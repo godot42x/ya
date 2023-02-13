@@ -1,0 +1,10 @@
+# Xmake cache
+.xmake/
+build/
+.vscode
+.cache
+
+# MacOS Cache
+.DS_Store
+
+
