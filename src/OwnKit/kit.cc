@@ -1,6 +1,6 @@
 #include <GLX/OwnKit/kit.h>
-#include <corecrt_math.h>
-#include <gl/glew.h>
+#include <GL/glew.h>
+#include <math.h>
 
 void ownkit::DrawCircle(glm::vec3 &&rgb, int steps, int radius)
 {
