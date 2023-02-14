@@ -8,13 +8,13 @@ add_requires("glew","glfw", "opengl", "glm")
 
 
 target("ownkit")
-    set_kind("shared","windows")
+    set_kind("shared")
     add_files("src/OwnKit/*.cc")
     add_includedirs("./include/GLX/ownkit/")
     add_packages("glew", "glm")
 
 target("glinternal")
-    set_kind("shared","windows")
+    set_kind("shared")
     add_files("src/glinternal/*.cc")
     add_includedirs("./include/GLX/glinternal/")
     add_packages("glfw","glew", "glm")
