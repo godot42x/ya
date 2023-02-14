@@ -5,16 +5,14 @@ set_languages("c++17")
 add_requires("glew","glfw", "opengl", "glm")
 
 
-
-
 target("ownkit")
-    set_kind("shared")
+    set_kind("static")
     add_files("src/OwnKit/*.cc")
     add_includedirs("./include/GLX/ownkit/")
     add_packages("glew", "glm")
 
 target("glinternal")
-    set_kind("shared")
+    set_kind("static")
     add_files("src/glinternal/*.cc")
     add_includedirs("./include/GLX/glinternal/")
     add_packages("glfw","glew", "glm")
@@ -23,6 +21,6 @@ target("glinternal")
 target("GLX")
     set_kind("binary")
     add_files("src/main.cc")
-    add_packages("glfw","glew", "glm", "opengl")
     add_deps("ownkit", "glinternal")
+    add_packages("glfw","glew", "glm", "opengl")
     add_includedirs("./include/")
