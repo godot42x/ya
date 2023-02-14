@@ -1,11 +1,52 @@
 [
-{
-  "directory": "/home/gloria/toys/cc/GL/GLX",
-  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++17", "-Iinclude", "-D_GLFW_X11", "-DGLFW_INCLUDE_NONE", "-I", "/home/gloria/.xmake/packages/g/glfw/3.3.8/aa037e96cc854680a09e144c4b5c8fe0/include", "-I", "/home/gloria/.xmake/packages/l/libxinerama/1.1.5/e539e5b3575342a89c7a931295fe40c5/include", "-I", "/usr/include/python3.10", "-I", "/usr/include/X11/dri", "-DNDEBUG", "-o", "build/.objs/GLX/linux/x86_64/release/src/main.cc.o", "src/main.cc"],
-  "file": "src/main.cc"
-},
-{
-  "directory": "/home/gloria/toys/cc/GL/GLX",
-  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-O3", "-std=c++17", "-Iinclude", "-I", "/usr/include/python3.10", "-I", "/usr/include/X11/dri", "-DNDEBUG", "-o", "build/.objs/ownkit/linux/x86_64/release/src/OwnKit/kit.cc.o", "src/OwnKit/kit.cc"],
-  "file": "src/OwnKit/kit.cc"
-}]
+  {
+    "directory": "/home/gloria/toys/cc/GL/GLX",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-m64",
+      "-fvisibility=hidden",
+      "-fvisibility-inlines-hidden",
+      "-O3",
+      "-std=c++17",
+      "-Iinclude",
+      "-D_GLFW_X11",
+      "-DGLFW_INCLUDE_NONE",
+      "-I",
+      "/home/gloria/.xmake/packages/g/glfw/3.3.8/aa037e96cc854680a09e144c4b5c8fe0/include",
+      "-I",
+      "/home/gloria/.xmake/packages/l/libxinerama/1.1.5/e539e5b3575342a89c7a931295fe40c5/include",
+      "-I",
+      "/usr/include/python3.10",
+      "-I",
+      "/usr/include/X11/dri",
+      "-DNDEBUG",
+      "-o",
+      "build/.objs/GLX/linux/x86_64/release/src/main.cc.o",
+      "src/main.cc"
+    ],
+    "file": "src/main.cc"
+  },
+  {
+    "directory": "/home/gloria/toys/cc/GL/GLX",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-c",
+      "-m64",
+      "-fvisibility=hidden",
+      "-fvisibility-inlines-hidden",
+      "-O3",
+      "-std=c++17",
+      "-Iinclude",
+      "-I",
+      "/usr/include/python3.10",
+      "-I",
+      "/usr/include/X11/dri",
+      "-DNDEBUG",
+      "-o",
+      "build/.objs/ownkit/linux/x86_64/release/src/OwnKit/kit.cc.o",
+      "src/OwnKit/kit.cc"
+    ],
+    "file": "src/OwnKit/kit.cc"
+  }
+]

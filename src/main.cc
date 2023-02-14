@@ -8,7 +8,7 @@
 
 #include <string>
 
-#include <GLX/OwnKit/kit.h>
+#include <GLX/ownkit/kit.h>
 
 const int WIN_WIDTH = 800;
 const int WIN_HEIGHT = 600;
@@ -58,8 +58,6 @@ int main(int argc, char **argv)
     {
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.3, 0.3, 1);
-
-        ownkit::DrawCircle(glm::vec3({255, 255, 255}), 20, 1);
 
         glfwSwapBuffers(p_Window);
         glfwPollEvents();

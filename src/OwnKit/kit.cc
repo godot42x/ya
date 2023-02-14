@@ -1,7 +1,15 @@
-#include <GLX/OwnKit/kit.h>
 #include <GL/glew.h>
+#include <kit.h>
 #include <math.h>
 
+/**
+ * @brief
+ *  deperacted in 3.3 core profile mode
+ * @param rgb
+ * @param steps
+ * @param radius
+ * @return void
+ */
 void ownkit::DrawCircle(glm::vec3 &&rgb, int steps, int radius)
 {
     const float angle = PI * 2 / steps;
