@@ -5,16 +5,18 @@
 #include <stdexcept>
 #include <string>
 
-#include <GLX/glinternal/Shader.h>
-#include <GLX/ownkit/kit.h>
-
-#include <spdlog/spdlog.h>
+#include <glinternal/Shader.h>
+#include <logx/spdlogx.h>
+#include <ownkit/kit.h>
 
 const int WIN_WIDTH = 800;
 const int WIN_HEIGHT = 600;
 
 int main(int argc, char **argv)
 {
+    logx::InitSpdLog();
+    spdlog::get("console")->error("hello");
+
     using std::cout, std::endl;
 
     if (GL_TRUE != glfwInit())

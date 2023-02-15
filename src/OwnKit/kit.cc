@@ -1,6 +1,6 @@
 #include <GL/glew.h>
-#include <kit.h>
 #include <math.h>
+#include <ownkit/kit.h>
 
 /**
  * @brief
