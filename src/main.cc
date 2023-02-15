@@ -1,4 +1,4 @@
-#include <GL/glew.h>
+#include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
 
@@ -36,10 +36,15 @@ int main(int argc, char **argv)
 
     glfwMakeContextCurrent(p_Window);
 
-    // GLEW
-    if (glewInit() != GLEW_OK)
+    // glew
+    // if (glewInit() != GLEW_OK)
+    // {
+    //     cout << "GLEW error !!" << endl;
+    // }
+    /// glad
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        cout << "GLEW error !!" << endl;
+        throw std::runtime_error("Failed to initialize GLAD!!");
     }
     cout << glGetString(GL_VERSION) << endl;
 
@@ -48,14 +53,21 @@ int main(int argc, char **argv)
         glfwSwapInterval(1);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glViewport(0, 0, WIN_WIDTH, WIN_HEIGHT);
+        glfwSetFramebufferSizeCallback(
+            p_Window, [](GLFWwindow *pWindow, int width, int height) { glViewport(0, 0, width, height); });
     }
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glScalef(0.1, 0.1, 0.1);
+    auto processInput = [](GLFWwindow *pWindow) {
+        if (glfwGetKey(pWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        {
+            glfwSetWindowShouldClose(pWindow, 1);
+        }
+    };
 
     while (!glfwWindowShouldClose(p_Window))
     {
+        processInput(p_Window);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.3, 0.3, 1);
 
