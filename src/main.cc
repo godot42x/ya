@@ -5,10 +5,12 @@
 #include <iostream>
 #include <locale>
 #include <stdexcept>
-
 #include <string>
 
+#include <GLX/glinternal/Shader.h>
 #include <GLX/ownkit/kit.h>
+
+#include <spdlog/spdlog.h>
 
 const int WIN_WIDTH = 800;
 const int WIN_HEIGHT = 600;

@@ -1,0 +1,19 @@
+#ifndef GL_INTERNAL_VERTEX_H
+#define GL_INTERNAL_VERTEX_H
+
+namespace glinternal
+{
+
+class Vertex
+{
+  public:
+    float x, y, z;
+
+    Vertex(float x, float y, float z) : x(x), y(y), z(z)
+    {
+    }
+};
+
+} // namespace glinternal
+
+#endif

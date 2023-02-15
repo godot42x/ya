@@ -1,6 +1,9 @@
 #include <VertexBuffer.h>
-#include <glad/glad.h>
+#include <vcruntime.h>
 
-glinternal::VertexBuffer::VertexBuffer(){
-
+glinternal::VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
+{
+    glGenBuffers(1, &Id);
+    glBindBuffer(buffertype, Id);
+    glBufferData(buffertype, datasize, data, drawType);
 };
