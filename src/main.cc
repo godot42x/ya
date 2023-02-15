@@ -1,6 +1,4 @@
-#include <glad/glad.h>
 
-#include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <locale>
@@ -39,15 +37,15 @@ int main(int argc, char **argv)
     glfwMakeContextCurrent(p_Window);
 
     // glew
-    // if (glewInit() != GLEW_OK)
-    // {
-    //     cout << "GLEW error !!" << endl;
-    // }
-    /// glad
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    if (glewInit() != GLEW_OK)
     {
-        throw std::runtime_error("Failed to initialize GLAD!!");
+        throw std::runtime_error("Failed to initialize GLEW!!");
     }
+    // glad
+    // if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    //{
+    //    throw std::runtime_error("Failed to initialize GLAD!!");
+    //}
     cout << glGetString(GL_VERSION) << endl;
 
     // Config

@@ -1,7 +1,7 @@
 #ifndef GLINTERNAL_VERTEXBUFFER_H
 #define GLINTERNAL_VERTEXBUFFER_H
 
-#include <glad/glad.h>
+#include <GL/glew.h>
 
 namespace glinternal
 {
