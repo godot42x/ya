@@ -1,9 +1,9 @@
 require "lfs"
 require "os"
 
-macros_dir = "./Scripts/macros"
+local macros_dir = "./Scripts/macros"
 
-function getpathes(rootpath, pathes)
+local function getpathes(rootpath, pathes)
     pathes = pathes or {}
     for entry in lfs.dir(rootpath) do
         -- print(entry)
@@ -22,7 +22,7 @@ function getpathes(rootpath, pathes)
     return pathes
 end
 
-function getPreWords(file)
+local function getPreWords(file)
     local ret = ""
     for i = 1, #file do
         -- print(i)
@@ -42,15 +42,15 @@ function getPreWords(file)
     return ret
 end
 
-function main(argv)
+local function main(argv)
     -- files = getpathes(argv[1])
-    files = getpathes(macros_dir)
+    local files = getpathes(macros_dir)
 
     for n, f in pairs(files) do
         print(n .. ":" .. f)
         n = getPreWords(n)
 
-        cmd = "xmake m --import=" .. f .. " " .. n
+        local cmd = "xmake m --import=" .. f .. " " .. n
         os.execute(cmd)
     end
 end

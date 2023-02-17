@@ -1,8 +1,14 @@
 add_rules("mode.debug", "mode.release")
 
 set_languages("c++17")
+set_targetdir("./bin")
 
 add_requires("glew","glfw", "opengl", "glm","spdlog")
+
+
+target("config")
+    set_kind("headeronly" )
+    add_headerfiles("include/GLX/config/*.h")
 
 target("logx")
     set_kind("static")

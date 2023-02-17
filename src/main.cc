@@ -1,13 +1,13 @@
-
-
 #include <iostream>
 #include <locale>
 #include <stdexcept>
 #include <string>
 
-#include <glinternal/Shader.h>
 #include <logx/spdlogx.h>
+
+#include <glinternal/Shader.h>
 #include <ownkit/kit.h>
+#include <synchapi.h>
 
 const int WIN_WIDTH = 800;
 const int WIN_HEIGHT = 600;
@@ -15,7 +15,12 @@ const int WIN_HEIGHT = 600;
 int main(int argc, char **argv)
 {
     logx::InitSpdLog();
+    spdlog::get("console")->trace("hello");
+    spdlog::get("console")->debug("hello");
+    spdlog::get("console")->info("hello");
+    spdlog::get("console")->warn("hello");
     spdlog::get("console")->error("hello");
+    spdlog::get("console")->critical("hello");
 
     using std::cout, std::endl;
 
