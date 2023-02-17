@@ -1,6 +1,6 @@
 add_rules("mode.debug", "mode.release")
 
-set_languages("c++17")
+set_languages("c++23")
 set_targetdir("./bin")
 
 add_requires("glew","glfw", "opengl", "glm","spdlog")

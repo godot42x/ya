@@ -14,16 +14,13 @@ using std::endl;
  */
 Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
 {
-    string vertSource;
-    string fragSource;
-
-    std::ifstream vsFile;
-    std::ifstream fsFile;
-
-    vsFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    fsFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    std::string vertSource, fragSource;
     try
     {
+        std::ifstream vsFile, fsFile;
+
+        vsFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+        fsFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
         vsFile.open(vertexShaderPath);
         fsFile.open(fragmentShaderPath);
 
