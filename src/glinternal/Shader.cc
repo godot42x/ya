@@ -8,6 +8,17 @@ using std::endl;
 
 /**
  * @brief Construct a new Shader:: Shader object
+ * Handle a shader progorm by ID
+ * @param vertexStr
+ * @param fragmentStr
+ */
+Shader::Shader(const char *vertexStr, const char *fragmentStr)
+{
+    initProgram(vertexStr, fragmentStr);
+}
+
+/**
+ * @brief Construct a new Shader:: Shader object
  * Create shader from 2 files by path
  * @param vertexShaderPath
  * @param fragmentShaderPath
@@ -92,11 +103,6 @@ Shader::Shader(string &theIntengrateFile)
     }
 
     initProgram(stream[VERTEX].str().c_str(), stream[FRAGMENT].str().c_str());
-}
-
-Shader::Shader(const char *vertexStr, const char *fragmentStr)
-{
-    initProgram(vertexStr, fragmentStr);
 }
 
 void Shader::initProgram(string &vertSource, string &fragSource)

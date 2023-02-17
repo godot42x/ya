@@ -35,11 +35,12 @@ class Shader
 
     ~Shader();
 
+  public:
     void Use() const;
     void UnUse() const;
 
     // uniform 工具函数
-    template <typename T> void setUnifrom(const string &name, T value) const;
+    template <typename T> void SetUnifrom1(const string &name, T value) const;
 
     [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept
     {
@@ -57,7 +58,7 @@ class Shader
     static GLuint getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
 };
 
-template <typename T> void Shader::setUnifrom(const string &name, T value) const
+template <typename T> void Shader::SetUnifrom1(const string &name, T value) const
 {
     if (std::is_same<bool, T>::value)
     {
