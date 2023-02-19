@@ -1,6 +1,7 @@
 .xmake/
 build/
 install
+bin
 lib
 .vscode
 .cache
