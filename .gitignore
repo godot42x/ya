@@ -1,7 +1,9 @@
-.xmake/
-build/
-install
+build
+bin
 lib
+install
+
+.xmake/
 .vscode
 .cache
 .vs
