@@ -1,14 +1,13 @@
 #include <glinternal/Shader.h>
 
-namespace glinternal
-{
+namespace glinternal {
 
 using std::cout;
 using std::endl;
 
 /**
  * @brief Construct a new Shader:: Shader object
- * Handle a shader progorm by ID
+ * - Handle a shader progorm by ID
  * @param vertexStr
  * @param fragmentStr
  */
@@ -26,8 +25,7 @@ Shader::Shader(const char *vertexStr, const char *fragmentStr)
 Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
 {
     std::string vertSource, fragSource;
-    try
-    {
+    try {
         std::ifstream vsFile, fsFile;
 
         vsFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -47,8 +45,7 @@ Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
         vertSource = vsStream.str();
         fragSource = fsStream.str();
     }
-    catch (std::ifstream::failure e)
-    {
+    catch (std::ifstream::failure e) {
         cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << endl;
     }
 
@@ -61,7 +58,7 @@ Shader::Shader(string &theIntengrateFile)
 
     enum ShaderType
     {
-        NONE = -1,
+        NONE   = -1,
         VERTEX = 0,
         FRAGMENT
     };
@@ -69,8 +66,7 @@ Shader::Shader(string &theIntengrateFile)
 
     file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
-    try
-    {
+    try {
         file.open(theIntengrateFile);
 
         ShaderType type = ShaderType::NONE;
@@ -97,8 +93,7 @@ Shader::Shader(string &theIntengrateFile)
 
         file.close();
     }
-    catch (std::ifstream::failure e)
-    {
+    catch (std::ifstream::failure e) {
         cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << endl;
     }
 
@@ -113,18 +108,19 @@ void Shader::initProgram(const char *vertSource, const char *fragSource)
 {
     auto vertShader = getShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     auto fragShader = getShader(fragSource, GL_FRAGMENT_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
-    ID = getProgram(vertShader, fragShader);
+    ID              = getProgram(vertShader, fragShader);
 }
 
 void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
 {
-    int success;
+    int  success;
     char infoLog[512];
     glGetShaderiv(shaderId, GL_COMPILE_STATUS, &success);
     if (success == 0)
     {
         glGetShaderInfoLog(shaderId, sizeof(infoLog), nullptr, infoLog);
-        std::cout << errorPrefix << "\n" << infoLog << std::endl;
+        std::cout << errorPrefix << "\n"
+                  << infoLog << std::endl;
         exit(-1);
     }
 }
@@ -155,7 +151,8 @@ GLuint Shader::getProgram(GLuint vert, GLuint frag)
     {
         char msg[512];
         glGetProgramInfoLog(shaderProgram, sizeof(msg), nullptr, msg);
-        cout << "ERROR::SHADER::PROGRAM::LINK_ERROR\n" << msg << endl;
+        cout << "ERROR::SHADER::PROGRAM::LINK_ERROR\n"
+             << msg << endl;
         exit(-1);
     }
 

@@ -8,12 +8,11 @@
 #include <glinternal/Shader.h>
 #include <ownkit/kit.h>
 
-const int WIN_WIDTH = 800;
+const int WIN_WIDTH  = 800;
 const int WIN_HEIGHT = 600;
 
 int main(int argc, char **argv)
 {
-    logx::InitSpdLog();
     spdlog::get("console")->trace("hello");
     spdlog::get("console")->debug("hello");
     spdlog::get("console")->info("hello");
