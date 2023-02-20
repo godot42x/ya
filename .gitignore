@@ -1,9 +1,10 @@
+
 build
+install
 bin
 lib
-install
 
-.xmake/
+.xmake
 .vscode
 .cache
 .vs
