@@ -17,9 +17,10 @@ const int WIN_HEIGHT = 600;
 int main(int argc, char **argv)
 {
     auto instance = logx::Loggerx::Instace();
-    instance.Init("logs", "console_log", "console", spdlog::level::trace, 10e6, 5, true);
-    logx::Loggerx::Instace().GetLogger()->trace("helloworld");
-    logx::Loggerx::Instace().GetLogger()->debug("helloworld");
+    instance.Init("logs", "logs/console_log", "console",
+                  spdlog::level::debug, 10e6, 5, true);
+    instance.GetLogger()->debug("hello world");
+
 
     return 0;
 

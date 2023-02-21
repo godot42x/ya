@@ -32,7 +32,7 @@ class Loggerx
      * @param MaxFileNums
      * @param bMultiSecurity  ! Whether config with multi thread security
      */
-    void Init(string logFolder, string LogFilePath, string LoggerName, spdlog::level::level_enum Level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity);
+    void Init(const string &logFolder, const string &LogFilePath, const string &LoggerName, spdlog::level::level_enum Level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity);
 
   private:
     Loggerx() = default;

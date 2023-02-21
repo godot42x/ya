@@ -1,9 +1,9 @@
 #include <ownkit/kit.h>
 
 #include <GL/glew.h>
+#include <cmath>
+#include <cstdlib>
 #include <exception>
-#include <math.h>
-#include <stdlib.h>
 
 
 /**
@@ -22,8 +22,8 @@ void ownkit::DrawCircle(glm::vec3 &&rgb, int steps, int radius)
 
     for (int i = 0; i <= steps; ++i)
     {
-        float newX = radius * cos(angle * i);
-        float newY = -radius * sin(angle * i);
+        float newX = radius * std::cos(angle * i);
+        float newY = -radius * std::sin(angle * i);
 
         glColor3f(rgb.x, rgb.y, rgb.z);
 
