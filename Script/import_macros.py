@@ -1,26 +1,31 @@
 import os
 import subprocess
+import sys
 
-macro_dirs = "./Scripts/macros/"
+macro_dirs = "Scripts/macros/"
 
 
 def getMacoFilse(dir):
-
+    # print(dir)
     ret = list()
 
     for root, dir, files in os.walk(dir):
-        # print(root, dir, files, "\n")
+        print(root, dir, files, "\n")
         for file in files:
             if file.endswith(".lua"):
                 name = file.removesuffix(".lua")
-                path = root + file
+                path = root + "/"+file
                 ret.append((name, path))
 
     return ret
 
 
 if __name__ == '__main__':
-    files = getMacoFilse(macro_dirs)
+    if len(sys.argv) <= 1:
+        print("arg1: Please input the macros directory")
+        exit(-1)
+    files = getMacoFilse(sys.argv[1])
+    # files = getMacoFilse(macro_dirs)
     # print(files)
 
     ts = list()
