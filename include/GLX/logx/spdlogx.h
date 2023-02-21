@@ -1,21 +1,26 @@
 #ifndef GLX_LOGX_SPDLOG_H
 #define GLX_LOGX_SPDLOG_H
 
+#include "spdlog/common.h"
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
 
+#include <ownkit/util.h>
 
 #include <memory>
 #include <string>
+
 
 namespace logx {
 
 using std::string;
 
+
 class Loggerx
 {
   public:
-    static Loggerx &Instace();
+    static Loggerx                        &Instace();
+    inline std::shared_ptr<spdlog::logger> GetLogger() { return sp_Logger; }
 
     /**
      * @brief Init the logger <instance> by your configuration
@@ -27,12 +32,14 @@ class Loggerx
      * @param MaxFileNums
      * @param bMultiSecurity  ! Whether config with multi thread security
      */
-    void init(string LogFilePath, string LoggerName, string Level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity);
+    void Init(string logFolder, string LogFilePath, string LoggerName, spdlog::level::level_enum Level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity);
 
   private:
     Loggerx() = default;
 
-  public:
+    void setLogLvel(spdlog::level::level_enum level);
+
+  private:
     std::shared_ptr<spdlog::logger> sp_Logger;
 };
 

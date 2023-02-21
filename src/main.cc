@@ -1,3 +1,6 @@
+#include "glm/ext/vector_float3.hpp"
+#include "spdlog/common.h"
+#include <cmath>
 #include <iostream>
 #include <locale>
 #include <stdexcept>
@@ -13,12 +16,12 @@ const int WIN_HEIGHT = 600;
 
 int main(int argc, char **argv)
 {
-    spdlog::get("console")->trace("hello");
-    spdlog::get("console")->debug("hello");
-    spdlog::get("console")->info("hello");
-    spdlog::get("console")->warn("hello");
-    spdlog::get("console")->error("hello");
-    spdlog::get("console")->critical("hello");
+    auto instance = logx::Loggerx::Instace();
+    instance.Init("logs", "console_log", "console", spdlog::level::trace, 10e6, 5, true);
+    logx::Loggerx::Instace().GetLogger()->trace("helloworld");
+    logx::Loggerx::Instace().GetLogger()->debug("helloworld");
+
+    return 0;
 
     using std::cout, std::endl;
 

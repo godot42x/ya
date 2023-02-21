@@ -1,12 +1,18 @@
+#include <logx/spdlogx.h>
+
 #include "spdlog/common.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/spdlog.h"
-#include <logx/spdlogx.h>
+#include <exception>
 
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <winnt.h>
+
+#include <ownkit/util.h>
+
+
 
 namespace logx {
+
+
 
 Loggerx &Loggerx::Instace()
 {
@@ -14,15 +20,26 @@ Loggerx &Loggerx::Instace()
     return instance;
 }
 
-void Loggerx::init(string LogFilePath, string LoggerName, string Level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity)
+void Loggerx::Init(string logFolder, string LogFilePath, string LoggerName, spdlog::level::level_enum level, size_t MaxFileSize, size_t MaxFileNums, bool bMultiSecurity)
 {
     try {
+        ownkit::CreateDirectoryIfNotExist(logFolder);
         if (bMultiSecurity) {
             sp_Logger = spdlog::rotating_logger_mt(LoggerName, LogFilePath, MaxFileSize, MaxFileSize);
         }
+        else {
+            sp_Logger = spdlog::rotating_logger_st(LoggerName, LogFilePath, MaxFileSize, MaxFileNums);
+        }
+        setLogLvel(level);
+        sp_Logger->set_pattern("[%Y-%m-%d %H:%M:%s.%e] [%l] 【%t] [%s %!:%#] %v");
     }
-    catch (...) {
+    catch (const spdlog::spdlog_ex &ex) {
+        throw std::exception("Errot when initialize spdlog");
     }
+}
+void Loggerx::setLogLvel(spdlog::level::level_enum level)
+{
+    sp_Logger->set_level(level);
 }
 
 } // namespace logx

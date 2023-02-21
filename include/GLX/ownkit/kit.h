@@ -1,11 +1,13 @@
 
+
+#include <string>
+
 #include <glm/vec3.hpp>
 
+namespace ownkit {
 
-class ownkit
-{
-  public:
-    static constexpr float PI = 3.1415926;
+static constexpr float PI = 3.1415926;
 
-    static void DrawCircle(glm::vec3 &&rgb, int steps, int radius);
-}; // namespace ownkit
+void DrawCircle(glm::vec3 &&rgb, int steps, int radius);
+
+} // namespace ownkit
