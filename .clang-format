@@ -6,7 +6,9 @@ TabWidth: 4
 
 AllowShortFunctionsOnASingleLine: true
 AlwaysBreakTemplateDeclarations: MultiLine
-BreakAfterAttributes: Leave
+
+# Works after clang-format 16
+#BreakAfterAttributes: Leave
 
 # 大括号换行，只有当 BreakBeforeBraces 设置为Custom时才有效
 BraceWrapping:

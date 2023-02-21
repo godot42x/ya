@@ -4,6 +4,7 @@ set_languages("c++23")
 set_targetdir("./bin")
 
 add_requires("glew","glfw", "opengl", "glm","spdlog")
+add_shflags("-fPIC")
 
 
 target("config")
@@ -11,20 +12,20 @@ target("config")
     add_headerfiles("include/GLX/config/*.h")
 
 target("logx")
-    set_kind("static")
+    set_kind("shared")
     add_files("src/logx/*.cc")
     add_includedirs("include/GLX/")
     add_packages("spdlog")
 
 
 target("ownkit")
-    set_kind("static")
+    set_kind("shared")
     add_files("src/OwnKit/*.cc")
     add_includedirs("./include/GLX/")
-    add_packages("glew", "glm","spdlog")
+    add_packages( "glm")
 
 target("glinternal")
-    set_kind("static")
+    set_kind("shared")
     add_files("src/glinternal/*.cc")
     add_includedirs("./include/GLX/")
     add_packages("glfw","glew", "glm","spdlog")
