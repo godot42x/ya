@@ -1,4 +1,5 @@
-
+#ifndef GLX_OWNKIT_KIT_H
+#define GLX_OWNKIT_KIT_H
 
 #include <string>
 
@@ -11,3 +12,5 @@ static constexpr float PI = 3.1415926;
 void DrawCircle(glm::vec3 &&rgb, int steps, int radius);
 
 } // namespace ownkit
+
+#endif
