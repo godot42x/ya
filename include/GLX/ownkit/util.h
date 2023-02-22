@@ -5,7 +5,7 @@
 
 namespace ownkit {
 
-void CreateDirectoryIfNotExist(const std::string &path);
+inline void CreateDirectoryIfNotExist(const std::string &path);
 
 }
 

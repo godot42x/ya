@@ -1,13 +1,9 @@
-#include "glm/ext/vector_float3.hpp"
-#include "spdlog/common.h"
 #include <cmath>
-#include <iostream>
 #include <locale>
 #include <stdexcept>
 #include <string>
 
-#include <logx/spdlogx.h>
-
+#include "logx/spdx.h"
 #include <glinternal/Shader.h>
 #include <ownkit/kit.h>
 
@@ -18,7 +14,8 @@ int main(int argc, char **argv)
 {
     auto instance = logx::Loggerx::Instace();
     instance.Init("logs", "logs/console_log", "console",
-                  spdlog::level::debug, 10e6, 5, true);
+                  spdlog::level::debug,
+                  10e6, 5, true);
     instance.GetLogger()->debug("hello world");
 
 

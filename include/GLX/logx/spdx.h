@@ -1,8 +1,6 @@
 #ifndef GLX_LOGX_SPDLOG_H
 #define GLX_LOGX_SPDLOG_H
 
-#include "spdlog/common.h"
-#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
 
 #include <ownkit/util.h>

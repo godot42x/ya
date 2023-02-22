@@ -1,5 +1,7 @@
+#include <logx/spdx.h>
+
 #include <iostream>
-#include <logx/spdlogx.h>
+#include <stdexcept>
 
 #include "spdlog/common.h"
 #include "spdlog/sinks/rotating_file_sink.h"
@@ -7,7 +9,6 @@
 
 
 #include <ownkit/util.h>
-#include <stdexcept>
 
 
 

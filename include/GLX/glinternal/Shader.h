@@ -44,8 +44,7 @@ class Shader
     template <typename T>
     void SetUnifrom1(const string &name, T value) const;
 
-    [[nodiscard("Shader program ID")]]
-    constexpr GLuint getID() const noexcept
+    [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept
     {
         return ID;
     };
