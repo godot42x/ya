@@ -1,5 +1,6 @@
 #include "glm/ext/vector_float3.hpp"
 #include "spdlog/common.h"
+#include "spdlog/spdlog.h"
 #include <cmath>
 #include <iostream>
 #include <locale>
@@ -16,11 +17,12 @@ const int WIN_HEIGHT = 600;
 
 int main(int argc, char **argv)
 {
-    auto instance = logx::Loggerx::Instace();
-    instance.Init("logs", "logs/console_log", "console",
-                  spdlog::level::debug, 10e6, 5, true);
-    instance.GetLogger()->debug("hello world");
-
+    logx::Loggerx::Instance().InitConsoleLogger("GLX").SetLogLvel(spdlog::level::trace);
+    LTRACE("hello world, {}", 1);
+    LDEBUG("hello world, {}", 1);
+    LINFO("hello world, {}", 1);
+    LWARN("hello world, {}", 1);
+    LERROR("hello world, {}", 1);
 
     return 0;
 
