@@ -50,5 +50,3 @@ void Loggerx::setLogLvel(spdlog::level::level_enum level)
 }
 
 } // namespace logx
-
-#define LOG ;

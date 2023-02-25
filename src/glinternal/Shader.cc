@@ -104,6 +104,7 @@ void Shader::initProgram(string &vertSource, string &fragSource)
 {
     initProgram(vertSource.c_str(), fragSource.c_str());
 }
+
 void Shader::initProgram(const char *vertSource, const char *fragSource)
 {
     auto vertShader = getShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);

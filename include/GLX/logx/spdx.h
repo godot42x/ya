@@ -1,5 +1,5 @@
-#ifndef GLX_LOGX_SPDLOG_H
-#define GLX_LOGX_SPDLOG_H
+#param once
+
 
 #include <spdlog/spdlog.h>
 
@@ -42,5 +42,3 @@ class Loggerx
 };
 
 } // namespace logx
-
-#endif

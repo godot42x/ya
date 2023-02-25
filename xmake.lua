@@ -1,4 +1,7 @@
 add_rules("mode.debug", "mode.release")
+
+set_languages("c++23")
+
 add_requires("glew","glfw", "opengl", "glm","spdlog")
 set_languages("c++20")
 add_shflags("-fPIC",{force = true})
@@ -15,10 +18,11 @@ target("config")
     add_headerfiles("include/GLX/config/*.h")
 
 target("ownkit")
-    set_kind("staic")
+    set_kind("shared")
     add_files("src/OwnKit/*.cc")
     add_includedirs("./include/GLX/")
-    add_packages( "glm","glew")
+    add_deps("config")
+    add_packages( "glm","glfw","glew")
 
 target("logx")
     set_kind("static")
@@ -29,17 +33,17 @@ target("logx")
 
 
 
- target("glinternal")
-     set_kind("static")
-     add_files("src/glinternal/*.cc")
-     add_includedirs("./include/GLX/")
-     add_deps("logx")
-     add_packages("glfw","glew", "glm")
-  
+target("glinternal")
+    set_kind("shared")
+    add_files("src/glinternal/*.cc")
+    add_includedirs("./include/GLX/")
+    add_deps("ownkit")
+    add_packages("glm","glfw","glew")
+    
 
- target("GLX")
-     set_kind("binary")
-     add_files("src/main.cc")
-     add_includedirs("./include/GLX/")
-     add_deps("glinternal","logx","ownkit")
-     add_packages("glfw","glew", "glm" ,"spdlog")
+target("GLX")
+    set_kind("binary")
+    add_files("src/main.cc")
+    add_includedirs("./include/GLX/")
+    add_deps("glinternal","logx","ownkit","config")
+    add_packages("glfw","glew", "glm", "opengl","spdlog")
