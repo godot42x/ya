@@ -2,7 +2,10 @@
 
 cmake_minimum_required(VERSION 3.25)
 
-include_directories(./include)
+set(CMAKE_TOOLCHAIN_FILE "G:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Package tool chian")
+if(NOT EXISTS ${CMAKE_TOOLCHAIN_FILE})
+	message(FATAL_ERROR "Please reset cmake toolchain file, retry after rm build directory")
+endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 26)
 

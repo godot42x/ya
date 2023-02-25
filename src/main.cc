@@ -7,13 +7,13 @@
 #include <cmath>
 #include <iostream>
 
-#include <logx/spdlogx.h>
+#include <logx/spdx.h>
 
 
 
 int main(int argc, char **argv)
 {
-    logx::Loggerx::Instance().InitConsoleLogger("GLX").SetLogLvel(spdlog::level::trace);
+    logx::Loggerx::Instance().InitConsoleLogger("GLX", "GLX_ERR").SetLogLvel(spdlog::level::trace);
     glinternal::GLX Context;
 
     // Config
