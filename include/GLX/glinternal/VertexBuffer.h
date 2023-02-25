@@ -1,10 +1,9 @@
 #ifndef GLINTERNAL_VERTEXBUFFER_H
 #define GLINTERNAL_VERTEXBUFFER_H
 
-#include <GL/glew.h>
+#include <ownkit/gl.h>
 
-namespace glinternal
-{
+namespace glinternal {
 
 class VertexBuffer
 {

@@ -1,18 +1,8 @@
-#ifndef GL_INTERNAL_SHADER_H
-#define GL_INTERNAL_SHADER_H
+#pragma once
 
-#include <GL/glew.h>
+#include <ownkit/precompile.h>
 
-#include <GLFW/glfw3.h>
-
-#include <array>
-#include <fstream>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <strstream>
+#include <ownkit/gl.h>
 
 namespace glinternal {
 
@@ -44,8 +34,7 @@ class Shader
     template <typename T>
     void SetUnifrom1(const string &name, T value) const;
 
-    [[nodiscard("Shader program ID")]]
-    constexpr GLuint getID() const noexcept
+    [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept
     {
         return ID;
     };
@@ -54,12 +43,13 @@ class Shader
     GLuint ID;
 
   private:
-    void          initProgram(string &vertSource, string &fragSource);
-    void          initProgram(const char *vertSource, const char *fragSource);
+    void initProgram(string &vertSource, string &fragSource);
+    void initProgram(const char *vertSource, const char *fragSource);
+
+  public:
     static GLuint getProgram(GLuint vert, GLuint frag);
     static void   testCompile(GLuint shaderId, std::string &errorPrefix);
-    static GLuint getShader(const char *source, GLenum shaderType,
-                            std::string &&errorPrefix, GLint *place_holder);
+    static GLuint getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
 };
 
 template <typename T>
@@ -77,4 +67,3 @@ void Shader::SetUnifrom1(const string &name, T value) const
 }
 
 } // namespace glinternal
-#endif

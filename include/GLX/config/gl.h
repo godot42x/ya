@@ -1,6 +1,7 @@
 #include <string>
 
-
+constexpr int WIN_WIDTH  = 800;
+constexpr int WIN_HEIGHT = 600;
 // struct logger_config
 // {
 //     std::string               name      = "run_logger";
