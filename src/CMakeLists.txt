@@ -15,8 +15,8 @@ find_package(spdlog CONFIG REQUIRED)
 project(ownkit)
 add_subdirectory(ownkit)
 
-# project(logx)
-# add_subdirectory(logx)
+project(logx)
+add_subdirectory(logx)
 
 # project(glinternal)
 # add_subdirectory(glinternal)

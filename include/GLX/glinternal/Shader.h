@@ -1,8 +1,9 @@
 #pragma once
 
-#include <ownkit/precompile.h>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <string>
 
-#include <ownkit/gl.h>
 
 namespace glinternal {
 

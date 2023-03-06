@@ -1,10 +1,13 @@
 #pragma once
 
-#include <ownkit/precompile.h>
+#include <iostream>
+#include <string>
 
-#include <ownkit/gl.h>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 #include <config/gl.h>
+
 
 
 namespace glinternal {

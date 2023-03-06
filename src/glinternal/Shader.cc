@@ -1,4 +1,7 @@
 #include <glinternal/Shader.h>
+#include <precompile.h>
+
+
 
 namespace glinternal {
 
