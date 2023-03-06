@@ -1,9 +1,6 @@
 #include <ownkit/kit.h>
 
 #include <GL/glew.h>
-#include <cmath>
-#include <cstdlib>
-#include <exception>
 
 
 /**

@@ -1,5 +1,5 @@
-#ifndef GLX_OWNKIT_UTIL_H
-#define GLX_OWNKIT_UTIL_H
+#ifndef Gloria_OWNKIT_UTIL_H
+#define Gloria_OWNKIT_UTIL_H
 
 #include <string>
 

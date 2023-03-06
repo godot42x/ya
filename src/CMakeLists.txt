@@ -1,4 +1,4 @@
-list(APPEND inc_dir ${CMAKE_SOURCE_DIR}/include/GLX)
+list(APPEND inc_dir ${CMAKE_SOURCE_DIR}/include/Gloria)
 include_directories(${inc_dir})
 
 
@@ -22,6 +22,6 @@ add_subdirectory(logx)
 # add_subdirectory(glinternal)
 
 
-# project(GLX)
+# project(Gloria)
 # add_executable(main.cc)
 # target_link_libraries(ownkit logx glinternal)

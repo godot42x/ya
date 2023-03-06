@@ -1,7 +1,7 @@
-#include <cassert>
+#include <precompile.h>
+
 #include <filesystem>
 #include <ownkit/util.h>
-#include <stdexcept>
 
 void ownkit::CreateDirectoryIfNotExist(const std::string &path)
 {

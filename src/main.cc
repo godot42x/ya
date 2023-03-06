@@ -1,5 +1,5 @@
 
-#include <glinternal/Init.h>
+#include <glinternal/core.h>
 
 
 #include <GL/glew.h>
@@ -13,8 +13,9 @@
 
 int main(int argc, char **argv)
 {
-    logx::Loggerx::Instance().InitConsoleLogger("GLX", "GLX_ERR").SetLogLvel(spdlog::level::trace);
-    glinternal::GLX Context;
+    logx::Loggerx::Instance().InitConsoleLogger("Gloria", "GLORIA_ERR").SetLogLvel(spdlog::level::trace);
+
+    glinternal::Gloria Context;
 
     // Config
     {

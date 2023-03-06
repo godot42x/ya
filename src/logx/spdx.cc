@@ -1,7 +1,7 @@
+#include <precompile.h>
+
 #include <logx/spdx.h>
 
-#include <iostream>
-#include <stdexcept>
 
 #include "spdlog/spdlog.h"
 #include <ownkit/util.h>

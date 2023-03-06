@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <iostream>
 #include <string>
 
@@ -12,17 +13,19 @@
 
 namespace glinternal {
 
-using std::cout, std::endl;
+using fn = std::function<int(int)>;
 
-class GLX
+class Gloria
 {
   public:
-    GLX();
-    GLX(GLX &&other) = default;
-    GLX(GLX &other)  = delete;
+    Gloria();
+    Gloria(Gloria &&other) = default;
+    Gloria(Gloria &other)  = delete;
 
   public:
     inline GLFWwindow *Window() { return p_Window; }
+
+    void ProcessInput();
 
   private:
     GLFWwindow *p_Window;

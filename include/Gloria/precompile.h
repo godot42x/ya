@@ -1,8 +1,12 @@
 #include <array>
+#include <cassert>
 #include <cmath>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>

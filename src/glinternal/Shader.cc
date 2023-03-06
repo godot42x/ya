@@ -1,12 +1,10 @@
-#include <glinternal/Shader.h>
 #include <precompile.h>
 
-
+#include <glinternal/Shader.h>
+#include <logx/spdx.h>
 
 namespace glinternal {
 
-using std::cout;
-using std::endl;
 
 /**
  * @brief Construct a new Shader:: Shader object
@@ -49,7 +47,7 @@ Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
         fragSource = fsStream.str();
     }
     catch (std::ifstream::failure e) {
-        cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << endl;
+        LERROR("[Shader] {}", e.what());
     }
 
     initProgram(vertSource, fragSource);
@@ -97,7 +95,7 @@ Shader::Shader(string &theIntengrateFile)
         file.close();
     }
     catch (std::ifstream::failure e) {
-        cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ" << endl;
+        LERROR("[Shader] {}", e.what());
     }
 
     initProgram(stream[VERTEX].str().c_str(), stream[FRAGMENT].str().c_str());
@@ -123,8 +121,7 @@ void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
     if (success == 0)
     {
         glGetShaderInfoLog(shaderId, sizeof(infoLog), nullptr, infoLog);
-        std::cout << errorPrefix << "\n"
-                  << infoLog << std::endl;
+        LERROR(errorPrefix + infoLog);
         exit(-1);
     }
 }
@@ -155,8 +152,7 @@ GLuint Shader::getProgram(GLuint vert, GLuint frag)
     {
         char msg[512];
         glGetProgramInfoLog(shaderProgram, sizeof(msg), nullptr, msg);
-        cout << "ERROR::SHADER::PROGRAM::LINK_ERROR\n"
-             << msg << endl;
+        LERROR("[SHADER] link error: {}", msg);
         exit(-1);
     }
 

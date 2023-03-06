@@ -1,10 +1,16 @@
-#include "glinternal/Init.h"
+#include <precompile.h>
+
+#include "glinternal/core.h"
+#include "spdlog/spdlog.h"
+
+#include <logx/spdx.h>
+#include <winbase.h>
 
 
 namespace glinternal {
 
 
-glinternal::GLX::GLX()
+glinternal::Gloria::Gloria()
 {
     if (GL_TRUE != glfwInit())
     {
@@ -15,7 +21,7 @@ glinternal::GLX::GLX()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    p_Window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "GLX", nullptr, nullptr);
+    p_Window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "Gloria", nullptr, nullptr);
     if (!p_Window)
     {
         glfwTerminate();
@@ -34,7 +40,8 @@ glinternal::GLX::GLX()
     //{
     //    throw std::runtime_error("Failed to initialize GLAD!!");
     //}
-    cout << glGetString(GL_VERSION) << endl;
+    auto verInfo = glGetString(GL_VERSION);
+    LINFO(reinterpret_cast<const char *>(verInfo));
 }
 
 } // namespace glinternal

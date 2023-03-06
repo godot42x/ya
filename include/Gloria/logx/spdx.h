@@ -52,9 +52,11 @@ class Loggerx
 
 #define DEFLOGGER logx::Loggerx::Instance().GetLogger().get()
 #define ERRLOGGER logx::Loggerx::Instance().GetErrLogger().get()
+
 // use embedded macro to support file and line number
-#define LTRACE(...) SPDLOG_LOGGER_CALL(LINSTANCELOGGER, spdlog::level::trace, __VA_ARGS__)
-#define LDEBUG(...) SPDLOG_LOGGER_CALL(LINSTANCELOGGER, spdlog::level::debug, __VA_ARGS__)
-#define LINFO(...) SPDLOG_LOGGER_CALL(LINSTANCELOGGER, spdlog::level::info, __VA_ARGS__)
+#define LTRACE(...) SPDLOG_LOGGER_CALL(DEFLOGGER, spdlog::level::trace, __VA_ARGS__)
+#define LDEBUG(...) SPDLOG_LOGGER_CALL(DEFLOGGER, spdlog::level::debug, __VA_ARGS__)
+#define LINFO(...) SPDLOG_LOGGER_CALL(DEFLOGGER, spdlog::level::info, __VA_ARGS__)
+
 #define LWARN(...) SPDLOG_LOGGER_CALL(ERRLOGGER, spdlog::level::warn, __VA_ARGS__)
 #define LERROR(...) SPDLOG_LOGGER_CALL(ERRLOGGER, spdlog::level::err, __VA_ARGS__)
