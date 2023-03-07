@@ -16,6 +16,7 @@ int main(int argc, char **argv)
     logx::Loggerx::Instance().InitConsoleLogger("Gloria", "GLORIA_ERR").SetLogLvel(spdlog::level::trace);
 
     glinternal::Gloria Context;
+    Context.Init();
 
     // Config
     {
