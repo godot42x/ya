@@ -14,8 +14,6 @@ struct GLFWwindow;
 
 namespace glinternal {
 
-using MappingFn = std::function<bool(void)>;
-
 class Gloria
 {
   public:
@@ -34,26 +32,11 @@ class Gloria
     template <typename aMappingFn>
     bool AddInputMapping(int key, aMappingFn fn);
 
-    void InputCallback(int key)
-    {
-        m_InputMappings[key]();
-    }
 
 
   private:
     GLFWwindow *p_Window;
-
-    std::unordered_map<int, MappingFn> m_InputMappings;
 };
 
-template <typename aMappingFn>
-bool Gloria::AddInputMapping(int key, aMappingFn fn)
-{
-    static_assert(std::is_same<MappingFn, aMappingFn>(), "Bind mapping func's Args/Retval not the same, should be std::function<bool>");
-    static_assert(std::is_invocable<aMappingFn>(), "Invalid function type");
-
-    m_InputMappings[key] = fn;
-    return true;
-}
 
 } // namespace glinternal
