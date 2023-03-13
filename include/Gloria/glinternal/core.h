@@ -26,13 +26,6 @@ class Gloria
   public:
     inline GLFWwindow *Window() { return p_Window; }
 
-    void ProcessInput();
-
-
-    template <typename aMappingFn>
-    bool AddInputMapping(int key, aMappingFn fn);
-
-
 
   private:
     GLFWwindow *p_Window;

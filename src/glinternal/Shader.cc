@@ -6,6 +6,7 @@
 namespace glinternal {
 
 
+
 /**
  * @brief Construct a new Shader:: Shader object
  * - Handle a shader progorm by ID
@@ -108,8 +109,8 @@ void Shader::initProgram(string &vertSource, string &fragSource)
 
 void Shader::initProgram(const char *vertSource, const char *fragSource)
 {
-    auto vertShader = getShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
-    auto fragShader = getShader(fragSource, GL_FRAGMENT_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
+    auto vertShader = createShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
+    auto fragShader = createShader(fragSource, GL_FRAGMENT_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     ID              = getProgram(vertShader, fragShader);
 }
 
@@ -126,7 +127,7 @@ void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
     }
 }
 
-GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
+GLuint Shader::createShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
 {
     GLuint shaderId;
 

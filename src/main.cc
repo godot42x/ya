@@ -1,4 +1,5 @@
 
+#include <glinternal/Shader.h>
 #include <glinternal/core.h>
 
 
@@ -28,6 +29,9 @@ int main(int argc, char **argv)
             Context.Window(),
             [](GLFWwindow *pWindow, int width, int height) { glViewport(0, 0, width, height); });
     }
+
+
+    glinternal::Shader shader("vert", "frag");
 
     auto processInput = [](GLFWwindow *pWindow) {
         if (glfwGetKey(pWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS)

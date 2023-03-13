@@ -12,18 +12,16 @@ using std::string;
 class Shader
 {
   public:
-    // From 2 file paths
     Shader(string &vertexShaderPath, string &fragmentShaderPath);
-    // When vert and frag in same files
     Shader(string &theIntengrateFile);
-    // Form 2 strings
     Shader(const char *vertexStr, const char *fragmentStr);
+
+    Shader(Shader &&other) noexcept            = default;
+    Shader &operator=(Shader &&other) noexcept = default;
 
     Shader(const Shader &)            = delete;
     Shader &operator=(const Shader &) = delete;
 
-    Shader(Shader &&other) noexcept            = default;
-    Shader &operator=(Shader &&other) noexcept = default;
 
     ~Shader();
 
@@ -50,7 +48,7 @@ class Shader
   public:
     static GLuint getProgram(GLuint vert, GLuint frag);
     static void   testCompile(GLuint shaderId, std::string &errorPrefix);
-    static GLuint getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
+    static GLuint createShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
 };
 
 template <typename T>
