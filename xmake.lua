@@ -2,7 +2,7 @@ add_rules("mode.debug", "mode.release")
 
 set_languages("c++2a")
 
-add_requires("glew","glfw", "opengl", "glm","spdlog")
+add_requires("glew","glfw","glm","spdlog")
 add_requires("gtest")
 
 add_shflags("-fPIC",{force = true})
@@ -49,7 +49,7 @@ target("Gloria")
     remove_files("src/main.cc")
     add_includedirs("./include/Gloria/")
     --add_deps("glinternal","logx","ownkit","config")
-    add_packages("glfw","glew", "glm", "opengl","spdlog")
+    add_packages("glfw","glew", "glm","spdlog")
 
 target("main")
     set_kind("binary")

@@ -20,8 +20,7 @@ TEST(TestInputMapping, InsertAndCall)
 
     EXPECT_EQ(b, true);
 
-    auto ret = ctx.InputCallback(GLFW_KEY_0);
-    spdlog::debug(ret);
+     ctx.InputCallback(GLFW_KEY_0);
 
 
     sleep(1000);
