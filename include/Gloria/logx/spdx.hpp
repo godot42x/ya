@@ -66,7 +66,7 @@ class Loggerx
 namespace logx {
 
 
-Loggerx &Loggerx::Instance()
+inline Loggerx &Loggerx::Instance()
 {
     static Loggerx instance;
     return instance;
@@ -99,7 +99,7 @@ Loggerx &Loggerx::Instance()
  }
 */
 
-Loggerx &Loggerx::InitConsoleLogger(const string &out, const string &err)
+inline Loggerx &Loggerx::InitConsoleLogger(const string &out, const string &err)
 {
     sp_Logger    = spdlog::stdout_color_mt(out);
     sp_ErrLogger = spdlog::stderr_color_mt(err);
@@ -107,7 +107,7 @@ Loggerx &Loggerx::InitConsoleLogger(const string &out, const string &err)
     return Instance();
 }
 
-Loggerx &Loggerx::SetLogLvel(spdlog::level::level_enum level)
+inline Loggerx &Loggerx::SetLogLvel(spdlog::level::level_enum level)
 {
     sp_Logger->set_level(level);
     sp_ErrLogger->set_level(level);

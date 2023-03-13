@@ -50,7 +50,7 @@ class Gloria
 
 namespace glinternal {
 
-void glinternal::Gloria::Init()
+inline void Gloria::Init()
 {
     if (GL_TRUE != glfwInit())
     {

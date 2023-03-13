@@ -17,11 +17,13 @@ class VertexBuffer
 
 
 
-glinternal::VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
+namespace glinternal {
+
+inline VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
 {
     glGenBuffers(1, &Id);
     glBindBuffer(buffertype, Id);
     glBufferData(buffertype, datasize, data, drawType);
 };
 
-#endif
+} // namespace glinternal

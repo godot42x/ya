@@ -11,9 +11,8 @@ void CreateDirectoryIfNotExist(const std::string &path);
 }
 
 
-namespace ownkit {
 
-void ownkit::CreateDirectoryIfNotExist(const std::string &path)
+inline void ownkit::CreateDirectoryIfNotExist(const std::string &path)
 {
     if (std::filesystem::exists(path)) {
         return;
@@ -28,4 +27,3 @@ void ownkit::CreateDirectoryIfNotExist(const std::string &path)
         throw std::runtime_error("execute system cmd [mkdir] error");
     }
 }
-} // namespace ownkit

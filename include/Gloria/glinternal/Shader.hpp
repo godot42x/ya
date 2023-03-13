@@ -12,12 +12,9 @@ using std::string;
 class Shader
 {
   public:
-    // From 2 file paths
     Shader(string &vertexShaderPath, string &fragmentShaderPath);
-    // When vert and frag in same files
     Shader(string &theIntengrateFile);
-    // Form 2 strings
-    Shader(const char *vertexStr, const char *fragmentStr);
+    Shader(const char *VertLiteralStr, const char *FragLiteralStr);
 
     Shader(const Shader &)            = delete;
     Shader &operator=(const Shader &) = delete;
@@ -31,14 +28,12 @@ class Shader
     void Use() const;
     void UnUse() const;
 
+    [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept;
+
     // uniform 工具函数
     template <typename T>
     void SetUnifrom1(const string &name, T value) const;
 
-    [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept
-    {
-        return ID;
-    };
 
   protected:
     GLuint ID;
@@ -52,6 +47,11 @@ class Shader
     static void   testCompile(GLuint shaderId, std::string &errorPrefix);
     static GLuint getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
 };
+
+} // namespace glinternal
+
+
+namespace glinternal {
 
 template <typename T>
 void Shader::SetUnifrom1(const string &name, T value) const
@@ -67,11 +67,7 @@ void Shader::SetUnifrom1(const string &name, T value) const
     }
 }
 
-} // namespace glinternal
 
-
-
-namespace glinternal {
 
 /**
  * @brief Construct a new Shader:: Shader object
@@ -79,7 +75,7 @@ namespace glinternal {
  * @param vertexStr
  * @param fragmentStr
  */
-Shader::Shader(const char *vertexStr, const char *fragmentStr)
+inline Shader::Shader(const char *vertexStr, const char *fragmentStr)
 {
     initProgram(vertexStr, fragmentStr);
 }
@@ -90,7 +86,7 @@ Shader::Shader(const char *vertexStr, const char *fragmentStr)
  * @param vertexShaderPath
  * @param fragmentShaderPath
  */
-Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
+inline Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
 {
     std::string vertSource, fragSource;
     try {
@@ -120,7 +116,7 @@ Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
     initProgram(vertSource, fragSource);
 }
 
-Shader::Shader(string &theIntengrateFile)
+inline Shader::Shader(string &theIntengrateFile)
 {
     std::ifstream file;
 
@@ -168,19 +164,19 @@ Shader::Shader(string &theIntengrateFile)
     initProgram(stream[VERTEX].str().c_str(), stream[FRAGMENT].str().c_str());
 }
 
-void Shader::initProgram(string &vertSource, string &fragSource)
+inline void Shader::initProgram(string &vertSource, string &fragSource)
 {
     initProgram(vertSource.c_str(), fragSource.c_str());
 }
 
-void Shader::initProgram(const char *vertSource, const char *fragSource)
+inline void Shader::initProgram(const char *vertSource, const char *fragSource)
 {
     auto vertShader = getShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     auto fragShader = getShader(fragSource, GL_FRAGMENT_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     ID              = getProgram(vertShader, fragShader);
 }
 
-void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
+inline void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
 {
     int  success;
     char infoLog[512];
@@ -193,7 +189,7 @@ void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
     }
 }
 
-GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
+inline GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
 {
     GLuint shaderId;
 
@@ -205,7 +201,7 @@ GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&er
     return shaderId;
 }
 
-GLuint Shader::getProgram(GLuint vert, GLuint frag)
+inline GLuint Shader::getProgram(GLuint vert, GLuint frag)
 {
     GLuint shaderProgram;
 
@@ -229,13 +225,18 @@ GLuint Shader::getProgram(GLuint vert, GLuint frag)
     return shaderProgram;
 }
 
-void Shader::Use() const
+inline void Shader::Use() const
 {
     glUseProgram(ID);
 }
-void Shader::UnUse() const
+inline void Shader::UnUse() const
 {
     glUseProgram(0);
 }
+
+[[nodiscard("Shader program ID")]] constexpr GLuint Shader::getID() const noexcept
+{
+    return ID;
+};
 
 } // namespace glinternal
