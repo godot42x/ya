@@ -75,7 +75,7 @@ void Shader::SetUnifrom1(const string &name, T value) const
  * @param vertexStr
  * @param fragmentStr
  */
-inline Shader::Shader(const char *vertexStr, const char *fragmentStr)
+INL Shader::Shader(const char *vertexStr, const char *fragmentStr)
 {
     initProgram(vertexStr, fragmentStr);
 }
@@ -86,7 +86,7 @@ inline Shader::Shader(const char *vertexStr, const char *fragmentStr)
  * @param vertexShaderPath
  * @param fragmentShaderPath
  */
-inline Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
+INL Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
 {
     std::string vertSource, fragSource;
     try {
@@ -116,7 +116,7 @@ inline Shader::Shader(string &vertexShaderPath, string &fragmentShaderPath)
     initProgram(vertSource, fragSource);
 }
 
-inline Shader::Shader(string &theIntengrateFile)
+INL Shader::Shader(string &theIntengrateFile)
 {
     std::ifstream file;
 
@@ -164,19 +164,19 @@ inline Shader::Shader(string &theIntengrateFile)
     initProgram(stream[VERTEX].str().c_str(), stream[FRAGMENT].str().c_str());
 }
 
-inline void Shader::initProgram(string &vertSource, string &fragSource)
+INL void Shader::initProgram(string &vertSource, string &fragSource)
 {
     initProgram(vertSource.c_str(), fragSource.c_str());
 }
 
-inline void Shader::initProgram(const char *vertSource, const char *fragSource)
+INL void Shader::initProgram(const char *vertSource, const char *fragSource)
 {
     auto vertShader = getShader(vertSource, GL_VERTEX_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     auto fragShader = getShader(fragSource, GL_FRAGMENT_SHADER, "ERROR::SHADER::VERTEX::COMPILATION_FAILURE", nullptr);
     ID              = getProgram(vertShader, fragShader);
 }
 
-inline void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
+INL void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
 {
     int  success;
     char infoLog[512];
@@ -189,7 +189,7 @@ inline void Shader::testCompile(GLuint shaderId, std::string &errorPrefix)
     }
 }
 
-inline GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
+INL GLuint Shader::getShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder)
 {
     GLuint shaderId;
 
@@ -201,7 +201,7 @@ inline GLuint Shader::getShader(const char *source, GLenum shaderType, std::stri
     return shaderId;
 }
 
-inline GLuint Shader::getProgram(GLuint vert, GLuint frag)
+INL GLuint Shader::getProgram(GLuint vert, GLuint frag)
 {
     GLuint shaderProgram;
 
@@ -225,11 +225,11 @@ inline GLuint Shader::getProgram(GLuint vert, GLuint frag)
     return shaderProgram;
 }
 
-inline void Shader::Use() const
+INL void Shader::Use() const
 {
     glUseProgram(ID);
 }
-inline void Shader::UnUse() const
+INL void Shader::UnUse() const
 {
     glUseProgram(0);
 }

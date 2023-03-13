@@ -12,3 +12,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+
+#define __ALL_INLINE__
+
+#ifdef __ALL_INLINE__
+#define INL inline
+#else
+#define INL
+#endif

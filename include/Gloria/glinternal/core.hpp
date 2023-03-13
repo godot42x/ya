@@ -23,7 +23,7 @@ class Gloria
     void Init();
 
   public:
-    inline GLFWwindow *Window() { return p_Window; }
+    INL GLFWwindow *Window() { return p_Window; }
 
     void ProcessInput();
 
@@ -50,7 +50,7 @@ class Gloria
 
 namespace glinternal {
 
-inline void Gloria::Init()
+INL void Gloria::Init()
 {
     if (GL_TRUE != glfwInit())
     {

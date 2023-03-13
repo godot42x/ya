@@ -12,7 +12,7 @@ void CreateDirectoryIfNotExist(const std::string &path);
 
 
 
-inline void ownkit::CreateDirectoryIfNotExist(const std::string &path)
+INL void ownkit::CreateDirectoryIfNotExist(const std::string &path)
 {
     if (std::filesystem::exists(path)) {
         return;

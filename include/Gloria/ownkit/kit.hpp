@@ -22,7 +22,7 @@ void DrawCircle(glm::vec3 &&rgb, int steps, int radius);
  * @param radius
  * @return void
  */
-inline void ownkit::DrawCircle(glm::vec3 &&rgb, int steps, int radius)
+INL void ownkit::DrawCircle(glm::vec3 &&rgb, int steps, int radius)
 {
     const float angle = PI * 2 / steps;
 

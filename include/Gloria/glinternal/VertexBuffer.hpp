@@ -2,6 +2,7 @@
 
 
 #include <GL/glew.h>
+#include <pch/std.h>
 
 namespace glinternal {
 
@@ -19,7 +20,7 @@ class VertexBuffer
 
 namespace glinternal {
 
-inline VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
+INL VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
 {
     glGenBuffers(1, &Id);
     glBindBuffer(buffertype, Id);
