@@ -14,49 +14,23 @@ if is_mode("debug") then
 end
 
 
--- target("config")
---     set_kind("headeronly" )
---     add_headerfiles("include/Gloria/config/*.h")
 
--- target("ownkit")
---     set_kind("static")
---     add_files("src/OwnKit/*.cc")
---     add_includedirs("./include/Gloria/")
---     add_deps("config")
---     add_packages( "glm","glfw","glew")
-
--- target("logx")
---     set_kind("shared")
---     add_files("src/logx/*.cc")
---     add_includedirs("include/Gloria/")
---     add_deps("ownkit")
---     add_packages("spdlog")
-
-
-
--- target("glinternal")
---     set_kind("static")
---     add_files("src/glinternal/*.cc")
---     add_includedirs("./include/Gloria/")
---     add_deps("ownkit")
---     add_packages("glm","glfw","glew")
     
 
 target("Gloria")
-    set_kind("static")
-    -- set_kind("binary")
-    add_files("src/**.cc")
-    remove_files("src/main.cc")
+    set_kind("headeronly")
+    add_headerfiles("./include/Gloria/**.hpp")
     add_includedirs("./include/Gloria/")
-    --add_deps("glinternal","logx","ownkit","config")
     add_packages("glfw","glew", "glm","spdlog")
+
 
 target("main")
     set_kind("binary")
-    add_files("src/main.cc")
+    add_files("src/main.cc" )
+    add_files("src/precompile.cc" )
     add_includedirs("./include/Gloria/")
-    add_packages("glfw","glew", "glm", "opengl","spdlog")
     add_deps("Gloria")
+    add_packages("glfw","glew", "glm", "opengl","spdlog")
 
 
 target("test")

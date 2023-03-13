@@ -1,13 +1,10 @@
 #pragma once
 
-#include <cmath>
-#include <functional>
-#include <iostream>
-#include <string>
-
-
 #include <config/gl.h>
-#include <unordered_map>
+#include <logx/spdx.hpp>
+#include <pch/gl.h>
+#include <pch/std.h>
+
 
 struct GLFWwindow;
 
@@ -45,6 +42,13 @@ class Gloria
 
     std::unordered_map<int, MappingFn> m_InputMappings;
 };
+
+
+
+} // namespace glinternal
+
+
+namespace glinternal {
 
 void glinternal::Gloria::Init()
 {

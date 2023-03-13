@@ -1,5 +1,4 @@
-#ifndef GL_INTERNAL_VERTEX_H
-#define GL_INTERNAL_VERTEX_H
+#pragma once
 
 namespace glinternal {
 
@@ -13,5 +12,3 @@ struct Vertex
 };
 
 } // namespace glinternal
-
-#endif

@@ -1,12 +1,10 @@
 
 #include "spdlog/spdlog.h"
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include <functional>
-#include <glinternal/core.h>
+#include <glinternal/core.hpp>
 #include <gtest/gtest.h>
-#include <logx/spdx.h>
-#include <unistd.h>
+#include <logx/spdx.hpp>
+#include <pch/gl.h>
 
 
 
@@ -20,7 +18,7 @@ TEST(TestInputMapping, InsertAndCall)
 
     EXPECT_EQ(b, true);
 
-     ctx.InputCallback(GLFW_KEY_0);
+    ctx.InputCallback(GLFW_KEY_0);
 
 
     sleep(1000);

@@ -1,13 +1,9 @@
-
-#include <glinternal/core.h>
-
-
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include <pch/gl.h>
+#include <pch/std.h>
 
 
-
-#include <logx/spdx.h>
+#include <glinternal/core.hpp>
+#include <logx/spdx.hpp>
 
 
 
