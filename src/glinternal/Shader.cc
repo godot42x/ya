@@ -1,14 +1,12 @@
-#include <precompile.h>
+#include <minimal.h>
 
 #include <glinternal/Shader.h>
 #include <logx/spdx.h>
 
 namespace glinternal {
 
-
-
 /**
- * @brief Construct a new Shader:: Shader object
+ * @brief Construct a new Shader::Shader object
  * - Handle a shader progorm by ID
  * @param vertexStr
  * @param fragmentStr
@@ -172,4 +170,17 @@ void Shader::UnUse() const
     glUseProgram(0);
 }
 
+Shader::~Shader()
+{
+}
+
+void Shader::SetUnifrom1i(const string &name, int value) const
+{
+    glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+}
+
+void Shader::SetUnifrom1f(const string &name, float value) const
+{
+    glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
+}
 } // namespace glinternal

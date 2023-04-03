@@ -10,7 +10,7 @@ class VertexBuffer
   public:
     VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType);
 
-    GLuint Id;
+    GLuint ID;
 };
 
 }; // namespace glinternal

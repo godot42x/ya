@@ -30,8 +30,8 @@ class Shader
     void UnUse() const;
 
     // uniform 工具函数
-    template <typename T>
-    void SetUnifrom1(const string &name, T value) const;
+    void SetUnifrom1i(const string &name, int value) const;
+    void SetUnifrom1f(const string &name, float value) const;
 
     [[nodiscard("Shader program ID")]] constexpr GLuint getID() const noexcept
     {
@@ -51,18 +51,5 @@ class Shader
     static GLuint createShader(const char *source, GLenum shaderType, std::string &&errorPrefix, GLint *place_holder);
 };
 
-template <typename T>
-void Shader::SetUnifrom1(const string &name, T value) const
-{
-    if (std::is_same<bool, T>::value) {
-        glUniform1i(glGetUniformLocation(ID, name.c_str()), (int)value);
-    }
-    else if (std::is_same<int, T>::value) {
-        glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
-    }
-    else if (std::is_same<float, T>::value) {
-        glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
-    }
-}
 
 } // namespace glinternal

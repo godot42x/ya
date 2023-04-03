@@ -43,19 +43,17 @@ end
     
 
 target("Gloria")
-    set_kind("static")
-    -- set_kind("binary")
+    set_kind("shared")
     add_files("src/**.cc")
     remove_files("src/main.cc")
     add_includedirs("./include/Gloria/")
-    --add_deps("glinternal","logx","ownkit","config")
     add_packages("glfw","glew", "glm","spdlog")
 
 target("main")
     set_kind("binary")
     add_files("src/main.cc")
     add_includedirs("./include/Gloria/")
-    add_packages("glfw","glew", "glm", "opengl","spdlog")
+    add_packages("glfw","glew", "glm","spdlog")
     add_deps("Gloria")
 
 

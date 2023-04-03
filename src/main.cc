@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     }
 
 
-    glinternal::Shader shader("vert", "frag");
+    // glinternal::Shader shader("vert", "frag");
 
     auto processInput = [](GLFWwindow *pWindow) {
         if (glfwGetKey(pWindow, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -43,6 +43,7 @@ int main(int argc, char **argv)
     while (!glfwWindowShouldClose(Context.Window()))
     {
         processInput(Context.Window());
+
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2, 0.3, 0.3, 1);
 
