@@ -5,6 +5,9 @@
 
 #include <logx/spdx.h>
 
+#include <imgui.h>
+#include <imgui_internal.h>
+
 
 
 namespace glinternal {
@@ -40,6 +43,8 @@ void glinternal::Gloria::Init()
     //{
     //    throw std::runtime_error("Failed to initialize GLAD!!");
     //}
+
+    LINFO("Gl core init success!");
     auto verInfo = glGetString(GL_VERSION);
     LINFO(reinterpret_cast<const char *>(verInfo));
 }

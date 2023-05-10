@@ -9,6 +9,8 @@
 #include <config/gl.h>
 #include <unordered_map>
 
+
+
 struct GLFWwindow;
 
 
@@ -26,7 +28,7 @@ class Gloria
   public:
     inline GLFWwindow *Window() { return p_Window; }
 
-
+  private:
   private:
     GLFWwindow *p_Window;
 };
