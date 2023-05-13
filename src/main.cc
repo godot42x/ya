@@ -61,7 +61,9 @@ static void initImgui(GLFWwindow *glWindow)
 
 int main(int argc, char **argv)
 {
-    logx::Loggerx::Instance().InitConsoleLogger("Gloria", "GLORIA_ERR").SetLogLvel(spdlog::level::trace);
+    logx::Loggerx::Instance()
+        .InitConsoleLogger("Gloria", "GLORIA_ERR")
+        .SetLogLvel(spdlog::level::trace);
 
     // LERROR("Setting glfw err callback {} {}", "test", 123);
     glfwSetErrorCallback([](auto error, auto descri) {
