@@ -1,3 +1,6 @@
+set_targetdir("./bin")
+
+
 add_rules("mode.debug", "mode.release")
 
 set_languages("c++2a")
@@ -10,7 +13,6 @@ add_requires("imgui docking",{configs={ glfw = true, opengl3=true }})
 
 
 add_shflags("-fPIC",{force = true})
---set_targetdir("./bin")
 
 if is_mode("debug") then 
     add_cxxflags("-Wall ",{force=true})
@@ -43,3 +45,4 @@ target("test")
     add_deps("Gloria")
     add_packages("gtest")
     add_packages("glfw","glew", "glm","spdlog")
+

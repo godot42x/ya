@@ -1,7 +1,9 @@
 
 #include <cstdio>
+#include <filesystem>
 #include <glinternal/Shader.h>
 #include <glinternal/core.h>
+
 
 
 #include <GL/glew.h>
@@ -17,6 +19,8 @@
 #include <imgui_impl_opengl3.h>
 #include <math.h>
 
+#include <libgen.h>
+
 static void initImgui(GLFWwindow *glWindow)
 {
     IMGUI_CHECKVERSION();
@@ -31,8 +35,19 @@ static void initImgui(GLFWwindow *glWindow)
     // docking without hold shift
     io.ConfigDockingWithShift = false;
 
-    io.Fonts->AddFontDefault();
-    io.Fonts->AddFontFromFileTTF("../res/ttf/Cascadia.ttf", 20.f);
+    {
+        auto cascadia_font_path = std::filesystem::relative("../res/ttf/Cascadia.ttf");
+        LDEBUG("Font path in relative : {}", cascadia_font_path.c_str());
+        auto cascadia_font = io.Fonts->AddFontFromFileTTF(cascadia_font_path.c_str(), 20.f);
+        if (!cascadia_font) {
+            LWARN("Loadding font cascadia from {} failed", cascadia_font_path.c_str());
+        }
+        // It's a stack , so need add default font after our customer fon
+        io.FontDefault = cascadia_font;
+        io.Fonts->AddFontDefault();
+    }
+
+
 
     if (true)
         ImGui::StyleColorsDark();
