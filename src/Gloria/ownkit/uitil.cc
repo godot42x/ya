@@ -1,7 +1,7 @@
-#include <precompile.h>
+#include <Gloria/minimal.h>
 
+#include <Gloria/ownkit/util.h>
 #include <filesystem>
-#include <ownkit/util.h>
 
 void ownkit::CreateDirectoryIfNotExist(const std::string &path)
 {

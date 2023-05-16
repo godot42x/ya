@@ -1,10 +1,9 @@
-#include <precompile.h>
+#include <Gloria/precompile.h>
 
-#include <logx/spdx.h>
-
+#include <Gloria/logx/spdx.h>
 
 #include "spdlog/spdlog.h"
-#include <ownkit/util.h>
+#include <Gloria/ownkit/util.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 

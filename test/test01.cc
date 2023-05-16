@@ -3,11 +3,11 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <functional>
-#include <glinternal/core.h>
 #include <gtest/gtest.h>
-#include <logx/spdx.h>
 #include <unistd.h>
 
+#include <Gloria/glinternal/core.h>
+#include <Gloria/logx/spdx.h>
 
 
 // TEST(TestInputMapping, InsertAndCall)

@@ -1,4 +1,4 @@
-#include <ownkit/kit.h>
+#include <Gloria/ownkit/kit.h>
 
 #include <GL/glew.h>
 

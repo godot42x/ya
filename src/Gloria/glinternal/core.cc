@@ -1,9 +1,8 @@
-#include <minimal.h>
+#include <Gloria/minimal.h>
 
-#include "glinternal/core.h"
-#include "spdlog/spdlog.h"
+#include <Gloria/glinternal/core.h>
 
-#include <logx/spdx.h>
+#include <Gloria/logx/spdx.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>

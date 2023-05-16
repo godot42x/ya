@@ -1,4 +1,4 @@
-#include <glinternal/VertexBuffer.h>
+#include <Gloria/glinternal/VertexBuffer.h>
 
 glinternal::VertexBuffer::VertexBuffer(GLenum buffertype, size_t datasize, float *data, GLuint drawType)
 {

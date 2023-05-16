@@ -1,8 +1,8 @@
 
+#include <Gloria/glinternal/Shader.h>
+#include <Gloria/glinternal/core.h>
 #include <cstdio>
 #include <filesystem>
-#include <glinternal/Shader.h>
-#include <glinternal/core.h>
 
 
 
@@ -11,8 +11,8 @@
 
 
 
+#include <Gloria/logx/spdx.h>
 #include <iostream>
-#include <logx/spdx.h>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -21,10 +21,13 @@
 
 #include <libgen.h>
 
+
+static ImGuiContext *g_ImGuiCtx;
+
 static void initImgui(GLFWwindow *glWindow)
 {
     IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    g_ImGuiCtx = ImGui::CreateContext();
 
     // key input
     auto io = ImGui::GetIO();
@@ -61,6 +64,7 @@ static void initImgui(GLFWwindow *glWindow)
 
 int main(int argc, char **argv)
 {
+
     logx::Loggerx::Instance()
         .InitConsoleLogger("Gloria", "GLORIA_ERR")
         .SetLogLvel(spdlog::level::trace);

@@ -6,7 +6,7 @@
 #include <string>
 
 
-#include <config/gl.h>
+#include <Gloria/config/gl.h>
 #include <unordered_map>
 
 

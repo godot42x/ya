@@ -3,7 +3,7 @@
 #include "spdlog/common.h"
 #include <spdlog/spdlog.h>
 
-#include <ownkit/util.h>
+#include <Gloria/ownkit/util.h>
 
 #include <memory>
 #include <string>

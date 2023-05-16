@@ -1,7 +1,7 @@
-#include <minimal.h>
+#include <Gloria/minimal.h>
 
-#include <glinternal/Shader.h>
-#include <logx/spdx.h>
+#include <Gloria/glinternal/Shader.h>
+#include <Gloria/logx/spdx.h>
 
 namespace glinternal {
 
