@@ -12,3 +12,5 @@ lib
 compile_commands.json
 ./compile_commands.json
 compile_commands*
+
+vulkaninfoSDK*
