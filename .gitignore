@@ -5,7 +5,7 @@ bin
 lib
 
 .xmake
-.vscode
+# .vscode
 .cache
 .vs
 
