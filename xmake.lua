@@ -16,13 +16,11 @@ add_requires("spdlog")
 -- add_requires("gtest")
 -- add_requires("imgui docking", { configs = { glfw = true, opengl3 = true } })
 
-
--- includes("engine")
--- includes("example/*")
-
 target("neon")
-set_kind("binary")
-add_files("main.cpp")
-add_packages("glfw")
-add_packages("vulkansdk")
-add_packages("spdlog")
+do
+    set_kind("binary")
+    add_files("main.cpp")
+    add_packages("glfw")
+    add_packages("vulkansdk")
+    add_packages("spdlog")
+end

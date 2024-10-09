@@ -3,11 +3,20 @@
 ---@param ... string
 function add_packages(...) end
 
+---@param ... string| "module.debug" | "module.release"
+function add_rules(...) end
+
 ---@param ... string
 function add_files(...) end
 
 ---@param ... string
 function add_requires(...) end
+
+---@class PackageConfig : table
+---@field config table
+
+---@overload fun(package:string, config:PackageConfig)
+function add_requires(package, config) end
 
 ---@param type "binary"|"shared"|"static"
 function set_kind(type) end
