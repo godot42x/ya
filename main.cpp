@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <format>
 #include <fstream>
 #include <set>
 
@@ -31,9 +32,11 @@ const char *to_string(VkDebugUtilsMessageSeverityFlagBitsEXT bit);
 const char *to_string(ERenderAPI bit);
 } // namespace std
 
-void panic(const std::string &msg, int code = 1)
+
+#include <source_location>
+void panic(const std::string &msg, int code = 1, std::source_location loc = std::source_location::current())
 {
-    std::cerr << "[ PANIC ] --> " << msg << std::endl;
+    std::cerr << "[ PANIC ] --> " << loc.file_name() << ":" << loc.line() << "  " << msg << std::endl;
     std::exit(code);
 }
 
@@ -66,7 +69,6 @@ struct GLFWState
 
     void Init()
     {
-
         if (GLFW_TRUE != glfwInit())
         {
             panic("Failed to init glfw");
@@ -150,6 +152,7 @@ const char *to_string(VkDebugUtilsMessageSeverityFlagBitsEXT bit)
         return "Unknown";
     }
     assert(false);
+    return "Unknown";
 }
 
 const char *to_string(ERenderAPI bit)
@@ -167,21 +170,9 @@ const char *to_string(ERenderAPI bit)
         return "Metal";
     }
     assert(false);
+    return "Unknown";
 }
 } // namespace std
-
-static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugMessengerCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT             messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-    void                                       *pUserData)
-{
-    std::cerr << "[ Validation Layer ] --> " << std::to_string(messageSeverity) << " " << pCallbackData->pMessage << std::endl;
-
-    return VK_FALSE;
-}
-
-
 
 // #define STB_IMAGE_IMPLEMENTATION
 // #include<stb/stb_iamge.h>
@@ -219,17 +210,6 @@ void DestoryDebugUtilsMessengerEXT(
     }
 }
 
-VkResult CreateDebugReportCallbackEXT(
-    VkInstance instance, const VkDebugReportCallbackCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugReportCallbackEXT *pCallback)
-{
-    auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
-    if (func != nullptr) {
-        return func(instance, pCreateInfo, pAllocator, pCallback);
-    }
-    else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
-}
 
 void DestoryDebugReportCallbackEXT(
     VkInstance instance, VkDebugReportCallbackEXT reporterCallback, const VkAllocationCallbacks *pAllocator)
@@ -366,8 +346,10 @@ struct VulkanState
         m_GLFWState = glfw_state;
 
         create_instance();
-        setupDebugMessenger();
-        // setupDebugCallback();
+
+        setup_debug_messenger();
+        setup_report_callback();
+
         createSurface();
         pickPhysicalDevice();
         createLogicalDevice();
@@ -480,53 +462,34 @@ struct VulkanState
 
 
         VkInstanceCreateInfo instance_create_info{
-            .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            .pNext                   = nullptr,
-            .flags                   = 0,
-            .pApplicationInfo        = &app_info,
-            .enabledLayerCount       = 0,
-            .ppEnabledLayerNames     = nullptr,
+            .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            .pNext            = nullptr,
+            .flags            = 0,
+            .pApplicationInfo = &app_info,
+            // .enabledLayerCount       = 0,
+            // .ppEnabledLayerNames     = nullptr,
             .enabledExtensionCount   = static_cast<uint32_t>(extensions.size()),
             .ppEnabledExtensionNames = extensions.data(),
         };
 
-        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-        {
-            if (m_EnableValidationLayers) {
-                instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
-                instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
+        if (m_EnableValidationLayers) {
+            const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = get_debug_messenger_create_info();
 
-                get_debug_messenger_create_info(debugCreateInfo);
-
-                instance_create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
-            }
-            else {
-                instance_create_info.enabledLayerCount = 0;
-                instance_create_info.pNext             = nullptr;
-            }
+            instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
+            instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
+            instance_create_info.pNext               = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
+        }
+        else {
+            instance_create_info.enabledLayerCount = 0;
+            instance_create_info.pNext             = nullptr;
         }
 
-        // ����  instance
         VkResult result = vkCreateInstance(&instance_create_info, nullptr, &m_instance);
         if (result != VK_SUCCESS) {
-            // panic("failed to create instance!");
             panic("failed to create instance!");
         }
     }
 
-    void setupDebugMessenger()
-    {
-        if (!m_EnableValidationLayers)
-            return;
-
-        VkDebugUtilsMessengerCreateInfoEXT createInfo;
-        get_debug_messenger_create_info(createInfo);
-
-        if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessengerCallback) != VK_SUCCESS)
-        {
-            panic("failed to set up debug messenger!");
-        }
-    }
 
     void createSurface()
     {
@@ -1769,34 +1732,84 @@ struct VulkanState
         // vkUnmapMemory(m_logicalDevice, m_uniformBUfferMemory);
     }
 
-  private: // ��������ܺ���
+  private:
 
-    void get_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT &debugCreatInfo)
+    const VkDebugUtilsMessengerCreateInfoEXT &get_debug_messenger_create_info()
     {
-        debugCreatInfo                 = {};
-        debugCreatInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        debugCreatInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debugCreatInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        debugCreatInfo.pfnUserCallback = debugMessengerCallback;
+        static VkDebugUtilsMessengerCreateInfoEXT info{
+            .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+            .pfnUserCallback = // nullptr,
+            [](VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
+               VkDebugUtilsMessageTypeFlagsEXT             type,
+               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+               void                                       *pUserData) -> VkBool32 {
+                std::cerr << std::format("[ Validation Layer ] severity: {}, type: {} --> {}",
+                                         std::to_string(severity),
+                                         type,
+                                         pCallbackData->pMessage)
+                          << std::endl;
+                return VK_FALSE;
+            },
+        };
+
+        return info;
     }
 
-    void setupDebugCallback()
+    void setup_debug_messenger()
     {
         if (!m_EnableValidationLayers)
             return;
 
-        VkDebugReportCallbackCreateInfoEXT callbackCreatInfo = {};
-        callbackCreatInfo.sType                              = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        callbackCreatInfo.flags                              = -VK_DEBUG_REPORT_ERROR_BIT_EXT | -VK_DEBUG_REPORT_WARNING_BIT_EXT;
-        callbackCreatInfo.pfnCallback                        = debugReportCallback;
+        const VkDebugUtilsMessengerCreateInfoEXT &createInfo = get_debug_messenger_create_info();
 
-        if (CreateDebugReportCallbackEXT(m_instance, &callbackCreatInfo, nullptr, &m_debugReportCallback) != VK_SUCCESS)
+        if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessengerCallback) != VK_SUCCESS)
         {
-            panic("failed to set up debug callback!");
+            panic("failed to set up debug messenger!");
+        }
+    }
+
+    void setup_report_callback()
+    {
+        if (!m_EnableValidationLayers)
+            return;
+
+        VkDebugReportCallbackCreateInfoEXT report_cb_create_info = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            .pNext = nullptr,
+            .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT |
+                     VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+                     VK_DEBUG_REPORT_ERROR_BIT_EXT,
+            .pfnCallback = nullptr,
+            .pUserData   = nullptr,
+        };
+        report_cb_create_info.pfnCallback = // static VKAPI_ATTR VkBool32 VKAPI_CALL  debugReportCallback(
+            [](VkDebugReportFlagsEXT      flagss,
+               VkDebugReportObjectTypeEXT flags_messageType,
+               uint64_t                   obj,
+               size_t                     location,
+               int32_t                    code,
+               const char                *layerPrefix,
+               const char                *msg,
+               void                      *pUserData) {
+                std::cerr << "validation layer: " << msg << std::endl;
+                return VK_FALSE;
+            };
+
+
+        auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_instance,
+                                                                              "vkCreateDebugReportCallbackEXT");
+        if (!func) {
+            panic("failed to set up debug callback!", VK_ERROR_EXTENSION_NOT_PRESENT);
+        }
+        VkResult ret = func(m_instance, &report_cb_create_info, nullptr, &m_debugReportCallback);
+        if (VK_SUCCESS != ret) {
+            panic("failed to set up debug callback!", ret);
         }
     }
 
@@ -2076,7 +2089,6 @@ struct VulkanState
     static std::vector<char> readFile(const std::string &filename)
     {
         std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
         if (!file.is_open()) {
             panic("failed to open file!");
         }
@@ -2341,7 +2353,7 @@ struct VulkanState
                 destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
             }
             else {
-                throw std::invalid_argument("unsupported layout transition!");
+                panic("unsupported layout transition!");
             }
         }
 
@@ -2443,6 +2455,7 @@ struct VulkanState
         }
 
         panic("failed to find supported format!");
+        return VK_FORMAT_UNDEFINED;
     }
 
     VkFormat findDepthFormat()
@@ -2460,30 +2473,6 @@ struct VulkanState
     }
 
   private: // static ����
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL
-    debugReportCallback(
-        VkDebugReportFlagsEXT      flagss,
-        VkDebugReportObjectTypeEXT flags_messageType,
-        uint64_t obj, size_t location, int32_t code,
-        const char *layerPrefix, const char *msg,
-        void *pUserData)
-    {
-        std::cerr << "validation layer: " << msg << std::endl;
-
-        return VK_FALSE;
-    }
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessengerCallback(
-        VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
-        VkDebugUtilsMessageTypeFlagsEXT             messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-        void                                       *pUserData)
-    {
-        std::cerr << "[ Validation Layer ] --> " << pCallbackData->pMessage << std::endl;
-
-        return VK_FALSE;
-    }
 };
 
 
