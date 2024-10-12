@@ -112,6 +112,11 @@ struct GLFWState
         glfwTerminate();
     }
 
+    void OnUpdate()
+    {
+        glfwPollEvents();
+    }
+
 
     std::vector<const char *> GetVKRequiredExtensions()
     {
@@ -2483,6 +2488,17 @@ struct App
     VulkanState m_VulkanState;
 
 
+    struct FTime
+    {
+        static float Now()
+        {
+            if constexpr (true) // use GLFW create window
+            {
+                return (float)glfwGetTime();
+            }
+        }
+    };
+
     void Init()
     {
         m_GLFWState.Init();
@@ -2499,21 +2515,24 @@ struct App
 
     void Run()
     {
-        float last_time = (float)glfwGetTime();
-        while (!glfwWindowShouldClose(m_GLFWState.m_Window))
+        float last_time = FTime::Now();
+        while (!ShouldClose())
         {
-            float time = (float)glfwGetTime();
+            float time = FTime::Now();
             float dt   = time - last_time;
             last_time  = time;
-            glfwPollEvents();
+            m_GLFWState.OnUpdate();
             m_VulkanState.PreUpdate();
             m_VulkanState.PostUpdate();
         }
     }
 
-    void *GetWindow()
+    bool ShouldClose()
     {
-        return m_GLFWState.m_Window;
+        if constexpr (true) // use GLFW create window
+        {
+            return glfwWindowShouldClose(m_GLFWState.m_Window);
+        }
     }
 };
 
