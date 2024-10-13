@@ -22,6 +22,9 @@
 
 using namespace std::literals;
 
+
+
+#include "log.h"
 struct UniformBufferObject
 {};
 enum class ERenderAPI;
@@ -41,9 +44,9 @@ void panic(const std::string &msg, int code = 1, std::source_location loc = std:
 }
 
 
-#define NEON_ASSERT(expr, msg) \
-    if (!(expr)) {             \
-        panic(msg);            \
+#define NE_ASSERT(expr, ...)             \
+    if (!(expr)) {                       \
+        panic(std::format(__VA_ARGS__)); \
     }
 
 
@@ -118,9 +121,14 @@ struct GLFWState
     }
 
 
+    void GetWindowSize(int &w, int &h)
+    {
+        glfwGetWindowSize(m_Window, &w, &h);
+    }
+
     std::vector<const char *> GetVKRequiredExtensions()
     {
-        NEON_ASSERT(RenderAPI == ERenderAPI::VULKAN, "Unsupported RenderAPI: "s + std::to_string(RenderAPI));
+        NE_ASSERT(RenderAPI == ERenderAPI::VULKAN, "Unsupported RenderAPI: {}", std::to_string(RenderAPI));
         std::vector<const char *> extensions;
 
         uint32_t     count = 0;
@@ -355,7 +363,7 @@ struct VulkanState
         setup_debug_messenger();
         setup_report_callback();
 
-        createSurface();
+        create_surface();
         pickPhysicalDevice();
         createLogicalDevice();
         createSwapChain();
@@ -496,11 +504,20 @@ struct VulkanState
     }
 
 
-    void createSurface()
+    void create_surface()
     {
-        if (glfwCreateWindowSurface(m_instance, m_GLFWState->m_Window, nullptr, &m_surface) != VK_SUCCESS)
+        if constexpr (1) // use GLFW
         {
-            panic("failed to create window surface");
+            if (VK_SUCCESS != glfwCreateWindowSurface(m_instance,
+                                                      m_GLFWState->m_Window,
+                                                      nullptr,
+                                                      &m_surface))
+            {
+                panic("failed to create window surface");
+            }
+        }
+        else {
+            panic("Unknow window surface creation provider");
         }
     }
 
@@ -1820,17 +1837,14 @@ struct VulkanState
 
     void pickPhysicalDevice()
     {
-        uint32_t deviceCount = 0;
-        VkResult result      = vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+        uint32_t count  = 0;
+        VkResult result = vkEnumeratePhysicalDevices(m_instance, &count, nullptr);
+        NE_ASSERT(count > 0, "Failed to find GPUs with Vulkan support!");
 
-        if (deviceCount == 0) {
-            panic("failed to find GPUs with Vulkan support!");
-        }
+        std::vector<VkPhysicalDevice> devices(count);
+        vkEnumeratePhysicalDevices(m_instance, &count, devices.data());
 
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
-
-        std::cout << "--Physical Device(" << deviceCount << "):\n";
+        std::cout << "--Physical Device(" << count << "):\n";
 
         for (const auto &device : devices) {
             std::cout << "----Physical Device-" << device << std::endl;
@@ -1912,51 +1926,6 @@ struct VulkanState
         return indices;
     }
 
-    std::vector<const char *> get_required_extensions()
-    {
-        std::vector<const char *> extensions;
-
-        uint32_t     glfwExtensionsCount = 0;
-        const char **glfwExtensions;
-
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
-        std::cout << "glfwGetRequiredInstanceExtensions: " << glfwExtensions << std::endl;
-
-        for (unsigned int i = 0; i < glfwExtensionsCount; ++i) {
-            extensions.push_back(glfwExtensions[i]);
-        }
-
-        if (m_EnableValidationLayers) {
-            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        }
-
-        return extensions;
-    }
-
-    std::vector<VkExtensionProperties> getRequiredExtensions_vec_VKExtensionProperties()
-    {
-        // ��� glfw extensions
-        unsigned int glfwExtensionCount = 0;
-        const char **glfwExtensions;
-
-        // TODO(Fix maybe): duplicate get extensionCount
-        vkEnumerateInstanceExtensionProperties(nullptr, &glfwExtensionCount, nullptr);
-        std::cout << glfwExtensionCount << "extension supported" << std::endl;
-
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-        std::cout << "glfwGetRequiredInstanceExtensions: " << glfwExtensions << std::endl;
-
-        std::vector<VkExtensionProperties> extensions(glfwExtensionCount);
-        vkEnumerateInstanceExtensionProperties(nullptr, &glfwExtensionCount, extensions.data());
-
-        std::cout << "available extensions:" << std::endl;
-
-        for (const auto &extension : extensions) {
-            std::cout << "\t" << extension.extensionName << std::endl;
-        }
-
-        return extensions;
-    }
 
     bool is_validation_layers_supported()
     {
@@ -2077,7 +2046,7 @@ struct VulkanState
         }
         else {
             int width, height;
-            glfwGetWindowSize(m_GLFWState->m_Window, &width, &height);
+            m_GLFWState->GetWindowSize(width, height);
             VkExtent2D actualExtent = {(uint32_t)width, (uint32_t)height};
 
             actualExtent.width = std::max(
