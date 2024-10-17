@@ -25,6 +25,7 @@ using namespace std::literals;
 
 
 #include "log.h"
+
 struct UniformBufferObject
 {};
 enum class ERenderAPI;
@@ -37,9 +38,9 @@ const char *to_string(ERenderAPI bit);
 
 
 #include <source_location>
-void panic(const std::string &msg, int code = 1, std::source_location loc = std::source_location::current())
+void panic(const std::string &msg, int code = 1)
 {
-    std::cerr << "[ PANIC ] --> " << loc.file_name() << ":" << loc.line() << "  " << msg << std::endl;
+    NE_ERROR(msg);
     std::exit(code);
 }
 
@@ -87,26 +88,11 @@ struct GLFWState
             panic("Failed to create window", 2);
         }
 
+        // Config
         glfwMakeContextCurrent(m_Window);
         glfwSwapInterval(1);
 
-        glfwSetWindowUserPointer(m_Window, this);
-
-        // TODO: better event system
-        glfwSetWindowSizeCallback(m_Window, [](GLFWwindow *window, int width, int height) {
-            if (width == 0 || height == 0)
-                return;
-            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnWindowResized.Broadcast(window, width, height);
-        });
-        glfwSetWindowCloseCallback(m_Window, [](GLFWwindow *window) {
-            printf("Window Closed...\n");
-        });
-        glfwSetKeyCallback(m_Window, [](GLFWwindow *window, int key, int scancode, int action, int mods) {
-            if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
-            }
-            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnKeyboardInput.Broadcast(window, key, scancode, action, mods);
-        });
+        bind_events();
     }
 
     void Uninit()
@@ -114,6 +100,7 @@ struct GLFWState
         glfwDestroyWindow(m_Window);
         glfwTerminate();
     }
+
 
     void OnUpdate()
     {
@@ -143,6 +130,28 @@ struct GLFWState
 
 
         return extensions;
+    }
+
+  private:
+    void bind_events()
+    {
+        glfwSetWindowUserPointer(m_Window, this);
+
+        // TODO: better event system
+        glfwSetWindowSizeCallback(m_Window, [](GLFWwindow *window, int width, int height) {
+            if (width == 0 || height == 0)
+                return;
+            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnWindowResized.Broadcast(window, width, height);
+        });
+        glfwSetWindowCloseCallback(m_Window, [](GLFWwindow *window) {
+            printf("Window Closed...\n");
+        });
+        glfwSetKeyCallback(m_Window, [](GLFWwindow *window, int key, int scancode, int action, int mods) {
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
+            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnKeyboardInput.Broadcast(window, key, scancode, action, mods);
+        });
     }
 };
 
@@ -365,6 +374,7 @@ struct VulkanState
 
         create_surface();
         pickPhysicalDevice();
+
         createLogicalDevice();
         createSwapChain();
         createImageViews();
@@ -1844,9 +1854,10 @@ struct VulkanState
         std::vector<VkPhysicalDevice> devices(count);
         vkEnumeratePhysicalDevices(m_instance, &count, devices.data());
 
-        std::cout << "--Physical Device(" << count << "):\n";
+        NE_TRACE("--Physical Device {}", count);
 
-        for (const auto &device : devices) {
+        for (const auto &device : devices)
+        {
             std::cout << "----Physical Device-" << device << std::endl;
             // TODO(fix) : no handle for present?
             if (isDeviceSuitable(device))
@@ -2470,6 +2481,7 @@ struct App
 
     void Init()
     {
+        neon::Logger::Init();
         m_GLFWState.Init();
         m_VulkanState.Init(&m_GLFWState);
         m_GLFWState.OnKeyboardInput.AddStatic([](GLFWwindow *window, int key, int scancode, int action, int mods) {
