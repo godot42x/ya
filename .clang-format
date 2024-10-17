@@ -8,6 +8,10 @@ AllowShortFunctionsOnASingleLine: true
 AlwaysBreakTemplateDeclarations: MultiLine
 BinPackArguments: false
 
+IndentPPDirectives: BeforeHash
+
+
+
 # Works after clang-format 16
 #BreakAfterAttributes: Leave
 
