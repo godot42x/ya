@@ -8,6 +8,7 @@
         "Swapchains",
         "vertexbuffer",
         "Viewports",
-        "VKAPI"
+        "VKAPI",
+        "WINDOWPOS"
     ]
 }

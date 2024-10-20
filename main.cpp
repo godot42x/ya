@@ -137,10 +137,6 @@ struct GLFWState : public Layer
 };
 
 
-struct SDLState : public Layer
-{
-};
-
 
 namespace std
 {
