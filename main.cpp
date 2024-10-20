@@ -24,16 +24,8 @@ using namespace std::literals;
 
 
 
-#include "log.h"
+#include "base.h"
 
-
-#if defined(_WIN32)
-    #define PLATFORM_BREAK() __debugbreak()
-#elif defined(__clang__) || defined(__GNUC__)
-    #define PLATFORM_BREAK() __builtin_trap()
-#else
-    #define PLATFORM_BREAK()
-#endif
 
 
 struct UniformBufferObject
@@ -47,33 +39,12 @@ const char *to_string(ERenderAPI bit);
 } // namespace std
 
 
-void panic(const std::string &msg, int code = 1)
-{
-    NE_ERROR(msg);
-    PLATFORM_BREAK();
-    std::exit(code);
-}
-
-
-#define NE_ASSERT(expr, ...)             \
-    if (!!!(expr)) {                     \
-        panic(std::format(__VA_ARGS__)); \
-    }
-
-
-static enum class ERenderAPI {
-    VULKAN = 0,
-    OPENGL = 1,
-    D3D12  = 2,
-    D3D11  = 3,
-    METAL  = 4
-} RenderAPI = ERenderAPI::VULKAN;
-
 
 struct App;
 
 
-struct GLFWState
+
+struct GLFWState : public Layer
 {
     GLFWwindow *m_Window = nullptr;
     const bool  bVulkan  = true;
@@ -166,6 +137,10 @@ struct GLFWState
 };
 
 
+struct SDLState : public Layer
+{
+};
+
 
 namespace std
 {
@@ -232,18 +207,18 @@ VkResult CreateDebugUtilsMessengerEXT(
     }
 }
 
-void DestoryDebugUtilsMessengerEXT(
-    VkInstance instance, VkDebugUtilsMessengerEXT debugerMessenger, const VkAllocationCallbacks *pAllocator)
+void DestroyDebugUtilsMessengerEXT(
+    VkInstance instance, VkDebugUtilsMessengerEXT debuggerMessenger, const VkAllocationCallbacks *pAllocator)
 {
     auto func =
         (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (nullptr != func) {
-        func(instance, debugerMessenger, pAllocator);
+        func(instance, debuggerMessenger, pAllocator);
     }
 }
 
 
-void DestoryDebugReportCallbackEXT(
+void DestroyDebugReportCallbackEXT(
     VkInstance instance, VkDebugReportCallbackEXT reporterCallback, const VkAllocationCallbacks *pAllocator)
 {
     auto func =
@@ -255,8 +230,8 @@ void DestoryDebugReportCallbackEXT(
 
 
 
-// const std::vector<Vertex> m_verticesa = {
-//     // ���� �� rgb �� texture �Ľ����� ����Ϊopengl���ƶ���ת��y�ᣬ��ʱ�����룬˳ʱ��������ͼ���ۣ�
+// const std::vector<Vertex> m_vertices = {
+//     // ���� �� rgb �� texture �Ľ����� ����Opengl���ƶ���ת��y�ᣬ��ʱ�����룬˳ʱ��������ͼ���ۣ�
 //     {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
 //     {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 //     {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
@@ -267,7 +242,7 @@ void DestoryDebugReportCallbackEXT(
 //     {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
 //     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
 
-// const std::vector<uint16_t> m_indicesa = {
+// const std::vector<uint16_t> m_indices = {
 //     0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7};
 
 
@@ -294,7 +269,7 @@ struct VulkanState
     VkSurfaceKHR m_Surface;
 
     VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
-    VkDebugReportCallbackEXT m_DebugReportCallback; // depercate
+    VkDebugReportCallbackEXT m_DebugReportCallback; // deprecate
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice;
@@ -309,11 +284,11 @@ struct VulkanState
     std::vector<VkImage>       m_swapChainImages;       // VKImage: һ�����Զ�д��Texture
     VkFormat                   m_swapChainImageFormat;
     VkExtent2D                 m_swapChainExtent;
-    std::vector<VkImageView>   m_swapChainImageViews;
+    std::vector<VkImageView>   m_swapChainImageViews; //
 
 
     VkPipeline   m_graphicsPipeLine; // drawing ʱ GPU ��Ҫ��״̬��Ϣ���Ͻṹ�壬������shader,��դ��,depth��
-    VkRenderPass m_renderPass;       // ������Ⱦ������drawing�����������, attachhment,subpass
+    VkRenderPass m_renderPass;       // ������Ⱦ������drawing�����������, attachment,subpass
 
 
     VkDescriptorPool      m_descriptorPool;
@@ -384,11 +359,13 @@ struct VulkanState
         find_and_pick_physical_device();
 
         create_logic_device();
+
+        // TODO: the swapchain maybe
         create_swapchain();
 
         createImageViews();
-        createRenderPass();
-        createDescriptorSetLayout();
+        createRenderPass();          // specify how many attachments(color,depth,etc)
+        createDescriptorSetLayout(); // specify how many binding (UBO,uniform,etc)
         createGraphicsPipeline();
 
         createCommandPool();
@@ -410,20 +387,17 @@ struct VulkanState
         createDescriptorSet();
 
         createCommandBuffers();
-        createSemphores();
+        createSemaphores();
     }
 
 
 
-    void PreUpdate()
+    void OnUpdate()
     {
         updateUniformBuffer();
         drawFrame();
 
         vkDeviceWaitIdle(m_LogicalDevice);
-    }
-    void PostUpdate()
-    {
     }
 
     void Uninit()
@@ -461,9 +435,9 @@ struct VulkanState
         //  Swap Chain ���
         if (m_EnableValidationLayers)
         {
-            DestoryDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
+            DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
         }
-        // DestoryDebugReportCallbackEXT(m_instance, m_debugReportCallback, nullptr);
+        // DestroyDebugReportCallbackEXT(m_instance, m_debugReportCallback, nullptr);
 
         vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
         vkDestroyInstance(m_Instance, nullptr);
@@ -662,7 +636,7 @@ struct VulkanState
 
             // Create swapchain
             if (vkCreateSwapchainKHR(m_LogicalDevice, &swapChainCreateInfo, nullptr, &m_SwapChain) != VK_SUCCESS) {
-                panic("faild to create swap chain!");
+                panic("failed to create swap chain!");
             }
         }
 
@@ -1601,7 +1575,7 @@ struct VulkanState
         }
     }
 
-    void createSemphores()
+    void createSemaphores()
     {
         VkSemaphoreCreateInfo semaphoreInfo = {};
         semaphoreInfo.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1872,7 +1846,7 @@ struct VulkanState
         NE_ASSERT(m_PhysicalDevice != VK_NULL_HANDLE, "failed to find a suitable GPU!");
     }
 
-    // A phichysical device is suitable/supported for ...
+    // A physical device is suitable/supported for ...
     bool is_device_suitable(VkPhysicalDevice device)
     {
         // VkPhysicalDeviceProperties deviceProperties;
@@ -2009,25 +1983,25 @@ struct VulkanState
         return details;
     }
 
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableForamts)
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats)
     {
         // Method 1
-        if (availableForamts.size() == 1 && availableForamts[0].format == VK_FORMAT_UNDEFINED)
+        if (availableFormats.size() == 1 && availableFormats[0].format == VK_FORMAT_UNDEFINED)
         {
             return {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
         }
 
         // Method 2
-        for (const auto &availableForamt : availableForamts)
+        for (const auto &availableFormat : availableFormats)
         {
-            if (availableForamt.format == VK_FORMAT_B8G8R8A8_UNORM && availableForamt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             {
-                return availableForamt;
+                return availableFormat;
             }
         }
 
-        // Fallback : Grede and rank, but ͨ��ѡ���һ����ʽ
-        return availableForamts[0];
+        // Fallback : Grade and rank, but ͨ��ѡ���һ����ʽ
+        return availableFormats[0];
     }
 
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes)
@@ -2501,8 +2475,7 @@ struct App
             float dt   = time - last_time;
             last_time  = time;
             m_GLFWState.OnUpdate();
-            m_VulkanState.PreUpdate();
-            m_VulkanState.PostUpdate();
+            m_VulkanState.OnUpdate();
         }
     }
 

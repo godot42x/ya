@@ -1,6 +1,13 @@
 {
     "cSpell.words": [
+        "renderpass",
+        "SFLOAT",
         "spdlog",
+        "subpass",
+        "subresource",
+        "Swapchains",
+        "vertexbuffer",
+        "Viewports",
         "VKAPI"
     ]
 }

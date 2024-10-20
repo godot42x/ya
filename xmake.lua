@@ -12,6 +12,7 @@ set_languages("c++20")
 add_requires("glfw")
 add_requires("vulkansdk")
 add_requires("spdlog")
+add_requires("libsdl")
 -- add_requires("glew", "glfw", "glm", "spdlog")
 -- add_requires("gtest")
 -- add_requires("imgui docking", { configs = { glfw = true, opengl3 = true } })
@@ -27,4 +28,5 @@ do
     add_packages("glfw")
     add_packages("vulkansdk")
     add_packages("spdlog")
+    add_packages("libsdl")
 end
