@@ -35,3 +35,6 @@ function set_exceptions(v) end
 
 ---@param platform "windows"|"linux"|"ios"
 function is_plat(platform) end
+
+---@param ... string
+function includes(...) end

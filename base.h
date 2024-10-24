@@ -13,12 +13,7 @@
     #define PLATFORM_BREAK()
 #endif
 
-void panic(const std::string &msg, int code = 1)
-{
-    NE_ERROR(msg);
-    PLATFORM_BREAK();
-    std::exit(code);
-}
+void panic(const std::string &msg, int code = 1);
 
 
 #define NE_ASSERT(expr, ...)             \
@@ -41,3 +36,10 @@ struct Layer
     virtual void Uninit()   = 0;
     virtual void OnUpdate() = 0;
 };
+
+
+namespace std
+{
+
+const char *to_string(ERenderAPI bit);
+} // namespace std

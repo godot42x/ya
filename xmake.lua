@@ -13,13 +13,15 @@ add_requires("glfw")
 add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl")
-add_requires( "glm")
+add_requires("glm")
 -- add_requires("gtest")
 -- add_requires("imgui docking", { configs = { glfw = true, opengl3 = true } })
 
 if is_plat("windows") then
     set_exceptions("cxx")
 end
+
+includes("./xmake")
 
 target("neon")
 do

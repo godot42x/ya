@@ -20,11 +20,13 @@
 
 #include "delegate.h"
 
+
 using namespace std::literals;
 
 
 
 #include "base.h"
+#include "glfw_state.h"
 
 
 
@@ -35,106 +37,11 @@ enum class ERenderAPI;
 namespace std
 {
 const char *to_string(VkDebugUtilsMessageSeverityFlagBitsEXT bit);
-const char *to_string(ERenderAPI bit);
 } // namespace std
 
 
 
 struct App;
-
-
-
-struct GLFWState : public Layer
-{
-    GLFWwindow *m_Window = nullptr;
-    const bool  bVulkan  = true;
-
-    MulticastDelegate<GLFWwindow * /*window*/, int /*width*/, int /*height */>                              OnWindowResized;
-    MulticastDelegate<GLFWwindow * /*window*/, int /*key*/, int /*scancode*/, int /*action*/, int /*mods*/> OnKeyboardInput;
-
-    void Init()
-    {
-        if (GLFW_TRUE != glfwInit())
-        {
-            panic("Failed to init glfw");
-        }
-
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-
-        m_Window = glfwCreateWindow(1024, 768, "Neon", nullptr, nullptr);
-        if (!m_Window)
-        {
-            glfwTerminate();
-            panic("Failed to create window", 2);
-        }
-
-        // Config
-        glfwMakeContextCurrent(m_Window);
-        glfwSwapInterval(1);
-
-        bind_events();
-    }
-
-    void Uninit()
-    {
-        glfwDestroyWindow(m_Window);
-        glfwTerminate();
-    }
-
-
-    void OnUpdate()
-    {
-        glfwPollEvents();
-    }
-
-
-    void GetWindowSize(int &w, int &h)
-    {
-        glfwGetWindowSize(m_Window, &w, &h);
-    }
-
-    std::vector<const char *> GetVKRequiredExtensions()
-    {
-        NE_ASSERT(RenderAPI == ERenderAPI::VULKAN, "Unsupported RenderAPI: {}", std::to_string(RenderAPI));
-        std::vector<const char *> extensions;
-
-        uint32_t     count = 0;
-        const char **glfwExtensions;
-
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&count);
-        std::cout << "glfwGetRequiredInstanceExtensions: \n";
-        for (unsigned int i = 0; i < count; ++i) {
-            std::cout << glfwExtensions[i] << "\n";
-            extensions.push_back(glfwExtensions[i]);
-        }
-
-
-        return extensions;
-    }
-
-  private:
-    void bind_events()
-    {
-        glfwSetWindowUserPointer(m_Window, this);
-
-        // TODO: better event system
-        glfwSetWindowSizeCallback(m_Window, [](GLFWwindow *window, int width, int height) {
-            if (width == 0 || height == 0)
-                return;
-            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnWindowResized.Broadcast(window, width, height);
-        });
-        glfwSetWindowCloseCallback(m_Window, [](GLFWwindow *window) {
-            printf("Window Closed...\n");
-        });
-        glfwSetKeyCallback(m_Window, [](GLFWwindow *window, int key, int scancode, int action, int mods) {
-            if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
-            }
-            static_cast<GLFWState *>(glfwGetWindowUserPointer(window))->OnKeyboardInput.Broadcast(window, key, scancode, action, mods);
-        });
-    }
-};
 
 
 
@@ -158,23 +65,6 @@ const char *to_string(VkDebugUtilsMessageSeverityFlagBitsEXT bit)
     return "Unknown";
 }
 
-const char *to_string(ERenderAPI bit)
-{
-    switch (bit) {
-    case ERenderAPI::VULKAN:
-        return "Vulkan";
-    case ERenderAPI::OPENGL:
-        return "OpenGL";
-    case ERenderAPI::D3D12:
-        return "D3D12";
-    case ERenderAPI::D3D11:
-        return "D3D11";
-    case ERenderAPI::METAL:
-        return "Metal";
-    }
-    assert(false);
-    return "Unknown";
-}
 } // namespace std
 
 // #define STB_IMAGE_IMPLEMENTATION
@@ -188,41 +78,6 @@ const char *to_string(ERenderAPI bit)
 
 // const std::string MODEL_PATH   = "models/monkey.obj";
 // const std::string TEXTURE_PATH = "textures/texture.jpg";
-
-
-VkResult CreateDebugUtilsMessengerEXT(
-    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pDebugMessenger)
-{
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-
-    if (nullptr != func) {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-    else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
-}
-
-void DestroyDebugUtilsMessengerEXT(
-    VkInstance instance, VkDebugUtilsMessengerEXT debuggerMessenger, const VkAllocationCallbacks *pAllocator)
-{
-    auto func =
-        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (nullptr != func) {
-        func(instance, debuggerMessenger, pAllocator);
-    }
-}
-
-
-void DestroyDebugReportCallbackEXT(
-    VkInstance instance, VkDebugReportCallbackEXT reporterCallback, const VkAllocationCallbacks *pAllocator)
-{
-    auto func =
-        (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
-    if (nullptr != func) {
-        func(instance, reporterCallback, pAllocator);
-    }
-}
 
 
 
@@ -265,7 +120,7 @@ struct VulkanState
     VkSurfaceKHR m_Surface;
 
     VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
-    VkDebugReportCallbackEXT m_DebugReportCallback; // deprecate
+    VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
@@ -410,8 +265,11 @@ struct VulkanState
 
         create_instance();
 
-        setup_debug_messenger();
-        setup_report_callback();
+        if (m_EnableValidationLayers)
+        {
+            setup_debug_messenger_ext();
+            setup_report_callback_ext();
+        }
 
         create_surface();
         find_and_pick_physical_device();
@@ -493,12 +351,11 @@ struct VulkanState
 
         vkDestroyDevice(m_LogicalDevice, nullptr);
 
-        //  Swap Chain ���
         if (m_EnableValidationLayers)
         {
-            DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
+            destroy_debug_callback_ext();
+            destroy_debug_report_callback_ext();
         }
-        // DestroyDebugReportCallbackEXT(m_instance, m_debugReportCallback, nullptr);
 
         vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
         vkDestroyInstance(m_Instance, nullptr);
@@ -540,7 +397,7 @@ struct VulkanState
         };
 
         if (m_EnableValidationLayers) {
-            const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = get_debug_messenger_create_info();
+            const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = get_debug_messenger_create_info_ext();
 
             instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
             instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
@@ -1802,7 +1659,7 @@ struct VulkanState
 
   private:
 
-    const VkDebugUtilsMessengerCreateInfoEXT &get_debug_messenger_create_info()
+    const VkDebugUtilsMessengerCreateInfoEXT &get_debug_messenger_create_info_ext()
     {
         static VkDebugUtilsMessengerCreateInfoEXT info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -1829,23 +1686,25 @@ struct VulkanState
         return info;
     }
 
-    void setup_debug_messenger()
+    void setup_debug_messenger_ext()
     {
-        if (!m_EnableValidationLayers)
-            return;
+        NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
 
-        const VkDebugUtilsMessengerCreateInfoEXT &createInfo = get_debug_messenger_create_info();
+        const VkDebugUtilsMessengerCreateInfoEXT &create_info = get_debug_messenger_create_info_ext();
 
-        if (CreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessengerCallback) != VK_SUCCESS)
-        {
-            panic("failed to set up debug messenger!");
+        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
+        if (!func) {
+            panic("failed to find debugger crate function! {}", VK_ERROR_EXTENSION_NOT_PRESENT);
+        }
+        VkResult ret = func(m_Instance, &create_info, nullptr, &m_DebugMessengerCallback);
+        if (VK_SUCCESS != ret) {
+            panic("failed to set up debug messenger! {}", ret);
         }
     }
 
-    void setup_report_callback()
+    void setup_report_callback_ext()
     {
-        if (!m_EnableValidationLayers)
-            return;
+        NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
 
         VkDebugReportCallbackCreateInfoEXT report_cb_create_info = {
             .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
@@ -1878,6 +1737,23 @@ struct VulkanState
         VkResult ret = func(m_Instance, &report_cb_create_info, nullptr, &m_DebugReportCallback);
         if (VK_SUCCESS != ret) {
             panic("failed to set up debug callback!", ret);
+        }
+    }
+
+    void destroy_debug_callback_ext()
+    {
+        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (nullptr != func) {
+            func(m_Instance, m_DebugMessengerCallback, nullptr);
+        }
+    }
+
+
+    void destroy_debug_report_callback_ext()
+    {
+        auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
+        if (nullptr != func) {
+            func(m_Instance, m_DebugReportCallback, nullptr);
         }
     }
 
@@ -2429,7 +2305,7 @@ struct VulkanState
         return format == VK_FORMAT_D32_SFLOAT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
-  private: // static ����
+  private:
 };
 
 
