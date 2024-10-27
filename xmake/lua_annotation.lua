@@ -12,6 +12,9 @@ function add_files(...) end
 ---@param ... string
 function add_requires(...) end
 
+---@param ... string
+function add_includedirs(...) end
+
 ---@class PackageConfig : table
 ---@field config table
 

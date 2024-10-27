@@ -14,6 +14,12 @@ add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl")
 add_requires("glm")
+
+add_requires("glad")
+if is_plat("windows") then
+    add_requires("opengl")
+end
+
 -- add_requires("gtest")
 -- add_requires("imgui docking", { configs = { glfw = true, opengl3 = true } })
 
@@ -21,7 +27,7 @@ if is_plat("windows") then
     set_exceptions("cxx")
 end
 
-includes("./xmake")
+add_includedirs("./engine/src/")
 
 target("neon")
 do
@@ -32,4 +38,6 @@ do
     add_packages("spdlog")
     add_packages("libsdl")
     add_packages("glm")
+    add_packages("glad")
 end
+

@@ -2,7 +2,9 @@
     "cSpell.words": [
         "renderpass",
         "SFLOAT",
+        "shaderc",
         "spdlog",
+        "SPIRV",
         "subpass",
         "Subpasses",
         "subresource",
