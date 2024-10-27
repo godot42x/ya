@@ -4,6 +4,7 @@
         "SFLOAT",
         "spdlog",
         "subpass",
+        "Subpasses",
         "subresource",
         "Swapchains",
         "vertexbuffer",

@@ -13,6 +13,7 @@
     #define PLATFORM_BREAK()
 #endif
 
+// TODO: make macro to panic with source location
 void panic(const std::string &msg, int code = 1);
 
 
