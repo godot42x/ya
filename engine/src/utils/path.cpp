@@ -16,7 +16,20 @@
 #include <cassert>
 #include <cstdio>
 #include <filesystem>
-#include <stdexcept>
+#include <iostream>
+#include <optional>
+#include <queue>
+#include <set>
+
+
+
+static void panic(const std::string &msg, int code = 1)
+{
+    fprintf(stderr, msg.c_str());
+    // PLATFORM_BREAK();
+    std::exit(code);
+}
+
 
 #if __linux__
     #include "unistd.h"
@@ -27,16 +40,8 @@
 
 #endif
 
-
 namespace utils
 {
-
-std::string        project_root_symbol = std::string(".project-root-symbol");
-void               SetProjectRootSymbol(std::string symbol) { project_root_symbol = symbol; }
-const std::string &GetProjectRootSymbol()
-{
-    return project_root_symbol;
-}
 
 using std::filesystem::path;
 
@@ -67,21 +72,37 @@ std::filesystem::path get_runtime_exe_path()
 }
 
 
-static bool is_dir_contain_file_symbol(const std::filesystem::path &the_path, std::string &target_symbol)
+// folder also be considered as a file
+bool is_dir_contain_all_symbols(const std::filesystem::path &path, const std::set<std::string> &target_symbols)
 {
-    for (const auto &file : std::filesystem::directory_iterator(the_path))
+    int count = 0;
+    for (const auto &file : std::filesystem::directory_iterator(path))
     {
-        if (file.path().filename() == target_symbol) {
-            return true;
+        if (target_symbols.contains(file.path().filename().string())) {
+            ++count;
         }
     }
-    return false;
+    return count == target_symbols.size();
 }
 
-static bool recursive_iterate_parent(const path &init_pos, std::string &target_symbol, path &out_dir)
+
+
+namespace project_locate
 {
-    static int nth       = 1;
-    path       directory = init_pos;
+#if !defined(NDEBUG)
+    #define __VALIDATION 1
+#endif
+
+static std::filesystem::path project_root_path;
+#if __VALIDATION
+static bool bProjectRootInitialized = false;
+#endif
+
+
+static bool iterate_parents(const path &init_pos, const std::set<std::string> &target_symbols, path &out_dir)
+{
+    int  count     = 0;
+    path directory = init_pos;
     while (true)
     {
         // printf("parent path: %s\n", directory.parent_path().string().c_str());
@@ -98,15 +119,16 @@ static bool recursive_iterate_parent(const path &init_pos, std::string &target_s
         }
 #elif _WIN32
         if (directory == directory.root_path()) {
+            fprintf(stderr, "current directory is already root path: %s\n", directory.string().c_str());
             break;
         }
 #endif
 
-        printf("Recursive parent %d times\n", nth++);
+        printf("Iterate parent %d times\n", count++);
         directory = directory.parent_path();
         printf("current directory: %s\n", directory.string().c_str());
 
-        if (is_dir_contain_file_symbol(directory, target_symbol)) {
+        if (is_dir_contain_all_symbols(directory, target_symbols)) {
             out_dir = directory;
             return true;
         }
@@ -115,97 +137,99 @@ static bool recursive_iterate_parent(const path &init_pos, std::string &target_s
 }
 
 
-static int  nth = 1;
-static bool recursive_iterate_children(const path &init_pos, std::string &target_symbol, path &out_dir)
+
+static bool iterate_children(const path &init_pos, const std::set<std::string> &target_symbols, path &out_dir)
 {
-    printf("Recursive children %d times\n", nth++);
     if (!std::filesystem::is_directory(init_pos)) {
         return false;
     }
 
-    for (auto &entry : std::filesystem::directory_iterator(init_pos))
-    {
-        if (entry.is_directory()) {
-            if (is_dir_contain_file_symbol(entry.path(), target_symbol)) {
-                out_dir = entry.path();
-                return true;
-            }
-            if (recursive_iterate_children(entry.path(), target_symbol, out_dir))
-            {
-                return true;
+    int              count = 0;
+    std::queue<path> dir_queue;
+    dir_queue.push(init_pos);
+
+    while (!dir_queue.empty()) {
+        printf("The %dth of child directory\n", count++);
+        path current_dir = dir_queue.front();
+        dir_queue.pop();
+
+        for (auto &entry : std::filesystem::directory_iterator(current_dir)) {
+            if (entry.is_directory()) {
+                if (is_dir_contain_all_symbols(entry.path(), target_symbols)) {
+                    out_dir = entry.path();
+                    return true;
+                }
+                dir_queue.push(entry.path());
             }
         }
     }
     return false;
 }
 
-path find_directory_by_file_symbol(path &initial_pos, std::string target_symbol)
+static std::optional<path> find_directory_by_file_symbols(path &initial_pos, const std::set<std::string> &target_symbols)
 {
     // to parent
-    if (!initial_pos.empty()) {
-        if (is_directory(initial_pos) && is_dir_contain_file_symbol(initial_pos, target_symbol)) {
-            return initial_pos;
-        }
-
-        path target_path;
-        if (recursive_iterate_parent(initial_pos, target_symbol, target_path)) {
-            return target_path;
-        }
-        if (recursive_iterate_children(initial_pos, target_symbol, target_path))
-        {
-            return target_path;
-        }
+    if (initial_pos.empty()) {
+        panic("initial_pos is empty");
     }
 
-    throw std::runtime_error("The directory mark by symbol file not found! Symbol file: " + target_symbol);
+    if (std::filesystem::is_directory(initial_pos) && is_dir_contain_all_symbols(initial_pos, target_symbols)) {
+        return initial_pos;
+    }
+
+    path target_path;
+    if (iterate_parents(initial_pos, target_symbols, target_path))
+    {
+        return target_path;
+    }
+    if (iterate_children(initial_pos, target_symbols, target_path))
+    {
+        return target_path;
+    }
+
+    return {};
 }
 
 
-const std::filesystem::path &ProjectRoot()
+
+void init(const std::vector<std::string> &symbols)
 {
-    static bool bInitialized = false;
-    static path project_root;
-
-    if (bInitialized) {
-        return project_root;
-    }
-
     path exe_path = get_runtime_exe_path();
     printf("exe_path: %ls\n", exe_path.c_str());
 
-    if (exe_path.empty())
-    {
-        throw std::runtime_error("Failed to get runtime path");
+    if (symbols.size() == 0) {
+        panic("No enough args for project locate process init");
     }
-    if (std::filesystem::is_directory(exe_path))
-    {
-        throw std::runtime_error("TODO and watch it: why a directory it is?");
+    if (exe_path.empty()) {
+        panic("Failed to get runtime path");
+    }
+    if (std::filesystem::is_directory(exe_path)) {
+        panic("TODO and watch it: why a directory it is?");
     }
 
-    // TODO: current identify it by a file, maybe by some certain directory struct further more
-    auto target_symbol = GetProjectRootSymbol();
-    assert(!target_symbol.empty());
-    printf("target symbol: %s\n", target_symbol.c_str());
-    path project_root_dir = find_directory_by_file_symbol(exe_path, target_symbol);
-    project_root          = std::filesystem::absolute(project_root_dir);
-    bInitialized          = true;
+    printf("symbol args size: %zu\n", symbols.size());
+    for (const auto &arg : symbols) {
+        printf(" \t%s\n ", arg.c_str());
+    }
 
-    return project_root;
+    std::set<std::string> symbols_set(symbols.begin(), symbols.end());
+
+    std::optional<path> project_root_dir = find_directory_by_file_symbols(exe_path, symbols_set);
+    if (!project_root_dir.has_value()) {
+        panic("Failed to find project root directory");
+    }
+    project_root_path = std::filesystem::absolute(project_root_dir.value());
+
+    bProjectRootInitialized = true;
 }
 
 
-
-std::string Files::GetFileNameWithoutExtension(const std::string &path)
+const std::filesystem::path &project_root()
 {
-    size_t slash_pos = path.find_last_of("/\\");
-    size_t dot_pos   = path.find_last_of(".");
+    return project_root_path;
+}
 
-    // DEBUG("{}, {}, {}", path, slash_pos, dot_pos);
-    auto filename = path.substr(slash_pos + 1, dot_pos - slash_pos - 1);
-    // LOG("{}", filename);
-    return filename;
-};
-
+} // namespace project_locate
 
 
 } // namespace utils

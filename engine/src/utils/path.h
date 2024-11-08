@@ -12,7 +12,9 @@
 
 
 #include <filesystem>
+#include <set>
 #include <string_view>
+
 
 
 #ifndef UTILS_API
@@ -20,74 +22,51 @@
 #endif
 
 
-
 namespace utils
 {
 
-using stdpath = std::filesystem::path;
+
+extern bool                            is_dir_contain_all_symbols(const std::filesystem::path &path, const std::set<std::string> &target_symbols);
+extern std::filesystem::path UTILS_API get_runtime_exe_path();
+
+namespace project_locate
+{
+
+// each file/folder of `match_symbols` all  under a directory
+// so we consider it is the project root we need
+extern void UTILS_API  init(const std::vector<std::string> &match_symbols);
+extern const UTILS_API std::filesystem::path &project_root();
+
+}; // namespace project_locate
 
 
-
-extern std::string project_root_symbol;
-void               SetProjectRootSymbol(std::string symbol);
-const std::string &GetProjectRootSymbol();
-stdpath            get_runtime_exe_path();
-
-// iterate parent and children recursively
-stdpath find_directory_by_file_symbol(stdpath &initial_pos, std::string target_symbol);
-
-
-const UTILS_API std::filesystem::path &ProjectRoot();
-namespace impl
+namespace detail
 {
 struct UTILS_API FPathImpl
 {
     explicit FPathImpl(const char *the_path)
     {
-        absolute_path = ProjectRoot() / the_path;
+        absolute_path = project_locate::project_root() / the_path;
     }
 
     explicit FPathImpl(const std::string &the_path)
     {
-        absolute_path = ProjectRoot() / the_path;
+        absolute_path = project_locate::project_root() / the_path;
     }
 
-
     [[nodiscard]] operator std::string() const { return absolute_path.string(); }
-
     [[nodiscard]] operator std::filesystem::path() const { return absolute_path; }
-
-    [[nodiscard]] stdpath operator/(std::string_view other)
+    [[nodiscard]] std::filesystem::path operator/(std::string_view other)
     {
         return this->absolute_path / other;
     }
 
-    stdpath absolute_path;
+    std::filesystem::path absolute_path;
 };
-}; // namespace impl
+}; // namespace detail
 
 
-
-struct UTILS_API Files
-{
-    static std::string GetFileNameWithoutExtension(const std::string &path);
-
-
-    template <class FileFilter, class Predicate>
-    static void ForeachFileInFolder(std::filesystem::path path, FileFilter file_filter, Predicate &&predicate)
-    {
-        for (const auto texture : std::filesystem::directory_iterator(path))
-        {
-            const auto &file_path = texture.path();
-
-            if (file_filter(file_path))
-            {
-                predicate(file_path);
-            }
-        }
-    }
-};
 
 } // namespace utils
 
-using FPath = utils::impl::FPathImpl;
+using FPath = utils::detail::FPathImpl;
