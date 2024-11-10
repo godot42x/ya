@@ -2,7 +2,7 @@
  * @ Author: godot42
  * @ Create Time: 2024-08-02 10:47:59
  * @ Modified by: @godot42
- * @ Modified time: 2024-08-22 14:15:12
+ * @ Modified time: 2024-11-10 15:35:09
  * @ Description:
  */
 
@@ -16,7 +16,8 @@
 #include <iostream>
 
 
-namespace utils {
+namespace utils
+{
 
 std::optional<std::string> File::read_all(const std::filesystem::path &filepath)
 {
@@ -102,6 +103,22 @@ std::optional<size_t> File::get_hash(const std::string &text)
 
     return {};
 }
+
+std::string File::get_filename_without_extension(const std::string &path)
+{
+    size_t slash_pos = path.find_last_of("/\\");
+    size_t dot_pos   = path.find_last_of(".");
+    if (slash_pos == std::string::npos || dot_pos == std::string::npos) {
+        std::cerr << std::format("Invalid file path: {}, slash_pos: {}, dot_pos: {}", path, slash_pos, dot_pos) << std::endl;
+        return path;
+    }
+
+    // DEBUG("{}, {}, {}", path, slash_pos, dot_pos);
+    auto filename = path.substr(slash_pos + 1, dot_pos - slash_pos - 1);
+    // LOG("{}", filename);
+    return filename;
+};
+
 
 
 } // namespace utils

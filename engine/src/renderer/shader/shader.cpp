@@ -1,7 +1,27 @@
 #include "shader.h"
+#include "utils/path.h"
 
-#include <shaderc/shaderc.h>
+#include <algorithm>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <shaderc/shaderc.hpp>
+#include <stdio.h>
+#include <string>
+#include <unordered_map>
 
+#include "./opengl.h"
+#include "C:\Users\norm\1\craft\Neon\engine\src\utils\file.h"
+#include "utils/trait/disable_copy.hpp"
+
+
+
+#define NE_INFO(...) fprintf(stdout, "%s\n", std::format(__VA_ARGS__).c_str());
+#define NE_CORE_ERROR(...)
+#define NE_CORE_ASSERT(...)
+
+std::string           ShaderScriptProcessor::m_BaseCacheRelativePath = "saved/cache/shader";
+std::filesystem::path ShaderScriptProcessor::m_BaseCachedStdPath     = FPath(m_BaseCacheRelativePath);
 
 
 static const char *eol_flag =
@@ -12,22 +32,23 @@ static const char *eol_flag =
 #endif
 
 
+
 namespace utils
 {
 
 
-static EShaderStage ShaderTypeFromString(const std::string &type)
+static EShaderStage ShaderStageFromString(const std::string &type)
 {
     if (type == "vertex")
         return EShaderStage::Vertex;
     else if (type == "fragment" || type == "pixel")
         return EShaderStage::Fragment;
 
-    // HZ_CORE_ASSERT(false, "Unknown shader type!");
+    NE_CORE_ASSERT(false, "Unknown shader type!");
     return EShaderStage::Undefined;
 }
 
-static shaderc_shader_kind GLShaderStageToShaderRcType(EShaderStage Stage)
+static shaderc_shader_kind ShaderStageToShaderRcType(EShaderStage Stage)
 {
     switch (Stage) {
     case EShaderStage::Vertex:
@@ -37,21 +58,13 @@ static shaderc_shader_kind GLShaderStageToShaderRcType(EShaderStage Stage)
     default:
         break;
     }
-    // HZ_CORE_ASSERT(false, "Unknown shader type!");
+    NE_CORE_ASSERT(false, "Unknown shader type!");
     return shaderc_shader_kind(0);
 }
 
-
-
-static std::filesystem::path GetCacheDirectory(const std::string &relative_path)
+static void CreateCacheDirectoryIfNeeded(std::filesystem::path cache_dir)
 {
-    static auto _ = (HZ_CORE_INFO("Initial Cache directory: {}", FPath(cache_relative_path).absolute_path.string()), 0);
-    return FPath(cache_relative_path);
-}
-
-static void CreateCacheDirectoryIfNeeded()
-{
-    auto cache_dir = GetCacheDirectory();
+    NE_INFO("Initial Cache directory: {}", cache_dir.string());
 
     if (!std::filesystem::exists(cache_dir))
     {
@@ -71,7 +84,7 @@ static void CreateCacheDirectoryIfNeeded()
     }
 }
 
-static const char *ShaderStage_CachedOpenGL_FileExtension(EShaderStage stage)
+static const char *ShaderStage2CachedFileExtension_OpenGL(EShaderStage stage)
 {
     switch (stage)
     {
@@ -82,11 +95,11 @@ static const char *ShaderStage_CachedOpenGL_FileExtension(EShaderStage stage)
     default:
         break;
     }
-    HZ_CORE_ASSERT(false);
+    NE_CORE_ASSERT(false);
     return "";
 }
 
-static const char *ShaderStage_CachedVulkan_FileExtension(EShaderStage stage)
+static const char *ShaderStage2CachedFileExtension_Vulkan(EShaderStage stage)
 {
     switch (stage)
     {
@@ -97,18 +110,43 @@ static const char *ShaderStage_CachedVulkan_FileExtension(EShaderStage stage)
     default:
         break;
     }
-    HZ_CORE_ASSERT(false);
+    // NE_CORE_ASSERT(false);
     return "";
 }
+
 
 
 } // namespace utils
 
 
-std::unordered_map<EShaderStage, std::string> GLSLProcessor::PreProcess(const std::string &source)
+GLSLScriptProcessor::GLSLScriptProcessor(const std::string &path)
 {
+    m_FilePath = FPath(path);
 
-    std::unordered_map<uint32_t, std::string> shader_sources;
+    auto source_code = utils::File::read_all(m_FilePath);
+    if (!source_code.has_value()) {
+        NE_CORE_ERROR("Failed to read shader source file: {}", m_FilePath.string());
+        NE_CORE_ASSERT(false);
+    }
+    std::unordered_map<EShaderStage, std::string> codes = PreProcess(source_code.value());
+    // TODO: check hash
+    CreateVulkanBinaries(codes, true);
+    bValid = true;
+}
+
+bool GLSLScriptProcessor::TakeSpv(std::unordered_map<EShaderStage, std::vector<uint32_t>> &spv_binaries)
+{
+    if (!bValid) {
+        return false;
+    }
+    spv_binaries = std::move(m_Vulkan_SPIRV);
+    bValid       = false;
+    return true;
+}
+
+std::unordered_map<EShaderStage, std::string> GLSLScriptProcessor::PreProcess(const std::string &source)
+{
+    std::unordered_map<EShaderStage, std::string> shader_sources;
 
     // We split the source by "#type <vertex/fragment>" preprocessing directives
     const char  *type_token     = "#type";
@@ -119,12 +157,12 @@ std::unordered_map<EShaderStage, std::string> GLSLProcessor::PreProcess(const st
     {
         // get the type string
         size_t eol = source.find_first_of(eol_flag, pos);
-        HZ_CORE_ASSERT(eol != std::string ::npos, "Syntax error");
+        NE_CORE_ASSERT(eol != std::string ::npos, "Syntax error");
         size_t      begin = pos + type_token_len + 1;
         std::string type  = source.substr(begin, eol - begin);
 
-        uint32_t shader_type = utils::ShaderTypeFromString(type);
-        HZ_CORE_ASSERT(shader_type, "Invalid shader type specific");
+        EShaderStage shader_type = utils::ShaderStageFromString(type);
+        NE_CORE_ASSERT(shader_type, "Invalid shader type specific");
 
         // get the shader content range
         size_t next_line_pos = source.find_first_not_of(eol_flag, eol);
@@ -134,29 +172,33 @@ std::unordered_map<EShaderStage, std::string> GLSLProcessor::PreProcess(const st
 
         auto codes = source.substr(next_line_pos, pos - count);
 
-        auto [_, Ok] = shader_sources.insert({(unsigned int)shader_type, codes});
+        auto [_, Ok] = shader_sources.insert({shader_type, codes});
 
-        HZ_CORE_ASSERT(Ok, "Failed to insert this shader source");
+        NE_CORE_ASSERT(Ok, "Failed to insert this shader source");
     }
 
     return shader_sources;
 }
 
-void GLSLProcessor::CreateGLBinaries(bool bSourceChanged)
+// why we need this function?
+// from glsl to spv,
+// then spv to glsl source code,
+// then glsl source code to spv binary,
+// then binary to create opengl shader program
+/*
+void GLSLScriptProcessor::CreateGLBinaries(bool bSourceChanged)
 {
-
     shaderc::Compiler       compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_opengl, shaderc_env_version_opengl_4_5);
 
-    const bool optimize = false;
-    if (optimize) {
+    if (bOptimizeGLBinaries) {
         options.SetOptimizationLevel(shaderc_optimization_level_performance);
     }
 
     auto &shader_data = m_OpenGL_SPIRV;
     shader_data.clear();
-    m_OpenGL_SourceCode.clear();
+    m_GLSL_SourceCode.clear();
 
     for (auto &&[stage, spirv_binary] : m_Vulkan_SPIRV)
     {
@@ -164,7 +206,7 @@ void GLSLProcessor::CreateGLBinaries(bool bSourceChanged)
         if (!bSourceChanged) {
             // load binary opengl caches
             std::ifstream in(cached_filepath, std::ios::in | std::ios::binary);
-            HZ_CORE_ASSERT(in.is_open(), "Cached opengl file not found when source do not changed!!");
+            NE_CORE_ASSERT(in.is_open(), "Cached opengl file not found when source do not changed!!");
 
             in.seekg(0, std::ios::end);
             auto size = in.tellg();
@@ -177,24 +219,26 @@ void GLSLProcessor::CreateGLBinaries(bool bSourceChanged)
         }
         else
         {
+            shaderc::Compiler compiler;
             // spirv binary -> glsl source code
             spirv_cross::CompilerGLSL glsl_compiler(spirv_binary);
-            m_OpenGL_SourceCode[stage] = glsl_compiler.compile();
+            m_GLSL_SourceCode[stage] = glsl_compiler.compile();
+
 
             // HZ_CORE_INFO("????????????????????????\n{}", m_OpenGL_SourceCode[stage]);
-            auto &source = m_OpenGL_SourceCode[stage];
+            auto &source = m_GLSL_SourceCode[stage];
             // HZ_CORE_ERROR(source);
             // HZ_CORE_ERROR(m_FilePath.string());
 
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
-                utils::GLShaderStageToShaderRcType(stage),
+                utils::ShaderStageToShaderRcType(stage),
                 m_FilePath.string().c_str());
 
             if (result.GetCompilationStatus() != shaderc_compilation_status_success)
             {
-                HZ_CORE_ERROR(result.GetErrorMessage());
-                HZ_CORE_ASSERT(false);
+                NE_CORE_ERROR(result.GetErrorMessage());
+                NE_CORE_ASSERT(false);
             }
 
             // store compile result(opengl) into memory and cached file
@@ -261,48 +305,46 @@ void GLSLProcessor::CreateProgram()
 
     m_ShaderID = program;
 }
+*/
 
-std::filesystem::path GLSLProcessor::GetCachePath(bool bVulkan, EShaderStage stage)
+
+std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderStage stage)
 {
-    auto cached_dir = utils::GetCacheDirectory();
+    auto cached_dir = GetBaseCachePath();
     auto filename   = m_FilePath.filename().string() +
                     (bVulkan
-                         ? utils::GLShaderStage_CachedVulkan_FileExtension(stage)
-                         : utils::GLShaderStage_CachedOpenGL_FileExtension(stage));
+                         ? utils::ShaderStage2CachedFileExtension_Vulkan(stage)
+                         : utils::ShaderStage2CachedFileExtension_OpenGL(stage));
     return cached_dir / filename;
 }
 
-std::filesystem::path GLSLProcessor::GetCacheMetaPath()
-{
-    return utils::GetCacheDirectory() / (m_FilePath.filename().string() + ".cached.meta.json");
-}
 
-void GLSLProcessor::Reflect(EShaderStage stage, const std::vector<uint32_t> &shader_data)
-{
+// void GLSLScriptProcessor::Reflect(EShaderStage stage, const std::vector<uint32_t> &shader_data)
+// {
 
-    spirv_cross::Compiler        compiler(shader_data);
-    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+//     spirv_cross::Compiler        compiler(shader_data);
+//     spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
-    HZ_CORE_TRACE("OpenGLShader:Reflect  - {} {}", utils::GLShaderStageToString(stage), m_FilePath.string());
-    HZ_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
-    HZ_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
+//     HZ_CORE_TRACE("OpenGLShader:Reflect  - {} {}", utils::GLShaderStageToString(stage), m_FilePath.string());
+//     HZ_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
+//     HZ_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
 
-    HZ_CORE_TRACE("Uniform buffers:");
-    for (const auto &resource : resources.uniform_buffers)
-    {
-        const auto &buffer_type  = compiler.get_type(resource.base_type_id);
-        uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
-        uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
-        int         member_count = buffer_type.member_types.size();
+//     HZ_CORE_TRACE("Uniform buffers:");
+//     for (const auto &resource : resources.uniform_buffers)
+//     {
+//         const auto &buffer_type  = compiler.get_type(resource.base_type_id);
+//         uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
+//         uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
+//         int         member_count = buffer_type.member_types.size();
 
-        HZ_CORE_TRACE("  {0}", resource.name);
-        HZ_CORE_TRACE("\tSize = {0}", bufferSize);
-        HZ_CORE_TRACE("\tBinding = {0}", binding);
-        HZ_CORE_TRACE("\tMembers = {0}", member_count);
-    }
-}
+//         HZ_CORE_TRACE("  {0}", resource.name);
+//         HZ_CORE_TRACE("\tSize = {0}", bufferSize);
+//         HZ_CORE_TRACE("\tBinding = {0}", binding);
+//         HZ_CORE_TRACE("\tMembers = {0}", member_count);
+//     }
+// }
 
-void GLSLProcessor::CreateVulkanBinaries(const std::unordered_map<unsigned int, std::string> &shader_sources, bool bSourceChanged)
+void GLSLScriptProcessor::CreateVulkanBinaries(const std::unordered_map<EShaderStage, std::string> &shader_sources, bool bSourceChanged)
 {
 
     shaderc::Compiler       compiler;
@@ -324,7 +366,7 @@ void GLSLProcessor::CreateVulkanBinaries(const std::unordered_map<unsigned int, 
         // load binary spirv caches
         if (!bSourceChanged) {
             std::ifstream f(cached_path, std::ios::in | std::ios::binary);
-            HZ_CORE_ASSERT(f.is_open(), "Cached spirv file not found when source do not changed!!");
+            NE_CORE_ASSERT(f.is_open(), "Cached spirv file not found when source do not changed!!");
             f.seekg(0, std::ios::end);
             auto size = f.tellg();
             f.seekg(0, std::ios::beg);
@@ -332,31 +374,32 @@ void GLSLProcessor::CreateVulkanBinaries(const std::unordered_map<unsigned int, 
             data.resize(size / sizeof(uint32_t));
             f.read((char *)data.data(), size);
             f.close();
+
+            continue;
         }
+
         // recompile
-        else {
-            shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
-                source,
-                utils::GLShaderStageToShaderRcType(stage),
-                fmt::format("{} ({})", m_FilePath.string(), utils::GLShaderStageToString(stage)).c_str(),
-                options);
+        shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
+            source,
+            utils::ShaderStageToShaderRcType(stage),
+            std::format("{} ({})", m_FilePath.string(), std::to_string(stage)).c_str(),
+            options);
 
-            if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-            {
-                HZ_CORE_ERROR(result.GetErrorMessage());
-                std::filesystem::remove(cached_path);
-                HZ_CORE_ASSERT(false);
-            }
+        if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+        {
+            NE_CORE_ERROR(result.GetErrorMessage());
+            std::filesystem::remove(cached_path);
+            NE_CORE_ASSERT(false);
+        }
 
-            // store compile result into memory and cached file
-            shader_data[stage] = std::vector<uint32_t>(result.begin(), result.end());
-            std::ofstream ofs(cached_path, std::ios::out | std::ios::binary | std::ios::trunc);
-            if (ofs.is_open()) {
-                auto &data = shader_data[stage];
-                ofs.write((char *)data.data(), data.size() * sizeof(uint32_t));
-                ofs.flush();
-                ofs.close();
-            }
+        // store compile result into memory and cached file
+        shader_data[stage] = std::vector<uint32_t>(result.begin(), result.end());
+        std::ofstream ofs(cached_path, std::ios::out | std::ios::binary | std::ios::trunc);
+        if (ofs.is_open()) {
+            auto &data = shader_data[stage];
+            ofs.write((char *)data.data(), data.size() * sizeof(uint32_t));
+            ofs.flush();
+            ofs.close();
         }
     }
 
@@ -364,4 +407,20 @@ void GLSLProcessor::CreateVulkanBinaries(const std::unordered_map<unsigned int, 
     {
         Reflect(stage, data);
     }
+}
+
+extern const char *std::to_string(EShaderStage stage)
+{
+    switch (stage) {
+
+    case EShaderStage::Vertex:
+        return "vertex";
+    case EShaderStage::Fragment:
+        return "fragment";
+        break;
+    case EShaderStage::Undefined:
+        break;
+    }
+    NE_CORE_ASSERT(false);
+    return "";
 }

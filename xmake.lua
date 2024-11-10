@@ -29,7 +29,7 @@ end
 
 add_includedirs("./engine/src/")
 
-target("neon")
+target("neon1")
 do
     set_kind("binary")
     add_files("main.cpp", "log.cpp")
