@@ -1,9 +1,16 @@
+
+
 #include "vulkan_state.h"
 
-#include <set>
+#include "core/base.h"
 
-#include "base.h"
-#include "glfw_state.h"
+#include <set>
+#include <unordered_map>
+
+#include "renderer/shader/shader.h"
+#include "window/glfw_state.h"
+
+#include "vertex.h"
 
 
 VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
@@ -443,50 +450,53 @@ void VulkanState::createGraphicsPipeline()
 
     /* shader ģ�� ������ͼ�ι��߿ɱ�̽׶εĹ���    */
 
-    // input binary SPIR-V codes
-    auto vertShaderCode = readFile("shaders/vert.spv");
-    auto fragShaderCode = readFile("shaders/frag.spv");
 
-    // Compile Module
-    auto vertShaderModule = createShaderModule(vertShaderCode);
-    auto fragShaderModule = createShaderModule(fragShaderCode);
+    GLSLScriptProcessor                                     processor("engine/shaders/default.glsl");
+    std::unordered_map<EShaderStage, std::vector<uint32_t>> spv_binaries;
+    bool                                                    Ok = processor.TakeSpv(spv_binaries);
+    NE_ASSERT(Ok, "failed to take spv binaries");
 
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
-    {
-        vertShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertShaderStageInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShaderModule;
-        vertShaderStageInfo.pName  = "main"; // ���õ�����������ڣ�
-    }
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
-    {
-        fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
-        fragShaderStageInfo.pName  = "main"; // ���õ�����������ڣ�
-    }
+    // Compile Module (Code)
+    auto vertShaderModule = create_shader_module(spv_binaries[EShaderStage::Vertex]);
+    auto fragShaderModule = create_shader_module(spv_binaries[EShaderStage::Fragment]);
 
-    // Shader Stage cretInfo
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
+        .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage  = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = vertShaderModule,
+        .pName  = "main",
+    };
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo = {
+        .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage  = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = fragShaderModule,
+        .pName  = "main",
+    };
+
+    // Shader Stage createInfo
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
+    VertexInput v_input(0);
+    v_input.AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "postion")
+        .AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "color")
+        .AddAttribute(VK_FORMAT_R32G32_SFLOAT, "texture_coord");
 
-    // vertx input State cretInfo
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-    // auto                                 bindingDescription    = Vertex::getBindingDescription();
-    // auto                                 attributeDescriptions = Vertex::getAttributeDescriptions();
-    // {
-    //     vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    //     vertexInputInfo.vertexBindingDescriptionCount   = 1;
-    //     vertexInputInfo.pVertexBindingDescriptions      = &bindingDescription;
-    //     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    //     vertexInputInfo.pVertexAttributeDescriptions    = attributeDescriptions.data();
-    // }
+    // the description of vertex(declaration) should compatible with the  shader module
+    auto bindingDescription    = v_input.GetBindingDescription();
+    auto attributeDescriptions = v_input.GetAttributeDescriptions();
+
+    // vertex input State createInfo
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
+        .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .vertexBindingDescriptionCount   = 1,
+        .pVertexBindingDescriptions      = &bindingDescription,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+        .pVertexAttributeDescriptions    = attributeDescriptions.data(),
+    };
     /************************** Shader Stages ***********************************************/
 
 
     /****************************** Fix-function State *****************************************/
-
-    /* �ýṹ�嶨��̶����߹��ܣ� ���磺 ����װ�䡢viewport���ü�����դ����blending��������*/
 
 
     // Assembly state cretInfo ( Triangle format in this example)

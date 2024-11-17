@@ -1,13 +1,12 @@
 #pragma once
-
+#include "core/base.h"
+#include "utils/delegate.h"
 
 #include "SDL_error.h"
 #include "SDL_events.h"
 #include "SDL_rect.h"
 #include "SDL_render.h"
 #include "SDL_video.h"
-#include "base.h"
-#include "delegate.h"
 
 #include <glm/glm.hpp>
 

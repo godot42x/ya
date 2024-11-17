@@ -1,9 +1,9 @@
 #pragma once
 
+#include "core/base.h"
+
 #include "GLFW/glfw3.h"
-#include "base.h"
-#include "delegate.h"
-#include "log.h"
+#include "utils/delegate.h"
 
 
 struct GLFWState : public Layer

@@ -12,6 +12,7 @@
         "vertexbuffer",
         "Viewports",
         "VKAPI",
+        "VUID",
         "WINDOWPOS"
     ]
 }
