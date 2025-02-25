@@ -17,4 +17,5 @@ if is_plat("windows") then
     set_exceptions("cxx")
 end
 
-includes("engine")
+--includes("engine")
+includes("Engine")
