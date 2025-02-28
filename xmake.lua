@@ -2,7 +2,7 @@
 --     includes(name .. "/src")
 -- end
 
-set_targetdir("./bin")
+-- set_targetdir("./bin")
 
 
 add_rules("mode.debug", "mode.release")
@@ -19,3 +19,5 @@ end
 
 --includes("engine")
 includes("Engine")
+
+set_rundir(os.scriptdir())

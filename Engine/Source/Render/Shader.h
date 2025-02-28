@@ -22,6 +22,14 @@ extern const char *to_string(EShaderStage);
 }
 
 
+struct Shader
+{
+    std::string           m_Name{};
+    uint32_t              m_ShaderID{0};
+    std::filesystem::path m_FilePath;
+};
+
+
 
 struct ShaderScriptProcessor
 {
@@ -29,9 +37,16 @@ struct ShaderScriptProcessor
 
   protected:
 
+
+    SDL_Storage *shaderStorage;
     SDL_Storage *cachedStorage;
+    std::string  shaderStoragePath = "Engine/Shader/";
     std::string  cachedStoragePath = "Engine/Intermediate/Shader/";
-    std::string *cachedFileSuffix;
+    std::string  cachedFileSuffix;
+
+  public:
+
+    virtual void process(std::string_view fileName) = 0;
 };
 
 
@@ -39,10 +54,6 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
 {
 
     friend class ShaderScriptProcessorFactory;
-
-    std::string           m_Name{};
-    uint32_t              m_ShaderID{0};
-    std::filesystem::path m_FilePath;
 
 
   private:
@@ -57,7 +68,12 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
 
 
   public:
+
+    void process(std::string_view fileName) override;
+
     bool TakeSpv(std::unordered_map<EShaderStage, std::vector<uint32_t>> &spv_binaries);
+
+
 
   protected:
     GLSLScriptProcessor() {}
@@ -86,12 +102,24 @@ struct ShaderScriptProcessorFactory
     } processorType;
 
     std::string cachedStoragePath;
+    std::string shaderStoragePath;
     bool        bSyncCreateStorage;
 
-    Self &withCachedStoragePath(std::string_view dirPath, bool bSyncCreateStorage)
+    Self &syncCreateStorage(bool bOn)
     {
-        cachedStoragePath        = dirPath;
-        this->bSyncCreateStorage = bSyncCreateStorage;
+        bSyncCreateStorage = bOn;
+        return *this;
+    }
+
+    Self &withCachedStoragePath(std::string_view dirPath)
+    {
+        cachedStoragePath = dirPath;
+        return *this;
+    }
+
+    Self &withShaderStoragePath(std::string_view dirPath)
+    {
+        shaderStoragePath = dirPath;
         return *this;
     }
 
@@ -109,8 +137,12 @@ struct ShaderScriptProcessorFactory
         };
 
 
+        processor->shaderStoragePath = shaderStoragePath;
+        processor->shaderStorage     = openFileStorage(shaderStoragePath.c_str(), bSyncCreateStorage);
+
         processor->cachedStoragePath = cachedStoragePath;
-        processor->cachedStorage     = openFileStorage(cachedStoragePath.c_str(), false);
+        processor->cachedStorage     = openFileStorage(cachedStoragePath.c_str(), bSyncCreateStorage);
+
         return processor;
     }
 };

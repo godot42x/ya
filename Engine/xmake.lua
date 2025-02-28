@@ -10,6 +10,7 @@ add_requires("glm")
 --if is_plat("windows") then
 --	add_requires("opengl")
 --end
+add_requires("shaderc")
 
 target("neon")
 do
@@ -21,6 +22,7 @@ do
 	add_packages("spdlog")
 	add_packages("libsdl3")
 	add_packages("glm")
+	add_packages("shaderc")
 	--add_packages("glad")
 
 	add_includedirs("./src")

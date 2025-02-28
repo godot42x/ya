@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+
 int main()
 {
     std::string str = "HelloWorld";
@@ -17,6 +18,9 @@ int main()
     printf("%d\n", v1[0]);
     printf("%d\n", v2[0]);
 
-    printf("v2 size: %zu\n", strlen((const char*)v2.data()));
+    printf("v2 size: %zu\n", strlen((const char *)v2.data()));
+
+    std::string b(std::string_view(str).substr(3, 3));
+    printf(b.c_str());
     return 0;
 }

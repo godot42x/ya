@@ -11,7 +11,6 @@
 #include "Core/FileSystem.h"
 
 SDL_GPUGraphicsPipeline *pipeline;
-SDL_Storage             *glslShaderStorage;
 
 
 
@@ -81,7 +80,6 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     // SDL_WriteStorageFile(storage, "abc", (void *)"abc", strlen(text));
     // SDL_CloseStorage(storage);
 
-    glslShaderStorage = openFileStorage("Engine/Shader/GLSL/", false);
 
     return SDL_APP_CONTINUE;
 }
