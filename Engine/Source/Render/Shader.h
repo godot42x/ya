@@ -7,26 +7,61 @@
 #include "SDL3/SDL_storage.h"
 
 #include "../Core/FileSystem.h"
+#include "../Core/Log.h"
 
-enum class EShaderStage
+namespace EShaderStage
+{
+enum T
 {
     Undefined = 0,
     Vertex,
     Fragment,
 };
 
+inline T FromString(std::string_view type)
+{
+    if (type == "vertex")
+        return EShaderStage::Vertex;
+    else if (type == "fragment" || type == "pixel")
+        return EShaderStage::Fragment;
+
+    NE_CORE_ASSERT(false, "Unknown shader type!");
+    return EShaderStage::Undefined;
+}
+
+
+} // namespace EShaderStage
+
 
 namespace std
 {
-extern const char *to_string(EShaderStage);
+inline const char *to_string(EShaderStage::T stage)
+{
+    switch (stage) {
+
+    case EShaderStage::Vertex:
+        return "vertex";
+    case EShaderStage::Fragment:
+        return "fragment";
+        break;
+    case EShaderStage::Undefined:
+        break;
+    }
+    NE_CORE_ASSERT(false);
+    return "";
 }
+} // namespace std
 
 
 struct Shader
 {
     std::string           m_Name{};
-    uint32_t              m_ShaderID{0};
     std::filesystem::path m_FilePath;
+};
+
+struct GLSLShader : public Shader
+{
+    uint32_t m_ShaderID{0};
 };
 
 
@@ -37,12 +72,12 @@ struct ShaderScriptProcessor
 
   protected:
 
+    DirectoryStore shaderStorage;
+    DirectoryStore cachedStorage;
 
-    SDL_Storage *shaderStorage;
-    SDL_Storage *cachedStorage;
-    std::string  shaderStoragePath = "Engine/Shader/";
-    std::string  cachedStoragePath = "Engine/Intermediate/Shader/";
-    std::string  cachedFileSuffix;
+    std::string shaderStoragePath = "Engine/Shader/";
+    std::string cachedStoragePath = "Engine/Intermediate/Shader/";
+    std::string cachedFileSuffix;
 
   public:
 
@@ -62,16 +97,14 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     bool bValid              = false;
 
   private:
-    std::unordered_map<EShaderStage, std::vector<uint32_t>> m_Vulkan_SPIRV;
-    std::unordered_map<EShaderStage, std::vector<uint32_t>> m_OpenGL_SPIRV;
-    std::unordered_map<EShaderStage, std::string>           m_GLSL_SourceCode;
+    std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_Vulkan_SPIRV;
+    std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_OpenGL_SPIRV;
+    std::unordered_map<EShaderStage::T, std::string>           m_GLSL_SourceCode;
 
 
   public:
 
     void process(std::string_view fileName) override;
-
-    bool TakeSpv(std::unordered_map<EShaderStage, std::vector<uint32_t>> &spv_binaries);
 
 
 
@@ -80,13 +113,12 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
 
   private:
 
-    std::unordered_map<EShaderStage, std::string> PreProcess(const std::string &glsl_source);
-    void                                          Reflect(EShaderStage stage, const std::vector<uint32_t> &shader_data);
+    void Reflect(EShaderStage::T stage, const std::vector<uint32_t> &shader_data);
 
     void CreateGLBinaries(bool bSourceChanged);
-    void CreateVulkanBinaries(const std::unordered_map<EShaderStage, std::string> &shader_sources, bool bSourceChanged);
+    void CreateVulkanBinaries(const std::unordered_map<EShaderStage::T, std::string> &shader_sources, bool bSourceChanged);
 
-    std::filesystem::path GetCachePath(bool bVulkan, EShaderStage stage);
+    std::filesystem::path GetCachePath(bool bVulkan, EShaderStage::T stage);
     std::filesystem::path GetCacheMetaPath();
 };
 
@@ -138,10 +170,10 @@ struct ShaderScriptProcessorFactory
 
 
         processor->shaderStoragePath = shaderStoragePath;
-        processor->shaderStorage     = openFileStorage(shaderStoragePath.c_str(), bSyncCreateStorage);
+        processor->shaderStorage.create(shaderStoragePath.c_str(), bSyncCreateStorage);
 
         processor->cachedStoragePath = cachedStoragePath;
-        processor->cachedStorage     = openFileStorage(cachedStoragePath.c_str(), bSyncCreateStorage);
+        processor->cachedStorage.create(cachedStoragePath.c_str(), bSyncCreateStorage);
 
         return processor;
     }
