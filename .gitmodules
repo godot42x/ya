@@ -1,0 +1,6 @@
+[submodule "Engine/Plugins/log.cc"]
+	path = Engine/Plugins/log.cc
+	url = git@github.com:godotc/log.cc.git
+[submodule "Engine/Plugins/utility.cc"]
+	path = Engine/Plugins/utility.cc
+	url = git@github.com:godotc/utility.cc.git

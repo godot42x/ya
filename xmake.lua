@@ -18,6 +18,10 @@ if is_plat("windows") then
 end
 
 --includes("engine")
-includes("Engine")
+
+includes("./xmake/rule.lua")
+includes("./Engine/Neon.xmake.lua")
+
+includes("./xmake/task.lua")
 
 set_rundir(os.scriptdir())

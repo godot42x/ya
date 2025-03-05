@@ -5,6 +5,6 @@ r:
 	xmake b && xmake r
 
 cfg:
-	xmake f -m debug
+	xmake f -m debug -y
 	xmake project -k compile_commands
 
