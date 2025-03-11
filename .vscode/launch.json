@@ -1,0 +1,35 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "pick-exe",
+            "type": "command",
+            "command": "extension.commandvariable.file.pickFile", // install this 
+            "args": {
+                "include": "**/*.{exe}",
+            }
+        }
+    ],
+    "configurations": [
+        {
+            "type": "cppvsdbg",
+            "name": "debug EXE MSVC",
+            "request": "launch",
+            "program": "${input:pick-exe}",
+            "logging": {
+                "moduleLoad": true,
+                "threadExit": true,
+                "processExit": true,
+                "programOutput": true,
+                "engineLogging": true,
+                "exceptions": true
+            },
+            "cwd": "${workspaceRoot}",
+            "console": "integratedTerminal",
+            "visualizerFile": "${workspaceFolder}/my.natvis",
+        },
+    ]
+}

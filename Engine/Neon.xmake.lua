@@ -21,6 +21,7 @@ do
     add_headerfiles("Source/**.h")
 
     add_deps("utility.cc")
+    add_deps("log.cc")
     -- add_deps("log")
 
     --add_packages("glfw")
@@ -32,7 +33,5 @@ do
     add_packages("spirv-cross")
     --add_packages("glad")
 
-    add_includedirs("./src")
+    add_includedirs("./Source")
 end
-
-
