@@ -10,14 +10,12 @@
 #include <unordered_map>
 
 #include <spirv_cross/spirv.h>
+#include <spirv_cross/spirv_cross.hpp>
 
 #include "utility/string_utils.h"
 
 
-#define NE_INFO(...) fprintf(stdout, "%s\n", std::format(__VA_ARGS__).c_str());
-#define NE_CORE_ERROR(...)
-#define NE_CORE_ASSERT(...)
-
+#include <SDL3/SDL_gpu.h>
 
 
 static const char *eolFlag =
@@ -31,7 +29,8 @@ static const char *eolFlag =
 namespace EShaderStage
 {
 
-shaderc_shader_kind ToShadercType(EShaderStage::T Stage)
+
+shaderc_shader_kind toShadercType(EShaderStage::T Stage)
 {
     switch (Stage) {
     case Vertex:
@@ -46,7 +45,7 @@ shaderc_shader_kind ToShadercType(EShaderStage::T Stage)
     return shaderc_shader_kind(0);
 }
 
-const char *GetOpenGLCacheFileExtension(EShaderStage::T stage)
+const char *getOpenGLCacheFileExtension(EShaderStage::T stage)
 {
     switch (stage)
     {
@@ -61,7 +60,7 @@ const char *GetOpenGLCacheFileExtension(EShaderStage::T stage)
     return "";
 }
 
-const char *GetVulkanCacheFileExtension(EShaderStage::T stage)
+const char *getVulkanCacheFileExtension(EShaderStage::T stage)
 {
     switch (stage)
     {
@@ -75,6 +74,26 @@ const char *GetVulkanCacheFileExtension(EShaderStage::T stage)
     // NE_CORE_ASSERT(false);
     return "";
 }
+
+const char *toString(EShaderStage::T Stage)
+{
+    return std::to_string(Stage);
+}
+
+SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
+{
+    switch (Stage) {
+    case Vertex:
+        return SDL_GPU_SHADERSTAGE_VERTEX;
+    case Fragment:
+        return SDL_GPU_SHADERSTAGE_FRAGMENT;
+    default:
+        break;
+    }
+    NE_CORE_ASSERT(false, "Unknown shader type!");
+    return (SDL_GPUShaderStage)-1;
+}
+} // namespace EShaderStage
 
 
 // why we need this function?
@@ -213,45 +232,43 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
     //                      ? utils::ShaderStage2CachedFileExtension_Vulkan(stage)
     //                      : utils::ShaderStage2CachedFileExtension_OpenGL(stage));
     // return cached_dir / filename;
+
+    return "";
 }
 
 
-void GLSLScriptProcessor::Reflect(EShaderStage::T stage, const std::vector<uint32_t> &shader_data)
+void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<uint32_t> &spirvData)
 {
-    // shaderc::Compiler compiler;
 
-    // spirv_cross::Compiler        compiler(shader_data);
-    // spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+    spirv_cross::Compiler        compiler(spirvData);
+    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
-    // HZ_CORE_TRACE("OpenGLShader:Reflect  - {} {}", utils::GLShaderStageToString(stage), m_FilePath.string());
-    // HZ_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
-    // HZ_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
+    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::ToString(stage), m_FilePath.string());
+    NE_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
+    NE_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
 
-    // HZ_CORE_TRACE("Uniform buffers:");
-    // for (const auto &resource : resources.uniform_buffers)
-    // {
-    //     const auto &buffer_type  = compiler.get_type(resource.base_type_id);
-    //     uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
-    //     uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
-    //     int         member_count = buffer_type.member_types.size();
+    NE_CORE_TRACE("Uniform buffers:");
+    for (const auto &resource : resources.uniform_buffers)
+    {
+        const auto &buffer_type  = compiler.get_type(resource.base_type_id);
+        uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
+        uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
+        int         member_count = buffer_type.member_types.size();
 
-    //     HZ_CORE_TRACE("  {0}", resource.name);
-    //     HZ_CORE_TRACE("\tSize = {0}", bufferSize);
-    //     HZ_CORE_TRACE("\tBinding = {0}", binding);
-    //     HZ_CORE_TRACE("\tMembers = {0}", member_count);
-    // }
+        NE_CORE_TRACE("  {0}", resource.name);
+        NE_CORE_TRACE("\tSize = {0}", bufferSize);
+        NE_CORE_TRACE("\tBinding = {0}", binding);
+        NE_CORE_TRACE("\tMembers = {0}", member_count);
+    }
 }
 
 
-} // namespace EShaderStage
 
-
-
-void GLSLScriptProcessor::process(std::string_view fileName)
+std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
 {
     auto content = shaderStorage.readStorageFile(fileName);
     if (!content.has_value()) {
-        return;
+        return {};
     }
 
     // Preprocess
@@ -276,7 +293,7 @@ void GLSLScriptProcessor::process(std::string_view fileName)
             type         = ut::str::trim(type);
 
 
-            EShaderStage::T shader_type = EShaderStage::FromString(type);
+            EShaderStage::T shader_type = EShaderStage::fromString(type);
             NE_CORE_ASSERT(shader_type, "Invalid shader type specific");
 
             // get the shader content range
@@ -296,6 +313,8 @@ void GLSLScriptProcessor::process(std::string_view fileName)
 
 
     // Compile
+    // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> ret;
+    stage2spirv_t ret;
     {
         shaderc::Compiler       compiler;
         shaderc::CompileOptions options;
@@ -305,59 +324,61 @@ void GLSLScriptProcessor::process(std::string_view fileName)
             options.SetOptimizationLevel(shaderc_optimization_level_performance);
         }
 
-        auto &shader_data = m_Vulkan_SPIRV;
-        shader_data.clear();
 
         for (auto &&[stage, source] : shaderSources)
         {
-            auto shader_file_path = fileName;
-            auto cached_path      = GetCachePath(true, stage);
+            // auto shader_file_path = fileName;
+            // auto cached_path      = GetCachePath(true, stage);
 
-            cachedStorage.readStorageFile(cached_path);
+            // cachedStorage.readStorageFile(cached_path.string());
 
             // load binary spirv caches
-            if (!bSourceChanged) {
-                std::ifstream f(cached_path, std::ios::in | std::ios::binary);
-                NE_CORE_ASSERT(f.is_open(), "Cached spirv file not found when source do not changed!!");
-                f.seekg(0, std::ios::end);
-                auto size = f.tellg();
-                f.seekg(0, std::ios::beg);
-                auto &data = shader_data[stage];
-                data.resize(size / sizeof(uint32_t));
-                f.read((char *)data.data(), size);
-                f.close();
+            // if (!bSourceChanged) {
+            //     std::ifstream f(cached_path, std::ios::in | std::ios::binary);
+            //     NE_CORE_ASSERT(f.is_open(), "Cached spirv file not found when source do not changed!!");
+            //     f.seekg(0, std::ios::end);
+            //     auto size = f.tellg();
+            //     f.seekg(0, std::ios::beg);
+            //     auto &data = shader_data[stage];
+            //     data.resize(size / sizeof(uint32_t));
+            //     f.read((char *)data.data(), size);
+            //     f.close();
 
-                continue;
-            }
+            //     continue;
+            // }
 
             // recompile
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
-                utils::ShaderStageToShadercType(stage),
-                std::format("{} ({})", m_FilePath.string(), std::to_string(stage)).c_str(),
+                EShaderStage::toShadercType(stage),
+                std::format("{} ({})", fileName, std::to_string(stage)).c_str(),
                 options);
 
             if (result.GetCompilationStatus() != shaderc_compilation_status_success)
             {
                 NE_CORE_ERROR(result.GetErrorMessage());
-                std::filesystem::remove(cached_path);
                 NE_CORE_ASSERT(false);
             }
 
-            // store compile result into memory and cached file
-            shader_data[stage] = std::vector<uint32_t>(result.begin(), result.end());
-            std::ofstream ofs(cached_path, std::ios::out | std::ios::binary | std::ios::trunc);
-            if (ofs.is_open()) {
-                auto &data = shader_data[stage];
-                ofs.write((char *)data.data(), data.size() * sizeof(uint32_t));
-                ofs.flush();
-                ofs.close();
-            }
+            // store compile result into memory
+            ret[stage] = spirv_ir_t(result.begin(), result.end());
+
+            // and into cached file
+            // std::filesystem::remove(cached_path);
+            //  std::ofstream ofs(cached_path, std::ios::out | std::ios::binary | std::ios::trunc);
+            //  if (ofs.is_open()) {
+            //      auto &data = shader_data[stage];
+            //      ofs.write((char *)data.data(), data.size() * sizeof(uint32_t));
+            //      ofs.flush();
+            //      ofs.close();
+            //  }
         }
     }
 
-    for (auto &&[stage, data] : shader_data)
+    for (auto &&[stage, data] : ret)
     {
-        Reflect(stage, data);
+        reflect(stage, data);
     }
+
+    return {std::move(ret)};
 }

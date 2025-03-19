@@ -1,45 +1,33 @@
-#include <format>
-#include <iostream>
 
-#if _WIN32
-    #define PLATFORM_BREAK() __debugbreak()
-#elif defined(__clang__) || defined(__GNUC__)
-    #define PLATFORM_BREAK() __builtin_trap()
-#else
-    #define PLATFORM_BREAK()
-#endif
+#include "Base.h"
+#include "log.cc/log.h"
 
-namespace ELogLevel
-{
-enum
-{
-    Trace = 0,
-    Info,
-    Warn,
-    Error,
-};
+#define NE_CORE_LOG(...)
+#define NE_CORE_TRACE(...)
+#define NE_CORE_INFO(...)
+#define NE_CORE_WARN(...)
+#define NE_CORE_ERROR(...)
 
-}
-
-
-template <typename... Args>
-inline void Log(const char *fmt, Args... args)
-{
-    std::format(std::forward<const char *>(fmt), std::forward<Args>(args)...);
-    std::cout << fmt << std::endl;
-}
-
-int a()
-{
-    Log("{}", "test");
-}
 
 #define NE_LOG(...)
+#define NE_TRACE(...)
+#define NE_INFO(...) fprintf(stdout, "%s\n", std::format(__VA_ARGS__).c_str());
+#define NE_WARN(...)
+#define NE_ERROR(...)
 
-#define NE_CORE_ASSERT(condition, ...)             \
-    {                                              \
-        if (!(condition)) {                        \
-            NE_LOG(ELogLevel::Error, __VA_ARGS__); \
-            PLATFORM_BREAK();                      \
-        }                                          \
+
+#define NE_CORE_ASSERT(condition, ...)                    \
+    {                                                     \
+        if (!!!(condition)) {                             \
+            NE_CORE_ERROR(ELogLevel::Error, __VA_ARGS__); \
+            PLATFORM_BREAK();                             \
+        }                                                 \
+    }
+
+#define NE_ASSERT(condition, ...)                    \
+    {                                                \
+        if (!!!(condition)) {                        \
+            NE_ERROR(ELogLevel::Error, __VA_ARGS__); \
+            PLATFORM_BREAK();                        \
+        }                                            \
     }

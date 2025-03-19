@@ -21,6 +21,24 @@ int main()
     printf("v2 size: %zu\n", strlen((const char *)v2.data()));
 
     std::string b(std::string_view(str).substr(3, 3));
-    printf(b.c_str());
+    printf("%s\n", b.c_str());
+
+
+    struct a
+    {
+    };
+
+
+
+    int arr[0];
+
+    printf("%llu\n", sizeof(arr));
+    // printf("%d\n", sizeof(void));
+    printf("%llu\n", sizeof(a));
+
+    printf("%d\n", sizeof(void));
+    printf("%d\n", sizeof(void()));
+
+
     return 0;
 }
