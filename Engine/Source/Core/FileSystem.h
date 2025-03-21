@@ -44,7 +44,7 @@ struct DirectoryStore
         return content;
     }
 
-    std::string GetFullPath(std::string_view fileName)
+    std::string getFullPath(std::string_view fileName)
     {
         return (std::filesystem::path(dirPath) / fileName).string();
     }

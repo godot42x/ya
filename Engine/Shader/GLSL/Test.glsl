@@ -4,7 +4,7 @@
 
 // layout(location = 0) in vec3 aPos;
 
-function vs_main()
+void main()
 {
     gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
 }
@@ -14,7 +14,9 @@ function vs_main()
 
 #version 450 core
 
-function fs_main()
+layout(location = 0) out vec4 outColor;
+
+void main() 
 {
-    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    outColor = vec4(1.0, 0.0, 0.0, 1.0);
 }

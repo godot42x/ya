@@ -1,9 +1,15 @@
+//
+/*
+ * @ Author: godot42
+ * @ Create Time: 2025-02-27 01:14:28
+ * @ Modified by: @godot42
+ * @ Modified time: 2025-03-22 00:40:40
+ * @ Description:
+ */
+
 #include "Shader.h"
 
 
-
-#include <filesystem>
-#include <format>
 #include <shaderc/shaderc.hpp>
 #include <stdio.h>
 #include <string>
@@ -56,7 +62,7 @@ const char *getOpenGLCacheFileExtension(EShaderStage::T stage)
     default:
         break;
     }
-    NE_CORE_ASSERT(false);
+    NE_CORE_ASSERT(false, "Unknown shader type!");
     return "";
 }
 
@@ -237,13 +243,14 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
 }
 
 
-void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<uint32_t> &spirvData)
+void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData)
 {
 
-    spirv_cross::Compiler        compiler(spirvData);
+    std::vector<uint32_t>        spirv_ir(spirvData.begin(), spirvData.end());
+    spirv_cross::Compiler        compiler(spirv_ir);
     spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
-    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::ToString(stage), m_FilePath.string());
+    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::toString(stage), tempProcessingPath);
     NE_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
     NE_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
 
@@ -266,15 +273,18 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<uint3
 
 std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
 {
-    auto content = shaderStorage.readStorageFile(fileName);
+    tempProcessingPath = shaderStorage.getFullPath(fileName);
+    auto content       = shaderStorage.readStorageFile(fileName);
     if (!content.has_value()) {
         return {};
     }
 
+    const std::vector<char> &contentStr = content.value();
+
     // Preprocess
     std::unordered_map<EShaderStage::T, std::string> shaderSources;
     {
-        std::string_view source(content.value().begin(), content.value().end());
+        std::string_view source(contentStr.begin(), contentStr.end());
 
 
         // We split the source by "#type <vertex/fragment>" preprocessing directives
@@ -288,10 +298,9 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
             size_t eol = source.find_first_of(eolFlag, pos);
             NE_CORE_ASSERT(eol != std::string ::npos, "Syntax error");
 
-            size_t begin = pos + typeTokenLen + 1;
-            auto   type  = std::string_view(source.substr(begin, eol - begin));
-            type         = ut::str::trim(type);
-
+            size_t           begin = pos + typeTokenLen + 1;
+            std::string_view type  = source.substr(begin, eol - begin);
+            type                   = ut::str::trim(type);
 
             EShaderStage::T shader_type = EShaderStage::fromString(type);
             NE_CORE_ASSERT(shader_type, "Invalid shader type specific");
@@ -319,6 +328,7 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
         shaderc::Compiler       compiler;
         shaderc::CompileOptions options;
         options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+        options.SetTargetSpirv(shaderc_spirv_version_1_3);
         const bool optimize = true;
         if (optimize) {
             options.SetOptimizationLevel(shaderc_optimization_level_performance);
@@ -348,16 +358,18 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
             // }
 
             // recompile
+            // options
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
                 EShaderStage::toShadercType(stage),
                 std::format("{} ({})", fileName, std::to_string(stage)).c_str(),
+                stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
                 options);
 
             if (result.GetCompilationStatus() != shaderc_compilation_status_success)
             {
-                NE_CORE_ERROR(result.GetErrorMessage());
-                NE_CORE_ASSERT(false);
+                NE_CORE_ERROR("\n{}", result.GetErrorMessage());
+                NE_CORE_ASSERT(false, "Shader compilation failed!");
             }
 
             // store compile result into memory
