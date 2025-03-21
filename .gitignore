@@ -16,3 +16,5 @@ compile_commands*
 vulkaninfoSDK*
 *.exe
 *.out
+
+test.log

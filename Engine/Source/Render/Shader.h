@@ -23,11 +23,15 @@ enum T
 inline T fromString(std::string_view type)
 {
     if (type == "vertex")
+    {
         return EShaderStage::Vertex;
+    }
     else if (type == "fragment" || type == "pixel")
+    {
         return EShaderStage::Fragment;
+    }
 
-    NE_CORE_ASSERT(false, "Unknown shader type!");
+    NE_CORE_ASSERT(false, "Unknown shader type! {}", type);
     return EShaderStage::Undefined;
 }
 
@@ -52,7 +56,7 @@ inline const char *to_string(EShaderStage::T stage)
     case EShaderStage::Undefined:
         break;
     }
-    NE_CORE_ASSERT(false);
+    NE_CORE_ASSERT(false, "Unknown shader type!");
     return "";
 }
 } // namespace std
@@ -85,6 +89,9 @@ struct ShaderScriptProcessor
     std::string cachedFileSuffix;
 
   public:
+    std::string tempProcessingPath;
+
+  public:
     using ir_t          = uint32_t;
     using spirv_ir_t    = std::vector<ir_t>;
     using stage2spirv_t = std::unordered_map<EShaderStage::T, spirv_ir_t>;
@@ -113,7 +120,7 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
   public:
 
     std::optional<stage2spirv_t> process(std::string_view fileName) override;
-    void                         reflect(EShaderStage::T stage, const std::vector<uint32_t> &spirvData);
+    void                         reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData);
 
   public:
     GLSLScriptProcessor() {}
