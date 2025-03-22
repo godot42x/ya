@@ -9,10 +9,8 @@ function add_rules(...) end
 ---@param ... string
 function add_files(...) end
 
----@param ... string
 function add_headerfiles(...) end
 
----@param ... string
 function add_requires(...) end
 
 ---@param ... string

@@ -8,6 +8,13 @@ add_requires("libsdl3")
 add_requires("glm")
 add_requires("spirv-cross")
 
+-- just for temp debug in runtime
+add_requires("imgui", {
+    configs = {
+        sdl3_gpu = true
+    }
+})
+
 --add_requires("glad")
 --if is_plat("windows") then
 --	add_requires("opengl")
@@ -31,7 +38,13 @@ do
     add_packages("glm")
     add_packages("shaderc")
     add_packages("spirv-cross")
+    add_packages("imgui")
     --add_packages("glad")
 
     add_includedirs("./Source")
+    before_run(function (target)
+        print("before run", target:name())
+        print("removing sdl log files")
+        os.rm("$(projectdir)/Neon.*-*-*.log")
+    end)
 end

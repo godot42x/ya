@@ -1,10 +1,17 @@
 {
     "cSpell.words": [
+        "blendfactor",
+        "BLENDOP",
+        "COLORCOMPONENT",
+        "CULLMODE",
         "DXIL",
         "HLSL",
         "logcc",
+        "MSAA",
         "PRIMITIVETYPE",
         "renderpass",
+        "SAMPLECOUNT",
+        "SDLGPU",
         "SDLK",
         "SDLMAIN",
         "SFLOAT",
