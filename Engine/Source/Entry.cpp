@@ -25,6 +25,7 @@
 SDL_GPUGraphicsPipeline *pipeline;
 SDL_GPUDevice           *device;
 SDL_Window              *window;
+SDL_GPUBuffer           *vertexBuffer;
 
 
 void initImGui(SDL_GPUDevice *device, SDL_Window *window)
@@ -44,14 +45,11 @@ void initImGui(SDL_GPUDevice *device, SDL_Window *window)
     ImGui_ImplSDLGPU3_Init(&info);
 }
 
-
-SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+bool initSDL3GPU()
 {
-    Logger::init();
-
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
+        return false;
     }
 
     int n = SDL_GetNumGPUDrivers();
@@ -67,7 +65,7 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
                                  nullptr);
     if (!device) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create GPU device: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
+        return false;
     }
 
     const char *driver = SDL_GetGPUDeviceDriver(device);
@@ -76,16 +74,20 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     window = SDL_CreateWindow("Neon", 800, 600, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create window: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
+        return false;
     }
 
     if (!SDL_ClaimWindowForGPUDevice(device, window)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to claim window: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
+        return false;
     }
 
-    ::initImGui(device, window);
+    return true;
+}
 
+// basic pipeline can draw triangle with texture
+bool createGraphicsPipeline()
+{
     // Create shader
     SDL_GPUShader *vertexShader   = nullptr;
     SDL_GPUShader *fragmentShader = nullptr;
@@ -135,12 +137,12 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
         if (!vertexShader) {
             NE_CORE_ERROR("Failed to create vertex shader");
-            return SDL_APP_FAILURE;
+            return false;
         }
         fragmentShader = SDL_CreateGPUShader(device, &fragmentCreateInfo);
         if (!fragmentShader) {
             NE_CORE_ERROR("Failed to create fragment shader");
-            return SDL_APP_FAILURE;
+            return false;
         }
 
         // SDL_Storage *storage = openFileStorage("Engine/Content/Test/", true);
@@ -150,28 +152,139 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     }
 
 
-    // Add vertex buffer description
-    // SDL_GPUVertexBufferDescription vbDesc[] = {
-    //     {
-    //         .stride = sizeof(float) * 6, // 3 for position + 3 for color
-    //         .step_mode = SDL_GPU_VERTEXSTEPMODE_VERTEX,
-    //     }
-    // };
+    // vertex buffer
+    struct VertexInput;
+    std::vector<SDL_GPUVertexBufferDescription> vertexBufferDescs;
+    std::vector<SDL_GPUVertexAttribute>         vertexAttributes;
+    {
 
-    // SDL_GPUVertexAttributeDescription vaDesc[] = {
-    //     {
-    //         .location = 0,
-    //         .offset = 0,
-    //         .format = SDL_GPU_VERTEXFORMAT_FLOAT32_3,
-    //         .buffer_index = 0,
-    //     },
-    //     {
-    //         .location = 1,
-    //         .offset = sizeof(float) * 3,
-    //         .format = SDL_GPU_VERTEXFORMAT_FLOAT32_3,
-    //         .buffer_index = 0,
-    //     }
-    // };
+
+        // TODO: reflect this and auto generate VertexBufferDescription and VertexAttribute
+        struct VertexInput
+        {
+            glm::vec3 position;
+            glm::vec4 color;
+        };
+
+        vertexBufferDescs = {
+            // aPos vec4 aColor vec4
+            SDL_GPUVertexBufferDescription{
+                .slot               = 0,
+                .pitch              = sizeof(VertexInput),
+                .input_rate         = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                .instance_step_rate = 0,
+            },
+        };
+        vertexAttributes = {
+            SDL_GPUVertexAttribute{
+                .location    = 0,
+                .buffer_slot = 0,
+                .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                .offset      = offsetof(VertexInput, position),
+            },
+            SDL_GPUVertexAttribute{
+                .location    = 1,
+                .buffer_slot = 0,
+                .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                .offset      = offsetof(VertexInput, color),
+            },
+        };
+
+
+        // std::vector<VertexInput> vertices = {
+        //     // mid center, red
+        //     VertexInput{
+        //         .position = {0.0f, 0.5f, 0.0f},
+        //         .color    = {1.0f, 0.0f, 0.0f, 1.0f},
+        //     },
+        //     // left bottom, blue
+        //     VertexInput{
+        //         .position = {0.5f, -0.5f, 0.0f},
+        //         .color    = {0.0f, 1.0f, 0.0f, 1.0f},
+        //     },
+        //     // right bottom, green
+        //     VertexInput{
+        //         .position = {-0.5f, -0.5f, 0.0f},
+        //         .color    = {0.0f, 0.0f, 1.0f, 1.0f},
+        //     },
+        // };
+
+        // reverse triangle
+        std::vector<VertexInput> vertices = {
+            // bottom mid, red
+            VertexInput{
+                .position = {0.0f, -0.5f, 0.0f},
+                .color    = {1.0f, 0.0f, 0.0f, 1.0f},
+            },
+            // left top, blue
+            VertexInput{
+                .position = {0.5f, 0.5f, 0.0f},
+                .color    = {0.0f, 1.0f, 0.0f, 1.0f},
+            },
+            // right top, green
+            VertexInput{
+                .position = {-0.5f, 0.5f, 0.0f},
+                .color    = {0.0f, 0.0f, 1.0f, 1.0f},
+            },
+        };
+        const uint32_t vertexBufferSize = static_cast<uint32_t>(sizeof(VertexInput) * vertices.size());
+
+        // create vertexBuffer, buffer on gpu
+        {
+            SDL_GPUBufferCreateInfo bufferInfo = {
+                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                .size  = vertexBufferSize,
+                .props = 0, // by comment
+            };
+
+            vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+            NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
+        }
+        // create transfer buffer, buffer on cpu
+        SDL_GPUTransferBuffer *transferBuffer;
+        {
+            SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
+                .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+                .size  = vertexBufferSize,
+                .props = 0, // by comment
+            };
+            transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
+            NE_ASSERT(transferBuffer, "Failed to create transfer buffer {}", SDL_GetError());
+
+            void *mmapData = SDL_MapGPUTransferBuffer(device, transferBuffer, false);
+            NE_ASSERT(mmapData, "Failed to map transfer buffer {}", SDL_GetError());
+            std::memcpy(mmapData, vertices.data(), vertexBufferSize);
+            SDL_UnmapGPUTransferBuffer(device, transferBuffer);
+        }
+
+
+        // upload
+        {
+            SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
+            NE_ASSERT(commandBuffer, "Failed to acquire command buffer {}", SDL_GetError());
+            {
+                SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+                NE_ASSERT(copyPass, "Failed to begin copy pass {}", SDL_GetError());
+
+                SDL_GPUTransferBufferLocation sourceLoc = {
+                    .transfer_buffer = transferBuffer,
+                    .offset          = 0,
+                };
+                SDL_GPUBufferRegion destRegion = {
+                    .buffer = vertexBuffer,
+                    .offset = 0,
+                    .size   = vertexBufferSize,
+                };
+                SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
+
+                SDL_EndGPUCopyPass(copyPass);
+            }
+            SDL_SubmitGPUCommandBuffer(commandBuffer);
+        }
+
+        // clean
+        SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
+    }
 
     // this format is the final screen surface's format
     // if you want other format, create texture yourself
@@ -197,10 +310,10 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         .vertex_shader      = vertexShader,
         .fragment_shader    = fragmentShader,
         .vertex_input_state = SDL_GPUVertexInputState{
-            // .vertex_buffer_descriptions = vbDesc,
-            // .vertex_attribute_descriptions = vaDesc,
-            .num_vertex_buffers    = 0,
-            .num_vertex_attributes = 0,
+            .vertex_buffer_descriptions = vertexBufferDescs.data(),
+            .num_vertex_buffers         = 1,
+            .vertex_attributes          = vertexAttributes.data(),
+            .num_vertex_attributes      = 2,
         },
         .primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .rasterizer_state = SDL_GPURasterizerState{
@@ -217,32 +330,24 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
             .has_depth_stencil_target  = false,
         },
     };
-
-    // clang-format off
-    // Create vertex buffer
-    // const float vertices[] = {
-    //     0.0f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom center, red
-    //     0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // top right, green -0.5f, 0.5f,
-    //     0.0f, 0.0f, 0.0f, 1.0f, // top left, blue
-    // };
-    // clang-format on
-
-    // SDL_GPUBufferCreateInfo bufferInfo = {
-    //     .size = sizeof(vertices),
-    //     .usage = SDL_GPU_BUFFERUSAGE_VERTEX | SDL_GPU_BUFFERUSAGE_STORAGE,
-    //     .memory_usage = SDL_GPU_MEMORYUSAGE_CPU_TO_GPU,
-    // };
-
-    // SDL_GPUBuffer* vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
-    // SDL_UpdateGPUBuffer(device, vertexBuffer, 0, vertices, sizeof(vertices));
-
-    // Store vertexBuffer in appstate for use in render loop
-    // *appstate = vertexBuffer;
-
     pipeline = SDL_CreateGPUGraphicsPipeline(device, &info);
 
     SDL_ReleaseGPUShader(device, vertexShader);
     SDL_ReleaseGPUShader(device, fragmentShader);
+
+    return true;
+}
+
+SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    Logger::init();
+
+    if (!initSDL3GPU()) {
+        return SDL_APP_FAILURE;
+    }
+    ::initImGui(device, window);
+
+    createGraphicsPipeline();
 
     return SDL_APP_CONTINUE;
 }
@@ -255,7 +360,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
     {
         SDL_Delay(100);
-        return SDL_APP_CONTINUE;
     }
 
     SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
@@ -312,6 +416,11 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         renderpass = SDL_BeginGPURenderPass(commandBuffer, &colorTargetInfo, 1, nullptr);
         {
             SDL_BindGPUGraphicsPipeline(renderpass, pipeline);
+            SDL_GPUBufferBinding vertexBufferBinding = {
+                .buffer = vertexBuffer,
+                .offset = 0,
+            };
+            SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
 
             int windowWidth, windowHeight;
             SDL_GetWindowSize(window, &windowWidth, &windowHeight);
@@ -394,11 +503,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     ImGui_ImplSDLGPU3_Shutdown();
     ImGui::DestroyContext();
 
-
-    // SDL_GPUBuffer* vertexBuffer = (SDL_GPUBuffer*)appstate;
-    // if (vertexBuffer) {
-    //     SDL_DestroyGPUBuffer(device, vertexBuffer);
-    // }
+    if (vertexBuffer) {
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+    }
 
     if (pipeline) {
         SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
