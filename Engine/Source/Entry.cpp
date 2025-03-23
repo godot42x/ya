@@ -356,8 +356,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         {
             return SDL_APP_SUCCESS;
         }
-        break;
-    }
+    } break;
     case SDL_EventType::SDL_EVENT_WINDOW_RESIZED:
     {
         if (event->window.windowID == SDL_GetWindowID(window))
@@ -365,8 +364,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             SDL_WaitForGPUIdle(device);
             NE_CORE_INFO("Window resized to {}x{}", event->window.data1, event->window.data2);
         }
-        break;
-    }
+    } break;
     case SDL_EventType::SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     {
         NE_CORE_INFO("SDL Window Close Requested {}", event->window.windowID);
@@ -374,12 +372,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         {
             return SDL_APP_SUCCESS;
         }
-    }
+    } break;
     case SDL_EventType::SDL_EVENT_QUIT:
     {
         NE_CORE_INFO("SDL Quit");
         return SDL_APP_SUCCESS;
-    }
+    } break;
     default:
         break;
     }
