@@ -26,7 +26,14 @@ SDL_GPUGraphicsPipeline *pipeline;
 SDL_GPUDevice           *device;
 SDL_Window              *window;
 SDL_GPUBuffer           *vertexBuffer;
+SDL_GPUBuffer           *indexBuffer;
 
+
+struct IndexInput
+{
+    uint32_t a, b, c;
+};
+std::vector<IndexInput> indices;
 
 void initImGui(SDL_GPUDevice *device, SDL_Window *window)
 {
@@ -166,6 +173,7 @@ bool createGraphicsPipeline()
             glm::vec4 color;
         };
 
+
         vertexBufferDescs = {
             // aPos vec4 aColor vec4
             SDL_GPUVertexBufferDescription{
@@ -190,44 +198,36 @@ bool createGraphicsPipeline()
             },
         };
 
-
-        // std::vector<VertexInput> vertices = {
-        //     // mid center, red
-        //     VertexInput{
-        //         .position = {0.0f, 0.5f, 0.0f},
-        //         .color    = {1.0f, 0.0f, 0.0f, 1.0f},
-        //     },
-        //     // left bottom, blue
-        //     VertexInput{
-        //         .position = {0.5f, -0.5f, 0.0f},
-        //         .color    = {0.0f, 1.0f, 0.0f, 1.0f},
-        //     },
-        //     // right bottom, green
-        //     VertexInput{
-        //         .position = {-0.5f, -0.5f, 0.0f},
-        //         .color    = {0.0f, 0.0f, 1.0f, 1.0f},
-        //     },
-        // };
-
-        // reverse triangle
+        // quad
         std::vector<VertexInput> vertices = {
-            // bottom mid, red
+            // lt
             VertexInput{
-                .position = {0.0f, -0.5f, 0.0f},
-                .color    = {1.0f, 0.0f, 0.0f, 1.0f},
+                {-0.5f, 0.5f, 0.0f},
+                {1.0f, 0.0f, 0.0f, 1.0f},
             },
-            // left top, blue
+            // rt
             VertexInput{
-                .position = {0.5f, 0.5f, 0.0f},
-                .color    = {0.0f, 1.0f, 0.0f, 1.0f},
+                {0.5f, 0.5f, 0.0f},
+                {0.0f, 1.0f, 0.0f, 1.0f},
             },
-            // right top, green
+            // lb
             VertexInput{
-                .position = {-0.5f, 0.5f, 0.0f},
+                .position = {-0.5, -0.5f, 0.f},
                 .color    = {0.0f, 0.0f, 1.0f, 1.0f},
+            },
+            // rb
+            VertexInput{
+                .position = {0.5f, -0.5f, 0.0f},
+                .color    = {1.0f, 1.0f, 0.0f, 1.0f},
             },
         };
         const uint32_t vertexBufferSize = static_cast<uint32_t>(sizeof(VertexInput) * vertices.size());
+
+        indices = {
+            {0, 1, 3},
+            {0, 3, 2},
+        };
+        const uint32_t indexBufferSize = sizeof(IndexInput) * indices.size();
 
         // create vertexBuffer, buffer on gpu
         {
@@ -240,12 +240,26 @@ bool createGraphicsPipeline()
             vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
             NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
         }
+
+        // create indexBuffer
+        {
+            SDL_GPUBufferCreateInfo bufferInfo = {
+                .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                .size  = indexBufferSize,
+                .props = 0, // by comment
+            };
+
+            indexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+            NE_ASSERT(indexBuffer, "Failed to create index buffer {}", SDL_GetError());
+        }
+
+
         // create transfer buffer, buffer on cpu
         SDL_GPUTransferBuffer *transferBuffer;
         {
             SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
                 .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-                .size  = vertexBufferSize,
+                .size  = vertexBufferSize + indexBufferSize,
                 .props = 0, // by comment
             };
             transferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
@@ -254,6 +268,7 @@ bool createGraphicsPipeline()
             void *mmapData = SDL_MapGPUTransferBuffer(device, transferBuffer, false);
             NE_ASSERT(mmapData, "Failed to map transfer buffer {}", SDL_GetError());
             std::memcpy(mmapData, vertices.data(), vertexBufferSize);
+            std::memcpy((uint8_t *)mmapData + vertexBufferSize, indices.data(), indexBufferSize);
             SDL_UnmapGPUTransferBuffer(device, transferBuffer);
         }
 
@@ -266,16 +281,34 @@ bool createGraphicsPipeline()
                 SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
                 NE_ASSERT(copyPass, "Failed to begin copy pass {}", SDL_GetError());
 
-                SDL_GPUTransferBufferLocation sourceLoc = {
-                    .transfer_buffer = transferBuffer,
-                    .offset          = 0,
-                };
-                SDL_GPUBufferRegion destRegion = {
-                    .buffer = vertexBuffer,
-                    .offset = 0,
-                    .size   = vertexBufferSize,
-                };
-                SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
+                // transfer vertices
+                {
+                    SDL_GPUTransferBufferLocation sourceLoc = {
+                        .transfer_buffer = transferBuffer,
+                        .offset          = 0,
+                    };
+                    SDL_GPUBufferRegion destRegion = {
+                        .buffer = vertexBuffer,
+                        .offset = 0,
+                        .size   = vertexBufferSize,
+                    };
+                    SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
+                }
+
+                // transfer indices
+                {
+                    SDL_GPUTransferBufferLocation sourceLoc = {
+                        .transfer_buffer = transferBuffer,
+                        .offset          = vertexBufferSize,
+                    };
+                    SDL_GPUBufferRegion destRegion = {
+                        .buffer = indexBuffer,
+                        .offset = 0,
+                        .size   = indexBufferSize,
+                    };
+                    SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
+                }
+
 
                 SDL_EndGPUCopyPass(copyPass);
             }
@@ -421,6 +454,11 @@ SDL_AppResult SDL_AppIterate(void *appstate)
                 .offset = 0,
             };
             SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
+            SDL_GPUBufferBinding indexBufferBinding = {
+                .buffer = indexBuffer,
+                .offset = 0,
+            };
+            SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
             int windowWidth, windowHeight;
             SDL_GetWindowSize(window, &windowWidth, &windowHeight);
@@ -436,7 +474,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             SDL_SetGPUViewport(renderpass, &viewport);
 
             // SDL_BindGPUVertexBuffer(renderpass, 0, vertexBuffer, 0);
-            SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+            // SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
+            SDL_DrawGPUIndexedPrimitives(renderpass,
+                                         indices.size() * 3, // 3 index for each triangle
+                                         1,
+                                         0,
+                                         0,
+                                         0);
 
             // after graphics pipeline draw, or make pipeline draw into a RT
             ImGui_ImplSDLGPU3_RenderDrawData(drawData, commandBuffer, renderpass);
