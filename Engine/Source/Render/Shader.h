@@ -8,7 +8,6 @@
 #include <SDL3/SDL_gpu.h>
 
 
-#include "../Core/FileSystem.h"
 #include "../Core/Log.h"
 
 namespace EShaderStage
@@ -81,11 +80,8 @@ struct ShaderScriptProcessor
 
   protected:
 
-    DirectoryStore shaderStorage;
-    DirectoryStore cachedStorage;
-
-    std::string shaderStoragePath = "Engine/Shader/";
-    std::string cachedStoragePath = "Engine/Intermediate/Shader/";
+    std::string shaderStoragePath = "Shader/";
+    std::string cachedStoragePath = "Intermediate/Shader/";
     std::string cachedFileSuffix;
 
   public:
@@ -112,10 +108,9 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     bool bValid              = false;
 
   private:
-    std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_Vulkan_SPIRV;
+    // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_Vulkan_SPIRV;
     // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_OpenGL_SPIRV;
-    std::unordered_map<EShaderStage::T, std::string> m_GLSL_SourceCode;
-
+    // std::unordered_map<EShaderStage::T, std::string> m_GLSL_SourceCode;
 
   public:
 
@@ -148,7 +143,6 @@ struct ShaderScriptProcessorFactory
 
     std::string cachedStoragePath;
     std::string shaderStoragePath;
-    bool        bSyncCreateStorage;
 
     Self &withProcessorType(EProcessorType type)
     {
@@ -156,11 +150,6 @@ struct ShaderScriptProcessorFactory
         return *this;
     }
 
-    Self &syncCreateStorage(bool bOn)
-    {
-        bSyncCreateStorage = bOn;
-        return *this;
-    }
 
     Self &withCachedStoragePath(std::string_view dirPath)
     {
@@ -189,10 +178,7 @@ struct ShaderScriptProcessorFactory
         };
 
         processor->shaderStoragePath = shaderStoragePath;
-        processor->shaderStorage.create(shaderStoragePath.c_str(), bSyncCreateStorage);
-
         processor->cachedStoragePath = cachedStoragePath;
-        processor->cachedStorage.create(cachedStoragePath.c_str(), bSyncCreateStorage);
 
         return processor;
     }

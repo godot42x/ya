@@ -9,6 +9,8 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_log.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3_image/SDL_image.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -19,7 +21,7 @@
 
 
 
-#include "Core/FileSystem.h"
+#include "Core/FileSystem/FileSystem.h"
 #include "Render/Shader.h"
 
 SDL_GPUGraphicsPipeline *pipeline;
@@ -27,6 +29,18 @@ SDL_GPUDevice           *device;
 SDL_Window              *window;
 SDL_GPUBuffer           *vertexBuffer;
 SDL_GPUBuffer           *indexBuffer;
+
+
+void loadImage(SDL_Storage *storage, std::string_view filename)
+{
+    SDL_Surface *surface = nullptr;
+
+    SDL_PathInfo info;
+    SDL_GetStoragePathInfo(storage, filename.data(), &info);
+    // IMG_Load()
+
+    // SDL_CreateSurface()
+}
 
 
 struct IndexInput
@@ -103,10 +117,9 @@ bool createGraphicsPipeline()
         ShaderScriptProcessorFactory factory;
         factory.withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
             .withShaderStoragePath("Engine/Shader/GLSL")
-            .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-            .syncCreateStorage(true);
-        std::shared_ptr<ShaderScriptProcessor> processor = factory.FactoryNew();
+            .withCachedStoragePath("Engine/Intermediate/Shader/GLSL");
 
+        std::shared_ptr<ShaderScriptProcessor> processor = factory.FactoryNew();
 
         auto ret = processor->process("Test.glsl");
         if (!ret) {
@@ -373,6 +386,7 @@ bool createGraphicsPipeline()
 
 SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
+    FileSystem::init();
     Logger::init();
 
     if (!initSDL3GPU()) {
@@ -381,6 +395,7 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     ::initImGui(device, window);
 
     createGraphicsPipeline();
+
 
     return SDL_APP_CONTINUE;
 }
@@ -550,7 +565,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     if (vertexBuffer) {
         SDL_ReleaseGPUBuffer(device, vertexBuffer);
     }
-
+    if (indexBuffer) {
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+    }
     if (pipeline) {
         SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
     }

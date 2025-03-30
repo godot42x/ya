@@ -5,12 +5,14 @@ includes("./Plugins/Plugins.xmake.lua")
 --add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl3")
+add_requires("libsdl3_image")
 add_requires("glm")
 add_requires("spirv-cross")
 
 -- just for temp debug in runtime
 add_requires("imgui", {
     configs = {
+        sdl3 = true,
         sdl3_gpu = true
     }
 })
@@ -27,6 +29,8 @@ do
     add_files("Source/**.cpp")
     add_headerfiles("Source/**.h")
 
+    add_includedirs("Source")
+
     add_deps("utility.cc")
     add_deps("log.cc")
     -- add_deps("log")
@@ -35,6 +39,7 @@ do
     --add_packages("vulkansdk")
     add_packages("spdlog")
     add_packages("libsdl3")
+    add_packages("libsdl3_image")
     add_packages("glm")
     add_packages("shaderc")
     add_packages("spirv-cross")

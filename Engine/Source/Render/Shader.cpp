@@ -24,6 +24,10 @@
 #include <SDL3/SDL_gpu.h>
 
 
+#include "Core/FileSystem/FileSystem.h"
+
+#include "utility/file_utils.h"
+
 static const char *eolFlag =
 #if _WIN32
     "\r\n";
@@ -273,13 +277,14 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>
 
 std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
 {
-    tempProcessingPath = shaderStorage.getFullPath(fileName);
-    auto content       = shaderStorage.readStorageFile(fileName);
-    if (!content.has_value()) {
+    std::string path    = (FileSystem::get()->getProjectRoot() / this->shaderStoragePath / fileName).string();
+    auto        content = ut::file::read_all(path.c_str());
+    if (!content.has_value())
+    {
         return {};
     }
 
-    const std::vector<char> &contentStr = content.value();
+    const std::string &contentStr = content.value();
 
     // Preprocess
     std::unordered_map<EShaderStage::T, std::string> shaderSources;
