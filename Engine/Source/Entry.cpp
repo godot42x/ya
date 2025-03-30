@@ -1,13 +1,15 @@
+#include <array>
 #include <cmath>
+#include <optional>
+
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_init.h>
-
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_init.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_surface.h>
 #include <SDL3_image/SDL_image.h>
@@ -20,28 +22,37 @@
 #include <imgui_impl_sdlgpu3.h>
 
 
-
 #include "Core/FileSystem/FileSystem.h"
 #include "Render/Shader.h"
 
+#include "reflect.cc/enum.h"
 #include "utility/file_utils.h"
+
+
 
 SDL_GPUGraphicsPipeline *pipeline;
 SDL_GPUDevice           *device;
 SDL_Window              *window;
 SDL_GPUBuffer           *vertexBuffer;
 SDL_GPUBuffer           *indexBuffer;
+SDL_GPUTexture          *faceTexture;
+
 
 
 enum class ESamplerType
 {
+    DefaultLinear = 0,
+    DefaultNearest,
     PointClamp,
     PointWrap,
     LinearClamp,
     LinearWrap,
     AnisotropicClamp,
-    AnisotropicWrap
+    AnisotropicWrap,
+    ENUM_MAX,
 };
+GENERATED_ENUM_MISC(ESamplerType);
+
 
 std::unordered_map<ESamplerType, SDL_GPUSampler *> samplers;
 
@@ -50,38 +61,135 @@ struct VertexInput
 {
     glm::vec3 position;
     glm::vec4 color;
+    glm::vec2 uv; // aka texcoord
 };
 // triangle
 struct IndexInput
 {
     uint32_t a, b, c;
 };
-std::vector<IndexInput> indices;
 
 
-template <typename T>
-std::string getRuntimeEnumName()
+// quad vertices
+std::vector<VertexInput> vertices = {
+    // lt
+    VertexInput{
+        {-0.5f, 0.5f, 0.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {0.0f, 0.0f},
+    },
+    // rt
+    VertexInput{
+        {0.5f, 0.5f, 0.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f},
+        {1.0f, 0.0f},
+    },
+    // lb
+    VertexInput{
+        .position = {-0.5, -0.5f, 0.f},
+        .color    = {1.0f, 1.0f, 1.0f, 1.0f},
+        .uv       = {0.0f, 1.0f},
+    },
+    // rb
+    VertexInput{
+        .position = {0.5f, -0.5f, 0.0f},
+        .color    = {1.0f, 1.0f, 1.0f, 1.0f},
+        .uv       = {1.0f, 1.0f},
+    },
+};
+// quad indices
+std::vector<IndexInput> indices = {
+    {0, 1, 3},
+    {0, 3, 2},
+};
+
+
+SDL_GPUTexture *createTexture(std::string_view filepath)
 {
-    std::string name = typeid(T).name();
-    name.erase(0, name.find_last_of(':') + 1); // remove namespace
-    name.erase(0, name.find_last_of(' ') + 1); // remove class name
-    return name;
-}
-
-
-void loadImage(std::string_view filename)
-{
-    auto path = FileSystem::get()->getProjectRoot() / filename;
-
+    auto         path    = FileSystem::get()->getProjectRoot() / filepath;
     SDL_Surface *surface = nullptr;
 
-    ut::file::ImageInfo info = ut::file::ImageInfo::detect(path);
+    ut::file::ImageInfo imageInfo = ut::file::ImageInfo::detect(path);
 
     surface = IMG_Load(path.string().c_str());
     if (!surface) {
         NE_CORE_ERROR("Failed to load image: {}", SDL_GetError());
-        return;
+        return nullptr;
     }
+
+    SDL_GPUTexture *outTexture = nullptr;
+
+    SDL_GPUTextureCreateInfo info{
+        .type                 = SDL_GPU_TEXTURETYPE_2D,
+        .format               = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width                = static_cast<Uint32>(surface->w),
+        .height               = static_cast<Uint32>(surface->h),
+        .layer_count_or_depth = 1,
+        .num_levels           = 1,
+    };
+    outTexture = SDL_CreateGPUTexture(device, &info);
+    if (!outTexture) {
+        NE_CORE_ERROR("Failed to create texture: {}", SDL_GetError());
+        return nullptr;
+    }
+    auto filename = std::format("{} 😜", path.stem().filename().string());
+    SDL_SetGPUTextureName(device, outTexture, filename.c_str());
+    NE_CORE_INFO("Texture name: {}", filename.c_str());
+
+
+    SDL_GPUTransferBuffer *textureTransferBuffer = nullptr;
+    {
+        SDL_GPUTransferBufferCreateInfo textureTransferBufferInfo = {
+            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+            .size  = static_cast<Uint32>(surface->w * surface->h * 4), // 4 bytes per pixel
+            .props = 0,                                                // by comment
+        };
+        textureTransferBuffer = SDL_CreateGPUTransferBuffer(device, &textureTransferBufferInfo);
+
+        // mmap
+        void *mmapPtr = SDL_MapGPUTransferBuffer(device, textureTransferBuffer, false);
+        std::memcpy(mmapPtr, surface->pixels, textureTransferBufferInfo.size);
+        SDL_UnmapGPUTransferBuffer(device, textureTransferBuffer);
+    }
+
+
+    // [upload] copy pass
+    {
+        SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
+        NE_ASSERT(commandBuffer, "Failed to acquire command buffer {}", SDL_GetError());
+
+        SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+
+        // transfer texture
+        {
+            SDL_GPUTextureTransferInfo srcTransferInfo = {
+                .transfer_buffer = textureTransferBuffer,
+                .offset          = 0,
+            };
+            SDL_GPUTextureRegion destGPUTextureRegion = {
+                .texture   = outTexture,
+                .mip_level = 0,
+                .layer     = 0,
+                .x         = 0,
+                .y         = 0,
+                .z         = 0,
+                .w         = static_cast<Uint32>(surface->w),
+                .h         = static_cast<Uint32>(surface->h),
+                .d         = 1, // depth
+            };
+
+            SDL_UploadToGPUTexture(copyPass, &srcTransferInfo, &destGPUTextureRegion, false);
+        }
+
+        SDL_EndGPUCopyPass(copyPass);
+        SDL_SubmitGPUCommandBuffer(commandBuffer);
+        SDL_ReleaseGPUTransferBuffer(device, textureTransferBuffer);
+    }
+
+    SDL_DestroySurface(surface);
+
+    return outTexture;
 }
 
 
@@ -145,6 +253,30 @@ bool initSDL3GPU()
 
 void createSamplers()
 {
+    // DefaultLinear
+    SDL_GPUSamplerCreateInfo defaultLinearInfo = {
+        .min_filter        = SDL_GPU_FILTER_LINEAR, // 缩小采样
+        .mag_filter        = SDL_GPU_FILTER_LINEAR, // 放大采样
+        .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+        .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .mip_lod_bias      = 0.0,
+        .compare_op        = SDL_GPU_COMPAREOP_ALWAYS,
+        .min_lod           = 1.0,
+        .max_lod           = 1.0,
+        .enable_anisotropy = false,
+        .enable_compare    = false,
+    };
+    samplers[ESamplerType::DefaultLinear] = SDL_CreateGPUSampler(device, &defaultLinearInfo);
+
+    // DefaultNearest
+    SDL_GPUSamplerCreateInfo defaultNearestInfo = defaultLinearInfo;
+    defaultNearestInfo.min_filter               = SDL_GPU_FILTER_NEAREST;
+    defaultNearestInfo.mag_filter               = SDL_GPU_FILTER_NEAREST;
+    defaultNearestInfo.mipmap_mode              = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    samplers[ESamplerType::DefaultNearest]      = SDL_CreateGPUSampler(device, &defaultNearestInfo);
+
     // PointClamp
     SDL_GPUSamplerCreateInfo pointClampInfo = {
         .min_filter     = SDL_GPU_FILTER_NEAREST,
@@ -152,7 +284,8 @@ void createSamplers()
         .mipmap_mode    = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
         .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
         .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE};
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    };
     samplers[ESamplerType::PointClamp] = SDL_CreateGPUSampler(device, &pointClampInfo);
 
     // PointWrap
@@ -162,7 +295,8 @@ void createSamplers()
         .mipmap_mode    = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
         .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
         .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
-        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT};
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+    };
     samplers[ESamplerType::PointWrap] = SDL_CreateGPUSampler(device, &pointWrapInfo);
 
     // LinearClamp
@@ -201,6 +335,18 @@ void createSamplers()
     samplers[ESamplerType::AnisotropicClamp] = SDL_CreateGPUSampler(device, &anisotropicClampInfo);
 
 
+    // AnisotropicWrap
+    SDL_GPUSamplerCreateInfo anisotropicWrapInfo = {
+        .min_filter        = SDL_GPU_FILTER_LINEAR,
+        .mag_filter        = SDL_GPU_FILTER_LINEAR,
+        .mipmap_mode       = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+        .address_mode_u    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+        .address_mode_v    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+        .address_mode_w    = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
+        .max_anisotropy    = 4,
+        .enable_anisotropy = true,
+    };
+    samplers[ESamplerType::AnisotropicWrap] = SDL_CreateGPUSampler(device, &anisotropicWrapInfo);
     // validate samplers
     for (auto &[key, sampler] : samplers) {
         NE_CORE_ASSERT(sampler, "Failed to create sampler {} {}", (int)key, SDL_GetError());
@@ -208,67 +354,17 @@ void createSamplers()
 }
 
 
-void testPreUploadBuffer()
+void uploadBuffers()
 {
-    // quad vertices
-    std::vector<VertexInput> vertices = {
-        // lt
-        VertexInput{
-            {-0.5f, 0.5f, 0.0f},
-            {1.0f, 0.0f, 0.0f, 1.0f},
-        },
-        // rt
-        VertexInput{
-            {0.5f, 0.5f, 0.0f},
-            {0.0f, 1.0f, 0.0f, 1.0f},
-        },
-        // lb
-        VertexInput{
-            .position = {-0.5, -0.5f, 0.f},
-            .color    = {0.0f, 0.0f, 1.0f, 1.0f},
-        },
-        // rb
-        VertexInput{
-            .position = {0.5f, -0.5f, 0.0f},
-            .color    = {1.0f, 1.0f, 0.0f, 1.0f},
-        },
-    };
-    const uint32_t vertexBufferSize = static_cast<uint32_t>(sizeof(VertexInput) * vertices.size());
+    // TODO: position use buffer , color and textcoord  use instance draw -> WTF?
 
-    // quad indices
-    indices = {
-        {0, 1, 3},
-        {0, 3, 2},
-    };
-    const uint32_t indexBufferSize = sizeof(IndexInput) * indices.size();
 
-    // create vertexBuffer, buffer on gpu
-    {
-        SDL_GPUBufferCreateInfo bufferInfo = {
-            .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-            .size  = vertexBufferSize, // TODO: make a big size buffer for batch draw call
-            .props = 0,                // by comment
-        };
-
-        vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
-        NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
-    }
-
-    // create indexBuffer
-    {
-        SDL_GPUBufferCreateInfo bufferInfo = {
-            .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-            .size  = indexBufferSize, // TODO: make a big size buffer for batch draw call
-            .props = 0,               // by comment
-        };
-
-        indexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
-        NE_ASSERT(indexBuffer, "Failed to create index buffer {}", SDL_GetError());
-    }
+    const uint32_t vertexBufferSize = sizeof(VertexInput) * vertices.size();
+    const uint32_t indexBufferSize  = sizeof(IndexInput) * indices.size();
 
 
     // create transfer buffer, buffer on cpu
-    SDL_GPUTransferBuffer *transferBuffer;
+    SDL_GPUTransferBuffer *transferBuffer = nullptr;
     {
         SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
             .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
@@ -332,14 +428,12 @@ void testPreUploadBuffer()
     SDL_ReleaseGPUTransferBuffer(device, transferBuffer);
 }
 
-// basic pipeline can draw triangle with texture
-bool createGraphicsPipeline()
+// shaders is high related with pipeline, we split it temporarily
+std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> createShaders()
 {
-    // Create shader
     SDL_GPUShader *vertexShader   = nullptr;
     SDL_GPUShader *fragmentShader = nullptr;
     {
-
         ShaderScriptProcessorFactory factory;
         factory.withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
             .withShaderStoragePath("Engine/Shader/GLSL")
@@ -374,7 +468,7 @@ bool createGraphicsPipeline()
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers         = 0,
+            .num_samplers         = 1,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
             .num_uniform_buffers  = 0,
@@ -383,12 +477,12 @@ bool createGraphicsPipeline()
         vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
         if (!vertexShader) {
             NE_CORE_ERROR("Failed to create vertex shader");
-            return false;
+            return {};
         }
         fragmentShader = SDL_CreateGPUShader(device, &fragmentCreateInfo);
         if (!fragmentShader) {
             NE_CORE_ERROR("Failed to create fragment shader");
-            return false;
+            return {};
         }
 
         // SDL_Storage *storage = openFileStorage("Engine/Content/Test/", true);
@@ -396,6 +490,50 @@ bool createGraphicsPipeline()
         // SDL_WriteStorageFile(storage, "abc", (void *)"abc", strlen(text));
         // SDL_CloseStorage(storage);
     }
+
+
+    return {{vertexShader, fragmentShader}};
+}
+
+// basic pipeline can draw triangle with texture
+bool createGraphicsPipeline()
+{
+
+    auto shaders = createShaders();
+    NE_ASSERT(shaders.has_value(), "Failed to create shader {}", SDL_GetError());
+    auto &[vertexShader, fragmentShader] = shaders.value();
+
+    const uint32_t vertexBufferSize = sizeof(VertexInput) * vertices.size();
+    const uint32_t indexBufferSize  = sizeof(IndexInput) * indices.size();
+
+    // create vertexBuffer, buffer on gpu
+    {
+        SDL_GPUBufferCreateInfo bufferInfo = {
+            .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+            .size  = vertexBufferSize, // TODO: make a big size buffer for batch draw call
+            .props = 0,                // by comment
+        };
+
+        vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+        NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
+
+        SDL_SetGPUBufferName(device, vertexBuffer, "godot42 vertex buffer 😍");
+    }
+
+    // create indexBuffer
+    {
+        SDL_GPUBufferCreateInfo bufferInfo = {
+            .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+            .size  = indexBufferSize, // TODO: make a big size buffer for batch draw call
+            .props = 0,               // by comment
+        };
+
+        indexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+        NE_ASSERT(indexBuffer, "Failed to create index buffer {}", SDL_GetError());
+
+        SDL_SetGPUBufferName(device, indexBuffer, "godot42 index buffer 😁");
+    }
+
 
     std::vector<SDL_GPUVertexBufferDescription> vertexBufferDescs;
     std::vector<SDL_GPUVertexAttribute>         vertexAttributes;
@@ -423,8 +561,15 @@ bool createGraphicsPipeline()
                 .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
                 .offset      = offsetof(VertexInput, color),
             },
+            SDL_GPUVertexAttribute{
+                .location    = 2,
+                .buffer_slot = 0,
+                .format      = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                .offset      = offsetof(VertexInput, uv),
+            },
         };
     }
+
 
     // this format is the final screen surface's format
     // if you want other format, create texture yourself
@@ -451,9 +596,9 @@ bool createGraphicsPipeline()
         .fragment_shader    = fragmentShader,
         .vertex_input_state = SDL_GPUVertexInputState{
             .vertex_buffer_descriptions = vertexBufferDescs.data(),
-            .num_vertex_buffers         = 1,
+            .num_vertex_buffers         = static_cast<Uint32>(vertexBufferDescs.size()),
             .vertex_attributes          = vertexAttributes.data(),
-            .num_vertex_attributes      = 2,
+            .num_vertex_attributes      = static_cast<Uint32>(vertexAttributes.size()),
         },
         .primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .rasterizer_state = SDL_GPURasterizerState{
@@ -492,16 +637,17 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
 
     createGraphicsPipeline();
     createSamplers();
-    testPreUploadBuffer();
-
+    uploadBuffers();
+    faceTexture = createTexture("Engine/Content/TestTextures/face.png");
 
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    SDL_GPUTexture *swapchainTexture = nullptr;
-    Uint32          w, h;
+    SDL_GPUTexture     *swapchainTexture = nullptr;
+    Uint32              w, h;
+    static ESamplerType selectedSampler = ESamplerType::PointClamp;
 
     if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
     {
@@ -535,6 +681,46 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     if (ImGui::Begin("Debug"))
     {
         ImGui::DragFloat4("Clear Color", glm::value_ptr(clearColor), 0.01f, 0.0f, 1.0f);
+
+        const std::string currentSamplerName = ESamplerType2Strings[selectedSampler];
+        if (ImGui::BeginCombo("Sampler", currentSamplerName.c_str()))
+        {
+            for (int i = 0; i < static_cast<int>(ESamplerType::ENUM_MAX); i++)
+            {
+                bool              bSelected   = (static_cast<int>(selectedSampler) == i);
+                const std::string samplerName = ESamplerType2Strings[static_cast<ESamplerType>(i)];
+                if (ImGui::Selectable(samplerName.c_str(), &bSelected)) {
+                    selectedSampler = static_cast<ESamplerType>(i);
+                    NE_CORE_INFO("Selected sampler: {}", samplerName);
+                }
+                if (bSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        bool bVertexInputChanged = false;
+        for (int i = 0; i < 4; ++i) {
+            ImGui::Text("Vertex %d", i);
+            char label[32];
+            sprintf(label, "position##%d", i);
+            if (ImGui::DragFloat3(label, glm::value_ptr(vertices[i].position))) {
+                bVertexInputChanged = true;
+            }
+            sprintf(label, "color##%d", i);
+            if (ImGui::DragFloat4(label, glm::value_ptr(vertices[i].color))) {
+                bVertexInputChanged = true;
+            }
+            sprintf(label, "uv##%d", i);
+            if (ImGui::DragFloat2(label, glm::value_ptr(vertices[i].uv))) {
+                bVertexInputChanged = true;
+            }
+        }
+        if (bVertexInputChanged) {
+            NE_INFO("Vertex input changed, reuploading buffers");
+            uploadBuffers();
+        }
     }
     ImGui::End();
     ImGui::Render();
@@ -562,16 +748,26 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         renderpass = SDL_BeginGPURenderPass(commandBuffer, &colorTargetInfo, 1, nullptr);
         {
             SDL_BindGPUGraphicsPipeline(renderpass, pipeline);
+
             SDL_GPUBufferBinding vertexBufferBinding = {
                 .buffer = vertexBuffer,
                 .offset = 0,
             };
             SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
+
+            // TODO: use uint16  to optimize index buffer
             SDL_GPUBufferBinding indexBufferBinding = {
                 .buffer = indexBuffer,
                 .offset = 0,
             };
             SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+            // sampler binding
+            SDL_GPUTextureSamplerBinding textureBinding = {
+                .texture = faceTexture,
+                .sampler = samplers[selectedSampler],
+            };
+            SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
 
             int windowWidth, windowHeight;
             SDL_GetWindowSize(window, &windowWidth, &windowHeight);
@@ -666,6 +862,10 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
             continue;
         }
         SDL_ReleaseGPUSampler(device, sampler);
+    }
+
+    if (faceTexture) {
+        SDL_ReleaseGPUTexture(device, faceTexture);
     }
 
     if (vertexBuffer) {
