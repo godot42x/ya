@@ -33,6 +33,7 @@ do
 
     add_deps("utility.cc")
     add_deps("log.cc")
+    add_deps("reflect.cc")
     -- add_deps("log")
 
     --add_packages("glfw")
@@ -47,7 +48,7 @@ do
     --add_packages("glad")
 
     add_includedirs("./Source")
-    before_run(function (target)
+    before_run(function(target)
         print("before run", target:name())
         print("removing sdl log files")
         os.rm("$(projectdir)/Neon.*-*-*.log")
