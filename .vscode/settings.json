@@ -11,6 +11,8 @@
         "PRIMITIVETYPE",
         "renderpass",
         "SAMPLECOUNT",
+        "SAMPLERADDRESSMODE",
+        "SAMPLERMIPMAPMODE",
         "SDLGPU",
         "SDLK",
         "SDLMAIN",
