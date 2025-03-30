@@ -576,13 +576,15 @@ bool createGraphicsPipeline()
     SDL_GPUTextureFormat format = SDL_GetGPUSwapchainTextureFormat(device, window);
 
     SDL_GPUColorTargetDescription colorTargetDesc{
-        .format      = format,
+        .format = format,
+        // final_color = (src_color × src_color_blendfactor) color_blend_op (dst_color × dst_color_blendfactor)
+        // final_alpha = (src_alpha × src_alpha_blendfactor) alpha_blend_op (dst_alpha × dst_alpha_blendfactor)
         .blend_state = SDL_GPUColorTargetBlendState{
-            .src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+            .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+            .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
             .color_blend_op        = SDL_GPU_BLENDOP_ADD,
             .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
-            .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO,
+            .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
             .alpha_blend_op        = SDL_GPU_BLENDOP_ADD,
             .color_write_mask      = SDL_GPU_COLORCOMPONENT_A | SDL_GPU_COLORCOMPONENT_B |
                                 SDL_GPU_COLORCOMPONENT_G | SDL_GPU_COLORCOMPONENT_R,
@@ -772,11 +774,31 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             int windowWidth, windowHeight;
             SDL_GetWindowSize(window, &windowWidth, &windowHeight);
 
+            // TODO: these works should be done in camera matrix?
+            // Calculate proper aspect-preserving dimensions
+            float targetAspect = 1.0f; // 1:1 for square
+            float windowAspect = (float)windowWidth / (float)windowHeight;
+            float viewportWidth, viewportHeight;
+            float offsetX = 0, offsetY = 0;
+
+            if (windowAspect > targetAspect) {
+                // Window is wider than needed
+                viewportHeight = (float)windowHeight;
+                viewportWidth  = viewportHeight * targetAspect;
+                offsetX        = (windowWidth - viewportWidth) / 2.0f;
+            }
+            else {
+                // Window is taller than needed
+                viewportWidth  = (float)windowWidth;
+                viewportHeight = viewportWidth / targetAspect;
+                offsetY        = (windowHeight - viewportHeight) / 2.0f;
+            }
+
             SDL_GPUViewport viewport = {
-                .x         = 0,
-                .y         = 0,
-                .w         = (float)windowWidth,
-                .h         = (float)windowHeight,
+                .x         = offsetX,
+                .y         = offsetY,
+                .w         = viewportWidth,
+                .h         = viewportHeight,
                 .min_depth = 0.0f,
                 .max_depth = 1.0f,
             };
