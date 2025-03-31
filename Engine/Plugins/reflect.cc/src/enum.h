@@ -3,6 +3,7 @@
 #include <iostream>
 #include <source_location>
 #include <string_view>
+#include <unordered_map>
 
 
 namespace detail
@@ -109,7 +110,7 @@ std::string enum_name(T value)
 
 #define GENERATED_ENUM_MISC(ENUM_TYPE_NAME)                                                                                \
     inline std::unordered_map<ENUM_TYPE_NAME, std::string> ENUM_TYPE_NAME##2Strings;                                       \
-    namespace detail##_ENUM_TYPE_NAME                                                                                      \
+    namespace ENUM_TYPE_NAME##__detail                                                                                     \
     {                                                                                                                      \
         struct Generator                                                                                                   \
         {                                                                                                                  \
@@ -120,5 +121,5 @@ std::string enum_name(T value)
                 }                                                                                                          \
             }                                                                                                              \
         };                                                                                                                 \
-        static Generator generator;                                                                                        \
+        inline static Generator generator;                                                                                 \
     }\

@@ -25,6 +25,7 @@
         "subpass",
         "Subpasses",
         "subresource",
+        "SWAPCHAINCOMPOSITION",
         "Swapchains",
         "vertexbuffer",
         "VERTEXELEMENTFORMAT",
