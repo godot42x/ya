@@ -18,10 +18,11 @@ struct Camera
     glm::mat4 getViewProjectionMatrix() const { return viewProjectionMatrix; }
 
   protected:
-    Camera() = default;
+    Camera()  = default;
+    ~Camera() = default;
 };
 
-class EditorCamera : public Camera
+struct EditorCamera : public Camera
 {
 
     float fov         = 45.0f;
@@ -40,12 +41,10 @@ class EditorCamera : public Camera
 
 
   public:
-    EditorCamera()
-    {
-    }
-    ~EditorCamera();
+    EditorCamera() {}
+    ~EditorCamera() {}
 
-    void setProjection(float fov, float aspectRatio, float nearClip, float farClip)
+    void setPerspective(float fov, float aspectRatio, float nearClip, float farClip)
     {
         this->projectionType = EProjectionType::Perspective;
         this->fov            = fov;
@@ -60,22 +59,54 @@ class EditorCamera : public Camera
         recalculateViewProjectionMatrix();
     }
 
+    void setOrthographic(float left, float right, float bottom, float top, float nearClip, float farClip)
+    {
+        this->projectionType = EProjectionType::Orthographic;
+        this->nearClip       = nearClip;
+        this->farClip        = farClip;
+        projectionMatrix     = glm::ortho(left, right, bottom, top, nearClip, farClip);
+
+        recalculateViewProjectionMatrix();
+    }
+
+
+    void recalculateViewMatrix()
+    {
+        const glm::quat rotQuat = glm::quat(glm::radians(rotation));
+
+        viewMatrix = glm::translate(glm::mat4(1.0f), position) *
+                     glm::mat4_cast(glm::quat(rotQuat));
+
+        viewMatrix = glm::inverse(viewMatrix);
+    }
+
     void recalculateViewProjectionMatrix()
     {
-        viewMatrix = glm::translate(glm::mat4(1.0f), -position) *
-                     glm::mat4_cast(glm::quat(glm::vec3(rotation.x, rotation.y, rotation.z)));
-
         viewProjectionMatrix = projectionMatrix * viewMatrix;
+    }
+
+    void recalculateAll()
+    {
+        recalculateViewMatrix();
+        recalculateViewProjectionMatrix();
     }
 
     void setPosition(const glm::vec3 &position)
     {
         this->position = position;
-        recalculateViewProjectionMatrix();
+        recalculateAll();
     }
+
     void setRotation(const glm::vec3 &rotation)
     {
         this->rotation = rotation;
-        recalculateViewProjectionMatrix();
+        recalculateAll();
+    }
+
+    void setPositionAndRotation(const glm::vec3 &position, const glm::vec3 &rotation)
+    {
+        this->position = position;
+        this->rotation = rotation;
+        recalculateAll();
     }
 };

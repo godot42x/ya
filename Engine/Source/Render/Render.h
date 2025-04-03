@@ -188,6 +188,10 @@ struct SDLGPURender : public Render
 
 
     void uploadBuffers(SDL_GPUCommandBuffer *commandBuffer, void *vertexData, Uint32 inputVerticesSize, void *indexData, Uint32 inputIndicesSize);
+    void setUnifroms(SDL_GPUCommandBuffer *commandBuffer, Uint32 slot_index, void *data, Uint32 dataSize)
+    {
+        SDL_PushGPUComputeUniformData(commandBuffer, 0, data, dataSize);
+    }
 
 
   private:

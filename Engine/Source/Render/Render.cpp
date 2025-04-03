@@ -34,8 +34,7 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::create
             .num_samplers         = 0,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
-            .num_uniform_buffers  = 0,
-
+            .num_uniform_buffers  = 1,
         };
         SDL_GPUShaderCreateInfo fragmentCreateInfo = {
             .code_size            = codes[EShaderStage::Fragment].size() * sizeof(uint32_t) / sizeof(uint8_t),
@@ -97,8 +96,19 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
 
             SDL_SetGPUBufferName(device, indexBuffer, "godot42 index buffer 😁");
         }
+
+        // // uniform
+        // {
+        //     SDL_GPUBufferCreateInfo bufferInfo = {
+        //         .usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE,
+        //         .size  = indexBufferSize, // TODO: make a big size buffer for batch draw call
+        //         .props = 0,               // by comment
+        //     };
+        //     // SDL_CreateGPUBuffer()
+        // }
     }
 
+    // SHADER is high related with pipeline!!!
     auto shaders = createShaders(info.shaderName);
     NE_ASSERT(shaders.has_value(), "Failed to create shader {}", SDL_GetError());
     auto &[vertexShader, fragmentShader] = shaders.value();
@@ -119,6 +129,7 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             SDL_GPUVertexAttribute sdlVertAttr{
                 .location    = info.vertexAttributes[i].location,
                 .buffer_slot = info.vertexAttributes[i].bufferSlot,
+                .format      = SDL_GPU_VERTEXELEMENTFORMAT_INVALID,
                 .offset      = info.vertexAttributes[i].offset,
             };
 
@@ -162,7 +173,7 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             .enable_color_write_mask = false,
         },
     };
-    SDL_GPUGraphicsPipelineCreateInfo sdlGPCreateInfo = {
+    SDL_GPUGraphicsPipelineCreateInfo sdlGPUCreateInfo = {
         .vertex_shader      = vertexShader,
         .fragment_shader    = fragmentShader,
         .vertex_input_state = SDL_GPUVertexInputState{
@@ -185,11 +196,13 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             .num_color_targets         = 1,
             .has_depth_stencil_target  = false,
         },
+
     };
-    pipeline = SDL_CreateGPUGraphicsPipeline(device, &sdlGPCreateInfo);
+    pipeline = SDL_CreateGPUGraphicsPipeline(device, &sdlGPUCreateInfo);
 
     SDL_ReleaseGPUShader(device, vertexShader);
     SDL_ReleaseGPUShader(device, fragmentShader);
+
 
     return pipeline != nullptr;
 }

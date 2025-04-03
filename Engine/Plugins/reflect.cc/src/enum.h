@@ -60,19 +60,36 @@ constexpr auto enum_name()
 }
 
 
+// template <typename T>
+// constexpr auto enum_size()
+// {
+//     if constexpr (requires { T::ENUM_MAX; })
+//         return static_cast<std::size_t>(T::ENUM_MAX);
+//     else if constexpr (requires { T::ENUM_COUNT; })
+//         return static_cast<std::size_t>(T::ENUM_COUNT);
+//     else {
+//         throw std::runtime_error("Enum class does not have ENUM_MAX or ENUM_COUNT member");
+//         // static_assert(false, "Enum class does not have ENUM_MAX or ENUM_COUNT member");
+//         return 0;
+//     }
+// }
+
+template <typename T, typename = void, typename = void>
+struct enum_size;
+
 template <typename T>
-constexpr auto enum_size()
+    requires requires { T::ENUM_MAX; }
+struct enum_size<T>
 {
-    if constexpr (requires { T::ENUM_MAX; })
-        return static_cast<std::size_t>(T::ENUM_MAX);
-    else if constexpr (requires { T::ENUM_COUNT; })
-        return static_cast<std::size_t>(T::ENUM_COUNT);
-    else {
-        throw std::runtime_error("Enum class does not have ENUM_MAX or ENUM_COUNT member");
-        // static_assert(false, "Enum class does not have ENUM_MAX or ENUM_COUNT member");
-        return 0;
-    }
-}
+    static constexpr auto value = static_cast<std::size_t>(T::ENUM_MAX);
+};
+
+template <typename T, T LastEnum>
+struct enum_size<T, std::integral_constant<T, LastEnum>, void>
+{
+    static constexpr auto value = static_cast<std::size_t>(LastEnum) + 1;
+};
+
 
 template <typename T, auto Num, std::size_t... Is>
 constexpr auto generate_names_array(std::index_sequence<Is...>)
@@ -84,7 +101,7 @@ template <typename T>
     requires std::is_enum_v<T>
 constexpr auto enum_name(T value)
 {
-    constexpr auto num   = enum_size<T>();
+    constexpr auto num   = enum_size<T>::value;
     constexpr auto names = generate_names_array<T, num>(std::make_index_sequence<num>{});
     return names.at(static_cast<std::size_t>(value));
 }
@@ -104,13 +121,13 @@ std::string enum_name()
 template <typename T>
 std::string enum_name(T value)
 {
-    return std::string(detail::enum_name(value));
+    return std::string(detail::enum_name<T>(value));
 }
 
 
 #define GENERATED_ENUM_MISC(ENUM_TYPE_NAME)                                                                                \
     inline std::unordered_map<ENUM_TYPE_NAME, std::string> ENUM_TYPE_NAME##2Strings;                                       \
-    namespace ENUM_TYPE_NAME##__detail                                                                                     \
+    namespace __detail__##ENUM_TYPE_NAME                                                                                   \
     {                                                                                                                      \
         struct Generator                                                                                                   \
         {                                                                                                                  \
@@ -122,4 +139,28 @@ std::string enum_name(T value)
             }                                                                                                              \
         };                                                                                                                 \
         inline static Generator generator;                                                                                 \
-    }\
+    }
+
+
+
+namespace Test
+{
+#if !NDEBUG
+
+enum class ETestEnum
+{
+    Test1 = 0,
+    Test2,
+    Test3,
+    ENUM_MAX,
+};
+
+GENERATED_ENUM_MISC(ETestEnum);
+
+inline void a()
+{
+    ETestEnum2Strings[ETestEnum::Test1] = "Test1";
+}
+#endif
+
+}; // namespace Test

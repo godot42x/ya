@@ -19,12 +19,14 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 
+#include "Core/EditorCamera.h"
 
 
 SDL_GPUTexture *faceTexture;
 
 App          app;
 SDLGPURender render;
+EditorCamera camera;
 
 
 
@@ -151,6 +153,8 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         static_cast<Uint32>(indices.size() * sizeof(IndexInput)));
     faceTexture = render.createTexture("Engine/Content/TestTextures/face.png");
 
+    camera.setPerspective(45.0f, 1.0f, 0.1f, 100.0f);
+
     return SDL_APP_CONTINUE;
 }
 
@@ -208,6 +212,24 @@ void imguiManipulateSwapchain()
     }
 }
 
+void imguiManipulateEditorCamera()
+{
+    auto position = camera.position;
+    auto rotation = camera.rotation;
+    bool bChanged = false;
+
+    if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
+        bChanged = true;
+    }
+    if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
+        bChanged = true;
+    }
+
+    if (bChanged) {
+        camera.setPositionAndRotation(position, rotation);
+    }
+}
+
 
 SDL_AppResult iterate()
 {
@@ -226,8 +248,6 @@ SDL_AppResult iterate()
     static float avgFps = 0.0f;
     avgFps              = avgFps * 0.95f + fps * 0.05f; // Simple exponential moving average
 
-    SDL_GPUTexture *swapchainTexture = nullptr;
-    Uint32          w, h;
 
     if (SDL_GetWindowFlags(render.window) & SDL_WINDOW_MINIMIZED)
     {
@@ -241,11 +261,13 @@ SDL_AppResult iterate()
         return SDL_APP_FAILURE;
     }
 
+    Uint32          swapChianTextureW, swapChainTextureHeight;
+    SDL_GPUTexture *swapchainTexture = nullptr;
     if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer,
                                                render.window,
                                                &swapchainTexture,
-                                               &w,
-                                               &h)) {
+                                               &swapChianTextureW,
+                                               &swapChainTextureHeight)) {
         NE_CORE_ERROR("Failed to acquire swapchain texture {}", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -290,6 +312,7 @@ SDL_AppResult iterate()
 
         bVertexInputChanged = imguiManipulateVertices();
         imguiManipulateSwapchain();
+        imguiManipulateEditorCamera();
     }
     ImGui::End();
     ImGui::Render();
@@ -300,6 +323,9 @@ SDL_AppResult iterate()
     if (swapchainTexture && !bMinimized)
     {
         Imgui_ImplSDLGPU3_PrepareDrawData(drawData, commandBuffer);
+
+        const auto &viewProjection = camera.getViewProjectionMatrix();
+        render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(viewProjection));
 
         SDL_GPURenderPass     *renderpass;
         SDL_GPUColorTargetInfo colorTargetInfo = {
@@ -353,29 +379,30 @@ SDL_AppResult iterate()
 
             // TODO: these works should be done in camera matrix?
             // Calculate proper aspect-preserving dimensions
-            float targetAspect = 1.0f; // 1:1 for square
-            float windowAspect = (float)windowWidth / (float)windowHeight;
-            float viewportWidth, viewportHeight;
-            float offsetX = 0, offsetY = 0;
+            // float targetAspect = 1.0f; // 1:1 for square
+            // float windowAspect = (float)windowWidth / (float)windowHeight;
+            // float viewportWidth , viewportHeight;
+            // float offsetX = 0;
+            // float offsetY = 0;
 
-            if (windowAspect > targetAspect) {
-                // Window is wider than needed
-                viewportHeight = (float)windowHeight;
-                viewportWidth  = viewportHeight * targetAspect;
-                offsetX        = (windowWidth - viewportWidth) / 2.0f;
-            }
-            else {
-                // Window is taller than needed
-                viewportWidth  = (float)windowWidth;
-                viewportHeight = viewportWidth / targetAspect;
-                offsetY        = (windowHeight - viewportHeight) / 2.0f;
-            }
+            // if (windowAspect > targetAspect) {
+            //     // Window is wider than needed
+            //     viewportHeight = (float)windowHeight;
+            //     viewportWidth  = viewportHeight * targetAspect;
+            //     offsetX        = (windowWidth - viewportWidth) / 2.0f;
+            // }
+            // else {
+            //     // Window is taller than needed
+            //     viewportWidth  = (float)windowWidth;
+            //     viewportHeight = viewportWidth / targetAspect;
+            //     offsetY        = (windowHeight - viewportHeight) / 2.0f;
+            // }
 
             SDL_GPUViewport viewport = {
-                .x         = offsetX,
-                .y         = offsetY,
-                .w         = viewportWidth,
-                .h         = viewportHeight,
+                .x         = 0,
+                .y         = 0,
+                .w         = static_cast<float>(windowWidth),
+                .h         = static_cast<float>(windowHeight),
                 .min_depth = 0.0f,
                 .max_depth = 1.0f,
             };
