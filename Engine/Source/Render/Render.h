@@ -446,14 +446,14 @@ struct SDLGPURender : public Render
         SDL_ReleaseGPUTransferBuffer(device, indexTransferBuffer);
     }
 
-    void setUnifroms(std::shared_ptr<GPUCommandBuffer> commandBuffer, Uint32 slot_index, void *data, Uint32 dataSize)
+    void setVertexUnifroms(std::shared_ptr<GPUCommandBuffer> commandBuffer, Uint32 slot_index, void *data, Uint32 dataSize)
     {
         bool bNeedSubmit = false;
         if (!commandBuffer) {
             commandBuffer = acquireCommandBuffer();
             bNeedSubmit   = true;
         }
-        SDL_PushGPUComputeUniformData(*commandBuffer, 0, data, dataSize);
+        SDL_PushGPUVertexUniformData(*commandBuffer, 0, data, dataSize);
 
         if (bNeedSubmit) {
             commandBuffer->submit();

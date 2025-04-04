@@ -20,6 +20,7 @@
 #include "Render/Shader.h"
 
 #include "Core/EditorCamera.h"
+#include "Core/Input/InputManager.h"
 
 
 SDL_GPUTexture *faceTexture;
@@ -28,55 +29,63 @@ SDL_GPUTexture *whiteTexture;
 App          app;
 SDLGPURender render;
 EditorCamera camera;
+InputManager inputManager;
 
 
 
 // TODO: reflect this and auto generate VertexBufferDescription and VertexAttribute
-struct VertexInput
+struct VertexEntry
 {
     glm::vec3 position;
     glm::vec4 color;
     glm::vec2 uv; // aka texcoord
 };
 // triangle
-struct IndexInput
+struct IndexEntry
 {
     uint32_t a, b, c;
 };
 
+struct CameraData
+{
+    glm::mat4 viewProjectionMatrix;
+};
+
 // quad vertices
-std::vector<VertexInput> vertices = {
+std::vector<VertexEntry> vertices = {
     // lt
-    VertexInput{
+    VertexEntry{
         {-0.5f, 0.5f, 0.0f},
         {1.0f, 1.0f, 1.0f, 1.0f},
         {0.0f, 0.0f},
     },
     // rt
-    VertexInput{
+    VertexEntry{
         {0.5f, 0.5f, 0.0f},
         {1.0f, 1.0f, 1.0f, 1.0f},
         {1.0f, 0.0f},
     },
     // lb
-    VertexInput{
+    VertexEntry{
         .position = {-0.5, -0.5f, 0.f},
         .color    = {1.0f, 1.0f, 1.0f, 1.0f},
         .uv       = {0.0f, 1.0f},
     },
     // rb
-    VertexInput{
+    VertexEntry{
         .position = {0.5f, -0.5f, 0.0f},
         .color    = {1.0f, 1.0f, 1.0f, 1.0f},
         .uv       = {1.0f, 1.0f},
     },
 };
 // quad indices
-std::vector<IndexInput> indices = {
+std::vector<IndexEntry> indices = {
     {0, 1, 3},
     {0, 3, 2},
 };
 
+
+CameraData cameraData;
 
 glm::mat4 quadTransform = glm::mat4(1.0f);
 
@@ -124,7 +133,7 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
             .vertexBufferDescs = {
                 {
                     0,
-                    sizeof(VertexInput),
+                    sizeof(VertexEntry),
                 },
             },
             .vertexAttributes = {
@@ -132,20 +141,20 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
                     0,
                     0,
                     EVertexAttributeFormat::Float3,
-                    offsetof(VertexInput, position),
+                    offsetof(VertexEntry, position),
 
                 },
                 {
                     1,
                     0,
                     EVertexAttributeFormat::Float4,
-                    offsetof(VertexInput, color),
+                    offsetof(VertexEntry, color),
                 },
                 {
                     2,
                     0,
                     EVertexAttributeFormat::Float2,
-                    offsetof(VertexInput, uv),
+                    offsetof(VertexEntry, uv),
                 },
             },
             .primitiveType = primitiveType,
@@ -165,7 +174,7 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     render.uploadVertexBuffers(
         commandBuffer,
         vertices.data(),
-        static_cast<Uint32>(vertices.size() * sizeof(VertexInput)));
+        static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
 
     faceTexture = render.createTexture(commandBuffer, "Engine/Content/TestTextures/face.png");
 
@@ -177,10 +186,8 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
 
 
     camera.setPerspective(45.0f, 1.0f, 0.1f, 100.0f);
-    render.setUnifroms(commandBuffer,
-                       0,
-                       (void *)glm::value_ptr(camera.getViewProjectionMatrix()),
-                       sizeof(glm::mat4));
+    cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
+    render.setVertexUnifroms(commandBuffer, 0, &cameraData, sizeof(CameraData));
 
     commandBuffer->submit();
 
@@ -279,6 +286,11 @@ SDL_AppResult iterate()
     static float avgFps = 0.0f;
     avgFps              = avgFps * 0.95f + fps * 0.05f; // Simple exponential moving average
 
+    // Update input manager
+    inputManager.update();
+
+    // Update camera based on input
+    camera.update(inputManager, deltaTime);
 
     if (SDL_GetWindowFlags(render.window) & SDL_WINDOW_MINIMIZED)
     {
@@ -343,7 +355,21 @@ SDL_AppResult iterate()
         }
 
         bVertexInputChanged = imguiManipulateVertices();
-        bCameraChanged      = imguiManipulateEditorCamera();
+
+        // Camera UI still useful for manual positioning
+        if (imguiManipulateEditorCamera()) {
+            // Manual camera manipulation from UI overrides input-based camera position
+            bCameraChanged = true;
+        }
+
+        // Add camera control settings to UI
+        if (ImGui::CollapsingHeader("Camera Controls")) {
+            ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
+            ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 0.01f, 0.01f, 1.0f);
+            ImGui::Text("Hold right mouse button to rotate camera");
+            ImGui::Text("WASD: Move horizontally, QE: Move vertically");
+        }
+
         imguiManipulateSwapchain();
     }
     ImGui::End();
@@ -372,17 +398,18 @@ SDL_AppResult iterate()
             .cycle_resolve_texture = false,
         };
 
-        if (bCameraChanged) {
-            NE_CORE_INFO("Camera changed, update view projection matrix");
-            const auto &viewProjection = camera.getViewProjectionMatrix();
-            render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(glm::mat4));
-        }
+        // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
+        // if (bCameraChanged) {
+        // NE_CORE_INFO("Camera changed, update view projection matrix");
+        cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
+        render.setVertexUnifroms(commandBuffer, 0, &cameraData, sizeof(CameraData));
+        // }
 
         if (bVertexInputChanged) {
 
             // TODO: move to render pipeline
             NE_CORE_INFO("Vertex input changed, update vertex buffer");
-            std::vector<VertexInput> verticesCopy = vertices;
+            std::vector<VertexEntry> verticesCopy = vertices;
             for (auto &vertex : verticesCopy) {
                 vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
             }
@@ -390,7 +417,7 @@ SDL_AppResult iterate()
             render.uploadVertexBuffers(
                 commandBuffer,
                 verticesCopy.data(),
-                static_cast<Uint32>(verticesCopy.size() * sizeof(VertexInput)));
+                static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
         }
 
         // target info can be multiple(use same pipeline?)
@@ -499,12 +526,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     // NE_CORE_TRACE("Event: {}", event->type);
 
     ImGui_ImplSDL3_ProcessEvent(event);
+    inputManager.processEvent(*event);
 
     switch ((SDL_EventType)event->type) {
     case SDL_EventType::SDL_EVENT_KEY_UP:
     {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Key up: %d", event->key.key);
-        if (event->key.key == SDLK_Q)
+        // get all  modifiers to bool
+        bool bShift = (event->key.mod & SDL_KMOD_SHIFT) != 0;
+        bool bCtrl  = (event->key.mod & SDL_KMOD_CTRL) != 0;
+        bool bAlt   = (event->key.mod & SDL_KMOD_ALT) != 0;
+        if (bShift && event->key.key == SDLK_ESCAPE)
         {
             return SDL_APP_SUCCESS;
         }

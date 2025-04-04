@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-
+#include "Input/InputManager.h"
 #include "Log.h"
 
 
@@ -24,21 +24,34 @@ struct Camera
 
 struct EditorCamera : public Camera
 {
-
     float fov         = 45.0f;
     float aspectRatio = 1.6 / 0.9f;
     float nearClip    = 0.1f;
     float farClip     = 1000.0f;
 
-    glm::vec3 position = {0.0f, 0.0f, 0.0f};
+    glm::vec3 position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
     glm::vec3 rotation = {0.0f, 0.0f, 0.0f}; // pitch, yaw, roll
+
+    // Camera control settings
+    float moveSpeed     = 5.0f; // Units per second
+    float rotationSpeed = 0.2f; // Degrees per pixel
+
+    // Movement keys (configurable)
+    SDL_Keycode forwardKey = SDLK_W;
+    SDL_Keycode backKey    = SDLK_S;
+    SDL_Keycode leftKey    = SDLK_A;
+    SDL_Keycode rightKey   = SDLK_D;
+    SDL_Keycode upKey      = SDLK_Q;
+    SDL_Keycode downKey    = SDLK_E;
+
+    // Mouse button for rotation
+    Uint8 rotateButton = SDL_BUTTON_RIGHT;
 
     enum EProjectionType
     {
         Perspective,
         Orthographic
     } projectionType;
-
 
   public:
     EditorCamera() {}
@@ -69,6 +82,90 @@ struct EditorCamera : public Camera
         recalculateViewProjectionMatrix();
     }
 
+    void update(const InputManager &inputManager, float deltaTime)
+    {
+        bool cameraChanged = false;
+
+        // Handle keyboard movement (WASD + QE)
+        if (handleKeyboardInput(inputManager, deltaTime)) {
+            cameraChanged = true;
+        }
+
+        // Handle mouse rotation when right mouse button is held
+        if (handleMouseRotation(inputManager, deltaTime)) {
+            cameraChanged = true;
+        }
+
+        if (cameraChanged) {
+            recalculateAll();
+        }
+    }
+
+    bool handleKeyboardInput(const InputManager &inputManager, float deltaTime)
+    {
+        bool  moved      = false;
+        float moveAmount = moveSpeed * deltaTime;
+
+        // Calculate forward and right vectors from the camera's orientation
+        glm::quat orientation = glm::quat(glm::radians(rotation));
+        glm::vec3 forward     = orientation * glm::vec3(0.0f, 0.0f, -1.0f);
+        glm::vec3 right       = orientation * glm::vec3(1.0f, 0.0f, 0.0f);
+        glm::vec3 up          = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
+
+        // Handle WASD movement
+        if (inputManager.isKeyPressed(forwardKey)) {
+            position += forward * moveAmount;
+            moved = true;
+        }
+        if (inputManager.isKeyPressed(backKey)) {
+            position -= forward * moveAmount;
+            moved = true;
+        }
+        if (inputManager.isKeyPressed(rightKey)) {
+            position += right * moveAmount;
+            moved = true;
+        }
+        if (inputManager.isKeyPressed(leftKey)) {
+            position -= right * moveAmount;
+            moved = true;
+        }
+        if (inputManager.isKeyPressed(upKey)) {
+            position += up * moveAmount;
+            moved = true;
+        }
+        if (inputManager.isKeyPressed(downKey)) {
+            position -= up * moveAmount;
+            moved = true;
+        }
+
+        return moved;
+    }
+
+    bool handleMouseRotation(const InputManager &inputManager, float deltaTime)
+    {
+        if (inputManager.isMouseButtonPressed(rotateButton)) {
+            glm::vec2 mouseDelta = inputManager.getMouseDelta();
+
+            if (glm::length(mouseDelta) > 0.0f) {
+                // Apply rotation (yaw around Y axis, pitch around X axis)
+                rotation.y -= mouseDelta.x * rotationSpeed;
+                rotation.x -= mouseDelta.y * rotationSpeed;
+
+                // Clamp pitch to avoid gimbal lock
+                rotation.x = glm::clamp(rotation.x, -89.0f, 89.0f);
+
+                // Normalize yaw angle
+                while (rotation.y > 180.0f)
+                    rotation.y -= 360.0f;
+                while (rotation.y < -180.0f)
+                    rotation.y += 360.0f;
+
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     void recalculateViewMatrix()
     {
