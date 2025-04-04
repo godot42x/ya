@@ -13,7 +13,8 @@ add_requires("spirv-cross")
 add_requires("imgui", {
     configs = {
         sdl3 = true,
-        sdl3_gpu = true
+        sdl3_gpu = true,
+        debug =  is_mode("debug")
     }
 })
 

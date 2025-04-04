@@ -53,3 +53,5 @@ struct Logger
             PLATFORM_BREAK();      \
         }                          \
     }
+
+#define NE_ENSURE(condition, ...) (!!(condition)) ? 1 : (NE_CORE_ERROR(__VA_ARGS__), PLATFORM_BREAK(), 0)

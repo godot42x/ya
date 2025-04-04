@@ -23,6 +23,7 @@
 
 
 SDL_GPUTexture *faceTexture;
+SDL_GPUTexture *whiteTexture;
 
 App          app;
 SDLGPURender render;
@@ -77,6 +78,7 @@ std::vector<IndexInput> indices = {
 };
 
 
+glm::mat4 quadTransform = glm::mat4(1.0f);
 
 void initImGui(SDL_GPUDevice *device, SDL_Window *window)
 {
@@ -109,9 +111,16 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
 
     ::initImGui(render.device, render.window);
 
+    EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
+
+
     bool ok = render.createGraphicsPipeline(
         GraphicsPipelineCreateInfo{
-            .shaderName        = "Test.glsl",
+            .shaderCreateInfo = {
+                .shaderName        = "Test.glsl",
+                .numUniformBuffers = 1,
+                .numSamplers       = 1,
+            },
             .vertexBufferDescs = {
                 {
                     0,
@@ -122,22 +131,24 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
                 {
                     0,
                     0,
-                    Float3,
+                    EVertexAttributeFormat::Float3,
                     offsetof(VertexInput, position),
+
                 },
                 {
                     1,
                     0,
-                    Float4,
+                    EVertexAttributeFormat::Float4,
                     offsetof(VertexInput, color),
                 },
                 {
                     2,
                     0,
-                    Float2,
+                    EVertexAttributeFormat::Float2,
                     offsetof(VertexInput, uv),
                 },
             },
+            .primitiveType = primitiveType,
         });
     if (!ok) {
         NE_CORE_ERROR("Failed to create graphics pipeline");
@@ -145,13 +156,22 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     }
 
 
-    render.uploadBuffers(
-        nullptr,
+    auto commandBuffer = render.acquireCommandBuffer();
+
+    render.uploadVertexBuffers(
+        commandBuffer,
         vertices.data(),
-        static_cast<Uint32>(vertices.size() * sizeof(VertexInput)),
-        indices.data(),
-        static_cast<Uint32>(indices.size() * sizeof(IndexInput)));
-    faceTexture = render.createTexture("Engine/Content/TestTextures/face.png");
+        static_cast<Uint32>(vertices.size() * sizeof(VertexInput)));
+
+    faceTexture = render.createTexture(commandBuffer, "Engine/Content/TestTextures/face.png");
+
+    // Create a 1x1 white texture (all pixels are white)
+    const Uint32 width         = 1;
+    const Uint32 height        = 1;
+    const Uint8  whitePixel[4] = {255, 255, 255, 255}; // RGBA: White with full opacity
+    whiteTexture               = render.createTextureByBuffer(commandBuffer, whitePixel, width, height, "White Texture ⬜");
+
+    commandBuffer->submit();
 
     camera.setPerspective(45.0f, 1.0f, 0.1f, 100.0f);
 
@@ -212,7 +232,7 @@ void imguiManipulateSwapchain()
     }
 }
 
-void imguiManipulateEditorCamera()
+bool imguiManipulateEditorCamera()
 {
     auto position = camera.position;
     auto rotation = camera.rotation;
@@ -228,6 +248,7 @@ void imguiManipulateEditorCamera()
     if (bChanged) {
         camera.setPositionAndRotation(position, rotation);
     }
+    return bChanged;
 }
 
 
@@ -255,7 +276,7 @@ SDL_AppResult iterate()
         return SDL_APP_CONTINUE;
     }
 
-    SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(render.device);
+    std::shared_ptr<GPUCommandBuffer> commandBuffer = render.acquireCommandBuffer();
     if (!commandBuffer) {
         NE_CORE_ERROR("Failed to acquire command buffer {}", SDL_GetError());
         return SDL_APP_FAILURE;
@@ -263,7 +284,7 @@ SDL_AppResult iterate()
 
     Uint32          swapChianTextureW, swapChainTextureHeight;
     SDL_GPUTexture *swapchainTexture = nullptr;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer,
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(*commandBuffer,
                                                render.window,
                                                &swapchainTexture,
                                                &swapChianTextureW,
@@ -279,6 +300,7 @@ SDL_AppResult iterate()
     static glm::vec4 clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
     bool                bVertexInputChanged = false;
+    bool                bCameraChanged      = false;
     static ESamplerType selectedSampler     = ESamplerType::PointClamp;
 
     ImGui_ImplSDLGPU3_NewFrame();
@@ -311,8 +333,8 @@ SDL_AppResult iterate()
         }
 
         bVertexInputChanged = imguiManipulateVertices();
+        bCameraChanged      = imguiManipulateEditorCamera();
         imguiManipulateSwapchain();
-        imguiManipulateEditorCamera();
     }
     ImGui::End();
     ImGui::Render();
@@ -320,14 +342,15 @@ SDL_AppResult iterate()
     const bool  bMinimized = drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f;
 
 
+    // current rectangle has no position data
+    glm::mat4 transform = glm::mat4(1.0f);
+
+
     if (swapchainTexture && !bMinimized)
     {
-        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, commandBuffer);
+        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, *commandBuffer);
 
-        const auto &viewProjection = camera.getViewProjectionMatrix();
-        render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(viewProjection));
 
-        SDL_GPURenderPass     *renderpass;
         SDL_GPUColorTargetInfo colorTargetInfo = {
             .texture               = swapchainTexture,
             .mip_level             = 0,
@@ -339,18 +362,25 @@ SDL_AppResult iterate()
             .cycle_resolve_texture = false,
         };
 
+        if (bCameraChanged) {
+            const auto &viewProjection = camera.getViewProjectionMatrix();
+            render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(viewProjection));
+        }
+
+
 
         if (bVertexInputChanged) {
-            render.uploadBuffers(
+            render.uploadVertexBuffers(
                 commandBuffer,
                 vertices.data(),
-                static_cast<Uint32>(vertices.size() * sizeof(VertexInput)),
-                indices.data(),
-                static_cast<Uint32>(indices.size() * sizeof(IndexInput)));
+                static_cast<Uint32>(vertices.size() * sizeof(VertexInput)));
         }
 
         // target info can be multiple(use same pipeline?)
-        renderpass = SDL_BeginGPURenderPass(commandBuffer, &colorTargetInfo, 1, nullptr);
+        SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(*commandBuffer,
+                                                               &colorTargetInfo,
+                                                               1,
+                                                               nullptr);
         {
             SDL_BindGPUGraphicsPipeline(renderpass, render.pipeline);
 
@@ -369,7 +399,7 @@ SDL_AppResult iterate()
 
             // sampler binding
             SDL_GPUTextureSamplerBinding textureBinding = {
-                .texture = faceTexture,
+                .texture = whiteTexture,
                 .sampler = render.samplers[selectedSampler],
             };
             SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
@@ -411,7 +441,7 @@ SDL_AppResult iterate()
             // SDL_BindGPUVertexBuffer(renderpass, 0, vertexBuffer, 0);
             // SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
             SDL_DrawGPUIndexedPrimitives(renderpass,
-                                         indices.size() * 3, // 3 index for each triangle
+                                         2 * 3, // 3 index for each triangle
                                          1,
                                          0,
                                          0,
@@ -419,13 +449,13 @@ SDL_AppResult iterate()
 
             // after graphics pipeline draw, or make pipeline draw into a RT
             if (drawData && drawData->CmdListsCount > 0) {
-                ImGui_ImplSDLGPU3_RenderDrawData(drawData, commandBuffer, renderpass);
+                ImGui_ImplSDLGPU3_RenderDrawData(drawData, *commandBuffer, renderpass);
             }
         }
         SDL_EndGPURenderPass(renderpass);
     }
 
-    if (!SDL_SubmitGPUCommandBuffer(commandBuffer)) {
+    if (!commandBuffer->submit()) {
         NE_CORE_ERROR("Failed to submit command buffer {}", SDL_GetError());
     }
 
@@ -502,6 +532,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
     if (faceTexture) {
         SDL_ReleaseGPUTexture(render.device, faceTexture);
+    }
+    if (whiteTexture) {
+        SDL_ReleaseGPUTexture(render.device, whiteTexture);
     }
 
     render.cleanContext();

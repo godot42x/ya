@@ -4,7 +4,7 @@
 
 // shaders is high related with pipeline, we split it temporarily
 // TODO: export shader info -> use reflection do this
-std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::createShaders(std::string_view shaderName)
+std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::createShaders(const ShaderCreateInfo &shaderCI)
 {
     SDL_GPUShader *vertexShader   = nullptr;
     SDL_GPUShader *fragmentShader = nullptr;
@@ -16,7 +16,7 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::create
 
         std::shared_ptr<ShaderScriptProcessor> processor = factory.FactoryNew();
 
-        auto ret = processor->process(shaderName);
+        auto ret = processor->process(shaderCI.shaderName);
         if (!ret) {
             NE_CORE_ERROR("Failed to process shader: {}", processor->tempProcessingPath);
             NE_CORE_ASSERT(false, "Failed to process shader: {}", processor->tempProcessingPath);
@@ -34,7 +34,7 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::create
             .num_samplers         = 0,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
-            .num_uniform_buffers  = 1,
+            .num_uniform_buffers  = shaderCI.numUniformBuffers,
         };
         SDL_GPUShaderCreateInfo fragmentCreateInfo = {
             .code_size            = codes[EShaderStage::Fragment].size() * sizeof(uint32_t) / sizeof(uint8_t),
@@ -42,7 +42,7 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::create
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers         = 1,
+            .num_samplers         = shaderCI.numSamplers,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
             .num_uniform_buffers  = 0,
@@ -70,46 +70,8 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> SDLGPURender::create
 bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info)
 {
 
-    // create global big size buffer for batch draw call
-    {
-        {
-            SDL_GPUBufferCreateInfo bufferInfo = {
-                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-                .size  = vertexBufferSize, // TODO: make a big size buffer for batch draw call
-                .props = 0,                // by comment
-            };
-
-            vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
-            NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
-
-            SDL_SetGPUBufferName(device, vertexBuffer, "godot42 vertex buffer 😍");
-        }
-
-        {
-            SDL_GPUBufferCreateInfo bufferInfo = {
-                .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-                .size  = indexBufferSize, // TODO: make a big size buffer for batch draw call
-                .props = 0,               // by comment
-            };
-            indexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
-            NE_ASSERT(indexBuffer, "Failed to create index buffer {}", SDL_GetError());
-
-            SDL_SetGPUBufferName(device, indexBuffer, "godot42 index buffer 😁");
-        }
-
-        // // uniform
-        // {
-        //     SDL_GPUBufferCreateInfo bufferInfo = {
-        //         .usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE,
-        //         .size  = indexBufferSize, // TODO: make a big size buffer for batch draw call
-        //         .props = 0,               // by comment
-        //     };
-        //     // SDL_CreateGPUBuffer()
-        // }
-    }
-
     // SHADER is high related with pipeline!!!
-    auto shaders = createShaders(info.shaderName);
+    auto shaders = createShaders(info.shaderCreateInfo);
     NE_ASSERT(shaders.has_value(), "Failed to create shader {}", SDL_GetError());
     auto &[vertexShader, fragmentShader] = shaders.value();
 
@@ -134,13 +96,13 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             };
 
             switch (info.vertexAttributes[i].format) {
-            case Float2:
+            case EVertexAttributeFormat::Float2:
                 sdlVertAttr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
                 break;
-            case Float3:
+            case EVertexAttributeFormat::Float3:
                 sdlVertAttr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
                 break;
-            case Float4:
+            case EVertexAttributeFormat::Float4:
                 sdlVertAttr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
                 break;
             default:
@@ -149,6 +111,9 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             }
             vertexAttributes.emplace_back(std::move(sdlVertAttr));
         }
+
+        const auto &last = info.vertexAttributes.end() - 1;
+        vertexInputSize  = last->offset + EVertexAttributeFormat::T2Size(last->format);
     }
 
 
@@ -182,7 +147,6 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
             .vertex_attributes          = vertexAttributes.data(),
             .num_vertex_attributes      = static_cast<Uint32>(vertexAttributes.size()),
         },
-        .primitive_type   = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .rasterizer_state = SDL_GPURasterizerState{
             .fill_mode = SDL_GPU_FILLMODE_FILL,
             .cull_mode = SDL_GPU_CULLMODE_NONE, // cull back/front face
@@ -198,13 +162,92 @@ bool SDLGPURender::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info
         },
 
     };
+    switch (info.primitiveType) {
+    case EGraphicPipeLinePrimitiveType::TriangleList:
+        // WTF? it should be SDL_GPU_PRIMITIVETYPE_TRIANGLELIST, so ambiguous
+        // sdlGPUCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_LINELIST;
+        sdlGPUCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        break;
+    default:
+        NE_CORE_ASSERT(false, "Invalid primitive type {}", int(info.primitiveType));
+        break;
+    }
+
     pipeline = SDL_CreateGPUGraphicsPipeline(device, &sdlGPUCreateInfo);
+
+    // create global big size buffer for batch draw call
+    {
+        {
+            SDL_GPUBufferCreateInfo bufferInfo = {
+                .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                .size  = getVertexBufferSize(),
+                .props = 0, // by comment
+            };
+
+            vertexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+            NE_ASSERT(vertexBuffer, "Failed to create vertex buffer {}", SDL_GetError());
+
+            SDL_SetGPUBufferName(device, vertexBuffer, "godot42 vertex buffer 😍");
+        }
+
+        {
+            SDL_GPUBufferCreateInfo bufferInfo = {
+                .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+                .size  = getIndexBufferSize(),
+                .props = 0, // by comment
+            };
+            indexBuffer = SDL_CreateGPUBuffer(device, &bufferInfo);
+            NE_ASSERT(indexBuffer, "Failed to create index buffer {}", SDL_GetError());
+
+            SDL_SetGPUBufferName(device, indexBuffer, "godot42 index buffer 😁");
+        }
+
+        // unifrom created and specify by shader create info
+    }
+
+
+    fillDefaultIndices(nullptr, info.primitiveType);
 
     SDL_ReleaseGPUShader(device, vertexShader);
     SDL_ReleaseGPUShader(device, fragmentShader);
 
 
     return pipeline != nullptr;
+}
+
+void SDLGPURender::fillDefaultIndices(std::shared_ptr<GPUCommandBuffer> commandBuffer, EGraphicPipeLinePrimitiveType primitiveType)
+{
+    std::vector<Uint32> indices(maxIndexBufferElemSize);
+
+    switch (primitiveType) {
+    case EGraphicPipeLinePrimitiveType::TriangleList:
+    {
+        // For triangle list, generate indices for quads (each quad is two triangles)
+        // Pattern: 0,1,3, 0,3,2 for each quad
+        // Calculate how many quads we can fit in our index buffer
+        size_t maxQuads = maxIndexBufferElemSize / 6;
+
+        for (uint32_t quad = 0; quad < maxQuads; ++quad) {
+            uint32_t baseVertex = quad * 4; // Each quad has 4 vertices
+            uint32_t indexOffset = quad * 6; // Each quad has 6 indices
+
+            // First triangle (0,1,3)
+            indices[indexOffset]     = baseVertex;
+            indices[indexOffset + 1] = baseVertex + 1;
+            indices[indexOffset + 2] = baseVertex + 3;
+
+            // Second triangle (0,3,2)
+            indices[indexOffset + 3] = baseVertex;
+            indices[indexOffset + 4] = baseVertex + 3;
+            indices[indexOffset + 5] = baseVertex + 2;
+        }
+    } break;
+    default:
+        NE_CORE_ASSERT(false, "Unsupported primitive type for default indices: {}", int(primitiveType));
+        break;
+    }
+
+    uploadIndexBuffers(commandBuffer, indices.data(), getIndexBufferSize());
 }
 
 void SDLGPURender::createSamplers()
@@ -309,7 +352,7 @@ void SDLGPURender::createSamplers()
     }
 }
 
-SDL_GPUTexture *SDLGPURender::createTexture(std::string_view filepath)
+SDL_GPUTexture *SDLGPURender::createTexture(std::shared_ptr<GPUCommandBuffer> commandBuffer, std::string_view filepath)
 {
     auto         path    = FileSystem::get()->getProjectRoot() / filepath;
     SDL_Surface *surface = nullptr;
@@ -342,29 +385,73 @@ SDL_GPUTexture *SDLGPURender::createTexture(std::string_view filepath)
     SDL_SetGPUTextureName(device, outTexture, filename.c_str());
     NE_CORE_INFO("Texture name: {}", filename.c_str());
 
+    uploadTexture(commandBuffer, outTexture, surface->pixels, surface->w, surface->h);
+
+    SDL_DestroySurface(surface);
+
+    return outTexture;
+}
+
+SDL_GPUTexture *SDLGPURender::createTextureByBuffer(std::shared_ptr<GPUCommandBuffer> commandBuffer,
+                                                    const void                       *data,
+                                                    Uint32                            width,
+                                                    Uint32                            height,
+                                                    const char                       *name)
+{
+    SDL_GPUTexture *outTexture = nullptr;
+
+    SDL_GPUTextureCreateInfo info{
+        .type                 = SDL_GPU_TEXTURETYPE_2D,
+        .format               = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .usage                = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width                = width,
+        .height               = height,
+        .layer_count_or_depth = 1,
+        .num_levels           = 1,
+    };
+    outTexture = SDL_CreateGPUTexture(device, &info);
+    if (!outTexture) {
+        NE_CORE_ERROR("Failed to create texture: {}", SDL_GetError());
+        return nullptr;
+    }
+
+    if (name) {
+        SDL_SetGPUTextureName(device, outTexture, name);
+        NE_CORE_INFO("Texture name: {}", name);
+    }
+
+    uploadTexture(commandBuffer, outTexture, (void *)data, width, height);
+
+    return outTexture;
+}
+
+void SDLGPURender::uploadTexture(std::shared_ptr<GPUCommandBuffer> commandBuffer, SDL_GPUTexture *texture, void *data, uint32_t w, uint32_t h)
+{
+    bool bNeedSubmit = false;
+    if (!commandBuffer) {
+        NE_CORE_WARN("Command buffer is null, creating new one");
+        commandBuffer = acquireCommandBuffer();
+        bNeedSubmit   = true;
+    }
 
     SDL_GPUTransferBuffer *textureTransferBuffer = nullptr;
     {
         SDL_GPUTransferBufferCreateInfo textureTransferBufferInfo = {
             .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .size  = static_cast<Uint32>(surface->w * surface->h * 4), // 4 bytes per pixel
-            .props = 0,                                                // by comment
+            .size  = static_cast<Uint32>(w * h * sizeof(float)), // 4 bytes per pixel
+            .props = 0,
         };
         textureTransferBuffer = SDL_CreateGPUTransferBuffer(device, &textureTransferBufferInfo);
 
         // mmap
         void *mmapPtr = SDL_MapGPUTransferBuffer(device, textureTransferBuffer, false);
-        std::memcpy(mmapPtr, surface->pixels, textureTransferBufferInfo.size);
+        std::memcpy(mmapPtr, data, textureTransferBufferInfo.size);
         SDL_UnmapGPUTransferBuffer(device, textureTransferBuffer);
     }
 
-
     // [upload] copy pass
     {
-        SDL_GPUCommandBuffer *commandBuffer = SDL_AcquireGPUCommandBuffer(device);
-        NE_ASSERT(commandBuffer, "Failed to acquire command buffer {}", SDL_GetError());
-
-        SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+        SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(*commandBuffer);
 
         // transfer texture
         {
@@ -373,119 +460,44 @@ SDL_GPUTexture *SDLGPURender::createTexture(std::string_view filepath)
                 .offset          = 0,
             };
             SDL_GPUTextureRegion destGPUTextureRegion = {
-                .texture   = outTexture,
+                .texture   = texture,
                 .mip_level = 0,
                 .layer     = 0,
                 .x         = 0,
                 .y         = 0,
                 .z         = 0,
-                .w         = static_cast<Uint32>(surface->w),
-                .h         = static_cast<Uint32>(surface->h),
-                .d         = 1, // depth
+                .w         = w,
+                .h         = h,
+                .d         = 1,
             };
 
             SDL_UploadToGPUTexture(copyPass, &srcTransferInfo, &destGPUTextureRegion, false);
         }
 
         SDL_EndGPUCopyPass(copyPass);
-        SDL_SubmitGPUCommandBuffer(commandBuffer);
+        if (bNeedSubmit) {
+            commandBuffer->submit();
+        }
         SDL_ReleaseGPUTransferBuffer(device, textureTransferBuffer);
     }
-
-    SDL_DestroySurface(surface);
-
-    return outTexture;
 }
 
-// Q: when input vertex and index size is smaller than previous batch, how to clear the old data exceed current size that on gpu?
-// A: we use draw index or draw vertex API, which will specify the vertices and indices count to draw. so we don't need to clear the old data.
-// TODO: we need to do draw call to consume data when buffer is about to full, then to draw the rest of the data
-void SDLGPURender::uploadBuffers(SDL_GPUCommandBuffer *commandBuffer, void *vertexData, Uint32 inputVerticesSize, void *indexData, Uint32 inputIndicesSize)
+
+namespace EVertexAttributeFormat
 {
-    bool bNeedSubmit = false;
-    if (!commandBuffer) {
-        NE_CORE_WARN("Command buffer is null, acquire a new one");
-        commandBuffer = SDL_AcquireGPUCommandBuffer(device);
-        NE_ASSERT(commandBuffer, "Failed to acquire command buffer {}", SDL_GetError());
-        bNeedSubmit = true;
+std::size_t T2Size(T type)
+{
+    switch (type) {
+    case Float2:
+        return sizeof(float) * 2;
+    case Float3:
+        return sizeof(float) * 3;
+    case Float4:
+        return sizeof(float) * 4;
+    default:
+        NE_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(type));
+        return 0;
     }
-
-    // create transfer buffer, buffer on cpu
-    SDL_GPUTransferBuffer *vertexTransferBuffer;
-    SDL_GPUTransferBuffer *indexTransferBuffer;
-    {
-        SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
-            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .size  = inputVerticesSize,
-            .props = 0, // by comment
-        };
-        vertexTransferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
-        NE_ASSERT(vertexTransferBuffer, "Failed to create transfer buffer {}", SDL_GetError());
-
-        void *mmapData = SDL_MapGPUTransferBuffer(device, vertexTransferBuffer, false);
-        NE_ASSERT(mmapData, "Failed to map transfer buffer {}", SDL_GetError());
-        std::memcpy(mmapData, vertexData, inputVerticesSize);
-        SDL_UnmapGPUTransferBuffer(device, vertexTransferBuffer);
-    }
-    {
-        SDL_GPUTransferBufferCreateInfo transferBufferInfo = {
-            .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-            .size  = inputIndicesSize,
-            .props = 0, // by comment
-        };
-        indexTransferBuffer = SDL_CreateGPUTransferBuffer(device, &transferBufferInfo);
-        NE_ASSERT(indexTransferBuffer, "Failed to create transfer buffer {}", SDL_GetError());
-
-        void *mmapData = SDL_MapGPUTransferBuffer(device, indexTransferBuffer, false);
-        NE_ASSERT(mmapData, "Failed to map transfer buffer {}", SDL_GetError());
-        std::memcpy(mmapData, indexData, inputIndicesSize);
-        SDL_UnmapGPUTransferBuffer(device, indexTransferBuffer);
-    }
-
-
-    // upload
-    {
-        {
-            SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(commandBuffer);
-            NE_ASSERT(copyPass, "Failed to begin copy pass {}", SDL_GetError());
-
-            // transfer vertices
-            {
-                SDL_GPUTransferBufferLocation sourceLoc = {
-                    .transfer_buffer = vertexTransferBuffer,
-                    .offset          = 0,
-                };
-                SDL_GPUBufferRegion destRegion = {
-                    .buffer = vertexBuffer,
-                    .offset = 0,
-                    .size   = inputVerticesSize,
-                };
-                SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
-            }
-
-            // transfer indices
-            {
-                SDL_GPUTransferBufferLocation sourceLoc = {
-                    .transfer_buffer = indexTransferBuffer,
-                    .offset          = 0,
-                };
-                SDL_GPUBufferRegion destRegion = {
-                    .buffer = indexBuffer,
-                    .offset = 0,
-                    .size   = inputIndicesSize,
-                };
-                SDL_UploadToGPUBuffer(copyPass, &sourceLoc, &destRegion, false);
-            }
-
-            SDL_EndGPUCopyPass(copyPass);
-        }
-    }
-
-    if (bNeedSubmit) {
-        SDL_SubmitGPUCommandBuffer(commandBuffer);
-    }
-
-    // clean
-    SDL_ReleaseGPUTransferBuffer(device, vertexTransferBuffer);
-    SDL_ReleaseGPUTransferBuffer(device, indexTransferBuffer);
 }
+
+} // namespace EVertexAttributeFormat
