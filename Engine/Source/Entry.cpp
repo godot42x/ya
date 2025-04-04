@@ -158,6 +158,10 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
 
     auto commandBuffer = render.acquireCommandBuffer();
 
+    for (auto &vertex : vertices) {
+        vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
+    }
+
     render.uploadVertexBuffers(
         commandBuffer,
         vertices.data(),
@@ -171,9 +175,15 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     const Uint8  whitePixel[4] = {255, 255, 255, 255}; // RGBA: White with full opacity
     whiteTexture               = render.createTextureByBuffer(commandBuffer, whitePixel, width, height, "White Texture ⬜");
 
-    commandBuffer->submit();
 
     camera.setPerspective(45.0f, 1.0f, 0.1f, 100.0f);
+    render.setUnifroms(commandBuffer,
+                       0,
+                       (void *)glm::value_ptr(camera.getViewProjectionMatrix()),
+                       sizeof(glm::mat4));
+
+    commandBuffer->submit();
+
 
     return SDL_APP_CONTINUE;
 }
@@ -363,17 +373,24 @@ SDL_AppResult iterate()
         };
 
         if (bCameraChanged) {
+            NE_CORE_INFO("Camera changed, update view projection matrix");
             const auto &viewProjection = camera.getViewProjectionMatrix();
-            render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(viewProjection));
+            render.setUnifroms(commandBuffer, 0, (void *)glm::value_ptr(viewProjection), sizeof(glm::mat4));
         }
 
-
-
         if (bVertexInputChanged) {
+
+            // TODO: move to render pipeline
+            NE_CORE_INFO("Vertex input changed, update vertex buffer");
+            std::vector<VertexInput> verticesCopy = vertices;
+            for (auto &vertex : verticesCopy) {
+                vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
+            }
+
             render.uploadVertexBuffers(
                 commandBuffer,
-                vertices.data(),
-                static_cast<Uint32>(vertices.size() * sizeof(VertexInput)));
+                verticesCopy.data(),
+                static_cast<Uint32>(verticesCopy.size() * sizeof(VertexInput)));
         }
 
         // target info can be multiple(use same pipeline?)
@@ -399,7 +416,7 @@ SDL_AppResult iterate()
 
             // sampler binding
             SDL_GPUTextureSamplerBinding textureBinding = {
-                .texture = whiteTexture,
+                .texture = faceTexture,
                 .sampler = render.samplers[selectedSampler],
             };
             SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);

@@ -15,7 +15,7 @@ struct Camera
     glm::mat4 viewMatrix;
     glm::mat4 viewProjectionMatrix;
 
-    glm::mat4 getViewProjectionMatrix() const { return viewProjectionMatrix; }
+    const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
 
   protected:
     Camera()  = default;
@@ -75,7 +75,7 @@ struct EditorCamera : public Camera
         const glm::quat rotQuat = glm::quat(glm::radians(rotation));
 
         viewMatrix = glm::translate(glm::mat4(1.0f), position) *
-                     glm::mat4_cast(glm::quat(rotQuat));
+                     glm::mat4_cast(rotQuat);
 
         viewMatrix = glm::inverse(viewMatrix);
     }

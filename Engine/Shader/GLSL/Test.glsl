@@ -18,8 +18,8 @@ void main()
 {
     // Transform vertex position with view-projection matrix
     // mvp
-    // gl_Position = uCamera.viewProjection * vec4(aPos, 1.0);
-    gl_Position =  vec4(aPos, 1.0);
+    gl_Position = uCamera.viewProjection * vec4(aPos, 1.0);
+    // gl_Position =  vec4(aPos, 1.0);
     fragColor = aColor;
     fragUV = aUV; 
 }

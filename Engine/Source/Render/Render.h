@@ -81,6 +81,11 @@ struct GPUCommandBuffer
         NE_CORE_ASSERT(commandBuffer, "commandBuffer is nullptr!");
         return (SDL_GPUCommandBuffer *)commandBuffer;
     }
+
+    virtual void setUniforms(Uint32 slot_index, void *data, Uint32 dataSize)
+    {
+        NE_CORE_ASSERT(false, "GPUCommandBuffer::setUniforms() is not implemented!");
+    }
 };
 
 struct GPUCommandBuffer_SDL : public GPUCommandBuffer
@@ -443,7 +448,16 @@ struct SDLGPURender : public Render
 
     void setUnifroms(std::shared_ptr<GPUCommandBuffer> commandBuffer, Uint32 slot_index, void *data, Uint32 dataSize)
     {
+        bool bNeedSubmit = false;
+        if (!commandBuffer) {
+            commandBuffer = acquireCommandBuffer();
+            bNeedSubmit   = true;
+        }
         SDL_PushGPUComputeUniformData(*commandBuffer, 0, data, dataSize);
+
+        if (bNeedSubmit) {
+            commandBuffer->submit();
+        }
     }
 
     // call in createGraphicsPipeline
