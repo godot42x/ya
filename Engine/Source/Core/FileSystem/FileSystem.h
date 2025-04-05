@@ -33,4 +33,10 @@ struct FileSystem
     const stdpath                                  &getProjectRoot() const { return projectRoot; }
     const std::unordered_map<std::string, stdpath> &getPluginRoots() const { return pluginRoots; }
     const std::unordered_map<std::string, stdpath> &getMountRoots() const { return mountRoots; }
+
+    bool readFileToString(const std::string &filepath, std::string &output) const;
+    bool isFileExists(const std::string &filepath) const
+    {
+        return std::filesystem::exists(projectRoot / filepath);
+    }
 };
