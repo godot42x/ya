@@ -23,7 +23,7 @@
 
 #include "Core/EditorCamera.h"
 #include "Core/Input/InputManager.h"
-
+#include "Core/UI/DialogWindow.h"
 #include "Render/SDL/SDLGPUCommandBuffer.h"
 #include "Render/SDL/SDLGPURender.h"
 
@@ -207,8 +207,7 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     int windowWidth, windowHeight;
     SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
     NE_INFO("Initialized window size: {}x{}", windowWidth, windowHeight);
-    camera.setPerspective(45.0f, (float)windowHeight / (float)windowHeight, 0.1f, 100.0f);
-    // camera.setAspectRatio((float)windowWidth / (float)windowHeight);
+    camera.setPerspective(45.0f, (float)windowWidth / (float)windowHeight, 0.1f, 100.0f);
     camera.setPosition({0.0f, 0.0f, 5.0f});
     cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
     commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
@@ -262,6 +261,117 @@ bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffe
 // Add UI for model loading
 void imguiModelControls()
 {
+    if (ImGui::CollapsingHeader("Model Controls"))
+    {
+        static char modelPath[256] = "Engine/Content/Models/cube.obj";
+        ImGui::InputText("Model Path", modelPath, IM_ARRAYSIZE(modelPath));
+
+        if (ImGui::Button("Browse...")) {
+            // Create dialog window if it doesn't exist yet
+            if (!dialogWindow) {
+                dialogWindow = NeonEngine::DialogWindow::create();
+            }
+
+            if (dialogWindow) {
+                // Define file filters for 3D models
+                std::vector<std::pair<std::string, std::string>> filters = {
+                    {"3D Models", "*.obj;*.fbx;*.gltf;*.glb"},
+                    {"Wavefront OBJ", "*.obj"},
+                    {"Autodesk FBX", "*.fbx"},
+                    {"GLTF", "*.gltf;*.glb"},
+                    {"All Files", "*.*"}};
+
+                auto result = dialogWindow->showDialog(
+                    NeonEngine::DialogType::OpenFile,
+                    "Select 3D Model",
+                    filters);
+
+                if (result.has_value()) {
+                    // Copy the path to the input field, ensuring it doesn't overflow
+                    strncpy(modelPath, result.value().c_str(), sizeof(modelPath) - 1);
+                    modelPath[sizeof(modelPath) - 1] = '\0';
+
+                    NE_CORE_INFO("Selected model file: {}", modelPath);
+                }
+            }
+        }
+
+        if (ImGui::Button("Load Model")) {
+            auto commandBuffer = render.acquireCommandBuffer();
+            if (commandBuffer) {
+                std::shared_ptr<Model> model = modelManager.loadModel(modelPath, commandBuffer);
+
+                if (model) {
+                    currentModel = model;
+                    useModel     = true;
+
+                    // Upload model data
+                    if (uploadModelToGPU(model, commandBuffer)) {
+                        NE_CORE_INFO("Model loaded and uploaded successfully");
+                    }
+                    else {
+                        NE_CORE_ERROR("Failed to upload model data");
+                    }
+
+                    commandBuffer->submit();
+                }
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Use Quad")) {
+            useModel           = false;
+            auto commandBuffer = render.acquireCommandBuffer();
+            if (commandBuffer) {
+                commandBuffer->uploadVertexBuffers(
+                    vertices.data(),
+                    static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
+                commandBuffer->submit();
+            }
+        }
+
+        // Model transform controls
+        if (useModel && currentModel) {
+            ImGui::Separator();
+            ImGui::Text("Model Transform");
+
+            static glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            static glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
+            static glm::vec3 scale    = {1.0f, 1.0f, 1.0f};
+
+            bool transformChanged = false;
+
+            if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
+                transformChanged = true;
+            }
+
+            if (ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1.0f)) {
+                transformChanged = true;
+            }
+
+            if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f, 0.01f, 10.0f)) {
+                transformChanged = true;
+            }
+
+            if (transformChanged) {
+                glm::mat4 transform = glm::mat4(1.0f);
+                transform           = glm::translate(transform, position);
+                transform           = glm::rotate(transform, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                transform           = glm::rotate(transform, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                transform           = glm::rotate(transform, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+                transform           = glm::scale(transform, scale);
+
+                currentModel->setTransform(transform);
+
+                auto commandBuffer = render.acquireCommandBuffer();
+                if (commandBuffer) {
+                    uploadModelToGPU(currentModel, commandBuffer);
+                    commandBuffer->submit();
+                }
+            }
+        }
+    }
 }
 
 bool imguiManipulateVertices()
