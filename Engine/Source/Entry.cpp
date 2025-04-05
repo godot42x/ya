@@ -1,6 +1,5 @@
-#include <array>
-#include <cmath>
-#include <optional>
+#include "Render/CommandBuffer.h"
+#include "SDL3/SDL_timer.h"
 
 
 #define SDL_MAIN_USE_CALLBACKS
@@ -16,20 +15,35 @@
 
 #include "Core/App.h"
 #include "Core/FileSystem/FileSystem.h"
+#include "Render/Model.h"
+#include "Render/ModelManager.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 
+
 #include "Core/EditorCamera.h"
 #include "Core/Input/InputManager.h"
+
+#include "Render/SDL/SDLGPUCommandBuffer.h"
+#include "Render/SDL/SDLGPURender.h"
+
 
 
 SDL_GPUTexture *faceTexture;
 SDL_GPUTexture *whiteTexture;
 
-App          app;
-SDLGPURender render;
-EditorCamera camera;
-InputManager inputManager;
+App           app;
+GPURender_SDL render;
+EditorCamera  camera;
+InputManager  inputManager;
+ModelManager  modelManager;
+
+// Current loaded model
+std::shared_ptr<Model> currentModel;
+bool                   useModel = false;
+
+// Dialog window for file operations
+std::unique_ptr<NeonEngine::DialogWindow> dialogWindow;
 
 
 
@@ -113,6 +127,9 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     FileSystem::init();
     Logger::init();
 
+    // Create dialog window
+    dialogWindow = NeonEngine::DialogWindow::create();
+
     if (!render.init()) {
         NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
@@ -171,23 +188,30 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
     }
 
-    render.uploadVertexBuffers(
-        commandBuffer,
+    commandBuffer->uploadVertexBuffers(
         vertices.data(),
         static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
 
-    faceTexture = render.createTexture(commandBuffer, "Engine/Content/TestTextures/face.png");
+    faceTexture = commandBuffer->createTexture("Engine/Content/TestTextures/face.png");
 
     // Create a 1x1 white texture (all pixels are white)
     const Uint32 width         = 1;
     const Uint32 height        = 1;
     const Uint8  whitePixel[4] = {255, 255, 255, 255}; // RGBA: White with full opacity
-    whiteTexture               = render.createTextureByBuffer(commandBuffer, whitePixel, width, height, "White Texture ⬜");
+    whiteTexture               = commandBuffer->createTextureFromBuffer(whitePixel, width, height, "White Texture ⬜");
+
+    // Initialize the model manager
+    modelManager.init();
 
 
-    camera.setPerspective(45.0f, 1.0f, 0.1f, 100.0f);
+    int windowWidth, windowHeight;
+    SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
+    NE_INFO("Initialized window size: {}x{}", windowWidth, windowHeight);
+    camera.setPerspective(45.0f, (float)windowHeight / (float)windowHeight, 0.1f, 100.0f);
+    // camera.setAspectRatio((float)windowWidth / (float)windowHeight);
+    camera.setPosition({0.0f, 0.0f, 5.0f});
     cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
-    render.setVertexUnifroms(commandBuffer, 0, &cameraData, sizeof(CameraData));
+    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
 
     commandBuffer->submit();
 
@@ -195,25 +219,71 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     return SDL_APP_CONTINUE;
 }
 
+// Function to upload model data to GPU
+bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffer> commandBuffer)
+{
+    if (!model || model->getMeshes().empty()) {
+        return false;
+    }
+
+    // For simplicity, we'll just use the first mesh in the model
+    const Mesh &mesh = model->getMeshes()[0];
+
+    // Convert Vertex to VertexEntry
+    std::vector<VertexEntry> vertexEntries;
+    vertexEntries.reserve(mesh.vertices.size());
+
+    for (const auto &vertex : mesh.vertices) {
+        VertexEntry entry;
+        entry.position = vertex.position;
+        entry.color    = vertex.color;
+        entry.uv       = vertex.texCoord;
+        vertexEntries.push_back(entry);
+    }
+
+    // Calculate transform - this is a simple model-to-world transform
+    glm::mat4 transform = model->getTransform();
+    for (auto &vertex : vertexEntries) {
+        vertex.position = transform * glm::vec4(vertex.position, 1.0f);
+    }
+
+    // Upload vertices and indices using the command buffer directly
+    commandBuffer->uploadVertexBuffers(
+        vertexEntries.data(),
+        static_cast<Uint32>(vertexEntries.size() * sizeof(VertexEntry)));
+
+    commandBuffer->uploadIndexBuffers(
+        mesh.indices.data(),
+        static_cast<Uint32>(mesh.indices.size() * sizeof(uint32_t)));
+
+    return true;
+}
+
+// Add UI for model loading
+void imguiModelControls()
+{
+}
 
 bool imguiManipulateVertices()
 {
-
     bool bVertexInputChanged = false;
-    for (int i = 0; i < 4; ++i) {
-        ImGui::Text("Vertex %d", i);
-        char label[32];
-        sprintf(label, "position##%d", i);
-        if (ImGui::DragFloat3(label, glm::value_ptr(vertices[i].position))) {
-            bVertexInputChanged = true;
-        }
-        sprintf(label, "color##%d", i);
-        if (ImGui::DragFloat4(label, glm::value_ptr(vertices[i].color))) {
-            bVertexInputChanged = true;
-        }
-        sprintf(label, "uv##%d", i);
-        if (ImGui::DragFloat2(label, glm::value_ptr(vertices[i].uv))) {
-            bVertexInputChanged = true;
+    if (ImGui::CollapsingHeader("Vertex Manipulation")) {
+
+        for (int i = 0; i < 4; ++i) {
+            ImGui::Text("Vertex %d", i);
+            char label[32];
+            sprintf(label, "position##%d", i);
+            if (ImGui::DragFloat3(label, glm::value_ptr(vertices[i].position))) {
+                bVertexInputChanged = true;
+            }
+            sprintf(label, "color##%d", i);
+            if (ImGui::DragFloat4(label, glm::value_ptr(vertices[i].color))) {
+                bVertexInputChanged = true;
+            }
+            sprintf(label, "uv##%d", i);
+            if (ImGui::DragFloat2(label, glm::value_ptr(vertices[i].uv))) {
+                bVertexInputChanged = true;
+            }
         }
     }
 
@@ -255,11 +325,18 @@ bool imguiManipulateEditorCamera()
     auto rotation = camera.rotation;
     bool bChanged = false;
 
-    if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
-        bChanged = true;
-    }
-    if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
-        bChanged = true;
+    // Add camera control settings to UI
+    if (ImGui::CollapsingHeader("Camera Controls")) {
+        if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
+            bChanged = true;
+        }
+        if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
+            bChanged = true;
+        }
+        ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
+        ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 0.01f, 0.01f, 1.0f);
+        ImGui::Text("Hold right mouse button to rotate camera");
+        ImGui::Text("WASD: Move horizontally, QE: Move vertically");
     }
 
     if (bChanged) {
@@ -298,15 +375,16 @@ SDL_AppResult iterate()
         return SDL_APP_CONTINUE;
     }
 
-    std::shared_ptr<GPUCommandBuffer> commandBuffer = render.acquireCommandBuffer();
+    std::shared_ptr<CommandBuffer> commandBuffer = render.acquireCommandBuffer();
     if (!commandBuffer) {
         NE_CORE_ERROR("Failed to acquire command buffer {}", SDL_GetError());
         return SDL_APP_FAILURE;
     }
+    auto sdlCommandBuffer = static_cast<GPUCommandBuffer_SDL *>(commandBuffer.get());
 
     Uint32          swapChianTextureW, swapChainTextureHeight;
     SDL_GPUTexture *swapchainTexture = nullptr;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture(*commandBuffer,
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture((sdlCommandBuffer->commandBuffer),
                                                render.window,
                                                &swapchainTexture,
                                                &swapChianTextureW,
@@ -355,20 +433,10 @@ SDL_AppResult iterate()
         }
 
         bVertexInputChanged = imguiManipulateVertices();
+        bCameraChanged      = imguiManipulateEditorCamera();
 
-        // Camera UI still useful for manual positioning
-        if (imguiManipulateEditorCamera()) {
-            // Manual camera manipulation from UI overrides input-based camera position
-            bCameraChanged = true;
-        }
-
-        // Add camera control settings to UI
-        if (ImGui::CollapsingHeader("Camera Controls")) {
-            ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
-            ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 0.01f, 0.01f, 1.0f);
-            ImGui::Text("Hold right mouse button to rotate camera");
-            ImGui::Text("WASD: Move horizontally, QE: Move vertically");
-        }
+        // Add model loading UI
+        imguiModelControls();
 
         imguiManipulateSwapchain();
     }
@@ -381,10 +449,10 @@ SDL_AppResult iterate()
     // current rectangle has no position data
     glm::mat4 transform = glm::mat4(1.0f);
 
-
     if (swapchainTexture && !bMinimized)
     {
-        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, *commandBuffer);
+        auto sdlCommandBuffer = static_cast<GPUCommandBuffer_SDL *>(commandBuffer.get());
+        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, sdlCommandBuffer->commandBuffer);
 
 
         SDL_GPUColorTargetInfo colorTargetInfo = {
@@ -399,11 +467,8 @@ SDL_AppResult iterate()
         };
 
         // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
-        // if (bCameraChanged) {
-        // NE_CORE_INFO("Camera changed, update view projection matrix");
         cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
-        render.setVertexUnifroms(commandBuffer, 0, &cameraData, sizeof(CameraData));
-        // }
+        commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
 
         if (bVertexInputChanged) {
 
@@ -414,14 +479,13 @@ SDL_AppResult iterate()
                 vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
             }
 
-            render.uploadVertexBuffers(
-                commandBuffer,
+            commandBuffer->uploadVertexBuffers(
                 verticesCopy.data(),
                 static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
         }
 
         // target info can be multiple(use same pipeline?)
-        SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(*commandBuffer,
+        SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(sdlCommandBuffer->commandBuffer,
                                                                &colorTargetInfo,
                                                                1,
                                                                nullptr);
@@ -441,36 +505,24 @@ SDL_AppResult iterate()
             };
             SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
+            // Determine which texture to use
+            SDL_GPUTexture *textureToUse = faceTexture;
+            if (useModel && currentModel && !currentModel->getMeshes().empty()) {
+                const auto &firstMesh = currentModel->getMeshes()[0];
+                if (firstMesh.diffuseTexture) {
+                    textureToUse = firstMesh.diffuseTexture;
+                }
+            }
+
             // sampler binding
             SDL_GPUTextureSamplerBinding textureBinding = {
-                .texture = faceTexture,
+                .texture = textureToUse,
                 .sampler = render.samplers[selectedSampler],
             };
             SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
 
             int windowWidth, windowHeight;
             SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
-
-            // TODO: these works should be done in camera matrix?
-            // Calculate proper aspect-preserving dimensions
-            // float targetAspect = 1.0f; // 1:1 for square
-            // float windowAspect = (float)windowWidth / (float)windowHeight;
-            // float viewportWidth , viewportHeight;
-            // float offsetX = 0;
-            // float offsetY = 0;
-
-            // if (windowAspect > targetAspect) {
-            //     // Window is wider than needed
-            //     viewportHeight = (float)windowHeight;
-            //     viewportWidth  = viewportHeight * targetAspect;
-            //     offsetX        = (windowWidth - viewportWidth) / 2.0f;
-            // }
-            // else {
-            //     // Window is taller than needed
-            //     viewportWidth  = (float)windowWidth;
-            //     viewportHeight = viewportWidth / targetAspect;
-            //     offsetY        = (windowHeight - viewportHeight) / 2.0f;
-            // }
 
             SDL_GPUViewport viewport = {
                 .x         = 0,
@@ -482,18 +534,30 @@ SDL_AppResult iterate()
             };
             SDL_SetGPUViewport(renderpass, &viewport);
 
-            // SDL_BindGPUVertexBuffer(renderpass, 0, vertexBuffer, 0);
-            // SDL_DrawGPUPrimitives(renderpass, 3, 1, 0, 0);
-            SDL_DrawGPUIndexedPrimitives(renderpass,
-                                         2 * 3, // 3 index for each triangle
-                                         1,
-                                         0,
-                                         0,
-                                         0);
+            // Draw the model or quad
+            if (useModel && currentModel && !currentModel->getMeshes().empty()) {
+                // Draw the model
+                const auto &firstMesh = currentModel->getMeshes()[0];
+                SDL_DrawGPUIndexedPrimitives(renderpass,
+                                             static_cast<uint32_t>(firstMesh.indices.size()),
+                                             1,
+                                             0,
+                                             0,
+                                             0);
+            }
+            else {
+                // Draw the quad
+                SDL_DrawGPUIndexedPrimitives(renderpass,
+                                             2 * 3, // 3 index for each triangle
+                                             1,
+                                             0,
+                                             0,
+                                             0);
+            }
 
             // after graphics pipeline draw, or make pipeline draw into a RT
             if (drawData && drawData->CmdListsCount > 0) {
-                ImGui_ImplSDLGPU3_RenderDrawData(drawData, *commandBuffer, renderpass);
+                ImGui_ImplSDLGPU3_RenderDrawData(drawData, sdlCommandBuffer->commandBuffer, renderpass);
             }
         }
         SDL_EndGPURenderPass(renderpass);
@@ -521,38 +585,39 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     }
 }
 
-SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *evt)
 {
     // NE_CORE_TRACE("Event: {}", event->type);
 
-    ImGui_ImplSDL3_ProcessEvent(event);
-    inputManager.processEvent(*event);
+    ImGui_ImplSDL3_ProcessEvent(evt);
+    inputManager.processEvent(*evt);
 
-    switch ((SDL_EventType)event->type) {
+    switch ((SDL_EventType)evt->type) {
     case SDL_EventType::SDL_EVENT_KEY_UP:
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Key up: %d", event->key.key);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Key up: %d", evt->key.key);
         // get all  modifiers to bool
-        bool bShift = (event->key.mod & SDL_KMOD_SHIFT) != 0;
-        bool bCtrl  = (event->key.mod & SDL_KMOD_CTRL) != 0;
-        bool bAlt   = (event->key.mod & SDL_KMOD_ALT) != 0;
-        if (bShift && event->key.key == SDLK_ESCAPE)
+        bool bShift = (evt->key.mod & SDL_KMOD_SHIFT) != 0;
+        bool bCtrl  = (evt->key.mod & SDL_KMOD_CTRL) != 0;
+        bool bAlt   = (evt->key.mod & SDL_KMOD_ALT) != 0;
+        if (bShift && evt->key.key == SDLK_ESCAPE)
         {
             return SDL_APP_SUCCESS;
         }
     } break;
     case SDL_EventType::SDL_EVENT_WINDOW_RESIZED:
     {
-        if (event->window.windowID == SDL_GetWindowID(render.window))
+        if (evt->window.windowID == SDL_GetWindowID(render.window))
         {
             SDL_WaitForGPUIdle(render.device);
-            NE_CORE_INFO("Window resized to {}x{}", event->window.data1, event->window.data2);
+            NE_CORE_INFO("Window resized to {}x{}", evt->window.data1, evt->window.data2);
+            camera.setAspectRatio(static_cast<float>(evt->window.data1) / static_cast<float>(evt->window.data2));
         }
     } break;
     case SDL_EventType::SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     {
-        NE_CORE_INFO("SDL Window Close Requested {}", event->window.windowID);
-        if (event->window.windowID == SDL_GetWindowID(render.window))
+        NE_CORE_INFO("SDL Window Close Requested {}", evt->window.windowID);
+        if (evt->window.windowID == SDL_GetWindowID(render.window))
         {
             return SDL_APP_SUCCESS;
         }
@@ -585,6 +650,12 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     if (whiteTexture) {
         SDL_ReleaseGPUTexture(render.device, whiteTexture);
     }
+
+    // Clear model manager before cleaning render context
+    modelManager.clear();
+
+    // Clean up dialog window
+    dialogWindow.reset();
 
     render.cleanContext();
 
