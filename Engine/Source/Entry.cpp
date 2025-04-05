@@ -1,42 +1,42 @@
-#include "Render/CommandBuffer.h"
-#include "SDL3/SDL_timer.h"
-
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
+#include "SDL3/SDL_timer.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <imgui.h>
-#include <imgui_impl_sdl3.h>
-#include <imgui_impl_sdlgpu3.h>
 
+#include "ImGuiHelper.h"
 
 #include "Core/App.h"
+#include "Core/EditorCamera.h"
+#include "Core/Event.h"
 #include "Core/FileSystem/FileSystem.h"
+#include "Core/Input/InputManager.h"
+#include "Core/UI/DialogWindow.h"
+
+
+
+#include "Render/CommandBuffer.h"
 #include "Render/Model.h"
 #include "Render/ModelManager.h"
 #include "Render/Render.h"
-#include "Render/Shader.h"
-
-
-#include "Core/EditorCamera.h"
-#include "Core/Input/InputManager.h"
-#include "Core/UI/DialogWindow.h"
 #include "Render/SDL/SDLGPUCommandBuffer.h"
 #include "Render/SDL/SDLGPURender.h"
-
 
 
 SDL_GPUTexture *faceTexture;
 SDL_GPUTexture *whiteTexture;
 
-App           app;
-GPURender_SDL render;
-EditorCamera  camera;
-InputManager  inputManager;
-ModelManager  modelManager;
+App              app;
+GPURender_SDL    render;
+Neon::ImguiState imguiState;
+EditorCamera     camera;
+InputManager     inputManager;
+ModelManager     modelManager;
+
 
 // Current loaded model
 std::shared_ptr<Model> currentModel;
@@ -44,8 +44,6 @@ bool                   useModel = false;
 
 // Dialog window for file operations
 std::unique_ptr<NeonEngine::DialogWindow> dialogWindow;
-
-
 
 // TODO: reflect this and auto generate VertexBufferDescription and VertexAttribute
 struct VertexEntry
@@ -98,32 +96,19 @@ std::vector<IndexEntry> indices = {
     {0, 3, 2},
 };
 
-
 CameraData cameraData;
 
 glm::mat4 quadTransform = glm::mat4(1.0f);
 
-void initImGui(SDL_GPUDevice *device, SDL_Window *window)
+struct SDLAppState
 {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO *io = &ImGui::GetIO();
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui::StyleColorsDark();
-
-    ImGui_ImplSDL3_InitForSDLGPU(window);
-    ImGui_ImplSDLGPU3_InitInfo info{
-        .Device            = device,
-        .ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(device, window),
-        .MSAASamples       = SDL_GPU_SAMPLECOUNT_1,
-    };
-    ImGui_ImplSDLGPU3_Init(&info);
-}
-
+};
 
 
 SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
+    *appstate = new SDLAppState{};
+
     FileSystem::init();
     Logger::init();
 
@@ -135,10 +120,9 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         return SDL_APP_FAILURE;
     }
 
-    ::initImGui(render.device, render.window);
+    imguiState.init(render.device, render.window);
 
     EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
-
 
     bool ok = render.createGraphicsPipeline(
         GraphicsPipelineCreateInfo{
@@ -181,7 +165,6 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
         return SDL_APP_FAILURE;
     }
 
-
     auto commandBuffer = render.acquireCommandBuffer();
 
     for (auto &vertex : vertices) {
@@ -203,7 +186,6 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
     // Initialize the model manager
     modelManager.init();
 
-
     int windowWidth, windowHeight;
     SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
     NE_INFO("Initialized window size: {}x{}", windowWidth, windowHeight);
@@ -214,9 +196,9 @@ SDLMAIN_DECLSPEC SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv
 
     commandBuffer->submit();
 
-
     return SDL_APP_CONTINUE;
 }
+
 
 // Function to upload model data to GPU
 bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffer> commandBuffer)
@@ -263,8 +245,9 @@ void imguiModelControls()
 {
     if (ImGui::CollapsingHeader("Model Controls"))
     {
-        static char modelPath[256] = "Engine/Content/Models/cube.obj";
-        ImGui::InputText("Model Path", modelPath, IM_ARRAYSIZE(modelPath));
+        // TODO: why copilot think this is wrong? must a char[256] with '\0' at the end?
+        static std::string modelPath = "Engine/Content/TestModels/face.obj\0";
+        ImGui::InputText("Model Path", modelPath.data(), sizeof(modelPath));
 
         if (ImGui::Button("Browse...")) {
             // Create dialog window if it doesn't exist yet
@@ -288,9 +271,8 @@ void imguiModelControls()
 
                 if (result.has_value()) {
                     // Copy the path to the input field, ensuring it doesn't overflow
-                    strncpy(modelPath, result.value().c_str(), sizeof(modelPath) - 1);
-                    modelPath[sizeof(modelPath) - 1] = '\0';
-
+                    modelPath = result.value();
+                    modelPath.push_back('\0'); // Null-terminate the string
                     NE_CORE_INFO("Selected model file: {}", modelPath);
                 }
             }
@@ -400,14 +382,10 @@ bool imguiManipulateVertices()
     return bVertexInputChanged;
 }
 
-
-
 void imguiManipulateSwapchain()
 {
-
     NE_ASSERT(SDL_WindowSupportsGPUSwapchainComposition(render.device, render.window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR),
               "Window does not support GPU swapchain composition");
-
 
     static SDL_GPUPresentMode currentPresentMode = SDL_GPU_PRESENTMODE_VSYNC;
 
@@ -420,7 +398,6 @@ void imguiManipulateSwapchain()
 
     if (ImGui::Combo("Present Mode", (int *)&currentPresentMode, presentModes, IM_ARRAYSIZE(presentModes)))
     {
-
         SDL_SetGPUSwapchainParameters(render.device,
                                       render.window,
                                       SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
@@ -456,8 +433,11 @@ bool imguiManipulateEditorCamera()
 }
 
 
-SDL_AppResult iterate()
+
+SDL_AppResult SDL_AppIterate(void *appState)
 {
+
+#pragma region Update
     if (app.bPausing) {
         return SDL_APP_CONTINUE;
     }
@@ -473,17 +453,19 @@ SDL_AppResult iterate()
     static float avgFps = 0.0f;
     avgFps              = avgFps * 0.95f + fps * 0.05f; // Simple exponential moving average
 
-    // Update input manager
-    inputManager.update();
 
-    // Update camera based on input
+    inputManager.update();
     camera.update(inputManager, deltaTime);
+
 
     if (SDL_GetWindowFlags(render.window) & SDL_WINDOW_MINIMIZED)
     {
         SDL_Delay(100);
         return SDL_APP_CONTINUE;
     }
+#pragma endregion
+
+#pragma region Render
 
     std::shared_ptr<CommandBuffer> commandBuffer = render.acquireCommandBuffer();
     if (!commandBuffer) {
@@ -507,15 +489,16 @@ SDL_AppResult iterate()
         return SDL_APP_CONTINUE;
     }
 
-    static glm::vec4 clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    static glm::vec4    clearColor      = {0.0f, 0.0f, 0.0f, 1.0f};
+    static ESamplerType selectedSampler = ESamplerType::PointClamp;
 
-    bool                bVertexInputChanged = false;
-    bool                bCameraChanged      = false;
-    static ESamplerType selectedSampler     = ESamplerType::PointClamp;
+    bool      bVertexInputChanged = false;
+    bool      bCameraChanged      = false;
+    glm::mat4 transform           = glm::mat4(1.0f); // current rectangle has no position data
+    bool      bImguiMinimized     = false;
 
-    ImGui_ImplSDLGPU3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
+    imguiState.beginFrame();
+    // UI code remains in Entry.cpp
     if (ImGui::Begin("Debug"))
     {
         // Display FPS at the top of the debug window
@@ -545,162 +528,153 @@ SDL_AppResult iterate()
         bVertexInputChanged = imguiManipulateVertices();
         bCameraChanged      = imguiManipulateEditorCamera();
 
-        // Add model loading UI
         imguiModelControls();
-
         imguiManipulateSwapchain();
     }
     ImGui::End();
-    ImGui::Render();
-    ImDrawData *drawData   = ImGui::GetDrawData();
-    const bool  bMinimized = drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f;
+    bImguiMinimized = imguiState.render(sdlCommandBuffer->commandBuffer);
 
+#pragma endregion
 
-    // current rectangle has no position data
-    glm::mat4 transform = glm::mat4(1.0f);
-
-    if (swapchainTexture && !bMinimized)
+#pragma region Draw
+    if (!swapchainTexture || bImguiMinimized)
     {
-        auto sdlCommandBuffer = static_cast<GPUCommandBuffer_SDL *>(commandBuffer.get());
-        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, sdlCommandBuffer->commandBuffer);
-
-
-        SDL_GPUColorTargetInfo colorTargetInfo = {
-            .texture               = swapchainTexture,
-            .mip_level             = 0,
-            .layer_or_depth_plane  = 0,
-            .clear_color           = {clearColor.r, clearColor.g, clearColor.b, clearColor.a},
-            .load_op               = SDL_GPU_LOADOP_CLEAR,
-            .store_op              = SDL_GPU_STOREOP_STORE,
-            .cycle                 = true, // wtf?
-            .cycle_resolve_texture = false,
-        };
-
-        // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
-        cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
-        commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-
-        if (bVertexInputChanged) {
-
-            // TODO: move to render pipeline
-            NE_CORE_INFO("Vertex input changed, update vertex buffer");
-            std::vector<VertexEntry> verticesCopy = vertices;
-            for (auto &vertex : verticesCopy) {
-                vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
-            }
-
-            commandBuffer->uploadVertexBuffers(
-                verticesCopy.data(),
-                static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
+        if (!commandBuffer->submit()) {
+            NE_CORE_ERROR("Failed to submit command buffer {}", SDL_GetError());
         }
-
-        // target info can be multiple(use same pipeline?)
-        SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(sdlCommandBuffer->commandBuffer,
-                                                               &colorTargetInfo,
-                                                               1,
-                                                               nullptr);
-        {
-            SDL_BindGPUGraphicsPipeline(renderpass, render.pipeline);
-
-            SDL_GPUBufferBinding vertexBufferBinding = {
-                .buffer = render.vertexBuffer,
-                .offset = 0,
-            };
-            SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
-
-            // TODO: use uint16  to optimize index buffer
-            SDL_GPUBufferBinding indexBufferBinding = {
-                .buffer = render.indexBuffer,
-                .offset = 0,
-            };
-            SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-
-            // Determine which texture to use
-            SDL_GPUTexture *textureToUse = faceTexture;
-            if (useModel && currentModel && !currentModel->getMeshes().empty()) {
-                const auto &firstMesh = currentModel->getMeshes()[0];
-                if (firstMesh.diffuseTexture) {
-                    textureToUse = firstMesh.diffuseTexture;
-                }
-            }
-
-            // sampler binding
-            SDL_GPUTextureSamplerBinding textureBinding = {
-                .texture = textureToUse,
-                .sampler = render.samplers[selectedSampler],
-            };
-            SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
-
-            int windowWidth, windowHeight;
-            SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
-
-            SDL_GPUViewport viewport = {
-                .x         = 0,
-                .y         = 0,
-                .w         = static_cast<float>(windowWidth),
-                .h         = static_cast<float>(windowHeight),
-                .min_depth = 0.0f,
-                .max_depth = 1.0f,
-            };
-            SDL_SetGPUViewport(renderpass, &viewport);
-
-            // Draw the model or quad
-            if (useModel && currentModel && !currentModel->getMeshes().empty()) {
-                // Draw the model
-                const auto &firstMesh = currentModel->getMeshes()[0];
-                SDL_DrawGPUIndexedPrimitives(renderpass,
-                                             static_cast<uint32_t>(firstMesh.indices.size()),
-                                             1,
-                                             0,
-                                             0,
-                                             0);
-            }
-            else {
-                // Draw the quad
-                SDL_DrawGPUIndexedPrimitives(renderpass,
-                                             2 * 3, // 3 index for each triangle
-                                             1,
-                                             0,
-                                             0,
-                                             0);
-            }
-
-            // after graphics pipeline draw, or make pipeline draw into a RT
-            if (drawData && drawData->CmdListsCount > 0) {
-                ImGui_ImplSDLGPU3_RenderDrawData(drawData, sdlCommandBuffer->commandBuffer, renderpass);
-            }
-        }
-        SDL_EndGPURenderPass(renderpass);
+        return SDL_APP_CONTINUE;
     }
+
+
+    // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
+    cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
+    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+
+
+    if (bVertexInputChanged) {
+        // TODO: move to render pipeline
+        NE_CORE_INFO("Vertex input changed, update vertex buffer");
+        std::vector<VertexEntry> verticesCopy = vertices;
+        for (auto &vertex : verticesCopy) {
+            vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
+        }
+
+        commandBuffer->uploadVertexBuffers(
+            verticesCopy.data(),
+            static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
+    }
+
+    imguiState.prepareDrawData(sdlCommandBuffer->commandBuffer);
+
+    // target info can be multiple(use same pipeline?)
+    SDL_GPUColorTargetInfo colorTargetInfo = {
+        .texture               = swapchainTexture,
+        .mip_level             = 0,
+        .layer_or_depth_plane  = 0,
+        .clear_color           = {clearColor.r, clearColor.g, clearColor.b, clearColor.a},
+        .load_op               = SDL_GPU_LOADOP_CLEAR,
+        .store_op              = SDL_GPU_STOREOP_STORE,
+        .cycle                 = true, // wtf?
+        .cycle_resolve_texture = false,
+    };
+
+    SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(sdlCommandBuffer->commandBuffer,
+                                                           &colorTargetInfo,
+                                                           1,
+                                                           nullptr);
+    {
+        SDL_BindGPUGraphicsPipeline(renderpass, render.pipeline);
+
+        SDL_GPUBufferBinding vertexBufferBinding = {
+            .buffer = render.vertexBuffer,
+            .offset = 0,
+        };
+        SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
+
+        // TODO: use uint16  to optimize index buffer
+        SDL_GPUBufferBinding indexBufferBinding = {
+            .buffer = render.indexBuffer,
+            .offset = 0,
+        };
+        SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+        // Determine which texture to use
+        SDL_GPUTexture *textureToUse = faceTexture;
+        if (useModel && currentModel && !currentModel->getMeshes().empty()) {
+            const auto &firstMesh = currentModel->getMeshes()[0];
+            if (firstMesh.diffuseTexture) {
+                textureToUse = firstMesh.diffuseTexture;
+            }
+        }
+
+        // sampler binding
+        SDL_GPUTextureSamplerBinding textureBinding = {
+            .texture = textureToUse,
+            .sampler = render.samplers[selectedSampler],
+        };
+        SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
+
+        int windowWidth, windowHeight;
+        SDL_GetWindowSize(render.window, &windowWidth, &windowHeight);
+
+        SDL_GPUViewport viewport = {
+            .x         = 0,
+            .y         = 0,
+            .w         = static_cast<float>(windowWidth),
+            .h         = static_cast<float>(windowHeight),
+            .min_depth = 0.0f,
+            .max_depth = 1.0f,
+        };
+        SDL_SetGPUViewport(renderpass, &viewport);
+
+        // Draw the model or quad
+        if (useModel && currentModel && !currentModel->getMeshes().empty()) {
+            // Draw the model
+            const auto &firstMesh = currentModel->getMeshes()[0];
+            SDL_DrawGPUIndexedPrimitives(renderpass,
+                                         static_cast<uint32_t>(firstMesh.indices.size()),
+                                         1,
+                                         0,
+                                         0,
+                                         0);
+        }
+        else {
+            // Draw the quad
+            SDL_DrawGPUIndexedPrimitives(renderpass,
+                                         2 * 3, // 3 index for each triangle
+                                         1,
+                                         0,
+                                         0,
+                                         0);
+        }
+
+        // after graphics pipeline draw, or make pipeline draw into a RT
+        imguiState.draw(sdlCommandBuffer->commandBuffer, renderpass);
+    }
+    SDL_EndGPURenderPass(renderpass);
 
     if (!commandBuffer->submit()) {
         NE_CORE_ERROR("Failed to submit command buffer {}", SDL_GetError());
     }
 
+#pragma endregion
     return SDL_APP_CONTINUE;
-}
-
-SDL_AppResult SDL_AppIterate(void *appstate)
-{
-    try {
-        return iterate();
-    }
-    catch (const std::exception &e) {
-        NE_CORE_ERROR("Exception: {}", e.what());
-        return SDL_APP_FAILURE;
-    }
-    catch (...) {
-        NE_CORE_ERROR("Unknown exception");
-        return SDL_APP_FAILURE;
-    }
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *evt)
 {
     // NE_CORE_TRACE("Event: {}", event->type);
+    EventProcessState state = EventProcessState::Continue;
 
-    ImGui_ImplSDL3_ProcessEvent(evt);
-    inputManager.processEvent(*evt);
+    // TODO: priority of each event handler?
+    if (state = imguiState.processEvents(*evt); state) {
+        NE_CORE_WARN("Imgui handled event: {}", evt->type);
+        return SDL_APP_CONTINUE;
+    }
+    if (state = inputManager.processEvent(*evt); state) {
+        NE_CORE_WARN("InputManager handled event: {}", evt->type);
+        return SDL_APP_CONTINUE;
+    }
 
     switch ((SDL_EventType)evt->type) {
     case SDL_EventType::SDL_EVENT_KEY_UP:
@@ -743,16 +717,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *evt)
     return SDL_APP_CONTINUE;
 }
 
-void SDL_AppQuit(void *appstate, SDL_AppResult result)
+SDLMAIN_DECLSPEC void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
-
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "sdl quit with result: %u", result);
 
     SDL_WaitForGPUIdle(render.device);
 
-    ImGui_ImplSDL3_Shutdown();
-    ImGui_ImplSDLGPU3_Shutdown();
-    ImGui::DestroyContext();
+    imguiState.shutdown();
 
     if (faceTexture) {
         SDL_ReleaseGPUTexture(render.device, faceTexture);
@@ -769,5 +740,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
     render.cleanContext();
 
+    auto sdlAppState = static_cast<SDLAppState *>(appstate);
+    delete sdlAppState;
     SDL_Quit();
 }

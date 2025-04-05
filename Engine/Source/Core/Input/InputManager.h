@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <unordered_map>
 
+#include "Core/Event.h"
 
 
 enum class KeyState
@@ -34,8 +35,8 @@ class InputManager
     InputManager();
     ~InputManager() = default;
 
-    void update();
-    void processEvent(const SDL_Event &event);
+    void                   update();
+    EventProcessState processEvent(const SDL_Event &event);
 
     bool isKeyPressed(SDL_Keycode keycode) const;
     bool wasKeyPressed(SDL_Keycode keycode) const;

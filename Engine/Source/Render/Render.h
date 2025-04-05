@@ -43,7 +43,7 @@ GENERATED_ENUM_MISC(ESamplerType);
 enum class EGraphicPipeLinePrimitiveType
 {
     TriangleList,
-    ENUM_MAX = 0,
+    ENUM_MAX,
 };
 
 struct VertexBufferDescription
@@ -70,10 +70,6 @@ GENERATED_ENUM_MISC(T);
 }; // namespace EVertexAttributeFormat
 
 
-namespace ETextureFormat
-{
-}
-
 struct VertexAttribute
 {
     uint32_t                  location;
@@ -99,6 +95,6 @@ struct GraphicsPipelineCreateInfo
 
 struct Render
 {
-    virtual bool                              createGraphicsPipeline(const GraphicsPipelineCreateInfo &info)                        = 0;
+    virtual bool                           createGraphicsPipeline(const GraphicsPipelineCreateInfo &info)                        = 0;
     virtual std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) = 0;
 };

@@ -1,10 +1,12 @@
 {
     "cSpell.words": [
+        "Assimp",
         "blendfactor",
         "BLENDOP",
         "COLORCOMPONENT",
         "CULLMODE",
         "DXIL",
+        "gltf",
         "HLSL",
         "logcc",
         "MSAA",

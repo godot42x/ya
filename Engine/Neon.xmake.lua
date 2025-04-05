@@ -8,13 +8,14 @@ add_requires("libsdl3")
 add_requires("libsdl3_image")
 add_requires("glm")
 add_requires("spirv-cross")
+add_requires("assimp")
 
 -- just for temp debug in runtime
 add_requires("imgui", {
     configs = {
         sdl3 = true,
         sdl3_gpu = true,
-        debug =  is_mode("debug")
+        debug = is_mode("debug")
     }
 })
 
@@ -27,10 +28,10 @@ add_requires("shaderc")
 target("Neon")
 do
     set_kind("binary")
-    add_files("Source/**.cpp")
-    add_headerfiles("Source/**.h")
+    add_files("./Source/**.cpp")
+    add_headerfiles("./Source/**.h")
 
-    add_includedirs("Source")
+    add_includedirs("./Source")
 
     add_deps("utility.cc")
     add_deps("log.cc")
@@ -47,8 +48,9 @@ do
     add_packages("spirv-cross")
     add_packages("imgui")
     --add_packages("glad")
+    add_packages("assimp")
 
-    add_includedirs("./Source")
+
     before_run(function(target)
         print("before run", target:name())
         print("removing sdl log files")

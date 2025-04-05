@@ -24,3 +24,7 @@ xmake run test
 - imgui
 - gtest
 
+
+# Code Style Standard
+1. Like Qt, all member variables and member function should be small camelCase
+2. All enum and class are big camel case, and small cmael
