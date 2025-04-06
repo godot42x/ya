@@ -1,7 +1,5 @@
 includes("./Plugins/Plugins.xmake.lua")
 
---add_requires("sdl")
-
 --add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl3")
@@ -19,10 +17,7 @@ add_requires("imgui", {
     }
 })
 
---add_requires("glad")
---if is_plat("windows") then
---	add_requires("opengl")
---end
+
 add_requires("shaderc")
 
 target("Neon")
@@ -38,7 +33,6 @@ do
     add_deps("reflect.cc")
     -- add_deps("log")
 
-    --add_packages("glfw")
     --add_packages("vulkansdk")
     add_packages("spdlog")
     add_packages("libsdl3")
@@ -50,6 +44,10 @@ do
     --add_packages("glad")
     add_packages("assimp")
 
+    -- Add subsystem specification to fix LNK4031 warning
+    if is_plat("windows") then
+        add_ldflags("/subsystem:console")
+    end
 
     before_run(function(target)
         print("before run", target:name())

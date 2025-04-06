@@ -11,6 +11,7 @@
         "logcc",
         "MSAA",
         "PRIMITIVETYPE",
+        "projectdir",
         "renderpass",
         "SAMPLECOUNT",
         "SAMPLERADDRESSMODE",

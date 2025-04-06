@@ -9,10 +9,6 @@ add_rules("mode.debug", "mode.release")
 
 set_languages("c++20")
 
-
--- add_requires("gtest")
--- add_requires("imgui docking", { configs = { glfw = true, opengl3 = true } })
-
 if is_plat("windows") then
     set_exceptions("cxx")
 end

@@ -277,14 +277,13 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>
 
 std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
 {
-    std::string path    = (FileSystem::get()->getProjectRoot() / this->shaderStoragePath / fileName).string();
-    auto        content = ut::file::read_all(path.c_str());
-    if (!content.has_value())
+    std::string contentStr;
+    if (!FileSystem::get()->readFileToString(fileName, contentStr))
     {
+        NE_CORE_ERROR("Failed to read shader file: {}", fileName);
         return {};
     }
 
-    const std::string &contentStr = content.value();
 
     // Preprocess
     std::unordered_map<EShaderStage::T, std::string> shaderSources;

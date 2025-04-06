@@ -12,7 +12,7 @@ void FileSystem::init()
 }
 
 
-bool FileSystem::readFileToString(const std::string &filepath, std::string &output) const
+bool FileSystem::readFileToString(std::string_view filepath, std::string &output) const
 {
     // default to project root
     std::filesystem::path fullPath = projectRoot / filepath;
