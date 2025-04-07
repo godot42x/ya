@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Core/Log.h"
 #include "Render/CommandBuffer.h"
+
+#include "Core/Log.h"
 #include "SDL3/SDL_gpu.h"
 
 struct SDL_GPUTexture;
 struct GPURender_SDL;
-struct SDL_CommandBuffer;
 
 
 struct GPUCommandBuffer_SDL : public CommandBuffer
@@ -55,6 +55,6 @@ struct GPUCommandBuffer_SDL : public CommandBuffer
     void uploadTexture(SDL_GPUTexture *texture, void *data, uint32_t w, uint32_t h) override;
     void setVertexUniforms(uint32_t slot_index, void *data, uint32_t dataSize) override;
 
-    SDL_GPUTexture *createTexture(std::string_view filepath) override;
-    SDL_GPUTexture *createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name) override;
+    std::shared_ptr<Texture> createTexture(std::string_view filepath) override;
+    std::shared_ptr<Texture> createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name) override;
 };

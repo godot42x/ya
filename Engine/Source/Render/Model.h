@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-class Render;
+#include "Render/Texture.h"
+
 struct CommandBuffer;
 
 struct Vertex
@@ -19,10 +20,10 @@ struct Vertex
 
 struct Mesh
 {
-    std::vector<Vertex>   vertices;
-    std::vector<uint32_t> indices;
-    std::string           name;
-    SDL_GPUTexture       *diffuseTexture = nullptr;
+    std::vector<Vertex>      vertices;
+    std::vector<uint32_t>    indices;
+    std::string              name;
+    std::shared_ptr<Texture> diffuseTexture = nullptr;
 
     Mesh()  = default;
     ~Mesh() = default;
@@ -30,6 +31,13 @@ struct Mesh
 
 class Model
 {
+  private:
+    std::vector<Mesh> meshes;
+    glm::mat4         transform = glm::mat4(1.0f);
+
+    bool        isLoaded = false;
+    std::string directory;
+
   public:
     Model()  = default;
     ~Model() = default;
@@ -37,14 +45,15 @@ class Model
     bool loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuffer> commandBuffer);
     void draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture);
 
-    const std::vector<Mesh> &getMeshes() const { return m_meshes; }
-    glm::mat4                getTransform() const { return m_transform; }
-    void                     setTransform(const glm::mat4 &transform) { m_transform = transform; }
+    const std::vector<Mesh> &getMeshes() const { return meshes; }
+    std::vector<Mesh>       &getMeshes() { return meshes; } // Non-const version for adding meshes
 
-  private:
-    std::vector<Mesh> m_meshes;
-    glm::mat4         m_transform = glm::mat4(1.0f);
+    glm::mat4 getTransform() const { return transform; }
+    void      setTransform(const glm::mat4 &transform) { this->transform = transform; }
 
-    bool        m_isLoaded = false;
-    std::string m_directory;
+    bool getIsLoaded() const { return isLoaded; }
+    void setIsLoaded(bool loaded) { isLoaded = loaded; }
+
+    const std::string &getDirectory() const { return directory; }
+    void               setDirectory(const std::string &directory) { this->directory = directory; }
 };

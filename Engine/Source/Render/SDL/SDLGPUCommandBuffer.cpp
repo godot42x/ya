@@ -1,8 +1,11 @@
 #include "SDLGPUCommandBuffer.h"
+
+
 #include "SDLGPURender.h"
 
-#include "utility/file_utils.h"
+#include "Render/SDL/SDLTexture.h"
 
+#include "Core/FileSystem/FileSystem.h"
 
 GPUCommandBuffer_SDL::GPUCommandBuffer_SDL(GPURender_SDL *render, std::source_location &&loc) : CommandBuffer(std::move(loc))
 {
@@ -11,12 +14,12 @@ GPUCommandBuffer_SDL::GPUCommandBuffer_SDL(GPURender_SDL *render, std::source_lo
     NE_ASSERT(commandBuffer, "Failed to create command buffer {}", SDL_GetError());
 }
 
-SDL_GPUTexture *GPUCommandBuffer_SDL::createTexture(std::string_view filepath)
+std::shared_ptr<Texture> GPUCommandBuffer_SDL::createTexture(std::string_view filepath)
 {
     auto         path    = FileSystem::get()->getProjectRoot() / filepath;
     SDL_Surface *surface = nullptr;
 
-    ut::file::ImageInfo imageInfo = ut::file::ImageInfo::detect(path);
+    // ut::file::ImageInfo imageInfo = ut::file::ImageInfo::detect(path);
 
     surface = IMG_Load(path.string().c_str());
     if (!surface) {
@@ -48,10 +51,16 @@ SDL_GPUTexture *GPUCommandBuffer_SDL::createTexture(std::string_view filepath)
 
     SDL_DestroySurface(surface);
 
-    return outTexture;
+    return std::make_shared<SDLTexture>(
+        outTexture,
+        info.width,
+        info.height,
+        SDLTexture::ConvertFromSDLFormat(info.format),
+        SDLTexture::ConvertFromSDLType(info.type),
+        filename);
 }
 
-SDL_GPUTexture *GPUCommandBuffer_SDL::createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name)
+std::shared_ptr<Texture> GPUCommandBuffer_SDL::createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name)
 {
     SDL_GPUTexture *outTexture = nullptr;
 
@@ -77,7 +86,13 @@ SDL_GPUTexture *GPUCommandBuffer_SDL::createTextureFromBuffer(const void *data, 
 
     uploadTexture(outTexture, (void *)data, width, height);
 
-    return outTexture;
+    return std::make_shared<SDLTexture>(
+        outTexture,
+        info.width,
+        info.height,
+        SDLTexture::ConvertFromSDLFormat(info.format),
+        SDLTexture::ConvertFromSDLType(info.type),
+        name ? name : "Unnamed Texture");
 }
 
 void GPUCommandBuffer_SDL::uploadTexture(SDL_GPUTexture *texture, void *data, uint32_t w, uint32_t h)

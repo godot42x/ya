@@ -1,47 +1,48 @@
-#include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
+#include "AssetManager.h"
 
-#include "Model.h"
-#include "Texture.h"
+
+#include "assimp/Importer.hpp"
 
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
-#include "Render/CommandBuffer.h"
-
-#include <assimp/Importer.hpp>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
 
 
-bool Model::loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuffer> commandBuffer)
+
+AssetManager *AssetManager::instance = nullptr;
+
+void AssetManager::init()
 {
-    if (isLoaded) {
-        return true;
+    instance = new AssetManager();
+}
+
+std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer)
+{
+    // Check if the model is already loaded
+    if (isModelLoaded(filepath)) {
+        return modelCache[filepath];
     }
 
-    // Get directory path
-    size_t lastSlash = filePath.find_last_of("/\\");
-    directory        = (lastSlash != std::string::npos) ? filePath.substr(0, lastSlash + 1) : "";
+    // Create a new model
+    auto model = std::make_shared<Model>();
 
-    // Use FileSystem to check if file exists
-    if (!FileSystem::get()->isFileExists(filePath)) {
-        NE_CORE_ERROR("Model file does not exist: {}", filePath);
-        return false;
+    // Get directory path for texture loading
+    size_t      lastSlash = filepath.find_last_of("/\\");
+    std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
+
+    // Check if file exists using FileSystem
+    if (!FileSystem::get()->isFileExists(filepath)) {
+        NE_CORE_ERROR("Model file does not exist: {}", filepath);
+        return nullptr;
     }
 
     // Read the file using FileSystem
     std::string fileContent;
-    if (!FileSystem::get()->readFileToString(filePath, fileContent)) {
-        NE_CORE_ERROR("Failed to read model file: {}", filePath);
-        return false;
+    if (!FileSystem::get()->readFileToString(filepath, fileContent)) {
+        NE_CORE_ERROR("Failed to read model file: {}", filepath);
+        return nullptr;
     }
 
-    // Create Assimp importer
-    Assimp::Importer importer;
-
-    // Load the model from memory
+    // Load the model using Assimp
     const aiScene *scene = importer.ReadFileFromMemory(
         fileContent.data(),
         fileContent.size(),
@@ -53,7 +54,7 @@ bool Model::loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuff
     // Check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
         NE_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
-        return false;
+        return nullptr;
     }
 
     // Process all meshes in the scene
@@ -89,15 +90,18 @@ bool Model::loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuff
                 vertex.texCoord = glm::vec2(0.0f, 0.0f);
             }
 
-            // Colors
+            // Colors - default white if no colors are available
             if (mesh->HasVertexColors(0)) {
                 vertex.color.r = mesh->mColors[0][j].r;
                 vertex.color.g = mesh->mColors[0][j].g;
                 vertex.color.b = mesh->mColors[0][j].b;
                 vertex.color.a = mesh->mColors[0][j].a;
             }
+            else {
+                vertex.color = glm::vec4(1.0f);
+            }
 
-            newMesh.vertices.push_back(vertex);
+            newMesh.vertices.push_back(std::move(vertex));
         }
 
         // Process indices
@@ -116,31 +120,38 @@ bool Model::loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuff
             if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
                 aiString texturePath;
                 if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-                    std::string fullPath = directory;
-                    if (!fullPath.empty() && fullPath.back() != '/' && fullPath.back() != '\\') {
-                        fullPath += '/';
-                    }
-                    fullPath += texturePath.C_Str();
+                    std::string fullPath = (std::filesystem::path(directory) / texturePath.C_Str()).string();
                     if (FileSystem::get()->isFileExists(fullPath)) {
                         newMesh.diffuseTexture = Texture::Create(fullPath, commandBuffer);
-                        if (!newMesh.diffuseTexture) {
-                            NE_CORE_WARN("Failed to load diffuse texture: {}", fullPath);
-                        }
                     }
                 }
             }
+            // You can add more texture types here (normal maps, specular maps, etc.)
         }
 
-        meshes.push_back(newMesh);
+        model->getMeshes().push_back(newMesh);
     }
 
-    isLoaded = true;
-    return true;
+    model->setIsLoaded(true);
+    model->setDirectory(directory);
+
+    // Cache the model
+    modelCache[filepath] = model;
+
+    return model;
 }
 
-void Model::draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture)
+
+
+bool AssetManager::isModelLoaded(const std::string &filepath) const
 {
-    // This function would be called if we had direct access to GPU buffers
-    // In our current setup, we'll refactor Entry.cpp to handle the drawing
-    // This is just a placeholder for potential future improvements
+    return modelCache.find(filepath) != modelCache.end();
+}
+
+std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
+{
+    if (isModelLoaded(filepath)) {
+        return modelCache.at(filepath);
+    }
+    return nullptr;
 }

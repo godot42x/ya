@@ -1,28 +1,27 @@
 
-# Gloria
+# Neon
 
-A render, maybe a real game engine in the future.
+A render in progressing, maybe a real game engine in the future.
 
 
 ## QuickStart
 
 ###  Requirements
-xmake 
+- xmake 
+- a cpp compiler
 
 ###  Run it
 ```sh
-xmake build
-xmake run  main
-xmake run test
+git submodule init && git submodule sync
+make cfg
+make r
 ```
-
 
 ## Packages
 - opengl >= 3.3
 - glfw
 - spdlog
 - imgui
-- gtest
 
 
 # Code Style Standard

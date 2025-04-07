@@ -1,15 +1,17 @@
 #pragma once
 
-#include "Core/Log.h"
-#include "reflect.cc/enum.h"
-
 #include <memory>
 #include <source_location>
-#include <string_view>
 #include <vector>
 
+#include "Core/Log.h"
+
+#include "reflect.cc/enum"
+
+#include "Render/CommandBuffer.h"
+
+
 // Forward declarations
-struct SDL_GPUTexture;
 struct CommandBuffer;
 
 struct RenderAPI
@@ -63,8 +65,7 @@ enum T
 };
 
 
-
-std::size_t T2Size(T type);
+extern std::size_t T2Size(T type);
 
 GENERATED_ENUM_MISC(T);
 }; // namespace EVertexAttributeFormat
@@ -93,8 +94,41 @@ struct GraphicsPipelineCreateInfo
     EGraphicPipeLinePrimitiveType        primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
 };
 
+#define STRINGIFY_IMPL(x) #x
+#define STRINGIFY(x) STRINGIFY_IMPL(x)
+
+//  template <typename W>
+//     W *getW()
+//     {
+//         static_assert(requires { RenderType::getW; });
+//         return static_cast<RenderType *>(this)->getW();
+//     }
+// #define STATIC_POLYMORPHIC_FUNC(CHILD_T, RET_TEMPLATE_NAME, FUNC_NAME, ...)                                                 \
+//     template <typename RET_TEMPLATE_NAME>                                                                                   \
+//     RET_TEMPLATE_NAME FUNC_NAME(__VA_ARGS__)                                                                                \
+//     {                                                                                                                       \
+//         static_assert(requires { CHILD_T::FUNC_NAME; }, STRINGIFY(CHILD_T) " Need implement " STRINGIFY(FUNC_NAME) "!!!!"); \
+//         return static_cast<CHILD_T *>(this)->FUNC_NAME(__VA_ARGS__);                                                        \
+//     }
+// #undef STATIC_POLYMORPHIC_FUNC
+
 struct Render
 {
-    virtual bool                           createGraphicsPipeline(const GraphicsPipelineCreateInfo &info)                        = 0;
+    virtual ~Render() = default;
+
+    struct Pimp
+    {
+    };
+
+    virtual bool init()                                                         = 0;
+    virtual void clean()                                                        = 0;
+    virtual bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info) = 0;
+
     virtual std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) = 0;
+
+    template <typename T>
+    T *as()
+    {
+        return static_cast<T *>(this);
+    }
 };

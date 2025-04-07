@@ -1,5 +1,7 @@
 #include "Render.h"
 
+#include "Render/SDL/SDLGPURender.h"
+
 namespace EVertexAttributeFormat
 {
 std::size_t T2Size(T type)
@@ -19,7 +21,7 @@ std::size_t T2Size(T type)
 
 } // namespace EVertexAttributeFormat
 
-namespace ETextureFormat
-{
-// Add texture format handling if needed
-} // namespace ETextureFormat
+// namespace ETextureFormat
+// {
+// // Add texture format handling if needed
+// } // namespace ETextureFormat

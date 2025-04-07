@@ -1,14 +1,16 @@
 #include "SDLGPURender.h"
 
-#include "Render/SDL/SDLGPUCommandBuffer.h"
+
+
 #include "SDL3/SDL_gpu.h"
-#include "utility/file_utils.h"
 
-
+#include "Render/Shader.h"
+#include "SDLGPUCommandBuffer.h"
 
 // shaders is high related with pipeline, we split it temporarily
 // TODO: export shader info -> use reflection do this
-std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
+std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>>
+GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
 {
     SDL_GPUShader *vertexShader   = nullptr;
     SDL_GPUShader *fragmentShader = nullptr;
@@ -66,6 +68,80 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> GPURender_SDL::creat
 
 
     return {{vertexShader, fragmentShader}};
+}
+
+std::shared_ptr<CommandBuffer> GPURender_SDL::acquireCommandBuffer(std::source_location location)
+{
+
+    // return std::shared_ptr<CommandBuffer>(new GPUCommandBuffer_SDL(this, std::move(location)));
+    return std::make_shared<GPUCommandBuffer_SDL>(this, std::move(location));
+    // return nullptr;
+}
+
+
+bool GPURender_SDL::init()
+{
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
+        return false;
+    }
+
+    int n = SDL_GetNumGPUDrivers();
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%d Available drivers: ", n);
+    for (int i = 0; i < n; ++i) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetGPUDriver(i));
+    }
+
+    device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV |
+                                     SDL_GPU_SHADERFORMAT_DXIL |
+                                     SDL_GPU_SHADERFORMAT_MSL,
+                                 true,
+                                 nullptr);
+    if (!device) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create GPU device: %s", SDL_GetError());
+        return false;
+    }
+
+    const char *driver = SDL_GetGPUDeviceDriver(device);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Choosen GPU Driver: %s", driver);
+
+    window = SDL_CreateWindow("Neon", 800, 600, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    if (!window) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create window: %s", SDL_GetError());
+        return false;
+    }
+
+    if (!SDL_ClaimWindowForGPUDevice(device, window)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to claim window: %s", SDL_GetError());
+        return false;
+    }
+
+    createSamplers();
+    return true;
+}
+
+void GPURender_SDL::clean()
+{
+    for (auto &[key, sampler] : samplers) {
+        if (!sampler) {
+            continue;
+        }
+        SDL_ReleaseGPUSampler(device, sampler);
+    }
+
+    if (vertexBuffer) {
+        SDL_ReleaseGPUBuffer(device, vertexBuffer);
+    }
+    if (indexBuffer) {
+        SDL_ReleaseGPUBuffer(device, indexBuffer);
+    }
+    if (pipeline) {
+        SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
+    }
+
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyWindow(window);
+    SDL_DestroyGPUDevice(device);
 }
 
 // a Pipeline: 1 vertex shader + 1 fragment shader + 1 render pass + 1 vertex buffer + 1 index buffer
@@ -251,7 +327,7 @@ void GPURender_SDL::fillDefaultIndices(std::shared_ptr<CommandBuffer> commandBuf
         break;
     }
 
-    auto cb = acquireCommandBuffer();
+    auto cb = acquireCommandBuffer(std::source_location::current());
     cb->uploadIndexBuffers(indices.data(), getIndexBufferSize());
     cb->submit();
 }
@@ -356,9 +432,4 @@ void GPURender_SDL::createSamplers()
     for (auto &[key, sampler] : samplers) {
         NE_CORE_ASSERT(sampler, "Failed to create sampler {} {}", (int)key, SDL_GetError());
     }
-}
-
-std::shared_ptr<CommandBuffer> GPURender_SDL::acquireCommandBuffer(std::source_location location)
-{
-    return std::make_shared<GPUCommandBuffer_SDL>(this, std::move(location));
 }
