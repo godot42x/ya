@@ -54,6 +54,8 @@ struct GPUCommandBuffer_SDL : public CommandBuffer
     void uploadIndexBuffers(const void *indexData, uint32_t indexDataSize) override;
     void uploadTexture(SDL_GPUTexture *texture, void *data, uint32_t w, uint32_t h) override;
     void setVertexUniforms(uint32_t slot_index, void *data, uint32_t dataSize) override;
+    void setFragmentUniforms(uint32_t slot_index, void *data, uint32_t dataSize) override;
+
 
     std::shared_ptr<Texture> createTexture(std::string_view filepath) override;
     std::shared_ptr<Texture> createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name) override;

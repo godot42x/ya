@@ -2,6 +2,7 @@
 
 
 #include "assimp/Importer.hpp"
+#include "assimp/ObjMaterial.h"
 
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
@@ -23,7 +24,8 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
     }
 
     // Create a new model
-    auto model = std::make_shared<Model>();
+    auto             model = std::make_shared<Model>();
+    Assimp::Importer importer;
 
     // Get directory path for texture loading
     size_t      lastSlash = filepath.find_last_of("/\\");
@@ -50,6 +52,7 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
             aiProcess_GenSmoothNormals |
             aiProcess_FlipUVs |
             aiProcess_CalcTangentSpace);
+
 
     // Check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {

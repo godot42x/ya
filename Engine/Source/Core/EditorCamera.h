@@ -19,6 +19,9 @@ struct Camera
 
     const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
 
+    glm::mat4 getViewMatrix() const { return viewMatrix; }
+    glm::mat4 getProjectionMatrix() const { return projectionMatrix; }
+
   protected:
     Camera()  = default;
     ~Camera() = default;

@@ -82,8 +82,10 @@ struct VertexAttribute
 struct ShaderCreateInfo
 {
     std::string shaderName; // we use single glsl now
-    uint32_t    numUniformBuffers = 0;
-    uint32_t    numSamplers       = 0;
+    uint32_t    numVertexUniformBuffers = 0; // Number of vertex uniform buffers
+
+    uint32_t    numFragmentUniformBuffers = 0; // Number of fragment uniform buffers
+    uint32_t numSamplers               = 0;
 };
 
 struct GraphicsPipelineCreateInfo

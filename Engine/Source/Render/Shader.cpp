@@ -278,9 +278,10 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>
 std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
 {
     std::string contentStr;
-    if (!FileSystem::get()->readFileToString(fileName, contentStr))
+    std::string fullPath = this->shaderStoragePath + "/" + fileName.data();
+    if (!FileSystem::get()->readFileToString(fullPath, contentStr))
     {
-        NE_CORE_ERROR("Failed to read shader file: {}", fileName);
+        NE_CORE_ERROR("Failed to read shader file: {}", fullPath);
         return {};
     }
 
@@ -341,7 +342,7 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
 
         for (auto &&[stage, source] : shaderSources)
         {
-            // auto shader_file_path = fileName;
+            // auto shader_file_path = resolvedPath;
             // auto cached_path      = GetCachePath(true, stage);
 
             // cachedStorage.readStorageFile(cached_path.string());
@@ -366,7 +367,7 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
                 EShaderStage::toShadercType(stage),
-                std::format("{} ({})", fileName, std::to_string(stage)).c_str(),
+                std::format("{} ({})", fullPath, std::to_string(stage)).c_str(),
                 stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
                 options);
 

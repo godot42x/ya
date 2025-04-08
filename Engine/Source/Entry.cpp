@@ -49,7 +49,8 @@ struct VertexEntry
 {
     glm::vec3 position;
     glm::vec4 color;
-    glm::vec2 uv; // aka texcoord
+    glm::vec2 uv;                          // aka texcoord
+    glm::vec3 normal = {0.0f, 0.0f, 1.0f}; // Default normal pointing out of the screen
 };
 // triangle
 struct IndexEntry
@@ -59,7 +60,16 @@ struct IndexEntry
 
 struct CameraData
 {
-    glm::mat4 viewProjectionMatrix;
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 projection;
+};
+
+struct FragmentConstUniforms
+{
+    // glm::vec4 lightPos;
+    // glm::vec4 lightColor;
+    glm::vec4 lightDirection;
 };
 
 std::vector<VertexEntry> vertices = {
@@ -95,7 +105,12 @@ std::vector<IndexEntry> indices = {
     {0, 3, 2},
 };
 
-CameraData cameraData;
+CameraData            cameraData;
+FragmentConstUniforms fragmentUniforms = {
+    // .lightPos       = {0.0f, 0.0f, 5.0f, 1.0f},
+    // .lightColor     = {1.0f, 1.0f, 1.0f, 1.0f},
+    .lightDirection = {0.0f, 0.0f, -1.0f, 1.0f},
+};
 
 glm::mat4 quadTransform = glm::mat4(1.0f);
 
@@ -105,73 +120,18 @@ struct SDLAppState
 };
 
 
-SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
+#pragma region Init
+
+
+void initShaderData()
 {
-
-    *appstate = new SDLAppState{};
-
-    FileSystem::init();
-    Logger::init();
-    AssetManager::init();
-
-    // Create dialog window
-    dialogWindow = NeonEngine::DialogWindow::create();
-    if (!render->init()) {
-        NE_CORE_ERROR("Failed to initialize render context");
-        return SDL_APP_FAILURE;
-    }
-
-    imguiState.init(render->device, render->window);
-
-    EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
-
-    bool ok = render->createGraphicsPipeline(
-        GraphicsPipelineCreateInfo{
-            .shaderCreateInfo = {
-                .shaderName        = "Test.glsl",
-                .numUniformBuffers = 1,
-                .numSamplers       = 1,
-            },
-            .vertexBufferDescs = {
-                {
-                    0,
-                    sizeof(VertexEntry),
-                },
-            },
-            .vertexAttributes = {
-                {
-                    0,
-                    0,
-                    EVertexAttributeFormat::Float3,
-                    offsetof(VertexEntry, position),
-
-                },
-                {
-                    1,
-                    0,
-                    EVertexAttributeFormat::Float4,
-                    offsetof(VertexEntry, color),
-                },
-                {
-                    2,
-                    0,
-                    EVertexAttributeFormat::Float2,
-                    offsetof(VertexEntry, uv),
-                },
-            },
-            .primitiveType = primitiveType,
-        });
-    if (!ok) {
-        NE_CORE_ERROR("Failed to create graphics pipeline");
-        return SDL_APP_FAILURE;
-    }
-
     auto commandBuffer = render->acquireCommandBuffer();
 
     for (auto &vertex : vertices) {
         vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);
     }
 
+    // setup init vertex buffer
     commandBuffer->uploadVertexBuffers(
         vertices.data(),
         static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
@@ -200,14 +160,92 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
     NE_INFO("Initialized window size: {}x{}", windowWidth, windowHeight);
     camera.setPerspective(45.0f, (float)windowWidth / (float)windowHeight, 0.1f, 100.0f);
     camera.setPosition({0.0f, 0.0f, 5.0f});
-    cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
-    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+    cameraData.model      = glm::mat4(1.0f);
+    cameraData.view       = camera.getViewMatrix();
+    cameraData.projection = camera.getProjectionMatrix();
 
+    // Set up the init buffer with the camera data
+    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+    commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
+    commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
     commandBuffer->submit();
+}
+
+SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
+{
+
+    *appstate = new SDLAppState{};
+
+    FileSystem::init();
+    Logger::init();
+    AssetManager::init();
+
+    // Create dialog window
+    dialogWindow = NeonEngine::DialogWindow::create();
+    if (!render->init()) {
+        NE_CORE_ERROR("Failed to initialize render context");
+        return SDL_APP_FAILURE;
+    }
+
+    imguiState.init(render->device, render->window);
+
+    EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
+
+    bool ok = render->createGraphicsPipeline(
+        GraphicsPipelineCreateInfo{
+            .shaderCreateInfo = {
+                .shaderName                = "Test.glsl",
+                .numVertexUniformBuffers   = 1,
+                .numFragmentUniformBuffers = 2,
+                .numSamplers               = 1,
+            },
+            .vertexBufferDescs = {
+                {
+                    0,
+                    sizeof(VertexEntry),
+                },
+            },
+            .vertexAttributes = {
+                {
+                    0,
+                    0,
+                    EVertexAttributeFormat::Float3,
+                    offsetof(VertexEntry, position),
+                },
+                {
+                    1,
+                    0,
+                    EVertexAttributeFormat::Float4,
+                    offsetof(VertexEntry, color),
+                },
+                {
+                    2,
+                    0,
+                    EVertexAttributeFormat::Float2,
+                    offsetof(VertexEntry, uv),
+                },
+                {
+                    3,
+                    0,
+                    EVertexAttributeFormat::Float3,
+                    offsetof(VertexEntry, normal),
+                },
+
+            },
+            .primitiveType = primitiveType,
+        });
+    if (!ok) {
+        NE_CORE_ERROR("Failed to create graphics pipeline");
+        return SDL_APP_FAILURE;
+    }
+
+
+    initShaderData();
 
     return SDL_APP_CONTINUE;
 }
 
+#pragma endregion
 
 
 // Function to upload model data to GPU
@@ -217,40 +255,45 @@ bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffe
         return false;
     }
 
-    // For simplicity, we'll just use the first mesh in the model
-    const Mesh &mesh = model->getMeshes()[0];
-
     // Convert Vertex to VertexEntry
     std::vector<VertexEntry> vertexEntries;
-    vertexEntries.reserve(mesh.vertices.size());
+    std::vector<uint32_t>    indexEntries;
+    vertexEntries.reserve(model->getMeshes()[0].vertices.size());
+    indexEntries.reserve(model->getMeshes()[0].indices.size()); // Assuming each mesh has a triangle list
 
-    for (const auto &vertex : mesh.vertices) {
-        VertexEntry entry;
-        entry.position = vertex.position;
-        entry.color    = vertex.color;
-        entry.uv       = vertex.texCoord;
-        vertexEntries.push_back(entry);
+    for (auto &mesh : model->getMeshes()) {
+        NE_CORE_INFO("Mesh name: {}", mesh.name);
+
+
+        for (const auto &vertex : mesh.vertices) {
+            VertexEntry entry;
+            entry.position = glm::vec4(vertex.position, 1.0f);
+            entry.color    = vertex.color;
+            entry.uv       = vertex.texCoord;
+            entry.normal   = vertex.normal; // Assuming normal is part of the Vertex struct
+            vertexEntries.push_back(entry);
+        }
+
+        indexEntries.insert(
+            indexEntries.end(),
+            mesh.indices.begin(),
+            mesh.indices.end());
     }
-
-    // Calculate transform - this is a simple model-to-world transform
-    glm::mat4 transform = model->getTransform();
-    for (auto &vertex : vertexEntries) {
-        vertex.position = transform * glm::vec4(vertex.position, 1.0f);
-    }
-
     // Upload vertices and indices using the command buffer directly
-    commandBuffer->uploadVertexBuffers(
+    commandBuffer->uploadBuffers(
         vertexEntries.data(),
-        static_cast<Uint32>(vertexEntries.size() * sizeof(VertexEntry)));
+        static_cast<Uint32>(vertexEntries.size() * sizeof(VertexEntry)),
+        indexEntries.data(),
+        static_cast<Uint32>(indexEntries.size() * sizeof(uint32_t)));
 
-    commandBuffer->uploadIndexBuffers(
-        mesh.indices.data(),
-        static_cast<Uint32>(mesh.indices.size() * sizeof(uint32_t)));
 
     return true;
 }
 
-bool imguiManipulateVertices()
+#pragma region ImGui Controls
+using cmbf_t = std::shared_ptr<CommandBuffer>;
+
+bool imcVertices(cmbf_t commandBuffer)
 {
     bool bVertexInputChanged = false;
     if (ImGui::CollapsingHeader("Vertex Manipulation")) {
@@ -277,7 +320,7 @@ bool imguiManipulateVertices()
 }
 
 
-void imguiManipulateSwapchain()
+void imcSwapChain(cmbf_t commandBuffer)
 {
     auto d = render->device;
     auto w = render->window;
@@ -305,7 +348,32 @@ void imguiManipulateSwapchain()
     }
 }
 
-bool imguiManipulateEditorCamera()
+
+void imcLight(cmbf_t commandBuffer)
+{
+    if (!ImGui::CollapsingHeader("Light Controls")) {
+        return;
+    }
+
+    bool bChanged = false;
+
+    // if (ImGui::DragFloat3("Light Position", glm::value_ptr(fragmentUniforms.lightPos), 0.01f, -100.0f, 100.0f)) {
+    //     bChanged = true;
+    // }
+    if (ImGui::DragFloat3("Light Direction", glm::value_ptr(fragmentUniforms.lightDirection), 0.01f, -100.0f, 100.0f)) {
+        bChanged = true;
+    }
+    // if (ImGui::ColorEdit4("Light Color", glm::value_ptr(fragmentUniforms.lightColor))) {
+    //     bChanged = true;
+    // }
+    if (bChanged) {
+        commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
+    }
+}
+
+
+
+bool imcEditorCamera(cmbf_t commandBuffer)
 {
     auto position = camera.position;
     auto rotation = camera.rotation;
@@ -332,7 +400,7 @@ bool imguiManipulateEditorCamera()
 }
 
 
-void imguiModelControls()
+void imcModel(cmbf_t commandBuffer)
 {
     if (!ImGui::CollapsingHeader("Model Controls")) {
         return;
@@ -374,23 +442,18 @@ void imguiModelControls()
     }
 
     if (ImGui::Button("Load Model")) {
-        auto commandBuffer = render->acquireCommandBuffer();
-        if (commandBuffer) {
-            std::shared_ptr<Model> model = assetManager.loadModel(modelPath, commandBuffer);
+        std::shared_ptr<Model> model = assetManager.loadModel(modelPath, commandBuffer);
 
-            if (model) {
-                currentModel = model;
-                useModel     = true;
+        if (model) {
+            currentModel = model;
+            useModel     = true;
 
-                // Upload model data
-                if (uploadModelToGPU(model, commandBuffer)) {
-                    NE_CORE_INFO("Model loaded and uploaded successfully");
-                }
-                else {
-                    NE_CORE_ERROR("Failed to upload model data");
-                }
-
-                commandBuffer->submit();
+            // Upload model data
+            if (uploadModelToGPU(model, commandBuffer)) {
+                NE_CORE_INFO("Model loaded and uploaded successfully");
+            }
+            else {
+                NE_CORE_ERROR("Failed to upload model data");
             }
         }
     }
@@ -398,14 +461,10 @@ void imguiModelControls()
     ImGui::SameLine();
 
     if (ImGui::Button("Use Quad")) {
-        useModel           = false;
-        auto commandBuffer = render->acquireCommandBuffer();
-        if (commandBuffer) {
-            commandBuffer->uploadVertexBuffers(
-                vertices.data(),
-                static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
-            commandBuffer->submit();
-        }
+        useModel = false;
+        commandBuffer->uploadVertexBuffers(
+            vertices.data(),
+            static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
     }
 
     // Model transform controls
@@ -441,16 +500,14 @@ void imguiModelControls()
 
             currentModel->setTransform(transform);
 
-            auto commandBuffer = render->acquireCommandBuffer();
-            if (commandBuffer) {
-                uploadModelToGPU(currentModel, commandBuffer);
-                commandBuffer->submit();
-            }
+            cameraData.model = transform;
+            commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
         }
     }
 }
 
 
+#pragma endregion
 
 SDL_AppResult AppIterate(void *appState)
 {
@@ -492,12 +549,12 @@ SDL_AppResult AppIterate(void *appState)
     }
     auto sdlCommandBuffer = static_cast<GPUCommandBuffer_SDL *>(commandBuffer.get());
 
-    Uint32          swapChianTextureW, swapChainTextureHeight;
+    Uint32          swapChainTextureWidth, swapChainTextureHeight;
     SDL_GPUTexture *swapchainTexture = nullptr;
     if (!SDL_WaitAndAcquireGPUSwapchainTexture((sdlCommandBuffer->commandBuffer),
                                                render->window,
                                                &swapchainTexture,
-                                               &swapChianTextureW,
+                                               &swapChainTextureWidth,
                                                &swapChainTextureHeight)) {
         NE_CORE_ERROR("Failed to acquire swapchain texture {}", SDL_GetError());
         return SDL_APP_FAILURE;
@@ -543,11 +600,13 @@ SDL_AppResult AppIterate(void *appState)
             ImGui::EndCombo();
         }
 
-        bVertexInputChanged = imguiManipulateVertices();
-        bCameraChanged      = imguiManipulateEditorCamera();
+        bVertexInputChanged = imcVertices(commandBuffer);
+        bCameraChanged      = imcEditorCamera(commandBuffer);
 
-        imguiModelControls();
-        imguiManipulateSwapchain();
+
+        imcModel(commandBuffer);
+        imcSwapChain(commandBuffer);
+        imcLight(commandBuffer);
     }
     ImGui::End();
     bImguiMinimized = imguiState.render(sdlCommandBuffer->commandBuffer);
@@ -565,9 +624,10 @@ SDL_AppResult AppIterate(void *appState)
 
 
     // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
-    cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
+    cameraData.view       = camera.getViewMatrix();
+    cameraData.projection = camera.getProjectionMatrix();
     commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-
+    commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
 
     if (bVertexInputChanged) {
         // TODO: move to render pipeline
@@ -617,7 +677,7 @@ SDL_AppResult AppIterate(void *appState)
         SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
 
         // Determine which texture to use
-        SDL_GPUTexture *textureToUse = faceTexture;
+        SDL_GPUTexture *textureToUse = whiteTexture;
         if (useModel && currentModel && !currentModel->getMeshes().empty()) {
             const auto &firstMesh = currentModel->getMeshes()[0];
             if (firstMesh.diffuseTexture) {
@@ -777,11 +837,9 @@ int main()
         SDL_Event evt;
         SDL_PollEvent(&evt);
         if (result = AppEvent(*appState, &evt); result != SDL_APP_CONTINUE) {
-            NE_CORE_ERROR("SDL App exited with error: {}", (int)result);
             break;
         }
         if (result = AppIterate(nullptr); result != SDL_APP_CONTINUE) {
-            NE_CORE_ERROR("SDL App exited with error: {}", (int)result);
             break;
         }
     }

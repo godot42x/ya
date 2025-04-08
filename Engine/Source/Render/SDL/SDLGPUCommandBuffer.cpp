@@ -145,7 +145,13 @@ void GPUCommandBuffer_SDL::uploadTexture(SDL_GPUTexture *texture, void *data, ui
 
 void GPUCommandBuffer_SDL::setVertexUniforms(uint32_t slot_index, void *data, uint32_t dataSize)
 {
-    SDL_PushGPUVertexUniformData(commandBuffer, 0, data, dataSize);
+    SDL_PushGPUVertexUniformData(commandBuffer, slot_index, data, dataSize);
+}
+
+
+void GPUCommandBuffer_SDL::setFragmentUniforms(uint32_t slot_index, void *data, uint32_t dataSize)
+{
+    SDL_PushGPUFragmentUniformData(commandBuffer, slot_index, data, dataSize);
 }
 
 

@@ -40,7 +40,7 @@ GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
             .num_samplers         = 0,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
-            .num_uniform_buffers  = shaderCI.numUniformBuffers,
+            .num_uniform_buffers  = shaderCI.numVertexUniformBuffers,
         };
         SDL_GPUShaderCreateInfo fragmentCreateInfo = {
             .code_size            = codes[EShaderStage::Fragment].size() * sizeof(uint32_t) / sizeof(uint8_t),
@@ -51,7 +51,7 @@ GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
             .num_samplers         = shaderCI.numSamplers,
             .num_storage_textures = 0,
             .num_storage_buffers  = 0,
-            .num_uniform_buffers  = 0,
+            .num_uniform_buffers  = shaderCI.numFragmentUniformBuffers,
         };
 
         vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
@@ -105,7 +105,7 @@ bool GPURender_SDL::init()
     const char *driver = SDL_GetGPUDeviceDriver(device);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Choosen GPU Driver: %s", driver);
 
-    window = SDL_CreateWindow("Neon", 800, 600, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow("Neon", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create window: %s", SDL_GetError());
         return false;
@@ -228,16 +228,32 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
             .num_vertex_attributes      = static_cast<Uint32>(vertexAttributes.size()),
         },
         .rasterizer_state = SDL_GPURasterizerState{
-            .fill_mode = SDL_GPU_FILLMODE_FILL,
-            .cull_mode = SDL_GPU_CULLMODE_NONE, // cull back/front face
+            .fill_mode  = SDL_GPU_FILLMODE_FILL,
+            .cull_mode  = SDL_GPU_CULLMODE_NONE, // cull back/front face
+            .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
         },
+
         .multisample_state = SDL_GPUMultisampleState{
             .sample_count = SDL_GPU_SAMPLECOUNT_1,
             .enable_mask  = false,
         },
+        // SDL_GPUCompareOp compare_op;                /**< The comparison operator used for depth testing. */
+        // SDL_GPUStencilOpState back_stencil_state;   /**< The stencil op state for back-facing triangles. */
+        // SDL_GPUStencilOpState front_stencil_state;  /**< The stencil op state for front-facing triangles. */
+        // Uint8 compare_mask;                         /**< Selects the bits of the stencil values participating in the stencil test. */
+        // Uint8 write_mask;                           /**< Selects the bits of the stencil values updated by the stencil test. */
+        // bool enable_depth_test;                 /**< true enables the depth test. */
+        // bool enable_depth_write;                /**< true enables depth writes. Depth writes are always disabled when enable_depth_test is false. */
+        // bool enable_stencil_test;               /**< true enables the stencil test. */
+        .depth_stencil_state = SDL_GPUDepthStencilState{
+            .compare_op        = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL,
+            .enable_depth_test = true,
+
+        },
         .target_info = SDL_GPUGraphicsPipelineTargetInfo{
             .color_target_descriptions = &colorTargetDesc,
             .num_color_targets         = 1,
+            .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
             .has_depth_stencil_target  = false,
         },
 

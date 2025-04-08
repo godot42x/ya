@@ -42,7 +42,6 @@ class Model
     Model()  = default;
     ~Model() = default;
 
-    bool loadFromOBJ(const std::string &filePath, std::shared_ptr<CommandBuffer> commandBuffer);
     void draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture);
 
     const std::vector<Mesh> &getMeshes() const { return meshes; }

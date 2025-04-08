@@ -32,6 +32,7 @@ struct CommandBuffer
     virtual void uploadIndexBuffers(const void *indexData, uint32_t indexDataSize)          = 0;
     virtual void uploadTexture(SDL_GPUTexture *texture, void *data, uint32_t w, uint32_t h) = 0;
     virtual void setVertexUniforms(uint32_t slot_index, void *data, uint32_t dataSize)      = 0;
+    virtual void setFragmentUniforms(uint32_t slot_index, void *data, uint32_t dataSize)    = 0;
 
     // Texture creation operations
     virtual std::shared_ptr<Texture> createTexture(std::string_view filepath)                                                               = 0;
