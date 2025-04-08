@@ -101,8 +101,8 @@ std::vector<VertexEntry> vertices = {
 
 // quad indices
 std::vector<IndexEntry> indices = {
-    {0, 1, 3},
-    {0, 3, 2},
+    {0, 3, 1}, // First triangle: top-left, bottom-right, top-right (CCW)
+    {0, 2, 3}, // Second triangle: top-left, bottom-left, bottom-right (CCW)
 };
 
 CameraData            cameraData;
@@ -408,8 +408,7 @@ void imcModel(cmbf_t commandBuffer)
 
     // TODO: why copilot think this is wrong? must a char[256] with '\0' at the end?
     static std::string modelPath(256, '\0');
-    ImGui::InputText("Model Path", modelPath.data(), sizeof(modelPath));
-
+    ImGui::InputText("Model Path", modelPath.data(), modelPath.size());
 
     if (ImGui::Button("Browse..."))
     {
@@ -846,6 +845,6 @@ int main()
 
     AppQuit(*appState, result);
 
-    return result;
+    return result == SDL_APP_SUCCESS ? 0 : result;
 }
 #pragma endregion

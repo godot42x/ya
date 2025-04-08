@@ -200,6 +200,11 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
     // this format is the final screen surface's format
     // if you want other format, create texture yourself
     SDL_GPUTextureFormat format = SDL_GetGPUSwapchainTextureFormat(device, window);
+    if (format == SDL_GPU_TEXTUREFORMAT_INVALID) {
+        NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
+        return false;
+    }
+    NE_CORE_INFO("curent gpu texture format: {}", (int)format);
 
     SDL_GPUColorTargetDescription colorTargetDesc{
         .format = format,
@@ -229,7 +234,7 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
         },
         .rasterizer_state = SDL_GPURasterizerState{
             .fill_mode  = SDL_GPU_FILLMODE_FILL,
-            .cull_mode  = SDL_GPU_CULLMODE_NONE, // cull back/front face
+            .cull_mode  = SDL_GPU_CULLMODE_BACK, // cull back/front face
             .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
         },
 
@@ -237,23 +242,30 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
             .sample_count = SDL_GPU_SAMPLECOUNT_1,
             .enable_mask  = false,
         },
-        // SDL_GPUCompareOp compare_op;                /**< The comparison operator used for depth testing. */
-        // SDL_GPUStencilOpState back_stencil_state;   /**< The stencil op state for back-facing triangles. */
-        // SDL_GPUStencilOpState front_stencil_state;  /**< The stencil op state for front-facing triangles. */
-        // Uint8 compare_mask;                         /**< Selects the bits of the stencil values participating in the stencil test. */
-        // Uint8 write_mask;                           /**< Selects the bits of the stencil values updated by the stencil test. */
-        // bool enable_depth_test;                 /**< true enables the depth test. */
-        // bool enable_depth_write;                /**< true enables depth writes. Depth writes are always disabled when enable_depth_test is false. */
-        // bool enable_stencil_test;               /**< true enables the stencil test. */
         .depth_stencil_state = SDL_GPUDepthStencilState{
-            .compare_op        = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL,
-            .enable_depth_test = true,
-
+            .compare_op = SDL_GPU_COMPAREOP_GREATER, // -z forward
+            // .back_stencil_state = SDL_GPUStencilOpState{
+            //     .fail_op       = SDL_GPU_STENCILOP_ZERO,
+            //     .pass_op       = SDL_GPU_STENCILOP_KEEP,
+            //     .depth_fail_op = SDL_GPU_STENCILOP_ZERO,
+            //     .compare_op    = SDL_GPU_COMPAREOP_NEVER,
+            // },
+            // .front_stencil_state = SDL_GPUStencilOpState{
+            //     .fail_op       = SDL_GPU_STENCILOP_KEEP,
+            //     .pass_op       = SDL_GPU_STENCILOP_KEEP,
+            //     .depth_fail_op = SDL_GPU_STENCILOP_KEEP,
+            //     .compare_op    = SDL_GPU_COMPAREOP_LESS,
+            // },
+            // .compare_mask        = 0xFF,
+            // .write_mask          = 0xFF,
+            .enable_depth_test   = true,
+            .enable_depth_write  = true,
+            .enable_stencil_test = false,
         },
         .target_info = SDL_GPUGraphicsPipelineTargetInfo{
             .color_target_descriptions = &colorTargetDesc,
             .num_color_targets         = 1,
-            .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM,
+            .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT,
             .has_depth_stencil_target  = false,
         },
 
@@ -270,6 +282,10 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
     }
 
     pipeline = SDL_CreateGPUGraphicsPipeline(device, &sdlGPUCreateInfo);
+    if (!pipeline) {
+        NE_CORE_ERROR("Failed to create graphics pipeline: {}", SDL_GetError());
+        return false;
+    }
 
     // create global big size buffer for batch draw call
     {
