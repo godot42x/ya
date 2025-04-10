@@ -247,8 +247,10 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
 }
 
 
-void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData)
+ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData)
 {
+    ShaderReflection::ShaderResources result;
+    result.stage = stage;
 
     std::vector<uint32_t>        spirv_ir(spirvData.begin(), spirvData.end());
     spirv_cross::Compiler        compiler(spirv_ir);
@@ -258,6 +260,7 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>
     NE_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
     NE_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
 
+    // Process uniform buffers
     NE_CORE_TRACE("Uniform buffers:");
     for (const auto &resource : resources.uniform_buffers)
     {
@@ -265,14 +268,101 @@ void GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>
         uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
         uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
         int         member_count = buffer_type.member_types.size();
+        uint32_t    set          = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
 
         NE_CORE_TRACE("  {0}", resource.name);
         NE_CORE_TRACE("\tSize = {0}", bufferSize);
         NE_CORE_TRACE("\tBinding = {0}", binding);
+        NE_CORE_TRACE("\tSet = {0}", set);
         NE_CORE_TRACE("\tMembers = {0}", member_count);
-    }
-}
 
+        // Create uniform buffer object
+        ShaderReflection::UniformBuffer uniformBuffer;
+        uniformBuffer.name    = resource.name;
+        uniformBuffer.binding = binding;
+        uniformBuffer.size    = bufferSize;
+
+        // Process each member of the uniform buffer
+        for (int i = 0; i < member_count; i++)
+        {
+            const std::string memberName   = compiler.get_member_name(buffer_type.self, i);
+            const auto       &memberType   = compiler.get_type(buffer_type.member_types[i]);
+            uint32_t          memberOffset = compiler.type_struct_member_offset(buffer_type, i);
+            uint32_t          memberSize   = compiler.get_declared_struct_member_size(buffer_type, i);
+
+            ShaderReflection::UniformBufferMember member;
+            member.name   = memberName;
+            member.offset = memberOffset;
+            member.size   = memberSize;
+
+            // Determine type
+            if (memberType.basetype == spirv_cross::SPIRType::Float)
+            {
+                if (memberType.vecsize == 1 && memberType.columns == 1)
+                    member.type = ShaderReflection::DataType::Float;
+                else if (memberType.vecsize == 2 && memberType.columns == 1)
+                    member.type = ShaderReflection::DataType::Vec2;
+                else if (memberType.vecsize == 3 && memberType.columns == 1)
+                    member.type = ShaderReflection::DataType::Vec3;
+                else if (memberType.vecsize == 4 && memberType.columns == 1)
+                    member.type = ShaderReflection::DataType::Vec4;
+                else if (memberType.vecsize == 3 && memberType.columns == 3)
+                    member.type = ShaderReflection::DataType::Mat3;
+                else if (memberType.vecsize == 4 && memberType.columns == 4)
+                    member.type = ShaderReflection::DataType::Mat4;
+                else
+                    member.type = ShaderReflection::DataType::Unknown;
+            }
+            else if (memberType.basetype == spirv_cross::SPIRType::Int)
+            {
+                member.type = ShaderReflection::DataType::Int;
+            }
+            else if (memberType.basetype == spirv_cross::SPIRType::UInt)
+            {
+                member.type = ShaderReflection::DataType::UInt;
+            }
+            else if (memberType.basetype == spirv_cross::SPIRType::Boolean)
+            {
+                member.type = ShaderReflection::DataType::Bool;
+            }
+            else
+            {
+                member.type = ShaderReflection::DataType::Unknown;
+            }
+
+            NE_CORE_TRACE("\t\tMember {0} (offset: {1}, size: {2})", memberName, memberOffset, memberSize);
+            uniformBuffer.members.push_back(member);
+        }
+
+        result.uniformBuffers.push_back(uniformBuffer);
+    }
+
+    // Process sampled images
+    for (const auto &resource : resources.sampled_images)
+    {
+        uint32_t    binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+        uint32_t    set     = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
+        const auto &type    = compiler.get_type(resource.type_id);
+
+        ShaderReflection::Resource sampledImage;
+        sampledImage.name    = resource.name;
+        sampledImage.binding = binding;
+        sampledImage.set     = set;
+
+        // Determine sampler type
+        if (type.image.dim == spv::Dim2D)
+            sampledImage.type = ShaderReflection::DataType::Sampler2D;
+        else if (type.image.dim == spv::DimCube)
+            sampledImage.type = ShaderReflection::DataType::SamplerCube;
+        else
+            sampledImage.type = ShaderReflection::DataType::Unknown;
+
+        NE_CORE_TRACE("Sampled Image: {0} (binding: {1}, set: {2})", resource.name, binding, set);
+        result.sampledImages.push_back(sampledImage);
+    }
+
+    return result;
+}
 
 
 std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
@@ -324,10 +414,10 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
         }
     }
 
-
+    // Record the processing path for reflection logging
+    tempProcessingPath = fullPath;
 
     // Compile
-    // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> ret;
     stage2spirv_t ret;
     {
         shaderc::Compiler       compiler;
@@ -342,28 +432,7 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
 
         for (auto &&[stage, source] : shaderSources)
         {
-            // auto shader_file_path = resolvedPath;
-            // auto cached_path      = GetCachePath(true, stage);
-
-            // cachedStorage.readStorageFile(cached_path.string());
-
-            // load binary spirv caches
-            // if (!bSourceChanged) {
-            //     std::ifstream f(cached_path, std::ios::in | std::ios::binary);
-            //     NE_CORE_ASSERT(f.is_open(), "Cached spirv file not found when source do not changed!!");
-            //     f.seekg(0, std::ios::end);
-            //     auto size = f.tellg();
-            //     f.seekg(0, std::ios::beg);
-            //     auto &data = shader_data[stage];
-            //     data.resize(size / sizeof(uint32_t));
-            //     f.read((char *)data.data(), size);
-            //     f.close();
-
-            //     continue;
-            // }
-
             // recompile
-            // options
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
                 EShaderStage::toShadercType(stage),
@@ -379,23 +448,17 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
 
             // store compile result into memory
             ret[stage] = spirv_ir_t(result.begin(), result.end());
-
-            // and into cached file
-            // std::filesystem::remove(cached_path);
-            //  std::ofstream ofs(cached_path, std::ios::out | std::ios::binary | std::ios::trunc);
-            //  if (ofs.is_open()) {
-            //      auto &data = shader_data[stage];
-            //      ofs.write((char *)data.data(), data.size() * sizeof(uint32_t));
-            //      ofs.flush();
-            //      ofs.close();
-            //  }
         }
     }
 
-    for (auto &&[stage, data] : ret)
-    {
-        reflect(stage, data);
-    }
+    // Perform reflection after compilation, but we don't need to store the results
+    // here. Callers can use the reflect method directly on the SPIR-V data if needed.
+    // for (auto &&[stage, data] : ret)
+    // {
+    //     ShaderReflection::ShaderResources resources = reflect(stage, data);
+    //     NE_CORE_INFO("Reflected shader stage: {} with {} uniform buffers and {} sampled images",
+    //         std::to_string(stage), resources.uniformBuffers.size(), resources.sampledImages.size());
+    // }
 
     return {std::move(ret)};
 }

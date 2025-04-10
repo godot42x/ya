@@ -9,8 +9,7 @@
 
 // shaders is high related with pipeline, we split it temporarily
 // TODO: export shader info -> use reflection do this
-std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>>
-GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
+std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
 {
     SDL_GPUShader *vertexShader   = nullptr;
     SDL_GPUShader *fragmentShader = nullptr;
@@ -27,8 +26,14 @@ GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
             NE_CORE_ERROR("Failed to process shader: {}", processor->tempProcessingPath);
             NE_CORE_ASSERT(false, "Failed to process shader: {}", processor->tempProcessingPath);
         }
-
         ShaderScriptProcessor::stage2spirv_t &codes = ret.value();
+
+
+        std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> shaderResources;
+        for (const auto &[stage, code] : codes) {
+            ShaderReflection::ShaderResources res = processor->reflect(stage, code);
+            shaderResources[stage]                = std::move(res);
+        }
 
 
         SDL_GPUShaderCreateInfo vertexCrateInfo = {
@@ -37,10 +42,10 @@ GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_VERTEX,
-            .num_samplers         = 0,
-            .num_storage_textures = 0,
-            .num_storage_buffers  = 0,
-            .num_uniform_buffers  = shaderCI.numVertexUniformBuffers,
+            .num_samplers         = (Uint32)shaderResources[EShaderStage::Vertex].sampledImages.size(),
+            .num_storage_textures = 0, //(Uint32)shaderResources[EShaderStage::Vertex].storageImages.size(),
+            .num_storage_buffers  = 0, //(Uint32)shaderResources[EShaderStage::Vertex].storageBuffers.size(),
+            .num_uniform_buffers  = (Uint32)shaderResources[EShaderStage::Vertex].uniformBuffers.size(),
         };
         SDL_GPUShaderCreateInfo fragmentCreateInfo = {
             .code_size            = codes[EShaderStage::Fragment].size() * sizeof(uint32_t) / sizeof(uint8_t),
@@ -48,10 +53,10 @@ GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers         = shaderCI.numSamplers,
-            .num_storage_textures = 0,
-            .num_storage_buffers  = 0,
-            .num_uniform_buffers  = shaderCI.numFragmentUniformBuffers,
+            .num_samplers         = (Uint32)shaderResources[EShaderStage::Fragment].sampledImages.size(),
+            .num_storage_textures = 0, //(Uint32)shaderResources[EShaderStage::Fragment].storageImages.size(),
+            .num_storage_buffers  = 0, //(Uint32)shaderResources[EShaderStage::Fragment].storageBuffers.size(),
+            .num_uniform_buffers  = (Uint32)shaderResources[EShaderStage::Fragment].uniformBuffers.size(),
         };
 
         vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
@@ -103,7 +108,7 @@ bool GPURender_SDL::init()
     }
 
     const char *driver = SDL_GetGPUDeviceDriver(device);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Choosen GPU Driver: %s", driver);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Chosen GPU Driver: %s", driver);
 
     window = SDL_CreateWindow("Neon", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
     if (!window) {
@@ -204,7 +209,7 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
         NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
         return false;
     }
-    NE_CORE_INFO("curent gpu texture format: {}", (int)format);
+    NE_CORE_INFO("current gpu texture format: {}", (int)format);
 
     SDL_GPUColorTargetDescription colorTargetDesc{
         .format = format,
