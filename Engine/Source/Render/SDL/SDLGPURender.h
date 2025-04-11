@@ -19,20 +19,31 @@
 
 struct GPURender_SDL : public Render
 {
-    SDL_GPUDevice                                                         *device;
-    SDL_Window                                                            *window;
+    SDL_GPUDevice *device;
+    SDL_Window    *window;
+
+    // Pipeline management
+    enum class PipelineType
+    {
+        Model3D = 0,
+        Sprite2D,
+        Count
+    };
+
+    // Legacy support - points to the current active pipeline
     SDL_GPUGraphicsPipeline                                               *pipeline;
     SDL_GPUBuffer                                                         *vertexBuffer;
     SDL_GPUBuffer                                                         *indexBuffer;
     std::unordered_map<ESamplerType, SDL_GPUSampler *>                     samplers;
     std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> cachedShaderResources;
 
-    uint32_t maxVertexBufferElemSize = 10000;
-    uint32_t maxIndexBufferElemSize  = 10000;
+    uint32_t maxVertexBufferElemSize = 1000 * 1024 * 1024; // 1MB
+    uint32_t maxIndexBufferElemSize  = 1000 * 1024 * 1024; // 1MB
     uint32_t vertexInputSize         = 0;
 
     uint32_t getVertexBufferSize() const { return maxVertexBufferElemSize * vertexInputSize; }
     uint32_t getIndexBufferSize() const { return maxIndexBufferElemSize * sizeof(uint32_t); }
+
 
 
     bool init(const InitParams &params) override;

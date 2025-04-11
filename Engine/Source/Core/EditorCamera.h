@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Camera.h"
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -11,21 +12,6 @@
 #include "Log.h"
 
 
-struct Camera
-{
-    glm::mat4 projectionMatrix;
-    glm::mat4 viewMatrix;
-    glm::mat4 viewProjectionMatrix;
-
-    const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
-
-    glm::mat4 getViewMatrix() const { return viewMatrix; }
-    glm::mat4 getProjectionMatrix() const { return projectionMatrix; }
-
-  protected:
-    Camera()  = default;
-    ~Camera() = default;
-};
 
 struct EditorCamera : public Camera
 {
