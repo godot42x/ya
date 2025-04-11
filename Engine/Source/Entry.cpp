@@ -34,7 +34,9 @@ Neon::ImguiState imguiState;
 EditorCamera     camera;
 InputManager     inputManager;
 GPURender_SDL   *render = new GPURender_SDL();
+static bool      bVsync = true;
 
+std::queue<std::function<void()>> asyncUpdateTask;
 
 
 // Current loaded model
@@ -182,7 +184,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
 
     // Create dialog window
     dialogWindow = NeonEngine::DialogWindow::create();
-    if (!render->init()) {
+    if (!render->init({.bVsync = bVsync})) {
         NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
     }
@@ -503,6 +505,13 @@ SDL_AppResult AppIterate(void *appState)
         SDL_Delay(100);
         return SDL_APP_CONTINUE;
     }
+
+    while (!asyncUpdateTask.empty()) {
+        auto task = asyncUpdateTask.front();
+        asyncUpdateTask.pop();
+        task();
+    }
+
 #pragma endregion
 
 #pragma region Render
@@ -544,6 +553,15 @@ SDL_AppResult AppIterate(void *appState)
         // Display FPS at the top of the debug window
         ImGui::Text("FPS: %.1f (%.3f ms/frame)", avgFps, 1000.0f / (avgFps > 0 ? avgFps : 1.0f));
         ImGui::Separator();
+        if (ImGui::Checkbox("Vsync", &bVsync)) {
+
+            asyncUpdateTask.emplace([bVsync = bVsync]() {
+                SDL_SetGPUSwapchainParameters(render->device,
+                                              render->window,
+                                              SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                              bVsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE);
+            });
+        }
 
         ImGui::DragFloat4("Clear Color", glm::value_ptr(clearColor), 0.01f, 0.0f, 1.0f);
 

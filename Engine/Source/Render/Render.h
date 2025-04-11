@@ -119,7 +119,11 @@ struct Render
     {
     };
 
-    virtual bool init()                                                         = 0;
+    struct InitParams
+    {
+        bool bVsync = true;
+    };
+    virtual bool init(const InitParams &params)                                 = 0;
     virtual void clean()                                                        = 0;
     virtual bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info) = 0;
 

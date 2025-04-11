@@ -101,7 +101,7 @@ std::shared_ptr<CommandBuffer> GPURender_SDL::acquireCommandBuffer(std::source_l
 }
 
 
-bool GPURender_SDL::init()
+bool GPURender_SDL::init(const InitParams &params)
 {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
@@ -137,6 +137,11 @@ bool GPURender_SDL::init()
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to claim window: %s", SDL_GetError());
         return false;
     }
+
+    SDL_SetGPUSwapchainParameters(device,
+                                  window,
+                                  SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                  params.bVsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE);
 
     createSamplers();
     return true;

@@ -33,7 +33,8 @@ struct GPURender_SDL : public Render
     uint32_t getVertexBufferSize() const { return maxVertexBufferElemSize * vertexInputSize; }
     uint32_t getIndexBufferSize() const { return maxIndexBufferElemSize * sizeof(uint32_t); }
 
-    bool init() override;
+
+    bool init(const InitParams &params) override;
     void clean() override;
     bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info) override;
 
@@ -51,7 +52,7 @@ struct GPURender_SDL : public Render
         std::optional<SDL_GPUShader *>                                    vertexShader;
         std::optional<SDL_GPUShader *>                                    fragmentShader;
         std::unordered_map<EShaderStage::T, spirv_cross::ShaderResources> shaderResources;
-        
+
         // Added reflection data using our custom structure
         ShaderReflection::ShaderResources vertexReflection;
         ShaderReflection::ShaderResources fragmentReflection;
