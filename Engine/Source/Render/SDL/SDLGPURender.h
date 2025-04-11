@@ -19,12 +19,13 @@
 
 struct GPURender_SDL : public Render
 {
-    SDL_GPUDevice                                     *device;
-    SDL_Window                                        *window;
-    SDL_GPUGraphicsPipeline                           *pipeline;
-    SDL_GPUBuffer                                     *vertexBuffer;
-    SDL_GPUBuffer                                     *indexBuffer;
-    std::unordered_map<ESamplerType, SDL_GPUSampler *> samplers;
+    SDL_GPUDevice                                                         *device;
+    SDL_Window                                                            *window;
+    SDL_GPUGraphicsPipeline                                               *pipeline;
+    SDL_GPUBuffer                                                         *vertexBuffer;
+    SDL_GPUBuffer                                                         *indexBuffer;
+    std::unordered_map<ESamplerType, SDL_GPUSampler *>                     samplers;
+    std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> cachedShaderResources;
 
     uint32_t maxVertexBufferElemSize = 10000;
     uint32_t maxIndexBufferElemSize  = 10000;
@@ -49,20 +50,17 @@ struct GPURender_SDL : public Render
 
     struct ShaderCreateResult
     {
-        std::optional<SDL_GPUShader *>                                    vertexShader;
-        std::optional<SDL_GPUShader *>                                    fragmentShader;
-        std::unordered_map<EShaderStage::T, spirv_cross::ShaderResources> shaderResources;
-
-        // Added reflection data using our custom structure
-        ShaderReflection::ShaderResources vertexReflection;
-        ShaderReflection::ShaderResources fragmentReflection;
+        std::optional<SDL_GPUShader *>                                         vertexShader;
+        std::optional<SDL_GPUShader *>                                         fragmentShader;
+        std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> shaderResources;
     };
+
+
 
     ShaderCreateResult createShaders(const ShaderCreateInfo &shaderCI);
 
     std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) override;
 
-    void fillDefaultIndices(std::shared_ptr<CommandBuffer> commandBuffer, EGraphicPipeLinePrimitiveType primitiveType);
 
   private:
     void createSamplers();

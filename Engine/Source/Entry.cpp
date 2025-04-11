@@ -60,6 +60,7 @@ struct IndexEntry
     uint32_t a, b, c;
 };
 
+// NOTICE: unifrom data member vec3 need to be aligned by vec4 bytes
 struct CameraData
 {
     glm::mat4 model;
@@ -69,9 +70,10 @@ struct CameraData
 
 struct FragmentConstUniforms
 {
-    // glm::vec4 lightPos;
-    // glm::vec4 lightColor;
-    glm::vec4 lightDirection;
+    glm::vec4 lightDir         = {0.0, 0.0, -1.0, 1.0};
+    glm::vec4 lightColor       = {1.0, 1.0, 1.0, 1.0};
+    float     ambientIntensity = 1.f;
+    float     specularPower    = 1.f;
 };
 
 std::vector<VertexEntry> vertices = {
@@ -103,16 +105,12 @@ std::vector<VertexEntry> vertices = {
 
 // quad indices
 std::vector<IndexEntry> indices = {
-    {0, 3, 1}, // First triangle: top-left, bottom-right, top-right (CCW)
-    {0, 2, 3}, // Second triangle: top-left, bottom-left, bottom-right (CCW)
+    {0, 2, 3}, // First triangle: top-left, bottom-right, top-right (CCW)
+    {0, 3, 1}, // Second triangle: top-left, bottom-left, bottom-right (CCW)
 };
 
 CameraData            cameraData;
-FragmentConstUniforms fragmentUniforms = {
-    // .lightPos       = {0.0f, 0.0f, 5.0f, 1.0f},
-    // .lightColor     = {1.0f, 1.0f, 1.0f, 1.0f},
-    .lightDirection = {0.0f, 0.0f, -1.0f, 1.0f},
-};
+FragmentConstUniforms fragmentUniforms;
 
 glm::mat4 quadTransform = glm::mat4(1.0f);
 
@@ -134,9 +132,11 @@ void initShaderData()
     }
 
     // setup init vertex buffer
-    commandBuffer->uploadVertexBuffers(
+    commandBuffer->uploadBuffers(
         vertices.data(),
-        static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
+        static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
+        indices.data(),
+        static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
 
     // Load textures using the new Texture abstraction
     std::shared_ptr<Texture> faceTextureObj = Texture::Create("Engine/Content/TestTextures/face.png", commandBuffer);
@@ -167,9 +167,9 @@ void initShaderData()
     cameraData.projection = camera.getProjectionMatrix();
 
     // Set up the init buffer with the camera data
-    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-    commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
-    commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
+    // commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+    // commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
+    // commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
     commandBuffer->submit();
 }
 
@@ -196,7 +196,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
     bool ok = render->createGraphicsPipeline(
         GraphicsPipelineCreateInfo{
             .shaderCreateInfo = {
-                .shaderName = "Test.glsl",
+                .shaderName = "Basic.glsl",
             },
             .primitiveType = primitiveType,
         });
@@ -323,17 +323,21 @@ void imcLight(cmbf_t commandBuffer)
 
     bool bChanged = false;
 
-    // if (ImGui::DragFloat3("Light Position", glm::value_ptr(fragmentUniforms.lightPos), 0.01f, -100.0f, 100.0f)) {
-    //     bChanged = true;
-    // }
-    if (ImGui::DragFloat3("Light Direction", glm::value_ptr(fragmentUniforms.lightDirection), 0.01f, -100.0f, 100.0f)) {
+
+    if (ImGui::DragFloat3("Light Direction", glm::value_ptr(fragmentUniforms.lightDir), 0.03f, -90.0f, 90.0f)) {
         bChanged = true;
     }
-    // if (ImGui::ColorEdit4("Light Color", glm::value_ptr(fragmentUniforms.lightColor))) {
-    //     bChanged = true;
-    // }
+    if (ImGui::ColorEdit3("Light Color", glm::value_ptr(fragmentUniforms.lightColor))) {
+        bChanged = true;
+    }
+    if (ImGui::DragFloat("Ambient Intensity", &fragmentUniforms.ambientIntensity, 0.01f, 0.0f, 1.0f)) {
+        bChanged = true;
+    }
+    if (ImGui::DragFloat("Specular Power", &fragmentUniforms.specularPower, 0.001f, 0.0f, 1.0f)) {
+        bChanged = true;
+    }
     if (bChanged) {
-        commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
+        // commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
     }
 }
 
@@ -609,8 +613,11 @@ SDL_AppResult AppIterate(void *appState)
     // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
     cameraData.view       = camera.getViewMatrix();
     cameraData.projection = camera.getProjectionMatrix();
+
+    // dose all unifroms need to be update each frame?
     commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
     commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
+    commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
 
     if (bVertexInputChanged) {
         // TODO: move to render pipeline

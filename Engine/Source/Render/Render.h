@@ -91,6 +91,11 @@ struct GraphicsPipelineCreateInfo
     std::vector<VertexBufferDescription> vertexBufferDescs;
     std::vector<VertexAttribute>         vertexAttributes;
     EGraphicPipeLinePrimitiveType        primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
+    enum EFrontFaceType
+    {
+        ClockWise = 0,
+        CounterClockWise,
+    } frontFaceType = CounterClockWise;
 };
 
 #define STRINGIFY_IMPL(x) #x

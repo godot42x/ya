@@ -36,16 +36,8 @@ GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreat
             // Get shader resources from SPIR-V reflection using our new custom reflection
             ShaderReflection::ShaderResources reflectedResources = processor->reflect(stage, code);
 
-            // Store in appropriate stage
-            if (stage == EShaderStage::Vertex) {
-                result.vertexReflection = reflectedResources;
-            }
-            else if (stage == EShaderStage::Fragment) {
-                result.fragmentReflection = reflectedResources;
-            }
-
             // Also store the original SPIRV-Cross resources for backward compatibility
-            result.shaderResources[stage] = reflectedResources.spirvResources;
+            result.shaderResources[stage] = reflectedResources;
         }
 
         // Create shader create info for vertex shader
@@ -55,10 +47,10 @@ GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreat
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_VERTEX,
-            .num_samplers         = (Uint32)result.vertexReflection.sampledImages.size(),
+            .num_samplers         = (Uint32)result.shaderResources[EShaderStage::Vertex].sampledImages.size(),
             .num_storage_textures = 0, // We're not using storage images currently
             .num_storage_buffers  = 0, // We're not using storage buffers currently
-            .num_uniform_buffers  = (Uint32)result.vertexReflection.uniformBuffers.size(),
+            .num_uniform_buffers  = (Uint32)result.shaderResources[EShaderStage::Vertex].uniformBuffers.size(),
         };
 
         // Create shader create info for fragment shader
@@ -68,10 +60,18 @@ GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreat
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers         = (Uint32)result.fragmentReflection.sampledImages.size(),
+            .num_samplers         = (Uint32)result.shaderResources[EShaderStage::Fragment].sampledImages.size(),
             .num_storage_textures = 0, // We're not using storage images currently
             .num_storage_buffers  = 0, // We're not using storage buffers currently
-            .num_uniform_buffers  = (Uint32)result.fragmentReflection.uniformBuffers.size(),
+            .num_uniform_buffers  = [&]() -> Uint32 {
+                const auto vertexUniformCount   = result.shaderResources[EShaderStage::Vertex].uniformBuffers.size();
+                const auto fragmentUniformCount = result.shaderResources[EShaderStage::Fragment].uniformBuffers.size();
+                if (vertexUniformCount + fragmentUniformCount > 99999) {
+                    NE_CORE_ERROR("Combined uniform buffer count exceeds the maximum allowed: Vertex={}, Fragment={}", vertexUniformCount, fragmentUniformCount);
+                    NE_CORE_ASSERT(false, "Uniform buffer count mismatch");
+                }
+                return static_cast<Uint32>(vertexUniformCount + fragmentUniformCount);
+            }(),
         };
 
         auto *vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
@@ -181,8 +181,9 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
     NE_ASSERT(result.vertexShader.has_value(), "Failed to create shader {}", SDL_GetError());
     NE_ASSERT(result.fragmentShader.has_value(), "Failed to create shader {}", SDL_GetError());
 
-    auto vertexShader   = result.vertexShader.value();
-    auto fragmentShader = result.fragmentShader.value();
+    auto vertexShader           = result.vertexShader.value();
+    auto fragmentShader         = result.fragmentShader.value();
+    this->cachedShaderResources = result.shaderResources;
 
     std::vector<SDL_GPUVertexBufferDescription> vertexBufferDescs;
     std::vector<SDL_GPUVertexAttribute>         vertexAttributes;
@@ -192,7 +193,7 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
         NE_CORE_INFO("Deriving vertex info from shader reflection");
 
         // Get the reflected shader resources for the vertex stage
-        const auto &vertexResources = result.vertexReflection;
+        const auto &vertexResources = result.shaderResources[EShaderStage::Vertex];
 
         // Initialize our vertex inputs based on the reflected data
         for (const auto &input : vertexResources.inputs) {
@@ -307,12 +308,15 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
             .vertex_attributes          = vertexAttributes.data(),
             .num_vertex_attributes      = static_cast<Uint32>(vertexAttributes.size()),
         },
+        // clang-format off
         .rasterizer_state = SDL_GPURasterizerState{
             .fill_mode  = SDL_GPU_FILLMODE_FILL,
             .cull_mode  = SDL_GPU_CULLMODE_BACK, // cull back/front face
-            .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+            .front_face = pipelineCI.frontFaceType == GraphicsPipelineCreateInfo::ClockWise ?
+                            SDL_GPU_FRONTFACE_CLOCKWISE :
+                           SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
         },
-
+        // clang-format on
         .multisample_state = SDL_GPUMultisampleState{
             .sample_count = SDL_GPU_SAMPLECOUNT_1,
             .enable_mask  = false,
@@ -343,7 +347,6 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
             .depth_stencil_format      = SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT,
             .has_depth_stencil_target  = false,
         },
-
     };
     switch (pipelineCI.primitiveType) {
     case EGraphicPipeLinePrimitiveType::TriangleList:
@@ -393,8 +396,6 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
     }
 
 
-    fillDefaultIndices(nullptr, pipelineCI.primitiveType);
-
     SDL_ReleaseGPUShader(device, vertexShader);
     SDL_ReleaseGPUShader(device, fragmentShader);
 
@@ -402,42 +403,6 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
     return pipeline != nullptr;
 }
 
-void GPURender_SDL::fillDefaultIndices(std::shared_ptr<CommandBuffer> commandBuffer, EGraphicPipeLinePrimitiveType primitiveType)
-{
-    std::vector<Uint32> indices(maxIndexBufferElemSize);
-
-    switch (primitiveType) {
-    case EGraphicPipeLinePrimitiveType::TriangleList:
-    {
-        // For triangle list, generate indices for quads (each quad is two triangles)
-        // Pattern: 0,1,3, 0,3,2 for each quad
-        // Calculate how many quads we can fit in our index buffer
-        size_t maxQuads = maxIndexBufferElemSize / 6;
-
-        for (uint32_t quad = 0; quad < maxQuads; ++quad) {
-            uint32_t baseVertex  = quad * 4; // Each quad has 4 vertices
-            uint32_t indexOffset = quad * 6; // Each quad has 6 indices
-
-            // First triangle (0,1,3)
-            indices[indexOffset]     = baseVertex;
-            indices[indexOffset + 1] = baseVertex + 1;
-            indices[indexOffset + 2] = baseVertex + 3;
-
-            // Second triangle (0,3,2)
-            indices[indexOffset + 3] = baseVertex;
-            indices[indexOffset + 4] = baseVertex + 3;
-            indices[indexOffset + 5] = baseVertex + 2;
-        }
-    } break;
-    default:
-        NE_CORE_ASSERT(false, "Unsupported primitive type for default indices: {}", int(primitiveType));
-        break;
-    }
-
-    auto cb = acquireCommandBuffer(std::source_location::current());
-    cb->uploadIndexBuffers(indices.data(), getIndexBufferSize());
-    cb->submit();
-}
 
 void GPURender_SDL::createSamplers()
 {

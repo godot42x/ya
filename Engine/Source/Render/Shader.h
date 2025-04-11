@@ -123,7 +123,7 @@ uint32_t                   getDataTypeSize(DataType type);
 namespace SPIRVHelper
 {
 extern SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type);
-extern uint32_t                   getAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
+extern uint32_t                   getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
 extern uint32_t                   getSpirvTypeSize(const spirv_cross::SPIRType &type);
 } // namespace SPIRVHelper
 

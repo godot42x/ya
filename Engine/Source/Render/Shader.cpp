@@ -185,85 +185,31 @@ uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type)
         break;
     }
 
+    // TODO: handled this
     // Handle alignment requirements for vec3 (which is actually 16 bytes in many GPU APIs)
     // This is a critical consideration when working with struct data in shaders
-    if (type.basetype == spirv_cross::SPIRType::Float && type.vecsize == 3 && type.columns == 1) {
-        // vec3 is typically padded to 16 bytes (4 floats) for alignment
-        return 16;
-    }
+    // if (type.basetype == spirv_cross::SPIRType::Float && type.vecsize == 3 && type.columns == 1) {
+    // vec3 is typically padded to 16 bytes (4 floats) for alignment
+    // return 16;
+    // }
 
     return size;
 }
 
 // Get the offset for a member in a struct with proper C++ alignment
-uint32_t getAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
+uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
 {
-    // Determine the alignment requirement based on C++ rules
+    // Determine the alignment requirement based on std140 layout rules
     uint32_t alignment = 4; // Default to 4 bytes for basic types
 
-    switch (type.basetype) {
-    case spirv_cross::SPIRType::Float:
-    case spirv_cross::SPIRType::Int:
-    case spirv_cross::SPIRType::UInt:
-        // Single scalar types
-        if (type.vecsize == 1 && type.columns == 1) {
-            alignment = 4; // float, int, uint are 4-byte aligned
-        }
-        // Vector types follow the rule: align to size of contained type times number of elements
-        // But round up to power of 2 for efficiency
-        else if (type.vecsize > 1) {
-            // vec2 is 8-byte aligned
-            if (type.vecsize == 2) {
-                alignment = 8;
-            }
-            // vec3 and vec4 are typically 16-byte aligned in GPU memory layouts
-            else {
-                alignment = 16;
-            }
-        }
-        // Matrix types are typically aligned to 16 bytes
-        if (type.columns > 1) {
-            alignment = 16;
-        }
-        break;
+    return (current_offset + alignment) % alignment == 0 ? current_offset : current_offset + alignment;
 
-    case spirv_cross::SPIRType::Double:
-        // Double types have 8-byte alignment
-        alignment = 8;
-        if (type.vecsize > 1 || type.columns > 1) {
-            alignment = 16; // Double vectors/matrices use 16-byte alignment
-        }
-        break;
 
-    case spirv_cross::SPIRType::Boolean:
-        // Booleans usually get 4-byte alignment in SPIR-V/GLSL
-        alignment = 4;
-        break;
-
-    case spirv_cross::SPIRType::Struct:
-        // Structs align to their most strictly aligned member
-        // For simplicity, we use 16-byte alignment for nested structs
-        alignment = 16;
-        break;
-
-    default:
-        // Default to 4 bytes for anything else
-        alignment = 4;
-        break;
-    }
-
-    // Apply alignment - round up to the next multiple of alignment
-    uint32_t aligned_offset = (current_offset + alignment - 1) & ~(alignment - 1);
-
-    // NE_CORE_TRACE("Aligning offset {} to {} (alignment={}) for type basetype={}, vecsize={}, columns={}",
-    //               current_offset,
-    //               aligned_offset,
-    //               alignment,
-    //               (int)type.basetype,
-    //               type.vecsize,
-    //               type.columns);
-
-    return aligned_offset;
+    // if ((current_offset + size) % alignment != 0) {
+    //     // Align to the next multiple of the alignment size
+    //     current_offset += (alignment - (current_offset % alignment));
+    // }
+    // return aligned_offset;
 }
 } // namespace SPIRVHelper
 
@@ -398,16 +344,17 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
 
     // Process stage inputs with alignment information
     NE_CORE_TRACE("Stage Inputs (with alignment information):");
-    uint32_t struct_offset = 0;
+    uint32_t   struct_offset      = 0;
+    const bool IS_CPP_STRUCT_PACK = true;
     for (const auto &input : spirvResources.stage_inputs) {
 
-        uint32_t    location = compiler.get_decoration(input.id, spv::DecorationLocation);
-        uint32_t    offset   = compiler.get_decoration(input.id, spv::DecorationOffset);
+        uint32_t location = compiler.get_decoration(input.id, spv::DecorationLocation);
+        uint32_t offset   = compiler.get_decoration(input.id, spv::DecorationOffset);
 
-        const auto &type     = compiler.get_type(input.type_id);
+        const auto &type = compiler.get_type(input.type_id);
 
         // Calculate aligned offset
-        uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, type);
+        uint32_t aligned_offset = SPIRVHelper::getVertexAlignedOffset(struct_offset, type);
         uint32_t type_size      = SPIRVHelper::getSpirvTypeSize(type);
         struct_offset           = aligned_offset + type_size;
 
@@ -490,14 +437,14 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
             uint32_t          memberSize   = compiler.get_declared_struct_member_size(buffer_type, i);
 
             // Calculate proper C++ aligned offset
-            uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, memberType);
-            struct_offset           = aligned_offset + SPIRVHelper::getSpirvTypeSize(memberType);
+            // uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, memberType);
+            // struct_offset           = aligned_offset + SPIRVHelper::getSpirvTypeSize(memberType);
 
             // Create uniform buffer member
             ShaderReflection::UniformBufferMember member;
             member.name   = memberName;
             member.type   = ShaderReflection::getSpirvBaseType(memberType);
-            member.offset = aligned_offset;
+            member.offset = memberOffset;
             member.size   = memberSize;
 
             // Add to uniform buffer
@@ -506,17 +453,17 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
             NE_CORE_TRACE("\t\t-Member {0} (shader offset: {1}, C++ aligned offset: {2}, size: {3}, type: {4})",
                           memberName,
                           memberOffset,
-                          aligned_offset,
+                          -1,
                           memberSize,
                           ShaderReflection::DataType2Strings[member.type]);
 
             // Check for alignment mismatches between shader and C++
-            if (memberOffset != aligned_offset) {
-                NE_CORE_WARN("\t\t  ⚠️ ALIGNMENT MISMATCH: Shader offset {0} != C++ aligned offset {1} for member {2}",
-                             memberOffset,
-                             aligned_offset,
-                             memberName);
-            }
+            // if (memberOffset != aligned_offset) {
+            //     NE_CORE_WARN("\t\t  ⚠️ ALIGNMENT MISMATCH: Shader offset {0} != C++ aligned offset {1} for member {2}",
+            //                  memberOffset,
+            //                  aligned_offset,
+            //                  memberName);
+            // }
         }
 
         // Add uniform buffer to resources
@@ -618,7 +565,7 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
             shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
                 source,
                 EShaderStage::toShadercType(stage),
-                std::format("{} ({})", fullPath, std::to_string(stage)).c_str(),
+                std::format("{} ({})", fullPath, EShaderStage::T2Strings[stage]).c_str(),
                 stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
                 options);
 

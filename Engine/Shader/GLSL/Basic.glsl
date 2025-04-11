@@ -6,7 +6,6 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec4 aColor;
 layout(location = 2) in vec2 aUV; // aka aTexCoord
 layout(location = 3) in vec3 aNormal; 
-layout(location = 4) in vec3 aTangent; 
 
 // Camera/transform uniforms
 layout(set = 1, binding = 0) uniform CameraBuffer {
@@ -51,8 +50,8 @@ layout(set = 3, binding = 0) uniform CameraBuffer{
 } uCamera;
 
 layout(set = 3, binding = 1) uniform LightBuffer {
-    vec3 lightDir; 
-    vec3 lightColor;
+    vec4 lightDir; 
+    vec4 lightColor;
     float ambientIntensity;  
     float specularPower; 
 } uLight; 
@@ -63,17 +62,18 @@ layout(location = 0) out vec4 outColor;
 void main() 
 {
     vec3 N = normalize(fragNormal); 
-    vec3 L = normalize(- uLight.lightDir); // Light direction
-    vec3 halfDir = normalize(L + fragPosition ); // Halfway vector between light and view direction
+    vec3 L = normalize(- vec3(uLight.lightDir)); // Light direction
+    vec3 halfDir = normalize(L + fragPosition); // Halfway vector between light and view direction
+    vec3  LC = vec3(uLight.lightColor); // Light color
 
     float diffuse  = max(dot(N, L), 0.0);  // 漫反射
-    float specular = pow(max( 0, dot(N, halfDir)), uLight.specularPower);  // 高光
-    float ambient =  uLight.ambientIntensity * uLight.lightColor; // 环境光
+    float specular = pow(max(0.0, dot(N, halfDir)), uLight.specularPower);  // 高光
+    vec3 ambient = uLight.ambientIntensity * LC; // 环境光
 
-    vec3 lighting = (ambient + diffuse) * texture(uTexture0, fragUV) 
-                    +  specular * uLight.lightColor; 
+    // Sample texture and compute final color
+    vec4 texColor = texture(uTexture0, fragUV);
+    vec3 lighting = (ambient + diffuse) * texColor.rgb 
+                    + specular * LC;
 
-
-    outColor =   vec4(lighting * fragColor.rgb, fragColor.a); 
-            
+    outColor = vec4(lighting, fragColor.a);
 }
