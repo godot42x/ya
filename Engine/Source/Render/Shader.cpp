@@ -26,7 +26,6 @@
 
 #include "Core/FileSystem/FileSystem.h"
 
-#include "utility/file_utils.h"
 
 static const char *eolFlag =
 #if _WIN32
@@ -85,10 +84,6 @@ const char *getVulkanCacheFileExtension(EShaderStage::T stage)
     return "";
 }
 
-const char *toString(EShaderStage::T Stage)
-{
-    return std::to_string(Stage);
-}
 
 SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
 {
@@ -106,133 +101,6 @@ SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
 } // namespace EShaderStage
 
 
-// why we need this function?
-// from glsl to spv,
-// then spv to glsl source code,
-// then glsl source code to spv binary,
-// then binary to create opengl shader program
-/*
-void GLSLScriptProcessor::CreateGLBinaries(bool bSourceChanged)
-{
-    shaderc::Compiler       compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_opengl, shaderc_env_version_opengl_4_5);
-
-    if (bOptimizeGLBinaries) {
-        options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    }
-
-    auto &shader_data = m_OpenGL_SPIRV;
-    shader_data.clear();
-    m_GLSL_SourceCode.clear();
-
-    for (auto &&[stage, spirv_binary] : m_Vulkan_SPIRV)
-    {
-        auto cached_filepath = GetCachePath(false, stage);
-        if (!bSourceChanged) {
-            // load binary opengl caches
-            std::ifstream in(cached_filepath, std::ios::in | std::ios::binary);
-            NE_CORE_ASSERT(in.is_open(), "Cached opengl file not found when source do not changed!!");
-
-            in.seekg(0, std::ios::end);
-            auto size = in.tellg();
-            in.seekg(0, std::ios::beg);
-
-            auto &data = shader_data[stage];
-            data.resize(size / sizeof(uint32_t));
-            in.read((char *)data.data(), size);
-            in.close();
-        }
-        else
-        {
-            shaderc::Compiler compiler;
-            // spirv binary -> glsl source code
-            spirv_cross::CompilerGLSL glsl_compiler(spirv_binary);
-            m_GLSL_SourceCode[stage] = glsl_compiler.compile();
-
-
-            // HZ_CORE_INFO("????????????????????????\n{}", m_OpenGL_SourceCode[stage]);
-            auto &source = m_GLSL_SourceCode[stage];
-            // HZ_CORE_ERROR(source);
-            // HZ_CORE_ERROR(m_FilePath.string());
-
-            shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
-                source,
-                utils::ShaderStageToShaderRcType(stage),
-                m_FilePath.string().c_str());
-
-            if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-            {
-                NE_CORE_ERROR(result.GetErrorMessage());
-                NE_CORE_ASSERT(false);
-            }
-
-            // store compile result(opengl) into memory and cached file
-            shader_data[stage] = std::vector<uint32_t>(result.cbegin(), result.cend());
-            std::ofstream out(cached_filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-            if (out.is_open())
-            {
-                auto &data = shader_data[stage];
-                out.write((char *)data.data(), data.size() * sizeof(uint32_t));
-                out.flush();
-                out.close();
-            }
-        }
-    }
-}
-
-void GLSLProcessor::CreateProgram()
-{
-    GLuint program = glCreateProgram();
-
-    std::vector<GLuint> shader_ids;
-    for (auto &&[stage, spirv] : m_OpenGL_SPIRV)
-    {
-        GLuint shader_id = shader_ids.emplace_back(glCreateShader(stage));
-        // binary from SPIR-V
-        glShaderBinary(1,
-                       &shader_id,
-                       GL_SHADER_BINARY_FORMAT_SPIR_V,
-                       spirv.data(),
-                       spirv.size() * sizeof(uint32_t));
-        glSpecializeShader(shader_id, "main", 0, nullptr, nullptr);
-        glAttachShader(program, shader_id);
-    }
-
-    glLinkProgram(program);
-
-    GLint bLinked;
-    glGetProgramiv(program, GL_LINK_STATUS, &bLinked);
-
-    // error handle
-    if (bLinked == GL_FALSE)
-    {
-        GLint max_len;
-        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &max_len);
-
-        std::vector<GLchar> info_log(max_len);
-        glGetProgramInfoLog(program, max_len, &max_len, info_log.data());
-
-        HZ_CORE_ERROR("Shader linking failed ({0}):\n{1}", m_FilePath.string(), info_log.data());
-
-        glDeleteProgram(program);
-
-        for (auto id : shader_ids) {
-            glDeleteShader(id);
-        }
-    }
-
-    // already linked
-    for (auto id : shader_ids)
-    {
-        glDetachShader(program, id);
-        glDeleteShader(id);
-    }
-
-    m_ShaderID = program;
-}
-*/
-
 
 std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderStage::T stage)
 {
@@ -246,122 +114,436 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
     return "";
 }
 
+namespace SPIRVHelper
+{
+
+// Helper function to convert SPIRV types to SDL_GPU vertex element formats
+SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type)
+{
+    // Check for alignment - we need to handle different data types
+    switch (type.basetype)
+    {
+    case spirv_cross::SPIRType::Float:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+        break;
+
+    case spirv_cross::SPIRType::Int:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT4;
+        break;
+
+    case spirv_cross::SPIRType::UInt:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT4;
+        break;
+
+    default:
+        break;
+    }
+
+    return SDL_GPU_VERTEXELEMENTFORMAT_INVALID;
+}
+
+// Get size of a SPIRV type with proper alignment for C++ structs
+uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type)
+{
+    uint32_t size = 0;
+    switch (type.basetype)
+    {
+    case spirv_cross::SPIRType::Float:
+        size = sizeof(float) * type.vecsize * type.columns;
+        break;
+    case spirv_cross::SPIRType::Int:
+        size = sizeof(int32_t) * type.vecsize * type.columns;
+        break;
+    case spirv_cross::SPIRType::UInt:
+        size = sizeof(uint32_t) * type.vecsize * type.columns;
+        break;
+    case spirv_cross::SPIRType::Boolean:
+        size = sizeof(uint32_t) * type.vecsize * type.columns; // Booleans in SPIR-V typically use 32 bits
+        break;
+    default:
+        break;
+    }
+
+    // Handle alignment requirements for vec3 (which is actually 16 bytes in many GPU APIs)
+    // This is a critical consideration when working with struct data in shaders
+    if (type.basetype == spirv_cross::SPIRType::Float && type.vecsize == 3 && type.columns == 1) {
+        // vec3 is typically padded to 16 bytes (4 floats) for alignment
+        return 16;
+    }
+
+    return size;
+}
+
+// Get the offset for a member in a struct with proper C++ alignment
+uint32_t getAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
+{
+    // Determine the alignment requirement based on C++ rules
+    uint32_t alignment = 4; // Default to 4 bytes for basic types
+
+    switch (type.basetype) {
+    case spirv_cross::SPIRType::Float:
+    case spirv_cross::SPIRType::Int:
+    case spirv_cross::SPIRType::UInt:
+        // Single scalar types
+        if (type.vecsize == 1 && type.columns == 1) {
+            alignment = 4; // float, int, uint are 4-byte aligned
+        }
+        // Vector types follow the rule: align to size of contained type times number of elements
+        // But round up to power of 2 for efficiency
+        else if (type.vecsize > 1) {
+            // vec2 is 8-byte aligned
+            if (type.vecsize == 2) {
+                alignment = 8;
+            }
+            // vec3 and vec4 are typically 16-byte aligned in GPU memory layouts
+            else {
+                alignment = 16;
+            }
+        }
+        // Matrix types are typically aligned to 16 bytes
+        if (type.columns > 1) {
+            alignment = 16;
+        }
+        break;
+
+    case spirv_cross::SPIRType::Double:
+        // Double types have 8-byte alignment
+        alignment = 8;
+        if (type.vecsize > 1 || type.columns > 1) {
+            alignment = 16; // Double vectors/matrices use 16-byte alignment
+        }
+        break;
+
+    case spirv_cross::SPIRType::Boolean:
+        // Booleans usually get 4-byte alignment in SPIR-V/GLSL
+        alignment = 4;
+        break;
+
+    case spirv_cross::SPIRType::Struct:
+        // Structs align to their most strictly aligned member
+        // For simplicity, we use 16-byte alignment for nested structs
+        alignment = 16;
+        break;
+
+    default:
+        // Default to 4 bytes for anything else
+        alignment = 4;
+        break;
+    }
+
+    // Apply alignment - round up to the next multiple of alignment
+    uint32_t aligned_offset = (current_offset + alignment - 1) & ~(alignment - 1);
+
+    // NE_CORE_TRACE("Aligning offset {} to {} (alignment={}) for type basetype={}, vecsize={}, columns={}",
+    //               current_offset,
+    //               aligned_offset,
+    //               alignment,
+    //               (int)type.basetype,
+    //               type.vecsize,
+    //               type.columns);
+
+    return aligned_offset;
+}
+} // namespace SPIRVHelper
+
+namespace ShaderReflection
+{
+
+DataType getSpirvBaseType(const spirv_cross::SPIRType &type)
+{
+    switch (type.basetype) {
+    case spirv_cross::SPIRType::Boolean:
+        return DataType::Bool;
+
+    case spirv_cross::SPIRType::Int:
+        return DataType::Int;
+
+    case spirv_cross::SPIRType::UInt:
+        return DataType::UInt;
+
+    case spirv_cross::SPIRType::Float:
+        if (type.columns > 1) {
+            // Matrix types
+            if (type.columns == 3 && type.vecsize == 3)
+                return DataType::Mat3;
+            else if (type.columns == 4 && type.vecsize == 4)
+                return DataType::Mat4;
+        }
+        else {
+            // Vector or scalar types
+            if (type.vecsize == 1)
+                return DataType::Float;
+            else if (type.vecsize == 2)
+                return DataType::Vec2;
+            else if (type.vecsize == 3)
+                return DataType::Vec3;
+            else if (type.vecsize == 4)
+                return DataType::Vec4;
+        }
+        break;
+
+    case spirv_cross::SPIRType::SampledImage:
+        switch (type.image.dim) {
+        case spv::Dim2D:
+            return DataType::Sampler2D;
+        case spv::DimCube:
+            return DataType::SamplerCube;
+        case spv::Dim3D:
+            return DataType::Sampler3D;
+        default:
+            break;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    return DataType::Unknown;
+}
+
+SDL_GPUVertexElementFormat dataTypeToSDLFormat(DataType type)
+{
+    switch (type) {
+    case DataType::Float:
+        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT;
+    case DataType::Vec2:
+        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+    case DataType::Vec3:
+        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+    case DataType::Vec4:
+        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+    case DataType::Int:
+        return SDL_GPU_VERTEXELEMENTFORMAT_INT;
+    case DataType::UInt:
+        return SDL_GPU_VERTEXELEMENTFORMAT_UINT;
+    default:
+        return SDL_GPU_VERTEXELEMENTFORMAT_INVALID;
+    }
+}
+
+uint32_t getDataTypeSize(DataType type)
+{
+    switch (type) {
+    case DataType::Bool:
+        return sizeof(uint32_t); // Booleans in SPIR-V typically use 32 bits
+    case DataType::Int:
+        return sizeof(int32_t);
+    case DataType::UInt:
+        return sizeof(uint32_t);
+    case DataType::Float:
+        return sizeof(float);
+    case DataType::Vec2:
+        return sizeof(float) * 2;
+    case DataType::Vec3:
+        return sizeof(float) * 3;
+    case DataType::Vec4:
+        return sizeof(float) * 4;
+    case DataType::Mat3:
+        return sizeof(float) * 3 * 3;
+    case DataType::Mat4:
+        return sizeof(float) * 4 * 4;
+    case DataType::Sampler2D:
+    case DataType::SamplerCube:
+    case DataType::Sampler3D:
+        return sizeof(uint32_t); // Samplers are typically bound by descriptor sets/slots
+    default:
+        return 0;
+    }
+}
+
+} // namespace ShaderReflection
 
 ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData)
 {
-    ShaderReflection::ShaderResources result;
-    result.stage = stage;
-
     std::vector<uint32_t>        spirv_ir(spirvData.begin(), spirvData.end());
     spirv_cross::Compiler        compiler(spirv_ir);
-    spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+    spirv_cross::ShaderResources spirvResources = compiler.get_shader_resources();
 
-    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::toString(stage), tempProcessingPath);
-    NE_CORE_TRACE("\t {} uniform buffers ", resources.uniform_buffers.size());
-    NE_CORE_TRACE("\t {} resources ", resources.sampled_images.size());
+    // Create our custom shader resources structure
+    ShaderReflection::ShaderResources resources;
+    resources.stage          = stage;
+    resources.spirvResources = spirvResources; // Store original spirv resources
+
+    NE_CORE_TRACE("===============================================================================");
+    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::T2Strings[stage], tempProcessingPath);
+    NE_CORE_TRACE("\t {} uniform buffers ", spirvResources.uniform_buffers.size());
+    NE_CORE_TRACE("\t {} storage buffers ", spirvResources.storage_buffers.size());
+    NE_CORE_TRACE("\t {} stage inputs ", spirvResources.stage_inputs.size());
+    NE_CORE_TRACE("\t {} stage outputs ", spirvResources.stage_outputs.size());
+    NE_CORE_TRACE("\t {} storage images ", spirvResources.storage_images.size());
+    NE_CORE_TRACE("\t {} resources ", spirvResources.sampled_images.size());
+
+
+    // Process stage inputs with alignment information
+    NE_CORE_TRACE("Stage Inputs (with alignment information):");
+    uint32_t struct_offset = 0;
+    for (const auto &input : spirvResources.stage_inputs) {
+
+        uint32_t    location = compiler.get_decoration(input.id, spv::DecorationLocation);
+        uint32_t    offset   = compiler.get_decoration(input.id, spv::DecorationOffset);
+
+        const auto &type     = compiler.get_type(input.type_id);
+
+        // Calculate aligned offset
+        uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, type);
+        uint32_t type_size      = SPIRVHelper::getSpirvTypeSize(type);
+        struct_offset           = aligned_offset + type_size;
+
+        SDL_GPUVertexElementFormat sdl_format = SPIRVHelper::spirvType2SDLFormat(type);
+
+        // Create stage input data
+        ShaderReflection::StageIOData inputData;
+        inputData.name     = input.name;
+        inputData.type     = ShaderReflection::getSpirvBaseType(type);
+        inputData.location = location;
+        inputData.offset   = aligned_offset;
+        inputData.size     = type_size;
+        inputData.format   = sdl_format;
+
+        // Add to our resources
+        resources.inputs.push_back(inputData);
+
+        NE_CORE_TRACE("\t(name: {0}, location: {1}, shader offset: {2}, aligned offset: {3}, size: {4}, type: {5}, SDL format: {6})",
+                      input.name,
+                      location,
+                      offset,
+                      aligned_offset,
+                      type_size,
+                      ShaderReflection::DataType2Strings[inputData.type],
+                      (int)sdl_format);
+    }
+
+    // Process stage outputs
+    NE_CORE_TRACE("Stage Outputs:");
+    for (const auto &output : spirvResources.stage_outputs) {
+        uint32_t    location = compiler.get_decoration(output.id, spv::DecorationLocation);
+        uint32_t    offset   = compiler.get_decoration(output.id, spv::DecorationOffset);
+        const auto &type     = compiler.get_type(output.type_id);
+
+        // Create stage output data
+        ShaderReflection::StageIOData outputData;
+        outputData.name     = output.name;
+        outputData.type     = ShaderReflection::getSpirvBaseType(type);
+        outputData.location = location;
+        outputData.offset   = offset;
+        outputData.size     = SPIRVHelper::getSpirvTypeSize(type);
+        outputData.format   = SPIRVHelper::spirvType2SDLFormat(type);
+
+        // Add to our resources
+        resources.outputs.push_back(outputData);
+
+        NE_CORE_TRACE("\t(name: {0}, location: {1}, offset: {2}, type: {3})", output.name, location, offset, ShaderReflection::DataType2Strings[outputData.type]);
+    }
 
     // Process uniform buffers
     NE_CORE_TRACE("Uniform buffers:");
-    for (const auto &resource : resources.uniform_buffers)
-    {
+    for (const auto &resource : spirvResources.uniform_buffers) {
         const auto &buffer_type  = compiler.get_type(resource.base_type_id);
         uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
         uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
         int         member_count = buffer_type.member_types.size();
         uint32_t    set          = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
 
-        NE_CORE_TRACE("  {0}", resource.name);
+        // Create uniform buffer
+        ShaderReflection::UniformBuffer uniformBuffer;
+        uniformBuffer.name    = resource.name;
+        uniformBuffer.binding = binding;
+        uniformBuffer.set     = set;
+        uniformBuffer.size    = bufferSize;
+
+        NE_CORE_TRACE("Buffer Name:  {0}", resource.name);
         NE_CORE_TRACE("\tSize = {0}", bufferSize);
         NE_CORE_TRACE("\tBinding = {0}", binding);
         NE_CORE_TRACE("\tSet = {0}", set);
         NE_CORE_TRACE("\tMembers = {0}", member_count);
 
-        // Create uniform buffer object
-        ShaderReflection::UniformBuffer uniformBuffer;
-        uniformBuffer.name    = resource.name;
-        uniformBuffer.binding = binding;
-        uniformBuffer.size    = bufferSize;
+        // Process each member of the uniform buffer with alignment information
+        NE_CORE_TRACE("\tMembers with alignment:");
+        uint32_t struct_offset = 0;
 
-        // Process each member of the uniform buffer
-        for (int i = 0; i < member_count; i++)
-        {
+        for (int i = 0; i < member_count; i++) {
             const std::string memberName   = compiler.get_member_name(buffer_type.self, i);
             const auto       &memberType   = compiler.get_type(buffer_type.member_types[i]);
             uint32_t          memberOffset = compiler.type_struct_member_offset(buffer_type, i);
             uint32_t          memberSize   = compiler.get_declared_struct_member_size(buffer_type, i);
 
+            // Calculate proper C++ aligned offset
+            uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, memberType);
+            struct_offset           = aligned_offset + SPIRVHelper::getSpirvTypeSize(memberType);
+
+            // Create uniform buffer member
             ShaderReflection::UniformBufferMember member;
             member.name   = memberName;
-            member.offset = memberOffset;
+            member.type   = ShaderReflection::getSpirvBaseType(memberType);
+            member.offset = aligned_offset;
             member.size   = memberSize;
 
-            // Determine type
-            if (memberType.basetype == spirv_cross::SPIRType::Float)
-            {
-                if (memberType.vecsize == 1 && memberType.columns == 1)
-                    member.type = ShaderReflection::DataType::Float;
-                else if (memberType.vecsize == 2 && memberType.columns == 1)
-                    member.type = ShaderReflection::DataType::Vec2;
-                else if (memberType.vecsize == 3 && memberType.columns == 1)
-                    member.type = ShaderReflection::DataType::Vec3;
-                else if (memberType.vecsize == 4 && memberType.columns == 1)
-                    member.type = ShaderReflection::DataType::Vec4;
-                else if (memberType.vecsize == 3 && memberType.columns == 3)
-                    member.type = ShaderReflection::DataType::Mat3;
-                else if (memberType.vecsize == 4 && memberType.columns == 4)
-                    member.type = ShaderReflection::DataType::Mat4;
-                else
-                    member.type = ShaderReflection::DataType::Unknown;
-            }
-            else if (memberType.basetype == spirv_cross::SPIRType::Int)
-            {
-                member.type = ShaderReflection::DataType::Int;
-            }
-            else if (memberType.basetype == spirv_cross::SPIRType::UInt)
-            {
-                member.type = ShaderReflection::DataType::UInt;
-            }
-            else if (memberType.basetype == spirv_cross::SPIRType::Boolean)
-            {
-                member.type = ShaderReflection::DataType::Bool;
-            }
-            else
-            {
-                member.type = ShaderReflection::DataType::Unknown;
-            }
-
-            NE_CORE_TRACE("\t\tMember {0} (offset: {1}, size: {2})", memberName, memberOffset, memberSize);
+            // Add to uniform buffer
             uniformBuffer.members.push_back(member);
+
+            NE_CORE_TRACE("\t\t-Member {0} (shader offset: {1}, C++ aligned offset: {2}, size: {3}, type: {4})",
+                          memberName,
+                          memberOffset,
+                          aligned_offset,
+                          memberSize,
+                          ShaderReflection::DataType2Strings[member.type]);
+
+            // Check for alignment mismatches between shader and C++
+            if (memberOffset != aligned_offset) {
+                NE_CORE_WARN("\t\t  ⚠️ ALIGNMENT MISMATCH: Shader offset {0} != C++ aligned offset {1} for member {2}",
+                             memberOffset,
+                             aligned_offset,
+                             memberName);
+            }
         }
 
-        result.uniformBuffers.push_back(uniformBuffer);
+        // Add uniform buffer to resources
+        resources.uniformBuffers.push_back(uniformBuffer);
     }
 
     // Process sampled images
-    for (const auto &resource : resources.sampled_images)
-    {
+    NE_CORE_TRACE("Sampled images:");
+    for (const auto &resource : spirvResources.sampled_images) {
         uint32_t    binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
         uint32_t    set     = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
         const auto &type    = compiler.get_type(resource.type_id);
 
+        // Create resource
         ShaderReflection::Resource sampledImage;
         sampledImage.name    = resource.name;
         sampledImage.binding = binding;
         sampledImage.set     = set;
+        sampledImage.type    = ShaderReflection::getSpirvBaseType(type);
 
-        // Determine sampler type
-        if (type.image.dim == spv::Dim2D)
-            sampledImage.type = ShaderReflection::DataType::Sampler2D;
-        else if (type.image.dim == spv::DimCube)
-            sampledImage.type = ShaderReflection::DataType::SamplerCube;
-        else
-            sampledImage.type = ShaderReflection::DataType::Unknown;
+        // Add to resources
+        resources.sampledImages.push_back(sampledImage);
 
-        NE_CORE_TRACE("Sampled Image: {0} (binding: {1}, set: {2})", resource.name, binding, set);
-        result.sampledImages.push_back(sampledImage);
+        NE_CORE_TRACE("\tSampled Image: {0} (binding: {1}, set: {2}, type: {3})", resource.name, binding, set, ShaderReflection::DataType2Strings[sampledImage.type]);
     }
 
-    return result;
+    return resources;
 }
 
 

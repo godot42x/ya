@@ -7,9 +7,11 @@
 #include "SDL3/SDL_storage.h"
 #include <SDL3/SDL_gpu.h>
 
+#include <spirv_cross/spirv_cross.hpp>
 
 #include "../Core/Log.h"
 
+#include "reflect.cc/enum"
 namespace EShaderStage
 {
 enum T
@@ -17,7 +19,10 @@ enum T
     Undefined = 0,
     Vertex,
     Fragment,
+    ENUM_MAX,
 };
+
+GENERATED_ENUM_MISC(T);
 
 inline T fromString(std::string_view type)
 {
@@ -40,32 +45,11 @@ SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage);
 
 } // namespace EShaderStage
 
-
-namespace std
-{
-inline const char *to_string(EShaderStage::T stage)
-{
-    switch (stage) {
-
-    case EShaderStage::Vertex:
-        return "vertex";
-    case EShaderStage::Fragment:
-        return "fragment";
-        break;
-    case EShaderStage::Undefined:
-        break;
-    }
-    NE_CORE_ASSERT(false, "Unknown shader type!");
-    return "";
-}
-} // namespace std
-
-
-// New shader reflection data structures
 namespace ShaderReflection
 {
 enum class DataType
 {
+    Unknown,
     Bool,
     Int,
     UInt,
@@ -77,28 +61,34 @@ enum class DataType
     Mat4,
     Sampler2D,
     SamplerCube,
-    Unknown
+    Sampler3D,
+    ENUM_MAX,
 };
 
-struct IOData
+GENERATED_ENUM_MISC(DataType);
+
+struct StageIOData
 {
-    std::string name;
-    DataType    type;
-    uint32_t    location;
+    std::string                name;
+    DataType                   type;
+    uint32_t                   location;
+    uint32_t                   offset;
+    uint32_t                   size;
+    SDL_GPUVertexElementFormat format;
 };
-
 
 struct UniformBufferMember
 {
     std::string name;
     DataType    type;
-    uint32_t    size;
     uint32_t    offset;
+    uint32_t    size;
 };
 
 struct UniformBuffer
 {
     std::string                      name;
+    uint32_t                         set;
     uint32_t                         binding;
     uint32_t                         size;
     std::vector<UniformBufferMember> members;
@@ -114,13 +104,28 @@ struct Resource
 
 struct ShaderResources
 {
-    std::vector<IOData>        inputs;
-    std::vector<IOData>        outputs;
+    EShaderStage::T            stage;
+    std::vector<StageIOData>   inputs;
+    std::vector<StageIOData>   outputs;
     std::vector<UniformBuffer> uniformBuffers;
     std::vector<Resource>      sampledImages;
-    EShaderStage::T            stage;
+
+    // Original SPIRV-Cross resources
+    spirv_cross::ShaderResources spirvResources;
 };
+
+// Utility functions for shader reflection
+DataType                   SpirType2DataType(const spirv_cross::SPIRType &type);
+SDL_GPUVertexElementFormat DataType2SDLFormat(DataType type);
+uint32_t                   getDataTypeSize(DataType type);
 } // namespace ShaderReflection
+
+namespace SPIRVHelper
+{
+extern SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type);
+extern uint32_t                   getAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
+extern uint32_t                   getSpirvTypeSize(const spirv_cross::SPIRType &type);
+} // namespace SPIRVHelper
 
 
 
@@ -153,8 +158,8 @@ struct ShaderScriptProcessor
     using spirv_ir_t    = std::vector<ir_t>;
     using stage2spirv_t = std::unordered_map<EShaderStage::T, spirv_ir_t>;
 
-    virtual std::optional<stage2spirv_t>      process(std::string_view fileName)                                 = 0;
-    virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) = 0;
+    virtual std::optional<stage2spirv_t>                    process(std::string_view fileName)                                 = 0;
+    [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) = 0;
 };
 
 

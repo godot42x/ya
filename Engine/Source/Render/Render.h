@@ -14,18 +14,18 @@
 // Forward declarations
 struct CommandBuffer;
 
-struct RenderAPI
+namespace RenderAPI
 {
-    enum EAPIType
-    {
-        None = 0,
-        OpenGL,
-        Vulkan,
-        DirectX12,
-        Metal,
-        SDL3GPU, // SDL3 GPU backend
-        ENUM_MAX,
-    };
+enum T
+{
+    None = 0,
+    OpenGL,
+    Vulkan,
+    DirectX12,
+    Metal,
+    SDL3GPU, // SDL3 GPU backend
+    ENUM_MAX,
+};
 };
 
 enum class ESamplerType
@@ -82,14 +82,11 @@ struct VertexAttribute
 struct ShaderCreateInfo
 {
     std::string shaderName; // we use single glsl now
-    uint32_t    numVertexUniformBuffers = 0; // Number of vertex uniform buffers
-
-    uint32_t    numFragmentUniformBuffers = 0; // Number of fragment uniform buffers
-    uint32_t numSamplers               = 0;
 };
 
 struct GraphicsPipelineCreateInfo
 {
+    bool                                 bDeriveInfoFromShader = true;
     ShaderCreateInfo                     shaderCreateInfo;
     std::vector<VertexBufferDescription> vertexBufferDescs;
     std::vector<VertexAttribute>         vertexAttributes;

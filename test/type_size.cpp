@@ -6,6 +6,24 @@
 #include <string>
 #include <vector>
 
+struct A
+{
+    long long          a;
+    long double        b;
+    unsigned long long c;
+    int                d;
+    float              e;
+};
+
+struct B
+{
+    A   a;
+    A   b;
+    int c;
+    int d;
+};
+
+
 int main()
 {
     std::string str = "HelloWorld";
@@ -24,20 +42,20 @@ int main()
     printf("%s\n", b.c_str());
 
 
-    struct a
-    {
-    };
+    // struct a
+    // {
+    // };
 
 
 
-    int arr[0];
+    // int arr[0];
 
-    printf("%llu\n", sizeof(arr));
+    // printf("%llu\n", sizeof(arr));
+    // // printf("%d\n", sizeof(void));
+    // printf("%llu\n", sizeof(a));
+
     // printf("%d\n", sizeof(void));
-    printf("%llu\n", sizeof(a));
-
-    printf("%d\n", sizeof(void));
-    printf("%d\n", sizeof(void()));
+    // printf("%d\n", sizeof(void()));
 
 
     return 0;

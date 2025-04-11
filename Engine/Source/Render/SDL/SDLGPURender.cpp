@@ -9,10 +9,13 @@
 
 // shaders is high related with pipeline, we split it temporarily
 // TODO: export shader info -> use reflection do this
-std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
+GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
 {
-    SDL_GPUShader *vertexShader   = nullptr;
-    SDL_GPUShader *fragmentShader = nullptr;
+    ShaderCreateResult result{
+        .vertexShader   = std::nullopt,
+        .fragmentShader = std::nullopt,
+    };
+
     {
         ShaderScriptProcessorFactory factory;
         factory.withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
@@ -28,51 +31,65 @@ std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> GPURender_SDL::creat
         }
         ShaderScriptProcessor::stage2spirv_t &codes = ret.value();
 
-
-        std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> shaderResources;
+        // Process each shader stage and store both SPIRV-Cross resources and our custom reflection data
         for (const auto &[stage, code] : codes) {
-            ShaderReflection::ShaderResources res = processor->reflect(stage, code);
-            shaderResources[stage]                = std::move(res);
+            // Get shader resources from SPIR-V reflection using our new custom reflection
+            ShaderReflection::ShaderResources reflectedResources = processor->reflect(stage, code);
+
+            // Store in appropriate stage
+            if (stage == EShaderStage::Vertex) {
+                result.vertexReflection = reflectedResources;
+            }
+            else if (stage == EShaderStage::Fragment) {
+                result.fragmentReflection = reflectedResources;
+            }
+
+            // Also store the original SPIRV-Cross resources for backward compatibility
+            result.shaderResources[stage] = reflectedResources.spirvResources;
         }
 
-
+        // Create shader create info for vertex shader
         SDL_GPUShaderCreateInfo vertexCrateInfo = {
             .code_size            = codes[EShaderStage::Vertex].size() * sizeof(uint32_t) / sizeof(uint8_t),
             .code                 = (uint8_t *)codes[EShaderStage::Vertex].data(),
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_VERTEX,
-            .num_samplers         = (Uint32)shaderResources[EShaderStage::Vertex].sampledImages.size(),
-            .num_storage_textures = 0, //(Uint32)shaderResources[EShaderStage::Vertex].storageImages.size(),
-            .num_storage_buffers  = 0, //(Uint32)shaderResources[EShaderStage::Vertex].storageBuffers.size(),
-            .num_uniform_buffers  = (Uint32)shaderResources[EShaderStage::Vertex].uniformBuffers.size(),
+            .num_samplers         = (Uint32)result.vertexReflection.sampledImages.size(),
+            .num_storage_textures = 0, // We're not using storage images currently
+            .num_storage_buffers  = 0, // We're not using storage buffers currently
+            .num_uniform_buffers  = (Uint32)result.vertexReflection.uniformBuffers.size(),
         };
+
+        // Create shader create info for fragment shader
         SDL_GPUShaderCreateInfo fragmentCreateInfo = {
             .code_size            = codes[EShaderStage::Fragment].size() * sizeof(uint32_t) / sizeof(uint8_t),
             .code                 = (uint8_t *)codes[EShaderStage::Fragment].data(),
             .entrypoint           = "main",
             .format               = SDL_GPU_SHADERFORMAT_SPIRV,
             .stage                = SDL_GPU_SHADERSTAGE_FRAGMENT,
-            .num_samplers         = (Uint32)shaderResources[EShaderStage::Fragment].sampledImages.size(),
-            .num_storage_textures = 0, //(Uint32)shaderResources[EShaderStage::Fragment].storageImages.size(),
-            .num_storage_buffers  = 0, //(Uint32)shaderResources[EShaderStage::Fragment].storageBuffers.size(),
-            .num_uniform_buffers  = (Uint32)shaderResources[EShaderStage::Fragment].uniformBuffers.size(),
+            .num_samplers         = (Uint32)result.fragmentReflection.sampledImages.size(),
+            .num_storage_textures = 0, // We're not using storage images currently
+            .num_storage_buffers  = 0, // We're not using storage buffers currently
+            .num_uniform_buffers  = (Uint32)result.fragmentReflection.uniformBuffers.size(),
         };
 
-        vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
+        auto *vertexShader = SDL_CreateGPUShader(device, &vertexCrateInfo);
         if (!vertexShader) {
             NE_CORE_ERROR("Failed to create vertex shader");
-            return {};
+            return result;
         }
-        fragmentShader = SDL_CreateGPUShader(device, &fragmentCreateInfo);
+        auto *fragmentShader = SDL_CreateGPUShader(device, &fragmentCreateInfo);
         if (!fragmentShader) {
             NE_CORE_ERROR("Failed to create fragment shader");
-            return {};
+            return result;
         }
+
+        result.vertexShader   = vertexShader;
+        result.fragmentShader = fragmentShader;
     }
 
-
-    return {{vertexShader, fragmentShader}};
+    return result;
 }
 
 std::shared_ptr<CommandBuffer> GPURender_SDL::acquireCommandBuffer(std::source_location location)
@@ -152,35 +169,82 @@ void GPURender_SDL::clean()
 // a Pipeline: 1 vertex shader + 1 fragment shader + 1 render pass + 1 vertex buffer + 1 index buffer
 // their format should be compatible with each other
 // so we put them together with initialization
-bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &info)
+bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pipelineCI)
 {
-
     // SHADER is high related with pipeline!!!
-    auto shaders = createShaders(info.shaderCreateInfo);
-    NE_ASSERT(shaders.has_value(), "Failed to create shader {}", SDL_GetError());
-    auto &[vertexShader, fragmentShader] = shaders.value();
+    ShaderCreateResult result = createShaders(pipelineCI.shaderCreateInfo);
+    NE_ASSERT(result.vertexShader.has_value(), "Failed to create shader {}", SDL_GetError());
+    NE_ASSERT(result.fragmentShader.has_value(), "Failed to create shader {}", SDL_GetError());
+
+    auto vertexShader   = result.vertexShader.value();
+    auto fragmentShader = result.fragmentShader.value();
 
     std::vector<SDL_GPUVertexBufferDescription> vertexBufferDescs;
     std::vector<SDL_GPUVertexAttribute>         vertexAttributes;
-    {
 
-        for (int i = 0; i < info.vertexBufferDescs.size(); ++i) {
+    if (pipelineCI.bDeriveInfoFromShader)
+    {
+        NE_CORE_INFO("Deriving vertex info from shader reflection");
+
+        // Get the reflected shader resources for the vertex stage
+        const auto &vertexResources = result.vertexReflection;
+
+        // Initialize our vertex inputs based on the reflected data
+        for (const auto &input : vertexResources.inputs) {
+            SDL_GPUVertexAttribute sdlVertAttr{
+                .location    = input.location,
+                .buffer_slot = 0,
+                .format      = input.format, // We already converted to SDL format in reflection
+                .offset      = input.offset, // We already calculated aligned offset in reflection
+            };
+
+            if (sdlVertAttr.format == SDL_GPU_VERTEXELEMENTFORMAT_INVALID) {
+                NE_CORE_ERROR("Unsupported vertex attribute format for input: {}", input.name);
+                continue;
+            }
+
+            vertexAttributes.push_back(sdlVertAttr);
+
+            NE_CORE_INFO("Added vertex attribute: {} location={}, format={}, offset={}, size={}", input.name, input.location, (int)sdlVertAttr.format, input.offset, input.size);
+        }
+
+        // Calculate the total size of all vertex attributes
+        uint32_t totalSize = 0;
+        if (!vertexResources.inputs.empty()) {
+            const auto &lastInput = vertexResources.inputs.back();
+            totalSize             = lastInput.offset + lastInput.size;
+        }
+
+        this->vertexInputSize = totalSize;
+
+        // Create the vertex buffer description
+        vertexBufferDescs.push_back(SDL_GPUVertexBufferDescription{
+            .slot               = 0,
+            .pitch              = this->vertexInputSize,
+            .input_rate         = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+            .instance_step_rate = 0,
+        });
+
+        NE_CORE_INFO("Created vertex buffer with {} attributes, total aligned size: {} bytes", vertexAttributes.size(), this->vertexInputSize);
+    }
+    else {
+        for (int i = 0; i < pipelineCI.vertexBufferDescs.size(); ++i) {
             vertexBufferDescs.push_back(SDL_GPUVertexBufferDescription{
-                .slot               = info.vertexBufferDescs[i].slot,
-                .pitch              = info.vertexBufferDescs[i].pitch,
+                .slot               = pipelineCI.vertexBufferDescs[i].slot,
+                .pitch              = pipelineCI.vertexBufferDescs[i].pitch,
                 .input_rate         = SDL_GPU_VERTEXINPUTRATE_VERTEX,
                 .instance_step_rate = 0,
             });
         }
-        for (int i = 0; i < info.vertexAttributes.size(); ++i) {
+        for (int i = 0; i < pipelineCI.vertexAttributes.size(); ++i) {
             SDL_GPUVertexAttribute sdlVertAttr{
-                .location    = info.vertexAttributes[i].location,
-                .buffer_slot = info.vertexAttributes[i].bufferSlot,
+                .location    = pipelineCI.vertexAttributes[i].location,
+                .buffer_slot = pipelineCI.vertexAttributes[i].bufferSlot,
                 .format      = SDL_GPU_VERTEXELEMENTFORMAT_INVALID,
-                .offset      = info.vertexAttributes[i].offset,
+                .offset      = pipelineCI.vertexAttributes[i].offset,
             };
 
-            switch (info.vertexAttributes[i].format) {
+            switch (pipelineCI.vertexAttributes[i].format) {
             case EVertexAttributeFormat::Float2:
                 sdlVertAttr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
                 break;
@@ -191,16 +255,15 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
                 sdlVertAttr.format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
                 break;
             default:
-                NE_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(info.vertexAttributes[i].format));
+                NE_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(pipelineCI.vertexAttributes[i].format));
                 break;
             }
             vertexAttributes.emplace_back(std::move(sdlVertAttr));
         }
 
-        const auto &last = info.vertexAttributes.end() - 1;
+        const auto &last = pipelineCI.vertexAttributes.end() - 1;
         vertexInputSize  = last->offset + EVertexAttributeFormat::T2Size(last->format);
     }
-
 
     // this format is the final screen surface's format
     // if you want other format, create texture yourself
@@ -210,6 +273,8 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
         return false;
     }
     NE_CORE_INFO("current gpu texture format: {}", (int)format);
+
+
 
     SDL_GPUColorTargetDescription colorTargetDesc{
         .format = format,
@@ -275,14 +340,14 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
         },
 
     };
-    switch (info.primitiveType) {
+    switch (pipelineCI.primitiveType) {
     case EGraphicPipeLinePrimitiveType::TriangleList:
         // WTF? it should be SDL_GPU_PRIMITIVETYPE_TRIANGLELIST, so ambiguous
         // sdlGPUCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_LINELIST;
         sdlGPUCreateInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
         break;
     default:
-        NE_CORE_ASSERT(false, "Invalid primitive type {}", int(info.primitiveType));
+        NE_CORE_ASSERT(false, "Invalid primitive type {}", int(pipelineCI.primitiveType));
         break;
     }
 
@@ -323,7 +388,7 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &inf
     }
 
 
-    fillDefaultIndices(nullptr, info.primitiveType);
+    fillDefaultIndices(nullptr, pipelineCI.primitiveType);
 
     SDL_ReleaseGPUShader(device, vertexShader);
     SDL_ReleaseGPUShader(device, fragmentShader);

@@ -194,43 +194,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
     bool ok = render->createGraphicsPipeline(
         GraphicsPipelineCreateInfo{
             .shaderCreateInfo = {
-                .shaderName                = "Test.glsl",
-                .numVertexUniformBuffers   = 1,
-                .numFragmentUniformBuffers = 2,
-                .numSamplers               = 1,
-            },
-            .vertexBufferDescs = {
-                {
-                    0,
-                    sizeof(VertexEntry),
-                },
-            },
-            .vertexAttributes = {
-                {
-                    0,
-                    0,
-                    EVertexAttributeFormat::Float3,
-                    offsetof(VertexEntry, position),
-                },
-                {
-                    1,
-                    0,
-                    EVertexAttributeFormat::Float4,
-                    offsetof(VertexEntry, color),
-                },
-                {
-                    2,
-                    0,
-                    EVertexAttributeFormat::Float2,
-                    offsetof(VertexEntry, uv),
-                },
-                {
-                    3,
-                    0,
-                    EVertexAttributeFormat::Float3,
-                    offsetof(VertexEntry, normal),
-                },
-
+                .shaderName = "Test.glsl",
             },
             .primitiveType = primitiveType,
         });
@@ -461,9 +425,11 @@ void imcModel(cmbf_t commandBuffer)
 
     if (ImGui::Button("Use Quad")) {
         useModel = false;
-        commandBuffer->uploadVertexBuffers(
+        commandBuffer->uploadBuffers(
             vertices.data(),
-            static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)));
+            static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
+            indices.data(),
+            static_cast<Uint32>(indices.size() * sizeof(uint32_t)));
     }
 
     // Model transform controls

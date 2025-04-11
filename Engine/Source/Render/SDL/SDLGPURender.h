@@ -14,6 +14,7 @@
 
 
 #include "Render/CommandBuffer.h"
+#include "Render/Shader.h"
 
 
 struct GPURender_SDL : public Render
@@ -27,7 +28,7 @@ struct GPURender_SDL : public Render
 
     uint32_t maxVertexBufferElemSize = 10000;
     uint32_t maxIndexBufferElemSize  = 10000;
-    uint32_t vertexInputSize         = -1;
+    uint32_t vertexInputSize         = 0;
 
     uint32_t getVertexBufferSize() const { return maxVertexBufferElemSize * vertexInputSize; }
     uint32_t getIndexBufferSize() const { return maxIndexBufferElemSize * sizeof(uint32_t); }
@@ -45,8 +46,18 @@ struct GPURender_SDL : public Render
         return window;
     }
 
+    struct ShaderCreateResult
+    {
+        std::optional<SDL_GPUShader *>                                    vertexShader;
+        std::optional<SDL_GPUShader *>                                    fragmentShader;
+        std::unordered_map<EShaderStage::T, spirv_cross::ShaderResources> shaderResources;
+        
+        // Added reflection data using our custom structure
+        ShaderReflection::ShaderResources vertexReflection;
+        ShaderReflection::ShaderResources fragmentReflection;
+    };
 
-    std::optional<std::tuple<SDL_GPUShader *, SDL_GPUShader *>> createShaders(const ShaderCreateInfo &shaderCI);
+    ShaderCreateResult createShaders(const ShaderCreateInfo &shaderCI);
 
     std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) override;
 
