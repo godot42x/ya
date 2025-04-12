@@ -21,22 +21,29 @@ struct SDLBuffer
         std::size_t size;
     };
 
-    static SDL_GPUBuffer *createBuffer(SDL_GPUDevice *device, const BufferCreateInfo &bufferInfo)
+    static SDL_GPUBuffer *createBuffer(SDL_GPUDevice *device, const BufferCreateInfo &BCI)
     {
-        SDL_GPUBufferCreateInfo bufferCreateInfo = {
-            .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-            .size  = static_cast<Uint32>(bufferInfo.size),
+        SDL_GPUBufferCreateInfo sdlBCI = {
+            .size  = static_cast<Uint32>(BCI.size),
             .props = 0, // by comment
         };
 
-        if (bufferInfo.usage == BufferCreateInfo::IndexBuffer) {
-            bufferCreateInfo.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+        switch (BCI.usage) {
+        case BufferCreateInfo::VertexBuffer:
+            sdlBCI.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+            break;
+        case BufferCreateInfo::IndexBuffer:
+            sdlBCI.usage = SDL_GPU_BUFFERUSAGE_INDEX;
+            break;
+        default:
+            NE_CORE_ASSERT(false, "Invalid buffer usage {}", (int)BCI.usage);
+            break;
         }
 
-        auto buffer = SDL_CreateGPUBuffer(device, &bufferCreateInfo);
+        auto buffer = SDL_CreateGPUBuffer(device, &sdlBCI);
         NE_CORE_ASSERT(buffer, "Failed to create buffer {}", SDL_GetError());
 
-        SDL_SetGPUBufferName(device, buffer, bufferInfo.name.c_str());
+        SDL_SetGPUBufferName(device, buffer, BCI.name.c_str());
 
         return buffer;
     }

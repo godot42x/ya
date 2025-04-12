@@ -45,6 +45,7 @@ GENERATED_ENUM_MISC(ESamplerType);
 enum class EGraphicPipeLinePrimitiveType
 {
     TriangleList,
+    Line,
     ENUM_MAX,
 };
 
@@ -84,6 +85,15 @@ struct ShaderCreateInfo
     std::string shaderName; // we use single glsl now
 };
 
+namespace EFrontFaceType
+{
+enum T
+{
+    ClockWise = 0,
+    CounterClockWise,
+};
+};
+
 struct GraphicsPipelineCreateInfo
 {
     bool                                 bDeriveInfoFromShader = true;
@@ -91,11 +101,7 @@ struct GraphicsPipelineCreateInfo
     std::vector<VertexBufferDescription> vertexBufferDescs;
     std::vector<VertexAttribute>         vertexAttributes;
     EGraphicPipeLinePrimitiveType        primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
-    enum EFrontFaceType
-    {
-        ClockWise = 0,
-        CounterClockWise,
-    } frontFaceType = CounterClockWise;
+    EFrontFaceType::T                    frontFaceType = EFrontFaceType::CounterClockWise;
 };
 
 #define STRINGIFY_IMPL(x) #x

@@ -79,4 +79,45 @@ struct GPURender_SDL : public Render
     void createSamplers();
 };
 
+class RenderPassManager
+{
+  public:
+    enum class RenderStage
+    {
+        Setup,       // 初始化渲染通道、清除颜色和深度
+        Background,  // 背景渲染
+        World3D,     // 3D世界对象渲染
+        Transparent, // 半透明物体渲染
+        UI2D,        // 2D UI渲染
+        Debug,       // 调试元素渲染
+        Count
+    };
+
+    struct RenderCommand
+    {
+        RenderStage                              stage;
+        std::function<void(SDL_GPURenderPass *)> renderFunc;
+        int                                      priority = 0;
+    };
+
+    void init(SDL_GPUDevice *device);
+    void cleanup();
+
+    // 添加渲染命令到特定阶段
+    void addRenderCommand(RenderStage                              stage,
+                          std::function<void(SDL_GPURenderPass *)> renderFunc,
+                          int                                      priority = 0);
+
+    // 执行所有阶段的渲染
+    void executeRenderPass(SDL_GPUCommandBuffer *cmdBuffer,
+                           SDL_GPUTexture       *colorTarget,
+                           SDL_GPUTexture       *depthTarget,
+                           const SDL_Color      &clearColor);
+
+  private:
+    SDL_GPUDevice                          *device = nullptr;
+    std::vector<std::vector<RenderCommand>> stageCommands;
+};
+
+
 } // namespace SDL
