@@ -3,7 +3,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 
-
+namespace SDL {
 
 struct SDLShader
 {
@@ -13,7 +13,7 @@ struct SDLShader
     SDL_GPUShaderCreateInfo                                                vertexCreateInfo;
     SDL_GPUShaderCreateInfo                                                fragmentCreateInfo;
 
-    void preCreate(const ShaderCreateInfo &shaderCI)
+    SDLShader &preCreate(const ShaderCreateInfo &shaderCI)
     {
 
         ShaderScriptProcessorFactory factory;
@@ -72,10 +72,12 @@ struct SDLShader
                 return static_cast<Uint32>(vertexUniformCount + fragmentUniformCount);
             }(),
         };
+
+        return *this;
     }
 
 
-    void create(SDL_GPUDevice *device)
+    SDLShader &create(SDL_GPUDevice *device)
     {
         bool ok      = true;
         vertexShader = SDL_CreateGPUShader(device, &vertexCreateInfo);
@@ -92,6 +94,7 @@ struct SDLShader
         if (!ok) {
             clean(device);
         }
+        return *this;
     }
 
     void clean(SDL_GPUDevice *device)
@@ -104,3 +107,5 @@ struct SDLShader
         }
     }
 };
+
+} // namespace SDL

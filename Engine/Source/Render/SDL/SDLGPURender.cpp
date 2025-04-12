@@ -7,6 +7,9 @@
 #include "Render/Shader.h"
 #include "SDLGPUCommandBuffer.h"
 
+namespace SDL
+{
+
 // shaders is high related with pipeline, we split it temporarily
 // TODO: export shader info -> use reflection do this
 GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreateInfo &shaderCI)
@@ -505,3 +508,5 @@ void GPURender_SDL::createSamplers()
         NE_CORE_ASSERT(sampler, "Failed to create sampler {} {}", (int)key, SDL_GetError());
     }
 }
+
+} // namespace SDL

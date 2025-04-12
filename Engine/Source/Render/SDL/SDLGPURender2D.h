@@ -1,18 +1,27 @@
 #pragma once
 
-#include "Core/Camera.h"
-#include "Render/Texture.h"
-#include <SDL3/SDL_gpu.h>
-
 #include <glm/glm.hpp>
 #include <vector>
 
-struct Render2D
+#include <SDL3/SDL_gpu.h>
+
+#include "Core/Camera.h"
+#include "Render/SDL/SDLGraphicsPipeline.h"
+#include "Render/Texture.h"
+
+
+
+namespace SDL
 {
-    // 2D render
-    SDL_GPUGraphicsPipeline *pipeline;
-    uint32_t                 maxBatchVertexBufferElemSize = 1000 * 1024;
-    uint32_t                 maxBatchIndexBufferElemSize  = 1000 * 1024;
+
+struct SDLRender2D
+{
+    SDL_GPUDevice *device = nullptr;
+
+    SDLGraphicsPipeLine pipeline;
+
+    uint32_t maxBatchVertexBufferElemSize = 1000 * 1024;
+    uint32_t maxBatchIndexBufferElemSize  = 1000 * 1024;
 
 
     SDL_GPUBuffer         *vertexBuffer;
@@ -44,3 +53,5 @@ struct Render2D
         vertexCount = 0;
     }
 };
+
+} // namespace SDL

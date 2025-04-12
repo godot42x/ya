@@ -6,8 +6,10 @@
 #include "SDL3/SDL_gpu.h"
 
 struct SDL_GPUTexture;
-struct GPURender_SDL;
 
+namespace SDL {
+
+struct GPURender_SDL;
 
 struct GPUCommandBuffer_SDL : public CommandBuffer
 {
@@ -60,3 +62,5 @@ struct GPUCommandBuffer_SDL : public CommandBuffer
     std::shared_ptr<Texture> createTexture(std::string_view filepath) override;
     std::shared_ptr<Texture> createTextureFromBuffer(const void *data, Uint32 width, Uint32 height, const char *name) override;
 };
+
+} // namespace SDL

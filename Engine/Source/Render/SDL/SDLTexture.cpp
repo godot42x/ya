@@ -12,25 +12,8 @@
 
 
 
-// Implementation of Texture's static factory methods
-std::shared_ptr<Texture> Texture::Create(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer)
+namespace SDL
 {
-    return SDLTexture::Create(filepath, commandBuffer);
-}
-
-std::shared_ptr<Texture> Texture::CreateFromBuffer(const void *data, uint32_t width, uint32_t height,
-                                                   ETextureFormat format, const std::string &name,
-                                                   std::shared_ptr<CommandBuffer> commandBuffer)
-{
-    return SDLTexture::CreateFromBuffer(data, width, height, format, name, commandBuffer);
-}
-
-std::shared_ptr<Texture> Texture::CreateEmpty(uint32_t width, uint32_t height,
-                                              ETextureFormat format, ETextureUsage usage,
-                                              std::shared_ptr<CommandBuffer> commandBuffer)
-{
-    return SDLTexture::CreateEmpty(width, height, format, usage, commandBuffer);
-}
 
 
 // SDLTexture implementation
@@ -293,3 +276,5 @@ ETextureType SDLTexture::ConvertFromSDLType(SDL_GPUTextureType type)
         return ETextureType::Texture2D; // Default to Texture2D for unknown types
     }
 }
+
+} // namespace SDL

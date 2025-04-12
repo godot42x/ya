@@ -16,6 +16,8 @@
 #include "Render/CommandBuffer.h"
 #include "Render/Shader.h"
 
+namespace SDL
+{
 
 struct GPURender_SDL : public Render
 {
@@ -76,3 +78,5 @@ struct GPURender_SDL : public Render
   private:
     void createSamplers();
 };
+
+} // namespace SDL

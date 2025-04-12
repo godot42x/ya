@@ -3,6 +3,8 @@
 #include "Render/Texture.h"
 #include "SDL3/SDL_gpu.h"
 
+namespace SDL {
+
 class SDLTexture : public Texture
 {
   private:
@@ -47,3 +49,5 @@ class SDLTexture : public Texture
     static SDL_GPUTextureType   ConvertToSDLType(ETextureType type);
     static ETextureType         ConvertFromSDLType(SDL_GPUTextureType type);
 };
+
+} // namespace SDL

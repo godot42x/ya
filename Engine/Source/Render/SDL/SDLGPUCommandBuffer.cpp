@@ -7,6 +7,8 @@
 
 #include "Core/FileSystem/FileSystem.h"
 
+namespace SDL {
+
 GPUCommandBuffer_SDL::GPUCommandBuffer_SDL(GPURender_SDL *render, std::source_location &&loc) : CommandBuffer(std::move(loc))
 {
     r             = render;
@@ -227,3 +229,5 @@ void GPUCommandBuffer_SDL::uploadIndexBuffers(const void *indexData, uint32_t in
     SDL_EndGPUCopyPass(copyPass);
     SDL_ReleaseGPUTransferBuffer(r->device, indexTransferBuffer);
 }
+
+} // namespace SDL

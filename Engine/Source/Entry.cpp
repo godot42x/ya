@@ -10,7 +10,7 @@
 
 #include "ImGuiHelper.h"
 
-#include "Core/App.h"
+// #include "Core/App.h"
 #include "Core/EditorCamera.h"
 #include "Core/Event.h"
 #include "Core/FileSystem/FileSystem.h"
@@ -29,12 +29,12 @@ SDL_GPUTexture *faceTexture;
 SDL_GPUTexture *whiteTexture;
 
 // App              app;
-AssetManager     assetManager;
-Neon::ImguiState imguiState;
-EditorCamera     camera;
-InputManager     inputManager;
-GPURender_SDL   *render = new GPURender_SDL();
-static bool      bVsync = true;
+AssetManager        assetManager;
+Neon::ImguiState    imguiState;
+EditorCamera        camera;
+InputManager        inputManager;
+SDL::GPURender_SDL *render = new SDL::GPURender_SDL();
+static bool         bVsync = true;
 
 std::queue<std::function<void()>> asyncUpdateTask;
 
@@ -435,7 +435,7 @@ void imcModel(cmbf_t commandBuffer)
             vertices.data(),
             static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
             indices.data(),
-            static_cast<Uint32>(indices.size() * sizeof(uint32_t)));
+            static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
     }
 
     // Model transform controls
@@ -525,7 +525,7 @@ SDL_AppResult AppIterate(void *appState)
         NE_CORE_ERROR("Failed to acquire command buffer {}", SDL_GetError());
         return SDL_APP_FAILURE;
     }
-    auto sdlCommandBuffer = static_cast<GPUCommandBuffer_SDL *>(commandBuffer.get());
+    auto sdlCommandBuffer = static_cast<SDL::GPUCommandBuffer_SDL *>(commandBuffer.get());
 
     Uint32          swapChainTextureWidth, swapChainTextureHeight;
     SDL_GPUTexture *swapchainTexture = nullptr;
