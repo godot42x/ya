@@ -6,6 +6,13 @@
 
 // Implementation of Texture's static factory methods
 
+std::shared_ptr<Texture> Texture::Create(const std::string             &filepath,
+                                         std::shared_ptr<CommandBuffer> commandBuffer)
+{
+
+    return SDL::SDLTexture::Create(filepath, commandBuffer);
+}
+
 std::shared_ptr<Texture> Texture::CreateFromBuffer(const void *data, uint32_t width, uint32_t height,
                                                    ETextureFormat format, const std::string &name,
                                                    std::shared_ptr<CommandBuffer> commandBuffer)

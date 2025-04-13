@@ -227,7 +227,6 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
             const auto &last = pipelineCI.vertexAttributes.end() - 1;
             vertexInputSize  = last->offset + EVertexAttributeFormat::T2Size(last->format);
         }
-
     }
 };
 

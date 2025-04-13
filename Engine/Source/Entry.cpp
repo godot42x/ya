@@ -24,17 +24,20 @@
 #include "Render/SDL/SDLGPUCommandBuffer.h"
 
 #include "Render/SDL/SDLGPURender.h"
+#include "Render/SDL/SDLGPURender2D.h"
 
 SDL_GPUTexture *faceTexture;
 SDL_GPUTexture *whiteTexture;
+
+static bool bVsync = true;
 
 // App              app;
 AssetManager        assetManager;
 Neon::ImguiState    imguiState;
 EditorCamera        camera;
 InputManager        inputManager;
-SDL::GPURender_SDL *render = new SDL::GPURender_SDL();
-static bool         bVsync = true;
+SDL::GPURender_SDL *render   = new SDL::GPURender_SDL();
+SDL::SDLRender2D   *render2d = new SDL::SDLRender2D();
 
 std::queue<std::function<void()>> asyncUpdateTask;
 
@@ -188,6 +191,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
         NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
     }
+    render2d->init(render->device, render->window);
 
     imguiState.init(render->device, render->window);
 
@@ -597,6 +601,15 @@ SDL_AppResult AppIterate(void *appState)
     }
     ImGui::End();
     bImguiMinimized = imguiState.render(sdlCommandBuffer->commandBuffer);
+    imguiState.prepareDrawData(sdlCommandBuffer->commandBuffer);
+
+    render2d->beginFrame(sdlCommandBuffer->commandBuffer, camera);
+    render2d->drawQuad(
+        {0.0f, 0.0f},
+        0,
+        {1.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f, 1.0f});
+    render2d->submit();
 
 #pragma endregion
 
@@ -632,7 +645,6 @@ SDL_AppResult AppIterate(void *appState)
             static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
     }
 
-    imguiState.prepareDrawData(sdlCommandBuffer->commandBuffer);
 
     // target info can be multiple(use same pipeline?)
     SDL_GPUColorTargetInfo colorTargetInfo = {
@@ -719,6 +731,9 @@ SDL_AppResult AppIterate(void *appState)
         // after graphics pipeline draw, or make pipeline draw into a RT
         imguiState.draw(sdlCommandBuffer->commandBuffer, renderpass);
     }
+
+    render2d->render(renderpass);
+
     SDL_EndGPURenderPass(renderpass);
 
     if (!commandBuffer->submit()) {

@@ -315,7 +315,7 @@ bool GPURender_SDL::createGraphicsPipeline(const GraphicsPipelineCreateInfo &pip
         .rasterizer_state = SDL_GPURasterizerState{
             .fill_mode  = SDL_GPU_FILLMODE_FILL,
             .cull_mode  = SDL_GPU_CULLMODE_BACK, // cull back/front face
-            .front_face = pipelineCI.frontFaceType == GraphicsPipelineCreateInfo::ClockWise ?
+            .front_face = pipelineCI.frontFaceType == EFrontFaceType::ClockWise ?
                             SDL_GPU_FRONTFACE_CLOCKWISE :
                            SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
         },
@@ -508,5 +508,7 @@ void GPURender_SDL::createSamplers()
         NE_CORE_ASSERT(sampler, "Failed to create sampler {} {}", (int)key, SDL_GetError());
     }
 }
+
+
 
 } // namespace SDL

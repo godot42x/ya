@@ -27,6 +27,7 @@
         "spdlog",
         "SPIR",
         "SPIRV",
+        "STENCILOP",
         "subpass",
         "Subpasses",
         "subresource",
