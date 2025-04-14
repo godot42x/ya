@@ -1,91 +1,200 @@
 #pragma once
 #include "Core/Log.h"
 #include "SDL3/SDL_gpu.h"
+#include <functional>
+#include <memory>
 #include <string>
 
+// Forward declarations
+class SDLGPUBuffer;
+class SDLGPUTransferBuffer;
 
-struct SDLBuffer
+// Typedefs for smart pointers
+using SDLGPUBufferPtr         = std::shared_ptr<SDLGPUBuffer>;
+using SDLGPUTransferBufferPtr = std::shared_ptr<SDLGPUTransferBuffer>;
+
+// RAII wrapper for SDL_GPUBuffer with self-contained size tracking
+class SDLGPUBuffer
 {
+    // Disallow copying
+    SDLGPUBuffer(const SDLGPUBuffer &)            = delete;
+    SDLGPUBuffer &operator=(const SDLGPUBuffer &) = delete;
 
-    struct BufferCreateInfo
+    SDL_GPUDevice &m_device; // Reference to ensure device outlives buffer
+    SDL_GPUBuffer *m_buffer;
+    size_t         m_size;
+    std::string    m_name;
+
+  private:
+    // Private constructor to ensure creation through factory method
+    SDLGPUBuffer(SDL_GPUDevice &device)
+        : m_device(device) {}
+
+  public:
+    enum class Usage
     {
-        enum EUsage
-        {
-            VertexBuffer,
-            IndexBuffer,
-            // TODO: support more usages...
-        };
-
-        std::string name;
-        EUsage      usage;
-        std::size_t size;
+        VertexBuffer,
+        IndexBuffer,
+        // Add other usages as needed
     };
 
-    static SDL_GPUBuffer *createBuffer(SDL_GPUDevice *device, const BufferCreateInfo &BCI)
+    ~SDLGPUBuffer()
     {
+        if (m_buffer) {
+            SDL_ReleaseGPUBuffer(&m_device, m_buffer);
+        }
+        m_buffer = nullptr;
+    }
+
+    SDL_GPUBuffer *getBuffer() const { return m_buffer; }
+    size_t         getSize() const { return m_size; }
+
+    // Static factory method
+    static SDLGPUBufferPtr Create(SDL_GPUDevice &device, const std::string &name, Usage usage, size_t size)
+    {
+        auto ptr = std::shared_ptr<SDLGPUBuffer>(new SDLGPUBuffer(device));
+        ptr->createInternal(size, usage, name);
+        return ptr;
+    }
+
+    // Method to recreate buffer with larger size if needed
+    void tryExtendSize(const std::string &name, Usage usage, size_t requiredSize)
+    {
+        if (requiredSize <= m_size) {
+            return;
+        }
+
+        // Calculate new size (double the current size or use required size if larger)
+        size_t newSize = m_size * 2;
+        if (newSize < requiredSize) {
+            newSize = requiredSize;
+        }
+
+        SDL_ReleaseGPUBuffer(&m_device, m_buffer);
+        m_buffer = nullptr;
+        createInternal(newSize, usage, name);
+    }
+
+  private:
+    void createInternal(std::size_t size, Usage usage, const std::string &name)
+    {
+        NE_ASSERT(m_buffer == nullptr, "Buffer already created");
+
         SDL_GPUBufferCreateInfo sdlBCI = {
-            .size  = static_cast<Uint32>(BCI.size),
+            .size  = static_cast<Uint32>(size),
             .props = 0, // by comment
         };
 
-        switch (BCI.usage) {
-        case BufferCreateInfo::VertexBuffer:
+        switch (usage) {
+        case Usage::VertexBuffer:
             sdlBCI.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
             break;
-        case BufferCreateInfo::IndexBuffer:
+        case Usage::IndexBuffer:
             sdlBCI.usage = SDL_GPU_BUFFERUSAGE_INDEX;
             break;
         default:
-            NE_CORE_ASSERT(false, "Invalid buffer usage {}", (int)BCI.usage);
-            break;
+            NE_CORE_ASSERT(false, "Invalid buffer usage");
+            return;
         }
 
-        auto buffer = SDL_CreateGPUBuffer(device, &sdlBCI);
-        NE_CORE_ASSERT(buffer, "Failed to create buffer {}", SDL_GetError());
+        m_buffer = SDL_CreateGPUBuffer(&m_device, &sdlBCI);
+        NE_CORE_ASSERT(m_buffer, "Failed to create buffer: {}", SDL_GetError());
+        m_size = size;
+        m_name = name;
 
-        SDL_SetGPUBufferName(device, buffer, BCI.name.c_str());
-
-        return buffer;
+        SDL_SetGPUBufferName(&m_device, m_buffer, name.c_str());
     }
+};
 
+// RAII wrapper for SDL_GPUTransferBuffer with self-contained size tracking
+class SDLGPUTransferBuffer
+{
+    // Disallow copying
+    SDLGPUTransferBuffer(const SDLGPUTransferBuffer &)            = delete;
+    SDLGPUTransferBuffer &operator=(const SDLGPUTransferBuffer &) = delete;
 
-    struct TransferBufferCreateInfo
+    SDL_GPUDevice         &m_device; // Reference to ensure device outlives buffer
+    SDL_GPUTransferBuffer *m_buffer = nullptr;
+    size_t                 m_size   = 0;
+    std::string            m_name;
+
+  private:
+    // Private constructor to ensure creation through factory method
+    SDLGPUTransferBuffer(SDL_GPUDevice &device)
+        : m_device(device) {}
+
+  public:
+    enum class Usage
     {
-        enum EUsage
-        {
-            Upload,
-            Download,
-        };
-
-        std::string name;
-        EUsage      usage;
-        std::size_t size;
+        Upload,
+        Download,
     };
 
-    static SDL_GPUTransferBuffer *createTransferBuffer(SDL_GPUDevice *device, const TransferBufferCreateInfo &transferBCI)
+    ~SDLGPUTransferBuffer()
     {
-        SDL_GPUTransferBufferCreateInfo sdlTransferBCI = {
-            .size  = static_cast<Uint32>(transferBCI.size),
+        if (m_buffer) {
+            SDL_ReleaseGPUTransferBuffer(&m_device, m_buffer);
+        }
+        m_buffer = nullptr;
+    }
+
+    SDL_GPUTransferBuffer *getBuffer() const { return m_buffer; }
+    size_t                 getSize() const { return m_size; }
+    const std::string     &getName() const { return m_name; }
+
+    // Static factory method
+    static SDLGPUTransferBufferPtr Create(SDL_GPUDevice &device, const std::string &name, Usage usage, size_t size)
+    {
+        auto ptr = std::shared_ptr<SDLGPUTransferBuffer>(new SDLGPUTransferBuffer(device));
+        ptr->createInternal(size, usage, name);
+        return ptr;
+    }
+
+    // Method to extend the buffer size if needed
+    void tryExtendSize(const std::string &name, Usage usage, size_t requiredSize)
+    {
+        if (requiredSize <= m_size) {
+            return;
+        }
+
+        // Calculate new size (double the current size or use required size if larger)
+        size_t newSize = m_size * 2;
+        if (newSize < requiredSize) {
+            newSize = requiredSize;
+        }
+
+        SDL_ReleaseGPUTransferBuffer(&m_device, m_buffer);
+        m_buffer = nullptr;
+        createInternal(newSize, usage, name);
+    }
+
+  private:
+    void createInternal(std::size_t size, Usage usage, const std::string &name)
+    {
+        NE_ASSERT(m_buffer == nullptr, "Transfer buffer already created");
+
+        SDL_GPUTransferBufferCreateInfo createInfo = {
+            .size  = static_cast<Uint32>(size),
             .props = 0, // by comment
         };
 
-        switch (transferBCI.usage) {
-        case TransferBufferCreateInfo::Upload:
-            sdlTransferBCI.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        switch (usage) {
+        case Usage::Upload:
+            createInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
             break;
-        case TransferBufferCreateInfo::Download:
-            sdlTransferBCI.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+        case Usage::Download:
+            createInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
             break;
         default:
-            NE_CORE_ASSERT(false, "Invalid transfer buffer usage {}", (int)transferBCI.usage);
+            NE_CORE_ASSERT(false, "Invalid transfer buffer usage");
+            return;
         }
 
-        auto buffer = SDL_CreateGPUTransferBuffer(device, &sdlTransferBCI);
-        NE_ASSERT(buffer, "Failed to create transfer buffer {}", SDL_GetError());
+        m_buffer = SDL_CreateGPUTransferBuffer(&m_device, &createInfo);
+        NE_CORE_ASSERT(m_buffer, "Failed to create transfer buffer: {}", SDL_GetError());
+        m_size = size;
+        m_name = name;
 
-        // no supported, so it's a buffer at cpu side?
-        // SDL_SetGPUBufferName(device, buffer, transferBCI.name.c_str());
-
-        return buffer;
+        // Note: No name setting for transfer buffer as it's not supported in the SDK
     }
 };
