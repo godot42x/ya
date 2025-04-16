@@ -16,20 +16,6 @@ using SDLGPUTransferBufferPtr = std::shared_ptr<SDLGPUTransferBuffer>;
 // RAII wrapper for SDL_GPUBuffer with self-contained size tracking
 class SDLGPUBuffer
 {
-    // Disallow copying
-    SDLGPUBuffer(const SDLGPUBuffer &)            = delete;
-    SDLGPUBuffer &operator=(const SDLGPUBuffer &) = delete;
-
-    SDL_GPUDevice &m_device; // Reference to ensure device outlives buffer
-    SDL_GPUBuffer *m_buffer;
-    size_t         m_size;
-    std::string    m_name;
-
-  private:
-    // Private constructor to ensure creation through factory method
-    SDLGPUBuffer(SDL_GPUDevice &device)
-        : m_device(device) {}
-
   public:
     enum class Usage
     {
@@ -38,47 +24,73 @@ class SDLGPUBuffer
         // Add other usages as needed
     };
 
+  private:
+
+    SDL_GPUDevice &_device; // Reference to ensure device outlives buffer
+    SDL_GPUBuffer *_gpuBuffer = nullptr;
+    std::size_t    _size;
+    std::string    _name;
+    Usage          _usage;
+
+
+
+  public:
+    // Private constructor to ensure creation through factory method
+    SDLGPUBuffer(SDL_GPUDevice &device)
+        : _device(device) {}
+
     ~SDLGPUBuffer()
     {
-        if (m_buffer) {
-            SDL_ReleaseGPUBuffer(&m_device, m_buffer);
+        if (_gpuBuffer) {
+            NE_CORE_TRACE("Destroying gpu buffer: {}", _name);
+            SDL_ReleaseGPUBuffer(&_device, _gpuBuffer);
         }
-        m_buffer = nullptr;
+        _gpuBuffer = nullptr;
     }
 
-    SDL_GPUBuffer *getBuffer() const { return m_buffer; }
-    size_t         getSize() const { return m_size; }
+  private:
+    // Disallow copying
+    SDLGPUBuffer(const SDLGPUBuffer &)            = delete;
+    SDLGPUBuffer &operator=(const SDLGPUBuffer &) = delete;
+
+  public:
+
+    SDL_GPUBuffer *getBuffer() const { return _gpuBuffer; }
+    std::size_t    getSize() const { return _size; }
+    std::string    getName() const { return _name; }
 
     // Static factory method
-    static SDLGPUBufferPtr Create(SDL_GPUDevice &device, const std::string &name, Usage usage, size_t size)
+    static SDLGPUBufferPtr Create(SDL_GPUDevice *device, const std::string &name, Usage usage, size_t size)
     {
-        auto ptr = std::shared_ptr<SDLGPUBuffer>(new SDLGPUBuffer(device));
+        auto ptr = std::make_shared<SDLGPUBuffer>(*device);
+        NE_CORE_TRACE("Creating gpu buffer: {}", name);
         ptr->createInternal(size, usage, name);
         return ptr;
     }
 
     // Method to recreate buffer with larger size if needed
-    void tryExtendSize(const std::string &name, Usage usage, size_t requiredSize)
+    void tryExtendSize(size_t requiredSize)
     {
-        if (requiredSize <= m_size) {
+        if (requiredSize <= _size) {
             return;
         }
 
         // Calculate new size (double the current size or use required size if larger)
-        size_t newSize = m_size * 2;
-        if (newSize < requiredSize) {
-            newSize = requiredSize;
+        if (requiredSize < _size * 2) {
+            requiredSize = _size * 2;
         }
 
-        SDL_ReleaseGPUBuffer(&m_device, m_buffer);
-        m_buffer = nullptr;
-        createInternal(newSize, usage, name);
+        SDL_ReleaseGPUBuffer(&_device, _gpuBuffer);
+        NE_CORE_TRACE("Extend set buffer size nullptr: {} -> {}", _size, requiredSize);
+        _gpuBuffer = nullptr;
+        createInternal(requiredSize, _usage, _name);
     }
+
 
   private:
     void createInternal(std::size_t size, Usage usage, const std::string &name)
     {
-        NE_ASSERT(m_buffer == nullptr, "Buffer already created");
+        NE_CORE_ASSERT(_gpuBuffer == nullptr, "Buffer already created, name: {}", name);
 
         SDL_GPUBufferCreateInfo sdlBCI = {
             .size  = static_cast<Uint32>(size),
@@ -97,32 +109,18 @@ class SDLGPUBuffer
             return;
         }
 
-        m_buffer = SDL_CreateGPUBuffer(&m_device, &sdlBCI);
-        NE_CORE_ASSERT(m_buffer, "Failed to create buffer: {}", SDL_GetError());
-        m_size = size;
-        m_name = name;
+        _gpuBuffer = SDL_CreateGPUBuffer(&_device, &sdlBCI);
+        NE_CORE_ASSERT(_gpuBuffer, "Failed to create buffer: {}", SDL_GetError());
+        _size = size;
+        _name = name;
 
-        SDL_SetGPUBufferName(&m_device, m_buffer, name.c_str());
+        SDL_SetGPUBufferName(&_device, _gpuBuffer, name.c_str());
     }
 };
 
 // RAII wrapper for SDL_GPUTransferBuffer with self-contained size tracking
 class SDLGPUTransferBuffer
 {
-    // Disallow copying
-    SDLGPUTransferBuffer(const SDLGPUTransferBuffer &)            = delete;
-    SDLGPUTransferBuffer &operator=(const SDLGPUTransferBuffer &) = delete;
-
-    SDL_GPUDevice         &m_device; // Reference to ensure device outlives buffer
-    SDL_GPUTransferBuffer *m_buffer = nullptr;
-    size_t                 m_size   = 0;
-    std::string            m_name;
-
-  private:
-    // Private constructor to ensure creation through factory method
-    SDLGPUTransferBuffer(SDL_GPUDevice &device)
-        : m_device(device) {}
-
   public:
     enum class Usage
     {
@@ -130,48 +128,73 @@ class SDLGPUTransferBuffer
         Download,
     };
 
+  private:
+
+    SDL_GPUDevice         &_device; // Reference to ensure device outlives buffer
+    SDL_GPUTransferBuffer *_gpuBuffer = nullptr;
+    size_t                 _size      = 0;
+    std::string            _name;
+    Usage                  _usage;
+
+  private:
+
+
+
+    // Disallow copying
+    SDLGPUTransferBuffer(const SDLGPUTransferBuffer &)            = delete;
+    SDLGPUTransferBuffer &operator=(const SDLGPUTransferBuffer &) = delete;
+
+  public:
+    // Private constructor to ensure creation through factory method
+    SDLGPUTransferBuffer(SDL_GPUDevice &device)
+        : _device(device) {}
+
     ~SDLGPUTransferBuffer()
     {
-        if (m_buffer) {
-            SDL_ReleaseGPUTransferBuffer(&m_device, m_buffer);
+        if (_gpuBuffer) {
+            NE_CORE_TRACE("Destroying transfer buffer: {}", _name);
+            SDL_ReleaseGPUTransferBuffer(&_device, _gpuBuffer);
         }
-        m_buffer = nullptr;
+        _gpuBuffer = nullptr;
     }
 
-    SDL_GPUTransferBuffer *getBuffer() const { return m_buffer; }
-    size_t                 getSize() const { return m_size; }
-    const std::string     &getName() const { return m_name; }
+
+  public:
+
+    SDL_GPUTransferBuffer *getBuffer() const { return _gpuBuffer; }
+    size_t                 getSize() const { return _size; }
+    const std::string     &getName() const { return _name; }
 
     // Static factory method
-    static SDLGPUTransferBufferPtr Create(SDL_GPUDevice &device, const std::string &name, Usage usage, size_t size)
+    static SDLGPUTransferBufferPtr Create(SDL_GPUDevice *device, const std::string &name, Usage usage, size_t size)
     {
-        auto ptr = std::shared_ptr<SDLGPUTransferBuffer>(new SDLGPUTransferBuffer(device));
+        auto ptr = std::make_shared<SDLGPUTransferBuffer>(*device);
         ptr->createInternal(size, usage, name);
         return ptr;
     }
 
     // Method to extend the buffer size if needed
-    void tryExtendSize(const std::string &name, Usage usage, size_t requiredSize)
+    void tryExtendSize(size_t requiredSize)
     {
-        if (requiredSize <= m_size) {
+        if (requiredSize <= _size) {
             return;
         }
 
         // Calculate new size (double the current size or use required size if larger)
-        size_t newSize = m_size * 2;
-        if (newSize < requiredSize) {
-            newSize = requiredSize;
+        if (requiredSize < _size * 2) {
+            requiredSize = _size * 2;
         }
 
-        SDL_ReleaseGPUTransferBuffer(&m_device, m_buffer);
-        m_buffer = nullptr;
-        createInternal(newSize, usage, name);
+
+        SDL_ReleaseGPUTransferBuffer(&_device, _gpuBuffer);
+        _gpuBuffer = nullptr;
+        createInternal(requiredSize, _usage, _name);
     }
 
   private:
     void createInternal(std::size_t size, Usage usage, const std::string &name)
     {
-        NE_ASSERT(m_buffer == nullptr, "Transfer buffer already created");
+        NE_CORE_ASSERT(_gpuBuffer == nullptr, "Transfer buffer already created name: {} ", name);
 
         SDL_GPUTransferBufferCreateInfo createInfo = {
             .size  = static_cast<Uint32>(size),
@@ -190,10 +213,10 @@ class SDLGPUTransferBuffer
             return;
         }
 
-        m_buffer = SDL_CreateGPUTransferBuffer(&m_device, &createInfo);
-        NE_CORE_ASSERT(m_buffer, "Failed to create transfer buffer: {}", SDL_GetError());
-        m_size = size;
-        m_name = name;
+        _gpuBuffer = SDL_CreateGPUTransferBuffer(&_device, &createInfo);
+        NE_CORE_ASSERT(_gpuBuffer, "Failed to create transfer buffer: {}", SDL_GetError());
+        _size = size;
+        _name = name;
 
         // Note: No name setting for transfer buffer as it's not supported in the SDK
     }

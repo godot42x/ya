@@ -1,4 +1,3 @@
-
 // #define SDL_MAIN_USE_CALLBACKS
 // #include <SDL3/SDL_main.h>
 
@@ -26,18 +25,27 @@
 #include "Render/SDL/SDLGPURender.h"
 #include "Render/SDL/SDLGPURender2D.h"
 
+
+#define ENABLE_IMGUI 1
+#define ENABLE_RENDER_2D 1
+
 SDL_GPUTexture *faceTexture;
 SDL_GPUTexture *whiteTexture;
 
 static bool bVsync = true;
 
 // App              app;
-AssetManager        assetManager;
-Neon::ImguiState    imguiState;
+AssetManager assetManager;
+
+#if ENABLE_IMGUI
+Neon::ImguiState imguiState;
+#endif
 EditorCamera        camera;
 InputManager        inputManager;
-SDL::GPURender_SDL *render   = new SDL::GPURender_SDL();
-SDL::SDLRender2D   *render2d = new SDL::SDLRender2D();
+SDL::GPURender_SDL *render = new SDL::GPURender_SDL();
+#if ENABLE_RENDER_2D
+SDL::SDLRender2D *render2d = new SDL::SDLRender2D();
+#endif
 
 std::queue<std::function<void()>> asyncUpdateTask;
 
@@ -191,9 +199,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
         NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
     }
-    render2d->init(render->device, render->window);
 
-    imguiState.init(render->device, render->window);
 
     EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
 
@@ -209,7 +215,13 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
+#if ENABLE_RENDER_2D
+    render2d->init(render->device, render->window);
+#endif
 
+#if ENABLE_IMGUI
+    imguiState.init(render->device, render->window);
+#endif
     initShaderData();
 
     return SDL_APP_CONTINUE;
@@ -554,6 +566,7 @@ SDL_AppResult AppIterate(void *appState)
     glm::mat4 transform           = glm::mat4(1.0f); // current rectangle has no position data
     bool      bImguiMinimized     = false;
 
+#if ENABLE_IMGUI
     imguiState.beginFrame();
     // UI code remains in Entry.cpp
     if (ImGui::Begin("Debug"))
@@ -602,14 +615,17 @@ SDL_AppResult AppIterate(void *appState)
     ImGui::End();
     bImguiMinimized = imguiState.render(sdlCommandBuffer->commandBuffer);
     imguiState.prepareDrawData(sdlCommandBuffer->commandBuffer);
+#endif
 
+#if ENABLE_RENDER_2D
     render2d->beginFrame(sdlCommandBuffer->commandBuffer, camera);
-    render2d->drawQuad(
-        {0.0f, 0.0f},
-        0,
-        {1.0f, 1.0f},
-        {1.0f, 1.0f, 1.0f, 1.0f});
+    for (float x = -5.f; x < 5.f; x += 1.f) {
+        for (float y = -5.f; y < 5.f; y += 1.f) {
+            render2d->drawQuad({x, y}, 0.0, {1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f});
+        }
+    }
     render2d->submit();
+#endif
 
 #pragma endregion
 
@@ -729,10 +745,14 @@ SDL_AppResult AppIterate(void *appState)
         }
 
         // after graphics pipeline draw, or make pipeline draw into a RT
+#if ENABLE_IMGUI
         imguiState.draw(sdlCommandBuffer->commandBuffer, renderpass);
+#endif
     }
 
+#if ENABLE_RENDER_2D
     render2d->render(renderpass);
+#endif
 
     SDL_EndGPURenderPass(renderpass);
 
@@ -751,10 +771,12 @@ SDL_AppResult AppEvent(void *appstate, SDL_Event *evt)
     EventProcessState state = EventProcessState::Continue;
 
     // TODO: priority of each event handler?
+#if ENABLE_IMGUI
     if (state = imguiState.processEvents(*evt); state) {
         NE_CORE_WARN("Imgui handled event: {}", evt->type);
         return SDL_APP_CONTINUE;
     }
+#endif
     if (state = inputManager.processEvent(*evt); state) {
         NE_CORE_WARN("InputManager handled event: {}", evt->type);
         return SDL_APP_CONTINUE;
@@ -807,7 +829,6 @@ void AppQuit(void *appstate, SDL_AppResult result)
 
     SDL_WaitForGPUIdle(render->device);
 
-    imguiState.shutdown();
 
     if (faceTexture) {
         SDL_ReleaseGPUTexture(render->device, faceTexture);
@@ -816,10 +837,20 @@ void AppQuit(void *appstate, SDL_AppResult result)
         SDL_ReleaseGPUTexture(render->device, whiteTexture);
     }
 
+#if ENABLE_IMGUI
+    imguiState.shutdown();
+#endif
+
     // Clean up dialog window
     dialogWindow.reset();
 
-    render->clean();
+
+#if ENABLE_RENDER_2D
+    render2d->clean();
+    // delete render2d;
+#endif
+    render->clean(); // now device owning by render
+    // delete render;
 
     auto sdlAppState = static_cast<SDLAppState *>(appstate);
     delete sdlAppState;

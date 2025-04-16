@@ -11,7 +11,6 @@ namespace SDL
 
 struct SDLGraphicsPipeLine : public GraphicsPipeline
 {
-
     SDL_GPUDevice                              *device          = nullptr; // owning device?
     SDL_GPUGraphicsPipeline                    *pipeline        = nullptr;
     std::size_t                                 vertexInputSize = 0;
@@ -21,11 +20,11 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
 
     bool create(SDL_GPUDevice *device, SDL_Window *window, const GraphicsPipelineCreateInfo &pipelineCI)
     {
-        this->device       = device;
-        pipelineCreateInfo = pipelineCI;
-        SDLShader shader   = SDLShader()
-                               .preCreate(pipelineCI.shaderCreateInfo) // prepare spir code and reflection info
-                               .create(device);                        // sdl api create
+        this->device              = device;
+        pipelineCreateInfo        = pipelineCI;
+        SDLShaderProcessor shader = SDLShaderProcessor(*device)
+                                        .preprocess(pipelineCI.shaderCreateInfo) // prepare spir code and reflection info
+                                        .create();                              // sdl api create
 
         auto vertexShader   = shader.vertexShader;
         auto fragmentShader = shader.fragmentShader;
@@ -37,13 +36,7 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
         // this format is the final screen surface's format
         // if you want other format, create texture yourself
         SDL_GPUTextureFormat format = SDL_GetGPUSwapchainTextureFormat(device, window);
-        if (format == SDL_GPU_TEXTUREFORMAT_INVALID) {
-            NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
-            return false;
-        }
-        NE_CORE_INFO("current gpu texture format: {}", (int)format);
-
-
+        NE_CORE_ASSERT(format != SDL_GPU_TEXTUREFORMAT_INVALID, "Failed to get swapchain texture format: {}", SDL_GetError());
 
         SDL_GPUColorTargetDescription colorTargetDesc{
             .format = format,
@@ -72,13 +65,13 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
                 .num_vertex_attributes      = static_cast<Uint32>(vertexAttributes.size()),
             },
             // clang-format off
-        .rasterizer_state = SDL_GPURasterizerState{
-            .fill_mode  = SDL_GPU_FILLMODE_FILL,
-            .cull_mode  = SDL_GPU_CULLMODE_BACK, // cull back/front face
-            .front_face = pipelineCI.frontFaceType == EFrontFaceType::ClockWise ?
-                            SDL_GPU_FRONTFACE_CLOCKWISE :
-                           SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
-        },
+            .rasterizer_state = SDL_GPURasterizerState{
+                .fill_mode  = SDL_GPU_FILLMODE_FILL,
+                .cull_mode  = SDL_GPU_CULLMODE_BACK, // cull back/front face
+                .front_face = pipelineCI.frontFaceType == EFrontFaceType::ClockWise ?
+                                SDL_GPU_FRONTFACE_CLOCKWISE :
+                            SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE,
+            },
             // clang-format on
             .multisample_state = SDL_GPUMultisampleState{
                 .sample_count = SDL_GPU_SAMPLECOUNT_1,
@@ -123,6 +116,7 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
         }
 
         pipeline = SDL_CreateGPUGraphicsPipeline(device, &sdlGPUCreateInfo);
+        NE_CORE_ASSERT(pipeline, "Failed to create graphics pipeline: {}", SDL_GetError());
 
         SDL_ReleaseGPUShader(device, vertexShader);
         SDL_ReleaseGPUShader(device, fragmentShader);

@@ -11,7 +11,7 @@ layout(set = 1, binding = 0) uniform CameraData {
 } uCamera;
 
 layout(location = 0) out vec4 fragColor;
-layout(location = 1) out vec2 fragUV;
+// layout(location = 1) out vec2 fragUV;
 
 void main()
 {

@@ -333,7 +333,7 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
     resources.spirvResources = spirvResources; // Store original spirv resources
 
     NE_CORE_TRACE("===============================================================================");
-    NE_CORE_TRACE("OpenGLShader:Reflect  - {} {}", EShaderStage::T2Strings[stage], tempProcessingPath);
+    NE_CORE_TRACE("OpenGLShader:Reflect {} -> {}", tempProcessingPath, EShaderStage::T2Strings[stage]);
     NE_CORE_TRACE("\t {} uniform buffers ", spirvResources.uniform_buffers.size());
     NE_CORE_TRACE("\t {} storage buffers ", spirvResources.storage_buffers.size());
     NE_CORE_TRACE("\t {} stage inputs ", spirvResources.stage_inputs.size());
@@ -580,14 +580,14 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
         }
     }
 
-    // Perform reflection after compilation, but we don't need to store the results
-    // here. Callers can use the reflect method directly on the SPIR-V data if needed.
-    // for (auto &&[stage, data] : ret)
-    // {
-    //     ShaderReflection::ShaderResources resources = reflect(stage, data);
-    //     NE_CORE_INFO("Reflected shader stage: {} with {} uniform buffers and {} sampled images",
-    //         std::to_string(stage), resources.uniformBuffers.size(), resources.sampledImages.size());
-    // }
+    // Validate SPIR-V magic number
+    for (auto &[stage, spirv] : ret) {
+        if (spirv.empty() || spirv[0] != 0x07230203) {
+            NE_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::T2Strings[stage]);
+            NE_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::T2Strings[stage]);
+        }
+    }
+
 
     return {std::move(ret)};
 }

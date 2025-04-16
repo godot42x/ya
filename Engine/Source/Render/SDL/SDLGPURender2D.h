@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <list>
 #include <vector>
 
 
@@ -21,29 +20,25 @@ namespace SDL
 
 struct SDLRender2D
 {
-    SDL_GPUDevice *device = nullptr;
-
-    SDLGraphicsPipeLine pipeline;
 
     struct VertexInput
     {
         glm::vec3 position;
         glm::vec4 color;
     };
-    std::list<std::vector<VertexInput>> vertexInputBuffer;
+
+    SDL_GPUDevice      *device = nullptr;
+    SDLGraphicsPipeLine pipeline;
+
+    std::vector<VertexInput> vertexInputBuffer;
+    std::vector<Uint32>      indexInputBuffer;
+    std::size_t              lastMaxIndexCapacity = 0;
+
 
     // Smart pointer buffer management
     SDLGPUBufferPtr         vertexBufferPtr         = nullptr;
     SDLGPUBufferPtr         indexBufferPtr          = nullptr;
     SDLGPUTransferBufferPtr vertexTransferBufferPtr = nullptr;
-
-    // Constants for buffer management
-    static constexpr uint32_t maxVerticesPerBuffer        = 1000;
-    static constexpr uint32_t maxBatchIndexBufferElemSize = 6000; // Support for 1000 quads (6 indices per quad)
-    static constexpr size_t   initialVertexBufferSize     = 1024 * sizeof(VertexInput);
-    static constexpr size_t   initialIndexBufferSize      = 6000 * sizeof(uint32_t);
-
-    uint32_t currentBufferIndex = 0;
 
     std::vector<std::shared_ptr<Texture>> textures;
     std::shared_ptr<Texture>              whiteTexture;
@@ -66,12 +61,11 @@ struct SDLRender2D
 
     void init(SDL_GPUDevice *device, SDL_Window *window)
     {
-        this->device       = device;
-        currentBufferIndex = 0;
+        this->device = device;
 
         pipeline.create(
             device,
-            nullptr,
+            window,
             GraphicsPipelineCreateInfo{
                 .bDeriveInfoFromShader = false,
                 .shaderCreateInfo      = ShaderCreateInfo{
@@ -101,27 +95,35 @@ struct SDLRender2D
                 .frontFaceType = EFrontFaceType::CounterClockWise,
             });
 
+
+        std::size_t initialVertexCount = 1024 * 4; // 4 vertices per quad
+        std::size_t initialIndexCount  = 1024 * 6; // 6 indices per quad
+
+        std::size_t initialVertexBufferSize = initialVertexCount * sizeof(VertexInput);
+        std::size_t initialIndexBufferSize  = initialIndexCount * sizeof(uint32_t);
+
         // Create initial buffers with default sizes using the new classes
-        vertexBufferPtr         = SDLGPUBuffer::Create(*device, "Render2D VertexBuffer", SDLGPUBuffer::Usage::VertexBuffer, initialVertexBufferSize);
-        indexBufferPtr          = SDLGPUBuffer::Create(*device, "Render2D IndexBuffer", SDLGPUBuffer::Usage::IndexBuffer, initialIndexBufferSize);
-        vertexTransferBufferPtr = SDLGPUTransferBuffer::Create(*device, "Render2D VertexTransferBuffer", SDLGPUTransferBuffer::Usage::Upload, initialVertexBufferSize);
+        vertexBufferPtr = SDLGPUBuffer::Create(device, "Render2D VertexBuffer", SDLGPUBuffer::Usage::VertexBuffer, initialVertexBufferSize);
+        indexBufferPtr  = SDLGPUBuffer::Create(device, "Render2D IndexBuffer", SDLGPUBuffer::Usage::IndexBuffer, initialIndexBufferSize);
 
-        // Create the first buffer in the list
-        vertexInputBuffer.emplace_back();
-        vertexInputBuffer.back().reserve(maxVerticesPerBuffer);
+        fillQuadIndicesToGPUBuffer(indexBufferPtr,
+                                   initialIndexCount,
+                                   initialIndexBufferSize);
 
-        this->initQuadIndexBuffer();
+        vertexTransferBufferPtr = SDLGPUTransferBuffer::Create(device, "Render2D VertexTransferBuffer", SDLGPUTransferBuffer::Usage::Upload, initialVertexBufferSize);
+
+        vertexInputBuffer.reserve(initialVertexCount);
+        indexInputBuffer.reserve(initialIndexCount);
     }
 
     void clean()
     {
-        // Clear smart pointers which will automatically release resources
         vertexBufferPtr.reset();
         indexBufferPtr.reset();
         vertexTransferBufferPtr.reset();
 
-        pipeline.clean();
         textures.clear();
+        pipeline.clean();
     }
 
     void beginFrame(SDL_GPUCommandBuffer *commandBuffer, const Camera &camera)
@@ -129,54 +131,41 @@ struct SDLRender2D
         currentCommandBuffer            = commandBuffer;
         cameraData.viewProjectionMatrix = camera.getViewProjectionMatrix();
 
-        // Reset all buffers
-        for (auto &buffer : vertexInputBuffer) {
-            buffer.resize(0); // Reset size without deallocating memory
-        }
-        currentBufferIndex = 0;
+        vertexInputBuffer.resize(0);
+        indexInputBuffer.resize(0);
     }
 
     void submit()
     {
-        size_t totalVertices = 0;
-        for (const auto &buffer : vertexInputBuffer) {
-            totalVertices += buffer.size();
+        if (vertexInputBuffer.size() == 0) {
+            return;
         }
 
-        if (totalVertices == 0) {
-            return; // Nothing to render
+        vertexBufferPtr->tryExtendSize(sizeof(VertexInput) * vertexInputBuffer.size());
+        vertexTransferBufferPtr->tryExtendSize(sizeof(VertexInput) * vertexInputBuffer.size());
+
+        // TODO: how to reduce the max size when not needed?
+        std::size_t curIndexInputBufferCapacity = indexInputBuffer.capacity();
+        if (lastMaxIndexCapacity < curIndexInputBufferCapacity) // this vector has been extended
+        {
+            static constexpr std::size_t elemSize = sizeof(indexInputBuffer[0]);
+            // extend gpu buffer
+            indexBufferPtr->tryExtendSize(elemSize * curIndexInputBufferCapacity);
+
+            // recreate index buffer and quad indices, contain a copy pass
+            fillQuadIndicesToGPUBuffer(indexBufferPtr,
+                                       curIndexInputBufferCapacity,
+                                       curIndexInputBufferCapacity * elemSize);
+
+            lastMaxIndexCapacity = curIndexInputBufferCapacity;
         }
 
-        size_t requiredVertexBufferSize = totalVertices * sizeof(VertexInput);
-
-        // Expand vertex buffer if needed using tryExtendSize
-        if (!vertexBufferPtr) {
-            vertexBufferPtr = SDLGPUBuffer::Create(*device, "VertexBuffer", SDLGPUBuffer::Usage::VertexBuffer, requiredVertexBufferSize);
-        }
-        else {
-            vertexBufferPtr->tryExtendSize("VertexBuffer", SDLGPUBuffer::Usage::VertexBuffer, requiredVertexBufferSize);
-        }
-
-        // Expand transfer buffer if needed
-        if (!vertexTransferBufferPtr) {
-            vertexTransferBufferPtr = SDLGPUTransferBuffer::Create(*device, "VertexTransferBuffer", SDLGPUTransferBuffer::Usage::Upload, requiredVertexBufferSize);
-        }
-        else {
-            vertexTransferBufferPtr->tryExtendSize("VertexTransferBuffer",
-                                                   SDLGPUTransferBuffer::Usage::Upload,
-                                                   requiredVertexBufferSize);
-        }
 
         // Map and copy data to transfer buffer
-        void  *ptr    = SDL_MapGPUTransferBuffer(device, vertexTransferBufferPtr->getBuffer(), true);
-        size_t offset = 0;
-        for (const auto &buffer : vertexInputBuffer) {
-            if (buffer.size() > 0) {
-                std::memcpy(static_cast<uint8_t *>(ptr) + offset, buffer.data(), buffer.size() * sizeof(VertexInput));
-                offset += buffer.size() * sizeof(VertexInput);
-            }
-        }
+        void *ptr = SDL_MapGPUTransferBuffer(device, vertexTransferBufferPtr->getBuffer(), true);
+        std::memcpy(ptr, vertexInputBuffer.data(), sizeof(VertexInput) * vertexInputBuffer.size());
         SDL_UnmapGPUTransferBuffer(device, vertexTransferBufferPtr->getBuffer());
+
 
         // Upload to GPU buffer
         SDL_GPUCopyPass *copyPass = SDL_BeginGPUCopyPass(currentCommandBuffer);
@@ -185,10 +174,10 @@ struct SDLRender2D
             .transfer_buffer = vertexTransferBufferPtr->getBuffer(),
             .offset          = 0,
         };
-
         SDL_GPUBufferRegion destination = {
             .buffer = vertexBufferPtr->getBuffer(),
             .offset = 0,
+            .size   = static_cast<Uint32>(sizeof(VertexInput) * vertexInputBuffer.size()),
         };
 
         SDL_UploadToGPUBuffer(copyPass, &source, &destination, false);
@@ -197,20 +186,7 @@ struct SDLRender2D
 
     void render(SDL_GPURenderPass *renderpass)
     {
-        // Calculate total number of vertices to render
-        size_t totalVertices = 0;
-        for (const auto &buffer : vertexInputBuffer) {
-            totalVertices += buffer.size();
-        }
-
-        if (totalVertices == 0) {
-            return; // Nothing to render
-        }
-
-        // Calculate total number of quads and indices
-        size_t totalQuads   = totalVertices / 4;
-        size_t totalIndices = totalQuads * 6;
-
+        // set the camera data in current pipeline(shader)
         SDL_PushGPUVertexUniformData(
             currentCommandBuffer,
             0,
@@ -233,44 +209,27 @@ struct SDLRender2D
 
         SDL_DrawGPUIndexedPrimitives(
             renderpass,
-            totalIndices, // Use actual number of indices
+            indexInputBuffer.size(),
             1,
             0,
             0,
             0);
     }
 
+
     void drawQuad(const glm::vec2 &position, float rotation, const glm::vec2 &scale, const glm::vec4 &color)
     {
+        static constexpr size_t numVertices = 4;
+
         glm::mat4 transform = glm::translate(glm::mat4(1.0), glm::vec3(position.x, position.y, 0.0)) *
                               glm::rotate(glm::mat4(1.0), glm::radians(rotation), glm::vec3(0, 0, 1)) *
                               glm::scale(glm::mat4(1.0), glm::vec3(scale.x, scale.y, 1.0));
 
-        // Check if we need a new buffer
-        if (currentBufferIndex >= vertexInputBuffer.size()) {
-            vertexInputBuffer.emplace_back();
-            vertexInputBuffer.back().reserve(maxVerticesPerBuffer);
-        }
-
-        auto &currentBuffer = vertexInputBuffer[currentBufferIndex];
-
-        // Check if we need to move to the next buffer
-        if (currentBuffer.size() + 4 > maxVerticesPerBuffer) {
-            currentBufferIndex++;
-
-            // Create a new buffer if needed
-            if (currentBufferIndex >= vertexInputBuffer.size()) {
-                vertexInputBuffer.emplace_back();
-                vertexInputBuffer.back().reserve(maxVerticesPerBuffer);
-            }
-
-            currentBuffer = vertexInputBuffer[currentBufferIndex];
-        }
 
         // Add the four vertices for this quad
-        for (const auto &pos : vertexPos) {
-            glm::vec4 transformedPos = transform * pos;
-            currentBuffer.emplace_back(
+        for (int i = 0; i < numVertices; ++i) {
+            glm::vec4 transformedPos = transform * vertexPos[i];
+            vertexInputBuffer.emplace_back(
                 VertexInput{
                     .position = glm::vec3(transformedPos.x, transformedPos.y, transformedPos.z),
                     .color    = color,
@@ -279,9 +238,7 @@ struct SDLRender2D
     }
 
 
-  private:
-    // init the indexBuffer for each *QUAD* indices
-    void initQuadIndexBuffer();
+    void fillQuadIndicesToGPUBuffer(SDLGPUBufferPtr indexBuffer, std::size_t indicesSize, std::size_t bufferSize);
 };
 
 } // namespace SDL

@@ -44,23 +44,23 @@
         "WINDOWPOS"
     ],
     "workbench.colorCustomizations": {
-        "activityBar.activeBackground": "#5b1942",
-        "activityBar.background": "#5b1942",
+        "activityBar.activeBackground": "#004a58",
+        "activityBar.background": "#004a58",
         "activityBar.foreground": "#e7e7e7",
         "activityBar.inactiveForeground": "#e7e7e799",
-        "activityBarBadge.background": "#5b7d22",
+        "activityBarBadge.background": "#000000",
         "activityBarBadge.foreground": "#e7e7e7",
         "commandCenter.border": "#e7e7e799",
-        "sash.hoverBorder": "#5b1942",
-        "statusBar.background": "#330e25",
+        "sash.hoverBorder": "#004a58",
+        "statusBar.background": "#001f25",
         "statusBar.foreground": "#e7e7e7",
-        "statusBarItem.hoverBackground": "#5b1942",
-        "statusBarItem.remoteBackground": "#330e25",
+        "statusBarItem.hoverBackground": "#004a58",
+        "statusBarItem.remoteBackground": "#001f25",
         "statusBarItem.remoteForeground": "#e7e7e7",
-        "titleBar.activeBackground": "#330e25",
+        "titleBar.activeBackground": "#001f25",
         "titleBar.activeForeground": "#e7e7e7",
-        "titleBar.inactiveBackground": "#330e2599",
+        "titleBar.inactiveBackground": "#001f2599",
         "titleBar.inactiveForeground": "#e7e7e799"
     },
-    "peacock.color": "#330e25"
+    "peacock.color": "#001f25"
 }

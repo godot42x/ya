@@ -1,35 +1,36 @@
 #include "SDLGPURender2D.h"
 
-void SDL::SDLRender2D::initQuadIndexBuffer()
+namespace SDL
 {
-    // Ensure the index buffer is large enough using tryExtendSize
-    if (!indexBufferPtr) {
-        indexBufferPtr = SDLGPUBuffer::Create(*device, "IndexBuffer", 
-                                             SDLGPUBuffer::Usage::IndexBuffer, 
-                                             maxBatchIndexBufferElemSize * sizeof(uint32_t));
-    } else {
-        indexBufferPtr->tryExtendSize("IndexBuffer", SDLGPUBuffer::Usage::IndexBuffer,
-                                     maxBatchIndexBufferElemSize * sizeof(uint32_t));
-    }
+
+void SDLRender2D::fillQuadIndicesToGPUBuffer(SDLGPUBufferPtr indexBuffer, std::size_t indicesSize, std::size_t bufferSize)
+{
+    NE_CORE_TRACE("Fill quad indices to GPU buffer: {0} bytes, {1} indices", bufferSize, indicesSize);
+    NE_CORE_ASSERT(indicesSize > 0 && (indicesSize * sizeof(Uint32) == bufferSize || indicesSize * sizeof(Uint16) == bufferSize),
+                   "Invalid index buffer size. Expected size is {0} or {1}, but got {2}",
+                   indicesSize * sizeof(Uint32),
+                   indicesSize * sizeof(Uint16),
+                   bufferSize);
+
+    indexBuffer->tryExtendSize(bufferSize);
 
     // Create a transfer buffer to upload the index data
     auto indexTransferBufferPtr = SDLGPUTransferBuffer::Create(
-        *device,
-        "IndexTransferBuffer",
+        device,
+        "Render2D IndexTransferBuffer",
         SDLGPUTransferBuffer::Usage::Upload,
-        maxBatchIndexBufferElemSize * sizeof(uint32_t)
-    );
-    
+        bufferSize);
+
     if (!indexTransferBufferPtr || !indexBufferPtr) {
         NE_CORE_ERROR("Failed to create buffers for quad index initialization");
         return;
     }
-    
+
     // Map the transfer buffer
-    Uint32* indicesPtr = (Uint32*)SDL_MapGPUTransferBuffer(device, indexTransferBufferPtr->getBuffer(), true);
-    
+    Uint32 *indicesPtr = (Uint32 *)SDL_MapGPUTransferBuffer(device, indexTransferBufferPtr->getBuffer(), true);
+
     if (pipeline.pipelineCreateInfo.frontFaceType == EFrontFaceType::ClockWise) {
-        for (uint32_t i = 0; i < maxBatchIndexBufferElemSize / 6; i++) {
+        for (uint32_t i = 0; i < indicesSize / 6; i++) {
             indicesPtr[i * 6 + 0] = i * 4 + 0; // left top
             indicesPtr[i * 6 + 1] = i * 4 + 1; // right top
             indicesPtr[i * 6 + 2] = i * 4 + 2; // right bottom
@@ -40,7 +41,7 @@ void SDL::SDLRender2D::initQuadIndexBuffer()
         }
     }
     else {
-        for (uint32_t i = 0; i < maxBatchIndexBufferElemSize / 6; i++) {
+        for (uint32_t i = 0; i < indicesSize / 6; i++) {
             indicesPtr[i * 6 + 0] = i * 4 + 0; // left top
             indicesPtr[i * 6 + 1] = i * 4 + 2; // right bottom
             indicesPtr[i * 6 + 2] = i * 4 + 1; // right top
@@ -54,20 +55,23 @@ void SDL::SDLRender2D::initQuadIndexBuffer()
     SDL_UnmapGPUTransferBuffer(device, indexTransferBufferPtr->getBuffer());
 
     auto commandBuffer = SDL_AcquireGPUCommandBuffer(device);
-    auto copyPass = SDL_BeginGPUCopyPass(commandBuffer);
+    auto copyPass      = SDL_BeginGPUCopyPass(commandBuffer);
     {
         SDL_GPUTransferBufferLocation source = {
             .transfer_buffer = indexTransferBufferPtr->getBuffer(),
-            .offset = 0,
+            .offset          = 0,
         };
         SDL_GPUBufferRegion destination = {
             .buffer = indexBufferPtr->getBuffer(),
             .offset = 0,
+            .size   = static_cast<Uint32>(bufferSize),
         };
         SDL_UploadToGPUBuffer(copyPass, &source, &destination, false);
     }
     SDL_EndGPUCopyPass(copyPass);
     SDL_SubmitGPUCommandBuffer(commandBuffer);
-    
+
+
     // indexTransferBufferPtr will be automatically released when it goes out of scope
 }
+} // namespace SDL

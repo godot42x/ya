@@ -2,7 +2,9 @@
 
 
 
+#include "SDL3/SDL.h"
 #include "SDL3/SDL_gpu.h"
+
 
 #include "Render/Shader.h"
 #include "SDLGPUCommandBuffer.h"
@@ -67,13 +69,13 @@ GPURender_SDL::ShaderCreateResult GPURender_SDL::createShaders(const ShaderCreat
             .num_storage_textures = 0, // We're not using storage images currently
             .num_storage_buffers  = 0, // We're not using storage buffers currently
             .num_uniform_buffers  = [&]() -> Uint32 {
-                const auto vertexUniformCount   = result.shaderResources[EShaderStage::Vertex].uniformBuffers.size();
                 const auto fragmentUniformCount = result.shaderResources[EShaderStage::Fragment].uniformBuffers.size();
-                if (vertexUniformCount + fragmentUniformCount > 99999) {
-                    NE_CORE_ERROR("Combined uniform buffer count exceeds the maximum allowed: Vertex={}, Fragment={}", vertexUniformCount, fragmentUniformCount);
+                const auto samplerCount         = result.shaderResources[EShaderStage::Fragment].sampledImages.size();
+                if (samplerCount + fragmentUniformCount > 99999) {
+                    NE_CORE_ERROR("Combined uniform buffer count exceeds the maximum allowed: Vertex={}, Fragment={}", samplerCount, fragmentUniformCount);
                     NE_CORE_ASSERT(false, "Uniform buffer count mismatch");
                 }
-                return static_cast<Uint32>(vertexUniformCount + fragmentUniformCount);
+                return static_cast<Uint32>(samplerCount + fragmentUniformCount);
             }(),
         };
 
