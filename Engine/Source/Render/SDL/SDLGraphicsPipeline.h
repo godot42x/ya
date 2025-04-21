@@ -24,7 +24,7 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
         pipelineCreateInfo        = pipelineCI;
         SDLShaderProcessor shader = SDLShaderProcessor(*device)
                                         .preprocess(pipelineCI.shaderCreateInfo) // prepare spir code and reflection info
-                                        .create();                              // sdl api create
+                                        .create();                               // sdl api create
 
         auto vertexShader   = shader.vertexShader;
         auto fragmentShader = shader.fragmentShader;

@@ -47,7 +47,7 @@ class App
     Neon::ImguiState imguiState;
     EditorCamera     camera;
     InputManager     inputManager;
-    GPURender_SDL   *render;
+    SDLRender3D   *render;
 
     // Rendering resources
     SDL_GPUTexture *faceTexture  = nullptr;

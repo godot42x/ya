@@ -40,9 +40,9 @@ AssetManager assetManager;
 #if ENABLE_IMGUI
 Neon::ImguiState imguiState;
 #endif
-EditorCamera        camera;
-InputManager        inputManager;
-SDL::GPURender_SDL *render = new SDL::GPURender_SDL();
+EditorCamera      camera;
+InputManager      inputManager;
+SDL::SDLRender3D *render = new SDL::SDLRender3D();
 #if ENABLE_RENDER_2D
 SDL::SDLRender2D *render2d = new SDL::SDLRender2D();
 #endif
@@ -143,11 +143,11 @@ void initShaderData()
     }
 
     // setup init vertex buffer
-    commandBuffer->uploadBuffers(
-        vertices.data(),
-        static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
-        indices.data(),
-        static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
+    // commandBuffer->uploadBuffers(
+    //     vertices.data(),
+    //     static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
+    //     indices.data(),
+    //     static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
 
     // Load textures using the new Texture abstraction
     std::shared_ptr<Texture> faceTextureObj = Texture::Create("Engine/Content/TestTextures/face.png", commandBuffer);
@@ -195,7 +195,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
 
     // Create dialog window
     dialogWindow = NeonEngine::DialogWindow::create();
-    if (!render->init({.bVsync = bVsync})) {
+    if (!render->init(true)) {
         NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
     }
@@ -559,7 +559,7 @@ SDL_AppResult AppIterate(void *appState)
     }
 
     static glm::vec4    clearColor      = {0.0f, 0.0f, 0.0f, 1.0f};
-    static ESamplerType selectedSampler = ESamplerType::PointClamp;
+    // static ESamplerType selectedSampler = ESamplerType::PointClamp;
 
     bool      bVertexInputChanged = false;
     bool      bCameraChanged      = false;
@@ -586,23 +586,23 @@ SDL_AppResult AppIterate(void *appState)
 
         ImGui::DragFloat4("Clear Color", glm::value_ptr(clearColor), 0.01f, 0.0f, 1.0f);
 
-        const std::string currentSamplerName = ESamplerType2Strings[selectedSampler];
-        if (ImGui::BeginCombo("Sampler", currentSamplerName.c_str()))
-        {
-            for (int i = 0; i < static_cast<int>(ESamplerType::ENUM_MAX); i++)
-            {
-                bool              bSelected   = (static_cast<int>(selectedSampler) == i);
-                const std::string samplerName = ESamplerType2Strings[static_cast<ESamplerType>(i)];
-                if (ImGui::Selectable(samplerName.c_str(), &bSelected)) {
-                    selectedSampler = static_cast<ESamplerType>(i);
-                    NE_CORE_INFO("Selected sampler: {}", samplerName);
-                }
-                if (bSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndCombo();
-        }
+        // const std::string currentSamplerName = ESamplerType2Strings[selectedSampler];
+        // if (ImGui::BeginCombo("Sampler", currentSamplerName.c_str()))
+        // {
+        //     for (int i = 0; i < static_cast<int>(ESamplerType::ENUM_MAX); i++)
+        //     {
+        //         bool              bSelected   = (static_cast<int>(selectedSampler) == i);
+        //         const std::string samplerName = ESamplerType2Strings[static_cast<ESamplerType>(i)];
+        //         if (ImGui::Selectable(samplerName.c_str(), &bSelected)) {
+        //             selectedSampler = static_cast<ESamplerType>(i);
+        //             NE_CORE_INFO("Selected sampler: {}", samplerName);
+        //         }
+        //         if (bSelected) {
+        //             ImGui::SetItemDefaultFocus();
+        //         }
+        //     }
+        //     ImGui::EndCombo();
+        // }
 
         bVertexInputChanged = imcVertices(commandBuffer);
         bCameraChanged      = imcEditorCamera(commandBuffer);
@@ -621,7 +621,7 @@ SDL_AppResult AppIterate(void *appState)
     render2d->beginFrame(sdlCommandBuffer->commandBuffer, camera);
     for (float x = -5.f; x < 5.f; x += 1.f) {
         for (float y = -5.f; y < 5.f; y += 1.f) {
-            render2d->drawQuad({x, y}, 0.0, {1.0f, 1.0f}, {1.0f, 0.0f, 1.0f, 1.0f});
+            render2d->drawQuad({x, y}, 0.0, {1.0f, 1.0f}, {x, y, x + y, 1.0f});
         }
     }
     render2d->submit();
@@ -639,15 +639,8 @@ SDL_AppResult AppIterate(void *appState)
     }
 
 
-    // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
-    cameraData.view       = camera.getViewMatrix();
-    cameraData.projection = camera.getProjectionMatrix();
 
-    // dose all unifroms need to be update each frame?
-    commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-    commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
-    commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
-
+#if ENABLE_RENDER_3D
     if (bVertexInputChanged) {
         // TODO: move to render pipeline
         NE_CORE_INFO("Vertex input changed, update vertex buffer");
@@ -660,6 +653,7 @@ SDL_AppResult AppIterate(void *appState)
             verticesCopy.data(),
             static_cast<Uint32>(verticesCopy.size() * sizeof(VertexEntry)));
     }
+#endif
 
 
     // target info can be multiple(use same pipeline?)
@@ -679,7 +673,17 @@ SDL_AppResult AppIterate(void *appState)
                                                            1,
                                                            nullptr);
     {
-        SDL_BindGPUGraphicsPipeline(renderpass, render->pipeline);
+#if ENABLE_RENDER_3D
+        render->draw....SDL_BindGPUGraphicsPipeline(renderpass, render->pipeline);
+
+        // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
+        cameraData.view       = camera.getViewMatrix();
+        cameraData.projection = camera.getProjectionMatrix();
+
+        // dose all unifroms need to be update each frame?
+        commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+        commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
+        commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
 
         SDL_GPUBufferBinding vertexBufferBinding = {
             .buffer = render->vertexBuffer,
@@ -709,6 +713,9 @@ SDL_AppResult AppIterate(void *appState)
             .sampler = render->samplers[selectedSampler],
         };
         SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
+#endif
+
+
 
         int windowWidth, windowHeight;
         SDL_GetWindowSize(render->window, &windowWidth, &windowHeight);
@@ -722,6 +729,8 @@ SDL_AppResult AppIterate(void *appState)
             .max_depth = 1.0f,
         };
         SDL_SetGPUViewport(renderpass, &viewport);
+
+#if ENABLE_RENDER_3D
 
         // Draw the model or quad
         if (useModel && currentModel && !currentModel->getMeshes().empty()) {
@@ -745,15 +754,14 @@ SDL_AppResult AppIterate(void *appState)
         }
 
         // after graphics pipeline draw, or make pipeline draw into a RT
+#endif
+#if ENABLE_RENDER_2D
+        render2d->draw(renderpass);
+#endif
 #if ENABLE_IMGUI
         imguiState.draw(sdlCommandBuffer->commandBuffer, renderpass);
 #endif
     }
-
-#if ENABLE_RENDER_2D
-    render2d->render(renderpass);
-#endif
-
     SDL_EndGPURenderPass(renderpass);
 
     if (!commandBuffer->submit()) {

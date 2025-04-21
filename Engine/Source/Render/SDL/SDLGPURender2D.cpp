@@ -33,22 +33,22 @@ void SDLRender2D::fillQuadIndicesToGPUBuffer(SDLGPUBufferPtr indexBuffer, std::s
         for (uint32_t i = 0; i < indicesSize / 6; i++) {
             indicesPtr[i * 6 + 0] = i * 4 + 0; // left top
             indicesPtr[i * 6 + 1] = i * 4 + 1; // right top
-            indicesPtr[i * 6 + 2] = i * 4 + 2; // right bottom
+            indicesPtr[i * 6 + 2] = i * 4 + 3; // right bottom
 
             indicesPtr[i * 6 + 3] = i * 4 + 0; // left top
-            indicesPtr[i * 6 + 4] = i * 4 + 2; // right bottom
-            indicesPtr[i * 6 + 5] = i * 4 + 3; // left bottom
+            indicesPtr[i * 6 + 4] = i * 4 + 3; // right bottom
+            indicesPtr[i * 6 + 5] = i * 4 + 2; // left bottom
         }
     }
     else {
         for (uint32_t i = 0; i < indicesSize / 6; i++) {
             indicesPtr[i * 6 + 0] = i * 4 + 0; // left top
-            indicesPtr[i * 6 + 1] = i * 4 + 2; // right bottom
+            indicesPtr[i * 6 + 1] = i * 4 + 3; // right bottom
             indicesPtr[i * 6 + 2] = i * 4 + 1; // right top
 
             indicesPtr[i * 6 + 3] = i * 4 + 0; // left top
-            indicesPtr[i * 6 + 4] = i * 4 + 3; // left bottom
-            indicesPtr[i * 6 + 5] = i * 4 + 2; // right bottom
+            indicesPtr[i * 6 + 4] = i * 4 + 2; // left bottom
+            indicesPtr[i * 6 + 5] = i * 4 + 3; // right bottom
         }
     }
 

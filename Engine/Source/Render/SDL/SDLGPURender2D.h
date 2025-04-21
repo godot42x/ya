@@ -184,16 +184,17 @@ struct SDLRender2D
         SDL_EndGPUCopyPass(copyPass);
     }
 
-    void render(SDL_GPURenderPass *renderpass)
+    void draw(SDL_GPURenderPass *renderpass)
     {
+
+        SDL_BindGPUGraphicsPipeline(renderpass, pipeline.pipeline);
+
         // set the camera data in current pipeline(shader)
         SDL_PushGPUVertexUniformData(
             currentCommandBuffer,
             0,
             &cameraData,
             sizeof(CameraData));
-
-        SDL_BindGPUGraphicsPipeline(renderpass, pipeline.pipeline);
 
         SDL_GPUBufferBinding vertexBufferBinding = {
             .buffer = vertexBufferPtr->getBuffer(),
@@ -209,7 +210,7 @@ struct SDLRender2D
 
         SDL_DrawGPUIndexedPrimitives(
             renderpass,
-            indexInputBuffer.size(),
+            vertexInputBuffer.size() / 4 * 6,
             1,
             0,
             0,

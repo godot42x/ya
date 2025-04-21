@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Camera.h"
 #include "Render/Render.h"
 
 #include <memory>
@@ -16,10 +17,12 @@
 #include "Render/CommandBuffer.h"
 #include "Render/Shader.h"
 
+#include "SDLGraphicsPipeline.h"
+
 namespace SDL
 {
 
-struct GPURender_SDL : public Render
+struct SDLRender3D
 {
     SDL_GPUDevice *device;
     SDL_Window    *window;
@@ -33,10 +36,9 @@ struct GPURender_SDL : public Render
     };
 
     // Legacy support - points to the current active pipeline
-    SDL_GPUGraphicsPipeline                                               *pipeline;
+    SDLGraphicsPipeLine                                                    _pipeline;
     SDL_GPUBuffer                                                         *vertexBuffer;
     SDL_GPUBuffer                                                         *indexBuffer;
-    std::unordered_map<ESamplerType, SDL_GPUSampler *>                     samplers;
     std::unordered_map<EShaderStage::T, ShaderReflection::ShaderResources> cachedShaderResources;
 
     uint32_t maxVertexBufferElemSize = 1000 * 1024 * 1024; // 1MB
@@ -48,9 +50,18 @@ struct GPURender_SDL : public Render
 
 
 
-    bool init(const InitParams &params) override;
-    void clean() override;
-    bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info) override;
+    bool init(bool bVsync);
+    void clean();
+    bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info);
+
+    void beginFrame(SDL_GPURenderPass *renderpass, Camera &camera)
+    {
+        SDL_BindGPUGraphicsPipeline(renderpass, _pipeline.pipeline);
+
+        // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
+        // cameraData.view       = camera.getViewMatrix();
+        // cameraData.projection = camera.getProjectionMatrix();
+    }
 
     void *getNativeDevice()
     {
@@ -70,13 +81,10 @@ struct GPURender_SDL : public Render
 
 
 
-    ShaderCreateResult createShaders(const ShaderCreateInfo &shaderCI);
 
-    std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) override;
+    std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current());
 
 
-  private:
-    void createSamplers();
 };
 
 } // namespace SDL

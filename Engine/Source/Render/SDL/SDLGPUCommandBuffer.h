@@ -9,14 +9,14 @@ struct SDL_GPUTexture;
 
 namespace SDL {
 
-struct GPURender_SDL;
+struct SDLRender3D;
 
 struct GPUCommandBuffer_SDL : public CommandBuffer
 {
-    GPURender_SDL        *r             = nullptr;
+    SDLRender3D        *r             = nullptr;
     SDL_GPUCommandBuffer *commandBuffer = nullptr;
 
-    GPUCommandBuffer_SDL(GPURender_SDL *render, std::source_location &&loc);
+    GPUCommandBuffer_SDL(SDLRender3D *render, std::source_location &&loc);
 
     ~GPUCommandBuffer_SDL() override
     {

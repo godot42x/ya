@@ -122,27 +122,3 @@ struct GraphicsPipelineCreateInfo
 //     }
 // #undef STATIC_POLYMORPHIC_FUNC
 
-struct Render
-{
-    virtual ~Render() = default;
-
-    struct Pimp
-    {
-    };
-
-    struct InitParams
-    {
-        bool bVsync = true;
-    };
-    virtual bool init(const InitParams &params)                                 = 0;
-    virtual void clean()                                                        = 0;
-    virtual bool createGraphicsPipeline(const GraphicsPipelineCreateInfo &info) = 0;
-
-    virtual std::shared_ptr<CommandBuffer> acquireCommandBuffer(std::source_location location = std::source_location::current()) = 0;
-
-    template <typename T>
-    T *as()
-    {
-        return static_cast<T *>(this);
-    }
-};

@@ -9,7 +9,7 @@
 
 namespace SDL {
 
-GPUCommandBuffer_SDL::GPUCommandBuffer_SDL(GPURender_SDL *render, std::source_location &&loc) : CommandBuffer(std::move(loc))
+GPUCommandBuffer_SDL::GPUCommandBuffer_SDL(SDLRender3D *render, std::source_location &&loc) : CommandBuffer(std::move(loc))
 {
     r             = render;
     commandBuffer = SDL_AcquireGPUCommandBuffer(render->device);
