@@ -1,6 +1,5 @@
 #include "Render.h"
 
-#include "Render/SDL/SDLGPURender.h"
 
 namespace EVertexAttributeFormat
 {

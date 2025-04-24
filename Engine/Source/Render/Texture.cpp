@@ -1,16 +1,20 @@
 #include "Texture.h"
 
-#include "Render/SDL/SDLTexture.h"
+#include "Platform/Render/SDL/SDLDevice.h"
+#include "Platform/Render/SDL/SDLTexture.h"
+#include "Render/Device.h"
 
 
 
 // Implementation of Texture's static factory methods
 
-std::shared_ptr<Texture> Texture::Create(const std::string             &filepath,
-                                         std::shared_ptr<CommandBuffer> commandBuffer)
+std::shared_ptr<Texture> Texture::CreateFromFile(LogicalDevice &device, const std::string &filepath,
+                                                 std::shared_ptr<CommandBuffer> commandBuffer)
 {
 
-    return SDL::SDLTexture::Create(filepath, commandBuffer);
+    auto sdlTexture = std::make_shared<SDL::SDLTexture>(*static_cast<SDL::SDLDevice*>(&device));
+    sdlTexture->createFromFile(filepath, commandBuffer);
+    return sdlTexture;
 }
 
 std::shared_ptr<Texture> Texture::CreateFromBuffer(const void *data, uint32_t width, uint32_t height,

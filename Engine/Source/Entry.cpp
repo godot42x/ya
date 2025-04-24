@@ -1,6 +1,7 @@
 // #define SDL_MAIN_USE_CALLBACKS
 // #include <SDL3/SDL_main.h>
 
+#include "Platform/Render/SDL/SDLDevice.h"
 #include "SDL3/SDL_timer.h"
 
 #include <glm/glm.hpp>
@@ -19,32 +20,42 @@
 
 
 #include "Core/AssetManager.h"
+#include "Platform/Render/SDL/SDLGPUCommandBuffer.h"
 #include "Render/Model.h"
-#include "Render/SDL/SDLGPUCommandBuffer.h"
-
-#include "Render/SDL/SDLGPURender.h"
-#include "Render/SDL/SDLGPURender2D.h"
 
 
-#define ENABLE_IMGUI 1
+#include "Platform/Render/SDL/SDLGPURender2D.h"
+#include "Platform/Render/SDL/SDLGPURender3D.h"
+
+
+
+#define ENABLE_RENDER_3D 0
 #define ENABLE_RENDER_2D 1
+#define ENABLE_IMGUI 1
 
-SDL_GPUTexture *faceTexture;
-SDL_GPUTexture *whiteTexture;
+
+SDL_GPUTexture *faceTexture  = nullptr;
+SDL_GPUTexture *whiteTexture = nullptr;
 
 static bool bVsync = true;
 
 // App              app;
 AssetManager assetManager;
 
-#if ENABLE_IMGUI
-Neon::ImguiState imguiState;
+EditorCamera    camera;
+InputManager    inputManager;
+SDL::SDLDevice *device = new SDL::SDLDevice();
+
+
+#if ENABLE_RENDER_3D
+SDL::SDLRender3D *render3d = new SDL::SDLRender3D();
 #endif
-EditorCamera      camera;
-InputManager      inputManager;
-SDL::SDLRender3D *render = new SDL::SDLRender3D();
+SDL::SDLRender3D *render3d = new SDL::SDLRender3D();
 #if ENABLE_RENDER_2D
 SDL::SDLRender2D *render2d = new SDL::SDLRender2D();
+#endif
+#if ENABLE_IMGUI
+Neon::ImguiState imguiState;
 #endif
 
 std::queue<std::function<void()>> asyncUpdateTask;
@@ -72,12 +83,6 @@ struct IndexEntry
 };
 
 // NOTICE: unifrom data member vec3 need to be aligned by vec4 bytes
-struct CameraData
-{
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 projection;
-};
 
 struct FragmentConstUniforms
 {
@@ -120,7 +125,6 @@ std::vector<IndexEntry> indices = {
     {0, 3, 1}, // Second triangle: top-left, bottom-left, bottom-right (CCW)
 };
 
-CameraData            cameraData;
 FragmentConstUniforms fragmentUniforms;
 
 glm::mat4 quadTransform = glm::mat4(1.0f);
@@ -134,6 +138,7 @@ struct SDLAppState
 #pragma region Init
 
 
+#if ENABLE_RENDER_3D
 void initShaderData()
 {
     auto commandBuffer = render->acquireCommandBuffer();
@@ -173,16 +178,13 @@ void initShaderData()
     NE_INFO("Initialized window size: {}x{}", windowWidth, windowHeight);
     camera.setPerspective(45.0f, (float)windowWidth / (float)windowHeight, 0.1f, 100.0f);
     camera.setPosition({0.0f, 0.0f, 5.0f});
-    cameraData.model      = glm::mat4(1.0f);
-    cameraData.view       = camera.getViewMatrix();
-    cameraData.projection = camera.getProjectionMatrix();
-
     // Set up the init buffer with the camera data
     // commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
     // commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
     // commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
     commandBuffer->submit();
 }
+#endif
 
 SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
 {
@@ -192,37 +194,40 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
     FileSystem::init();
     Logger::init();
     AssetManager::init();
+    device->init(SDL::SDLDevice::InitParams{
+        .bVsync = true,
+    });
 
     // Create dialog window
     dialogWindow = NeonEngine::DialogWindow::create();
-    if (!render->init(true)) {
-        NE_CORE_ERROR("Failed to initialize render context");
-        return SDL_APP_FAILURE;
-    }
 
 
     EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
 
-    bool ok = render->createGraphicsPipeline(
-        GraphicsPipelineCreateInfo{
-            .shaderCreateInfo = {
-                .shaderName = "Basic.glsl",
-            },
-            .primitiveType = primitiveType,
-        });
+#if ENABLE_RENDER_3D
+    bool ok = render3d->init(device->device,
+                             device->window,
+                             GraphicsPipelineCreateInfo{
+                                 .shaderCreateInfo = {
+                                     .shaderName = "Basic.glsl",
+                                 },
+                                 .primitiveType = primitiveType,
+                             });
     if (!ok) {
-        NE_CORE_ERROR("Failed to create graphics pipeline");
+        NE_CORE_ERROR("Failed to initialize render context");
         return SDL_APP_FAILURE;
     }
+    initShaderData();
+#endif
+
 
 #if ENABLE_RENDER_2D
-    render2d->init(render->device, render->window);
+    render2d->init(device->getNativeDevicePtr<SDL_GPUDevice>(), device->getNativeWindowPtr<SDL_Window>());
 #endif
 
 #if ENABLE_IMGUI
-    imguiState.init(render->device, render->window);
+    imguiState.init(device->getNativeDevicePtr<SDL_GPUDevice>(), device->getNativeDevicePtr<SDL_Window>());
 #endif
-    initShaderData();
 
     return SDL_APP_CONTINUE;
 }
@@ -231,49 +236,50 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
 
 
 // Function to upload model data to GPU
-bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffer> commandBuffer)
-{
-    if (!model || model->getMeshes().empty()) {
-        return false;
-    }
+// bool uploadModelToGPU(std::shared_ptr<Model> model, std::shared_ptr<CommandBuffer> commandBuffer)
+// {
+//     if (!model || model->getMeshes().empty()) {
+//         return false;
+//     }
 
-    // Convert Vertex to VertexEntry
-    std::vector<VertexEntry> vertexEntries;
-    std::vector<uint32_t>    indexEntries;
-    vertexEntries.reserve(model->getMeshes()[0].vertices.size());
-    indexEntries.reserve(model->getMeshes()[0].indices.size()); // Assuming each mesh has a triangle list
+//     // Convert Vertex to VertexEntry
+//     std::vector<VertexEntry> vertexEntries;
+//     std::vector<uint32_t>    indexEntries;
+//     vertexEntries.reserve(model->getMeshes()[0].vertices.size());
+//     indexEntries.reserve(model->getMeshes()[0].indices.size()); // Assuming each mesh has a triangle list
 
-    for (auto &mesh : model->getMeshes()) {
-        NE_CORE_INFO("Mesh name: {}", mesh.name);
-
-
-        for (const auto &vertex : mesh.vertices) {
-            VertexEntry entry;
-            entry.position = glm::vec4(vertex.position, 1.0f);
-            entry.color    = vertex.color;
-            entry.uv       = vertex.texCoord;
-            entry.normal   = vertex.normal; // Assuming normal is part of the Vertex struct
-            vertexEntries.push_back(entry);
-        }
-
-        indexEntries.insert(
-            indexEntries.end(),
-            mesh.indices.begin(),
-            mesh.indices.end());
-    }
-    // Upload vertices and indices using the command buffer directly
-    commandBuffer->uploadBuffers(
-        vertexEntries.data(),
-        static_cast<Uint32>(vertexEntries.size() * sizeof(VertexEntry)),
-        indexEntries.data(),
-        static_cast<Uint32>(indexEntries.size() * sizeof(uint32_t)));
+//     for (auto &mesh : model->getMeshes()) {
+//         NE_CORE_INFO("Mesh name: {}", mesh.name);
 
 
-    return true;
-}
+//         for (const auto &vertex : mesh.vertices) {
+//             VertexEntry entry;
+//             entry.position = glm::vec4(vertex.position, 1.0f);
+//             entry.color    = vertex.color;
+//             entry.uv       = vertex.texCoord;
+//             entry.normal   = vertex.normal; // Assuming normal is part of the Vertex struct
+//             vertexEntries.push_back(entry);
+//         }
+
+//         indexEntries.insert(
+//             indexEntries.end(),
+//             mesh.indices.begin(),
+//             mesh.indices.end());
+//     }
+//     // Upload vertices and indices using the command buffer directly
+//     commandBuffer->uploadBuffers(
+//         vertexEntries.data(),
+//         static_cast<Uint32>(vertexEntries.size() * sizeof(VertexEntry)),
+//         indexEntries.data(),
+//         static_cast<Uint32>(indexEntries.size() * sizeof(uint32_t)));
+
+
+//     return true;
+// }
 
 #pragma region ImGui Controls
-using cmbf_t = std::shared_ptr<CommandBuffer>;
+// using cmbf_t = std::shared_ptr<CommandBuffer>;
+using cmbf_t = SDL_GPUCommandBuffer *;
 
 bool imcVertices(cmbf_t commandBuffer)
 {
@@ -302,33 +308,33 @@ bool imcVertices(cmbf_t commandBuffer)
 }
 
 
-void imcSwapChain(cmbf_t commandBuffer)
-{
-    auto d = render->device;
-    auto w = render->window;
+// void imcSwapChain(cmbf_t commandBuffer)
+// {
+//     auto d = device->device;
+//     auto w = device->window;
 
-    // TODO: abstract this to a function in NeonEngine::Render
-    NE_ASSERT(SDL_WindowSupportsGPUSwapchainComposition(d, w, SDL_GPU_SWAPCHAINCOMPOSITION_SDR),
-              "Window does not support GPU swapchain composition");
+//     // TODO: abstract this to a function in NeonEngine::Render
+//     NE_ASSERT(SDL_WindowSupportsGPUSwapchainComposition(d, w, SDL_GPU_SWAPCHAINCOMPOSITION_SDR),
+//               "Window does not support GPU swapchain composition");
 
-    static SDL_GPUPresentMode currentPresentMode = SDL_GPU_PRESENTMODE_VSYNC;
+//     static SDL_GPUPresentMode currentPresentMode = SDL_GPU_PRESENTMODE_VSYNC;
 
-    ImGui::Separator();
-    const char *presentModes[] = {
-        "Vsync",
-        "Immediate",
-        "Mailbox",
-    };
+//     ImGui::Separator();
+//     const char *presentModes[] = {
+//         "Vsync",
+//         "Immediate",
+//         "Mailbox",
+//     };
 
-    if (ImGui::Combo("Present Mode", (int *)&currentPresentMode, presentModes, IM_ARRAYSIZE(presentModes)))
-    {
-        SDL_SetGPUSwapchainParameters(d,
-                                      w,
-                                      SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
-                                      currentPresentMode);
-        NE_CORE_INFO("Changed presentation mode to: {}", presentModes[currentPresentMode]);
-    }
-}
+//     if (ImGui::Combo("Present Mode", (int *)&currentPresentMode, presentModes, IM_ARRAYSIZE(presentModes)))
+//     {
+//         SDL_SetGPUSwapchainParameters(d,
+//                                       w,
+//                                       SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+//                                       currentPresentMode);
+//         NE_CORE_INFO("Changed presentation mode to: {}", presentModes[currentPresentMode]);
+//     }
+// }
 
 
 void imcLight(cmbf_t commandBuffer)
@@ -386,112 +392,112 @@ bool imcEditorCamera(cmbf_t commandBuffer)
 }
 
 
-void imcModel(cmbf_t commandBuffer)
-{
-    if (!ImGui::CollapsingHeader("Model Controls")) {
-        return;
-    }
+// void imcModel(cmbf_t commandBuffer)
+// {
+//     if (!ImGui::CollapsingHeader("Model Controls")) {
+//         return;
+//     }
 
-    // TODO: why copilot think this is wrong? must a char[256] with '\0' at the end?
-    static std::string modelPath(256, '\0');
-    ImGui::InputText("Model Path", modelPath.data(), modelPath.size());
+//     // TODO: why copilot think this is wrong? must a char[256] with '\0' at the end?
+//     static std::string modelPath(256, '\0');
+//     ImGui::InputText("Model Path", modelPath.data(), modelPath.size());
 
-    if (ImGui::Button("Browse..."))
-    {
-        // Create dialog window if it doesn't exist yet
-        if (!dialogWindow) {
-            dialogWindow = NeonEngine::DialogWindow::create();
-        }
+//     if (ImGui::Button("Browse..."))
+//     {
+//         // Create dialog window if it doesn't exist yet
+//         if (!dialogWindow) {
+//             dialogWindow = NeonEngine::DialogWindow::create();
+//         }
 
-        if (dialogWindow) {
-            // Define file filters for 3D models
-            std::vector<std::pair<std::string, std::string>> filters = {
-                {"3D Models", "*.obj;*.fbx;*.gltf;*.glb"},
-                {"Wavefront OBJ", "*.obj"},
-                {"Autodesk FBX", "*.fbx"},
-                {"GLTF", "*.gltf;*.glb"},
-                {"All Files", "*.*"}};
+//         if (dialogWindow) {
+//             // Define file filters for 3D models
+//             std::vector<std::pair<std::string, std::string>> filters = {
+//                 {"3D Models", "*.obj;*.fbx;*.gltf;*.glb"},
+//                 {"Wavefront OBJ", "*.obj"},
+//                 {"Autodesk FBX", "*.fbx"},
+//                 {"GLTF", "*.gltf;*.glb"},
+//                 {"All Files", "*.*"}};
 
-            auto result = dialogWindow->showDialog(
-                NeonEngine::DialogType::OpenFile,
-                "Select 3D Model",
-                filters);
+//             auto result = dialogWindow->showDialog(
+//                 NeonEngine::DialogType::OpenFile,
+//                 "Select 3D Model",
+//                 filters);
 
-            if (result.has_value()) {
-                // Copy the path to the input field, ensuring it doesn't overflow
-                modelPath = result.value();
-                modelPath.push_back('\0'); // Null-terminate the string
-                NE_CORE_INFO("Selected model file: {}", modelPath);
-            }
-        }
-    }
+//             if (result.has_value()) {
+//                 // Copy the path to the input field, ensuring it doesn't overflow
+//                 modelPath = result.value();
+//                 modelPath.push_back('\0'); // Null-terminate the string
+//                 NE_CORE_INFO("Selected model file: {}", modelPath);
+//             }
+//         }
+//     }
 
-    if (ImGui::Button("Load Model")) {
-        std::shared_ptr<Model> model = assetManager.loadModel(modelPath, commandBuffer);
+//     if (ImGui::Button("Load Model")) {
+//         std::shared_ptr<Model> model = assetManager.loadModel(modelPath, commandBuffer);
 
-        if (model) {
-            currentModel = model;
-            useModel     = true;
+//         if (model) {
+//             currentModel = model;
+//             useModel     = true;
 
-            // Upload model data
-            if (uploadModelToGPU(model, commandBuffer)) {
-                NE_CORE_INFO("Model loaded and uploaded successfully");
-            }
-            else {
-                NE_CORE_ERROR("Failed to upload model data");
-            }
-        }
-    }
+//             // Upload model data
+//             if (uploadModelToGPU(model, commandBuffer)) {
+//                 NE_CORE_INFO("Model loaded and uploaded successfully");
+//             }
+//             else {
+//                 NE_CORE_ERROR("Failed to upload model data");
+//             }
+//         }
+//     }
 
-    ImGui::SameLine();
+//     ImGui::SameLine();
 
-    if (ImGui::Button("Use Quad")) {
-        useModel = false;
-        commandBuffer->uploadBuffers(
-            vertices.data(),
-            static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
-            indices.data(),
-            static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
-    }
+//     if (ImGui::Button("Use Quad")) {
+//         useModel = false;
+//         commandBuffer->uploadBuffers(
+//             vertices.data(),
+//             static_cast<Uint32>(vertices.size() * sizeof(VertexEntry)),
+//             indices.data(),
+//             static_cast<Uint32>(indices.size() * sizeof(IndexEntry)));
+//     }
 
-    // Model transform controls
-    if (useModel && currentModel) {
-        ImGui::Separator();
-        ImGui::Text("Model Transform");
+//     // Model transform controls
+//     if (useModel && currentModel) {
+//         ImGui::Separator();
+//         ImGui::Text("Model Transform");
 
-        static glm::vec3 position = {0.0f, 0.0f, 0.0f};
-        static glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
-        static glm::vec3 scale    = {1.0f, 1.0f, 1.0f};
+//         static glm::vec3 position = {0.0f, 0.0f, 0.0f};
+//         static glm::vec3 rotation = {0.0f, 0.0f, 0.0f};
+//         static glm::vec3 scale    = {1.0f, 1.0f, 1.0f};
 
-        bool transformChanged = false;
+//         bool transformChanged = false;
 
-        if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
-            transformChanged = true;
-        }
+//         if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
+//             transformChanged = true;
+//         }
 
-        if (ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1.0f)) {
-            transformChanged = true;
-        }
+//         if (ImGui::DragFloat3("Rotation", glm::value_ptr(rotation), 1.0f)) {
+//             transformChanged = true;
+//         }
 
-        if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f, 0.01f, 10.0f)) {
-            transformChanged = true;
-        }
+//         if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f, 0.01f, 10.0f)) {
+//             transformChanged = true;
+//         }
 
-        if (transformChanged) {
-            glm::mat4 transform = glm::mat4(1.0f);
-            transform           = glm::translate(transform, position);
-            transform           = glm::rotate(transform, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            transform           = glm::rotate(transform, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            transform           = glm::rotate(transform, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            transform           = glm::scale(transform, scale);
+//         if (transformChanged) {
+//             glm::mat4 transform = glm::mat4(1.0f);
+//             transform           = glm::translate(transform, position);
+//             transform           = glm::rotate(transform, glm::radians(rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+//             transform           = glm::rotate(transform, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+//             transform           = glm::rotate(transform, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+//             transform           = glm::scale(transform, scale);
 
-            currentModel->setTransform(transform);
+//             currentModel->setTransform(transform);
 
-            cameraData.model = transform;
-            commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-        }
-    }
-}
+//             cameraData.model = transform;
+//             commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
+//         }
+//     }
+// }
 
 
 #pragma endregion
@@ -519,8 +525,10 @@ SDL_AppResult AppIterate(void *appState)
     inputManager.update();
     camera.update(inputManager, deltaTime);
 
+    auto sdlDevice = device->getNativeDevicePtr<SDL_GPUDevice>();
+    auto sdlWindow = device->getNativeWindowPtr<SDL_Window>();
 
-    if (SDL_GetWindowFlags(render->window) & SDL_WINDOW_MINIMIZED)
+    if (SDL_GetWindowFlags(sdlWindow) & SDL_WINDOW_MINIMIZED)
     {
         SDL_Delay(100);
         return SDL_APP_CONTINUE;
@@ -536,17 +544,12 @@ SDL_AppResult AppIterate(void *appState)
 
 #pragma region Render
 
-    std::shared_ptr<CommandBuffer> commandBuffer = render->acquireCommandBuffer();
-    if (!commandBuffer) {
-        NE_CORE_ERROR("Failed to acquire command buffer {}", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
-    auto sdlCommandBuffer = static_cast<SDL::GPUCommandBuffer_SDL *>(commandBuffer.get());
+    auto *sdlCommandBuffer = SDL_AcquireGPUCommandBuffer(sdlDevice);
 
     Uint32          swapChainTextureWidth, swapChainTextureHeight;
     SDL_GPUTexture *swapchainTexture = nullptr;
-    if (!SDL_WaitAndAcquireGPUSwapchainTexture((sdlCommandBuffer->commandBuffer),
-                                               render->window,
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(sdlCommandBuffer,
+                                               sdlWindow,
                                                &swapchainTexture,
                                                &swapChainTextureWidth,
                                                &swapChainTextureHeight)) {
@@ -559,7 +562,7 @@ SDL_AppResult AppIterate(void *appState)
     }
 
     static glm::vec4    clearColor      = {0.0f, 0.0f, 0.0f, 1.0f};
-    // static ESamplerType selectedSampler = ESamplerType::PointClamp;
+    static ESamplerType selectedSampler = ESamplerType::PointClamp;
 
     bool      bVertexInputChanged = false;
     bool      bCameraChanged      = false;
@@ -576,49 +579,52 @@ SDL_AppResult AppIterate(void *appState)
         ImGui::Separator();
         if (ImGui::Checkbox("Vsync", &bVsync)) {
 
-            asyncUpdateTask.emplace([bVsync = bVsync]() {
-                SDL_SetGPUSwapchainParameters(render->device,
-                                              render->window,
-                                              SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
-                                              bVsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE);
+            // safe callback?
+            asyncUpdateTask.emplace([bVsync = bVsync, sdlDevice, sdlWindow]() {
+                if (sdlDevice && sdlWindow) {
+                    SDL_SetGPUSwapchainParameters(sdlDevice,
+                                                  sdlWindow,
+                                                  SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                                  bVsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE);
+                }
             });
         }
 
         ImGui::DragFloat4("Clear Color", glm::value_ptr(clearColor), 0.01f, 0.0f, 1.0f);
 
-        // const std::string currentSamplerName = ESamplerType2Strings[selectedSampler];
-        // if (ImGui::BeginCombo("Sampler", currentSamplerName.c_str()))
-        // {
-        //     for (int i = 0; i < static_cast<int>(ESamplerType::ENUM_MAX); i++)
-        //     {
-        //         bool              bSelected   = (static_cast<int>(selectedSampler) == i);
-        //         const std::string samplerName = ESamplerType2Strings[static_cast<ESamplerType>(i)];
-        //         if (ImGui::Selectable(samplerName.c_str(), &bSelected)) {
-        //             selectedSampler = static_cast<ESamplerType>(i);
-        //             NE_CORE_INFO("Selected sampler: {}", samplerName);
-        //         }
-        //         if (bSelected) {
-        //             ImGui::SetItemDefaultFocus();
-        //         }
-        //     }
-        //     ImGui::EndCombo();
-        // }
+        const std::string currentSamplerName = ESamplerType2Strings[selectedSampler];
+        if (ImGui::BeginCombo("Sampler", currentSamplerName.c_str()))
+        {
+            for (int i = 0; i < static_cast<int>(ESamplerType::ENUM_MAX); i++)
+            {
+                bool              bSelected   = (static_cast<int>(selectedSampler) == i);
+                const std::string samplerName = ESamplerType2Strings[static_cast<ESamplerType>(i)];
+                if (ImGui::Selectable(samplerName.c_str(), &bSelected)) {
+                    selectedSampler = static_cast<ESamplerType>(i);
+                    NE_CORE_INFO("Selected sampler: {}", samplerName);
+                }
+                if (bSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
 
-        bVertexInputChanged = imcVertices(commandBuffer);
-        bCameraChanged      = imcEditorCamera(commandBuffer);
+        bVertexInputChanged = imcVertices(sdlCommandBuffer);
+        bCameraChanged      = imcEditorCamera(sdlCommandBuffer);
 
 
-        imcModel(commandBuffer);
-        imcSwapChain(commandBuffer);
-        imcLight(commandBuffer);
+        // imcModel(commandBuffer);
+        // imcSwapChain(sdlCommandBuffer);
+        imcLight(sdlCommandBuffer);
     }
     ImGui::End();
-    bImguiMinimized = imguiState.render(sdlCommandBuffer->commandBuffer);
-    imguiState.prepareDrawData(sdlCommandBuffer->commandBuffer);
+    bImguiMinimized = imguiState.render(sdlCommandBuffer);
+    imguiState.prepareDrawData(sdlCommandBuffer);
 #endif
 
 #if ENABLE_RENDER_2D
-    render2d->beginFrame(sdlCommandBuffer->commandBuffer, camera);
+    render2d->beginFrame(sdlCommandBuffer, camera);
     for (float x = -5.f; x < 5.f; x += 1.f) {
         for (float y = -5.f; y < 5.f; y += 1.f) {
             render2d->drawQuad({x, y}, 0.0, {1.0f, 1.0f}, {x, y, x + y, 1.0f});
@@ -632,12 +638,16 @@ SDL_AppResult AppIterate(void *appState)
 #pragma region Draw
     if (!swapchainTexture || bImguiMinimized)
     {
-        if (!commandBuffer->submit()) {
+        // If the swapchain texture is null or ImGui is minimized, skip rendering
+        if (!SDL_SubmitGPUCommandBuffer(sdlCommandBuffer)) {
             NE_CORE_ERROR("Failed to submit command buffer {}", SDL_GetError());
         }
         return SDL_APP_CONTINUE;
     }
 
+
+    int windowWidth, windowHeight;
+    SDL_GetWindowSize(sdlWindow, &windowWidth, &windowHeight);
 
 
 #if ENABLE_RENDER_3D
@@ -668,57 +678,11 @@ SDL_AppResult AppIterate(void *appState)
         .cycle_resolve_texture = false,
     };
 
-    SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(sdlCommandBuffer->commandBuffer,
+    SDL_GPURenderPass *renderpass = SDL_BeginGPURenderPass(sdlCommandBuffer,
                                                            &colorTargetInfo,
                                                            1,
                                                            nullptr);
     {
-#if ENABLE_RENDER_3D
-        render->draw....SDL_BindGPUGraphicsPipeline(renderpass, render->pipeline);
-
-        // Unifrom buffer should be update continuously, or we can use a ring buffer to store the data
-        cameraData.view       = camera.getViewMatrix();
-        cameraData.projection = camera.getProjectionMatrix();
-
-        // dose all unifroms need to be update each frame?
-        commandBuffer->setVertexUniforms(0, &cameraData, sizeof(CameraData));
-        commandBuffer->setFragmentUniforms(0, &cameraData, sizeof(CameraData));
-        commandBuffer->setFragmentUniforms(1, &fragmentUniforms, sizeof(FragmentConstUniforms));
-
-        SDL_GPUBufferBinding vertexBufferBinding = {
-            .buffer = render->vertexBuffer,
-            .offset = 0,
-        };
-        SDL_BindGPUVertexBuffers(renderpass, 0, &vertexBufferBinding, 1);
-
-        // TODO: use uint16  to optimize index buffer
-        SDL_GPUBufferBinding indexBufferBinding = {
-            .buffer = render->indexBuffer,
-            .offset = 0,
-        };
-        SDL_BindGPUIndexBuffer(renderpass, &indexBufferBinding, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-
-        // Determine which texture to use
-        SDL_GPUTexture *textureToUse = whiteTexture;
-        if (useModel && currentModel && !currentModel->getMeshes().empty()) {
-            const auto &firstMesh = currentModel->getMeshes()[0];
-            if (firstMesh.diffuseTexture) {
-                textureToUse = firstMesh.diffuseTexture->GetSDLTexture();
-            }
-        }
-
-        // sampler binding
-        SDL_GPUTextureSamplerBinding textureBinding = {
-            .texture = textureToUse,
-            .sampler = render->samplers[selectedSampler],
-        };
-        SDL_BindGPUFragmentSamplers(renderpass, 0, &textureBinding, 1);
-#endif
-
-
-
-        int windowWidth, windowHeight;
-        SDL_GetWindowSize(render->window, &windowWidth, &windowHeight);
 
         SDL_GPUViewport viewport = {
             .x         = 0,
@@ -729,6 +693,15 @@ SDL_AppResult AppIterate(void *appState)
             .max_depth = 1.0f,
         };
         SDL_SetGPUViewport(renderpass, &viewport);
+
+#if ENABLE_RENDER_3D
+        render->draw();
+        render->draw....SDL_BindGPUGraphicsPipeline(renderpass, render->pipeline);
+
+
+#endif
+
+
 
 #if ENABLE_RENDER_3D
 
@@ -759,12 +732,12 @@ SDL_AppResult AppIterate(void *appState)
         render2d->draw(renderpass);
 #endif
 #if ENABLE_IMGUI
-        imguiState.draw(sdlCommandBuffer->commandBuffer, renderpass);
+        imguiState.draw(sdlCommandBuffer, renderpass);
 #endif
     }
     SDL_EndGPURenderPass(renderpass);
 
-    if (!commandBuffer->submit()) {
+    if (!SDL_SubmitGPUCommandBuffer(sdlCommandBuffer)) {
         NE_CORE_ERROR("Failed to submit command buffer {}", SDL_GetError());
     }
 
@@ -777,6 +750,9 @@ SDL_AppResult AppEvent(void *appstate, SDL_Event *evt)
 {
     // NE_CORE_TRACE("Event: {}", event->type);
     EventProcessState state = EventProcessState::Continue;
+
+    auto sdlDevice = device->getNativeDevicePtr<SDL_GPUDevice>();
+    auto sdlWindow = device->getNativeWindowPtr<SDL_Window>();
 
     // TODO: priority of each event handler?
 #if ENABLE_IMGUI
@@ -805,9 +781,9 @@ SDL_AppResult AppEvent(void *appstate, SDL_Event *evt)
     } break;
     case SDL_EventType::SDL_EVENT_WINDOW_RESIZED:
     {
-        if (evt->window.windowID == SDL_GetWindowID(render->window))
+        if (evt->window.windowID == SDL_GetWindowID(sdlWindow))
         {
-            SDL_WaitForGPUIdle(render->device);
+            SDL_WaitForGPUIdle(sdlDevice);
             NE_CORE_INFO("Window resized to {}x{}", evt->window.data1, evt->window.data2);
             camera.setAspectRatio(static_cast<float>(evt->window.data1) / static_cast<float>(evt->window.data2));
         }
@@ -815,7 +791,7 @@ SDL_AppResult AppEvent(void *appstate, SDL_Event *evt)
     case SDL_EventType::SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     {
         NE_CORE_INFO("SDL Window Close Requested {}", evt->window.windowID);
-        if (evt->window.windowID == SDL_GetWindowID(render->window))
+        if (evt->window.windowID == SDL_GetWindowID(sdlWindow))
         {
             return SDL_APP_SUCCESS;
         }
@@ -833,16 +809,18 @@ SDL_AppResult AppEvent(void *appstate, SDL_Event *evt)
 
 void AppQuit(void *appstate, SDL_AppResult result)
 {
+    auto sdlDevice = device->getNativeDevicePtr<SDL_GPUDevice>();
+    auto sdlWindow = device->getNativeWindowPtr<SDL_Window>();
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "sdl quit with result: %u", result);
 
-    SDL_WaitForGPUIdle(render->device);
+    SDL_WaitForGPUIdle(sdlDevice);
 
 
     if (faceTexture) {
-        SDL_ReleaseGPUTexture(render->device, faceTexture);
+        SDL_ReleaseGPUTexture(sdlDevice, faceTexture);
     }
     if (whiteTexture) {
-        SDL_ReleaseGPUTexture(render->device, whiteTexture);
+        SDL_ReleaseGPUTexture(sdlDevice, whiteTexture);
     }
 
 #if ENABLE_IMGUI
@@ -857,8 +835,13 @@ void AppQuit(void *appstate, SDL_AppResult result)
     render2d->clean();
     // delete render2d;
 #endif
+
+#if ENABLE_RENDER_3D
     render->clean(); // now device owning by render
-    // delete render;
+// delete render;
+#endif
+
+    device->clean();
 
     auto sdlAppState = static_cast<SDLAppState *>(appstate);
     delete sdlAppState;

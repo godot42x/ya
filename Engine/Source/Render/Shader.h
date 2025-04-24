@@ -243,7 +243,7 @@ struct ShaderScriptProcessorFactory
             processor = std::make_shared<GLSLScriptProcessor>();
             break;
         case HLSL:
-            throw std::runtime_error("unsupported lang");
+            throw std::runtime_error("HLSL not supported yet");
             break;
         };
 

@@ -6,6 +6,7 @@
 
 #include "Core/Log.h"
 
+#include "Render/Device.h"
 #include "reflect.cc/enum"
 
 #include "Render/CommandBuffer.h"
@@ -27,20 +28,6 @@ enum T
     ENUM_MAX,
 };
 };
-
-enum class ESamplerType
-{
-    DefaultLinear = 0,
-    DefaultNearest,
-    PointClamp,
-    PointWrap,
-    LinearClamp,
-    LinearWrap,
-    AnisotropicClamp,
-    AnisotropicWrap,
-    ENUM_MAX,
-};
-GENERATED_ENUM_MISC(ESamplerType);
 
 enum class EGraphicPipeLinePrimitiveType
 {
@@ -122,3 +109,6 @@ struct GraphicsPipelineCreateInfo
 //     }
 // #undef STATIC_POLYMORPHIC_FUNC
 
+
+
+extern RenderAPI::T gRenderAPIType;

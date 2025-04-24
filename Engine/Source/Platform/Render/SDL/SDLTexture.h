@@ -3,11 +3,16 @@
 #include "Render/Texture.h"
 #include "SDL3/SDL_gpu.h"
 
-namespace SDL {
+namespace SDL
+{
+
+struct SDLDevice;
 
 class SDLTexture : public Texture
 {
   private:
+    SDLDevice &device;
+
     SDL_GPUTexture *textureHandle = nullptr;
     uint32_t        width         = 0;
     uint32_t        height        = 0;
@@ -16,18 +21,12 @@ class SDLTexture : public Texture
     std::string     name;
 
   public:
-    SDLTexture(SDL_GPUTexture *texture, uint32_t width, uint32_t height,
-               ETextureFormat format, ETextureType type, const std::string &name);
+
+    SDLTexture(SDLDevice &device);
     ~SDLTexture() override;
 
+
     // Factory methods for SDL implementation
-    static std::shared_ptr<Texture> Create(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer);
-    static std::shared_ptr<Texture> CreateFromBuffer(const void *data, uint32_t width, uint32_t height,
-                                                     ETextureFormat format, const std::string &name,
-                                                     std::shared_ptr<CommandBuffer> commandBuffer);
-    static std::shared_ptr<Texture> CreateEmpty(uint32_t width, uint32_t height,
-                                                ETextureFormat format, ETextureUsage usage,
-                                                std::shared_ptr<CommandBuffer> commandBuffer);
 
     // Implementation of base class methods
     uint32_t           GetWidth() const override { return width; }
@@ -41,13 +40,23 @@ class SDLTexture : public Texture
     bool UpdateData(const void *data, uint32_t width, uint32_t height, std::shared_ptr<CommandBuffer> commandBuffer) override;
 
     // SDL specific methods
-    SDL_GPUTexture *GetSDLTexture() const override { return textureHandle; }
+    SDL_GPUTexture *GetSDLTexture() const { return textureHandle; }
 
     // Helper functions
     static SDL_GPUTextureFormat ConvertToSDLFormat(ETextureFormat format);
     static ETextureFormat       ConvertFromSDLFormat(SDL_GPUTextureFormat format);
     static SDL_GPUTextureType   ConvertToSDLType(ETextureType type);
     static ETextureType         ConvertFromSDLType(SDL_GPUTextureType type);
+
+    bool createFromFile(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer);
+
+    bool createFromBuffer(const void *data, uint32_t width, uint32_t height,
+                          ETextureFormat format, const std::string &name,
+                          std::shared_ptr<CommandBuffer> commandBuffer);
+
+    bool createEmpty(uint32_t width, uint32_t height,
+                     ETextureFormat format, ETextureUsage usage,
+                     std::shared_ptr<CommandBuffer> commandBuffer);
 };
 
 } // namespace SDL

@@ -58,6 +58,7 @@ class SDLGPUBuffer
     SDL_GPUBuffer *getBuffer() const { return _gpuBuffer; }
     std::size_t    getSize() const { return _size; }
     std::string    getName() const { return _name; }
+    SDL_GPUDevice *getDevice() const { return &_device; }
 
     // Static factory method
     static SDLGPUBufferPtr Create(SDL_GPUDevice *device, const std::string &name, Usage usage, size_t size)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Device.h"
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -33,12 +34,11 @@ enum class ETextureUsage
 
 class Texture
 {
+
   public:
     virtual ~Texture() = default;
 
     // Create texture methods
-    static std::shared_ptr<Texture> Create(const std::string             &filepath,
-                                           std::shared_ptr<CommandBuffer> commandBuffer);
     static std::shared_ptr<Texture> CreateFromBuffer(const void *data,
                                                      uint32_t width, uint32_t height,
                                                      ETextureFormat format, const std::string &name,
@@ -54,15 +54,13 @@ class Texture
     virtual ETextureType       GetType() const   = 0;
     virtual const std::string &GetName() const   = 0;
 
-    // Get native handle (implementation-specific, use with caution)
-    virtual void *GetNativeHandle() const = 0;
-
     // Utility methods
-    virtual bool Resize(uint32_t width, uint32_t height, std::shared_ptr<CommandBuffer> commandBuffer)                       = 0;
-    virtual bool UpdateData(const void *data, uint32_t width, uint32_t height, std::shared_ptr<CommandBuffer> commandBuffer) = 0;
+    virtual bool  Resize(uint32_t width, uint32_t height, std::shared_ptr<CommandBuffer> commandBuffer)                       = 0;
+    virtual bool  UpdateData(const void *data, uint32_t width, uint32_t height, std::shared_ptr<CommandBuffer> commandBuffer) = 0;
+    virtual void *GetNativeHandle() const                                                                                     = 0; // Get the native handle of the texture (e.g., SDL_GPUTexture* for SDL)
 
-    // For SDL implementation
-    virtual SDL_GPUTexture *GetSDLTexture() const { return nullptr; }
+    std::shared_ptr<Texture> CreateFromFile(LogicalDevice &device, const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer);
+
 
   protected:
     Texture() = default;

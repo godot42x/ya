@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../GraphicsPipeline.h"
+#include "Render/GraphicsPipeline.h"
 
 #include "SDL3/SDL_gpu.h"
 
@@ -221,6 +221,17 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
             const auto &last = pipelineCI.vertexAttributes.end() - 1;
             vertexInputSize  = last->offset + EVertexAttributeFormat::T2Size(last->format);
         }
+    }
+
+
+    void setVertexUniforms(std::shared_ptr<CommandBuffer> commandBuffer, uint32_t slot_index, void *data, uint32_t dataSize)
+    {
+        SDL_PushGPUVertexUniformData(commandBuffer->getNativeCommandBufferPtr<SDL_GPUCommandBuffer>(), slot_index, data, dataSize);
+    }
+
+    void setFragmentUniforms(std::shared_ptr<CommandBuffer> commandBuffer, uint32_t slot_index, void *data, uint32_t dataSize)
+    {
+        SDL_PushGPUFragmentUniformData(commandBuffer->getNativeCommandBufferPtr<SDL_GPUCommandBuffer>(), slot_index, data, dataSize);
     }
 };
 

@@ -9,8 +9,8 @@
 #include <SDL3/SDL_gpu.h>
 
 #include "Core/Camera.h"
-#include "Render/SDL/SDLBuffers.h"
-#include "Render/SDL/SDLGraphicsPipeline.h"
+#include "SDLBuffers.h"
+#include "SDLGraphicsPipeline.h"
 #include "glm/ext/matrix_transform.hpp"
 
 

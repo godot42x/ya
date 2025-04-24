@@ -33,7 +33,7 @@ do
     add_deps("reflect.cc")
     -- add_deps("log")
 
-    --add_packages("vulkansdk")
+    -- add_packages("vulkansdk")
     add_packages("spdlog")
     add_packages("libsdl3")
     add_packages("libsdl3_image")
@@ -43,6 +43,8 @@ do
     add_packages("imgui")
     --add_packages("glad")
     add_packages("assimp")
+
+    -- set_runtimes("MT")
 
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then

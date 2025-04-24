@@ -116,21 +116,21 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
         }
 
         // Process materials/textures
-        if (mesh->mMaterialIndex >= 0 && commandBuffer) {
-            aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
+        // if (mesh->mMaterialIndex >= 0 && commandBuffer) {
+        //     aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
 
-            // Load diffuse texture
-            if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-                aiString texturePath;
-                if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-                    std::string fullPath = (std::filesystem::path(directory) / texturePath.C_Str()).string();
-                    if (FileSystem::get()->isFileExists(fullPath)) {
-                        newMesh.diffuseTexture = Texture::Create(fullPath, commandBuffer);
-                    }
-                }
-            }
-            // You can add more texture types here (normal maps, specular maps, etc.)
-        }
+        //     // Load diffuse texture
+        //     if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
+        //         aiString texturePath;
+        //         if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
+        //             std::string fullPath = (std::filesystem::path(directory) / texturePath.C_Str()).string();
+        //             if (FileSystem::get()->isFileExists(fullPath)) {
+        //                 newMesh.diffuseTexture = Texture::CreateFromFile(fullPath, commandBuffer);
+        //             }
+        //         }
+        //     }
+        //     // You can add more texture types here (normal maps, specular maps, etc.)
+        // }
 
         model->getMeshes().push_back(newMesh);
     }

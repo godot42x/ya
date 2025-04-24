@@ -9,6 +9,7 @@
 
 
 #include "Core/Event.h"
+#include "Core/Log.h"
 
 namespace Neon
 {
@@ -27,9 +28,17 @@ struct ImguiState
         ImGui::StyleColorsDark();
 
         ImGui_ImplSDL3_InitForSDLGPU(window);
+
+        auto swapChianFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
+        NE_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}", static_cast<int>(swapChianFormat), (uintptr_t)device, (uintptr_t)window);
+        if (swapChianFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
+            NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
+            SDL_Delay(1000);
+        }
+
         ImGui_ImplSDLGPU3_InitInfo info{
             .Device            = device,
-            .ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(device, window),
+            .ColorTargetFormat = swapChianFormat,
             .MSAASamples       = SDL_GPU_SAMPLECOUNT_1,
         };
         ImGui_ImplSDLGPU3_Init(&info);
