@@ -1,6 +1,6 @@
 includes("./Plugins/Plugins.xmake.lua")
 
---add_requires("vulkansdk")
+add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl3")
 add_requires("libsdl3_image")
@@ -33,7 +33,7 @@ do
     add_deps("reflect.cc")
     -- add_deps("log")
 
-    -- add_packages("vulkansdk")
+    add_packages("vulkansdk")
     add_packages("spdlog")
     add_packages("libsdl3")
     add_packages("libsdl3_image")
