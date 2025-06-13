@@ -24,6 +24,10 @@ using namespace std::literals;
 
 #include <vector>
 
+#include "WindowProvider.h"
+
+#include <Render/Shader.h>
+
 struct GLFWState;
 
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
@@ -35,9 +39,13 @@ struct SwapChainSupportDetails
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR>   present_modes;
 
+    // first valid surface format
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat();
-    VkPresentModeKHR   ChooseSwapPresentMode();
-    VkExtent2D         ChooseSwapExtent(GLFWState *m_GLFWState);
+    // first valid present mode
+    VkPresentModeKHR ChooseSwapPresentMode();
+    VkExtent2D       ChooseSwapExtent(WindowProvider *provider);
+
+    static SwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };
 
 
@@ -136,26 +144,26 @@ struct VulkanState
             vkGetPhysicalDeviceQueueFamilyProperties(device, &count, queue_families.data());
 
 
-            int family_index = 0;
+            int familyIndex = 0;
             for (const auto &queue_family : queue_families) {
                 if (queue_family.queueCount > 0)
                 {
                     if (queue_family.queueFlags & flags) {
 
-                        indices.graphics_family = family_index;
+                        indices.graphics_family = familyIndex;
                     }
                     VkBool32 bSupport = false;
-                    vkGetPhysicalDeviceSurfaceSupportKHR(device, family_index, surface, &bSupport);
+                    vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, surface, &bSupport);
                     if (bSupport)
                     {
-                        indices.supported_family = family_index;
+                        indices.supported_family = familyIndex;
                     }
                 }
 
                 if (indices.is_complete()) {
                     break;
                 }
-                ++family_index;
+                ++familyIndex;
             }
 
             return indices;
@@ -165,8 +173,18 @@ struct VulkanState
 
   public:
 
-    void init(GLFWState *glfw_state)
+    WindowProvider *_windowProvider = nullptr;
+    void           *nativeWindow    = nullptr;
+    template <typename T>
+    void *getNativeWindow()
     {
+        return static_cast<T *>(nativeWindow);
+    }
+
+    void init(WindowProvider *windowProvider)
+    {
+        _windowProvider = windowProvider;
+        nativeWindow    = _windowProvider->getNativeWindowPtr();
         create_instance();
 
         if (m_EnableValidationLayers)
@@ -177,16 +195,17 @@ struct VulkanState
         bool ok = onCreateSurface.ExecuteIfBound(m_Surface);
         NE_CORE_ASSERT(ok, "Failed to create surface!");
 
-        find_and_pick_physical_device();
-
-
+        searchPhysicalDevice();
         create_logic_device();
 
+        // TODO: use recreateSwapChain() here
         create_swapchain();
+        init_swapchain_images();
         create_iamge_views();
+
+
         create_renderpass();            // specify how many attachments(color,depth,etc)
         create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
-        createGraphicsPipeline();
 
         createCommandPool();
 
@@ -201,59 +220,7 @@ struct VulkanState
         loadModel();
         createVertexBuffer();
         createIndexBuffer();
-        createUniformBuffer();
-
-        createDescriptorPool();
-        createDescriptorSet();
-
-        createCommandBuffers();
-        createSemaphores();
-    }
-
-
-    void *nativeWindow = nullptr;
-    template <typename T>
-    void *getNativeWindow()
-    {
-        return static_cast<T *>(nativeWindow);
-    }
-
-    void init(WindowProvider *windowProvider)
-    {
-        nativeWindow = windowProvider->getNativeWindowPtr<void *>();
-        create_instance();
-
-        if (m_EnableValidationLayers)
-        {
-            setup_debug_messenger_ext();
-            setup_report_callback_ext();
-        }
-
-        create_surface();
-        find_and_pick_physical_device();
-
-        create_logic_device();
-
-        create_swapchain();
-        create_iamge_views();
-        create_renderpass();            // specify how many attachments(color,depth,etc)
-        create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
-        createGraphicsPipeline();
-
-        createCommandPool();
-
-        createDepthResources();
-
-        createFramebuffers();
-
-        createTextureImage();
-        createTextureImageView();
-        createTextureSampler();
-
-        loadModel();
-        createVertexBuffer();
-        createIndexBuffer();
-        createUniformBuffer();
+        // createUniformBuffer();
 
         createDescriptorPool();
         createDescriptorSet();
@@ -317,6 +284,8 @@ struct VulkanState
         vkDestroyInstance(m_Instance, nullptr);
     }
 
+    void createGraphicsPipeline(std::unordered_map<EShaderStage::T, std::vector<uint32_t>> spv_binaries);
+
   private:
 
     void create_instance();
@@ -331,7 +300,6 @@ struct VulkanState
     void create_iamge_views();
     void create_renderpass();
     void create_descriptor_set_layout();
-    void createGraphicsPipeline();
     void createCommandPool();
     void createDepthResources();
     void createFramebuffers();
@@ -341,7 +309,7 @@ struct VulkanState
     void loadModel();
     void createVertexBuffer();
     void createIndexBuffer();
-    void createUniformBuffer();
+    void createUniformBuffer(uint32_t size);
     void createDescriptorPool();
 
     void createDescriptorSet();
@@ -593,7 +561,7 @@ struct VulkanState
         }
     }
 
-    void find_and_pick_physical_device()
+    void searchPhysicalDevice()
     {
         uint32_t count  = 0;
         VkResult result = vkEnumeratePhysicalDevices(m_Instance, &count, nullptr);
@@ -617,11 +585,10 @@ struct VulkanState
         NE_ASSERT(m_PhysicalDevice != VK_NULL_HANDLE, "failed to find a suitable GPU!");
     }
 
-    bool                    is_device_suitable(VkPhysicalDevice device);
-    QueueFamilyIndices      query_queue_families(VkPhysicalDevice device, VkQueueFlagBits flags = VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
-    bool                    is_validation_layers_supported();
-    bool                    is_device_extension_support(VkPhysicalDevice device);
-    SwapChainSupportDetails query_swapchain_supported(VkPhysicalDevice device);
+    bool               is_device_suitable(VkPhysicalDevice device);
+    QueueFamilyIndices query_queue_families(VkPhysicalDevice device, VkQueueFlagBits flags = VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
+    bool               is_validation_layers_supported();
+    bool               is_device_extension_support(VkPhysicalDevice device);
 
     static std::vector<char> readFile(const std::string &filename)
     {

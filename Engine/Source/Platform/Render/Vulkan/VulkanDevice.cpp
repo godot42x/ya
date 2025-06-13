@@ -4,10 +4,14 @@
 
 #include <Core/Log.h>
 
+#include <Render/Shader.h>
+#include <array>
 #include <cstring>
 #include <set>
 #include <unordered_map>
 
+
+#define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
 
 
 VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
@@ -51,14 +55,14 @@ VkPresentModeKHR SwapChainSupportDetails::ChooseSwapPresentMode()
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(GLFWState *m_GLFWState)
+VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
     }
 
     int width, height;
-    m_GLFWState->GetWindowSize(width, height);
+    provider->getWindowSize(width, height);
     VkExtent2D actual_extent = {(uint32_t)width, (uint32_t)height};
 
     actual_extent.width = std::max(
@@ -70,6 +74,35 @@ VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(GLFWState *m_GLFWState)
 
     return actual_extent;
 }
+
+SwapChainSupportDetails SwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+    SwapChainSupportDetails details;
+
+    // Capabilities
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+    // Formats
+    uint32_t format_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, nullptr);
+    if (format_count != 0)
+    {
+        details.formats.resize(format_count);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, details.formats.data());
+    }
+
+    // PresentModes
+    uint32_t present_mode_count;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, nullptr);
+    if (present_mode_count != 0)
+    {
+        details.present_modes.resize(present_mode_count);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, details.present_modes.data());
+    }
+
+    return details;
+}
+
 
 void VulkanState::create_instance()
 {
@@ -159,8 +192,6 @@ void VulkanState::create_logic_device()
         .pEnabledFeatures        = &device_features
 
     };
-
-
     if (m_EnableValidationLayers)
     {
         deviceCreateInfo.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
@@ -180,24 +211,22 @@ void VulkanState::create_logic_device()
 void VulkanState::create_swapchain()
 {
     // Swap chain support details
-    SwapChainSupportDetails swapchain_support_details = query_swapchain_supported(m_PhysicalDevice);
+    SwapChainSupportDetails supportDetails = SwapChainSupportDetails::query(m_PhysicalDevice, m_Surface);
 
-    VkSurfaceFormatKHR surface_format = swapchain_support_details.ChooseSwapSurfaceFormat();
-    VkPresentModeKHR   presentMode    = swapchain_support_details.ChooseSwapPresentMode();
+    VkSurfaceFormatKHR surface_format = supportDetails.ChooseSwapSurfaceFormat();
+    VkPresentModeKHR   presentMode    = supportDetails.ChooseSwapPresentMode();
 
-    m_SwapChainExtent      = swapchain_support_details.ChooseSwapExtent(m_GLFWState);
+    m_SwapChainExtent      = supportDetails.ChooseSwapExtent(_windowProvider);
     m_SwapChainImageFormat = surface_format.format;
 
 
-    // Image count
-    uint32_t image_count = swapchain_support_details.capabilities.minImageCount + 1;
-    if (swapchain_support_details.capabilities.maxImageCount > 0 &&
-        image_count > swapchain_support_details.capabilities.maxImageCount)
+    uint32_t image_count = supportDetails.capabilities.minImageCount + 1;
+    if (supportDetails.capabilities.maxImageCount > 0 &&
+        image_count > supportDetails.capabilities.maxImageCount)
     {
-        image_count = swapchain_support_details.capabilities.maxImageCount;
+        image_count = supportDetails.capabilities.maxImageCount;
     }
 
-    // Create info
     VkSwapchainCreateInfoKHR swapchain_create_info{
         .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface          = m_Surface,
@@ -207,7 +236,7 @@ void VulkanState::create_swapchain()
         .imageExtent      = m_SwapChainExtent,
         .imageArrayLayers = 1,
         .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .preTransform     = swapchain_support_details.capabilities.currentTransform, // No transform op
+        .preTransform     = supportDetails.capabilities.currentTransform, // No transform op
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode      = presentMode,
         .clipped          = VK_TRUE,
@@ -239,9 +268,7 @@ void VulkanState::create_swapchain()
 
     // Create swapchain
     VkResult ret = vkCreateSwapchainKHR(m_LogicalDevice, &swapchain_create_info, nullptr, &m_SwapChain);
-    if (ret != VK_SUCCESS) {
-        panic("failed to create swapchain!");
-    }
+    NE_CORE_ASSERT(ret == VK_SUCCESS, "failed to create swapchain!");
     NE_ASSERT(m_SwapChain != VK_NULL_HANDLE, "failed to create swapchain!");
 }
 
@@ -381,7 +408,7 @@ void VulkanState::create_renderpass()
 
     if (VK_SUCCESS != vkCreateRenderPass(m_LogicalDevice, &renderpass_create_info, nullptr, &m_renderPass))
     {
-        panic("failed to crete render pass!");
+        NE_CORE_ASSERT(false, "failed to crete render pass!");
     }
     NE_ASSERT(m_renderPass, "failed to crete render pass!");
 }
@@ -424,17 +451,16 @@ void VulkanState::create_descriptor_set_layout()
     NE_ASSERT(m_descriptorSetLayout, "failed to create descriptor set layout");
 }
 
-void VulkanState::createGraphicsPipeline()
+void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std::vector<uint32_t>> spv_binaries)
 {
     /************************** Shader Stages ***********************************************/
 
     /* shader ģ�� ������ͼ�ι��߿ɱ�̽׶εĹ���    */
 
 
-    GLSLScriptProcessor                                     processor("engine/shaders/default.glsl");
-    std::unordered_map<EShaderStage, std::vector<uint32_t>> spv_binaries;
-    bool                                                    Ok = processor.TakeSpv(spv_binaries);
-    NE_ASSERT(Ok, "failed to take spv binaries");
+    // GLSLScriptProcessor                                     processor("engine/shaders/default.glsl");
+    // bool                                                    Ok = processor.TakeSpv(spv_binaries);
+    // NE_ASSERT(Ok, "failed to take spv binaries");
 
     // Compile Module (Code)
     auto vertShaderModule = create_shader_module(spv_binaries[EShaderStage::Vertex]);
@@ -456,22 +482,22 @@ void VulkanState::createGraphicsPipeline()
     // Shader Stage createInfo
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-    VertexInput v_input(0);
-    v_input.AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "postion")
-        .AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "color")
-        .AddAttribute(VK_FORMAT_R32G32_SFLOAT, "texture_coord");
+    // VertexInput v_input(0);
+    // v_input.AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "postion")
+    //     .AddAttribute(VK_FORMAT_R32G32B32_SFLOAT, "color")
+    //     .AddAttribute(VK_FORMAT_R32G32_SFLOAT, "texture_coord");
 
     // the description of vertex(declaration) should compatible with the  shader module
-    auto bindingDescription    = v_input.GetBindingDescription();
-    auto attributeDescriptions = v_input.GetAttributeDescriptions();
+    // auto bindingDescription    = v_input.GetBindingDescription();
+    // auto attributeDescriptions = v_input.GetAttributeDescriptions();
 
     // vertex input State createInfo
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
-        .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount   = 1,
-        .pVertexBindingDescriptions      = &bindingDescription,
-        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
-        .pVertexAttributeDescriptions    = attributeDescriptions.data(),
+        //     .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        //     .vertexBindingDescriptionCount   = 1,
+        //     .pVertexBindingDescriptions      = &bindingDescription,
+        //     .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+        //     .pVertexAttributeDescriptions    = attributeDescriptions.data(),
     };
     /************************** Shader Stages ***********************************************/
 
@@ -485,13 +511,6 @@ void VulkanState::createGraphicsPipeline()
         inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-        // VkPipelineInputAssemblyStateCreateInfo�ṹ��������������:����������ʲô���͵ļ���ͼԪ���˽��л��Ƽ��Ƿ����ö��������¿�ʼͼԪ��ͼԪ�����˽ṹ����topologyö��ֵ����:
-        // VK_PRIMITIVE_TOPOLOGY_POINT_LIST: ���㵽��
-        // VK_PRIMITIVE_TOPOLOGY_LINE_LIST : ������ߣ����㲻����
-        // VK_PRIMITIVE_TOPOLOGY_LINE_STRIP : ������ߣ�ÿ���߶εĽ���������Ϊ��һ���߶εĿ�ʼ����
-        // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : ������棬���㲻����
-        // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP : ÿ������ѵ�ĵڶ��������������㶼��Ϊ��һ�������ε�ǰ��������
     }
 
     // Viewport ���� ͼ��ת����ӳ�䣩�� framebuffer�����ڣ� �Ķ�Ӧ���� �������xy������hw�������minmax
@@ -644,7 +663,7 @@ void VulkanState::createGraphicsPipeline()
         pipelineLayoutCreateInfo.pPushConstantRanges    = 0;                      // Optional
     }
     if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayoutCreateInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
-        panic("filed to create pipeline layout!");
+        NE_CORE_ASSERT(false, "filed to create pipeline layout!");
     }
     /************************************* Pipeline Layout ********************************************/
 
@@ -744,7 +763,36 @@ void VulkanState::createDepthResources()
     /// </summary>
 
     // 1. �ҵ�֧�ֵ�format
+
+
+    auto findSupportedFormat = [this](const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+        for (VkFormat format : candidates) {
+            VkFormatProperties props;
+            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
+
+            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+                return format;
+            }
+            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+                return format;
+            }
+        }
+
+        NE_CORE_ASSERT(false, "failed to find supported format!");
+        return VK_FORMAT_UNDEFINED;
+    };
+
+
+    auto findDepthFormat = [findSupportedFormat]() {
+        return findSupportedFormat({VK_FORMAT_D32_SFLOAT,
+                                    VK_FORMAT_D32_SFLOAT_S8_UINT,
+                                    VK_FORMAT_D24_UNORM_S8_UINT},
+                                   VK_IMAGE_TILING_OPTIMAL,
+                                   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    };
+
     VkFormat depthFormat = findDepthFormat();
+
 
     // 2. ���� m_depthImage ��� �� �ڴ�ռ�
     createImage(m_SwapChainExtent.width, m_SwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
@@ -984,11 +1032,9 @@ void VulkanState::createIndexBuffer()
     vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }
 
-void VulkanState::createUniformBuffer()
+void VulkanState::createUniformBuffer(uint32_t size)
 {
-    VkDeviceSize buffersize = sizeof(UniformBufferObject);
-
-    createBuffer(buffersize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffer, m_uniformBUfferMemory);
+    createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffer, m_uniformBUfferMemory);
 }
 
 void VulkanState::createDescriptorPool()
@@ -1039,7 +1085,7 @@ void VulkanState::createDescriptorSet()
     {
         bufferInfo.buffer = m_uniformBuffer;
         bufferInfo.offset = 0;
-        bufferInfo.range  = sizeof(UniformBufferObject);
+        // bufferInfo.range  = sizeof(UniformBufferObject);
     }
 
     VkDescriptorImageInfo image_info{
@@ -1186,10 +1232,7 @@ void VulkanState::createCommandBuffers()
 
         auto result = (vkEndCommandBuffer(m_commandBuffers[i])); // E ���������¼
         /*<-------------------------------------------------------------------------------->*/
-        if (result != VK_SUCCESS)
-        {
-            panic("failed to record command buffer!");
-        }
+        NE_CORE_ASSERT(result == VK_SUCCESS, "failed to record command buffer!");
     }
 }
 
@@ -1214,7 +1257,7 @@ void VulkanState::recreateSwapChain()
     create_iamge_views();
 
     create_renderpass();
-    createGraphicsPipeline();
+    // createGraphicsPipeline();
     createDepthResources();
     createFramebuffers();
     createCommandBuffers();
@@ -1239,7 +1282,7 @@ bool VulkanState::is_device_suitable(VkPhysicalDevice device)
     bool bSwapchainComplete = false;
     if (bExtensionSupported)
     {
-        SwapChainSupportDetails swapchain_support_details = query_swapchain_supported(device);
+        SwapChainSupportDetails swapchain_support_details = SwapChainSupportDetails::query(device, m_Surface);
 
         bSwapchainComplete = !swapchain_support_details.formats.empty() &&
                              !swapchain_support_details.present_modes.empty();
@@ -1260,8 +1303,8 @@ bool VulkanState::is_validation_layers_supported()
 {
     uint32_t count;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
-    std::vector<VkLayerProperties> layers(layer_count);
-    vkEnumerateInstanceLayerProperties(&layer_count, layers.data());
+    std::vector<VkLayerProperties> layers(count);
+    vkEnumerateInstanceLayerProperties(&count, layers.data());
 
     for (const char *layer : m_ValidationLayers)
     {
@@ -1291,32 +1334,4 @@ bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
         required_extensions.erase(extension.extensionName);
     }
     return required_extensions.empty();
-}
-
-SwapChainSupportDetails VulkanState::query_swapchain_supported(VkPhysicalDevice device)
-{
-    SwapChainSupportDetails details;
-
-    // Capabilities
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface, &details.capabilities);
-
-    // Formats
-    uint32_t format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &format_count, nullptr);
-    if (format_count != 0)
-    {
-        details.formats.resize(format_count);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &format_count, details.formats.data());
-    }
-
-    // PresentModes
-    uint32_t present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &present_mode_count, nullptr);
-    if (present_mode_count != 0)
-    {
-        details.present_modes.resize(present_mode_count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface, &present_mode_count, details.present_modes.data());
-    }
-
-    return details;
 }

@@ -12,6 +12,7 @@ class WindowProvider
 
   public:
 
+    void *getNativeWindowPtr() { return nativeWindowHandle; }
     template <typename T>
     T *getNativeWindowPtr() { return static_cast<T *>(nativeWindowHandle); }
 
