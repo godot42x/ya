@@ -24,14 +24,20 @@
 #include "Render/Model.h"
 
 
-#include "Platform/Render/SDL/SDLGPURender2D.h"
-#include "Platform/Render/SDL/SDLGPURender3D.h"
-
-
 
 #define ENABLE_RENDER_3D 0
 #define ENABLE_RENDER_2D 1
 #define ENABLE_IMGUI 1
+
+
+#if ENABLE_RENDER_3D
+    #include "Platform/Render/SDL/SDLGPURender3D.h"
+#endif
+
+#if ENABLE_RENDER_2D
+    #include "Platform/Render/SDL/SDLGPURender2D.h"
+#endif
+
 
 
 SDL_GPUTexture *faceTexture  = nullptr;
@@ -50,7 +56,6 @@ SDL::SDLDevice *device = new SDL::SDLDevice();
 #if ENABLE_RENDER_3D
 SDL::SDLRender3D *render3d = new SDL::SDLRender3D();
 #endif
-SDL::SDLRender3D *render3d = new SDL::SDLRender3D();
 #if ENABLE_RENDER_2D
 SDL::SDLRender2D *render2d = new SDL::SDLRender2D();
 #endif
@@ -141,7 +146,9 @@ struct SDLAppState
 #if ENABLE_RENDER_3D
 void initShaderData()
 {
-    auto commandBuffer = render->acquireCommandBuffer();
+    auto cmdBuf           = device->acquireCommandBuffer();
+    auto sldCommandBuffer = cmdBuf->getNativeCommandBufferPtr<SDL::SDLGPUCommandBuffer>();
+
 
     for (auto &vertex : vertices) {
         vertex.position = quadTransform * glm::vec4(vertex.position, 1.0f);

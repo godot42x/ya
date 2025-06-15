@@ -26,10 +26,8 @@ bool SDLDevice::init(const InitParams &params)
                                                     SDL_GPU_SHADERFORMAT_MSL,
                                                 true,
                                                 nullptr);
-    if (!device) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to create GPU device: %s", SDL_GetError());
-        return false;
-    }
+
+    NE_CORE_ASSERT(!!device, "Failed to create GPU device: {}", SDL_GetError());
 
     nativeDevice = device;
 
@@ -161,6 +159,7 @@ std::shared_ptr<CommandBuffer> SDLDevice::acquireCommandBuffer(std::source_locat
 {
     return std::make_shared<SDL::SDLGPUCommandBuffer>(*this, std::move(location));
 }
+
 
 
 }; // namespace SDL

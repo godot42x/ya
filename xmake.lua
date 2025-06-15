@@ -16,6 +16,7 @@ end
 --includes("engine")
 
 includes("./xmake/rule.lua")
+includes("./xmake/package/xmake.lua")
 includes("./Engine/Neon.xmake.lua")
 
 includes("./xmake/task.lua")

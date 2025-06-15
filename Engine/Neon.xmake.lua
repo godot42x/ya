@@ -1,12 +1,23 @@
+-- if is_mode("debug") then
+--     set_runtimes("MTd")
+-- else
+set_runtimes("MT") -- use static link and no debug runtime library
+-- end
+
 includes("./Plugins/Plugins.xmake.lua")
 
-add_requires("vulkansdk")
 add_requires("spdlog")
 add_requires("libsdl3")
 add_requires("libsdl3_image")
 add_requires("glm")
 add_requires("spirv-cross")
-add_requires("assimp")
+add_requires("vulkansdk")
+add_requires("assimp", {
+    configs = {
+        shared = false,
+        runtime = "MT",
+    }
+})
 
 -- just for temp debug in runtime
 add_requires("imgui", {
@@ -16,9 +27,13 @@ add_requires("imgui", {
         debug = is_mode("debug")
     }
 })
+add_requires("shaderc", {
+    configs = {
+        shared = false,
+        runtime = "MT",
+    }
+})
 
-
-add_requires("shaderc")
 
 target("Neon")
 do
@@ -33,18 +48,30 @@ do
     add_deps("reflect.cc")
     -- add_deps("log")
 
-    add_packages("vulkansdk")
+
+    -- Add math library for exp2 and log2 functions
+    if is_plat("windows") then
+        add_links("msvcrt")
+    end
+
+
     add_packages("spdlog")
     add_packages("libsdl3")
     add_packages("libsdl3_image")
     add_packages("glm")
-    add_packages("shaderc")
-    add_packages("spirv-cross")
     add_packages("imgui")
     --add_packages("glad")
     add_packages("assimp")
 
-    -- set_runtimes("MT")
+    do
+        --NOTICE: must before vulkansdk or it will cause error
+        -- because vulkansdk's linkdir contains those libs like ["shaderc.lib", "spirv-cross.lib"]
+        add_packages("shaderc")
+        add_packages("spirv-cross")
+
+        add_packages("vulkansdk")
+    end
+
 
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then

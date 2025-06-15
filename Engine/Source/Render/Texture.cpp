@@ -12,7 +12,7 @@ std::shared_ptr<Texture> Texture::CreateFromFile(LogicalDevice &device, const st
                                                  std::shared_ptr<CommandBuffer> commandBuffer)
 {
 
-    auto sdlTexture = std::make_shared<SDL::SDLTexture>(*static_cast<SDL::SDLDevice*>(&device));
+    auto sdlTexture = std::make_shared<SDL::SDLTexture>(*static_cast<SDL::SDLDevice *>(&device));
     sdlTexture->createFromFile(filepath, commandBuffer);
     return sdlTexture;
 }
@@ -21,12 +21,16 @@ std::shared_ptr<Texture> Texture::CreateFromBuffer(const void *data, uint32_t wi
                                                    ETextureFormat format, const std::string &name,
                                                    std::shared_ptr<CommandBuffer> commandBuffer)
 {
-    return SDL::SDLTexture::CreateFromBuffer(data, width, height, format, name, commandBuffer);
+    // return SDL::SDLTexture::CreateFromBuffer(data, width, height, format, name, commandBuffer);
+    UNIMPLEMENTED();
+    return nullptr;
 }
 
 std::shared_ptr<Texture> Texture::CreateEmpty(uint32_t width, uint32_t height,
                                               ETextureFormat format, ETextureUsage usage,
                                               std::shared_ptr<CommandBuffer> commandBuffer)
 {
-    return SDL::SDLTexture::CreateEmpty(width, height, format, usage, commandBuffer);
+    UNIMPLEMENTED();
+    // return SDL::SDLTexture::CreateEmpty(width, height, format, usage, commandBuffer);
+    return nullptr;
 }

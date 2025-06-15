@@ -34,6 +34,7 @@ class Delegate<ReturnType(Args...)>
         if (bBound) {
             return m_Function(std::forward<Args>(args)...);
         }
+        return ReturnType{}; // Return default value if not bound
     }
 
   private:

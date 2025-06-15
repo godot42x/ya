@@ -80,20 +80,20 @@ struct VulkanState
     VkFormat   m_SwapChainImageFormat;
     VkExtent2D m_SwapChainExtent;
 
-    std::vector<VkImage>       m_SwapChainImages;       // VKImage: Texture
-    std::vector<VkImageView>   m_SwapChainImageViews;   //
-    std::vector<VkFramebuffer> m_SwapChainFrameBuffers; // VkFramebuffer:����renderpass ��Ŀ��ͼƬ����������VkImage����
+    std::vector<VkImage>       m_SwapChainImages; // VKImage: Texture
+    std::vector<VkImageView>   m_SwapChainImageViews;
+    std::vector<VkFramebuffer> m_SwapChainFrameBuffers;
 
 
 
-    VkPipeline   m_graphicsPipeLine; // drawing ʱ GPU ��Ҫ��״̬��Ϣ���Ͻṹ�壬������shader,��դ��,depth��
-    VkRenderPass m_renderPass;       // ������Ⱦ������drawing�����������, attachment,subpass
+    VkPipeline   m_graphicsPipeLine;
+    VkRenderPass m_renderPass;
 
 
     VkDescriptorPool      m_descriptorPool;
     VkDescriptorSet       m_DescriptorSet;
-    VkDescriptorSetLayout m_descriptorSetLayout; // ���������������һ��������
-    VkPipelineLayout      m_pipelineLayout;      // ���߲��� linera �� Optimal(tileƽ��)��
+    VkDescriptorSetLayout m_descriptorSetLayout;
+    VkPipelineLayout      m_pipelineLayout;
 
 
 
@@ -583,10 +583,7 @@ struct VulkanState
         }
 
         NE_ASSERT(m_PhysicalDevice != VK_NULL_HANDLE, "failed to find a suitable GPU!");
-    }
-
-    bool               is_device_suitable(VkPhysicalDevice device);
-    QueueFamilyIndices query_queue_families(VkPhysicalDevice device, VkQueueFlagBits flags = VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
+    }    bool               is_device_suitable(VkPhysicalDevice device);
     bool               is_validation_layers_supported();
     bool               is_device_extension_support(VkPhysicalDevice device);
 

@@ -242,10 +242,8 @@ void VulkanState::create_swapchain()
         .clipped          = VK_TRUE,
         .oldSwapchain     = VK_NULL_HANDLE,
     };
-
-
     // TODO: only need to query once? no high performance required
-    QueueFamilyIndices indices = query_queue_families(m_PhysicalDevice);
+    QueueFamilyIndices indices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
 
     uint32_t queue_family_indices[] = {
         (uint32_t)indices.graphics_family,
@@ -729,7 +727,7 @@ void VulkanState::createCommandPool()
     ��ÿ�� commandPool ֻ�ܷ����ڵ�һ�Ķ����ϣ����������Ҫ���������һ�£�
     �������� ���� ѡ�� ͼ�ζ��д�
     */
-    QueueFamilyIndices queueFamilyIndices = query_queue_families(m_PhysicalDevice);
+    QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
 
     VkCommandPoolCreateInfo poolInfo = {};
     {
