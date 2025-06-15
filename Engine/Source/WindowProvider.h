@@ -16,7 +16,10 @@ class WindowProvider
     template <typename T>
     T *getNativeWindowPtr() { return static_cast<T *>(nativeWindowHandle); }
 
-    virtual ~WindowProvider() = default;
+    virtual ~WindowProvider()
+    {
+        NE_CORE_TRACE("WindowProvider::~WindowProvider()");
+    }
 
     virtual bool init() = 0;
 
@@ -29,7 +32,15 @@ class SDLWindowProvider : public WindowProvider
 {
   public:
     SDLWindowProvider() = default;
-    ~SDLWindowProvider() override;
+    ~SDLWindowProvider() override
+    {
+        NE_CORE_INFO("SDLWindowProvider::~SDLWindowProvider()");
+        if (nativeWindowHandle) {
+            SDL_DestroyWindow(static_cast<SDL_Window *>(nativeWindowHandle));
+            SDL_Quit();
+            nativeWindowHandle = nullptr;
+        }
+    }
 
     bool init() override
     {

@@ -4,6 +4,7 @@ do -- grab all cpp file under test folder as a target
     for _, file in ipairs(test_files) do
         local name = path.basename(file)
         local target_name = "test." .. name
+        -- print("add test target:", target_name)
         target(target_name)
         do
             if bDebug then

@@ -4,6 +4,7 @@
 #include "Core/Log.h"
 
 
+#include "Render/Device.h"
 #include "SDL3/SDL_video.h"
 
 #include <string>
@@ -583,9 +584,10 @@ struct VulkanState
         }
 
         NE_ASSERT(m_PhysicalDevice != VK_NULL_HANDLE, "failed to find a suitable GPU!");
-    }    bool               is_device_suitable(VkPhysicalDevice device);
-    bool               is_validation_layers_supported();
-    bool               is_device_extension_support(VkPhysicalDevice device);
+    }
+    bool is_device_suitable(VkPhysicalDevice device);
+    bool is_validation_layers_supported();
+    bool is_device_extension_support(VkPhysicalDevice device);
 
     static std::vector<char> readFile(const std::string &filename)
     {
@@ -1005,5 +1007,14 @@ struct Vertex
         return attributeDescriptions;
     }
 };
+
+
+struct VulkanDevice : public LogicalDevice
+{
+    VulkanState _vulkanState;
+
+    virtual bool init(const InitParams &params) override;
+};
+
 
 #undef panic

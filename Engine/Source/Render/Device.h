@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "WindowProvider.h"
 #include "reflect.cc/enum"
 
 
@@ -25,9 +26,12 @@ struct LogicalDevice
     void *nativeDevice = nullptr;
     void *nativeWindow = nullptr;
 
+    virtual ~LogicalDevice() { NE_CORE_TRACE("LogicalDevice::~LogicalDevice()"); }
+
     struct InitParams
     {
-        bool bVsync = true;
+        bool            bVsync = true;
+        WindowProvider &windowProvider;
     };
 
     virtual bool init(const InitParams &params) = 0;

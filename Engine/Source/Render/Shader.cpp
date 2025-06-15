@@ -18,7 +18,7 @@
 #include <spirv_cross/spirv.h>
 #include <spirv_cross/spirv_cross.hpp>
 
-#include "utility/string_utils.h"
+#include "utility.cc/string_utils.h"
 
 
 #include <SDL3/SDL_gpu.h>

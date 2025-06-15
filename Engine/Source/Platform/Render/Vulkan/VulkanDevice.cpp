@@ -1333,3 +1333,10 @@ bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
     }
     return required_extensions.empty();
 }
+
+bool VulkanDevice::init(const InitParams &params)
+{
+
+    // UNIMPLEMENTED();
+    return false;
+}

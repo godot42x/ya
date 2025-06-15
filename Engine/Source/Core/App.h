@@ -9,20 +9,40 @@
 #include <vector>
 
 #include "../ImGuiHelper.h"
-#include "../Render/Model.h"
-#include "../Render/SDL/SDLGPUCommandBuffer.h"
-#include "../Render/SDL/SDLGPURender.h"
-#include "AssetManager.h"
-#include "EditorCamera.h"
-#include "Input/InputManager.h"
-#include "UI/DialogWindow.h"
+#include "StackDeleter.h"
+#include "WindowProvider.h"
 
 
-namespace NeonEngine
+#include "Platform/Render/Vulkan/VulkanDevice.h"
+
+// #include "utility.cc/stack_deleter.h"
+
+
+namespace Neon
 {
 
 class App
 {
+    // StackDeleter    deleteStack;
+    WindowProvider *windowProvider = nullptr;
+    LogicalDevice  *logicalDevice  = nullptr;
+
+
+    bool bRunning = true;
+
+  public:
+    void init();
+    int  run();
+    void quit();
+
+    int onEvent(SDL_Event &event);
+
+    int iterate(float dt)
+    {
+        // Handle input, update logic, render, etc.
+        // This is where the main loop logic would go.
+        return 0; // Continue running
+    }
 };
 
-} // namespace NeonEngine
+} // namespace Neon
