@@ -21,6 +21,8 @@ struct ImguiState
     // Initialize ImGui with SDL and SDLGPU backends
     void init(SDL_GPUDevice *device, SDL_Window *window)
     {
+        NE_CORE_ASSERT(device != nullptr && window != nullptr, "SDL GPU device or window is null");
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO *io = &ImGui::GetIO();
@@ -29,11 +31,11 @@ struct ImguiState
 
         ImGui_ImplSDL3_InitForSDLGPU(window);
 
+        SDL_WaitForGPUSwapchain(device, window);
         auto swapChianFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
         NE_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}", static_cast<int>(swapChianFormat), (uintptr_t)device, (uintptr_t)window);
         if (swapChianFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
             NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
-            SDL_Delay(1000);
         }
 
         ImGui_ImplSDLGPU3_InitInfo info{

@@ -233,7 +233,7 @@ SDL_AppResult AppInit(void **appstate, int argc, char *argv[])
 #endif
 
 #if ENABLE_IMGUI
-    imguiState.init(device->getNativeDevicePtr<SDL_GPUDevice>(), device->getNativeDevicePtr<SDL_Window>());
+    imguiState.init(device->getNativeDevicePtr<SDL_GPUDevice>(), device->getNativeWindowPtr<SDL_Window>());
 #endif
 
     return SDL_APP_CONTINUE;
