@@ -5,4 +5,4 @@ end
 include_xmake("./log.cc")
 include_xmake("./utility.cc")
 include_xmake("./reflect.cc")
-include_xmake("./test.cc")
+-- include_xmake("./test.cc")
