@@ -27,6 +27,9 @@ class WindowProvider
 };
 
 
+#if USE_VULKAN
+    #include "SDL3/SDL_vulkan.h"
+#endif
 
 class SDLWindowProvider : public WindowProvider
 {
@@ -44,7 +47,7 @@ class SDLWindowProvider : public WindowProvider
 
     bool init() override
     {
-        NE_CORE_INFO("SDLDevice::init()");
+        NE_CORE_INFO("SDLWindowProvider::init()");
         if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
             return false;
@@ -61,4 +64,37 @@ class SDLWindowProvider : public WindowProvider
     {
         SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
     }
+
+#if USE_VULKAN
+    bool createVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+    {
+        if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window *>(nativeWindowHandle),
+                                      instance,
+                                      nullptr, // if needed
+                                      surface))
+        {
+            NE_CORE_ERROR("Failed to create Vulkan surface: {}", SDL_GetError());
+            return false;
+        }
+        NE_CORE_INFO("Vulkan surface created successfully.");
+        return true;
+    }
+    void destroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+    {
+        SDL_Vulkan_DestroySurface(instance, *surface, nullptr); // if needed
+        NE_CORE_INFO("Vulkan surface destroyed successfully.");
+    }
+
+    std::vector<const char *> getVkInstanceExtensions()
+    {
+        Uint32 count = 0;
+        // VK_KHR_win32_surface
+        const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&count);
+        if (!extensions) {
+            NE_CORE_ERROR("Failed to get Vulkan instance extensions: {}", SDL_GetError());
+            return {};
+        }
+        return std::vector<const char *>(extensions, extensions + count);
+    }
+#endif
 };

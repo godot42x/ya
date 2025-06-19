@@ -1,7 +1,6 @@
-
-
 #include "VulkanDevice.h"
 
+#include <Core/Base.h>
 #include <Core/Log.h>
 
 #include <Render/Shader.h>
@@ -12,6 +11,7 @@
 
 
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
+
 
 
 VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
@@ -125,7 +125,6 @@ void VulkanState::create_instance()
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
 
-
     VkInstanceCreateInfo instance_create_info{
         .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext            = nullptr,
@@ -159,7 +158,7 @@ void VulkanState::create_instance()
 // Assign the m_physicalDevice, m_PresentQueue, m_GraphicsQueue
 void VulkanState::create_logic_device()
 {
-    QueueFamilyIndices family_indices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
+    QueueFamilyIndices family_indices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queue_crate_infos;
 
@@ -208,6 +207,7 @@ void VulkanState::create_logic_device()
     NE_ASSERT(m_GraphicsQueue != VK_NULL_HANDLE, "failed to get graphics queue!");
 }
 
+
 void VulkanState::create_swapchain()
 {
     // Swap chain support details
@@ -243,14 +243,17 @@ void VulkanState::create_swapchain()
         .oldSwapchain     = VK_NULL_HANDLE,
     };
     // TODO: only need to query once? no high performance required
-    QueueFamilyIndices indices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
+    QueueFamilyIndices indices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
     uint32_t queue_family_indices[] = {
         (uint32_t)indices.graphics_family,
         (uint32_t)indices.supported_family,
     };
 
-    // TODO: what's the difference between concurrent and exclusive sharing
+    // Q: what's the difference between concurrent and exclusive sharing
+    // AI: Concurrent sharing allows multiple queues to access the same image simultaneously,
+    //  while exclusive sharing allows only one queue to access the image at a time.
+
     if (indices.graphics_family != indices.supported_family)
     {
         swapchain_create_info.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
@@ -284,131 +287,10 @@ void VulkanState::create_iamge_views()
 
     for (size_t i = 0; i < m_SwapChainImages.size(); ++i)
     {
-        m_SwapChainImageViews[i] = createImageView(m_SwapChainImages[i],
-                                                   m_SwapChainImageFormat,
-                                                   VK_IMAGE_ASPECT_COLOR_BIT);
+        m_SwapChainImageViews[i] = helper.createImageView(m_SwapChainImages[i],
+                                                          m_SwapChainImageFormat,
+                                                          VK_IMAGE_ASPECT_COLOR_BIT);
     }
-}
-
-void VulkanState::create_renderpass()
-{
-    // TODO: Different and make all hardcodes as parameters
-
-    // color
-    VkAttachmentDescription color_attachment_desc = {
-        .format         = m_SwapChainImageFormat,
-        .samples        = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED, // Bug fix: init-undef sub-attachOptimal final-presentSrcKhr
-        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    };
-    VkAttachmentReference color_attachment_Ref = {
-        .attachment = 0, // index
-        .layout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-    };
-
-
-    // depth
-    VkFormat depth_format = VK_FORMAT_UNDEFINED;
-    {
-        auto candidate_formats = {
-            VK_FORMAT_D32_SFLOAT,
-            VK_FORMAT_D32_SFLOAT_S8_UINT,
-            VK_FORMAT_D24_UNORM_S8_UINT,
-        };
-        VkImageTiling        tiling        = VK_IMAGE_TILING_OPTIMAL;
-        VkFormatFeatureFlags feature_flags = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        for (VkFormat candidate_format : candidate_formats)
-        {
-            VkFormatProperties properties;
-            vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, candidate_format, &properties);
-
-            switch (tiling) {
-
-            case VK_IMAGE_TILING_OPTIMAL:
-            {
-                if ((properties.optimalTilingFeatures & feature_flags) == feature_flags) {
-                    depth_format = candidate_format;
-                }
-            }
-            case VK_IMAGE_TILING_LINEAR:
-            {
-                if ((properties.linearTilingFeatures & feature_flags) == feature_flags) {
-                    depth_format = candidate_format;
-                }
-            }
-            case VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT:
-            case VK_IMAGE_TILING_MAX_ENUM:
-                NE_ASSERT(false, "tiling is not supported!");
-            }
-        }
-    }
-    NE_ASSERT(depth_format != VK_FORMAT_UNDEFINED, "failed to find supported format!");
-
-    VkAttachmentDescription depth_attachment_desc = {
-        .format         = depth_format,
-        .samples        = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-    VkAttachmentReference depth_attachment_ref = {
-        .attachment = 1,
-        .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-
-    VkSubpassDescription subpass_desc = {
-        .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,                     // Maybe add more for mouse picking
-        .pColorAttachments    = &color_attachment_Ref, //  where the frag output vec4 color will store
-        /*
-            pInputAttachments
-            pResolveAttachments
-            pDepthStencilAttachment
-            pPreserveAttachments
-        */
-        .pDepthStencilAttachment = &depth_attachment_ref,
-    };
-
-    VkSubpassDependency subpass_dependency = {
-        .srcSubpass    = VK_SUBPASS_EXTERNAL,
-        .dstSubpass    = 0,
-        .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, //  swapchain output
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-                         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    };
-
-    std::array<VkAttachmentDescription, 2> attachments = {
-        color_attachment_desc,
-        depth_attachment_desc,
-    };
-
-    // RenderPass creatInfo ��Ⱦͨ��
-    VkRenderPassCreateInfo renderpass_create_info = {
-        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = static_cast<uint32_t>(attachments.size()),
-        .pAttachments    = attachments.data(),
-        .subpassCount    = 1,
-        .pSubpasses      = &subpass_desc,
-        .dependencyCount = 1,
-        .pDependencies   = &subpass_dependency,
-    };
-
-    if (VK_SUCCESS != vkCreateRenderPass(m_LogicalDevice, &renderpass_create_info, nullptr, &m_renderPass))
-    {
-        NE_CORE_ASSERT(false, "failed to crete render pass!");
-    }
-    NE_ASSERT(m_renderPass, "failed to crete render pass!");
 }
 
 void VulkanState::create_descriptor_set_layout()
@@ -691,8 +573,8 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
 
         pipelineCreateInfo.layout = m_pipelineLayout;
 
-        pipelineCreateInfo.renderPass = m_renderPass; //  ���� renderPass
-        pipelineCreateInfo.subpass    = 0;            // subpass ��ͨ�� ������
+        pipelineCreateInfo.renderPass = m_renderPass.getRenderPass(); //  ���� renderPass
+        pipelineCreateInfo.subpass    = 0;                            // subpass ��ͨ�� ������
 
         /*
         ʵ���ϻ�����������:basePipelineHandle �� basePipelineIndex��Vulkan������ͨ���Ѿ����ڵĹ��ߴ����µ�ͼ�ι��ߡ�
@@ -722,24 +604,14 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
 
 void VulkanState::createCommandPool()
 {
-    /*
-    ��������������ύ��һ���豸���У����Ǽ��������� graphics �� presentaion ���У� ����ִ��
-    ��ÿ�� commandPool ֻ�ܷ����ڵ�һ�Ķ����ϣ����������Ҫ���������һ�£�
-    �������� ���� ѡ�� ͼ�ζ��д�
-    */
-    QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
+
+    QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
     VkCommandPoolCreateInfo poolInfo = {};
     {
         poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         poolInfo.queueFamilyIndex = queueFamilyIndices.graphics_family;
-        poolInfo.flags            = 0; // Optional
-                                       /*
-                                       ��������־λ����command pools :
-                                           VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: ��ʾ��������ǳ�Ƶ�������¼�¼������(���ܻ�ı��ڴ������Ϊ)
-                                           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT : ������������������¼�¼��û�������־�����е��������������һ������
-                                       ���ǽ����ڳ���ʼ��ʱ���¼���������������ѭ����main loop�ж��ִ�У�������ǲ���ʹ����Щ��־��
-                                       */
+        poolInfo.flags            = 0;
     }
 
     if (vkCreateCommandPool(m_LogicalDevice, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
@@ -792,93 +664,24 @@ void VulkanState::createDepthResources()
     VkFormat depthFormat = findDepthFormat();
 
 
-    // 2. ���� m_depthImage ��� �� �ڴ�ռ�
-    createImage(m_SwapChainExtent.width, m_SwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
+    helper.createImage(m_SwapChainExtent.width, m_SwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
 
-    // 3. ���� ���ͼ��Ӧ�� view
-    m_depthImageView = createImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+    m_depthImageView = helper.createImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    // 4. �л�
-    transitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-}
-
-void VulkanState::createFramebuffers()
-{
-    m_SwapChainFrameBuffers.resize(m_SwapChainImageViews.size());
-
-    for (size_t i = 0; i < m_SwapChainImageViews.size(); ++i)
-    {
-        std::array<VkImageView, 2> attachments = {
-            m_SwapChainImageViews[i],
-            m_depthImageView};
-
-        VkFramebufferCreateInfo framebufferInfo = {};
-        {
-            framebufferInfo.sType      = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebufferInfo.renderPass = m_renderPass;
-
-            framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-            framebufferInfo.pAttachments    = attachments.data(); // �󶨵���Ӧ�ĸ��������� VkImageView ����
-
-            framebufferInfo.width  = m_SwapChainExtent.width;
-            framebufferInfo.height = m_SwapChainExtent.height;
-            framebufferInfo.layers = 1; // ָ��ͼ�����еĲ���
-        }
-
-        if (vkCreateFramebuffer(m_LogicalDevice, &framebufferInfo, nullptr, &m_SwapChainFrameBuffers[i]) != VK_SUCCESS)
-        {
-            panic("failed to create freamebuffer!");
-        }
-    }
+    helper.transitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
 void VulkanState::createTextureImage()
 {
-    // // TODO(enchance): ��������ܹ�Ϊһ���࣬�����������ĳ�Ա����ֻ�ܴ���һ��ͼƬ
+    auto path = "Engine/Content/TestTextures/face.png";
 
-    // // ����ͼƬ�� map���������ص���ʱ�������� �������
-    // int      texWidth, texHeight, texChannels;
-    // stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    // if (!pixels)
-    // {
-    //     panic("failed to load texture image!");
-    // }
-
-    // VkDeviceSize imageSize = texWidth * texHeight * 4;
-
-    // VkBuffer       stagingBuffer;
-    // VkDeviceMemory stagingBufferMemory;
-
-    // createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-    // void *data;
-    // vkMapMemory(m_logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
-    // memcpy(data, pixels, static_cast<size_t>(imageSize));
-    // vkUnmapMemory(m_logicalDevice, stagingBufferMemory);
-
-    // stbi_image_free(pixels);
-
-
-    // // ���� ����Ҫm_textureImage�ϵ� map ӳ��
-    // createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_textureImage, m_textureImageMemory);
-
-    // // �仯��ͼͼ�� layout �� VK_IAMGE_LAYOUT_TRANSFER_DST_OPTIMAL
-    // // TODO (may fix): old layout ����Ϊ PREINITIALIZED ������δ���� �ò����Ŀ�����
-    // transitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    // // ִ�� ������ �� ͼ��� ��������
-    // copyBufferToImage(stagingBuffer, m_textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
-    // // �����ı任��׼�� ��ɫ������, �ڻ�copyBufferToImage����������m_textureImage��
-    // transitionImageLayout(m_textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // vkDestroyBuffer(m_logicalDevice, stagingBuffer, nullptr);
-    // vkFreeMemory(m_logicalDevice, stagingBufferMemory, nullptr);
+    helper.createTextureImage(path, m_textureImage, m_textureImageMemory);
 }
 
 void VulkanState::createTextureImageView()
 {
-    m_textureImageView = createImageView(m_textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+    m_textureImageView = helper.createImageView(
+        m_textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void VulkanState::createTextureSampler()
@@ -1013,16 +816,16 @@ void VulkanState::createIndexBuffer()
 
     VkBuffer       stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
     void *data;
     vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
     memcpy(data, m_indices.data(), (size_t)bufferSize);
     vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+    helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
 
-    copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+    helper.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
 
 
     // clean stage data
@@ -1032,7 +835,7 @@ void VulkanState::createIndexBuffer()
 
 void VulkanState::createUniformBuffer(uint32_t size)
 {
-    createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffer, m_uniformBUfferMemory);
+    helper.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffer, m_uniformBUfferMemory);
 }
 
 void VulkanState::createDescriptorPool()
@@ -1126,7 +929,7 @@ void VulkanState::createDescriptorSet()
 
 void VulkanState::createCommandBuffers()
 {
-    m_commandBuffers.resize(m_SwapChainFrameBuffers.size());
+    m_commandBuffers.resize(m_renderPass.getFramebuffers().size());
 
     // 1. ������������ڴ�
     VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
@@ -1177,8 +980,8 @@ void VulkanState::createCommandBuffers()
         }
         {
             renderPassInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass  = m_renderPass;
-            renderPassInfo.framebuffer = m_SwapChainFrameBuffers[i];
+            renderPassInfo.renderPass  = m_renderPass.getRenderPass();
+            renderPassInfo.framebuffer = m_renderPass.getFramebuffers()[i];
 
             renderPassInfo.renderArea.offset = {0, 0};
             renderPassInfo.renderArea.extent = m_SwapChainExtent;
@@ -1254,10 +1057,9 @@ void VulkanState::recreateSwapChain()
     init_swapchain_images();
     create_iamge_views();
 
-    create_renderpass();
-    // createGraphicsPipeline();
+    // Recreate render pass and framebuffers
     createDepthResources();
-    createFramebuffers();
+    m_renderPass.recreate(m_SwapChainImageViews, m_depthImageView, m_SwapChainExtent);
     createCommandBuffers();
 }
 
@@ -1270,10 +1072,10 @@ bool VulkanState::is_device_suitable(VkPhysicalDevice device)
     // VkPhysicalDeviceFeatures devicesFeatures;
     // vkGetPhysicalDeviceFeatures(device, &devicesFeatures);
 
-    // return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-    // 	&& devicesFeatures.geometryShader;
+    // return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && devicesFeatures.geometryShader;
 
-    QueueFamilyIndices indices = QueueFamilyIndices::Query(m_Surface, device, VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
+    QueueFamilyIndices indices = QueueFamilyIndices::query(
+        m_Surface, device, VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
 
     bool bExtensionSupported = is_device_extension_support(device);
 
@@ -1332,11 +1134,4 @@ bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
         required_extensions.erase(extension.extensionName);
     }
     return required_extensions.empty();
-}
-
-bool VulkanDevice::init(const InitParams &params)
-{
-
-    // UNIMPLEMENTED();
-    return false;
 }

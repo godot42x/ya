@@ -22,6 +22,10 @@ class Delegate<ReturnType(Args...)>
         m_Function = function;
         bBound     = true;
     }
+    void set(FunctionType &&function)
+    {
+        Set(std::move(function));
+    }
 
     // Execute the delegate with arguments
     ReturnType operator()(Args... args) const
@@ -33,6 +37,12 @@ class Delegate<ReturnType(Args...)>
     {
         if (bBound) {
             return m_Function(std::forward<Args>(args)...);
+        }
+        if constexpr (std::is_void_v<ReturnType>) {
+            return; // No return value for void
+        }
+        else if constexpr (std::is_same_v<ReturnType, bool>) {
+            return true; // Return true if  not bound
         }
         return ReturnType{}; // Return default value if not bound
     }

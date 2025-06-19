@@ -1,3 +1,5 @@
+#pragma once
+
 #if _WIN32
     #define PLATFORM_BREAK() __debugbreak()
 #elif defined(__clang__) || defined(__GNUC__)
@@ -16,3 +18,8 @@
 #else
     #define NEON_API
 #endif
+
+
+#define USE_VULKAN 1
+#define USE_STB_IMG 1
+#define USE_SDL 1

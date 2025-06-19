@@ -34,6 +34,8 @@ add_requires("shaderc", {
     }
 })
 
+add_requires("stb")
+
 
 target("Neon")
 do
@@ -55,6 +57,7 @@ do
     end
 
 
+    add_packages("stb")
     add_packages("spdlog")
     add_packages("libsdl3")
     add_packages("libsdl3_image")
