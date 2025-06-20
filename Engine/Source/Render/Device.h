@@ -35,6 +35,7 @@ struct LogicalDevice
     };
 
     virtual bool init(const InitParams &params) = 0;
+    virtual void destroy()                      = 0;
 
     template <typename DeviceType>
     DeviceType *getNativeDevicePtr() { return static_cast<DeviceType *>(nativeDevice); } // TODO: check type safety

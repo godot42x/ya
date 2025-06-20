@@ -1,6 +1,7 @@
--- function include_project(name)
---     includes(name .. "/src")
--- end
+local old_print = print
+function print(...)
+    old_print(os.scriptdir(), ...)
+end
 
 -- set_targetdir("./bin")
 

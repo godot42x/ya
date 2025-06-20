@@ -102,21 +102,41 @@ struct VulkanState
 
 
     // std::vector<Vertex>   m_vertices;
-    std::vector<uint32_t> m_indices;
+    // std::vector<uint32_t> m_indices;
 
-    VkBuffer       m_vertexBuffer;
-    VkDeviceMemory m_vertexBufferMemory;
+    // VkBuffer       m_vertexBuffer;
+    // VkDeviceMemory m_vertexBufferMemory;
 
-    VkBuffer       m_indexBuffer;
-    VkDeviceMemory m_indexBufferMemory;
+    // VkBuffer       m_indexBuffer;
+    // VkDeviceMemory m_indexBufferMemory;
 
-    VkBuffer       m_uniformBuffer;
-    VkDeviceMemory m_uniformBUfferMemory;
+    // VkBuffer       m_uniformBuffer;
+    // VkDeviceMemory m_uniformBUfferMemory;
 
-    VkImage        m_textureImage;
-    VkDeviceMemory m_textureImageMemory;
-    VkImageView    m_textureImageView; // ���� ����ͼ��
-    VkSampler      m_textureSampler;   // texture����
+
+    VkSampler m_defaultTextureSampler;
+
+
+    // how to get the max size of texture slot in current physical device?
+    // AI: The maximum number of texture slots is determined by the physical device's capabilities,
+    // specifically the `maxPerStageDescriptorSamplers` property of the `VkPhysicalDeviceLimits` structure.
+    int m_maxTextureSlots = -1; // TODO: query the physical device for this value
+
+    struct Texture
+    {};
+    struct Texture2D : public Texture
+    {};
+    struct VulkanTexture2D : public Texture2D
+    {
+        VkImage     image;
+        VkImageView imageView;
+    };
+
+    std::vector<std::shared_ptr<VulkanTexture2D>> m_textures; // for multi-texture
+
+    std::vector<VkImage>     m_textureImages;     // for multi-texture
+    std::vector<VkImageView> m_textureImageViews; // for multi-texture
+
 
     VkImage        m_depthImage;
     VkDeviceMemory m_depthImageMemory;
@@ -125,8 +145,8 @@ struct VulkanState
     VkCommandPool                m_commandPool;    // ����أ����滺�������ڴ� ����ֱ�ӵ��ú������л��ƻ��ڴ�����ȣ� ����д���������������
     std::vector<VkCommandBuffer> m_commandBuffers; // �������
 
-    VkSemaphore m_imageAvailableSemaphore; // Э���������¼����ź����������� դ��(?Fench) һ������դ��״̬�� ��Ҫ���ڶ����ڻ���������ͬ������
-    VkSemaphore m_renderFinishedSemaphore; // դ����Ҫ���� ���ó��� ��������Ⱦ����ͬ��
+    VkSemaphore m_imageAvailableSemaphore;
+    VkSemaphore m_renderFinishedSemaphore;
 
     VulkanUtils helper; // helper for vulkan utils
 
@@ -204,8 +224,9 @@ struct VulkanState
         create_logic_device(); // logical device, present queue, graphics queue
         createCommandPool();
 
-        helper.onRecreateSwapchain(this); // TODO: use recreateSwapChain() here
         create_swapchain();
+        helper.onRecreateSwapchain(this); // TODO: use recreateSwapChain() here
+
         init_swapchain_images();
         create_iamge_views();
 
@@ -214,7 +235,6 @@ struct VulkanState
         m_renderPass.createRenderPass();
 
         create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
-
         createDepthResources();
 
         // Create framebuffers using the render pass
@@ -224,9 +244,8 @@ struct VulkanState
         createTextureImageView();
         createTextureSampler();
 
-        loadModel();
-        createVertexBuffer();
-        createIndexBuffer();
+        // loadModel();
+        // createIndexBuffer();
         // createUniformBuffer();
 
         createDescriptorPool();
@@ -240,8 +259,10 @@ struct VulkanState
 
     void OnUpdate()
     {
+        modifedStaticData();
         updateUniformBuffer();
         drawFrame();
+        submitFrame();
     }
 
     void OnPostUpdate()
@@ -255,24 +276,20 @@ struct VulkanState
 
         cleanupSwapChain();
 
-        vkDestroySampler(m_LogicalDevice, m_textureSampler, nullptr);
+        // vkDestroySampler(m_LogicalDevice, m_textureSampler, nullptr);
 
-        vkDestroyImageView(m_LogicalDevice, m_textureImageView, nullptr);
-
-        vkDestroyImage(m_LogicalDevice, m_textureImage, nullptr);
-        vkFreeMemory(m_LogicalDevice, m_textureImageMemory, nullptr);
 
         vkDestroyDescriptorPool(m_LogicalDevice, m_descriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(m_LogicalDevice, m_descriptorSetLayout, nullptr);
 
-        vkDestroyBuffer(m_LogicalDevice, m_uniformBuffer, nullptr);
-        vkFreeMemory(m_LogicalDevice, m_uniformBUfferMemory, nullptr);
+        // vkDestroyBuffer(m_LogicalDevice, m_uniformBuffer, nullptr);
+        // vkFreeMemory(m_LogicalDevice, m_uniformBUfferMemory, nullptr);
 
-        vkDestroyBuffer(m_LogicalDevice, m_indexBuffer, nullptr);
-        vkFreeMemory(m_LogicalDevice, m_indexBufferMemory, nullptr);
+        // vkDestroyBuffer(m_LogicalDevice, m_indexBuffer, nullptr);
+        // vkFreeMemory(m_LogicalDevice, m_indexBufferMemory, nullptr);
 
-        vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
-        vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
+        // vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
+        // vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
 
         vkDestroySemaphore(m_LogicalDevice, m_renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
@@ -301,6 +318,7 @@ struct VulkanState
     Delegate<std::vector<const char *>()>               onGetRequiredExtensions;
 
 
+
   private:
 
     void create_instance();
@@ -317,9 +335,9 @@ struct VulkanState
     void createTextureImageView();
     void createTextureSampler();
     void loadModel();
-    void createVertexBuffer();
+    void createVertexBuffer(void *data, std::size_t size, VkBuffer &outVertexBuffer, VkDeviceMemory &outVertexBufferMemory);
     void createIndexBuffer();
-    void createUniformBuffer(uint32_t size);
+    // void createUniformBuffer(uint32_t size);
     void createDescriptorPool();
 
     void createDescriptorSet();
@@ -343,7 +361,7 @@ struct VulkanState
         vkDestroyPipeline(m_LogicalDevice, m_graphicsPipeLine, nullptr);
         vkDestroyPipelineLayout(m_LogicalDevice, m_pipelineLayout, nullptr);
 
-        vkDestroyImageView(m_LogicalDevice, m_textureImageView, nullptr);
+        // vkDestroyImageView(m_LogicalDevice, m_textureImageView, nullptr);
 
         for (size_t i = 0; i < m_SwapChainImageViews.size(); ++i)
         {
@@ -357,37 +375,114 @@ struct VulkanState
 
     void drawFrame()
     {
+        for (size_t i = 0; i < m_commandBuffers.size(); i++)
+        {
+            // 2. ����������¼
+            VkCommandBufferBeginInfo beginInfo = {};
+            {
+                beginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+                beginInfo.pInheritanceInfo = nullptr;
+                // Optional
+                /*
+                    VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: use the command buffer only once, after which it will be reset.
+                    VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT :
+                    VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT :
+                */
+            }
 
-        // 1. �����ź��� : creteSemphores() in initVulkan()
-        // 2. �ӽ�������ȡͼ��
+            /*<-------------------------------------------------------------------------------->*/
+            vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo); // S ���������¼
+
+            std::array<VkClearValue, 2> clearValues = {
+                VkClearValue{
+                    .color = {0.0f, 0.0f, 0.0f, 1.0f}, // clear color
+                },
+                VkClearValue{
+                    .depthStencil = {1.0f, 0} // clear depth
+                },
+            };
+
+            VkRenderPassBeginInfo renderPassInfo = {};
+            {
+                renderPassInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass  = m_renderPass.getRenderPass();
+                renderPassInfo.framebuffer = m_renderPass.getFramebuffers()[i];
+
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = m_SwapChainExtent;
+
+                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+                renderPassInfo.pClearValues    = clearValues.data();
+            }
+
+            vkCmdBeginRenderPass(m_commandBuffers[i],
+                                 &renderPassInfo,
+                                 VK_SUBPASS_CONTENTS_INLINE);
+            // VK_SUBPASS_CONTENTS_INLINE : the commands in the command buffer will be executed inline within the render pass.
+            // VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : the command buffer will contain secondary command buffers that will be executed within the render pass.
+
+            vkCmdBindDescriptorSets(m_commandBuffers[i],
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    m_pipelineLayout,
+                                    0,
+                                    1,
+                                    &m_DescriptorSet,
+                                    0,
+                                    nullptr);
+
+            vkCmdBindPipeline(m_commandBuffers[i],
+                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              m_graphicsPipeLine);
+            // VkBuffer     vertexBuffers[] = {vertexBuffer};
+            // VkDeviceSize offsets[]       = {0};
+
+            // // why drawing here?
+            // vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+            // vkCmdBindIndexBuffer(m_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            // the DrawCall, can be mutiple in a pass?
+            // vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+
+            vkCmdEndRenderPass(m_commandBuffers[i]);
+
+            auto result = (vkEndCommandBuffer(m_commandBuffers[i]));
+            NE_CORE_ASSERT(result == VK_SUCCESS, "failed to record command buffer!");
+        }
+    }
+    void submitFrame()
+    {
+
         uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, std::numeric_limits<uint64_t>::max(), m_imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-        /*
-        vkAcquireNextImageKHR����ǰ��������������ϣ����ȡ��ͼ����߼��豸�ͽ�������
-        ����������ָ����ȡ��Чͼ��Ĳ���timeout����λ���롣����ʹ��64λ�޷������ֵ��ֹtimeout��
-        ����������������ָ��ʹ�õ�ͬ�����󣬵�presentation���������ͼ��ĳ��ֺ��ʹ�øö������źš�
-        ����ǿ�ʼ���Ƶ�ʱ��㡣������ָ��һ���ź���semaphore����դ���������ߡ�����Ŀ���ԣ����ǻ�ʹ��imageAvailableSemaphore��
-        ���Ĳ���ָ���������г�Ϊavailable״̬��ͼ���Ӧ���������������������ý�����ͼ������swapChainImages��ͼ��VkImage������ʹ���������ѡ����ȷ�����������
-        */
+        VkResult result = vkAcquireNextImageKHR(m_LogicalDevice,
+                                                m_SwapChain,
+                                                std::numeric_limits<uint64_t>::max(),
+                                                m_imageAvailableSemaphore,
+                                                VK_NULL_HANDLE,
+                                                &imageIndex);
 
         vkQueueWaitIdle(m_PresentQueue);
 
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) { // swap chain �� surface ���ټ��ݣ����ɽ�����Ⱦ
+        // Q: why VK_ERROR_OUT_OF_DATE_KHR?
+        // AI: If the swap chain is no longer compatible with the surface (e.g., window resized), we need to recreate it.
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             std::cout << "Swap chain no compatible with surface! Adjusting... " << std::endl;
             recreateSwapChain();
             return;
         }
-        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) { // SUPOPTIMAL �������Կ�����surface�ύͼ�񣬵���surface����Ϥ����ƥ��׼ȷ������ƽ̨�������µ���ͼ��ĳߴ���Ӧ��С
+        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+            // VK_SUBOPTIMAL_KHR means the swapchain is still valid but not optimal
             panic("failed to acquire swap chain image");
         }
 
 
 
-        // 3. �ύ�������
-        VkSubmitInfo         submitInfo         = {};
-        VkSemaphore          waitSemaphores[]   = {m_imageAvailableSemaphore};
-        VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        VkSemaphore          signalSemaphores[] = {m_renderFinishedSemaphore};
+        VkSemaphore          waitSemaphores[] = {m_imageAvailableSemaphore};
+        VkPipelineStageFlags waitStages[]     = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+        VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore};
+
+        VkSubmitInfo submitInfo = {};
         {
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -407,20 +502,22 @@ struct VulkanState
             NE_CORE_ASSERT(false, "failed to submit draw command buffer!");
         }
 
-        // 4. ������ύ�� swapchain ������, ��ʾ����Ļ��
+        //   Present the image to the swapchain
+        VkResult presentResult = VK_SUCCESS;
+
         VkPresentInfoKHR presentInfo  = {};
         VkSwapchainKHR   swapChains[] = {m_SwapChain};
         {
             presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
             presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores    = signalSemaphores; // ָ����Ҫ�ȴ����ź����� �� VkSubmitInfo һ��
+            presentInfo.pWaitSemaphores    = signalSemaphores;
 
             presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains    = swapChains; // ָ���ύ�� target swapchain �� ÿ�� swapchain ������
+            presentInfo.pSwapchains    = swapChains;
             presentInfo.pImageIndices  = &imageIndex;
 
-            presentInfo.pResults = nullptr; // ָ��У����ֵ�����ǿ���ֱ��ʹ�� vkQueuePresentKHR() �ķ���ֵ�ж�  Optional
+            presentInfo.pResults = &presentResult; // Optional, can be used to get results of present operation
         }
 
         result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
@@ -432,6 +529,14 @@ struct VulkanState
         else if (result != VK_SUCCESS) {
             NE_CORE_ASSERT(false, "failed to present image/imageIndex to swapchain!");
         }
+    }
+
+    void modifedStaticData()
+    {
+        // change vertex data, index data
+        // like the model's position, rotation, scale, etc.
+        // update the vertex buffer, index buffer, uniform buffer, etc.
+        // if needed
     }
 
     void updateUniformBuffer()
@@ -740,6 +845,12 @@ struct VulkanDevice : public LogicalDevice
 
         // UNIMPLEMENTED();
         return false;
+    }
+
+    void destroy() override
+    {
+        _vulkanState.Uninit();
+        windowProvider = nullptr;
     }
 };
 

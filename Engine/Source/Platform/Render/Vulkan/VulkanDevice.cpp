@@ -325,7 +325,10 @@ void VulkanState::create_descriptor_set_layout()
             .bindingCount = static_cast<uint32_t>(bindings.size()),
             .pBindings    = bindings.data(),
         };
-    if (VK_SUCCESS != vkCreateDescriptorSetLayout(m_LogicalDevice, &layout_crate_info, nullptr, &m_descriptorSetLayout)) {
+    if (VK_SUCCESS != vkCreateDescriptorSetLayout(m_LogicalDevice,
+                                                  &layout_crate_info,
+                                                  nullptr,
+                                                  &m_descriptorSetLayout)) {
         NE_CORE_ASSERT(false, "failed to create descriptor set layout");
     }
     NE_ASSERT(m_descriptorSetLayout, "failed to create descriptor set layout");
@@ -335,7 +338,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
 {
     /************************** Shader Stages ***********************************************/
 
-    /* shader ģ�� ������ͼ�ι��߿ɱ�̽׶εĹ���    */
+    /* Shader modules define the programmable pipeline stages */
 
 
     // GLSLScriptProcessor                                     processor("engine/shaders/default.glsl");
@@ -385,7 +388,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
     /****************************** Fix-function State *****************************************/
 
 
-    // Assembly state cretInfo ( Triangle format in this example)
+    // Assembly state creatInfo ( Triangle format in this example)
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     {
         inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -393,7 +396,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         inputAssembly.primitiveRestartEnable = VK_FALSE;
     }
 
-    // Viewport ���� ͼ��ת����ӳ�䣩�� framebuffer�����ڣ� �Ķ�Ӧ���� �������xy������hw�������minmax
+    // Viewport defines the transformation mapping from image to framebuffer region, corresponding to xy coordinates and hw dimensions, minmax
     VkViewport viewport = {};
     {
         viewport.x        = 0.0f;
@@ -404,14 +407,14 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         viewport.maxDepth = 1.0f;
     }
 
-    // Scissor �ü� ������Щ�����ڵ����ر�����
+    // Scissor clipping defines which pixels will be discarded
     VkRect2D scissor = {};
     {
         scissor.offset = {0, 0};
-        scissor.extent = m_SwapChainExtent; // ���ӵ㱣��һ��
+        scissor.extent = m_SwapChainExtent; // Keep the clipping region consistent
     }
 
-    // Viewport State cretInfo ����ʹ�òü����ӵ�
+    // Viewport State createInfo combined with clipping regions and viewports
     VkPipelineViewportStateCreateInfo viewportState = {};
     {
         viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -422,35 +425,32 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
     }
 
 
-    // Resterization State cretInfo ��դ�����������ԡ�tansmit ͼ�� fragmentShader ��ɫ��ִ����Ȳ���depth testing����ü��Ͳü����ԣ������Ƿ���� ����ͼԪ���� ���� �߿򣨿�����Ⱦ��
+    // Rasterization State createInfo handles geometry transmission to fragment shader, including depth testing, scissor and clipping tests, wireframe or filled primitive rendering
     VkPipelineRasterizationStateCreateInfo rasterizer = {};
     {
         rasterizer.sType            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizer.depthClampEnable = VK_FALSE;
 
-        // ����Զ���ü����ͼԪ���������������������������Ӱ��ͼ��������ã���GPU support; ������ʿ����ͼԪ�����framebuffer
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
-
-        // polygonMode�������β���ͼƬ�����ݡ�������Чģʽ:
-        // VK_POLYGON_MODE_FILL: ������������
-        // VK_POLYGON_MODE_LINE : ����α�Ե�߿����
-        // VK_POLYGON_MODE_POINT : ����ζ�����Ϊ������
-        // ʹ���κ�ģʽ�����Ҫ����GPU���ܡ�
+        // Enable depth clamping and discard primitives that exceed the near/far planes, affecting image rendering, requires GPU support; otherwise enable primitive discard beyond framebuffer
+        rasterizer.rasterizerDiscardEnable = VK_FALSE; // polygonMode controls how geometry is filled. Available modes:
+        // VK_POLYGON_MODE_FILL: fill polygons with fragments
+        // VK_POLYGON_MODE_LINE : draw polygon edges as lines
+        // VK_POLYGON_MODE_POINT : draw polygon vertices as points
+        // Using any mode other than fill requires enabling a GPU feature.
         rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 
         rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode  = VK_CULL_MODE_BACK_BIT; // culling/font faces/call back facess/all ��ü��ķ�ʽ
+        rasterizer.cullMode  = VK_CULL_MODE_BACK_BIT; // culling/font faces/call back faces/all ��ü��ķ�ʽ
         // rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // ˳ʱ��/��ʱ�� �������˳��
         rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; /// ��ת y ��������ʱ�����
 
-        // ���ֵ config �����Ϊfalse
         rasterizer.depthBiasEnable         = VK_FALSE;
         rasterizer.depthBiasConstantFactor = 0.0f; // Optional
         rasterizer.depthBiasClamp          = 0.0f; // Optional
         rasterizer.depthBiasSlopeFactor    = 0.0f; // Optional
     }
 
-    // Multisample State cretInfo ���ز��� ���ﲻʹ��
+    // Multisample State createInfo ���ز��� ���ﲻʹ��
     VkPipelineMultisampleStateCreateInfo multisample_state_create_info{
         .sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
@@ -468,7 +468,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         colorBlendAttachment.blendEnable    = VK_FALSE;
 
         if (colorBlendAttachment.blendEnable) {
-            // finalcolor = newcolor & colorwritemask
+            // finalcolor = newcolor & color writemask
             colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;  // Optional
             colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
             colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;      // Optional
@@ -479,7 +479,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         else {
             // alpha blending: finalcolor.rgb = newAlpha*newColor + (1-newAlpha)*oldColor; finalcolor.a = newAlpha.a
             colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // blend mthod
+            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // blend method
             colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
             colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
             colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
@@ -487,7 +487,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         }
     }
 
-    // color blend cretInfo
+    // color blend createInfo
     VkPipelineColorBlendStateCreateInfo colorBlendingCreateInfo = {};
     {
         colorBlendingCreateInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -531,7 +531,7 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
 
     /************************************* Pipeline Layout ********************************************/
 
-    /* ���߲��ֶ����� uniform(Ҳ����DynamicState) �� push values �Ĳ��֣� �� shader ÿһ�� drawing ��ʱ�����*/
+    /* Pipeline layout defines uniform variables and push constants that can be accessed by shaders during each drawing call */
 
     // pipeLayout Createinfo
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
@@ -546,19 +546,17 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         NE_CORE_ASSERT(false, "filed to create pipeline layout!");
     }
     /************************************* Pipeline Layout ********************************************/
-
-
     /************************************* Render Pass ********************************************/
-    /*   ������createRenderPass()������          */
+    /*   NOTE: createRenderPass() moved to VulkanRenderPass class          */
     /************************************* Render Pass ********************************************/
 
 
-    // Pipeline cretInfo
+    // Pipeline createInfo
     VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
     {
         pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 
-        // p_state ��Ϊ�� state �� create info
+        // pStages pointer to state create info array
         pipelineCreateInfo.stageCount = 2; // vertex AND fragment State
         pipelineCreateInfo.pStages    = shaderStages;
 
@@ -571,26 +569,25 @@ void VulkanState::createGraphicsPipeline(std::unordered_map<EShaderStage::T, std
         pipelineCreateInfo.pColorBlendState    = &colorBlendingCreateInfo;
         pipelineCreateInfo.pDynamicState       = nullptr; // Dynamicstage Optional
 
-        pipelineCreateInfo.layout = m_pipelineLayout;
-
-        pipelineCreateInfo.renderPass = m_renderPass.getRenderPass(); //  ���� renderPass
-        pipelineCreateInfo.subpass    = 0;                            // subpass ��ͨ�� ������
+        pipelineCreateInfo.layout     = m_pipelineLayout;
+        pipelineCreateInfo.renderPass = m_renderPass.getRenderPass(); // bind renderPass
+        pipelineCreateInfo.subpass    = 0;                            // subpass index
 
         /*
-        ʵ���ϻ�����������:basePipelineHandle �� basePipelineIndex��Vulkan������ͨ���Ѿ����ڵĹ��ߴ����µ�ͼ�ι��ߡ�
-        �����������¹��ߵ��뷨���ڣ���Ҫ�����Ĺ��������йܵ�������ͬʱ����ýϵ͵Ŀ�����ͬʱҲ���Ը������ɹ����л�������������ͬһ�������ߡ�
-        ����ͨ��basePipelineHandleָ�����й��ߵľ����Ҳ����������basePipelineIndex���Դ�������һ�����ߡ�
-        Ŀǰֻ��һ�����ߣ���������ֻ��Ҫָ��һ���վ����һ����Ч��������
-        ֻ����VkGraphicsPipelineCreateInfo��flags�ֶ���Ҳָ����VK_PIPELINE_CREATE_DERIVATIVE_BIT��־ʱ������Ҫʹ����Щֵ��
+        Pipeline derivation allows creating new graphics pipelines based on existing ones.
+        This can reduce creation time when pipelines share common state and may allow
+        driver optimizations and better cache usage.
+        You can specify base pipeline using basePipelineHandle or basePipelineIndex.
+        Currently we only have one pipeline, so we just set these to null/invalid values.
+        These values are only used when VK_PIPELINE_CREATE_DERIVATIVE_BIT flag is set.
         */
         pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE; //  Optional
         pipelineCreateInfo.basePipelineIndex  = -1;             //  Optional
 
         pipelineCreateInfo.pDepthStencilState = &depthStencil;
-    }
-
-    // 1. ���� ���� Pipeline ���浽��Ա����, ���Դ��ݶ�� pipelineCreateInfo ��������� ����
-    // 2. �ڶ�������cache ���ڴ洢�͸�����ͨ����ε���VkCreateGraphicsPipelines ������ص����ݣ� �����ڳ���ִ��ʱ���浽һ���ļ��У� �������Լ��ٺ����Ĺ��ߴ����߼�, ������ʱ������
+    } // 1. Create graphics pipeline and save to member variable, can later reference multiple pipelineCreateInfo objects
+    // 2. Second parameter is pipeline cache for storing and reusing data across multiple calls to VkCreateGraphicsPipelines,
+    //    can be saved to file and loaded later to speed up pipeline creation
     if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &m_graphicsPipeLine) != VK_SUCCESS)
     {
         panic("failed to create graphics pipeline!");
@@ -621,21 +618,10 @@ void VulkanState::createCommandPool()
 
 void VulkanState::createDepthResources()
 {
-    /// <summary>
-    /// ����������ͼ�����ǲ�һ����Ҫ�ض��ĸ�ʽ����Ϊ���ǲ���ֱ�Ӵӳ����з������ء�
-    /// ��������Ҫһ��������׼ȷ�ԣ�����24λ��ʵ�ʳ������ǳ����ġ��м��ַ���Ҫ��ĸ�ʽ��
-    ///	  VK_FORMAT_D32_SFLOAT : 32 - bit float depth
-    ///	  VK_FORMAT_D32_SFLOAT_S8_UNIT : 32 - bit signed float depth �� 8 - bit stencil component
-    ///	  VK_FORMAT_D32_UNORM_S8_UINT : 24 - bit float depth �� 8 - bit stencil component
-    /// stencil component ģ���������ģ�����(stencil tests)�����ǿ�������Ȳ�����ϵĸ��Ӳ��ԡ����ǽ���δ�����½���չ����
-    /// ���ǿ��Լ�Ϊ VK_FORMAT_D32_SFLOAT ��ʽ����Ϊ����֧���Ƿǳ������ģ����Ǿ����ܵ�����һЩ����������Ҳ�Ǻܺõġ�
-    /// ��������һ������ findSupportedFormat �Ӻ�ѡ��ʽ�б��� ��������ֵ�Ľ���ԭ�򣬼���һ���õ�֧�ֵĸ�ʽ��
-    /// </summary>
 
-    // 1. �ҵ�֧�ֵ�format
-
-
-    auto findSupportedFormat = [this](const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+    auto findSupportedFormat = [this](const std::vector<VkFormat> &candidates,
+                                      VkImageTiling                tiling,
+                                      VkFormatFeatureFlags         features) {
         for (VkFormat format : candidates) {
             VkFormatProperties props;
             vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, format, &props);
@@ -643,7 +629,7 @@ void VulkanState::createDepthResources()
             if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
                 return format;
             }
-            else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+            if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
                 return format;
             }
         }
@@ -654,67 +640,53 @@ void VulkanState::createDepthResources()
 
 
     auto findDepthFormat = [findSupportedFormat]() {
-        return findSupportedFormat({VK_FORMAT_D32_SFLOAT,
-                                    VK_FORMAT_D32_SFLOAT_S8_UINT,
-                                    VK_FORMAT_D24_UNORM_S8_UINT},
-                                   VK_IMAGE_TILING_OPTIMAL,
-                                   VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
     };
 
-    VkFormat depthFormat = findDepthFormat();
+    VkFormat depthFormat = findSupportedFormat(
+        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
 
-    helper.createImage(m_SwapChainExtent.width, m_SwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_depthImage, m_depthImageMemory);
+    helper.createImage(m_SwapChainExtent.width,
+                       m_SwapChainExtent.height,
+                       depthFormat,
+                       VK_IMAGE_TILING_OPTIMAL,
+                       VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                       m_depthImage,
+                       m_depthImageMemory);
 
-    m_depthImageView = helper.createImageView(m_depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+    m_depthImageView = helper.createImageView(m_depthImage,
+                                              depthFormat,
+                                              VK_IMAGE_ASPECT_DEPTH_BIT);
 
-    helper.transitionImageLayout(m_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    helper.transitionImageLayout(m_depthImage,
+                                 depthFormat,
+                                 VK_IMAGE_LAYOUT_UNDEFINED,
+                                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
-void VulkanState::createTextureImage()
-{
-    auto path = "Engine/Content/TestTextures/face.png";
-
-    helper.createTextureImage(path, m_textureImage, m_textureImageMemory);
-}
-
-void VulkanState::createTextureImageView()
-{
-    m_textureImageView = helper.createImageView(
-        m_textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-}
 
 void VulkanState::createTextureSampler()
 {
-    // ��������
     VkSamplerCreateInfo samplerInfo = {};
     {
         samplerInfo.sType     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerInfo.magFilter = VK_FILTER_LINEAR; // ���� �Ŵ� �� ��С ���ڲ�ֵ��
+        samplerInfo.magFilter = VK_FILTER_LINEAR;
         samplerInfo.minFilter = VK_FILTER_LINEAR;
 
-        /// <addressMode>
-        /// ����ʹ��addressMode�ֶ�ָ��ÿ������ʹ�õ�Ѱַģʽ����Ч��ֵ�����·���
-        /// �������ͼ�����Ѿ�����˵�����ˡ���Ҫע����������������Ϊ U��V �� W ���� X��Y �� Z�����������ռ������Լ����
-        ///     VK_SAMPLER_ADDRESS_MODE_REPEAT��������ͼ��ߴ��ʱ�����ѭ����䡣
-        /// 	VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT����ѭ��ģʽ���ƣ����ǵ�����ͼ��ߴ��ʱ�������÷�����Ч����
-        /// 	VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE��������ͼ��ߴ��ʱ�򣬲��ñ�Ե�������ɫ������䡣
-        /// 	VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TOEDGE�����Եģʽ���ƣ�����ʹ���������Ե�෴�ı�Ե������䡣
-        /// 	VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER������������ͼ��ĳߴ�ʱ������һ����ɫ��䡣
-        /// ������ʹ��ʲô����Ѱַģʽ������Ҫ����Ϊ���ǲ�����ͼ��֮����в�����
-        /// ����ѭ��ģʽ���ձ�ʹ�õ�һ��ģʽ����Ϊ����������ʵ��������Ƭ�����ǽ�������Ч����
-        /// </addressMode>
-        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // repeat �� texCoord ����[0,1]ʱ�������ѭ�����ƣ�[0,2] ��Ϊ4����
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
         samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 
-        samplerInfo.anisotropyEnable = VK_TRUE; // �����������ι���
-        samplerInfo.maxAnisotropy    = 16;      // ������Ϊ1
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy    = 16;
 
-        samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK; // ����ͼ��Χʱ ���ص���ɫ
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;                         // ȷ�����귶Χ����ѹ����, Ϊ texWidth,texHeight, ����[0,1]
+        samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+        samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
-        samplerInfo.compareEnable = VK_FALSE; // ����  ����������ֵ�Ƚϣ� ������ֵ���ڹ��˲�������Ҫ���� ��Ӱ����ӳ��� precentage-closer filtering ���ٷֱȽ��ƹ�����
+        samplerInfo.compareEnable = VK_FALSE;
         samplerInfo.compareOp     = VK_COMPARE_OP_ALWAYS;
 
         samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -723,120 +695,116 @@ void VulkanState::createTextureSampler()
         samplerInfo.maxLod     = 0.0f;
     }
 
-    if (vkCreateSampler(m_LogicalDevice, &samplerInfo, nullptr, &m_textureSampler) != VK_SUCCESS)
+    if (vkCreateSampler(m_LogicalDevice, &samplerInfo, nullptr, &m_defaultTextureSampler) != VK_SUCCESS)
     {
         panic("failed to create texture sampler!");
     }
 }
 
-void VulkanState::loadModel()
+// void VulkanState::loadModel()
+// {
+//     // tinyobj::attrib_t                attrib;
+//     // std::vector<tinyobj::shape_t>    shapes; // �������е����Ķ������
+//     // std::vector<tinyobj::material_t> material;
+//     // std::string                      warn;
+//     // std::string                      err;
+
+//     // if (!tinyobj::LoadObj(&attrib, &shapes, &material, &warn, &err, MODEL_PATH.c_str()))
+//     // {
+//     //     panic(err);
+//     // }
+
+//     // for (const auto &shape : shapes)
+//     // {
+//     //     for (const auto &index : shape.mesh.indices)
+//     //     {
+//     //         Vertex vertex = {};
+//     //         vertex.pos    = {
+//     //             attrib.vertices[3 * index.vertex_index + 0], // �� float ���� *3
+//     //             attrib.vertices[3 * index.vertex_index + 1],
+//     //             attrib.vertices[3 * index.vertex_index + 2]};
+//     //         vertex.texCoord = {
+//     //             attrib.texcoords[2 * index.texcoord_index + 0],
+//     //             1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+
+//     //         vertex.color = {1.0f, 1.0f, 1.0f};
+
+
+//     //         m_vertices.push_back(vertex);
+//     //         m_indices.push_back(m_indices.size());
+//     //     }
+//     // }
+// }
+
+void VulkanState::createVertexBuffer(void *data, std::size_t size, VkBuffer &outVertexBuffer, VkDeviceMemory &outVertexBufferMemory)
 {
-    // tinyobj::attrib_t                attrib;
-    // std::vector<tinyobj::shape_t>    shapes; // �������е����Ķ������
-    // std::vector<tinyobj::material_t> material;
-    // std::string                      warn;
-    // std::string                      err;
 
-    // if (!tinyobj::LoadObj(&attrib, &shapes, &material, &warn, &err, MODEL_PATH.c_str()))
-    // {
-    //     panic(err);
-    // }
-
-    // for (const auto &shape : shapes)
-    // {
-    //     for (const auto &index : shape.mesh.indices)
-    //     {
-    //         Vertex vertex = {};
-    //         vertex.pos    = {
-    //             attrib.vertices[3 * index.vertex_index + 0], // �� float ���� *3
-    //             attrib.vertices[3 * index.vertex_index + 1],
-    //             attrib.vertices[3 * index.vertex_index + 2]};
-    //         vertex.texCoord = {
-    //             attrib.texcoords[2 * index.texcoord_index + 0],
-    //             1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
-
-    //         vertex.color = {1.0f, 1.0f, 1.0f};
+    VkDeviceSize buffersize = size;
 
 
-    //         m_vertices.push_back(vertex);
-    //         m_indices.push_back(m_indices.size());
-    //     }
-    // }
-}
-
-void VulkanState::createVertexBuffer()
-{
-    // /*
-    // ------>��䶥�㻺����(���붥�����ݣ� ��memmap m_vertBufMemory �� cpu �ô� -> copy �������ݵ����ڴ� -> ȡ�� map��
-    // method 1: �������򲻻������������ݵ��������У� ��Ҫӳ��һ���ڴ浽��������Ȼ�󿽱�������ڴ���, ���ڴ�ӳ����һ��������ʧ
-    // method 2: ����ڴ�ӳ��󣬵��� vkFlushMappedMemoryRanges, ��ȡ�����ڴ�ʱ������ vkInvalidateMappedMemoryRanges
-    // ����ѡ�� ���� 1
-    // */
-
-    // VkDeviceSize buffersize = sizeof(m_vertices[0]) * m_vertices.size(); // Ҫ�����Ķ������ݴ�С
-
-    // /*************************��ʱ�������� ʹ����ʱ��buffer,buffermemory����ʱ��commandBuffer����������********/
-
-    // // ����ʹ����ʱ�Ļ�����
-    // VkBuffer       stagingBuffer; // �� stagingbuffer ������SBmemory
-    // VkDeviceMemory stagingBufferMemory;
-    // // ���� buffer ���㻺�塢host visible�� host coherent
-    // /*
-    // ����ʹ��stagingBuffer������stagingBufferMemory����������ӳ�䡢�����������ݡ��ڱ��½�����ʹ�������µĻ�����usage�������ͣ�
-    //     VK_BUFFER_USAGE_TRANSFER_SRC_BIT����������������Դ�ڴ洫�������
-    //     VK_BUFFER_USAGE_TRANSFER_DST_BIT����������������Ŀ���ڴ洫�������
-    // */
-    // createBuffer(buffersize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-
-
-    // // map ��ʱ buufer, �Ѷ������ݿ�����ȥ
-    // void *data;
-    // vkMapMemory(m_logicalDevice, stagingBufferMemory, 0, buffersize, 0, &data); // map ����ʱ�ڴ�
-    // memcpy(data, m_vertices.data(), (size_t)buffersize);
-    // vkUnmapMemory(m_logicalDevice, stagingBufferMemory); // ֹͣӳ��
-
-    // // ���� �豸�� �� cpu�ô��ϵ� map
-    // createBuffer(buffersize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vertexBuffer, m_vertexBufferMemory);
-
-
-    // //  ���Ѿ��������map���� stagingBuffer, ������ͬ��map�� device �� m_vertexBuffer ����
-    // copyBuffer(stagingBuffer, m_vertexBuffer, buffersize); // encapsulation ��װ copy ����
-
-
-    // // ������ʹ����� stagingBuffer �� stagingBufferMemory
-    // vkDestroyBuffer(m_logicalDevice, stagingBuffer, nullptr);
-    // vkFreeMemory(m_logicalDevice, stagingBufferMemory, nullptr);
-}
-
-void VulkanState::createIndexBuffer()
-{
-    // ������vertex buffer
-    VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
-
-    VkBuffer       stagingBuffer;
+    VkBuffer       stagingBuffer; // aka transfer buffer?
     VkDeviceMemory stagingBufferMemory;
-    helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-    void *data;
-    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, m_indices.data(), (size_t)bufferSize);
-    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
-
-    helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
-
-    helper.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+    helper.createBuffer(buffersize,
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        stagingBuffer,
+                        stagingBufferMemory);
 
 
-    // clean stage data
-    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+
+    void *gpuData;
+    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, buffersize, 0, &gpuData); // map ����ʱ�ڴ�
+    std::memcpy(gpuData, data, (size_t)buffersize);
+    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory); // ֹͣӳ��
+
+    helper.createBuffer(buffersize,
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        outVertexBuffer,
+                        outVertexBufferMemory);
+
+
+    helper.copyBuffer(stagingBuffer, outVertexBuffer, buffersize); // encapsulation ��װ copy ����
+
+
+    // ������ʹ����� stagingBuffer �� stagingBufferMemory    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
     vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }
 
-void VulkanState::createUniformBuffer(uint32_t size)
-{
-    helper.createBuffer(size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_uniformBuffer, m_uniformBUfferMemory);
-}
+// void VulkanState::createIndexBuffer()
+// {
+//     // ������vertex buffer
+//     VkDeviceSize bufferSize = sizeof(m_indices[0]) * m_indices.size();
+
+//     VkBuffer       stagingBuffer;
+//     VkDeviceMemory stagingBufferMemory;
+//     helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+//     void *data;
+//     vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+//     memcpy(data, m_indices.data(), (size_t)bufferSize);
+//     vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+//     helper.createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_indexBuffer, m_indexBufferMemory);
+
+//     helper.copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+
+
+//     // clean stage data
+//     vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+//     vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+// }
+
+// void VulkanState::createUniformBuffer(uint32_t size)
+// {
+//     V
+
+//     helper.createBuffer(size,
+//                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+//                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+//                         m_uniformBuffer,
+//                         m_uniformBUfferMemory);
+// }
 
 void VulkanState::createDescriptorPool()
 {
@@ -849,13 +817,14 @@ void VulkanState::createDescriptorPool()
         poolSizes[1].descriptorCount = 1;
     }
 
+    // layout(set = 1, binding = 0) uniform UniformBufferObject
+    // layout(set = 1, binding = 1) uniform sampler2D textureSampler;
     VkDescriptorPoolCreateInfo poolInfo = {};
     {
         poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
         poolInfo.pPoolSizes    = poolSizes.data();
-
-        poolInfo.maxSets = 1; // �������������
+        poolInfo.maxSets       = 1;
     }
 
     if (vkCreateDescriptorPool(m_LogicalDevice, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
@@ -864,9 +833,10 @@ void VulkanState::createDescriptorPool()
     }
 }
 
+// like the sampler, it's a resource of the device,
+// should the render pass compatible with the descriptor set layout?
 void VulkanState::createDescriptorSet()
 {
-    // ���� m_descriptor set �ռ�
     VkDescriptorSetLayout       layouts[] = {m_descriptorSetLayout};
     VkDescriptorSetAllocateInfo allocInfo = {};
     {
@@ -875,50 +845,57 @@ void VulkanState::createDescriptorSet()
         allocInfo.descriptorSetCount = 1;
         allocInfo.pSetLayouts        = layouts;
     }
-    if (vkAllocateDescriptorSets(m_LogicalDevice, &allocInfo, &m_DescriptorSet)) // ����һ������uniform buufer �������ļ���
+    if (vkAllocateDescriptorSets(m_LogicalDevice, &allocInfo, &m_DescriptorSet))
     {
         panic("failed to allocate descriptor set!");
-    }
-
-    // �����ڲ������� �� ��Ҫ������һ�黺����
-    // ���� ubo �� layout ��Ϣ
+    } // Configure internal descriptor sets - need to update buffer info
+    // Set UBO layout information
     VkDescriptorBufferInfo bufferInfo = {};
     {
-        bufferInfo.buffer = m_uniformBuffer;
-        bufferInfo.offset = 0;
+        // bufferInfo.buffer = m_uniformBuffer;
+        // bufferInfo.offset = 0;
         // bufferInfo.range  = sizeof(UniformBufferObject);
     }
 
-    VkDescriptorImageInfo image_info{
-        .sampler     = m_textureSampler,
-        .imageView   = m_textureImageView,
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+    // Q: why a simpler need a image view?
+    // AI: The image view is necessary to provide a way for the shader to access the texture data.
 
-    std::array<VkWriteDescriptorSet, 2>
-        descriptor_writes = {
-            VkWriteDescriptorSet{
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet           = m_DescriptorSet,
-                .dstBinding       = 0,
-                .dstArrayElement  = 0,
-                .descriptorCount  = 1,
-                .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pImageInfo       = nullptr,     //  Optional
-                .pBufferInfo      = &bufferInfo, // ��set ���ڻ�����������ѡ�� pBufferInfo
-                .pTexelBufferView = nullptr,     // Optional
-            },
-            {
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet           = m_DescriptorSet,
-                .dstBinding       = 1,
-                .dstArrayElement  = 0,
-                .descriptorCount  = 1,
-                .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo       = &image_info, // ����ѡ�� pImage
-                .pBufferInfo      = nullptr,
-                .pTexelBufferView = nullptr,
-            }};
+    // vec4 color = texture(textureSampler, texCoord);
+    // 即一个 sampler 绑定一个 image view, 但 sampler 可以重用
+    // std::vector<VkDescriptorImageInfo> imageInfos{
+    //     VkDescriptorImageInfo{
+    //         .sampler     = m_defaultTextureSampler,
+    //         .imageView   = m_textureImageView, // 这个要对哪个image做sample
+    //         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    //     } //  Optional
+    // };
+
+
+    // layout(set = 1, binding = 0) uniform UniformBufferObject
+    // layout(set = 1, binding = 1) uniform sampler2D textureSampler;
+    std::array<VkWriteDescriptorSet, 2> descriptor_writes = {
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet           = m_DescriptorSet,
+            .dstBinding       = 0,
+            .dstArrayElement  = 0,
+            .descriptorCount  = 1,
+            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo       = nullptr,     //  Optional
+            .pBufferInfo      = &bufferInfo, // set buffer info - choose pBufferInfo for buffer descriptor
+            .pTexelBufferView = nullptr,     // Optional
+        },
+        {
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet           = m_DescriptorSet,
+            .dstBinding       = 1,
+            .dstArrayElement  = 0,
+            .descriptorCount  = 0,
+            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo       = nullptr, //&image_info, // ����ѡ�� pImage
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        }};
 
     vkUpdateDescriptorSets(m_LogicalDevice,
                            static_cast<uint32_t>(descriptor_writes.size()),
@@ -931,109 +908,32 @@ void VulkanState::createCommandBuffers()
 {
     m_commandBuffers.resize(m_renderPass.getFramebuffers().size());
 
-    // 1. ������������ڴ�
     VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
     {
         commandBufferAllocateInfo.sType       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         commandBufferAllocateInfo.commandPool = m_commandPool;
         commandBufferAllocateInfo.level       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        /*
-        level����ָ�������������������ӹ�ϵ��
-            VK_COMMAND_BUFFER_LEVEL_PRIMARY : �����ύ������ִ�У������ܴ�����������������á�
-            VK_COMMAND_BUFFER_LEVEL_SECONDARY : �޷�ֱ���ύ�����ǿ��Դ�������������á�
-        ���ǲ���������ʹ�ø������������ܣ����ǿ������񣬶��ڸ������������ĳ��ò������а�����
-        */
+        // Question: what's VK_COMMAND_BUFFER_LEVEL_PRIMARY/SECONDARY?
+        // AI:
+        // In Vulkan, command buffers can be allocated at two levels:
+        // 1. Primary Command Buffers: These are the main command buffers that can be submitted to a queue for execution.
+        // They can contain any commands, including drawing commands, compute commands, and more.
+        // They are typically used for rendering operations.
+        // 2. Secondary Command Buffers:
+        // These are command buffers that can be recorded with commands but cannot be submitted directly.
+        // Instead, they are intended to be called from primary command buffers.
+        // They are useful for organizing command buffers and reusing command sequences.
+        // 不能直接提交到队列
+        // 必须通过主命令缓冲区的 vkCmdExecuteCommands 调用
+        // 不能开始/结束渲染通道（但可以在渲染通道内执行）
+        // 可以被多个主命令缓冲区重复使用
+        // 多线程命令记录，可重用的绘制命令序列
+
         commandBufferAllocateInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
     }
     if (vkAllocateCommandBuffers(m_LogicalDevice, &commandBufferAllocateInfo, m_commandBuffers.data()) != VK_SUCCESS)
     {
         panic("failed to allocate command buffers!");
-    }
-
-    for (size_t i = 0; i < m_commandBuffers.size(); i++)
-    {
-        // 2. ����������¼
-        VkCommandBufferBeginInfo beginInfo = {};
-        {
-            beginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-            beginInfo.pInheritanceInfo = nullptr; // Optional
-                                                  /*
-                                                  flags��־λ��������ָ�����ʹ�������������ѡ�Ĳ�����������:
-                                                      VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: �����������ִ��һ�κ��������¼�¼��
-                                                      VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : ����һ������������������������һ����Ⱦͨ���С�
-                                                      VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT : �������Ҳ���������ύ��ͬʱ��Ҳ�ڵȴ�ִ�С�
-                                                  ����ʹ�������һ����־����Ϊ���ǿ����Ѿ�����һ֡��ʱ�����˻�����������һ֡��δ��ɡ�pInheritanceInfo�����븨����������ء���ָ��������������̳е�״̬��
-                                                  �����������Ѿ�����¼һ�Σ���ô����vkBeginCommandBuffer����ʽ������������������ӵ��������ǲ����ܵġ�
-                                                  */
-        }
-
-        /*<-------------------------------------------------------------------------------->*/
-        vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo); // S ���������¼
-
-        // 3. ������Ⱦͨ��
-        VkRenderPassBeginInfo       renderPassInfo = {};
-        std::array<VkClearValue, 2> clearValues    = {}; // �������
-        {
-            clearValues[0].color        = {0.0f, 0.0f, 0.0f, 1.0f};
-            clearValues[1].depthStencil = {1.0f, 0}; // ����Ϊ 1.0f�� ���Ϊ 0
-        }
-        {
-            renderPassInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass  = m_renderPass.getRenderPass();
-            renderPassInfo.framebuffer = m_renderPass.getFramebuffers()[i];
-
-            renderPassInfo.renderArea.offset = {0, 0};
-            renderPassInfo.renderArea.extent = m_SwapChainExtent;
-
-            renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-            renderPassInfo.pClearValues    = clearValues.data();
-        }
-
-        vkCmdBeginRenderPass(m_commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE); // S ������Ⱦͨ��
-        /// <vkCmdBeginRenderPass>
-        ///	����ÿ�������һ���������Ǽ�¼�����������������ڶ�������ָ�����Ǵ��ݵ���Ⱦͨ���ľ�����Ϣ��
-        ///	���Ĳ�����������ṩrender pass��ҪӦ�õĻ��������ʹ��������ֵ����һ�� :
-        ///		VK_SUBPASS_CONTENTS_INLINE: ��Ⱦ�������Ƕ��������������У�û�и���������ִ�С�
-        ///		VK_SUBPASS_CONTENTS_SECONDARY_COOMAND_BUFFERS : ��Ⱦͨ�������Ӹ����������ִ�С�
-        ///	���ǲ���ʹ�ø��������������������ѡ���һ����
-        /// </vkCmdBeginRenderPass>
-
-        // 4. ������ͼ����
-        /// ��ʵ��shader �� descriptor ��
-        /// �붥����������ͬ�� ���������� ����graphicsPipeline Ψһ�ģ������Ҫָ���Ƿ� descriptorSet �󶨵�ͼ�λ���������
-        vkCmdBindDescriptorSets(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_DescriptorSet, 0, nullptr);
-
-        /// �󶨹���
-        vkCmdBindPipeline(m_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeLine);
-        VkBuffer     vertexBuffers[] = {m_vertexBuffer};
-        VkDeviceSize offsets[]       = {0};
-
-        /// �󶨶��㻺����
-        vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, &m_vertexBuffer, offsets);
-
-        /// ������������
-        vkCmdBindIndexBuffer(m_commandBuffers[i], m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-
-        /// ʹ�� vkCmdDrawIndexed ��������ö���
-        // vkCmdDraw(m_commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-        /*
-        ʵ�ʵ�vkCmdDraw�����е���������˼��һ�£�������˼򵥣�����Ϊ������ǰָ��������Ⱦ��ص���Ϣ���������µĲ�����Ҫָ���������������:
-            vertexCount: ��ʹ����û�ж��㻺����������������Ȼ��3��������Ҫ���ơ�
-            instanceCount : ����instanced ��Ⱦ�����û��ʹ������1��
-            firstVertex : ��Ϊ���㻺������ƫ����������gl_VertexIndex����Сֵ��
-            firstInstance : ��Ϊinstanced ��Ⱦ��ƫ������������gl_InstanceIndex����Сֵ��
-        */
-        vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
-
-
-        // 5. ������Ⱦ
-        vkCmdEndRenderPass(m_commandBuffers[i]); // E ������Ⱦ
-
-        auto result = (vkEndCommandBuffer(m_commandBuffers[i])); // E ���������¼
-        /*<-------------------------------------------------------------------------------->*/
-        NE_CORE_ASSERT(result == VK_SUCCESS, "failed to record command buffer!");
     }
 }
 
