@@ -11,7 +11,6 @@ add_requires("libsdl3")
 add_requires("libsdl3_image")
 add_requires("glm")
 add_requires("spirv-cross")
-add_requires("vulkansdk")
 add_requires("assimp", {
     configs = {
         shared = false,
@@ -36,6 +35,8 @@ add_requires("shaderc", {
 
 add_requires("stb")
 
+add_requires("vulkansdk")
+add_requires("glad")
 
 target("Neon")
 do
@@ -74,6 +75,7 @@ do
 
         add_packages("vulkansdk")
     end
+    add_packages("glad")
 
 
     -- Add subsystem specification to fix LNK4031 warning
