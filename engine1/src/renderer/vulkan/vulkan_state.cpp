@@ -143,7 +143,7 @@ void VulkanState::create_surface()
 }
 
 // Assign the m_physicalDevice, m_PresentQueue, m_GraphicsQueue
-void VulkanState::create_logic_device()
+void VulkanState::createLogicDevice()
 {
     QueueFamilyIndices family_indices = QueueFamilyIndices::Query(m_Surface, m_PhysicalDevice);
 
@@ -196,7 +196,7 @@ void VulkanState::create_logic_device()
     NE_ASSERT(m_GraphicsQueue != VK_NULL_HANDLE, "failed to get graphics queue!");
 }
 
-void VulkanState::create_swapchain()
+void VulkanState::createSwapchain()
 {
     // Swap chain support details
     SwapChainSupportDetails swapchain_support_details = query_swapchain_supported(m_PhysicalDevice);
@@ -264,7 +264,7 @@ void VulkanState::create_swapchain()
     NE_ASSERT(m_SwapChain != VK_NULL_HANDLE, "failed to create swapchain!");
 }
 
-void VulkanState::init_swapchain_images()
+void VulkanState::initSwapchainImages()
 {
     uint32_t image_count;
     vkGetSwapchainImagesKHR(m_LogicalDevice, m_SwapChain, &image_count, nullptr);
@@ -1229,8 +1229,8 @@ void VulkanState::recreateSwapChain()
 {
     vkDeviceWaitIdle(m_LogicalDevice); // ����������ʹ���е���Դ
 
-    create_swapchain();
-    init_swapchain_images();
+    createSwapchain();
+    initSwapchainImages();
     create_iamge_views();
 
     create_renderpass();

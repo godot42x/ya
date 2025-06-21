@@ -221,13 +221,13 @@ struct VulkanState
         NE_CORE_ASSERT(ok, "Failed to create surface!");
 
         searchPhysicalDevice();
-        create_logic_device(); // logical device, present queue, graphics queue
+        createLogicDevice(); // logical device, present queue, graphics queue
         createCommandPool();
 
-        create_swapchain();
+        createSwapchain();
         helper.onRecreateSwapchain(this); // TODO: use recreateSwapChain() here
 
-        init_swapchain_images();
+        initSwapchainImages();
         create_iamge_views();
 
         // Initialize and create render pass
@@ -240,8 +240,6 @@ struct VulkanState
         // Create framebuffers using the render pass
         m_renderPass.createFramebuffers(m_SwapChainImageViews, m_depthImageView, m_SwapChainExtent);
 
-        createTextureImage();
-        createTextureImageView();
         createTextureSampler();
 
         // loadModel();
@@ -276,20 +274,12 @@ struct VulkanState
 
         cleanupSwapChain();
 
-        // vkDestroySampler(m_LogicalDevice, m_textureSampler, nullptr);
+        vkDestroySampler(m_LogicalDevice, m_defaultTextureSampler, nullptr);
 
 
         vkDestroyDescriptorPool(m_LogicalDevice, m_descriptorPool, nullptr);
         vkDestroyDescriptorSetLayout(m_LogicalDevice, m_descriptorSetLayout, nullptr);
 
-        // vkDestroyBuffer(m_LogicalDevice, m_uniformBuffer, nullptr);
-        // vkFreeMemory(m_LogicalDevice, m_uniformBUfferMemory, nullptr);
-
-        // vkDestroyBuffer(m_LogicalDevice, m_indexBuffer, nullptr);
-        // vkFreeMemory(m_LogicalDevice, m_indexBufferMemory, nullptr);
-
-        // vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
-        // vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
 
         vkDestroySemaphore(m_LogicalDevice, m_renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
@@ -298,7 +288,6 @@ struct VulkanState
 
         vkDestroyDevice(m_LogicalDevice, nullptr);
 
-        onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
 
         if (m_EnableValidationLayers)
         {
@@ -306,7 +295,8 @@ struct VulkanState
             destroy_debug_report_callback_ext();
         }
 
-        vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+        onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
+        // vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
         vkDestroyInstance(m_Instance, nullptr);
     }
 
@@ -324,17 +314,17 @@ struct VulkanState
     void create_instance();
 
 
-    void create_logic_device();
-    void create_swapchain();
-    void init_swapchain_images();
+    void createLogicDevice();
+    void createSwapchain();
+    void initSwapchainImages();
     void create_iamge_views();
     void create_descriptor_set_layout();
     void createCommandPool();
     void createDepthResources();
-    void createTextureImage();
-    void createTextureImageView();
+
     void createTextureSampler();
-    void loadModel();
+
+    // void loadModel();
     void createVertexBuffer(void *data, std::size_t size, VkBuffer &outVertexBuffer, VkDeviceMemory &outVertexBufferMemory);
     void createIndexBuffer();
     // void createUniformBuffer(uint32_t size);

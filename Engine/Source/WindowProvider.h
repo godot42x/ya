@@ -21,7 +21,8 @@ class WindowProvider
         NE_CORE_TRACE("WindowProvider::~WindowProvider()");
     }
 
-    virtual bool init() = 0;
+    virtual bool init()    = 0;
+    virtual void destroy() = 0;
 
     virtual void getWindowSize(int &width, int &height) = 0;
 };
@@ -59,6 +60,16 @@ class SDLWindowProvider : public WindowProvider
 
         return true;
     }
+
+    void destroy() override
+    {
+        NE_CORE_INFO("SDLWindowProvider::destroy()");
+        if (nativeWindowHandle) {
+            SDL_DestroyWindow(static_cast<SDL_Window *>(nativeWindowHandle));
+            nativeWindowHandle = nullptr;
+        }
+    }
+
 
     void getWindowSize(int &width, int &height) override
     {

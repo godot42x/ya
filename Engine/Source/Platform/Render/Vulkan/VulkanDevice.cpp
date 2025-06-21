@@ -156,19 +156,23 @@ void VulkanState::create_instance()
 
 
 // Assign the m_physicalDevice, m_PresentQueue, m_GraphicsQueue
-void VulkanState::create_logic_device()
+void VulkanState::createLogicDevice()
 {
     QueueFamilyIndices family_indices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queue_crate_infos;
+    std::set<uint32_t> unique_queue_families = {
+        static_cast<uint32_t>(family_indices.graphics_family),
+        static_cast<uint32_t>(family_indices.supported_family)
+    };
 
     float queue_priority = 1.0f;
-    for (int queue_family : {family_indices.graphics_family, family_indices.supported_family}) {
+    for (uint32_t queue_family : unique_queue_families) {
         queue_crate_infos.push_back({
             .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .pNext            = nullptr,
             .flags            = 0,
-            .queueFamilyIndex = static_cast<uint32_t>(queue_family),
+            .queueFamilyIndex = queue_family,
             .queueCount       = 1,
             .pQueuePriorities = &queue_priority,
         });
@@ -208,7 +212,7 @@ void VulkanState::create_logic_device()
 }
 
 
-void VulkanState::create_swapchain()
+void VulkanState::createSwapchain()
 {
     // Swap chain support details
     SwapChainSupportDetails supportDetails = SwapChainSupportDetails::query(m_PhysicalDevice, m_Surface);
@@ -273,7 +277,7 @@ void VulkanState::create_swapchain()
     NE_ASSERT(m_SwapChain != VK_NULL_HANDLE, "failed to create swapchain!");
 }
 
-void VulkanState::init_swapchain_images()
+void VulkanState::initSwapchainImages()
 {
     uint32_t image_count;
     vkGetSwapchainImagesKHR(m_LogicalDevice, m_SwapChain, &image_count, nullptr);
@@ -953,8 +957,8 @@ void VulkanState::recreateSwapChain()
 {
     vkDeviceWaitIdle(m_LogicalDevice); // ����������ʹ���е���Դ
 
-    create_swapchain();
-    init_swapchain_images();
+    createSwapchain();
+    initSwapchainImages();
     create_iamge_views();
 
     // Recreate render pass and framebuffers

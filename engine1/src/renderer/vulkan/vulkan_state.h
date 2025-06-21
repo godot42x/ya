@@ -175,9 +175,9 @@ struct VulkanState
         create_surface();
         find_and_pick_physical_device();
 
-        create_logic_device();
+        createLogicDevice();
 
-        create_swapchain();
+        createSwapchain();
         create_iamge_views();
         create_renderpass();            // specify how many attachments(color,depth,etc)
         create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
@@ -264,9 +264,9 @@ struct VulkanState
 
     void create_instance();
     void create_surface();
-    void create_logic_device();
-    void create_swapchain();
-    void init_swapchain_images();
+    void createLogicDevice();
+    void createSwapchain();
+    void initSwapchainImages();
     void create_iamge_views();
     void create_renderpass();
     void create_descriptor_set_layout();

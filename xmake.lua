@@ -1,6 +1,18 @@
-local old_print = print
-function print(...)
-    old_print(os.scriptdir(), ...)
+do
+    IsHacked = IsHacked or false
+    local old_print = print
+    local old_cprint = cprint
+    if not IsHacked then
+        IsHacked = true
+        print("HACK IT")
+        function print(...)
+            old_print(os.scriptdir(), ...)
+        end
+
+        function cprint(...)
+            old_cprint(os.scriptdir(), ...)
+        end
+    end
 end
 
 -- set_targetdir("./bin")

@@ -19,6 +19,9 @@ void Neon::App::init()
 
 void Neon::App::quit()
 {
+    logicalDevice->destroy();
+    windowProvider->destroy();
+
     delete logicalDevice;
     delete windowProvider;
 }
