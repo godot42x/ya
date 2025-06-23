@@ -23,8 +23,8 @@ GENERATED_ENUM_MISC(ESamplerType);
 struct LogicalDevice
 {
 
-    void *nativeDevice = nullptr;
-    void *nativeWindow = nullptr;
+    void           *nativeDevice   = nullptr;
+    WindowProvider *windowProvider = nullptr;
 
     virtual ~LogicalDevice() { NE_CORE_TRACE("LogicalDevice::~LogicalDevice()"); }
 
@@ -38,7 +38,5 @@ struct LogicalDevice
     virtual void destroy()                      = 0;
 
     template <typename DeviceType>
-    DeviceType *getNativeDevicePtr() { return static_cast<DeviceType *>(nativeDevice); } // TODO: check type safety
-    template <typename WindowType>
-    WindowType *getNativeWindowPtr() { return static_cast<WindowType *>(nativeWindow); } // TODO: check type safety
+    DeviceType *getNativeDevicePtr() { return static_cast<DeviceType *>(nativeDevice); }
 };

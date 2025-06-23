@@ -114,57 +114,11 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
     return "";
 }
 
-namespace SPIRVHelper
-{
 
-// Helper function to convert SPIRV types to SDL_GPU vertex element formats
-SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type)
-{
-    // Check for alignment - we need to handle different data types
-    switch (type.basetype)
-    {
-    case spirv_cross::SPIRType::Float:
-        if (type.vecsize == 1 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT;
-        else if (type.vecsize == 2 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-        else if (type.vecsize == 3 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-        else if (type.vecsize == 4 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-        break;
 
-    case spirv_cross::SPIRType::Int:
-        if (type.vecsize == 1 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_INT;
-        else if (type.vecsize == 2 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_INT2;
-        else if (type.vecsize == 3 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_INT3;
-        else if (type.vecsize == 4 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_INT4;
-        break;
-
-    case spirv_cross::SPIRType::UInt:
-        if (type.vecsize == 1 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_UINT;
-        else if (type.vecsize == 2 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_UINT2;
-        else if (type.vecsize == 3 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_UINT3;
-        else if (type.vecsize == 4 && type.columns == 1)
-            return SDL_GPU_VERTEXELEMENTFORMAT_UINT4;
-        break;
-
-    default:
-        break;
-    }
-
-    return SDL_GPU_VERTEXELEMENTFORMAT_INVALID;
-}
 
 // Get size of a SPIRV type with proper alignment for C++ structs
-uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type)
+uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType &type)
 {
     uint32_t size = 0;
     switch (type.basetype)
@@ -197,7 +151,7 @@ uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type)
 }
 
 // Get the offset for a member in a struct with proper C++ alignment
-uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
+uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
 {
     // Determine the alignment requirement based on std140 layout rules
     uint32_t alignment = 4; // Default to 4 bytes for basic types
@@ -211,7 +165,6 @@ uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIR
     // }
     // return aligned_offset;
 }
-} // namespace SPIRVHelper
 
 namespace ShaderReflection
 {
@@ -351,14 +304,13 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
         uint32_t location = compiler.get_decoration(input.id, spv::DecorationLocation);
         uint32_t offset   = compiler.get_decoration(input.id, spv::DecorationOffset);
 
-        const auto &type = compiler.get_type(input.type_id);
+        const spirv_cross::SPIRType &type = compiler.get_type(input.type_id);
 
         // Calculate aligned offset
         uint32_t aligned_offset = SPIRVHelper::getVertexAlignedOffset(struct_offset, type);
         uint32_t type_size      = SPIRVHelper::getSpirvTypeSize(type);
         struct_offset           = aligned_offset + type_size;
 
-        SDL_GPUVertexElementFormat sdl_format = SPIRVHelper::spirvType2SDLFormat(type);
 
         // Create stage input data
         ShaderReflection::StageIOData inputData;
@@ -367,27 +319,28 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
         inputData.location = location;
         inputData.offset   = aligned_offset;
         inputData.size     = type_size;
-        inputData.format   = sdl_format;
+        inputData.format   = type;
 
         // Add to our resources
         resources.inputs.push_back(inputData);
 
-        NE_CORE_TRACE("\t(name: {0}, location: {1}, shader offset: {2}, aligned offset: {3}, size: {4}, type: {5}, SDL format: {6})",
+
+        NE_CORE_TRACE("\t(name: {0}, location: {1}, shader offset: {2}, aligned offset: {3}, size: {4}, type: {5}, {6}",
                       input.name,
                       location,
                       offset,
                       aligned_offset,
                       type_size,
                       ShaderReflection::DataType2Strings[inputData.type],
-                      (int)sdl_format);
+                      type);
     }
 
     // Process stage outputs
     NE_CORE_TRACE("Stage Outputs:");
     for (const auto &output : spirvResources.stage_outputs) {
-        uint32_t    location = compiler.get_decoration(output.id, spv::DecorationLocation);
-        uint32_t    offset   = compiler.get_decoration(output.id, spv::DecorationOffset);
-        const auto &type     = compiler.get_type(output.type_id);
+        uint32_t                     location = compiler.get_decoration(output.id, spv::DecorationLocation);
+        uint32_t                     offset   = compiler.get_decoration(output.id, spv::DecorationOffset);
+        const spirv_cross::SPIRType &type     = compiler.get_type(output.type_id);
 
         // Create stage output data
         ShaderReflection::StageIOData outputData;
@@ -396,7 +349,7 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
         outputData.location = location;
         outputData.offset   = offset;
         outputData.size     = SPIRVHelper::getSpirvTypeSize(type);
-        outputData.format   = SPIRVHelper::spirvType2SDLFormat(type);
+        outputData.format   = type; // SPIRVHelper::spirvType2SDLFormat(type);
 
         // Add to our resources
         resources.outputs.push_back(outputData);

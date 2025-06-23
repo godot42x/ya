@@ -22,6 +22,7 @@ struct SDLDevice : LogicalDevice
 {
     std::unordered_map<ESamplerType, SDL_GPUSampler *> samplers;
 
+    SDL_Window * sdlWindow = nullptr;
 
     bool init(const InitParams &params) override;
 
@@ -30,9 +31,7 @@ struct SDLDevice : LogicalDevice
     void clean()
     {
         auto sdlDevice = getNativeDevicePtr<SDL_GPUDevice>();
-        auto sdlWindow = getNativeWindowPtr<SDL_Window>();
         SDL_ReleaseWindowFromGPUDevice(sdlDevice, sdlWindow);
-        SDL_DestroyWindow(sdlWindow);
         SDL_DestroyGPUDevice(sdlDevice);
     }
 

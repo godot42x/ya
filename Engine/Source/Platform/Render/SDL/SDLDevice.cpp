@@ -34,9 +34,9 @@ bool SDLDevice::init(const InitParams &params)
     const char *driver = SDL_GetGPUDeviceDriver(device);
     NE_CORE_INFO("SDLDevice::init() choosen driver: {}", driver);
 
-    SDL_Window *window = SDL_CreateWindow("Neon", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    NE_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
-    nativeWindow = window;
+
+    auto window = params.windowProvider.getNativeWindowPtr<SDL_Window>();
+
 
     NE_CORE_INFO("SDLDevice::init() claim window for GPU device");
     if (!SDL_ClaimWindowForGPUDevice(device, window)) {

@@ -8,14 +8,14 @@
 #include <string>
 #include <vector>
 
-#include "../ImGuiHelper.h"
-#include "StackDeleter.h"
+#include "ImGuiHelper.h"
 #include "WindowProvider.h"
 
 
-#include "Platform/Render/Vulkan/VulkanDevice.h"
 
 // #include "utility.cc/stack_deleter.h"
+
+struct LogicalDevice;
 
 
 namespace Neon
@@ -37,12 +37,7 @@ class App
 
     int onEvent(SDL_Event &event);
 
-    int iterate(float dt)
-    {
-        // Handle input, update logic, render, etc.
-        // This is where the main loop logic would go.
-        return 0; // Continue running
-    }
+    int iterate(float dt);
 };
 
 } // namespace Neon

@@ -4,14 +4,21 @@
 
 void VulkanRenderPass::initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice, VkFormat swapChainImageFormat)
 {
-    m_logicalDevice = logicalDevice;
-    m_physicalDevice = physicalDevice;
+    m_logicalDevice        = logicalDevice;
+    m_physicalDevice       = physicalDevice;
     m_swapChainImageFormat = swapChainImageFormat;
-    m_depthFormat = findDepthFormat();
+    m_depthFormat          = findDepthFormat();
+
+    _shaderProcessor = ShaderScriptProcessorFactory()
+                           .withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
+                           .withShaderStoragePath("Engine/Shader/GLSL")
+                           .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
+                           .FactoryNew<GLSLScriptProcessor>();
 }
 
-void VulkanRenderPass::createRenderPass()
+void VulkanRenderPass::createRenderPass(std::string path)
 {
+
     // Color attachment description
     VkAttachmentDescription colorAttachment = {
         .format         = m_swapChainImageFormat,
@@ -66,7 +73,7 @@ void VulkanRenderPass::createRenderPass()
 
     std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
 
-    VkRenderPassCreateInfo renderPassInfo = {
+    VkRenderPassCreateInfo createInfo = {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = static_cast<uint32_t>(attachments.size()),
         .pAttachments    = attachments.data(),
@@ -76,16 +83,20 @@ void VulkanRenderPass::createRenderPass()
         .pDependencies   = &dependency,
     };
 
-    if (vkCreateRenderPass(m_logicalDevice, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
+    if (vkCreateRenderPass(m_logicalDevice, &createInfo, nullptr, &m_renderPass) != VK_SUCCESS)
     {
         NE_CORE_ASSERT(false, "Failed to create render pass!");
     }
     NE_ASSERT(m_renderPass, "Failed to create render pass!");
+
+
+
+    auto stage2Spirv = _shaderProcessor->process(path);
 }
 
-void VulkanRenderPass::createFramebuffers(const std::vector<VkImageView>& swapChainImageViews, 
-                                         VkImageView depthImageView, 
-                                         VkExtent2D swapChainExtent)
+void VulkanRenderPass::createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,
+                                          VkImageView                     depthImageView,
+                                          VkExtent2D                      swapChainExtent)
 {
     m_framebuffers.resize(swapChainImageViews.size());
 
@@ -93,8 +104,7 @@ void VulkanRenderPass::createFramebuffers(const std::vector<VkImageView>& swapCh
     {
         std::array<VkImageView, 2> attachments = {
             swapChainImageViews[i],
-            depthImageView
-        };
+            depthImageView};
 
         VkFramebufferCreateInfo framebufferInfo = {
             .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -128,9 +138,9 @@ void VulkanRenderPass::cleanup()
     }
 }
 
-void VulkanRenderPass::recreate(const std::vector<VkImageView>& swapChainImageViews, 
-                               VkImageView depthImageView, 
-                               VkExtent2D swapChainExtent)
+void VulkanRenderPass::recreate(const std::vector<VkImageView> &swapChainImageViews,
+                                VkImageView                     depthImageView,
+                                VkExtent2D                      swapChainExtent)
 {
     // Clean up existing framebuffers
     for (auto framebuffer : m_framebuffers)
@@ -150,17 +160,17 @@ void VulkanRenderPass::beginRenderPass(VkCommandBuffer commandBuffer, uint32_t f
         .renderPass  = m_renderPass,
         .framebuffer = m_framebuffers[frameBufferIndex],
         .renderArea  = {
-            .offset = {0, 0},
-            .extent = extent,
+             .offset = {0, 0},
+             .extent = extent,
         },
     };
 
     std::array<VkClearValue, 2> clearValues = {};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
+    clearValues[0].color                    = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[1].depthStencil             = {1.0f, 0};
 
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues = clearValues.data();
+    renderPassInfo.pClearValues    = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
@@ -175,13 +185,12 @@ VkFormat VulkanRenderPass::findDepthFormat()
     return findSupportedFormat(
         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
         VK_IMAGE_TILING_OPTIMAL,
-        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-    );
+        VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
-VkFormat VulkanRenderPass::findSupportedFormat(const std::vector<VkFormat>& candidates, 
-                                              VkImageTiling tiling, 
-                                              VkFormatFeatureFlags features)
+VkFormat VulkanRenderPass::findSupportedFormat(const std::vector<VkFormat> &candidates,
+                                               VkImageTiling                tiling,
+                                               VkFormatFeatureFlags         features)
 {
     for (VkFormat format : candidates)
     {

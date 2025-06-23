@@ -13,6 +13,8 @@
         "MSAA",
         "PRIMITIVETYPE",
         "projectdir",
+        "Renderbuffer",
+        "Renderbuffers",
         "renderpass",
         "SAMPLECOUNT",
         "SAMPLERADDRESSMODE",

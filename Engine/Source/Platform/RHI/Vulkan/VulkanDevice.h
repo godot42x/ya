@@ -100,20 +100,6 @@ struct VulkanState
     VkPipelineLayout      m_pipelineLayout;
 
 
-
-    // std::vector<Vertex>   m_vertices;
-    // std::vector<uint32_t> m_indices;
-
-    // VkBuffer       m_vertexBuffer;
-    // VkDeviceMemory m_vertexBufferMemory;
-
-    // VkBuffer       m_indexBuffer;
-    // VkDeviceMemory m_indexBufferMemory;
-
-    // VkBuffer       m_uniformBuffer;
-    // VkDeviceMemory m_uniformBUfferMemory;
-
-
     VkSampler m_defaultTextureSampler;
 
 
@@ -142,8 +128,8 @@ struct VulkanState
     VkDeviceMemory m_depthImageMemory;
     VkImageView    m_depthImageView;
 
-    VkCommandPool                m_commandPool;    // ����أ����滺�������ڴ� ����ֱ�ӵ��ú������л��ƻ��ڴ�����ȣ� ����д���������������
-    std::vector<VkCommandBuffer> m_commandBuffers; // �������
+    VkCommandPool                m_commandPool;
+    std::vector<VkCommandBuffer> m_commandBuffers;
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
@@ -214,8 +200,8 @@ struct VulkanState
 
         if (m_EnableValidationLayers)
         {
-            setup_debug_messenger_ext();
-            setup_report_callback_ext();
+            setupDebugMessengerExt();
+            setupReportCallbackExt();
         }
         bool ok = onCreateSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
         NE_CORE_ASSERT(ok, "Failed to create surface!");
@@ -231,8 +217,10 @@ struct VulkanState
         create_iamge_views();
 
         // Initialize and create render pass
-        m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_SwapChainImageFormat);
-        m_renderPass.createRenderPass();
+        m_renderPass.initialize(m_LogicalDevice,
+                                m_PhysicalDevice,
+                                m_SwapChainImageFormat);
+        m_renderPass.createRenderPass("VulkanTest.glsl");
 
         create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
         createDepthResources();
@@ -257,8 +245,6 @@ struct VulkanState
 
     void OnUpdate()
     {
-        modifedStaticData();
-        updateUniformBuffer();
         drawFrame();
         submitFrame();
     }
@@ -291,8 +277,8 @@ struct VulkanState
 
         if (m_EnableValidationLayers)
         {
-            destroy_debug_callback_ext();
-            destroy_debug_report_callback_ext();
+            destroyDebugCallBackExt();
+            destroyDebugReportCallbackExt();
         }
 
         onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
@@ -440,6 +426,7 @@ struct VulkanState
             NE_CORE_ASSERT(result == VK_SUCCESS, "failed to record command buffer!");
         }
     }
+
     void submitFrame()
     {
 
@@ -521,49 +508,10 @@ struct VulkanState
         }
     }
 
-    void modifedStaticData()
-    {
-        // change vertex data, index data
-        // like the model's position, rotation, scale, etc.
-        // update the vertex buffer, index buffer, uniform buffer, etc.
-        // if needed
-    }
-
-    void updateUniformBuffer()
-    {
-        // using clock = std::chrono::high_resolution_clock;
-
-        // static auto startTime   = clock::now(); // static ��ʼʱ��
-        // auto        currentTime = clock::now();
-
-        // // ����ʱ����������ת�ı���
-        // float time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() / 1000.0f;
-
-        // UniformBufferObject ubo = {};
-        // {
-        //     //  ��һ��mat�� ��ת�Ƕȡ� ��ת��
-        //     ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-        //     // �ӽǷ��򣨽Ƕȣ�������λ�á�ͷ��ָ����
-        //     ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
-        //     // Fov 45�Ƚǣ� ���߱ȣ� ��/Զ�ü���
-        //     ubo.proj = glm::perspective(glm::radians(45.0f), m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
-
-        //     // GLM Ϊ openGL ��Ƶģ� ���Ĳü�����(proj.y)��vulkan�෴
-        //     ubo.proj[1][1] *= -1;
-        // }
-
-        // // �� ubo ���󿽱��������õ� uniformBufferMemory ��
-        // void *data;
-        // vkMapMemory(m_logicalDevice, m_uniformBUfferMemory, 0, sizeof(ubo), 0, &data);
-        // memcpy(data, &ubo, sizeof(ubo));
-        // vkUnmapMemory(m_logicalDevice, m_uniformBUfferMemory);
-    }
 
   private:
 
-    const VkDebugUtilsMessengerCreateInfoEXT &get_debug_messenger_create_info_ext()
+    const VkDebugUtilsMessengerCreateInfoEXT &getDebugMessengerCreateInfoExt()
     {
         static VkDebugUtilsMessengerCreateInfoEXT info{
             .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -590,76 +538,10 @@ struct VulkanState
         return info;
     }
 
-    void setup_debug_messenger_ext()
-    {
-        NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
-
-        const VkDebugUtilsMessengerCreateInfoEXT &create_info = get_debug_messenger_create_info_ext();
-
-        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
-        if (!func) {
-            NE_CORE_ASSERT(false, "failed to find debugger crate function! {}", (int)VK_ERROR_EXTENSION_NOT_PRESENT);
-        }
-        VkResult ret = func(m_Instance, &create_info, nullptr, &m_DebugMessengerCallback);
-        if (VK_SUCCESS != ret) {
-            NE_CORE_ASSERT(false, "failed to set up debug messenger! {}", (int)ret);
-        }
-    }
-
-    void setup_report_callback_ext()
-    {
-        NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
-
-        VkDebugReportCallbackCreateInfoEXT report_cb_create_info = {
-            .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-            .pNext = nullptr,
-            .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT |
-                     VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
-                     VK_DEBUG_REPORT_ERROR_BIT_EXT,
-            .pfnCallback = nullptr,
-            .pUserData   = nullptr,
-        };
-        report_cb_create_info.pfnCallback = // static VKAPI_ATTR VkBool32 VKAPI_CALL  debugReportCallback(
-            [](VkDebugReportFlagsEXT      flagss,
-               VkDebugReportObjectTypeEXT flags_messageType,
-               uint64_t                   obj,
-               size_t                     location,
-               int32_t                    code,
-               const char                *layerPrefix,
-               const char                *msg,
-               void                      *pUserData) {
-                std::cerr << "validation layer: " << msg << std::endl;
-                return VK_FALSE;
-            };
-
-
-        auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_Instance,
-                                                                              "vkCreateDebugReportCallbackEXT");
-        if (!func) {
-            panic("failed to set up debug callback!", (int)VK_ERROR_EXTENSION_NOT_PRESENT);
-        }
-        VkResult ret = func(m_Instance, &report_cb_create_info, nullptr, &m_DebugReportCallback);
-        if (VK_SUCCESS != ret) {
-            panic("failed to set up debug callback!", (int)ret);
-        }
-    }
-
-    void destroy_debug_callback_ext()
-    {
-        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (nullptr != func) {
-            func(m_Instance, m_DebugMessengerCallback, nullptr);
-        }
-    }
-
-
-    void destroy_debug_report_callback_ext()
-    {
-        auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
-        if (nullptr != func) {
-            func(m_Instance, m_DebugReportCallback, nullptr);
-        }
-    }
+    void setupDebugMessengerExt();
+    void setupReportCallbackExt();
+    void destroyDebugCallBackExt();
+    void destroyDebugReportCallbackExt();
 
     void searchPhysicalDevice()
     {
@@ -688,23 +570,6 @@ struct VulkanState
     bool is_validation_layers_supported();
     bool is_device_extension_support(VkPhysicalDevice device);
 
-    static std::vector<char> readFile(const std::string &filename)
-    {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-        if (!file.is_open()) {
-            panic("failed to open file!");
-        }
-
-        size_t            fileSize = (size_t)file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-
-        file.close();
-
-        return buffer;
-    }
 
     VkShaderModule create_shader_module(const std::vector<uint32_t> &spv_binary)
     {
@@ -820,13 +685,13 @@ struct VulkanDevice : public LogicalDevice
 
         auto sdlWindow = static_cast<SDLWindowProvider *>(windowProvider);
         _vulkanState.onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            return sdlWindow->createVkSurface(instance, surface);
+            return sdlWindow->onCreateVkSurface(instance, surface);
         });
         _vulkanState.onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            sdlWindow->destroyVkSurface(instance, surface);
+            sdlWindow->onDestroyVkSurface(instance, surface);
         });
         _vulkanState.onGetRequiredExtensions.set([sdlWindow]() {
-            return sdlWindow->getVkInstanceExtensions();
+            return sdlWindow->onGetVkInstanceExtensions();
         });
 
 #endif

@@ -91,24 +91,5 @@ struct GraphicsPipelineCreateInfo
     EFrontFaceType::T                    frontFaceType = EFrontFaceType::CounterClockWise;
 };
 
-#define STRINGIFY_IMPL(x) #x
-#define STRINGIFY(x) STRINGIFY_IMPL(x)
-
-//  template <typename W>
-//     W *getW()
-//     {
-//         static_assert(requires { RenderType::getW; });
-//         return static_cast<RenderType *>(this)->getW();
-//     }
-// #define STATIC_POLYMORPHIC_FUNC(CHILD_T, RET_TEMPLATE_NAME, FUNC_NAME, ...)                                                 \
-//     template <typename RET_TEMPLATE_NAME>                                                                                   \
-//     RET_TEMPLATE_NAME FUNC_NAME(__VA_ARGS__)                                                                                \
-//     {                                                                                                                       \
-//         static_assert(requires { CHILD_T::FUNC_NAME; }, STRINGIFY(CHILD_T) " Need implement " STRINGIFY(FUNC_NAME) "!!!!"); \
-//         return static_cast<CHILD_T *>(this)->FUNC_NAME(__VA_ARGS__);                                                        \
-//     }
-// #undef STATIC_POLYMORPHIC_FUNC
-
-
 
 extern RenderAPI::T gRenderAPIType;

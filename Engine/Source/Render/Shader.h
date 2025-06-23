@@ -4,14 +4,29 @@
 #include <string>
 #include <unordered_map>
 
-#include "SDL3/SDL_storage.h"
-#include <SDL3/SDL_gpu.h>
-
-#include <spirv_cross/spirv_cross.hpp>
 
 #include "../Core/Log.h"
 
 #include "reflect.cc/enum"
+#include <spirv_cross/spirv_cross.hpp>
+
+
+
+// Add formatter specialization for spirv_cross::SPIRType
+template <>
+struct std::formatter<spirv_cross::SPIRType> : std::formatter<std::string>
+{
+    auto format(const spirv_cross::SPIRType &type, std::format_context &ctx) const
+    {
+        return std::format("[ SPIRType: {}, vecsize: {}, columns: {}, array size: {} ]",
+                           static_cast<int>(type.basetype),
+                           type.vecsize,
+                           type.columns,
+                           type.array.size());
+    }
+};
+
+
 namespace EShaderStage
 {
 enum T
@@ -41,7 +56,6 @@ inline T fromString(std::string_view type)
 
 const char *toString(EShaderStage::T Stage);
 
-SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage);
 
 } // namespace EShaderStage
 
@@ -69,12 +83,12 @@ GENERATED_ENUM_MISC(DataType);
 
 struct StageIOData
 {
-    std::string                name;
-    DataType                   type;
-    uint32_t                   location;
-    uint32_t                   offset;
-    uint32_t                   size;
-    SDL_GPUVertexElementFormat format;
+    std::string           name;
+    DataType              type;
+    uint32_t              location;
+    uint32_t              offset;
+    uint32_t              size;
+    spirv_cross::SPIRType format;
 };
 
 struct UniformBufferMember
@@ -115,17 +129,15 @@ struct ShaderResources
 };
 
 // Utility functions for shader reflection
-DataType                   SpirType2DataType(const spirv_cross::SPIRType &type);
-SDL_GPUVertexElementFormat DataType2SDLFormat(DataType type);
-uint32_t                   getDataTypeSize(DataType type);
+DataType SpirType2DataType(const spirv_cross::SPIRType &type);
+uint32_t getDataTypeSize(DataType type);
 } // namespace ShaderReflection
 
-namespace SPIRVHelper
+struct SPIRVHelper
 {
-extern SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type);
-extern uint32_t                   getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
-extern uint32_t                   getSpirvTypeSize(const spirv_cross::SPIRType &type);
-} // namespace SPIRVHelper
+    static uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
+    static uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type);
+};
 
 
 
@@ -158,6 +170,13 @@ struct ShaderScriptProcessor
     using spirv_ir_t    = std::vector<ir_t>;
     using stage2spirv_t = std::unordered_map<EShaderStage::T, spirv_ir_t>;
 
+
+  protected:
+    // ShaderScriptProcessor() {}
+
+  public:
+
+
     virtual std::optional<stage2spirv_t>                    process(std::string_view fileName)                                 = 0;
     [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) = 0;
 };
@@ -174,16 +193,8 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     bool bOptimizeGLBinaries = false;
     bool bValid              = false;
 
-  private:
-    // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_Vulkan_SPIRV;
-    // std::unordered_map<EShaderStage::T, std::vector<uint32_t>> m_OpenGL_SPIRV;
-    // std::unordered_map<EShaderStage::T, std::string> m_GLSL_SourceCode;
-
-
-  public:
-    GLSLScriptProcessor()
-    {
-    }
+  protected:
+    // GLSLScriptProcessor() {}
 
   public:
 
@@ -234,9 +245,10 @@ struct ShaderScriptProcessorFactory
     }
 
 
-    std::shared_ptr<ShaderScriptProcessor> FactoryNew()
+    template <typename T>
+    std::shared_ptr<T> FactoryNew()
     {
-        std::shared_ptr<ShaderScriptProcessor> processor;
+        std::shared_ptr<T> processor;
 
         switch (processorType) {
         case GLSL:

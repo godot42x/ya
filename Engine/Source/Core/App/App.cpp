@@ -1,9 +1,14 @@
 #include "App.h"
+#include "Core/FileSystem/FileSystem.h"
+#include "Platform/RHI/Vulkan/VulkanDevice.h"
 
 #include <SDL3/SDL_events.h>
 
 void Neon::App::init()
 {
+    Logger::init();
+    FileSystem::init();
+
     windowProvider = new SDLWindowProvider();
     // deleteStack.push("SDLWindowProvider", windowProvider);
     windowProvider->init();
@@ -187,3 +192,16 @@ int Neon::App::onEvent(SDL_Event &event)
     }
     return 0;
 };
+
+
+int Neon::App::iterate(float dt)
+{
+#if USE_VULKAN
+    auto &vulkanState = static_cast<VulkanDevice *>(logicalDevice)->_vulkanState;
+    vulkanState.OnUpdate();
+    vulkanState.OnPostUpdate();
+#endif
+    // Handle input, update logic, render, etc.
+    // This is where the main loop logic would go.
+    return 0; // Continue running
+}

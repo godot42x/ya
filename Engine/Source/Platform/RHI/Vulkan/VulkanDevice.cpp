@@ -63,16 +63,16 @@ VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
 
     int width, height;
     provider->getWindowSize(width, height);
-    VkExtent2D actual_extent = {(uint32_t)width, (uint32_t)height};
+    VkExtent2D actualExtent = {(uint32_t)width, (uint32_t)height};
 
-    actual_extent.width = std::max(
+    actualExtent.width = std::max(
         capabilities.minImageExtent.width,
-        std::min(capabilities.maxImageExtent.width, actual_extent.width));
-    actual_extent.height = std::max(
+        std::min(capabilities.maxImageExtent.width, actualExtent.width));
+    actualExtent.height = std::max(
         capabilities.minImageExtent.height,
-        std::min(capabilities.maxImageExtent.height, actual_extent.height));
+        std::min(capabilities.maxImageExtent.height, actualExtent.height));
 
-    return actual_extent;
+    return actualExtent;
 }
 
 SwapChainSupportDetails SwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
@@ -137,7 +137,7 @@ void VulkanState::create_instance()
     };
 
     if (m_EnableValidationLayers) {
-        const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = get_debug_messenger_create_info_ext();
+        const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = getDebugMessengerCreateInfoExt();
 
         instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
         instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
@@ -161,10 +161,9 @@ void VulkanState::createLogicDevice()
     QueueFamilyIndices family_indices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queue_crate_infos;
-    std::set<uint32_t> unique_queue_families = {
+    std::set<uint32_t>                   unique_queue_families = {
         static_cast<uint32_t>(family_indices.graphics_family),
-        static_cast<uint32_t>(family_indices.supported_family)
-    };
+        static_cast<uint32_t>(family_indices.supported_family)};
 
     float queue_priority = 1.0f;
     for (uint32_t queue_family : unique_queue_families) {
@@ -965,6 +964,76 @@ void VulkanState::recreateSwapChain()
     createDepthResources();
     m_renderPass.recreate(m_SwapChainImageViews, m_depthImageView, m_SwapChainExtent);
     createCommandBuffers();
+}
+
+void VulkanState::setupDebugMessengerExt()
+{
+    NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
+
+    const VkDebugUtilsMessengerCreateInfoEXT &create_info = getDebugMessengerCreateInfoExt();
+
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
+    if (!func) {
+        NE_CORE_ASSERT(false, "failed to find debugger crate function! {}", (int)VK_ERROR_EXTENSION_NOT_PRESENT);
+    }
+    VkResult ret = func(m_Instance, &create_info, nullptr, &m_DebugMessengerCallback);
+    if (VK_SUCCESS != ret) {
+        NE_CORE_ASSERT(false, "failed to set up debug messenger! {}", (int)ret);
+    }
+}
+
+void VulkanState::setupReportCallbackExt()
+{
+    NE_ASSERT(m_EnableValidationLayers, "Validation layers requested, but not available!");
+
+    VkDebugReportCallbackCreateInfoEXT report_cb_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+        .pNext = nullptr,
+        .flags = VK_DEBUG_REPORT_WARNING_BIT_EXT |
+                 VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+                 VK_DEBUG_REPORT_ERROR_BIT_EXT,
+        .pfnCallback = nullptr,
+        .pUserData   = nullptr,
+    };
+    report_cb_create_info.pfnCallback = // static VKAPI_ATTR VkBool32 VKAPI_CALL  debugReportCallback(
+        [](VkDebugReportFlagsEXT      flagss,
+           VkDebugReportObjectTypeEXT flags_messageType,
+           uint64_t                   obj,
+           size_t                     location,
+           int32_t                    code,
+           const char                *layerPrefix,
+           const char                *msg,
+           void                      *pUserData) {
+            std::cerr << "validation layer: " << msg << std::endl;
+            return VK_FALSE;
+        };
+
+
+    auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(m_Instance,
+                                                                          "vkCreateDebugReportCallbackEXT");
+    if (!func) {
+        panic("failed to set up debug callback!", (int)VK_ERROR_EXTENSION_NOT_PRESENT);
+    }
+    VkResult ret = func(m_Instance, &report_cb_create_info, nullptr, &m_DebugReportCallback);
+    if (VK_SUCCESS != ret) {
+        panic("failed to set up debug callback!", (int)ret);
+    }
+}
+
+void VulkanState::destroyDebugCallBackExt()
+{
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (nullptr != func) {
+        func(m_Instance, m_DebugMessengerCallback, nullptr);
+    }
+}
+
+void VulkanState::destroyDebugReportCallbackExt()
+{
+    auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
+    if (nullptr != func) {
+        func(m_Instance, m_DebugReportCallback, nullptr);
+    }
 }
 
 // A physical device is suitable/supported for ...

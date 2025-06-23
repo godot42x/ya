@@ -6,6 +6,52 @@
 namespace SDL
 {
 
+// Helper function to convert SPIRV types to SDL_GPU vertex element formats
+inline SDL_GPUVertexElementFormat spirvType2SDLFormat(const spirv_cross::SPIRType &type)
+{
+    // Check for alignment - we need to handle different data types
+    switch (type.basetype)
+    {
+    case spirv_cross::SPIRType::Float:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
+        break;
+
+    case spirv_cross::SPIRType::Int:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_INT4;
+        break;
+
+    case spirv_cross::SPIRType::UInt:
+        if (type.vecsize == 1 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT;
+        else if (type.vecsize == 2 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT2;
+        else if (type.vecsize == 3 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT3;
+        else if (type.vecsize == 4 && type.columns == 1)
+            return SDL_GPU_VERTEXELEMENTFORMAT_UINT4;
+        break;
+
+    default:
+        break;
+    }
+
+    return SDL_GPU_VERTEXELEMENTFORMAT_INVALID;
+}
+
 struct SDLShaderProcessor
 {
 
@@ -24,12 +70,13 @@ struct SDLShaderProcessor
     SDLShaderProcessor &preprocess(const ShaderCreateInfo &shaderCI)
     {
 
-        ShaderScriptProcessorFactory factory;
-        factory.withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
-            .withShaderStoragePath("Engine/Shader/GLSL")
-            .withCachedStoragePath("Engine/Intermediate/Shader/GLSL");
+        std::shared_ptr<ShaderScriptProcessor> processor =
+            ShaderScriptProcessorFactory()
+                .withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
+                .withShaderStoragePath("Engine/Shader/GLSL")
+                .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
+                .FactoryNew<GLSLScriptProcessor>();
 
-        std::shared_ptr<ShaderScriptProcessor> processor = factory.FactoryNew();
 
         auto ret = processor->process(shaderCI.shaderName);
         if (!ret) {

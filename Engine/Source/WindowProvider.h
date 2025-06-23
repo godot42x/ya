@@ -77,7 +77,7 @@ class SDLWindowProvider : public WindowProvider
     }
 
 #if USE_VULKAN
-    bool createVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+    bool onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface)
     {
         if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window *>(nativeWindowHandle),
                                       instance,
@@ -90,13 +90,14 @@ class SDLWindowProvider : public WindowProvider
         NE_CORE_INFO("Vulkan surface created successfully.");
         return true;
     }
-    void destroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+
+    void onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
     {
         SDL_Vulkan_DestroySurface(instance, *surface, nullptr); // if needed
         NE_CORE_INFO("Vulkan surface destroyed successfully.");
     }
 
-    std::vector<const char *> getVkInstanceExtensions()
+    std::vector<const char *> onGetVkInstanceExtensions()
     {
         Uint32 count = 0;
         // VK_KHR_win32_surface

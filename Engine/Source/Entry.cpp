@@ -1,7 +1,7 @@
 // #define SDL_MAIN_USE_CALLBACKS
 // #include <SDL3/SDL_main.h>
 
-#include "Core/App.h"
+#include "Core/App/App.h"
 // #include "Platform/Render/SDL/SDLDevice.h"
 // #include "SDL3/SDL_timer.h"
 
