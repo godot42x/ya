@@ -116,7 +116,6 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
 
 
 
-
 // Get size of a SPIRV type with proper alignment for C++ structs
 uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType &type)
 {
@@ -222,25 +221,6 @@ DataType getSpirvBaseType(const spirv_cross::SPIRType &type)
     return DataType::Unknown;
 }
 
-SDL_GPUVertexElementFormat dataTypeToSDLFormat(DataType type)
-{
-    switch (type) {
-    case DataType::Float:
-        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT;
-    case DataType::Vec2:
-        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
-    case DataType::Vec3:
-        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
-    case DataType::Vec4:
-        return SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;
-    case DataType::Int:
-        return SDL_GPU_VERTEXELEMENTFORMAT_INT;
-    case DataType::UInt:
-        return SDL_GPU_VERTEXELEMENTFORMAT_UINT;
-    default:
-        return SDL_GPU_VERTEXELEMENTFORMAT_INVALID;
-    }
-}
 
 uint32_t getDataTypeSize(DataType type)
 {

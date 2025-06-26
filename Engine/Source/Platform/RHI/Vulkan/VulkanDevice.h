@@ -6,8 +6,12 @@
 
 #include "Render/Device.h"
 #include "SDL3/SDL_video.h"
+#include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
+#include "VulkanResourceManager.h"
+#include "VulkanSwapChain.h"
 #include "VulkanUtils.h"
+
 
 
 #include <string>
@@ -37,26 +41,11 @@ struct GLFWState;
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
 
 
-struct SwapChainSupportDetails
-{
-    VkSurfaceCapabilitiesKHR        capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR>   present_modes;
-
-    // first valid surface format
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat();
-    // first valid present mode
-    VkPresentModeKHR ChooseSwapPresentMode();
-    VkExtent2D       ChooseSwapExtent(WindowProvider *provider);
-
-    static SwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
-};
-
-
 
 struct VulkanState
 {
     friend struct VulkanUtils;
+    friend struct VulkanRenderPass;
 
     const std::vector<const char *> m_ValidationLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -81,71 +70,53 @@ struct VulkanState
     VkQueue m_PresentQueue  = VK_NULL_HANDLE;
     VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
 
-    VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;
+    // Command pool belongs to device level
+    VkCommandPool m_commandPool = VK_NULL_HANDLE;
 
-    VkFormat                 m_SwapChainImageFormat;
-    VkColorSpaceKHR          m_SwapChainColorSpace;
-    VkExtent2D               m_SwapChainExtent;
-    std::vector<VkImage>     m_SwapChainImages; // VKImage: Texture
-    std::vector<VkImageView> m_SwapChainImageViews;
+    // Use separate classes for better organization
+    VulkanSwapChain       m_swapChain;
+    VulkanRenderPass      m_renderPass;
+    VulkanPipeline        m_pipeline;
+    VulkanResourceManager m_resourceManager;
 
-    VulkanRenderPass m_renderPass;
-
-    VkPipeline m_graphicsPipeLine;
-
-
-    VkDescriptorPool      m_descriptorPool;
-    VkDescriptorSet       m_DescriptorSet;
-    VkDescriptorSetLayout m_descriptorSetLayout;
-    VkPipelineLayout      m_pipelineLayout;
-
-
-    VkSampler m_defaultTextureSampler;
-
-
-    // how to get the max size of texture slot in current physical device?
-    // AI: The maximum number of texture slots is determined by the physical device's capabilities,
-    // specifically the `maxPerStageDescriptorSamplers` property of the `VkPhysicalDeviceLimits` structure.
-    int m_maxTextureSlots = -1; // TODO: query the physical device for this value
-
-    struct Texture
-    {};
-    struct Texture2D : public Texture
-    {};
-    struct VulkanTexture2D : public Texture2D
-    {
-        VkImage     image;
-        VkImageView imageView;
-    };
-
-    std::vector<std::shared_ptr<VulkanTexture2D>> m_textures; // for multi-texture
-
-    std::vector<VkImage>     m_textureImages;     // for multi-texture
-    std::vector<VkImageView> m_textureImageViews; // for multi-texture
-
-
+    // Depth resources - could also be moved to resource manager
     VkImage        m_depthImage;
     VkDeviceMemory m_depthImageMemory;
     VkImageView    m_depthImageView;
 
-    VkCommandPool                m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
 
-    VulkanUtils helper; // helper for vulkan utils
 
     struct QueueFamilyIndices
     {
-        int graphics_family  = -1;
-        int supported_family = -1;
+        int graphicsFamilyIdx  = -1;
+        int supportedFamilyIdx = -1;
 
         bool is_complete()
         {
-            return graphics_family >= 0 && supported_family >= 0;
+            return graphicsFamilyIdx >= 0 && supportedFamilyIdx >= 0;
         }
 
+        /**
+         * @brief Queries and identifies suitable queue families for Vulkan operations
+         *
+         * This static method searches through available queue families on a physical device
+         * to find ones that support the required graphics operations and surface presentation.
+         * It evaluates each queue family against the specified flags and surface compatibility.
+         *
+         * @param surface The Vulkan surface handle to check for presentation support
+         * @param device The physical device to query queue families from
+         * @param flags The queue capability flags to match (defaults to VK_QUEUE_GRAPHICS_BIT)
+         *
+         * @return QueueFamilyIndices structure containing the indices of suitable queue families
+         *         for graphics operations and surface presentation
+         *
+         * @note The function will return early if all required queue families are found
+         *       before iterating through all available families for optimization
+         */
         static QueueFamilyIndices query(VkSurfaceKHR surface, VkPhysicalDevice device, VkQueueFlagBits flags = VK_QUEUE_GRAPHICS_BIT)
         {
             QueueFamilyIndices indices;
@@ -161,13 +132,13 @@ struct VulkanState
                 {
                     if (queue_family.queueFlags & flags) {
 
-                        indices.graphics_family = familyIndex;
+                        indices.graphicsFamilyIdx = familyIndex;
                     }
                     VkBool32 bSupport = false;
                     vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, surface, &bSupport);
                     if (bSupport)
                     {
-                        indices.supported_family = familyIndex;
+                        indices.supportedFamilyIdx = familyIndex;
                     }
                 }
 
@@ -196,6 +167,7 @@ struct VulkanState
     {
         _windowProvider = windowProvider;
         nativeWindow    = _windowProvider->getNativeWindowPtr();
+
         create_instance();
 
         if (m_EnableValidationLayers)
@@ -203,51 +175,63 @@ struct VulkanState
             setupDebugMessengerExt();
             setupReportCallbackExt();
         }
+
         bool ok = onCreateSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
         NE_CORE_ASSERT(ok, "Failed to create surface!");
 
-        searchPhysicalDevice();
-        createLogicDevice(); // logical device, present queue, graphics queue
-        createCommandPool();
+        //  find a suitable physical device
+        {
+            VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 
-        createSwapchain();
-        helper.onRecreateSwapchain(this); // TODO: use recreateSwapChain() here
+            // Enumerate physical devices
+            uint32_t deviceCount = 0;
+            vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+            if (deviceCount == 0) {
+                NE_CORE_ASSERT(false, "Failed to find GPUs with Vulkan support!");
+            }
 
-        initSwapchainImages();
-        create_iamge_views();
+            std::vector<VkPhysicalDevice> devices(deviceCount);
+            vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
 
-        // Initialize and create render pass
-        m_renderPass.initialize(m_LogicalDevice,
-                                m_PhysicalDevice,
-                                m_SwapChainImageFormat);
-        m_renderPass.createRenderPass("VulkanTest.glsl");
+            // Select the first suitable device
+            for (const auto &device : devices) {
+                if (is_device_suitable(device)) {
+                    physicalDevice = device;
+                    break;
+                }
+            }
 
-        create_descriptor_set_layout(); // specify how many binding (UBO,uniform,etc)
+            NE_CORE_ASSERT(physicalDevice != VK_NULL_HANDLE, "Failed to find a suitable GPU!");
+
+            m_PhysicalDevice = physicalDevice;
+        }
+
+        createLogicDevice();
+        createCommandPool(); // CommandPool moved to device level
+
+        // Initialize separate components
+        m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider);
+        m_swapChain.create();
+
+
+        // Initialize resource manager
+        m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
+
+        m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat());
+        m_renderPass.createRenderPass();
+
         createDepthResources();
+        m_renderPass.createFramebuffers(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
 
-        // Create framebuffers using the render pass
-        m_renderPass.createFramebuffers(m_SwapChainImageViews, m_depthImageView, m_SwapChainExtent);
-
-        createTextureSampler();
-
-        // loadModel();
-        // createIndexBuffer();
-        // createUniformBuffer();
-
-        createDescriptorPool();
-        createDescriptorSet();
+        // Pipeline now gets resource manager for descriptor layout
+        m_pipeline.initialize(m_LogicalDevice, m_PhysicalDevice);
+        m_pipeline.createGraphicsPipeline("VulkanTest.glsl", m_renderPass.getRenderPass(), m_swapChain.getExtent());
 
         createCommandBuffers();
         createSemaphores();
     }
 
 
-
-    void OnUpdate()
-    {
-        drawFrame();
-        submitFrame();
-    }
 
     void OnPostUpdate()
     {
@@ -258,22 +242,15 @@ struct VulkanState
     {
         vkDeviceWaitIdle(m_LogicalDevice);
 
-        cleanupSwapChain();
 
-        vkDestroySampler(m_LogicalDevice, m_defaultTextureSampler, nullptr);
-
-
-        vkDestroyDescriptorPool(m_LogicalDevice, m_descriptorPool, nullptr);
-        vkDestroyDescriptorSetLayout(m_LogicalDevice, m_descriptorSetLayout, nullptr);
-
+        // Cleanup resource manager
+        m_resourceManager.cleanup();
 
         vkDestroySemaphore(m_LogicalDevice, m_renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
 
-        vkDestroyCommandPool(m_LogicalDevice, m_commandPool, nullptr);
-
+        vkDestroyCommandPool(m_LogicalDevice, m_commandPool, nullptr); // CommandPool cleanup moved here
         vkDestroyDevice(m_LogicalDevice, nullptr);
-
 
         if (m_EnableValidationLayers)
         {
@@ -282,11 +259,8 @@ struct VulkanState
         }
 
         onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
-        // vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
         vkDestroyInstance(m_Instance, nullptr);
     }
-
-    void createGraphicsPipeline(std::unordered_map<EShaderStage::T, std::vector<uint32_t>> spv_binaries);
 
   public:
     Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
@@ -298,219 +272,14 @@ struct VulkanState
   private:
 
     void create_instance();
-
-
     void createLogicDevice();
-    void createSwapchain();
-    void initSwapchainImages();
-    void create_iamge_views();
-    void create_descriptor_set_layout();
     void createCommandPool();
     void createDepthResources();
-
-    void createTextureSampler();
-
-    // void loadModel();
-    void createVertexBuffer(void *data, std::size_t size, VkBuffer &outVertexBuffer, VkDeviceMemory &outVertexBufferMemory);
-    void createIndexBuffer();
-    // void createUniformBuffer(uint32_t size);
-    void createDescriptorPool();
-
-    void createDescriptorSet();
-
     void createCommandBuffers();
-
     void createSemaphores();
-
     void recreateSwapChain();
 
-  private:
-    void cleanupSwapChain()
-    {
-        vkDestroyImageView(m_LogicalDevice, m_depthImageView, nullptr);
-        vkDestroyImage(m_LogicalDevice, m_depthImage, nullptr);
-        vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
-
-        // Clean up render pass and framebuffers
-        m_renderPass.cleanup();
-
-        vkDestroyPipeline(m_LogicalDevice, m_graphicsPipeLine, nullptr);
-        vkDestroyPipelineLayout(m_LogicalDevice, m_pipelineLayout, nullptr);
-
-        // vkDestroyImageView(m_LogicalDevice, m_textureImageView, nullptr);
-
-        for (size_t i = 0; i < m_SwapChainImageViews.size(); ++i)
-        {
-            vkDestroyImageView(m_LogicalDevice, m_SwapChainImageViews[i], nullptr);
-        }
-
-        vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
-    }
-
-  private: // mainLoop �׶κ���
-
-    void drawFrame()
-    {
-        for (size_t i = 0; i < m_commandBuffers.size(); i++)
-        {
-            // 2. ����������¼
-            VkCommandBufferBeginInfo beginInfo = {};
-            {
-                beginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                beginInfo.flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-                beginInfo.pInheritanceInfo = nullptr;
-                // Optional
-                /*
-                    VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: use the command buffer only once, after which it will be reset.
-                    VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT :
-                    VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT :
-                */
-            }
-
-            /*<-------------------------------------------------------------------------------->*/
-            vkBeginCommandBuffer(m_commandBuffers[i], &beginInfo); // S ���������¼
-
-            std::array<VkClearValue, 2> clearValues = {
-                VkClearValue{
-                    .color = {0.0f, 0.0f, 0.0f, 1.0f}, // clear color
-                },
-                VkClearValue{
-                    .depthStencil = {1.0f, 0} // clear depth
-                },
-            };
-
-            VkRenderPassBeginInfo renderPassInfo = {};
-            {
-                renderPassInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                renderPassInfo.renderPass  = m_renderPass.getRenderPass();
-                renderPassInfo.framebuffer = m_renderPass.getFramebuffers()[i];
-
-                renderPassInfo.renderArea.offset = {0, 0};
-                renderPassInfo.renderArea.extent = m_SwapChainExtent;
-
-                renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-                renderPassInfo.pClearValues    = clearValues.data();
-            }
-
-            vkCmdBeginRenderPass(m_commandBuffers[i],
-                                 &renderPassInfo,
-                                 VK_SUBPASS_CONTENTS_INLINE);
-            // VK_SUBPASS_CONTENTS_INLINE : the commands in the command buffer will be executed inline within the render pass.
-            // VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : the command buffer will contain secondary command buffers that will be executed within the render pass.
-
-            vkCmdBindDescriptorSets(m_commandBuffers[i],
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    m_pipelineLayout,
-                                    0,
-                                    1,
-                                    &m_DescriptorSet,
-                                    0,
-                                    nullptr);
-
-            vkCmdBindPipeline(m_commandBuffers[i],
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              m_graphicsPipeLine);
-            // VkBuffer     vertexBuffers[] = {vertexBuffer};
-            // VkDeviceSize offsets[]       = {0};
-
-            // // why drawing here?
-            // vkCmdBindVertexBuffers(m_commandBuffers[i], 0, 1, &vertexBuffer, offsets);
-            // vkCmdBindIndexBuffer(m_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            // the DrawCall, can be mutiple in a pass?
-            // vkCmdDrawIndexed(m_commandBuffers[i], static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
-
-            vkCmdEndRenderPass(m_commandBuffers[i]);
-
-            auto result = (vkEndCommandBuffer(m_commandBuffers[i]));
-            NE_CORE_ASSERT(result == VK_SUCCESS, "failed to record command buffer!");
-        }
-    }
-
-    void submitFrame()
-    {
-
-        uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(m_LogicalDevice,
-                                                m_SwapChain,
-                                                std::numeric_limits<uint64_t>::max(),
-                                                m_imageAvailableSemaphore,
-                                                VK_NULL_HANDLE,
-                                                &imageIndex);
-
-        vkQueueWaitIdle(m_PresentQueue);
-
-        // Q: why VK_ERROR_OUT_OF_DATE_KHR?
-        // AI: If the swap chain is no longer compatible with the surface (e.g., window resized), we need to recreate it.
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-            std::cout << "Swap chain no compatible with surface! Adjusting... " << std::endl;
-            recreateSwapChain();
-            return;
-        }
-        else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-            // VK_SUBOPTIMAL_KHR means the swapchain is still valid but not optimal
-            panic("failed to acquire swap chain image");
-        }
-
-
-
-        VkSemaphore          waitSemaphores[] = {m_imageAvailableSemaphore};
-        VkPipelineStageFlags waitStages[]     = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-
-        VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore};
-
-        VkSubmitInfo submitInfo = {};
-        {
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores    = waitSemaphores;
-            submitInfo.pWaitDstStageMask  = waitStages;
-
-            submitInfo.commandBufferCount = 1; // Bug fixed: Lost 2 define
-            submitInfo.pCommandBuffers    = &m_commandBuffers[imageIndex];
-
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores    = signalSemaphores;
-        }
-
-        if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
-        {
-            NE_CORE_ASSERT(false, "failed to submit draw command buffer!");
-        }
-
-        //   Present the image to the swapchain
-        VkResult presentResult = VK_SUCCESS;
-
-        VkPresentInfoKHR presentInfo  = {};
-        VkSwapchainKHR   swapChains[] = {m_SwapChain};
-        {
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-            presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores    = signalSemaphores;
-
-            presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains    = swapChains;
-            presentInfo.pImageIndices  = &imageIndex;
-
-            presentInfo.pResults = &presentResult; // Optional, can be used to get results of present operation
-        }
-
-        result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-        {
-            std::cout << "warn of present queue" << std::endl;
-            recreateSwapChain();
-        }
-        else if (result != VK_SUCCESS) {
-            NE_CORE_ASSERT(false, "failed to present image/imageIndex to swapchain!");
-        }
-    }
-
-
-  private:
-
+    // Missing method declarations
     const VkDebugUtilsMessengerCreateInfoEXT &getDebugMessengerCreateInfoExt()
     {
         static VkDebugUtilsMessengerCreateInfoEXT info{
@@ -537,35 +306,11 @@ struct VulkanState
 
         return info;
     }
-
     void setupDebugMessengerExt();
     void setupReportCallbackExt();
     void destroyDebugCallBackExt();
     void destroyDebugReportCallbackExt();
 
-    void searchPhysicalDevice()
-    {
-        uint32_t count  = 0;
-        VkResult result = vkEnumeratePhysicalDevices(m_Instance, &count, nullptr);
-        NE_CORE_ASSERT(count > 0, "Failed to find GPUs with Vulkan support!");
-
-        std::vector<VkPhysicalDevice> devices(count);
-        vkEnumeratePhysicalDevices(m_Instance, &count, devices.data());
-
-        NE_CORE_TRACE("Physical Device count: {}", count);
-
-        for (const auto &device : devices)
-        {
-            NE_CORE_TRACE("  Physic device addr: {}", (void *)device);
-            if (is_device_suitable(device))
-            {
-                m_PhysicalDevice = device;
-                break;
-            }
-        }
-
-        NE_ASSERT(m_PhysicalDevice != VK_NULL_HANDLE, "failed to find a suitable GPU!");
-    }
     bool is_device_suitable(VkPhysicalDevice device);
     bool is_validation_layers_supported();
     bool is_device_extension_support(VkPhysicalDevice device);
@@ -592,7 +337,6 @@ struct VulkanState
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
 
-        // Ϊ�������ҵ����ʵ��ڴ�����
         for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
             if (typeFilter & (1 << i) &&                                                 // vertexbuffer
                 (memProperties.memoryTypes[i].propertyFlags & properties) == properties) // ����
@@ -604,73 +348,6 @@ struct VulkanState
         return -1;
     }
 };
-
-#include "glm/glm.hpp"
-
-
-struct Vertex
-{
-    glm::vec3 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-
-
-    static VkVertexInputBindingDescription getBindingDescription()
-    {
-        VkVertexInputBindingDescription bindingDescription = {};
-        {
-            bindingDescription.binding   = 0;
-            bindingDescription.stride    = sizeof(Vertex);
-            bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-            /*
-            VK_VERTEX_INPUT_RATE_VERTEX: 移动到每个顶点后的下一个数据条目
-            VK_VERTEX_INPUT_RATE_INSTANCE : 在每个instance之后移动到下一个数据条目
-                我们不会使用instancing渲染，所以坚持使用per - vertex data方式。
-            */
-        }
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions()
-    {
-        // 顶点属性
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
-        {
-            // 顶点段 2 floats vec2
-            attributeDescriptions[0].binding  = 0;
-            attributeDescriptions[0].location = 0;
-            attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
-            attributeDescriptions[0].offset   = offsetof(Vertex, pos);
-            /*
-            format参数描述了属性的类型。该格式使用与颜色格式一样的枚举，看起来有点乱。下列的着色器类型和格式是比较常用的搭配。
-                float: VK_FORMAT_R32_SFLOAT
-                vec2 : VK_FORMAT_R32G32_SFLOAT
-                vec3 : VK_FORMAT_R32G32B32_SFLOAT
-                vec4 : V_FORMAT_R32G32B32A32_SFLOAT
-            颜色类型(SFLOAT, UINT, SINT) 和位宽度应该与着色器输入的类型对应匹配。如下示例：
-                ivec2 : VK_FORMAT_R32G32_SINT, 由两个32位有符号整数分量组成的向量
-                uvec4 : VK_FORMAT_R32G32B32A32_UINT, 由四个32位无符号正式分量组成的向量
-                double : VK_FORMAT_R64_SFLOAT, 双精度浮点数(64 - bit)
-            */
-
-            // 颜色段 3 floats vec3
-            attributeDescriptions[1].binding  = 0;
-            attributeDescriptions[1].location = 1;
-            attributeDescriptions[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-            attributeDescriptions[1].offset   = offsetof(Vertex, color);
-
-            //  纹理贴图的坐标(四角的一角） floats vec2
-            attributeDescriptions[2].binding  = 0;
-            attributeDescriptions[2].location = 2;
-            attributeDescriptions[2].format   = VK_FORMAT_R32G32_SFLOAT;
-            attributeDescriptions[2].offset   = offsetof(Vertex, texCoord);
-        }
-
-        return attributeDescriptions;
-    }
-};
-
 
 struct VulkanDevice : public LogicalDevice
 {

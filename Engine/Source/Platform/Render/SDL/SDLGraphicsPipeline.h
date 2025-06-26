@@ -151,8 +151,8 @@ struct SDLGraphicsPipeLine : public GraphicsPipeline
                 SDL_GPUVertexAttribute sdlVertAttr{
                     .location    = input.location,
                     .buffer_slot = 0,
-                    .format      = input.format, // We already converted to SDL format in reflection
-                    .offset      = input.offset, // We already calculated aligned offset in reflection
+                    .format      = spirvType2SDLFormat(input.format), // We already converted to SDL format in reflection
+                    .offset      = input.offset,                      // We already calculated aligned offset in reflection
                 };
 
                 if (sdlVertAttr.format == SDL_GPU_VERTEXELEMENTFORMAT_INVALID) {

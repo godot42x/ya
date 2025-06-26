@@ -1,6 +1,8 @@
 #include "VulkanRenderPass.h"
 #include "Core/Log.h"
+#include "VulkanUtils.h"
 #include <array>
+
 
 void VulkanRenderPass::initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice, VkFormat swapChainImageFormat)
 {
@@ -8,19 +10,11 @@ void VulkanRenderPass::initialize(VkDevice logicalDevice, VkPhysicalDevice physi
     m_physicalDevice       = physicalDevice;
     m_swapChainImageFormat = swapChainImageFormat;
     m_depthFormat          = findDepthFormat();
-
-    _shaderProcessor = ShaderScriptProcessorFactory()
-                           .withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
-                           .withShaderStoragePath("Engine/Shader/GLSL")
-                           .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-                           .FactoryNew<GLSLScriptProcessor>();
 }
 
-void VulkanRenderPass::createRenderPass(std::string path)
+void VulkanRenderPass::createRenderPass()
 {
-
-    // Color attachment description
-    VkAttachmentDescription colorAttachment = {
+    VkAttachmentDescription colorAttachment{
         .format         = m_swapChainImageFormat,
         .samples        = m_config.samples,
         .loadOp         = m_config.colorLoadOp,
@@ -31,13 +25,12 @@ void VulkanRenderPass::createRenderPass(std::string path)
         .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
     };
 
-    VkAttachmentReference colorAttachmentRef = {
+    VkAttachmentReference colorAttachmentRef{
         .attachment = 0,
         .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
     };
 
-    // Depth attachment description
-    VkAttachmentDescription depthAttachment = {
+    VkAttachmentDescription depthAttachment{
         .format         = m_depthFormat,
         .samples        = m_config.samples,
         .loadOp         = m_config.depthLoadOp,
@@ -48,21 +41,19 @@ void VulkanRenderPass::createRenderPass(std::string path)
         .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
 
-    VkAttachmentReference depthAttachmentRef = {
+    VkAttachmentReference depthAttachmentRef{
         .attachment = 1,
         .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
 
-    // Subpass description
-    VkSubpassDescription subpass = {
+    VkSubpassDescription subpass{
         .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount    = 1,
         .pColorAttachments       = &colorAttachmentRef,
         .pDepthStencilAttachment = &depthAttachmentRef,
     };
 
-    // Subpass dependency
-    VkSubpassDependency dependency = {
+    VkSubpassDependency dependency{
         .srcSubpass    = VK_SUBPASS_EXTERNAL,
         .dstSubpass    = 0,
         .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
@@ -73,7 +64,7 @@ void VulkanRenderPass::createRenderPass(std::string path)
 
     std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
 
-    VkRenderPassCreateInfo createInfo = {
+    VkRenderPassCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = static_cast<uint32_t>(attachments.size()),
         .pAttachments    = attachments.data(),
@@ -83,15 +74,9 @@ void VulkanRenderPass::createRenderPass(std::string path)
         .pDependencies   = &dependency,
     };
 
-    if (vkCreateRenderPass(m_logicalDevice, &createInfo, nullptr, &m_renderPass) != VK_SUCCESS)
-    {
-        NE_CORE_ASSERT(false, "Failed to create render pass!");
-    }
-    NE_ASSERT(m_renderPass, "Failed to create render pass!");
+    VkResult result = vkCreateRenderPass(m_logicalDevice, &createInfo, nullptr, &m_renderPass);
+    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass!");
 
-
-
-    auto stage2Spirv = _shaderProcessor->process(path);
 }
 
 void VulkanRenderPass::createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,
@@ -155,7 +140,7 @@ void VulkanRenderPass::recreate(const std::vector<VkImageView> &swapChainImageVi
 
 void VulkanRenderPass::beginRenderPass(VkCommandBuffer commandBuffer, uint32_t frameBufferIndex, VkExtent2D extent)
 {
-    VkRenderPassBeginInfo renderPassInfo = {
+    VkRenderPassBeginInfo renderPassInfo{
         .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass  = m_renderPass,
         .framebuffer = m_framebuffers[frameBufferIndex],
@@ -182,15 +167,15 @@ void VulkanRenderPass::endRenderPass(VkCommandBuffer commandBuffer)
 
 VkFormat VulkanRenderPass::findDepthFormat()
 {
-    return findSupportedFormat(
+    return findSupportedImageFormat(
         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
         VK_IMAGE_TILING_OPTIMAL,
         VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
-VkFormat VulkanRenderPass::findSupportedFormat(const std::vector<VkFormat> &candidates,
-                                               VkImageTiling                tiling,
-                                               VkFormatFeatureFlags         features)
+VkFormat VulkanRenderPass::findSupportedImageFormat(const std::vector<VkFormat> &candidates,
+                                                    VkImageTiling                tiling,
+                                                    VkFormatFeatureFlags         features)
 {
     for (VkFormat format : candidates)
     {

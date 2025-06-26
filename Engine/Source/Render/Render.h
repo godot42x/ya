@@ -93,3 +93,10 @@ struct GraphicsPipelineCreateInfo
 
 
 extern RenderAPI::T gRenderAPIType;
+
+
+struct IRender
+{
+    virtual bool init()    = 0;
+    virtual void destroy() = 0;
+};

@@ -198,7 +198,7 @@ int Neon::App::iterate(float dt)
 {
 #if USE_VULKAN
     auto &vulkanState = static_cast<VulkanDevice *>(logicalDevice)->_vulkanState;
-    vulkanState.OnUpdate();
+    // vulkanState.OnUpdate();
     vulkanState.OnPostUpdate();
 #endif
     // Handle input, update logic, render, etc.
