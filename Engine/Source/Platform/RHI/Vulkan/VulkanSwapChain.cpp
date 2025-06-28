@@ -5,7 +5,7 @@
 #include <limits>
 
 
-VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
+VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat()
 {
     if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
     {
@@ -27,7 +27,7 @@ VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
     return formats[0];
 }
 
-VkPresentModeKHR SwapChainSupportDetails::ChooseSwapPresentMode()
+VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode()
 {
     for (const auto &available_present_mode : present_modes)
     {
@@ -42,7 +42,7 @@ VkPresentModeKHR SwapChainSupportDetails::ChooseSwapPresentMode()
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
+VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
@@ -62,9 +62,9 @@ VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
     return actualExtent;
 }
 
-SwapChainSupportDetails SwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
+VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
-    SwapChainSupportDetails details;
+    VulkanSwapChainSupportDetails details;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
 
@@ -98,7 +98,7 @@ void VulkanSwapChain::initialize(VkDevice logicalDevice, VkPhysicalDevice physic
 
 void VulkanSwapChain::create()
 {
-    SwapChainSupportDetails supportDetails = SwapChainSupportDetails::query(m_physicalDevice, m_surface);
+    VulkanSwapChainSupportDetails supportDetails = VulkanSwapChainSupportDetails::query(m_physicalDevice, m_surface);
 
     VkSurfaceFormatKHR surfaceFormat = supportDetails.ChooseSwapSurfaceFormat();
     VkPresentModeKHR   presentMode   = supportDetails.ChooseSwapPresentMode();

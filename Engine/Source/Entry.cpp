@@ -886,11 +886,22 @@ int main()
     // return result == SDL_APP_SUCCESS ? 0 : result;
 
 
-    Neon::App app;
-    app.init();
-    app.run();
-    app.quit();
+    try {
+        Neon::App app;
+        app.init();
+        app.run();
+        app.quit();
+    }
+    catch (const std::exception &e) {
+        NE_CORE_ERROR("Exception caught in main: {}", e.what());
+        return -1;
+    }
+    catch (...) {
+        NE_CORE_ERROR("Unknown exception caught in main");
+        return -1;
+    }
 
+    NE_CORE_INFO("Application exited successfully");
     return 0;
 }
 #pragma endregion

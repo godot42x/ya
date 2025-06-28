@@ -235,6 +235,28 @@ void VulkanUtils::transitionImageLayout(VkDevice device, VkCommandPool commandPo
     endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
 }
 
+void VulkanUtils::copyBufferToImage(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
+                                    VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+{
+
+    VkCommandBuffer   commandBuffer = beginSingleTimeCommands(device, commandPool);
+    VkBufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+             .mipLevel       = 0,
+             .baseArrayLayer = 0,
+             .layerCount     = 1,
+        },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {width, height, 1},
+    };
+    vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+}
+
 void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                      const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory)
 {

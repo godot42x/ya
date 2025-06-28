@@ -4,7 +4,7 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 
-struct SwapChainSupportDetails
+struct VulkanSwapChainSupportDetails
 {
     VkSurfaceCapabilitiesKHR        capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
@@ -14,7 +14,7 @@ struct SwapChainSupportDetails
     VkPresentModeKHR   ChooseSwapPresentMode();
     VkExtent2D         ChooseSwapExtent(WindowProvider *provider);
 
-    static SwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
+    static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };
 
 class VulkanSwapChain

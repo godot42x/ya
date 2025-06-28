@@ -35,7 +35,13 @@ add_requires("shaderc", {
 
 add_requires("stb")
 
-add_requires("vulkansdk")
+add_requires("vulkansdk", {
+    configs = {
+        utils = {
+            "VkLayer_khronos_validation", -- import layer
+        }
+    }
+})
 add_requires("glad")
 
 target("Neon")
@@ -54,7 +60,7 @@ do
 
     -- Add math library for exp2 and log2 functions
     if is_plat("windows") then
-        add_links("msvcrt")
+        add_ldflags("/NODEFAULTLIB:LIBCMT")  -- Fix runtime library conflict
     end
 
 

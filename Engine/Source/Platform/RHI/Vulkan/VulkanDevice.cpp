@@ -12,96 +12,6 @@
 
 
 
-VkSurfaceFormatKHR SwapChainSupportDetails::ChooseSwapSurfaceFormat()
-{
-    // Method 1
-    if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
-    {
-        return {
-            .format     = VK_FORMAT_B8G8R8A8_UNORM,
-            .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        };
-    }
-
-    // Method 2
-    for (const auto &available_format : formats)
-    {
-        if (available_format.format == VK_FORMAT_B8G8R8A8_UNORM && available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-        {
-            return available_format;
-        }
-    }
-
-    // Fallback, ??
-    return formats[0];
-}
-
-VkPresentModeKHR SwapChainSupportDetails::ChooseSwapPresentMode()
-{
-
-    for (const auto &available_present_mode : present_modes)
-    {
-        if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return available_present_mode;
-        }
-        else if (available_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
-            return available_present_mode;
-        }
-    }
-
-    // fallback best mode
-    return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D SwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider)
-{
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
-        return capabilities.currentExtent;
-    }
-
-    int width, height;
-    provider->getWindowSize(width, height);
-    VkExtent2D actualExtent = {(uint32_t)width, (uint32_t)height};
-
-    actualExtent.width = std::max(
-        capabilities.minImageExtent.width,
-        std::min(capabilities.maxImageExtent.width, actualExtent.width));
-    actualExtent.height = std::max(
-        capabilities.minImageExtent.height,
-        std::min(capabilities.maxImageExtent.height, actualExtent.height));
-
-    return actualExtent;
-}
-
-SwapChainSupportDetails SwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
-{
-    SwapChainSupportDetails details;
-
-    // Capabilities
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
-
-    // Formats
-    uint32_t format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, nullptr);
-    if (format_count != 0)
-    {
-        details.formats.resize(format_count);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, details.formats.data());
-    }
-
-    // PresentModes
-    uint32_t present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, nullptr);
-    if (present_mode_count != 0)
-    {
-        details.present_modes.resize(present_mode_count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, details.present_modes.data());
-    }
-
-    return details;
-}
-
-
 void VulkanState::create_instance()
 {
     if (m_EnableValidationLayers && !is_validation_layers_supported()) {
@@ -150,6 +60,9 @@ void VulkanState::create_instance()
     if (result != VK_SUCCESS) {
         NE_CORE_ASSERT(false, "failed to create instance!");
     }
+
+    // Load debug function pointers after instance creation
+    loadDebugFunctionPointers();
 }
 
 
@@ -251,6 +164,136 @@ void VulkanState::createSemaphores()
     }
 }
 
+void VulkanState::setupDebugMessengerExt()
+{
+    if (!m_EnableValidationLayers) {
+        return;
+    }
+
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = getDebugMessengerCreateInfoExt();
+
+    if (pfnCreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessengerCallback) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "failed to set up debug messenger!");
+    }
+}
+
+void VulkanState::setupReportCallbackExt()
+{
+
+    if (!m_EnableValidationLayers) {
+        return;
+    }
+
+    VkDebugReportCallbackCreateInfoEXT createInfo{
+        .sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+        .flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT,
+        .pfnCallback = [](VkDebugReportFlagsEXT      flags,
+                          VkDebugReportObjectTypeEXT objectType,
+                          uint64_t                   object,
+                          size_t                     location,
+                          int32_t                    messageCode,
+                          const char                *pLayerPrefix,
+                          const char                *pMessage,
+                          void                      *pUserData) -> VkBool32 {
+            NE_CORE_ERROR("[Validation Layer] {}: {}", pLayerPrefix, pMessage);
+            return VK_FALSE;
+        },
+    };
+
+    if (pfnCreateDebugReportCallbackEXT(m_Instance, &createInfo, nullptr, &m_DebugReportCallback) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "failed to set up debug report callback!");
+    }
+}
+
+void VulkanState::destroyDebugCallBackExt()
+{
+    if (m_EnableValidationLayers) {
+        pfnDestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
+    }
+}
+
+void VulkanState::destroyDebugReportCallbackExt()
+{
+    if (m_EnableValidationLayers) {
+        pfnDestroyDebugReportCallbackEXT(m_Instance, m_DebugReportCallback, nullptr);
+        m_DebugReportCallback = VK_NULL_HANDLE;
+    }
+}
+
+
+bool VulkanState::is_device_suitable(VkPhysicalDevice device)
+{
+    // VkPhysicalDeviceProperties deviceProperties;
+    // vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+    // VkPhysicalDeviceFeatures devicesFeatures;
+    // vkGetPhysicalDeviceFeatures(device, &devicesFeatures);
+
+    // return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && devicesFeatures.geometryShader;
+
+    QueueFamilyIndices indices = QueueFamilyIndices::query(
+        m_Surface, device, VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
+
+    bool bExtensionSupported = is_device_extension_support(device);
+
+    bool bSwapchainComplete = false;
+    if (bExtensionSupported)
+    {
+        VulkanSwapChainSupportDetails swapchain_support_details = VulkanSwapChainSupportDetails::query(device, m_Surface);
+
+        bSwapchainComplete = !swapchain_support_details.formats.empty() &&
+                             !swapchain_support_details.present_modes.empty();
+    }
+
+    VkPhysicalDeviceFeatures supported_features;
+    vkGetPhysicalDeviceFeatures(device, &supported_features);
+
+
+    return indices.is_complete() &&
+           bExtensionSupported &&
+           bSwapchainComplete &&
+           // TODO: other feature that we required
+           supported_features.samplerAnisotropy; // bool
+}
+
+bool VulkanState::is_validation_layers_supported()
+{
+    uint32_t count;
+    vkEnumerateInstanceLayerProperties(&count, nullptr);
+    std::vector<VkLayerProperties> layers(count);
+    vkEnumerateInstanceLayerProperties(&count, layers.data());
+
+    for (const char *layer : m_ValidationLayers)
+    {
+        NE_CORE_DEBUG("Checking validation layer: {}", layer);
+        bool ok = false;
+        for (const auto &layer_properties : layers)
+        {
+            if (0 != std::strcmp(layer, layer_properties.layerName)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
+{
+    uint32_t count;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &count, nullptr);
+    std::vector<VkExtensionProperties> available_extensions(count);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &count, available_extensions.data());
+
+    // Global predefine extensions that we need
+    std::set<std::string> required_extensions(m_DeviceExtensions.begin(), m_DeviceExtensions.end());
+
+    for (const auto &extension : available_extensions)
+    {
+        required_extensions.erase(extension.extensionName);
+    }
+    return required_extensions.empty();
+}
+
 
 
 void VulkanState::createDepthResources()
@@ -289,4 +332,26 @@ void VulkanState::createDepthResources()
                                        depthFormat,
                                        VK_IMAGE_LAYOUT_UNDEFINED,
                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+}
+
+void VulkanState::loadDebugFunctionPointers()
+{
+    if (m_EnableValidationLayers) {
+        // Load debug utils messenger functions
+        pfnCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)
+            vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
+        pfnDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
+            vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
+        
+        // Load debug report callback functions (deprecated but still used)
+        pfnCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)
+            vkGetInstanceProcAddr(m_Instance, "vkCreateDebugReportCallbackEXT");
+        pfnDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
+            vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
+        
+        NE_CORE_ASSERT(pfnCreateDebugUtilsMessengerEXT != nullptr, "Failed to load vkCreateDebugUtilsMessengerEXT");
+        NE_CORE_ASSERT(pfnDestroyDebugUtilsMessengerEXT != nullptr, "Failed to load vkDestroyDebugUtilsMessengerEXT");
+        NE_CORE_ASSERT(pfnCreateDebugReportCallbackEXT != nullptr, "Failed to load vkCreateDebugReportCallbackEXT");
+        NE_CORE_ASSERT(pfnDestroyDebugReportCallbackEXT != nullptr, "Failed to load vkDestroyDebugReportCallbackEXT");
+    }
 }

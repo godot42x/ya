@@ -1,40 +1,30 @@
 #pragma once
+#include "Core/Base.h"
 
 #include "Core/Delegate.h"
-#include "Core/Log.h"
+
+
+#include <string>
+using namespace std::literals;
+#include <cassert>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 
 #include "Render/Device.h"
-#include "SDL3/SDL_video.h"
 #include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
 #include "VulkanResourceManager.h"
 #include "VulkanSwapChain.h"
 #include "VulkanUtils.h"
 
-
-
-#include <string>
-using namespace std::literals;
-
-#include <cstdio>
-#include <fstream>
-
-
-#include <cassert>
-#include <cstdint>
-#include <cstdlib>
-#include <iostream>
-
-#include <string>
-#include <vector>
-#include <vulkan/vulkan.h>
-
-#include <vector>
-
 #include "WindowProvider.h"
-
 #include <Render/Shader.h>
+
+
+
+#include <vulkan/vulkan.h>
 
 struct GLFWState;
 
@@ -64,6 +54,12 @@ struct VulkanState
     VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
     VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
 
+    // Function pointers for debug extensions
+    PFN_vkCreateDebugUtilsMessengerEXT  pfnCreateDebugUtilsMessengerEXT = nullptr;
+    PFN_vkDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessengerEXT = nullptr;
+    PFN_vkCreateDebugReportCallbackEXT  pfnCreateDebugReportCallbackEXT = nullptr;
+    PFN_vkDestroyDebugReportCallbackEXT pfnDestroyDebugReportCallbackEXT = nullptr;
+
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
 
@@ -79,7 +75,6 @@ struct VulkanState
     VulkanPipeline        m_pipeline;
     VulkanResourceManager m_resourceManager;
 
-    // Depth resources - could also be moved to resource manager
     VkImage        m_depthImage;
     VkDeviceMemory m_depthImageMemory;
     VkImageView    m_depthImageView;
@@ -295,11 +290,10 @@ struct VulkanState
                VkDebugUtilsMessageTypeFlagsEXT             type,
                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                void                                       *pUserData) -> VkBool32 {
-                std::cerr << std::format("[ Validation Layer ] severity: {}, type: {} --> {}",
-                                         std::to_string(severity),
-                                         type,
-                                         pCallbackData->pMessage)
-                          << std::endl;
+                NE_CORE_DEBUG("[ Validation Layer ] severity: {}, type: {} --> {}",
+                              std::to_string(severity),
+                              type,
+                              pCallbackData->pMessage);
                 return VK_FALSE;
             },
         };
@@ -308,6 +302,7 @@ struct VulkanState
     }
     void setupDebugMessengerExt();
     void setupReportCallbackExt();
+    void loadDebugFunctionPointers();  // Add this new function
     void destroyDebugCallBackExt();
     void destroyDebugReportCallbackExt();
 

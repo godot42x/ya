@@ -16,18 +16,19 @@ namespace std
 
 
 // Add formatter specialization for spirv_cross::SPIRType
-// template <>
-// struct formatter<spirv_cross::SPIRType> : formatter<std::string>
-// {
-//     auto format(const spirv_cross::SPIRType &type, std::format_context &ctx) const
-//     {
-//         return std::format("[ SPIRType: {}, vecsize: {}, columns: {}, array size: {} ]",
-//                            static_cast<int>(type.basetype),
-//                            type.vecsize,
-//                            type.columns,
-//                            type.array.size());
-//     }
-// };
+template <>
+struct formatter<spirv_cross::SPIRType> : formatter<std::string>
+{
+    auto format(const spirv_cross::SPIRType &type, std::format_context &ctx) const
+    {
+        return std::format_to(ctx.out(),
+                              "[ SPIRType: {}, vecsize: {}, columns: {}, array size: {} ]",
+                              static_cast<int>(type.basetype),
+                              type.vecsize,
+                              type.columns,
+                              type.array.size());
+    }
+};
 } // namespace std
 
 
