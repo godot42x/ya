@@ -3,6 +3,10 @@
 
 #include "Core/Delegate.h"
 
+#include <array>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 
 #include <string>
 using namespace std::literals;
@@ -28,9 +32,48 @@ using namespace std::literals;
 
 struct GLFWState;
 
+// Vertex structure for triangle rendering
+struct Vertex
+{
+    glm::vec3 pos;
+    glm::vec4 color;
+
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription{};
+        bindingDescription.binding   = 0;
+        bindingDescription.stride    = sizeof(Vertex);
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+
+        // Position attribute
+        attributeDescriptions[0].binding  = 0;
+        attributeDescriptions[0].location = 0;
+        attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[0].offset   = offsetof(Vertex, pos);
+
+        // Color attribute
+        attributeDescriptions[1].binding  = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDescriptions[1].offset   = offsetof(Vertex, color);
+
+        return attributeDescriptions;
+    }
+};
+
+// Camera data for uniform buffer
+struct CameraData
+{
+    glm::mat4 viewProjection;
+};
+
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
-
-
 
 struct VulkanState
 {
@@ -44,7 +87,7 @@ struct VulkanState
     const std::vector<const char *> m_DeviceExtensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME, // "VK_KHR_swapchain"
     };
-    const bool m_EnableValidationLayers = false;
+    const bool m_EnableValidationLayers = true;
 
   private:
 
@@ -55,9 +98,9 @@ struct VulkanState
     VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
 
     // Function pointers for debug extensions
-    PFN_vkCreateDebugUtilsMessengerEXT  pfnCreateDebugUtilsMessengerEXT = nullptr;
+    PFN_vkCreateDebugUtilsMessengerEXT  pfnCreateDebugUtilsMessengerEXT  = nullptr;
     PFN_vkDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessengerEXT = nullptr;
-    PFN_vkCreateDebugReportCallbackEXT  pfnCreateDebugReportCallbackEXT = nullptr;
+    PFN_vkCreateDebugReportCallbackEXT  pfnCreateDebugReportCallbackEXT  = nullptr;
     PFN_vkDestroyDebugReportCallbackEXT pfnDestroyDebugReportCallbackEXT = nullptr;
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
@@ -83,6 +126,17 @@ struct VulkanState
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
+    VkFence     m_inFlightFence;
+
+    // Triangle rendering data
+    VkBuffer            m_vertexBuffer;
+    VkDeviceMemory      m_vertexBufferMemory;
+    std::vector<Vertex> m_triangleVertices;
+
+    // Camera uniform buffer
+    VkBuffer       m_uniformBuffer;
+    VkDeviceMemory m_uniformBufferMemory;
+    void          *m_uniformBufferMapped;
 
 
     struct QueueFamilyIndices
@@ -163,13 +217,13 @@ struct VulkanState
         _windowProvider = windowProvider;
         nativeWindow    = _windowProvider->getNativeWindowPtr();
 
-        create_instance();
+        createInstance();
 
-        if (m_EnableValidationLayers)
-        {
-            setupDebugMessengerExt();
-            setupReportCallbackExt();
-        }
+        // if (m_EnableValidationLayers)
+        // {
+        //     setupDebugMessengerExt();
+        //     setupReportCallbackExt();
+        // }
 
         bool ok = onCreateSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
         NE_CORE_ASSERT(ok, "Failed to create surface!");
@@ -220,10 +274,15 @@ struct VulkanState
 
         // Pipeline now gets resource manager for descriptor layout
         m_pipeline.initialize(m_LogicalDevice, m_PhysicalDevice);
-        m_pipeline.createGraphicsPipeline("VulkanTest.glsl", m_renderPass.getRenderPass(), m_swapChain.getExtent());
+        m_pipeline.createGraphicsPipeline("SimpleTriangle.glsl", m_renderPass.getRenderPass(), m_swapChain.getExtent());
 
         createCommandBuffers();
         createSemaphores();
+        createFences();
+
+        // Create triangle rendering resources
+        createVertexBuffer();
+        createUniformBuffer();
     }
 
 
@@ -233,14 +292,39 @@ struct VulkanState
         vkDeviceWaitIdle(m_LogicalDevice);
     };
 
-    void Uninit()
+    void DrawFrame()
+    {
+        drawTriangle();
+    }
+
+    void destroy()
     {
         vkDeviceWaitIdle(m_LogicalDevice);
 
+        if (m_depthImage) {
+            vkDestroyImage(m_LogicalDevice, m_depthImage, nullptr);
+            vkDestroyImageView(m_LogicalDevice, m_depthImageView, nullptr);
+            vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
+        }
 
         // Cleanup resource manager
         m_resourceManager.cleanup();
 
+        // Cleanup triangle rendering resources
+        if (m_uniformBufferMapped) {
+            vkUnmapMemory(m_LogicalDevice, m_uniformBufferMemory);
+        }
+        vkDestroyBuffer(m_LogicalDevice, m_uniformBuffer, nullptr);
+        vkFreeMemory(m_LogicalDevice, m_uniformBufferMemory, nullptr);
+
+        vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
+        vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
+
+        m_pipeline.cleanup();
+        m_swapChain.cleanup();
+        m_renderPass.cleanup();
+
+        vkDestroyFence(m_LogicalDevice, m_inFlightFence, nullptr);
         vkDestroySemaphore(m_LogicalDevice, m_renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
 
@@ -249,9 +333,10 @@ struct VulkanState
 
         if (m_EnableValidationLayers)
         {
-            destroyDebugCallBackExt();
-            destroyDebugReportCallbackExt();
+            // destroyDebugCallBackExt();
+            // destroyDebugReportCallbackExt();
         }
+
 
         onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
         vkDestroyInstance(m_Instance, nullptr);
@@ -266,13 +351,20 @@ struct VulkanState
 
   private:
 
-    void create_instance();
+    void createInstance();
     void createLogicDevice();
     void createCommandPool();
     void createDepthResources();
     void createCommandBuffers();
     void createSemaphores();
+    void createFences();
     void recreateSwapChain();
+
+    // Triangle rendering functions
+    void createVertexBuffer();
+    void createUniformBuffer();
+    void updateUniformBuffer();
+    void drawTriangle();
 
     // Missing method declarations
     const VkDebugUtilsMessengerCreateInfoEXT &getDebugMessengerCreateInfoExt()
@@ -290,7 +382,7 @@ struct VulkanState
                VkDebugUtilsMessageTypeFlagsEXT             type,
                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                void                                       *pUserData) -> VkBool32 {
-                NE_CORE_DEBUG("[ Validation Layer ] severity: {}, type: {} --> {}",
+                NE_CORE_DEBUG("[ValidationLayer] severity: {}, type: {} --> {}",
                               std::to_string(severity),
                               type,
                               pCallbackData->pMessage);
@@ -300,9 +392,12 @@ struct VulkanState
 
         return info;
     }
+
+
+    // may be deprecated, not the debug was created in the create_instance()
+    void loadDebugFunctionPointers();
     void setupDebugMessengerExt();
     void setupReportCallbackExt();
-    void loadDebugFunctionPointers();  // Add this new function
     void destroyDebugCallBackExt();
     void destroyDebugReportCallbackExt();
 
@@ -376,7 +471,7 @@ struct VulkanDevice : public LogicalDevice
 
     void destroy() override
     {
-        _vulkanState.Uninit();
+        _vulkanState.destroy();
         windowProvider = nullptr;
     }
 };

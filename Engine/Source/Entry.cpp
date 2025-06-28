@@ -901,6 +901,8 @@ int main()
         return -1;
     }
 
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Give time for logs to flush
     NE_CORE_INFO("Application exited successfully");
     return 0;
 }

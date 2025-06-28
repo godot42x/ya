@@ -326,3 +326,15 @@ void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalD
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
+
+void VulkanUtils::copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
+                           VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+    VkCommandBuffer commandBuffer = beginSingleTimeCommands(device, commandPool);
+
+    VkBufferCopy copyRegion{};
+    copyRegion.size = size;
+    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+}

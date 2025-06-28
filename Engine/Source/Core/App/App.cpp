@@ -197,9 +197,10 @@ int Neon::App::onEvent(SDL_Event &event)
 int Neon::App::iterate(float dt)
 {
 #if USE_VULKAN
-    auto &vulkanState = static_cast<VulkanDevice *>(logicalDevice)->_vulkanState;
-    // vulkanState.OnUpdate();
-    vulkanState.OnPostUpdate();
+    auto vkDevice = static_cast<VulkanDevice *>(logicalDevice);
+    vkDevice->_vulkanState.DrawFrame(); // Draw triangle!
+    vkDevice->_vulkanState.OnPostUpdate();
+
 #endif
     // Handle input, update logic, render, etc.
     // This is where the main loop logic would go.

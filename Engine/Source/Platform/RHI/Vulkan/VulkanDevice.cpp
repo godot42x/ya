@@ -5,14 +5,17 @@
 
 #include <array>
 #include <cstring>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <set>
+
 
 
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
 
 
 
-void VulkanState::create_instance()
+void VulkanState::createInstance()
 {
     if (m_EnableValidationLayers && !is_validation_layers_supported()) {
         NE_CORE_ASSERT(false, "validation layers requested, but not available!");
@@ -50,11 +53,13 @@ void VulkanState::create_instance()
         instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
         instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
         instance_create_info.pNext               = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
+
     }
     else {
         instance_create_info.enabledLayerCount = 0;
         instance_create_info.pNext             = nullptr;
     }
+
 
     VkResult result = vkCreateInstance(&instance_create_info, nullptr, &m_Instance);
     if (result != VK_SUCCESS) {
@@ -62,7 +67,7 @@ void VulkanState::create_instance()
     }
 
     // Load debug function pointers after instance creation
-    loadDebugFunctionPointers();
+    // loadDebugFunctionPointers();
 }
 
 
@@ -170,17 +175,23 @@ void VulkanState::setupDebugMessengerExt()
         return;
     }
 
+
     VkDebugUtilsMessengerCreateInfoEXT createInfo = getDebugMessengerCreateInfoExt();
 
     if (pfnCreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessengerCallback) != VK_SUCCESS) {
         NE_CORE_ASSERT(false, "failed to set up debug messenger!");
     }
+    NE_CORE_INFO("Debug messenger setup successfully");
 }
 
 void VulkanState::setupReportCallbackExt()
 {
 
     if (!m_EnableValidationLayers) {
+        return;
+    }
+    if (!pfnCreateDebugReportCallbackEXT) {
+        NE_CORE_WARN("pfnCreateDebugReportCallbackEXT is not loaded, skipping debug report callback setup");
         return;
     }
 
@@ -203,6 +214,8 @@ void VulkanState::setupReportCallbackExt()
     if (pfnCreateDebugReportCallbackEXT(m_Instance, &createInfo, nullptr, &m_DebugReportCallback) != VK_SUCCESS) {
         NE_CORE_ASSERT(false, "failed to set up debug report callback!");
     }
+
+    NE_CORE_INFO("Debug report callback setup successfully");
 }
 
 void VulkanState::destroyDebugCallBackExt()
@@ -269,12 +282,12 @@ bool VulkanState::is_validation_layers_supported()
         bool ok = false;
         for (const auto &layer_properties : layers)
         {
-            if (0 != std::strcmp(layer, layer_properties.layerName)) {
-                return false;
+            if (0 == std::strcmp(layer, layer_properties.layerName)) {
+                return true;
             }
         }
     }
-    return true;
+    return false;
 }
 
 bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
@@ -307,6 +320,7 @@ void VulkanState::createDepthResources()
 
 
     auto ext = m_swapChain.getExtent();
+
     VulkanUtils::createImage(
         m_LogicalDevice,
         m_PhysicalDevice,
@@ -342,16 +356,236 @@ void VulkanState::loadDebugFunctionPointers()
             vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
         pfnDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
             vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
-        
+
         // Load debug report callback functions (deprecated but still used)
         pfnCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)
             vkGetInstanceProcAddr(m_Instance, "vkCreateDebugReportCallbackEXT");
         pfnDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
             vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
-        
-        NE_CORE_ASSERT(pfnCreateDebugUtilsMessengerEXT != nullptr, "Failed to load vkCreateDebugUtilsMessengerEXT");
-        NE_CORE_ASSERT(pfnDestroyDebugUtilsMessengerEXT != nullptr, "Failed to load vkDestroyDebugUtilsMessengerEXT");
-        NE_CORE_ASSERT(pfnCreateDebugReportCallbackEXT != nullptr, "Failed to load vkCreateDebugReportCallbackEXT");
-        NE_CORE_ASSERT(pfnDestroyDebugReportCallbackEXT != nullptr, "Failed to load vkDestroyDebugReportCallbackEXT");
+
+        if (!pfnCreateDebugUtilsMessengerEXT) {
+            NE_CORE_WARN("pfnCreateDebugUtilsMessengerEXT is not loaded, skipping debug utils messenger setup");
+            pfnCreateDebugUtilsMessengerEXT = nullptr; // Set to nullptr to avoid using it later
+        }
+        if (!pfnCreateDebugReportCallbackEXT) {
+            NE_CORE_WARN("pfnCreateDebugReportCallbackEXT is not loaded, skipping debug report callback setup");
+            pfnCreateDebugReportCallbackEXT = nullptr; // Set to nullptr to avoid using it later
+        }
+        if (!pfnDestroyDebugUtilsMessengerEXT) {
+            NE_CORE_WARN("pfnDestroyDebugUtilsMessengerEXT is not loaded, skipping debug utils messenger cleanup");
+            pfnDestroyDebugUtilsMessengerEXT = nullptr; // Set to nullptr to avoid using it later
+        }
+        if (!pfnDestroyDebugReportCallbackEXT) {
+            NE_CORE_WARN("pfnDestroyDebugReportCallbackEXT is not loaded, skipping debug report callback cleanup");
+            pfnDestroyDebugReportCallbackEXT = nullptr; // Set to nullptr to avoid using it later
+        }
+    }
+}
+
+void VulkanState::createVertexBuffer()
+{
+    // Define triangle vertices (centered triangle)
+    m_triangleVertices = {
+        {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}}, // Bottom vertex (red)
+        {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},  // Top right vertex (green)
+        {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}  // Top left vertex (blue)
+    };
+
+    VkDeviceSize bufferSize = sizeof(m_triangleVertices[0]) * m_triangleVertices.size();
+
+    // Create staging buffer
+    VkBuffer       stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+
+    VulkanUtils::createBuffer(
+        m_LogicalDevice,
+        m_PhysicalDevice,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        stagingBuffer,
+        stagingBufferMemory);
+
+    // Copy vertex data to staging buffer
+    void *data;
+    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+    memcpy(data, m_triangleVertices.data(), (size_t)bufferSize);
+    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+    // Create vertex buffer
+    VulkanUtils::createBuffer(
+        m_LogicalDevice,
+        m_PhysicalDevice,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        m_vertexBuffer,
+        m_vertexBufferMemory);
+
+    // Copy from staging buffer to vertex buffer
+    VulkanUtils::copyBuffer(m_LogicalDevice, m_commandPool, m_GraphicsQueue, stagingBuffer, m_vertexBuffer, bufferSize);
+
+    // Cleanup staging buffer
+    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+    vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+}
+
+void VulkanState::createUniformBuffer()
+{
+    VkDeviceSize bufferSize = sizeof(CameraData);
+
+    VulkanUtils::createBuffer(
+        m_LogicalDevice,
+        m_PhysicalDevice,
+        bufferSize,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_uniformBuffer,
+        m_uniformBufferMemory);
+
+    // Map the uniform buffer memory so we can update it
+    vkMapMemory(m_LogicalDevice, m_uniformBufferMemory, 0, bufferSize, 0, &m_uniformBufferMapped);
+}
+
+void VulkanState::updateUniformBuffer()
+{
+    CameraData ubo{};
+    ubo.viewProjection = glm::mat4(1.0f); // Identity matrix for now (no transformation)
+
+    memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
+}
+
+void VulkanState::drawTriangle()
+{
+    // Wait for previous frame
+    vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(m_LogicalDevice, 1, &m_inFlightFence);
+
+    // Acquire next image
+    uint32_t imageIndex;
+    VkResult result = m_swapChain.acquireNextImage(imageIndex, m_imageAvailableSemaphore);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        recreateSwapChain();
+        return;
+    }
+    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        NE_CORE_ASSERT(false, "Failed to acquire swap chain image!");
+    }
+
+    // Update uniform buffer
+    updateUniformBuffer();
+
+    // Reset and begin command buffer
+    VkCommandBuffer commandBuffer = m_commandBuffers[imageIndex];
+    vkResetCommandBuffer(commandBuffer, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "Failed to begin recording command buffer!");
+    }
+
+    // Begin render pass
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass        = m_renderPass.getRenderPass();
+    renderPassInfo.framebuffer       = m_renderPass.getFramebuffers()[imageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = m_swapChain.getExtent();
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color        = {{0.0f, 0.0f, 0.0f, 1.0f}}; // Clear color: black
+    clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
+
+    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.pClearValues    = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Bind graphics pipeline
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.getPipeline());
+
+    // Set viewport
+    VkViewport viewport{};
+    viewport.x        = 0.0f;
+    viewport.y        = 0.0f;
+    viewport.width    = static_cast<float>(m_swapChain.getExtent().width);
+    viewport.height   = static_cast<float>(m_swapChain.getExtent().height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    // Set scissor
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapChain.getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    // Bind vertex buffer
+    VkBuffer     vertexBuffers[] = {m_vertexBuffer};
+    VkDeviceSize offsets[]       = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+    // Draw triangle
+    vkCmdDraw(commandBuffer, static_cast<uint32_t>(m_triangleVertices.size()), 1, 0, 0);
+
+    // End render pass and command buffer
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "Failed to record command buffer!");
+    }
+
+    // Submit command buffer
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore          waitSemaphores[] = {m_imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[]     = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount         = 1;
+    submitInfo.pWaitSemaphores            = waitSemaphores;
+    submitInfo.pWaitDstStageMask          = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers    = &commandBuffer;
+
+    VkSemaphore signalSemaphores[]  = {m_renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores    = signalSemaphores;
+
+    if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "Failed to submit draw command buffer!");
+    }
+
+    // Present
+    result = m_swapChain.presentImage(imageIndex, m_renderFinishedSemaphore, m_PresentQueue);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        recreateSwapChain();
+    }
+    else if (result != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "Failed to present swap chain image!");
+    }
+}
+
+void VulkanState::recreateSwapChain()
+{
+    // For now, just wait for device to be idle
+    // In a full implementation, this would recreate the swap chain when the window is resized
+    vkDeviceWaitIdle(m_LogicalDevice);
+    NE_CORE_WARN("Swap chain recreation requested - not fully implemented yet");
+}
+
+void VulkanState::createFences()
+{
+    VkFenceCreateInfo fenceInfo{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT // Start in signaled state
+    };
+
+    if (vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_inFlightFence) != VK_SUCCESS) {
+        NE_CORE_ASSERT(false, "failed to create fence!");
     }
 }
