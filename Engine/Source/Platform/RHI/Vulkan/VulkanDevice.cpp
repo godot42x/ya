@@ -53,7 +53,6 @@ void VulkanState::createInstance()
         instance_create_info.enabledLayerCount   = static_cast<uint32_t>(m_ValidationLayers.size());
         instance_create_info.ppEnabledLayerNames = m_ValidationLayers.data();
         instance_create_info.pNext               = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
-
     }
     else {
         instance_create_info.enabledLayerCount = 0;
@@ -387,8 +386,8 @@ void VulkanState::createVertexBuffer()
     // Define triangle vertices (centered triangle)
     m_triangleVertices = {
         {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}}, // Bottom vertex (red)
+        {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}, // Top left vertex (blue)
         {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},  // Top right vertex (green)
-        {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}  // Top left vertex (blue)
     };
 
     VkDeviceSize bufferSize = sizeof(m_triangleVertices[0]) * m_triangleVertices.size();
@@ -423,7 +422,12 @@ void VulkanState::createVertexBuffer()
         m_vertexBufferMemory);
 
     // Copy from staging buffer to vertex buffer
-    VulkanUtils::copyBuffer(m_LogicalDevice, m_commandPool, m_GraphicsQueue, stagingBuffer, m_vertexBuffer, bufferSize);
+    VulkanUtils::copyBuffer(m_LogicalDevice,
+                            m_commandPool,
+                            m_GraphicsQueue,
+                            stagingBuffer,
+                            m_vertexBuffer,
+                            bufferSize);
 
     // Cleanup staging buffer
     vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
@@ -496,7 +500,7 @@ void VulkanState::drawTriangle()
     renderPassInfo.renderArea.extent = m_swapChain.getExtent();
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color        = {{0.0f, 0.0f, 0.0f, 1.0f}}; // Clear color: black
+    clearValues[0].color        = {{1.0f, 0.0f, 1.0f, 1.0f}}; // Clear color: black
     clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
 
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -507,6 +511,7 @@ void VulkanState::drawTriangle()
     // Bind graphics pipeline
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.getPipeline());
 
+#if 1 // need to set the vulkan dynamic state, see VkPipelineDynamicStateCreateInfo
     // Set viewport
     VkViewport viewport{};
     viewport.x        = 0.0f;
@@ -517,11 +522,13 @@ void VulkanState::drawTriangle()
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
+
     // Set scissor
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = m_swapChain.getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+#endif
 
     // Bind vertex buffer
     VkBuffer     vertexBuffers[] = {m_vertexBuffer};
@@ -531,6 +538,12 @@ void VulkanState::drawTriangle()
     // Draw triangle
     vkCmdDraw(commandBuffer, static_cast<uint32_t>(m_triangleVertices.size()), 1, 0, 0);
 
+
+#if 1 // multiple renderpass
+    // vkCmdNextSubpass2()
+    // vkCmdNextSubpass()
+#endif
+
     // End render pass and command buffer
     vkCmdEndRenderPass(commandBuffer);
 
@@ -539,21 +552,22 @@ void VulkanState::drawTriangle()
     }
 
     // Submit command buffer
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    VkSemaphore          waitSemaphores[]   = {m_imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSemaphore          signalSemaphores[] = {m_renderFinishedSemaphore};
 
-    VkSemaphore          waitSemaphores[] = {m_imageAvailableSemaphore};
-    VkPipelineStageFlags waitStages[]     = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    submitInfo.waitSemaphoreCount         = 1;
-    submitInfo.pWaitSemaphores            = waitSemaphores;
-    submitInfo.pWaitDstStageMask          = waitStages;
 
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers    = &commandBuffer;
+    VkSubmitInfo submitInfo{
+        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount   = 1,
+        .pWaitSemaphores      = waitSemaphores,
+        .pWaitDstStageMask    = waitStages,
+        .commandBufferCount   = 1,
+        .pCommandBuffers      = &commandBuffer,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores    = signalSemaphores,
+    };
 
-    VkSemaphore signalSemaphores[]  = {m_renderFinishedSemaphore};
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores    = signalSemaphores;
 
     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
         NE_CORE_ASSERT(false, "Failed to submit draw command buffer!");
@@ -572,6 +586,7 @@ void VulkanState::drawTriangle()
 
 void VulkanState::recreateSwapChain()
 {
+    m_swapChain.recreate();
     // For now, just wait for device to be idle
     // In a full implementation, this would recreate the swap chain when the window is resized
     vkDeviceWaitIdle(m_LogicalDevice);

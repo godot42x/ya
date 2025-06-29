@@ -406,21 +406,6 @@ struct VulkanState
     bool is_device_extension_support(VkPhysicalDevice device);
 
 
-    VkShaderModule create_shader_module(const std::vector<uint32_t> &spv_binary)
-    {
-        VkShaderModuleCreateInfo shaderModuleCreateInfo = {
-            .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = spv_binary.size() * 4, // VUID-VkShaderModuleCreateInfo-codeSize-08735
-            .pCode    = spv_binary.data(),
-        };
-
-        VkShaderModule shaderModule;
-        if (VK_SUCCESS != vkCreateShaderModule(m_LogicalDevice, &shaderModuleCreateInfo, nullptr, &shaderModule))
-        {
-            panic("failed to create shader module");
-        }
-        return shaderModule;
-    }
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
     {
@@ -474,6 +459,7 @@ struct VulkanDevice : public LogicalDevice
         _vulkanState.destroy();
         windowProvider = nullptr;
     }
+
 };
 
 
