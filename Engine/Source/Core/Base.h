@@ -23,3 +23,5 @@
 #define USE_VULKAN 1
 #define USE_STB_IMG 1
 #define USE_SDL 1
+
+#include "Log.h"

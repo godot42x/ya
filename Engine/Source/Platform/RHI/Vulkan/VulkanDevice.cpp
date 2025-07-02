@@ -508,8 +508,26 @@ void VulkanState::drawTriangle()
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    // Bind graphics pipeline
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.getPipeline());
+    // Bind graphics pipeline - use the first available pipeline or a specific one
+    std::string pipelineName = "DefaultTriangle"; // Default name
+    if (!m_pipelineManager.hasPipeline(pipelineName)) {
+        // Get the first available pipeline
+        auto pipelineNames = m_pipelineManager.getPipelineNames();
+        if (!pipelineNames.empty()) {
+            pipelineName = pipelineNames[0];
+        } else {
+            NE_CORE_ERROR("No pipelines available for rendering!");
+            return;
+        }
+    }
+    
+    if (!m_pipelineManager.bindPipeline(commandBuffer, pipelineName)) {
+        NE_CORE_ERROR("Failed to bind pipeline: {}", pipelineName);
+        return;
+    }
+
+    // Bind descriptor sets for the active pipeline
+    m_pipelineManager.bindDescriptorSets(commandBuffer, pipelineName);
 
 #if 1 // need to set the vulkan dynamic state, see VkPipelineDynamicStateCreateInfo
     // Set viewport
@@ -586,11 +604,28 @@ void VulkanState::drawTriangle()
 
 void VulkanState::recreateSwapChain()
 {
-    m_swapChain.recreate();
-    // For now, just wait for device to be idle
-    // In a full implementation, this would recreate the swap chain when the window is resized
     vkDeviceWaitIdle(m_LogicalDevice);
-    NE_CORE_WARN("Swap chain recreation requested - not fully implemented yet");
+
+    // Clean up depth resources
+    if (m_depthImage) {
+        vkDestroyImage(m_LogicalDevice, m_depthImage, nullptr);
+        vkDestroyImageView(m_LogicalDevice, m_depthImageView, nullptr);
+        vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
+    }
+
+    // Recreate swap chain
+    m_swapChain.recreate();
+
+    // Recreate depth resources with new extent
+    createDepthResources();
+
+    // Recreate render pass framebuffers
+    m_renderPass.recreate(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
+
+    // Recreate all pipelines with new render pass and extent
+    m_pipelineManager.recreateAllPipelines(m_renderPass.getRenderPass(), m_swapChain.getExtent());
+
+    NE_CORE_INFO("Swap chain and all pipelines recreated successfully");
 }
 
 void VulkanState::createFences()

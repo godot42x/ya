@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Input/InputManager.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
 #include <glm/glm.hpp>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "ImGuiHelper.h"
+#include "RHI/Render.h"
 #include "WindowProvider.h"
 
 
@@ -25,7 +27,9 @@ class App
 {
     // StackDeleter    deleteStack;
     WindowProvider *windowProvider = nullptr;
-    LogicalDevice  *logicalDevice  = nullptr;
+    IRender        *vkRender       = nullptr;
+
+    InputManager inputManager;
 
 
     bool bRunning = true;

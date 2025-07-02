@@ -1,8 +1,11 @@
+
 #include "Render.h"
+
 
 
 namespace EVertexAttributeFormat
 {
+
 std::size_t T2Size(T type)
 {
     switch (type) {
@@ -17,10 +20,4 @@ std::size_t T2Size(T type)
         return 0;
     }
 }
-
-} // namespace EVertexAttributeFormat
-
-// namespace ETextureFormat
-// {
-// // Add texture format handling if needed
-// } // namespace ETextureFormat
+}; // namespace EVertexAttributeFormat

@@ -195,3 +195,204 @@ VkFormat VulkanRenderPass::findSupportedImageFormat(const std::vector<VkFormat> 
     NE_CORE_ASSERT(false, "Failed to find supported format!");
     return VK_FORMAT_UNDEFINED;
 }
+
+void VulkanRenderPass::createRenderPassWithConfig(const RenderPassCreateInfo &config)
+{
+    // Convert abstract configuration to Vulkan-specific values
+    std::vector<VkAttachmentDescription> vkAttachments;
+    
+    // Convert attachments from config
+    for (const auto &attachment : config.attachments) {
+        VkAttachmentDescription vkAttachment{};
+        
+        // Convert format
+        switch (attachment.format) {
+            case EFormat::R8G8B8A8_UNORM:
+                vkAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+                break;
+            case EFormat::B8G8R8A8_UNORM:
+                vkAttachment.format = VK_FORMAT_B8G8R8A8_UNORM;
+                break;
+            case EFormat::D32_SFLOAT:
+                vkAttachment.format = VK_FORMAT_D32_SFLOAT;
+                break;
+            case EFormat::D24_UNORM_S8_UINT:
+                vkAttachment.format = VK_FORMAT_D24_UNORM_S8_UINT;
+                break;
+            default:
+                vkAttachment.format = m_swapChainImageFormat; // Fallback to swap chain format
+                break;
+        }
+        
+        // Convert sample count
+        switch (attachment.samples) {
+            case ESampleCount::Sample_1:  vkAttachment.samples = VK_SAMPLE_COUNT_1_BIT; break;
+            case ESampleCount::Sample_2:  vkAttachment.samples = VK_SAMPLE_COUNT_2_BIT; break;
+            case ESampleCount::Sample_4:  vkAttachment.samples = VK_SAMPLE_COUNT_4_BIT; break;
+            case ESampleCount::Sample_8:  vkAttachment.samples = VK_SAMPLE_COUNT_8_BIT; break;
+            case ESampleCount::Sample_16: vkAttachment.samples = VK_SAMPLE_COUNT_16_BIT; break;
+            case ESampleCount::Sample_32: vkAttachment.samples = VK_SAMPLE_COUNT_32_BIT; break;
+            case ESampleCount::Sample_64: vkAttachment.samples = VK_SAMPLE_COUNT_64_BIT; break;
+        }
+        
+        // Convert load/store ops
+        switch (attachment.loadOp) {
+            case EAttachmentLoadOp::Load:     vkAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; break;
+            case EAttachmentLoadOp::Clear:    vkAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; break;
+            case EAttachmentLoadOp::DontCare: vkAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; break;
+        }
+        
+        switch (attachment.storeOp) {
+            case EAttachmentStoreOp::Store:    vkAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; break;
+            case EAttachmentStoreOp::DontCare: vkAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; break;
+        }
+        
+        // Set stencil ops (simplified)
+        switch (attachment.stencilLoadOp) {
+            case EAttachmentLoadOp::Load:     vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD; break;
+            case EAttachmentLoadOp::Clear:    vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; break;
+            case EAttachmentLoadOp::DontCare: vkAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; break;
+        }
+        
+        switch (attachment.stencilStoreOp) {
+            case EAttachmentStoreOp::Store:    vkAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE; break;
+            case EAttachmentStoreOp::DontCare: vkAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; break;
+        }
+        
+        // Set layouts
+        vkAttachment.initialLayout = attachment.bInitialLayoutUndefined ? 
+            VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        vkAttachment.finalLayout = attachment.bFinalLayoutPresentSrc ? 
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        
+        vkAttachments.push_back(vkAttachment);
+    }
+    
+    // If no attachments specified, create default color + depth
+    if (vkAttachments.empty()) {
+        // Default color attachment
+        VkAttachmentDescription colorAttachment{
+            .format         = m_swapChainImageFormat,
+            .samples        = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        };
+        
+        // Default depth attachment
+        VkAttachmentDescription depthAttachment{
+            .format         = findDepthFormat(),
+            .samples        = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        
+        vkAttachments = {colorAttachment, depthAttachment};
+        m_depthFormat = depthAttachment.format;
+    }
+    
+    // Create subpass configuration
+    std::vector<VkSubpassDescription> vkSubpasses;
+    std::vector<VkAttachmentReference> colorAttachmentRefs;
+    std::vector<VkAttachmentReference> depthAttachmentRefs;
+    
+    // Process subpasses from config or create default
+    if (!config.subpasses.empty()) {
+        for (const auto &subpass : config.subpasses) {
+            VkSubpassDescription vkSubpass{};
+            vkSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            
+            // Add color attachment references
+            for (uint32_t colorAttachmentIndex : subpass.colorAttachmentIndices) {
+                colorAttachmentRefs.push_back({
+                    .attachment = colorAttachmentIndex,
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                });
+            }
+            
+            vkSubpass.colorAttachmentCount = static_cast<uint32_t>(subpass.colorAttachmentIndices.size());
+            vkSubpass.pColorAttachments = colorAttachmentRefs.data() + (colorAttachmentRefs.size() - subpass.colorAttachmentIndices.size());
+            
+            // Add depth attachment if specified
+            if (subpass.depthStencilAttachmentIndex != UINT32_MAX) {
+                depthAttachmentRefs.push_back({
+                    .attachment = subpass.depthStencilAttachmentIndex,
+                    .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                });
+                vkSubpass.pDepthStencilAttachment = &depthAttachmentRefs.back();
+            }
+            
+            vkSubpasses.push_back(vkSubpass);
+        }
+    } else {
+        // Default subpass - color attachment 0, depth attachment 1
+        VkAttachmentReference colorAttachmentRef{
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        };
+        
+        VkAttachmentReference depthAttachmentRef{
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        
+        VkSubpassDescription subpass{
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachmentRef,
+            .pDepthStencilAttachment = &depthAttachmentRef,
+        };
+        
+        vkSubpasses.push_back(subpass);
+    }
+    
+    // Create subpass dependencies
+    std::vector<VkSubpassDependency> vkDependencies;
+    for (const auto &dependency : config.dependencies) {
+        VkSubpassDependency vkDependency{
+            .srcSubpass = dependency.srcSubpass,
+            .dstSubpass = dependency.dstSubpass,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        };
+        vkDependencies.push_back(vkDependency);
+    }
+    
+    // Default dependency if none specified
+    if (vkDependencies.empty()) {
+        VkSubpassDependency dependency{
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        };
+        vkDependencies.push_back(dependency);
+    }
+    
+    // Create the render pass
+    VkRenderPassCreateInfo createInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = static_cast<uint32_t>(vkAttachments.size()),
+        .pAttachments = vkAttachments.data(),
+        .subpassCount = static_cast<uint32_t>(vkSubpasses.size()),
+        .pSubpasses = vkSubpasses.data(),
+        .dependencyCount = static_cast<uint32_t>(vkDependencies.size()),
+        .pDependencies = vkDependencies.data(),
+    };
+    
+    VkResult result = vkCreateRenderPass(m_logicalDevice, &createInfo, nullptr, &m_renderPass);
+    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass with config!");
+    
+    NE_CORE_INFO("Created render pass with {} attachments, {} subpasses", vkAttachments.size(), vkSubpasses.size());
+}

@@ -23,6 +23,7 @@ add_requires("imgui", {
     configs = {
         sdl3 = true,
         sdl3_gpu = true,
+        vulkan = true,
         debug = is_mode("debug")
     }
 })

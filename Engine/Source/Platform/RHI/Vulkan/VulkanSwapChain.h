@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RHI/Render.h"
 #include "WindowProvider.h"
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -26,11 +27,11 @@ class VulkanSwapChain
     WindowProvider  *m_windowProvider = nullptr;
 
     VkSwapchainKHR           m_swapChain = VK_NULL_HANDLE;
+    std::vector<VkImage>     m_images;
+    std::vector<VkImageView> m_imageViews;
     VkFormat                 m_imageFormat;
     VkColorSpaceKHR          m_colorSpace;
     VkExtent2D               m_extent;
-    std::vector<VkImage>     m_images;
-    std::vector<VkImageView> m_imageViews;
 
   public:
     VulkanSwapChain()  = default;
@@ -40,19 +41,20 @@ class VulkanSwapChain
                     VkSurfaceKHR surface, WindowProvider *windowProvider);
 
     void create();
+    void createBy(const SwapchainCreateInfo &ci);
     void cleanup();
     void recreate();
 
     // Getters
     VkSwapchainKHR                  getSwapChain() const { return m_swapChain; }
-    VkFormat                        getImageFormat() const { return m_imageFormat; }
-    VkExtent2D                      getExtent() const { return m_extent; }
     const std::vector<VkImage>     &getImages() const { return m_images; }
     const std::vector<VkImageView> &getImageViews() const { return m_imageViews; }
+    VkFormat                        getImageFormat() const { return m_imageFormat; }
+    VkExtent2D                      getExtent() const { return m_extent; }
 
     // Swap chain operations
     VkResult acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore);
-    VkResult presentImage(uint32_t imageIndex, VkSemaphore waitSemaphore, VkQueue presentQueue);
+    VkResult presentImage(uint32_t imageIndex, VkSemaphore semaphore, VkQueue presentQueue);
 
   private:
     void createImageViews();

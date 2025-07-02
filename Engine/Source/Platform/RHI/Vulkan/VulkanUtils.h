@@ -33,25 +33,11 @@ struct VulkanUtils
     static void copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
                            VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
+    static VkFormat findSupportedImageFormat(VkPhysicalDevice physicalDevice, 
+                                             const std::vector<VkFormat> &candidates,
+                                             VkImageTiling tiling, 
+                                             VkFormatFeatureFlags features);
+
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
-
-
-    static VkFormat findSupportedImageFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat> &candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
-    {
-        for (VkFormat format : candidates) {
-            VkFormatProperties props;
-            vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
-
-            if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
-                return format;
-            }
-            if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
-                return format;
-            }
-        }
-
-        NE_CORE_ASSERT(false, "failed to find supported format!");
-        return VK_FORMAT_UNDEFINED;
-    };
 };

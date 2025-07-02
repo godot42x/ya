@@ -25,6 +25,11 @@ class WindowProvider
     virtual void destroy() = 0;
 
     virtual void getWindowSize(int &width, int &height) = 0;
+    virtual bool setWindowSize(int width, int height)
+    {
+        NE_CORE_ERROR("setWindowSize not implemented in WindowProvider");
+        return false;
+    }
 };
 
 
@@ -74,6 +79,15 @@ class SDLWindowProvider : public WindowProvider
     void getWindowSize(int &width, int &height) override
     {
         SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
+    }
+    bool setWindowSize(int width, int height)
+    {
+        if (nativeWindowHandle) {
+            SDL_SetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), width, height);
+            return true;
+        }
+        NE_CORE_ERROR("Failed to set window size: native window handle is null.");
+        return false;
     }
 
 #if USE_VULKAN

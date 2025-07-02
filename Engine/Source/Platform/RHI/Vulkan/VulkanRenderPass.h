@@ -46,6 +46,9 @@ class VulkanRenderPass : public RenderPass
     // Create the render pass
     void createRenderPass();
 
+    // Create the render pass with custom configuration
+    void createRenderPassWithConfig(const RenderPassCreateInfo &config);
+
     // Create framebuffers for the render pass
     void createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,
                             VkImageView                     depthImageView,

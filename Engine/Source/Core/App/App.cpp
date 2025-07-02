@@ -1,8 +1,9 @@
 #include "App.h"
 #include "Core/FileSystem/FileSystem.h"
-#include "Platform/RHI/Vulkan/VulkanDevice.h"
+#include "Platform/RHI/Vulkan/VulkanRender.h"
 
 #include <SDL3/SDL_events.h>
+
 
 void Neon::App::init()
 {
@@ -13,21 +14,26 @@ void Neon::App::init()
     // deleteStack.push("SDLWindowProvider", windowProvider);
     windowProvider->init();
 
-
-    logicalDevice = new VulkanDevice();
-    // deleteStack.push("LogicalDevice", logicalDevice);
-    logicalDevice->init(LogicalDevice::InitParams{
+    vkRender = new VulkanRender();
+    vkRender->init(IRender::InitParams{
         .bVsync         = true,
+        .renderAPI      = ERenderAPI::Vulkan,
         .windowProvider = *windowProvider,
+        .swapchainCI    = SwapchainCreateInfo{
+
+        },
+        .renderPassCI = RenderPassCreateInfo{
+
+        },
     });
 }
 
 void Neon::App::quit()
 {
-    logicalDevice->destroy();
+    vkRender->destroy();
     windowProvider->destroy();
 
-    delete logicalDevice;
+    delete vkRender;
     delete windowProvider;
 }
 
@@ -62,6 +68,9 @@ int Neon::App::run()
 
 int Neon::App::onEvent(SDL_Event &event)
 {
+    inputManager.processEvent(event);
+
+
     switch (SDL_EventType(event.type))
     {
     case SDL_EVENT_FIRST:
@@ -196,10 +205,12 @@ int Neon::App::onEvent(SDL_Event &event)
 
 int Neon::App::iterate(float dt)
 {
+    inputManager.update();
+
 #if USE_VULKAN
-    auto vkDevice = static_cast<VulkanDevice *>(logicalDevice);
-    vkDevice->_vulkanState.DrawFrame(); // Draw triangle!
-    vkDevice->_vulkanState.OnPostUpdate();
+    auto render = static_cast<VulkanRender *>(vkRender);
+    render->_vulkanState.DrawFrame(); // Draw triangle!
+    render->_vulkanState.OnPostUpdate();
 
 #endif
     // Handle input, update logic, render, etc.

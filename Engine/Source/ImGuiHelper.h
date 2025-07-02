@@ -1,11 +1,17 @@
 #pragma once
 
+#include <Core/Base.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 
 #include <ImGui.h>
 #include <imgui_impl_sdl3.h>
-#include <imgui_impl_sdlgpu3.h>
+#if USE_VULKAN
+    #include <imgui_impl_vulkan.h>
+#else
+    #include <imgui_impl_sdlgpu3.h>
+#endif
 
 
 #include "Core/Event.h"
@@ -29,7 +35,11 @@ struct ImguiState
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         ImGui::StyleColorsDark();
 
+#if USE_VULKAN
+        ImGui_ImplSDL3_InitForVulkan(window);
+#elif USE_SDL3_GPU
         ImGui_ImplSDL3_InitForSDLGPU(window);
+#endif
 
         SDL_WaitForGPUSwapchain(device, window);
         auto swapChianFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
@@ -37,19 +47,29 @@ struct ImguiState
         if (swapChianFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
             NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
         }
-
+#if USE_VULKAN
+        // ImGui_ImplVulkan_InitInfo initInfo{
+        //     .MSAASamples = SDL_GPU_SAMPLECOUNT_1,
+        // };
+        // ImGui_ImplVulkan_Init(&initInfo);
+#else
         ImGui_ImplSDLGPU3_InitInfo info{
             .Device            = device,
             .ColorTargetFormat = swapChianFormat,
             .MSAASamples       = SDL_GPU_SAMPLECOUNT_1,
         };
         ImGui_ImplSDLGPU3_Init(&info);
+#endif
     }
 
     // Begin new ImGui frame
     void beginFrame()
     {
-        ImGui_ImplSDLGPU3_NewFrame();
+#if USE_VULKAN
+#else
+// ImGui_ImplSDLGPU3_NewFrame();
+#endif
+
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
     }
@@ -65,7 +85,10 @@ struct ImguiState
 
     void prepareDrawData(SDL_GPUCommandBuffer *commandBuffer)
     {
+#if USE_VULKAN
+#else
         Imgui_ImplSDLGPU3_PrepareDrawData(drawData, commandBuffer);
+#endif
     }
 
 
@@ -73,7 +96,9 @@ struct ImguiState
     void draw(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass)
     {
         if (drawData && drawData->CmdListsCount > 0) {
+#if 0 
             ImGui_ImplSDLGPU3_RenderDrawData(drawData, commandBuffer, renderpass);
+#endif
         }
     }
 
@@ -81,7 +106,9 @@ struct ImguiState
     void shutdown()
     {
         ImGui_ImplSDL3_Shutdown();
+#if 0
         ImGui_ImplSDLGPU3_Shutdown();
+#endif
         ImGui::DestroyContext();
     }
 

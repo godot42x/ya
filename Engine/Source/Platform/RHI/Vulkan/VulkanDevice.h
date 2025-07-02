@@ -16,12 +16,14 @@ using namespace std::literals;
 #include <vector>
 
 
+#include "RHI/Render.h" // Add this include for SwapchainCreateInfo
 #include "Render/Device.h"
 #include "VulkanPipeline.h"
 #include "VulkanRenderPass.h"
 #include "VulkanResourceManager.h"
 #include "VulkanSwapChain.h"
 #include "VulkanUtils.h"
+
 
 #include "WindowProvider.h"
 #include <Render/Shader.h>
@@ -112,11 +114,16 @@ struct VulkanState
     // Command pool belongs to device level
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
 
+    // Configuration parameters
+    SwapchainCreateInfo  m_swapchainConfig;
+    RenderPassCreateInfo m_renderPassConfig;
+    bool                 m_bVsyncEnabled = true;
+
     // Use separate classes for better organization
-    VulkanSwapChain       m_swapChain;
-    VulkanRenderPass      m_renderPass;
-    VulkanPipeline        m_pipeline;
-    VulkanResourceManager m_resourceManager;
+    VulkanSwapChain         m_swapChain;
+    VulkanRenderPass        m_renderPass;
+    VulkanPipelineManager   m_pipelineManager;
+    VulkanResourceManager   m_resourceManager;
 
     VkImage        m_depthImage;
     VkDeviceMemory m_depthImageMemory;
@@ -211,11 +218,15 @@ struct VulkanState
     {
         return static_cast<T *>(nativeWindow);
     }
-
-    void init(WindowProvider *windowProvider)
+    bool init(WindowProvider *windowProvider, const SwapchainCreateInfo &swapchainCI = {}, const RenderPassCreateInfo &renderPassCI = {}, bool bVsync = true)
     {
         _windowProvider = windowProvider;
         nativeWindow    = _windowProvider->getNativeWindowPtr();
+
+        // Store configurations
+        m_swapchainConfig  = swapchainCI;
+        m_renderPassConfig = renderPassCI;
+        m_bVsyncEnabled    = bVsync;
 
         createInstance();
 
@@ -256,25 +267,54 @@ struct VulkanState
         }
 
         createLogicDevice();
-        createCommandPool(); // CommandPool moved to device level
+        createCommandPool();
 
-        // Initialize separate components
+        // Initialize separate components with configuration
         m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider);
-        m_swapChain.create();
-
+        m_swapChain.createBy(m_swapchainConfig);
 
         // Initialize resource manager
         m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
 
+        // Initialize render pass with custom configuration
         m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat());
-        m_renderPass.createRenderPass();
+        m_renderPass.createRenderPassWithConfig(m_renderPassConfig);
 
         createDepthResources();
         m_renderPass.createFramebuffers(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
 
-        // Pipeline now gets resource manager for descriptor layout
-        m_pipeline.initialize(m_LogicalDevice, m_PhysicalDevice);
-        m_pipeline.createGraphicsPipeline("SimpleTriangle.glsl", m_renderPass.getRenderPass(), m_swapChain.getExtent());
+        // Pipeline creation with custom configuration from render pass
+        m_pipelineManager.initialize(m_LogicalDevice, m_PhysicalDevice);
+
+        // Create multiple pipelines if provided in render pass config
+        if (!m_renderPassConfig.pipelineCIs.empty()) {
+            // Create each pipeline from the configuration
+            for (size_t i = 0; i < m_renderPassConfig.pipelineCIs.size(); ++i) {
+                const auto& pipelineConfig = m_renderPassConfig.pipelineCIs[i];
+                std::string pipelineName = "Pipeline_" + std::to_string(i);
+                
+                // Use shader name as pipeline name if available
+                if (!pipelineConfig.shaderCreateInfo.shaderName.empty()) {
+                    pipelineName = pipelineConfig.shaderCreateInfo.shaderName;
+                }
+                
+                bool success = m_pipelineManager.createPipeline(pipelineName, pipelineConfig, 
+                                                               m_renderPass.getRenderPass(), 
+                                                               m_swapChain.getExtent());
+                if (!success) {
+                    NE_CORE_ERROR("Failed to create pipeline: {}", pipelineName);
+                }
+            }
+        } else {
+            // Create default pipeline
+            GraphicsPipelineCreateInfo defaultPipelineConfig = createDefaultPipelineConfig();
+            bool success = m_pipelineManager.createPipeline("DefaultTriangle", defaultPipelineConfig, 
+                                                           m_renderPass.getRenderPass(), 
+                                                           m_swapChain.getExtent());
+            if (!success) {
+                NE_CORE_ERROR("Failed to create default pipeline");
+            }
+        }
 
         createCommandBuffers();
         createSemaphores();
@@ -283,6 +323,8 @@ struct VulkanState
         // Create triangle rendering resources
         createVertexBuffer();
         createUniformBuffer();
+
+        return true;
     }
 
 
@@ -320,7 +362,7 @@ struct VulkanState
         vkDestroyBuffer(m_LogicalDevice, m_vertexBuffer, nullptr);
         vkFreeMemory(m_LogicalDevice, m_vertexBufferMemory, nullptr);
 
-        m_pipeline.cleanup();
+        m_pipelineManager.cleanup();
         m_swapChain.cleanup();
         m_renderPass.cleanup();
 
@@ -424,43 +466,6 @@ struct VulkanState
     }
 };
 
-struct VulkanDevice : public LogicalDevice
-{
-    VulkanState     _vulkanState;
-    WindowProvider *windowProvider = nullptr;
-
-    virtual bool init(const InitParams &params) override
-    {
-        windowProvider = &params.windowProvider;
-
-#if USE_SDL
-
-        auto sdlWindow = static_cast<SDLWindowProvider *>(windowProvider);
-        _vulkanState.onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            return sdlWindow->onCreateVkSurface(instance, surface);
-        });
-        _vulkanState.onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            sdlWindow->onDestroyVkSurface(instance, surface);
-        });
-        _vulkanState.onGetRequiredExtensions.set([sdlWindow]() {
-            return sdlWindow->onGetVkInstanceExtensions();
-        });
-
-#endif
-
-        _vulkanState.init(windowProvider);
-
-        // UNIMPLEMENTED();
-        return false;
-    }
-
-    void destroy() override
-    {
-        _vulkanState.destroy();
-        windowProvider = nullptr;
-    }
-
-};
 
 
 #undef panic

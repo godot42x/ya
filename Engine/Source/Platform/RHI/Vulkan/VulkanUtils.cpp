@@ -257,6 +257,27 @@ void VulkanUtils::copyBufferToImage(VkDevice device, VkCommandPool commandPool, 
     endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
 }
 
+VkFormat VulkanUtils::findSupportedImageFormat(VkPhysicalDevice physicalDevice,
+                                               const std::vector<VkFormat> &candidates,
+                                               VkImageTiling tiling,
+                                               VkFormatFeatureFlags features)
+{
+    for (VkFormat format : candidates) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+        if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+            return format;
+        }
+        if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+            return format;
+        }
+    }
+
+    NE_CORE_ASSERT(false, "failed to find supported format!");
+    return VK_FORMAT_UNDEFINED;
+}
+
 void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                      const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory)
 {
@@ -335,7 +356,7 @@ void VulkanUtils::copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue
     VkBufferCopy copyRegion{
         .srcOffset = 0,
         .dstOffset = 0,
-        .size      = size,
+        .size = size,
     };
     vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
