@@ -115,15 +115,15 @@ struct VulkanState
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
 
     // Configuration parameters
-    SwapchainCreateInfo  m_swapchainConfig;
+    SwapchainCreateInfo  m_swapchainCI;
     RenderPassCreateInfo m_renderPassConfig;
     bool                 m_bVsyncEnabled = true;
 
     // Use separate classes for better organization
-    VulkanSwapChain         m_swapChain;
-    VulkanRenderPass        m_renderPass;
-    VulkanPipelineManager   m_pipelineManager;
-    VulkanResourceManager   m_resourceManager;
+    VulkanSwapChain       m_swapChain;
+    VulkanRenderPass      m_renderPass;
+    VulkanPipelineManager m_pipelineManager;
+    VulkanResourceManager m_resourceManager;
 
     VkImage        m_depthImage;
     VkDeviceMemory m_depthImageMemory;
@@ -224,7 +224,7 @@ struct VulkanState
         nativeWindow    = _windowProvider->getNativeWindowPtr();
 
         // Store configurations
-        m_swapchainConfig  = swapchainCI;
+        m_swapchainCI      = swapchainCI;
         m_renderPassConfig = renderPassCI;
         m_bVsyncEnabled    = bVsync;
 
@@ -270,15 +270,15 @@ struct VulkanState
         createCommandPool();
 
         // Initialize separate components with configuration
-        m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider);
-        m_swapChain.createBy(m_swapchainConfig);
+        m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
+        m_swapChain.create();
 
         // Initialize resource manager
         m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
 
         // Initialize render pass with custom configuration
-        m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat());
-        m_renderPass.createRenderPassWithConfig(m_renderPassConfig);
+        m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat(), m_renderPassConfig);
+        m_renderPass.create();
 
         createDepthResources();
         m_renderPass.createFramebuffers(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
@@ -287,32 +287,24 @@ struct VulkanState
         m_pipelineManager.initialize(m_LogicalDevice, m_PhysicalDevice);
 
         // Create multiple pipelines if provided in render pass config
-        if (!m_renderPassConfig.pipelineCIs.empty()) {
-            // Create each pipeline from the configuration
-            for (size_t i = 0; i < m_renderPassConfig.pipelineCIs.size(); ++i) {
-                const auto& pipelineConfig = m_renderPassConfig.pipelineCIs[i];
-                std::string pipelineName = "Pipeline_" + std::to_string(i);
-                
-                // Use shader name as pipeline name if available
-                if (!pipelineConfig.shaderCreateInfo.shaderName.empty()) {
-                    pipelineName = pipelineConfig.shaderCreateInfo.shaderName;
-                }
-                
-                bool success = m_pipelineManager.createPipeline(pipelineName, pipelineConfig, 
-                                                               m_renderPass.getRenderPass(), 
-                                                               m_swapChain.getExtent());
-                if (!success) {
-                    NE_CORE_ERROR("Failed to create pipeline: {}", pipelineName);
-                }
+
+        NE_CORE_ASSERT(!m_renderPassConfig.subpasses.empty() && !m_renderPassConfig.pipelineCIs.empty() && m_renderPassConfig.pipelineCIs.size() == m_renderPassConfig.subpasses.size(),
+                       "Render pass configuration must have at least one subpass and matching pipeline configurations!");
+
+        // Create each pipeline from the configuration
+        for (size_t i = 0; i < m_renderPassConfig.pipelineCIs.size(); ++i) {
+
+            const auto &ci           = m_renderPassConfig.pipelineCIs[i];
+            std::string pipelineName = "Pipeline_" + std::to_string(i);
+
+            // Use shader name as pipeline name if available
+            if (!ci.shaderCreateInfo.shaderName.empty()) {
+                pipelineName = ci.shaderCreateInfo.shaderName;
             }
-        } else {
-            // Create default pipeline
-            GraphicsPipelineCreateInfo defaultPipelineConfig = createDefaultPipelineConfig();
-            bool success = m_pipelineManager.createPipeline("DefaultTriangle", defaultPipelineConfig, 
-                                                           m_renderPass.getRenderPass(), 
-                                                           m_swapChain.getExtent());
+
+            bool success = m_pipelineManager.createPipeline(pipelineName, ci, m_renderPass.getRenderPass(), m_swapChain.getExtent());
             if (!success) {
-                NE_CORE_ERROR("Failed to create default pipeline");
+                NE_CORE_ERROR("Failed to create pipeline: {}", pipelineName);
             }
         }
 

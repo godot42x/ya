@@ -5,7 +5,7 @@ struct VulkanRender : public IRender
 {
     VulkanState     _vulkanState;
     WindowProvider *windowProvider = nullptr;
-    
+
     // Store initialization parameters for later use
     SwapchainCreateInfo  m_swapchainCI;
     RenderPassCreateInfo m_renderPassCI;
@@ -56,7 +56,7 @@ struct VulkanRender : public IRender
         windowProvider = nullptr;
     }
 
-private:
+  private:
     void applyInitConfiguration()
     {
         // Apply V-Sync setting

@@ -62,6 +62,19 @@ VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provi
     return actualExtent;
 }
 
+bool VulkanSwapChainSupportDetails::isValidFormat(const VkSurfaceFormatKHR &fmt)
+{
+    for (const auto &availableFormat : formats)
+    {
+        if (availableFormat.format == fmt.format && availableFormat.colorSpace == fmt.colorSpace)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+
 VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
     VulkanSwapChainSupportDetails details;
@@ -88,63 +101,15 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
 }
 
 void VulkanSwapChain::initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice,
-                                 VkSurfaceKHR surface, WindowProvider *windowProvider)
+                                 VkSurfaceKHR surface, WindowProvider *windowProvider, const SwapchainCreateInfo &ci)
 {
     m_logicalDevice  = logicalDevice;
     m_physicalDevice = physicalDevice;
     m_surface        = surface;
     m_windowProvider = windowProvider;
+    _ci              = ci;
 }
 
-void VulkanSwapChain::create()
-{
-    VulkanSwapChainSupportDetails supportDetails = VulkanSwapChainSupportDetails::query(m_physicalDevice, m_surface);
-
-    VkSurfaceFormatKHR surfaceFormat = supportDetails.ChooseSwapSurfaceFormat();
-    VkPresentModeKHR   presentMode   = supportDetails.ChooseSwapPresentMode();
-
-    m_extent      = supportDetails.ChooseSwapExtent(m_windowProvider);
-    m_imageFormat = surfaceFormat.format;
-    m_colorSpace  = surfaceFormat.colorSpace;
-
-    uint32_t minImageCount = supportDetails.capabilities.minImageCount + 1;
-    if (supportDetails.capabilities.maxImageCount > 0 &&
-        minImageCount > supportDetails.capabilities.maxImageCount)
-    {
-        minImageCount = supportDetails.capabilities.maxImageCount;
-    }
-
-    VkSwapchainCreateInfoKHR ci{
-        .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .surface          = m_surface,
-        .minImageCount    = minImageCount,
-        .imageFormat      = m_imageFormat,
-        .imageColorSpace  = m_colorSpace,
-        .imageExtent      = m_extent,
-        .imageArrayLayers = 1,
-        .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .preTransform     = supportDetails.capabilities.currentTransform,
-        .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode      = presentMode,
-        .clipped          = VK_TRUE,
-        .oldSwapchain     = VK_NULL_HANDLE,
-    };
-
-    // Set sharing mode based on queue families
-    // This would need queue family indices - simplified for now
-    ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VkResult result = vkCreateSwapchainKHR(m_logicalDevice, &ci, nullptr, &m_swapChain);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
-
-    // Get swap chain images
-    uint32_t imageCount;
-    vkGetSwapchainImagesKHR(m_logicalDevice, m_swapChain, &imageCount, nullptr);
-    m_images.resize(imageCount);
-    vkGetSwapchainImagesKHR(m_logicalDevice, m_swapChain, &imageCount, m_images.data());
-
-    createImageViews();
-}
 
 void VulkanSwapChain::cleanup()
 {
@@ -177,7 +142,7 @@ void VulkanSwapChain::createImageViews()
 
 
 
-void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
+void VulkanSwapChain::create()
 {
     VulkanSwapChainSupportDetails supportDetails = VulkanSwapChainSupportDetails::query(m_physicalDevice, m_surface);
 
@@ -185,7 +150,7 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
     VkSurfaceFormatKHR surfaceFormat;
 
     // Convert from abstract format to Vulkan format
-    switch (ci.imageFormat) {
+    switch (_ci.imageFormat) {
     case EFormat::B8G8R8A8_UNORM:
         surfaceFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
         break;
@@ -198,7 +163,7 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
     }
 
     // Set color space based on config
-    switch (ci.colorSpace) {
+    switch (_ci.colorSpace) {
     case EColorSpace::SRGB_NONLINEAR:
         surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
         break;
@@ -207,14 +172,19 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
         break;
     }
 
+    NE_CORE_ASSERT(supportDetails.isValidFormat(surfaceFormat),
+                   "Unsupported swap chain surface format: {}, {}",
+                   (int)_ci.imageFormat,
+                   (int)_ci.colorSpace);
+
     // TODO: extend
     // Choose present mode based on config and V-Sync setting
     VkPresentModeKHR presentMode;
-    if (ci.bVsync) {
+    if (_ci.bVsync) {
         presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync enabled
     }
     else {
-        switch (ci.presentMode) {
+        switch (_ci.presentMode) {
         case EPresentMode::Immediate:
             presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
             break;
@@ -231,9 +201,9 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
     }
 
     // Use configured dimensions or fall back to window size
-    if (ci.width > 0 && ci.height > 0) {
-        m_extent.width  = ci.width;
-        m_extent.height = ci.height;
+    if (_ci.width > 0 && _ci.height > 0) {
+        m_extent.width  = _ci.width;
+        m_extent.height = _ci.height;
 
         // Clamp to surface capabilities
         m_extent.width = std::max(
@@ -250,7 +220,7 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
     m_imageFormat = surfaceFormat.format;
     m_colorSpace  = surfaceFormat.colorSpace;
 
-    uint32_t minImageCount = std::max(ci.minImageCount, supportDetails.capabilities.minImageCount);
+    uint32_t minImageCount = std::max(_ci.minImageCount, supportDetails.capabilities.minImageCount);
     if (supportDetails.capabilities.maxImageCount > 0 &&
         minImageCount > supportDetails.capabilities.maxImageCount)
     {
@@ -264,12 +234,12 @@ void VulkanSwapChain::createBy(const SwapchainCreateInfo &ci)
         .imageFormat      = m_imageFormat,
         .imageColorSpace  = m_colorSpace,
         .imageExtent      = m_extent,
-        .imageArrayLayers = ci.imageArrayLayers,
+        .imageArrayLayers = _ci.imageArrayLayers,
         .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // Convert from config if needed
         .preTransform     = supportDetails.capabilities.currentTransform,
         .compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode      = presentMode,
-        .clipped          = ci.bClipped ? VK_TRUE : VK_FALSE,
+        .clipped          = _ci.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain     = VK_NULL_HANDLE,
     };
 

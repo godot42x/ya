@@ -1,10 +1,12 @@
 
 #pragma once
 
+#include <cassert>
+#include <format>
 #include <map>
 #include <stdint.h>
 #include <string>
-#include <cassert>
+
 
 
 #ifndef T_INTEGER
@@ -52,12 +54,46 @@ struct FName
         : index(NameRegistry::instance().getIndex(name)), data(name)
     {
     }
+    FName(const char *name)
+        : index(NameRegistry::instance().getIndex(std::string(name))), data(name)
+    {
+    }
 
+    void clear()
+    {
+        index = 0;
+        data.clear();
+    }
     operator T_INTEGER() const { return index; }
     operator const std::string &() const { return data; }
+    operator const char *() const { return data.c_str(); }
     bool operator==(const FName &other) const { return index == other.index; }
 };
 
+
+namespace std
+{
+// Add formatter specialization for spirv_cross::SPIRType
+template <>
+struct formatter<FName> : formatter<std::string>
+{
+    auto format(const FName &type, std::format_context &ctx) const
+    {
+        return std::format_to(ctx.out(), "%s", type.data.c_str());
+    }
+};
+
+template <>
+struct hash<FName>
+{
+    std::size_t operator()(const FName &name) const
+    {
+        // Use a simple hash function for FName
+        return std::hash<std::string>()(name.data);
+    }
+};
+
+} // namespace std
 
 #ifndef ENABLE_TEST
     #define ENABLE_TEST 0

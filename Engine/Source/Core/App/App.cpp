@@ -2,6 +2,8 @@
 #include "Core/FileSystem/FileSystem.h"
 #include "Platform/RHI/Vulkan/VulkanRender.h"
 
+#include "RHI/Render.h"
+
 #include <SDL3/SDL_events.h>
 
 
@@ -14,18 +16,93 @@ void Neon::App::init()
     // deleteStack.push("SDLWindowProvider", windowProvider);
     windowProvider->init();
 
+    int w, h;
+    windowProvider->getWindowSize(w, h);
+
     vkRender = new VulkanRender();
-    vkRender->init(IRender::InitParams{
+
+    IRender::InitParams params = {
         .bVsync         = true,
         .renderAPI      = ERenderAPI::Vulkan,
         .windowProvider = *windowProvider,
         .swapchainCI    = SwapchainCreateInfo{
-
+               .bVsync = true,
+               .width  = static_cast<uint32_t>(w),
+               .height = static_cast<uint32_t>(h),
         },
         .renderPassCI = RenderPassCreateInfo{
+            .attachments = {
+                AttachmentDescription{
+                    .format                  = EFormat::B8G8R8A8_UNORM,
+                    .loadOp                  = EAttachmentLoadOp::Clear,
+                    .storeOp                 = EAttachmentStoreOp::Store,
+                    .bInitialLayoutUndefined = true,
+                },
+                AttachmentDescription{
+                    .format                  = EFormat::D32_SFLOAT,
+                    .loadOp                  = EAttachmentLoadOp::Clear,
+                    .storeOp                 = EAttachmentStoreOp::DontCare,
+                    .bInitialLayoutUndefined = true,
+                },
+            },
+            .dependencies = {
+                RenderPassCreateInfo::SubpassDependency{
+                    .srcSubpass = 0,
+                    .dstSubpass = 0,
+                },
+            },
+            .subpasses = {
+                RenderPassCreateInfo::SubpassInfo{
+                    .colorAttachmentIndices      = {0},
+                    .depthStencilAttachmentIndex = 1,
+                    .inputAttachmentIndices      = {1},
+                },
+            },
+            .pipelineCIs = {
+                GraphicsPipelineCreateInfo{
+                    .shaderCreateInfo = ShaderCreateInfo{
+                        .shaderName = "SimpleTriangle.glsl",
+                    },
+                    // could be defined by shader
+                    .vertexAttributes = {
+                        VertexAttribute{
+                            .location   = 0,
+                            .bufferSlot = 0,
+                            .format     = EVertexAttributeFormat::Float3,
+                            .offset     = 0,
+                        },
+                        VertexAttribute{
+                            .location   = 1,
+                            .bufferSlot = 0,
+                            .format     = EVertexAttributeFormat::Float2,
+                            .offset     = sizeof(float) * 3,
+                        },
+                    },
+                    .rasterizationState = RasterizationState{
+                        .bDepthClampEnable = false,
+                        .polygonMode       = EPolygonMode::Fill,
+                        .cullMode          = ECullMode::Back,
+                    },
+                    .colorBlendState = ColorBlendState{
+                        .bLogicOpEnable = false,
+                        .logicOp        = ELogicOp::NoOp,
+                        .attachments    = {
+                            // ColorBlendAttachment{
+                            //        .blendEnable   = true,
+                            //        .srcColorBlend = EBlendFactor::SrcAlpha,
+                            //        .dstColorBlend = EBlendFactor::OneMinusSrcAlpha,
+                            //        .colorBlendOp  = EBlendOp::Add,
+                            //        .srcAlphaBlend = EBlendFactor::One,
+                            //        .dstAlphaBlend = EBlendFactor::Zero,
+                            //        .alphaBlendOp  = EBlendOp::Add,
+                            // },
+                        },
+                    },
+                },
+            },
+        }};
 
-        },
-    });
+    vkRender->init(params);
 }
 
 void Neon::App::quit()

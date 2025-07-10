@@ -2,6 +2,7 @@
 
 
 #include "Core/Delegate.h"
+#include "Platform/RHI/Vulkan/VulkanPipeline.h"
 #include "Render/RenderManager.h"
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -22,15 +23,9 @@ class VulkanRenderPass : public RenderPass
     VkRenderPass               m_renderPass = VK_NULL_HANDLE;
     std::vector<VkFramebuffer> m_framebuffers;
 
-    // Render pass configuration
-    struct RenderPassConfig
-    {
-        VkSampleCountFlagBits samples      = VK_SAMPLE_COUNT_1_BIT;
-        VkAttachmentLoadOp    colorLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        VkAttachmentStoreOp   colorStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-        VkAttachmentLoadOp    depthLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        VkAttachmentStoreOp   depthStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    } m_config;
+    VulkanPipelineManager m_pipelineManager;
+
+    RenderPassCreateInfo _ci;
 
   public:
 
@@ -41,13 +36,11 @@ class VulkanRenderPass : public RenderPass
     ~VulkanRenderPass() = default;
 
     // Initialize the render pass with device and format information
-    void initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice, VkFormat swapChainImageFormat);
+    void initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice, VkFormat swapChainImageFormat, RenderPassCreateInfo renderPassCI);
 
-    // Create the render pass
-    void createRenderPass();
 
     // Create the render pass with custom configuration
-    void createRenderPassWithConfig(const RenderPassCreateInfo &config);
+    void create();
 
     // Create framebuffers for the render pass
     void createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,

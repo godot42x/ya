@@ -509,18 +509,19 @@ void VulkanState::drawTriangle()
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     // Bind graphics pipeline - use the first available pipeline or a specific one
-    std::string pipelineName = "DefaultTriangle"; // Default name
+    FName pipelineName = "DefaultTriangle"; // Default name
     if (!m_pipelineManager.hasPipeline(pipelineName)) {
         // Get the first available pipeline
         auto pipelineNames = m_pipelineManager.getPipelineNames();
         if (!pipelineNames.empty()) {
             pipelineName = pipelineNames[0];
-        } else {
+        }
+        else {
             NE_CORE_ERROR("No pipelines available for rendering!");
             return;
         }
     }
-    
+
     if (!m_pipelineManager.bindPipeline(commandBuffer, pipelineName)) {
         NE_CORE_ERROR("Failed to bind pipeline: {}", pipelineName);
         return;

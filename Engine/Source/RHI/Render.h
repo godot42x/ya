@@ -425,13 +425,13 @@ struct RenderPassCreateInfo
         std::vector<uint32_t> colorAttachmentIndices;
         uint32_t              depthStencilAttachmentIndex = UINT32_MAX; // UINT32_MAX means no depth
         std::vector<uint32_t> inputAttachmentIndices;
-        std::vector<uint32_t> resolveAttachmentIndices;
+        // std::vector<uint32_t> resolveAttachmentIndices;
     };
 
 
     std::vector<AttachmentDescription>      attachments;
     std::vector<SubpassDependency>          dependencies;
-    std::vector<SubpassInfo>                subpasses;           // Multiple subpasses can be defined, but currently we use a single subpass
+    std::vector<SubpassInfo>                subpasses;   // Multiple subpasses can be defined, but currently we use a single subpass
     std::vector<GraphicsPipelineCreateInfo> pipelineCIs; // For compatibility checks
 
 
@@ -494,23 +494,21 @@ struct SwapchainCreateInfo
     bool            bVsync      = true;               // V-Sync enabled by default
 
     // Image configuration
-    uint32_t                    minImageCount    = 2; // Double buffering by default
-    uint32_t                    imageArrayLayers = 1;
-    std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
+    uint32_t minImageCount    = 2; // Double buffering by default
+    uint32_t imageArrayLayers = 1;
+    // std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
 
     // Transform and composite
-    ESurfaceTransform::T preTransform   = ESurfaceTransform::Identity;
-    ECompositeAlpha::T   compositeAlpha = ECompositeAlpha::Opaque;
+    // ESurfaceTransform::T preTransform   = ESurfaceTransform::Identity;
+    // ECompositeAlpha::T   compositeAlpha = ECompositeAlpha::Opaque;
 
     // Clipping and sharing
-    bool                  bClipped         = true;
-    ESharingMode::T       imageSharingMode = ESharingMode::Exclusive;
-    std::vector<uint32_t> queueFamilyIndices; // For concurrent sharing mode
+    bool bClipped = true;
+    // ESharingMode::T       imageSharingMode = ESharingMode::Exclusive;
+    // std::vector<uint32_t> queueFamilyIndices; // For concurrent sharing mode
 
-    // Window integration
-    void    *windowHandle = nullptr; // Platform-specific window handle
-    uint32_t width        = 800;
-    uint32_t height       = 600;
+    uint32_t width  = 800;
+    uint32_t height = 600;
 };
 
 
@@ -543,15 +541,15 @@ inline uint32_t combineImageUsageFlags(const std::vector<EImageUsage::T> &usages
 }
 
 // Helper function to add image usage flags
-inline void addImageUsage(SwapchainCreateInfo &info, EImageUsage::T usage)
+inline void addImageUsage(std::vector<EImageUsage::T> &usage, EImageUsage::T flag)
 {
     // Check if usage already exists
-    for (auto existingUsage : info.imageUsageFlags) {
-        if (existingUsage == usage) {
+    for (auto existingUsage : usage) {
+        if (existingUsage == flag) {
             return; // Already exists
         }
     }
-    info.imageUsageFlags.push_back(usage);
+    usage.push_back(flag);
 }
 
 // Pipeline-RenderPass compatibility and management functions

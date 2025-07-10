@@ -14,6 +14,7 @@ struct VulkanSwapChainSupportDetails
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat();
     VkPresentModeKHR   ChooseSwapPresentMode();
     VkExtent2D         ChooseSwapExtent(WindowProvider *provider);
+    bool               isValidFormat(const VkSurfaceFormatKHR &fmt);
 
     static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };
@@ -33,15 +34,16 @@ class VulkanSwapChain
     VkColorSpaceKHR          m_colorSpace;
     VkExtent2D               m_extent;
 
+    SwapchainCreateInfo      _ci;
+
   public:
     VulkanSwapChain()  = default;
     ~VulkanSwapChain() = default;
 
     void initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice,
-                    VkSurfaceKHR surface, WindowProvider *windowProvider);
+                    VkSurfaceKHR surface, WindowProvider *windowProvider, const SwapchainCreateInfo &ci);
 
     void create();
-    void createBy(const SwapchainCreateInfo &ci);
     void cleanup();
     void recreate();
 
