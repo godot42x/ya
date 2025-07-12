@@ -1,4 +1,5 @@
 #include "App.h"
+#include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 #include "Platform/RHI/Vulkan/VulkanRender.h"
 
@@ -11,6 +12,7 @@ void Neon::App::init()
 {
     Logger::init();
     FileSystem::init();
+    NameRegistry::init(); // Initialize FName registry
 
     windowProvider = new SDLWindowProvider();
     // deleteStack.push("SDLWindowProvider", windowProvider);
@@ -47,8 +49,8 @@ void Neon::App::init()
             },
             .dependencies = {
                 RenderPassCreateInfo::SubpassDependency{
-                    .srcSubpass = 0,
-                    .dstSubpass = 0,
+                    .bSrcExternal = true, // External source
+                    .dstSubpass   = 0,
                 },
             },
             .subpasses = {

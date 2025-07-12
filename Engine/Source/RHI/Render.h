@@ -414,8 +414,9 @@ struct RenderPassCreateInfo
 
     struct SubpassDependency
     {
-        uint32_t srcSubpass = 0;
-        uint32_t dstSubpass = 0;
+        bool     bSrcExternal = false; // If true, srcSubpass is VK_SUBPASS_EXTERNAL
+        uint32_t srcSubpass   = 0;
+        uint32_t dstSubpass   = 0;
         // Simplified for basic usage - can be expanded later
     };
 

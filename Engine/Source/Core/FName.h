@@ -9,24 +9,22 @@
 
 
 
-#ifndef T_INTEGER
-    #define T_INTEGER uint32_t
-#endif
+using index_t = uint32_t;
 
 
 class NameRegistry
 {
     static NameRegistry *_instance;
 
-    std::map<std::string, T_INTEGER> _str2Index;
-    T_INTEGER                        _nextIndex = 1; // 0 is reserved for empty name
+    std::map<std::string, index_t> _str2Index;
+    index_t                        _nextIndex = 1; // 0 is reserved for empty name
 
   public:
 
     static void          init();
     static NameRegistry &instance() { return *_instance; }
 
-    T_INTEGER getIndex(const std::string &name)
+    index_t getIndex(const std::string &name)
     {
         auto it = _str2Index.find(name);
         if (it != _str2Index.end())
@@ -36,7 +34,7 @@ class NameRegistry
         else
         {
             // If name not found, add it
-            T_INTEGER index  = _nextIndex++;
+            index_t index    = _nextIndex++;
             _str2Index[name] = index;
             return index;
         }
@@ -46,7 +44,7 @@ class NameRegistry
 struct FName
 {
 
-    T_INTEGER   index;
+    index_t     index;
     std::string data;
 
     FName() : index(0), data("") {}
@@ -64,7 +62,7 @@ struct FName
         index = 0;
         data.clear();
     }
-    operator T_INTEGER() const { return index; }
+    operator index_t() const { return index; }
     operator const std::string &() const { return data; }
     operator const char *() const { return data.c_str(); }
     bool operator==(const FName &other) const { return index == other.index; }
@@ -89,7 +87,7 @@ struct hash<FName>
     std::size_t operator()(const FName &name) const
     {
         // Use a simple hash function for FName
-        return std::hash<std::string>()(name.data);
+        return name.index;
     }
 };
 

@@ -309,13 +309,14 @@ void VulkanRenderPass::create()
     NE_CORE_ASSERT(!_ci.dependencies.empty(), "Render pass must have at least one subpass dependency defined!");
     for (const auto &dependency : _ci.dependencies) {
         VkSubpassDependency vkDependency{
-            .srcSubpass    = dependency.srcSubpass,
+            .srcSubpass    = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
             .dstSubpass    = dependency.dstSubpass,
             .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
             .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
             .srcAccessMask = 0,
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
         };
+
         vkDependencies.push_back(vkDependency);
     }
 
