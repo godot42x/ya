@@ -1,9 +1,9 @@
 #include "App.h"
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
-#include "Platform/RHI/Vulkan/VulkanRender.h"
+#include "Platform/Render/Vulkan/VulkanRender.h"
 
-#include "RHI/Render.h"
+#include "Render/Render.h"
 
 #include <SDL3/SDL_events.h>
 
@@ -34,12 +34,14 @@ void Neon::App::init()
         },
         .renderPassCI = RenderPassCreateInfo{
             .attachments = {
+                // color
                 AttachmentDescription{
                     .format                  = EFormat::B8G8R8A8_UNORM,
                     .loadOp                  = EAttachmentLoadOp::Clear,
                     .storeOp                 = EAttachmentStoreOp::Store,
                     .bInitialLayoutUndefined = true,
                 },
+                // depth
                 AttachmentDescription{
                     .format                  = EFormat::D32_SFLOAT,
                     .loadOp                  = EAttachmentLoadOp::Clear,

@@ -65,7 +65,7 @@ void VulkanPipelineManager::cleanup()
     }
 }
 
-bool VulkanPipelineManager::createPipelineImpl(const FName &name, const GraphicsPipelineCreateInfo &config, VkRenderPass renderPass, VkExtent2D extent)
+bool VulkanPipelineManager::createPipelineImpl(const FName &name, const GraphicsPipelineCreateInfo &ci, VkRenderPass renderPass, VkExtent2D extent)
 {
     // Check if pipeline already exists
     if (m_pipelines.find(name) != m_pipelines.end()) {
@@ -76,17 +76,17 @@ bool VulkanPipelineManager::createPipelineImpl(const FName &name, const Graphics
     m_extent = extent;
 
     // Create new pipeline info
-    auto pipelineInfo    = std::make_unique<PipelineInfo>();
-    pipelineInfo->name   = name;
-    pipelineInfo->config = config;
+    auto pipelineInfo  = std::make_unique<PipelineInfo>();
+    pipelineInfo->name = name;
+    pipelineInfo->ci   = ci;
 
     // Create pipeline resources
     try {
-        createDescriptorSetLayout(*pipelineInfo, config);
+        createDescriptorSetLayout(*pipelineInfo, ci);
         createPipelineLayout(*pipelineInfo);
         createDescriptorPool(*pipelineInfo);
         createDescriptorSets(*pipelineInfo);
-        createGraphicsPipelineInternal(*pipelineInfo, config, renderPass, extent);
+        createGraphicsPipelineInternal(*pipelineInfo, ci, renderPass, extent);
 
         // Store the pipeline
         m_pipelines[name] = std::move(pipelineInfo);
@@ -178,7 +178,7 @@ void VulkanPipelineManager::recreatePipeline(const FName &name, VkRenderPass ren
     }
 
     // Recreate pipeline with stored configuration
-    createGraphicsPipelineInternal(*pipelineInfo, pipelineInfo->config, renderPass, extent);
+    createGraphicsPipelineInternal(*pipelineInfo, pipelineInfo->ci, renderPass, extent);
 
     NE_CORE_INFO("Recreated graphics pipeline: '{}'", name);
 }
@@ -195,7 +195,7 @@ void VulkanPipelineManager::recreateAllPipelines(VkRenderPass renderPass, VkExte
         }
 
         // Recreate pipeline
-        createGraphicsPipelineInternal(*pipelineInfo, pipelineInfo->config, renderPass, extent);
+        createGraphicsPipelineInternal(*pipelineInfo, pipelineInfo->ci, renderPass, extent);
     }
 
     NE_CORE_INFO("Recreated all {} graphics pipelines", m_pipelines.size());

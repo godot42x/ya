@@ -4,7 +4,6 @@
 #include <sstream>
 
 #include "Model.h"
-#include "Texture.h"
 
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"

@@ -77,7 +77,7 @@ struct formatter<FName> : formatter<std::string>
 {
     auto format(const FName &type, std::format_context &ctx) const
     {
-        return std::format_to(ctx.out(), "%s", type.data.c_str());
+        return std::format_to(ctx.out(), "{}", type.data.c_str());
     }
 };
 

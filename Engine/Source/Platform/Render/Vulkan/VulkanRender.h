@@ -1,5 +1,5 @@
-#include "Platform/RHI/Vulkan/VulkanDevice.h"
-#include "RHI/Render.h"
+#include "Platform/Render/Vulkan/VulkanDevice.h"
+#include "Render/Render.h"
 
 struct VulkanRender : public IRender
 {

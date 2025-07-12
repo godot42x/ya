@@ -10,7 +10,7 @@
 
 
 #include "Render/Model.h"
-#include "Render/Texture.h"
+// #include "Render/Texture.h"
 
 class AssetManager
 {
@@ -19,7 +19,7 @@ class AssetManager
 
     // Cache for loaded models
     std::unordered_map<std::string, std::shared_ptr<Model>>   modelCache;
-    std::unordered_map<std::string, std::shared_ptr<Texture>> textureCache;
+    // std::unordered_map<std::string, std::shared_ptr<Texture>> textureCache;
 
     // Assimp importer
     Assimp::Importer importer;

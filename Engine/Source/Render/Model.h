@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "Render/Texture.h"
 
 struct CommandBuffer;
 
@@ -23,7 +22,7 @@ struct Mesh
     std::vector<Vertex>      vertices;
     std::vector<uint32_t>    indices;
     std::string              name;
-    std::shared_ptr<Texture> diffuseTexture = nullptr;
+    // std::shared_ptr<Texture> diffuseTexture = nullptr;
 
     Mesh()  = default;
     ~Mesh() = default;

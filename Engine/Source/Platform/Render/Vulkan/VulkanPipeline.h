@@ -9,7 +9,7 @@
 
 #include "Core/Base.h"
 #include "Core/FName.h"
-#include "RHI/Render.h"
+#include "Render/Render.h"
 #include "Render/Shader.h"
 
 
@@ -34,7 +34,7 @@ class VulkanPipelineManager
         VkDescriptorSetLayout      descriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorPool           descriptorPool      = VK_NULL_HANDLE;
         VkDescriptorSet            descriptorSet       = VK_NULL_HANDLE;
-        GraphicsPipelineCreateInfo config;
+        GraphicsPipelineCreateInfo ci;
 
         // Resource tracking for cleanup
         std::vector<std::shared_ptr<VulkanTexture2D>> textures;
