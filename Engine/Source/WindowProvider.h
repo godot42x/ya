@@ -80,7 +80,7 @@ class SDLWindowProvider : public WindowProvider
     {
         SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
     }
-    bool setWindowSize(int width, int height)
+    bool setWindowSize(int width, int height) override
     {
         if (nativeWindowHandle) {
             SDL_SetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), width, height);

@@ -887,10 +887,10 @@ int main()
 
 
     try {
-        Neon::App app;
-        app.init();
-        app.run();
-        app.quit();
+        auto *app = Neon::App::create();
+        app->init();
+        app->run();
+        app->quit();
     }
     catch (const std::exception &e) {
         NE_CORE_ERROR("Exception caught in main: {}", e.what());

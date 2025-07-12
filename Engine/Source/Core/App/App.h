@@ -25,6 +25,8 @@ namespace Neon
 
 class App
 {
+    static App *_instance;
+
     // StackDeleter    deleteStack;
     WindowProvider *windowProvider = nullptr;
     IRender        *vkRender       = nullptr;
@@ -35,13 +37,17 @@ class App
     bool bRunning = true;
 
   public:
-    void init();
-    int  run();
-    void quit();
+    static App *create();
+    void        init();
+    int         run();
+    void        quit();
 
     int onEvent(SDL_Event &event);
 
     int iterate(float dt);
+
+    IRender    *getRender() { return vkRender; }
+    static App *get() { return _instance; }
 };
 
 } // namespace Neon

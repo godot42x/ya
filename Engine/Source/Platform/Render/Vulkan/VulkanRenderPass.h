@@ -12,7 +12,7 @@
 Render Pass主导资源声明
 Pipeline 需要兼容/依赖 Render Pass 的资源声明
 */
-class VulkanRenderPass : public RenderPass
+class VulkanRenderPass
 {
   private:
     VkDevice         m_logicalDevice        = VK_NULL_HANDLE;

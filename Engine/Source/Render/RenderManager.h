@@ -1,16 +1,10 @@
 #pragma once
 #include <functional>
 
-#include "Render/CommandBuffer.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 
 #include <glm/glm.hpp>
-
-struct RenderPass
-{
-    void *passPtr = nullptr; // SDL_GPURenderPass* passPtr;
-};
 
 
 enum class RenderStage
@@ -24,11 +18,13 @@ enum class RenderStage
     ENUM_AX
 };
 
+struct RHICmdList; // Unimplemented
+
 
 struct RenderCommand
 {
     RenderStage                       stage;
-    std::function<void(RenderPass *)> renderFunc;
+    std::function<void(RHICmdList *)> renderFunc;
     int                               priority = 0;
 };
 
@@ -57,7 +53,7 @@ class RenderPassManager
 
     // 添加渲染命令到特定阶段
     void addPass(RenderStage                       stage,
-                 std::function<void(RenderPass *)> renderFunc,
+                 std::function<void(RHICmdList *)> renderFunc,
                  int                               priority = 0)
     {
         if (stage == RenderStage::ENUM_AX || static_cast<size_t>(stage) >= stageCommands.size()) {

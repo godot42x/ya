@@ -7,7 +7,6 @@
 
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
-#include "Render/CommandBuffer.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>

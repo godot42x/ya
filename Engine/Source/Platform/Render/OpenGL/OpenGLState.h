@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Log.h"
-#include "Render/Device.h"
 
 #include "glad/glad.h"
 #include <string>

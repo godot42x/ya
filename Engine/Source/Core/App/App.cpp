@@ -1,14 +1,27 @@
 #include "App.h"
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
+
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "Render/Render.h"
 
 #include <SDL3/SDL_events.h>
 
+namespace Neon
+{
 
-void Neon::App::init()
+
+App *App::_instance = nullptr;
+
+App *App::create()
+{
+    NE_CORE_ASSERT(App::_instance == nullptr, "App instance already exists!");
+    App::_instance = new App();
+    return App::_instance;
+}
+
+void App::init()
 {
     Logger::init();
     FileSystem::init();
@@ -26,7 +39,7 @@ void Neon::App::init()
     IRender::InitParams params = {
         .bVsync         = true,
         .renderAPI      = ERenderAPI::Vulkan,
-        .windowProvider = *windowProvider,
+        .windowProvider = windowProvider,
         .swapchainCI    = SwapchainCreateInfo{
                .bVsync = true,
                .width  = static_cast<uint32_t>(w),
@@ -290,11 +303,13 @@ int Neon::App::iterate(float dt)
 
 #if USE_VULKAN
     auto render = static_cast<VulkanRender *>(vkRender);
-    render->_vulkanState.DrawFrame(); // Draw triangle!
-    render->_vulkanState.OnPostUpdate();
+    render->DrawFrame(); // Draw triangle!
+    render->OnPostUpdate();
 
 #endif
     // Handle input, update logic, render, etc.
     // This is where the main loop logic would go.
     return 0; // Continue running
 }
+
+} // namespace Neon

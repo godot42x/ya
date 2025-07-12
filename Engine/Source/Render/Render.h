@@ -522,7 +522,7 @@ struct IRender
     {
         bool                 bVsync    = true;
         ERenderAPI::T        renderAPI = ERenderAPI::Vulkan;
-        WindowProvider      &windowProvider;
+        WindowProvider      *windowProvider;
         SwapchainCreateInfo  swapchainCI;
         RenderPassCreateInfo renderPassCI;
     };

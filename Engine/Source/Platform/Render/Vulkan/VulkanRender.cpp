@@ -1,4 +1,4 @@
-#include "VulkanDevice.h"
+#include "VulkanRender.h"
 
 #include <Core/Base.h>
 #include <Core/Log.h>
@@ -15,7 +15,7 @@
 
 
 
-void VulkanState::createInstance()
+void VulkanRender::createInstance()
 {
     if (m_EnableValidationLayers && !is_validation_layers_supported()) {
         NE_CORE_ASSERT(false, "validation layers requested, but not available!");
@@ -71,7 +71,7 @@ void VulkanState::createInstance()
 
 
 // Assign the m_physicalDevice, m_PresentQueue, m_GraphicsQueue
-void VulkanState::createLogicDevice()
+void VulkanRender::createLogicDevice()
 {
     QueueFamilyIndices family_indices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
@@ -125,7 +125,7 @@ void VulkanState::createLogicDevice()
     NE_ASSERT(m_GraphicsQueue != VK_NULL_HANDLE, "failed to get graphics queue!");
 }
 
-void VulkanState::createCommandPool()
+void VulkanRender::createCommandPool()
 {
     QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
@@ -140,7 +140,7 @@ void VulkanState::createCommandPool()
     }
 }
 
-void VulkanState::createCommandBuffers()
+void VulkanRender::createCommandBuffers()
 {
     m_commandBuffers.resize(m_swapChain.getImages().size());
 
@@ -156,7 +156,7 @@ void VulkanState::createCommandBuffers()
     }
 }
 
-void VulkanState::createSemaphores()
+void VulkanRender::createSemaphores()
 {
     VkSemaphoreCreateInfo semaphoreInfo{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -168,7 +168,7 @@ void VulkanState::createSemaphores()
     }
 }
 
-void VulkanState::setupDebugMessengerExt()
+void VulkanRender::setupDebugMessengerExt()
 {
     if (!m_EnableValidationLayers) {
         return;
@@ -183,7 +183,7 @@ void VulkanState::setupDebugMessengerExt()
     NE_CORE_INFO("Debug messenger setup successfully");
 }
 
-void VulkanState::setupReportCallbackExt()
+void VulkanRender::setupReportCallbackExt()
 {
 
     if (!m_EnableValidationLayers) {
@@ -217,14 +217,14 @@ void VulkanState::setupReportCallbackExt()
     NE_CORE_INFO("Debug report callback setup successfully");
 }
 
-void VulkanState::destroyDebugCallBackExt()
+void VulkanRender::destroyDebugCallBackExt()
 {
     if (m_EnableValidationLayers) {
         pfnDestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
     }
 }
 
-void VulkanState::destroyDebugReportCallbackExt()
+void VulkanRender::destroyDebugReportCallbackExt()
 {
     if (m_EnableValidationLayers) {
         pfnDestroyDebugReportCallbackEXT(m_Instance, m_DebugReportCallback, nullptr);
@@ -233,7 +233,7 @@ void VulkanState::destroyDebugReportCallbackExt()
 }
 
 
-bool VulkanState::is_device_suitable(VkPhysicalDevice device)
+bool VulkanRender::is_device_suitable(VkPhysicalDevice device)
 {
     // VkPhysicalDeviceProperties deviceProperties;
     // vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -268,7 +268,7 @@ bool VulkanState::is_device_suitable(VkPhysicalDevice device)
            supported_features.samplerAnisotropy; // bool
 }
 
-bool VulkanState::is_validation_layers_supported()
+bool VulkanRender::is_validation_layers_supported()
 {
     uint32_t count;
     vkEnumerateInstanceLayerProperties(&count, nullptr);
@@ -289,7 +289,7 @@ bool VulkanState::is_validation_layers_supported()
     return false;
 }
 
-bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
+bool VulkanRender::is_device_extension_support(VkPhysicalDevice device)
 {
     uint32_t count;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &count, nullptr);
@@ -308,7 +308,7 @@ bool VulkanState::is_device_extension_support(VkPhysicalDevice device)
 
 
 
-void VulkanState::createDepthResources()
+void VulkanRender::createDepthResources()
 {
 
     VkFormat depthFormat = VulkanUtils::findSupportedImageFormat(
@@ -347,7 +347,7 @@ void VulkanState::createDepthResources()
                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
-void VulkanState::loadDebugFunctionPointers()
+void VulkanRender::loadDebugFunctionPointers()
 {
     if (m_EnableValidationLayers) {
         // Load debug utils messenger functions
@@ -381,7 +381,7 @@ void VulkanState::loadDebugFunctionPointers()
     }
 }
 
-void VulkanState::createVertexBuffer()
+void VulkanRender::createVertexBuffer()
 {
     // Define triangle vertices (centered triangle)
     m_triangleVertices = {
@@ -434,7 +434,7 @@ void VulkanState::createVertexBuffer()
     vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }
 
-void VulkanState::createUniformBuffer()
+void VulkanRender::createUniformBuffer()
 {
     VkDeviceSize bufferSize = sizeof(CameraData);
 
@@ -451,7 +451,7 @@ void VulkanState::createUniformBuffer()
     vkMapMemory(m_LogicalDevice, m_uniformBufferMemory, 0, bufferSize, 0, &m_uniformBufferMapped);
 }
 
-void VulkanState::updateUniformBuffer()
+void VulkanRender::updateUniformBuffer()
 {
     CameraData ubo{};
     ubo.viewProjection = glm::mat4(1.0f); // Identity matrix for now (no transformation)
@@ -459,7 +459,7 @@ void VulkanState::updateUniformBuffer()
     memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
 }
 
-void VulkanState::drawTriangle()
+void VulkanRender::drawTriangle()
 {
     // Wait for previous frame
     vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
@@ -603,7 +603,7 @@ void VulkanState::drawTriangle()
     }
 }
 
-void VulkanState::recreateSwapChain()
+void VulkanRender::recreateSwapChain()
 {
     vkDeviceWaitIdle(m_LogicalDevice);
 
@@ -629,7 +629,7 @@ void VulkanState::recreateSwapChain()
     NE_CORE_INFO("Swap chain and all pipelines recreated successfully");
 }
 
-void VulkanState::createFences()
+void VulkanRender::createFences()
 {
     VkFenceCreateInfo fenceInfo{
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
