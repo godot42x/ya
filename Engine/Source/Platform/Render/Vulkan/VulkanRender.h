@@ -420,7 +420,11 @@ struct VulkanRender : public IRender
     Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
     Delegate<std::vector<const char *>()>               onGetRequiredExtensions;
 
-
+    // Getter methods for 2D renderer access
+    VkDevice getLogicalDevice() const { return m_LogicalDevice; }
+    VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
+    VkCommandPool getCommandPool() const { return m_commandPool; }
+    VkQueue getGraphicsQueue() const { return m_GraphicsQueue; }
 
   private:
 

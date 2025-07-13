@@ -5,6 +5,7 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "Render/Render.h"
+#include "Render/Render2DIntegration.h"
 
 #include <SDL3/SDL_events.h>
 
@@ -120,10 +121,21 @@ void App::init()
         }};
 
     vkRender->init(params);
+    
+    // Initialize 2D rendering system after Vulkan renderer
+    if (!Neon::Render2DIntegration::initialize()) {
+        NE_CORE_ERROR("Failed to initialize 2D renderer");
+    }
+    
+    // Set screen size for 2D rendering
+    Neon::Render2DIntegration::setScreenSize(static_cast<float>(w), static_cast<float>(h));
 }
 
 void Neon::App::quit()
 {
+    // Shutdown 2D renderer before main renderer
+    Neon::Render2DIntegration::shutdown();
+    
     vkRender->destroy();
     windowProvider->destroy();
 
@@ -300,6 +312,15 @@ int Neon::App::onEvent(SDL_Event &event)
 int Neon::App::iterate(float dt)
 {
     inputManager.update();
+    
+    // Begin 2D rendering frame
+    Neon::Render2DIntegration::beginFrame();
+    
+    // Render example 2D UI
+    Neon::Render2DIntegration::renderExampleUI();
+    
+    // End 2D rendering frame
+    Neon::Render2DIntegration::endFrame();
 
 #if USE_VULKAN
     auto render = static_cast<VulkanRender *>(vkRender);

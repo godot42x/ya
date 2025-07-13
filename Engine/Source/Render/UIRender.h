@@ -68,10 +68,12 @@ public:
 
   // 变换相关
   virtual glm::mat4 getTransform() const {
-    UNIMPLEMENTED();
-    return {};
+    // TODO: Implement transform calculation
+    return glm::mat4(1.0f);
   }
-  virtual glm::vec4 getBounds() const {};
+  virtual glm::vec4 getBounds() const {
+    return glm::vec4(position.x, position.y, size.x, size.y);
+  }
 
   //
   virtual void onPaint() = 0;
@@ -160,7 +162,7 @@ public:
                        float fontSize = 16.0f,
                        const glm::vec4 &color = {1.0f, 1.0f, 1.0f, 1.0f},
                        uint32_t fontTextureId = 0);
-  static void drawImage(const std::string &texturePath,
+  static void drawImage(const std::shared_ptr<Texture2D> &texture,
                         const glm::vec2 &position, const glm::vec2 &size,
                         const glm::vec4 &uvRect = {0.0f, 0.0f, 1.0f, 1.0f},
                         float rotation = 0.0f, float scale = 1.0f,
@@ -169,12 +171,18 @@ public:
                        const glm::vec4 &color = {1.0f, 1.0f, 1.0f, 1.0f},
                        float thickness = 1.0f);
   static void drawCircle(const glm::vec2 &center, float radius,
-                         const glm::vec4 &color = {1.0f, 1.0f, 1.0f, 1.0f},
-                         int segments = 32);
+                         const glm::vec4 &color = {1.0f, 1.0f, 1.0f, 1.0f});
 
-  // unimplemented
-  // static uint32_t registerTexture(const std::shared_ptr<Texture2D>
-  // &texture); static void setViewport(float width, float height);
+  // Statistics and debugging
+  struct RenderStats {
+    uint32_t drawCalls{0};
+    uint32_t vertexCount{0};
+    uint32_t indexCount{0};
+    uint32_t quadCount{0};
+  };
+  
+  static const RenderStats& getStats();
+  static void resetStats();
 };
 
 // UI管理器 - 整合到渲染系统中

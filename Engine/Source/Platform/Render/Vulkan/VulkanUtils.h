@@ -11,7 +11,7 @@ struct VulkanUtils
     static uint32_t findMemoryType(VkPhysicalDevice physicalDevice,
                                    uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-    static void createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
+    static bool createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
                              VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
                              VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
 

@@ -31,7 +31,7 @@ uint32_t VulkanUtils::findMemoryType(VkPhysicalDevice physicalDevice, uint32_t t
     return -1;
 }
 
-void VulkanUtils::createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
+bool VulkanUtils::createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
                                VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
 {
     VkBufferCreateInfo bufferInfo{
@@ -60,6 +60,8 @@ void VulkanUtils::createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
         NE_CORE_ASSERT(false, "failed to allocate buffer memory!");
     }
     vkBindBufferMemory(device, outBuffer, outBufferMemory, 0);
+
+    return true;
 }
 
 void VulkanUtils::createImage(VkDevice device, VkPhysicalDevice physicalDevice,
@@ -257,10 +259,10 @@ void VulkanUtils::copyBufferToImage(VkDevice device, VkCommandPool commandPool, 
     endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
 }
 
-VkFormat VulkanUtils::findSupportedImageFormat(VkPhysicalDevice physicalDevice,
+VkFormat VulkanUtils::findSupportedImageFormat(VkPhysicalDevice             physicalDevice,
                                                const std::vector<VkFormat> &candidates,
-                                               VkImageTiling tiling,
-                                               VkFormatFeatureFlags features)
+                                               VkImageTiling                tiling,
+                                               VkFormatFeatureFlags         features)
 {
     for (VkFormat format : candidates) {
         VkFormatProperties props;
@@ -296,7 +298,10 @@ void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalD
     VkBuffer       stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
 
-    createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    if (!VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory)) {
+        NE_CORE_ERROR("Failed to create staging buffer");
+        return;
+    }
 
     void *data;
     vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
@@ -356,7 +361,7 @@ void VulkanUtils::copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue
     VkBufferCopy copyRegion{
         .srcOffset = 0,
         .dstOffset = 0,
-        .size = size,
+        .size      = size,
     };
     vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
