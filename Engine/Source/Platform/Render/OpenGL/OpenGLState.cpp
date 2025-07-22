@@ -561,20 +561,14 @@ void OpenGLState::checkGLError(const std::string &operation)
 std::string OpenGLState::getGLErrorString(GLenum error)
 {
     switch (error) {
-    case GL_NO_ERROR:
-        return "No Error";
-    case GL_INVALID_ENUM:
-        return "Invalid Enum";
-    case GL_INVALID_VALUE:
-        return "Invalid Value";
-    case GL_INVALID_OPERATION:
-        return "Invalid Operation";
-    case GL_OUT_OF_MEMORY:
-        return "Out of Memory";
-    case GL_INVALID_FRAMEBUFFER_OPERATION:
-        return "Invalid Framebuffer Operation";
+        CASE_ENUM_TO_STR(GL_NO_ERROR);
+        CASE_ENUM_TO_STR(GL_INVALID_ENUM);
+        CASE_ENUM_TO_STR(GL_INVALID_VALUE);
+        CASE_ENUM_TO_STR(GL_INVALID_OPERATION);
+        CASE_ENUM_TO_STR(GL_OUT_OF_MEMORY);
+        CASE_ENUM_TO_STR(GL_INVALID_FRAMEBUFFER_OPERATION);
     default:
-        return "Unknown Error";
+        return std::format("Unknown Error: {}", (int)error);
     }
 }
 

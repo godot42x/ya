@@ -10,6 +10,7 @@
         "gltf",
         "HLSL",
         "logcc",
+        "Lsizeiptr",
         "MSAA",
         "PRIMITIVETYPE",
         "projectdir",
@@ -42,6 +43,7 @@
         "VERTEXSTEPMODE",
         "Viewports",
         "VKAPI",
+        "VKCAPTURE",
         "VUID",
         "WINDOWPOS"
     ],

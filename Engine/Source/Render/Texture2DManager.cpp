@@ -38,10 +38,10 @@ void Texture2DManager::shutdown() {
     auto app = Neon::App::get();
     if (!app) return;
     
-    auto vkRender = static_cast<VulkanRender*>(app->getRender());
-    if (!vkRender) return;
+    auto _render = static_cast<VulkanRender*>(app->getRender());
+    if (!_render) return;
     
-    VkDevice device = vkRender->getLogicalDevice();
+    VkDevice device = _render->getLogicalDevice();
     vkDeviceWaitIdle(device);
     
     // Cleanup all textures
@@ -161,13 +161,13 @@ std::shared_ptr<Texture2DManager::Texture2D> Texture2DManager::createVulkanTextu
     auto app = Neon::App::get();
     if (!app) return nullptr;
     
-    auto vkRender = static_cast<VulkanRender*>(app->getRender());
-    if (!vkRender) return nullptr;
+    auto _render = static_cast<VulkanRender*>(app->getRender());
+    if (!_render) return nullptr;
     
-    VkDevice device = vkRender->getLogicalDevice();
-    VkPhysicalDevice physicalDevice = vkRender->getPhysicalDevice();
-    VkCommandPool commandPool = vkRender->getCommandPool();
-    VkQueue graphicsQueue = vkRender->getGraphicsQueue();
+    VkDevice device = _render->getLogicalDevice();
+    VkPhysicalDevice physicalDevice = _render->getPhysicalDevice();
+    VkCommandPool commandPool = _render->getCommandPool();
+    VkQueue graphicsQueue = _render->getGraphicsQueue();
     
     auto texture = std::make_shared<Texture2D>();
     texture->width = width;

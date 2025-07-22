@@ -513,6 +513,22 @@ struct SwapchainCreateInfo
 };
 
 
+struct DeviceFeature
+{
+    std::string name;
+    bool        bRequired;
+
+    bool operator==(const DeviceFeature &other) const
+    {
+        return name == other.name;
+    }
+
+    bool operator<(const DeviceFeature &other) const
+    {
+        return name < other.name;
+    }
+};
+
 struct IRender
 {
 
@@ -520,11 +536,10 @@ struct IRender
 
     struct InitParams
     {
-        bool                 bVsync    = true;
-        ERenderAPI::T        renderAPI = ERenderAPI::Vulkan;
-        WindowProvider      *windowProvider;
-        SwapchainCreateInfo  swapchainCI;
-        RenderPassCreateInfo renderPassCI;
+        bool                bVsync    = true;
+        ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
+        WindowProvider     *windowProvider;
+        SwapchainCreateInfo swapchainCI;
     };
 
     virtual bool init(const InitParams &params) = 0;

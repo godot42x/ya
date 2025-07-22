@@ -1,4 +1,5 @@
 #pragma once
+#include "FWD.h"
 
 #if _WIN32
     #define PLATFORM_BREAK() __debugbreak()
@@ -25,3 +26,21 @@
 #define USE_SDL 1
 
 #include "Log.h"
+
+
+struct DefaultAllocator
+{
+    template <typename T>
+    static T *allocate(std::size_t size)
+    {
+        return static_cast<T *>(malloc(size));
+    }
+
+    template <typename T>
+    static void deallocate(T *ptr)
+    {
+        free(ptr);
+    }
+};
+
+static DefaultAllocator defaultAllocator;

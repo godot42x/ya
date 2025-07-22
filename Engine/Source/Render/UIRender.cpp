@@ -127,8 +127,8 @@ static void FlushBatch()
     if (s_data.currentVertexCount == 0)
         return;
 
-    auto vkRender = GetVulkanRenderer();
-    if (!vkRender)
+    auto _render = GetVulkanRenderer();
+    if (!_render)
         return;
 
     // Update vertex buffer
@@ -224,8 +224,8 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
         return true;
     }
 
-    auto vkRender = GetVulkanRenderer();
-    if (!vkRender) {
+    auto _render = GetVulkanRenderer();
+    if (!_render) {
         NE_CORE_ERROR("Failed to get Vulkan renderer");
         return false;
     }
@@ -239,8 +239,8 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
     s_data.textureSlots.resize(s_data.maxTextureSlots);
 
     // Create buffers
-    VkDevice         device         = vkRender->getLogicalDevice();
-    VkPhysicalDevice physicalDevice = vkRender->getPhysicalDevice();
+    VkDevice         device         = _render->getLogicalDevice();
+    VkPhysicalDevice physicalDevice = _render->getPhysicalDevice();
 
     // Vertex buffer
     VkDeviceSize vertexBufferSize = maxVertices * sizeof(UIVertex);
@@ -290,13 +290,13 @@ void F2DRender::shutdown()
         NE_CORE_WARN("F2DRender not initialized");
         return;
     }
-    auto vkRender = GetVulkanRenderer();
-    if (!vkRender) {
+    auto _render = GetVulkanRenderer();
+    if (!_render) {
         NE_CORE_ERROR("Failed to get Vulkan renderer");
         return;
     }
 
-    VkDevice device = vkRender->getLogicalDevice();
+    VkDevice device = _render->getLogicalDevice();
     vkDeviceWaitIdle(device);
     // Cleanup buffers
     if (s_data.vertexBufferMapped) {

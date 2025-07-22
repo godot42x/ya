@@ -18,6 +18,7 @@
 // #include "utility.cc/stack_deleter.h"
 
 struct LogicalDevice;
+struct VulkanRenderPass;
 
 
 namespace Neon
@@ -28,8 +29,10 @@ class App
     static App *_instance;
 
     // StackDeleter    deleteStack;
-    WindowProvider *windowProvider = nullptr;
-    IRender        *vkRender       = nullptr;
+    WindowProvider   *windowProvider       = nullptr;
+    IRender          *_render              = nullptr;
+    VulkanRenderPass *m_triangleRenderPass = nullptr;
+    VulkanRenderPass *m_2DRenderPass       = nullptr;
 
     InputManager inputManager;
 
@@ -46,7 +49,7 @@ class App
 
     int iterate(float dt);
 
-    IRender    *getRender() { return vkRender; }
+    IRender    *getRender() { return _render; }
     static App *get() { return _instance; }
 };
 

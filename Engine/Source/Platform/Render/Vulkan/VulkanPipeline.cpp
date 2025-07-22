@@ -539,7 +539,9 @@ void VulkanPipelineManager::createGraphicsPipelineInternal(PipelineInfo &pipelin
 
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR};
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+        };
 
     VkPipelineDynamicStateCreateInfo dynamicState{
         .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,

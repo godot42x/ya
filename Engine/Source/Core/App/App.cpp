@@ -5,7 +5,6 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "Render/Render.h"
-#include "Render/Render2DIntegration.h"
 
 #include <SDL3/SDL_events.h>
 
@@ -35,9 +34,11 @@ void App::init()
     int w, h;
     windowProvider->getWindowSize(w, h);
 
-    vkRender = new VulkanRender();
+    _render        = new VulkanRender();
+    auto *vkRender = static_cast<VulkanRender *>(_render);
 
-    IRender::InitParams params = {
+    // IRender::InitParams params =
+    vkRender->init(IRender::InitParams{
         .bVsync         = true,
         .renderAPI      = ERenderAPI::Vulkan,
         .windowProvider = windowProvider,
@@ -46,100 +47,17 @@ void App::init()
                .width  = static_cast<uint32_t>(w),
                .height = static_cast<uint32_t>(h),
         },
-        .renderPassCI = RenderPassCreateInfo{
-            .attachments = {
-                // color
-                AttachmentDescription{
-                    .format                  = EFormat::B8G8R8A8_UNORM,
-                    .loadOp                  = EAttachmentLoadOp::Clear,
-                    .storeOp                 = EAttachmentStoreOp::Store,
-                    .bInitialLayoutUndefined = true,
-                },
-                // depth
-                AttachmentDescription{
-                    .format                  = EFormat::D32_SFLOAT,
-                    .loadOp                  = EAttachmentLoadOp::Clear,
-                    .storeOp                 = EAttachmentStoreOp::DontCare,
-                    .bInitialLayoutUndefined = true,
-                },
-            },
-            .dependencies = {
-                RenderPassCreateInfo::SubpassDependency{
-                    .bSrcExternal = true, // External source
-                    .dstSubpass   = 0,
-                },
-            },
-            .subpasses = {
-                RenderPassCreateInfo::SubpassInfo{
-                    .colorAttachmentIndices      = {0},
-                    .depthStencilAttachmentIndex = 1,
-                    .inputAttachmentIndices      = {1},
-                },
-            },
-            .pipelineCIs = {
-                GraphicsPipelineCreateInfo{
-                    .shaderCreateInfo = ShaderCreateInfo{
-                        .shaderName = "SimpleTriangle.glsl",
-                    },
-                    // could be defined by shader
-                    .vertexAttributes = {
-                        VertexAttribute{
-                            .location   = 0,
-                            .bufferSlot = 0,
-                            .format     = EVertexAttributeFormat::Float3,
-                            .offset     = 0,
-                        },
-                        VertexAttribute{
-                            .location   = 1,
-                            .bufferSlot = 0,
-                            .format     = EVertexAttributeFormat::Float2,
-                            .offset     = sizeof(float) * 3,
-                        },
-                    },
-                    .rasterizationState = RasterizationState{
-                        .bDepthClampEnable = false,
-                        .polygonMode       = EPolygonMode::Fill,
-                        .cullMode          = ECullMode::Back,
-                    },
-                    .colorBlendState = ColorBlendState{
-                        .bLogicOpEnable = false,
-                        .logicOp        = ELogicOp::NoOp,
-                        .attachments    = {
-                            // ColorBlendAttachment{
-                            //        .blendEnable   = true,
-                            //        .srcColorBlend = EBlendFactor::SrcAlpha,
-                            //        .dstColorBlend = EBlendFactor::OneMinusSrcAlpha,
-                            //        .colorBlendOp  = EBlendOp::Add,
-                            //        .srcAlphaBlend = EBlendFactor::One,
-                            //        .dstAlphaBlend = EBlendFactor::Zero,
-                            //        .alphaBlendOp  = EBlendOp::Add,
-                            // },
-                        },
-                    },
-                },
-            },
-        }};
+    });
 
-    vkRender->init(params);
-    
-    // Initialize 2D rendering system after Vulkan renderer
-    if (!Neon::Render2DIntegration::initialize()) {
-        NE_CORE_ERROR("Failed to initialize 2D renderer");
-    }
-    
-    // Set screen size for 2D rendering
-    Neon::Render2DIntegration::setScreenSize(static_cast<float>(w), static_cast<float>(h));
+    // TODO: create pipelines
 }
 
 void Neon::App::quit()
 {
-    // Shutdown 2D renderer before main renderer
-    Neon::Render2DIntegration::shutdown();
-    
-    vkRender->destroy();
+    _render->destroy();
     windowProvider->destroy();
 
-    delete vkRender;
+    delete _render;
     delete windowProvider;
 }
 
@@ -312,18 +230,10 @@ int Neon::App::onEvent(SDL_Event &event)
 int Neon::App::iterate(float dt)
 {
     inputManager.update();
-    
-    // Begin 2D rendering frame
-    Neon::Render2DIntegration::beginFrame();
-    
-    // Render example 2D UI
-    Neon::Render2DIntegration::renderExampleUI();
-    
-    // End 2D rendering frame
-    Neon::Render2DIntegration::endFrame();
+
 
 #if USE_VULKAN
-    auto render = static_cast<VulkanRender *>(vkRender);
+    auto render = static_cast<VulkanRender *>(_render);
     render->DrawFrame(); // Draw triangle!
     render->OnPostUpdate();
 
