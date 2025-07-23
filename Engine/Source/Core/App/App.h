@@ -24,7 +24,7 @@ struct VulkanRenderPass;
 namespace Neon
 {
 
-class App
+struct App
 {
     static App *_instance;
 
@@ -37,7 +37,8 @@ class App
     InputManager inputManager;
 
 
-    bool bRunning = true;
+    bool          bRunning         = true;
+    ERenderAPI::T currentRenderAPI = ERenderAPI::None;
 
   public:
     static App *create();

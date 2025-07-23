@@ -297,9 +297,8 @@ void VulkanRender::createSurface()
     NE_CORE_ASSERT(ok, "Failed to create surface!");
 }
 
-bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount, const LogicDeviceSettings &settings)
+bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
 {
-
     if (graphicsQueueCount > _graphicsQueueFamily.queueCount)
     {
         NE_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
@@ -322,7 +321,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
     std::vector<float> graphicsQueuePriorities(graphicsQueueCount, 0.0f);
     std::vector<float> presentQueuePriorities(presentQueueCount, 1.0f);
 
-    bool bSameQueueFamily = isSameQueueFamily();
+    bool bSameQueueFamily = isGraphicsPresentSameQueueFamily();
 
 
     std::vector<VkDeviceQueueCreateInfo> deviceQueueCIs;
@@ -450,7 +449,7 @@ bool VulkanRender::createCommandPool()
         return false;
     }
 
-    if (isSameQueueFamily()) {
+    if (isGraphicsPresentSameQueueFamily()) {
         VkCommandPoolCreateInfo presentCommandPoolCI{
             .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -469,7 +468,7 @@ bool VulkanRender::createCommandPool()
 void VulkanRender::createCommandBuffers()
 {
     UNIMPLEMENTED();
-    m_commandBuffers.resize(m_swapChain.getImages().size());
+    m_commandBuffers.resize(m_swapChain->getImages().size());
 
     VkCommandBufferAllocateInfo allocInfo{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -963,7 +962,7 @@ void VulkanRender::recreateSwapChain()
     // }
 
     // Recreate swap chain
-    m_swapChain.recreate();
+    m_swapChain->recreate(m_swapChain->getCreateInfo());
 
     // Recreate depth resources with new extent
     // createDepthResources();

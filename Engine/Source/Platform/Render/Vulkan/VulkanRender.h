@@ -37,6 +37,12 @@ using namespace std::literals;
 
 #define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
 
+struct QueueFamilyIndices
+{
+    int32_t queueFamilyIndex = -1; // Graphics queue family index
+    int32_t queueCount       = -1;
+};
+
 struct VulkanRender : public IRender
 {
     friend struct VulkanUtils;
@@ -83,18 +89,12 @@ struct VulkanRender : public IRender
     VkCommandPool _presentCommandPool  = VK_NULL_HANDLE;
 
     // Configuration parameters
-    SwapchainCreateInfo m_swapchainCI;
-    // RenderPassCreateInfo m_renderPassCI;
-    bool m_bVsyncEnabled = true;
+    SwapchainCreateInfo m_swapChainCI;
 
     // Use separate classes for better organization
-    VulkanSwapChain       m_swapChain;
+    VulkanSwapChain      *m_swapChain;
     VulkanPipelineManager m_pipelineManager;
     VulkanResourceManager m_resourceManager;
-
-    // VkImage        m_depthImage;
-    // VkDeviceMemory m_depthImageMemory;
-    // VkImageView    m_depthImageView;
 
     std::vector<VkCommandBuffer> m_commandBuffers;
 
@@ -102,21 +102,22 @@ struct VulkanRender : public IRender
     VkSemaphore m_renderFinishedSemaphore;
     VkFence     m_inFlightFence;
 
-    struct QueueFamilyIndices
-    {
-        int32_t queueFamilyIndex = -1; // Graphics queue family index
-        int32_t queueCount       = -1;
-    };
 
     QueueFamilyIndices _graphicsQueueFamily;
     QueueFamilyIndices _presentQueueFamily;
 
 
+    void *nativeWindow = nullptr;
 
   public:
-
     WindowProvider *_windowProvider = nullptr;
-    void           *nativeWindow    = nullptr;
+
+    Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
+    Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
+    Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
+
+
+  public:
     template <typename T>
     void *getNativeWindow()
     {
@@ -153,6 +154,11 @@ struct VulkanRender : public IRender
     }
 
 
+    bool                      isGraphicsPresentSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
+    const QueueFamilyIndices &getGraphicsQueueFamilyInfo() const { return _graphicsQueueFamily; }
+    const QueueFamilyIndices &getPresentQueueFamilyInfo() const { return _presentQueueFamily; }
+
+  private:
     void terminate()
     {
         destroy();
@@ -166,8 +172,7 @@ struct VulkanRender : public IRender
         nativeWindow    = _windowProvider->getNativeWindowPtr();
 
         // Store configurations
-        m_swapchainCI   = params.swapchainCI;
-        m_bVsyncEnabled = params.bVsync;
+        m_swapChainCI = params.swapchainCI;
 
         createInstance();
 
@@ -193,6 +198,8 @@ struct VulkanRender : public IRender
             terminate();
         }
 
+        m_swapChain = new VulkanSwapChain(this);
+        m_swapChain->create(m_swapChainCI);
         // Initialize separate components with configuration
         // m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
         // m_swapChain.create();
@@ -262,7 +269,12 @@ struct VulkanRender : public IRender
         m_resourceManager.cleanup();
 
         m_pipelineManager.cleanup();
-        m_swapChain.cleanup();
+        if (m_swapChain)
+        {
+            // Cleanup swap chain resources
+            m_swapChain->cleanup();
+            delete m_swapChain;
+        }
         // m_renderPass.cleanup();
 
         if (m_inFlightFence)
@@ -313,9 +325,8 @@ struct VulkanRender : public IRender
 
 
   public:
-    Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
-    Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
-    Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
+    void recreateSwapChain();
+
 
     // Getter methods for 2D renderer access
 
@@ -331,18 +342,14 @@ struct VulkanRender : public IRender
 
     void createSurface();
 
-    struct LogicDeviceSettings
-    {
-    };
-    bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount, const LogicDeviceSettings &settings = {});
+
+    bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount);
     bool createCommandPool();
     // void createDepthResources();
     void createCommandBuffers();
     void createSemaphores();
     void createFences();
-    void recreateSwapChain();
 
-    bool isSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
 
     // Triangle rendering functions
     // void createVertexBuffer();

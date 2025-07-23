@@ -9,55 +9,58 @@ struct VulkanSwapChainSupportDetails
 {
     VkSurfaceCapabilitiesKHR        capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR>   present_modes;
+    std::vector<VkPresentModeKHR>   presentModes;
 
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat();
-    VkPresentModeKHR   ChooseSwapPresentMode();
-    VkExtent2D         ChooseSwapExtent(WindowProvider *provider);
-    bool               isValidFormat(const VkSurfaceFormatKHR &fmt);
+    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR preferredSurfaceFormat);
+    VkPresentModeKHR   ChooseSwapPresentMode(VkPresentModeKHR preferredMode);
+    VkExtent2D         ChooseSwapExtent(WindowProvider *provider, int preferredWidth = 0, int preferredHeight = 0);
 
     static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };
 
+struct VulkanRender;
+
 class VulkanSwapChain
 {
   private:
-    VkDevice         m_logicalDevice  = VK_NULL_HANDLE;
-    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-    VkSurfaceKHR     m_surface        = VK_NULL_HANDLE;
-    WindowProvider  *m_windowProvider = nullptr;
+    VulkanRender *_render = nullptr;
 
-    VkSwapchainKHR           m_swapChain = VK_NULL_HANDLE;
+    VkSwapchainKHR                m_swapChain = VK_NULL_HANDLE;
+    VulkanSwapChainSupportDetails _supportDetails;
+
     std::vector<VkImage>     m_images;
     std::vector<VkImageView> m_imageViews;
-    VkFormat                 m_imageFormat;
-    VkColorSpaceKHR          m_colorSpace;
-    VkExtent2D               m_extent;
 
-    SwapchainCreateInfo      _ci;
+    VkFormat         _surfaceFormat = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR  _surfaceColorSpace;
+    uint32_t         _minImageCount = 0; // Minimum image count based on surface capabilities
+    VkPresentModeKHR _presentMode;
+
+    SwapchainCreateInfo _ci;
 
   public:
-    VulkanSwapChain()  = default;
-    ~VulkanSwapChain() = default;
+    VulkanSwapChain(VulkanRender *render)
+        : _render(render)
+    {
+        NE_CORE_ASSERT(_render != nullptr, "VulkanRender is null!");
+    }
+    ~VulkanSwapChain();
 
-    void initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice,
-                    VkSurfaceKHR surface, WindowProvider *windowProvider, const SwapchainCreateInfo &ci);
 
-    void create();
+    bool create(const SwapchainCreateInfo &ci);
     void cleanup();
-    void recreate();
+    void recreate(const SwapchainCreateInfo &ci);
+
+    const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 
     // Getters
     VkSwapchainKHR                  getSwapChain() const { return m_swapChain; }
     const std::vector<VkImage>     &getImages() const { return m_images; }
     const std::vector<VkImageView> &getImageViews() const { return m_imageViews; }
-    VkFormat                        getImageFormat() const { return m_imageFormat; }
-    VkExtent2D                      getExtent() const { return m_extent; }
 
     // Swap chain operations
     VkResult acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore);
     VkResult presentImage(uint32_t imageIndex, VkSemaphore semaphore, VkQueue presentQueue);
 
   private:
-    void createImageViews();
 };

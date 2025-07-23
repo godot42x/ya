@@ -14,8 +14,10 @@
 #endif
 
 
+#include "Core/App/App.h"
 #include "Core/Event.h"
 #include "Core/Log.h"
+
 
 namespace Neon
 {
@@ -35,9 +37,20 @@ struct ImguiState
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         ImGui::StyleColorsDark();
 
-#if USE_VULKAN
-        ImGui_ImplSDL3_InitForVulkan(window);
-#elif USE_SDL3_GPU
+        switch (App::get()->currentRenderAPI)
+        {
+
+        case ERenderAPI::None:
+            break;
+        case ERenderAPI::OpenGL:
+        case ERenderAPI::Vulkan:
+            ImGui_ImplSDL3_InitForVulkan(window);
+        case ERenderAPI::DirectX12:
+        case ERenderAPI::Metal:
+        case ERenderAPI::ENUM_MAX:
+            break;
+        }
+#if USE_SDL3_GPU
         ImGui_ImplSDL3_InitForSDLGPU(window);
 #endif
 

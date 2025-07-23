@@ -495,8 +495,9 @@ struct SwapchainCreateInfo
     bool            bVsync      = true;               // V-Sync enabled by default
 
     // Image configuration
-    uint32_t minImageCount    = 2; // Double buffering by default
-    uint32_t imageArrayLayers = 1;
+    uint32_t minImageCount       = 3; // Double buffering by default
+    uint32_t preferredImageCount = 3; // Triple buffering if supported
+    uint32_t imageArrayLayers    = 1;
     // std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
 
     // Transform and composite
@@ -504,9 +505,8 @@ struct SwapchainCreateInfo
     // ECompositeAlpha::T   compositeAlpha = ECompositeAlpha::Opaque;
 
     // Clipping and sharing
-    bool bClipped = true;
-    // ESharingMode::T       imageSharingMode = ESharingMode::Exclusive;
-    // std::vector<uint32_t> queueFamilyIndices; // For concurrent sharing mode
+    bool bClipped                = true;
+    bool preferredDifferentQueue = true; // Use different queues for graphics and present if possible
 
     uint32_t width  = 800;
     uint32_t height = 600;

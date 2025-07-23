@@ -49,6 +49,8 @@ void App::init()
         },
     });
 
+    currentRenderAPI = ERenderAPI::Vulkan;
+
     // TODO: create pipelines
 }
 
@@ -124,6 +126,14 @@ int Neon::App::onEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_EXPOSED:
     case SDL_EVENT_WINDOW_MOVED:
     case SDL_EVENT_WINDOW_RESIZED:
+    {
+        // NE_CORE_INFO("window resized {}x{}",
+        //              event.window.data1,
+        //              event.window.data2);
+        // auto vkRender = static_cast<VulkanRender *>(_render);
+        // vkRender->recreateSwapChain();
+
+    } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
     case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
     case SDL_EVENT_WINDOW_MINIMIZED:
@@ -240,8 +250,8 @@ int Neon::App::iterate(float dt)
 
 #if USE_VULKAN
     auto render = static_cast<VulkanRender *>(_render);
-    render->DrawFrame(); // Draw triangle!
-    render->OnPostUpdate();
+    // render->DrawFrame(); // Draw triangle!
+    // render->OnPostUpdate();
 
 #endif
     // Handle input, update logic, render, etc.
