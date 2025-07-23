@@ -4,13 +4,12 @@
 #include <Core/Base.h>
 #include <Core/Log.h>
 
-#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <set>
 
+#include <vulkan/vk_enum_string_helper.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -24,11 +23,6 @@
 
 void VulkanRender::createInstance()
 {
-    uint32_t instanceLayerCount = 0;
-    vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr);
-    std::vector<VkLayerProperties> availableLayers(instanceLayerCount);
-    vkEnumerateInstanceLayerProperties(&instanceLayerCount, availableLayers.data());
-
     // Check supported Vulkan API version
     uint32_t supportedVersion = 0;
     VkResult result           = vkEnumerateInstanceVersion(&supportedVersion);
@@ -51,8 +45,7 @@ void VulkanRender::createInstance()
     else {
         supportedVersion = VK_API_VERSION_1_3;
     }
-    //
-    supportedVersion = VK_API_VERSION_1_2;
+    // supportedVersion = VK_API_VERSION_1_2;
 
     NE_CORE_INFO("Using Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(supportedVersion), VK_VERSION_MINOR(supportedVersion), VK_VERSION_PATCH(supportedVersion));
 
@@ -65,45 +58,53 @@ void VulkanRender::createInstance()
         .apiVersion         = supportedVersion,
     };
 
-    std::set<DeviceFeature> layerSet(_deviceLayers.begin(), _deviceLayers.end());
-    std::set<DeviceFeature> extensionSet(_instanceExtensions.begin(), _instanceExtensions.end());
+    auto requestExtensions = _instanceExtensions;
+    auto requestLayers     = _instanceLayers;
 
     const auto &required = onGetRequiredInstanceExtensions.ExecuteIfBound();
     for (const auto &ext : required) {
-        extensionSet.insert(ext);
+        requestExtensions.push_back(ext);
     }
     if (m_EnableValidationLayers)
     {
-        extensionSet.insert({VK_EXT_DEBUG_UTILS_EXTENSION_NAME, true});
+        requestLayers.insert(requestLayers.end(),
+                             _instanceValidationLayers.begin(),
+                             _instanceValidationLayers.end());
+        requestExtensions.push_back({VK_EXT_DEBUG_UTILS_EXTENSION_NAME, true});
     }
+
+    uint32_t extensionCount = 0;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+
+    uint32_t layerCount = 0;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
     std::vector<const char *> extensionNames;
     std::vector<const char *> layerNames;
 
-    bool bSupported = isInstanceSuitable(extensionSet,
-                                         layerSet,
-                                         extensionNames,
-                                         layerNames);
+    bool bSupported = isFeatureSupported(
+        "Vulkan instance",
+        availableExtensions,
+        availableLayers,
+        requestExtensions,
+        requestLayers,
+        extensionNames,
+        layerNames);
     NE_CORE_ASSERT(bSupported, "Required feature not supported!");
 
-    // Debug: Print what extensions and layers we're trying to enable
-    NE_CORE_INFO("Final validation - Attempting to create Vulkan instance with {} extensions and {} layers",
-                 extensionNames.size(),
-                 layerNames.size());
-    for (size_t i = 0; i < extensionNames.size(); ++i) {
-        NE_CORE_INFO("  Final Extension[{}]: {}", i, extensionNames[i]);
-    }
-    for (size_t i = 0; i < layerNames.size(); ++i) {
-        NE_CORE_INFO("  Final Layer[{}]: {}", i, layerNames[i]);
-    }
+
 
     VkInstanceCreateInfo instanceCI{
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext                   = nullptr,
         .flags                   = 0,
         .pApplicationInfo        = &appInfo,
-        .enabledLayerCount       = 0,
-        .ppEnabledLayerNames     = nullptr,
+        .enabledLayerCount       = static_cast<uint32_t>(layerNames.size()),
+        .ppEnabledLayerNames     = layerNames.data(),
         .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
     };
@@ -111,15 +112,12 @@ void VulkanRender::createInstance()
     if (m_EnableValidationLayers) {
         const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = getDebugMessengerCreateInfoExt();
 
-        instanceCI.enabledLayerCount   = static_cast<uint32_t>(layerNames.size());
-        instanceCI.ppEnabledLayerNames = layerNames.data();
-        instanceCI.pNext               = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
+        instanceCI.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
     }
 
     NE_CORE_INFO("About to call vkCreateInstance...");
-    result = vkCreateInstance(&instanceCI, nullptr, &m_Instance);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {}", static_cast<int32_t>(result));
-
+    result = vkCreateInstance(&instanceCI, nullptr, &_instance);
+    NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), string_VkResult(result));
 
     NE_CORE_INFO("Vulkan instance created successfully!");
 
@@ -133,10 +131,10 @@ void VulkanRender::findPhysicalDevice()
 
     // Enumerate physical devices
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
     NE_CORE_ASSERT(deviceCount > 0, "Failed to find GPUs with Vulkan support!");
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data());
     NE_CORE_INFO("Found {} physical devices", deviceCount);
 
     auto getDeviceTypeStr = [](VkPhysicalDeviceType type) -> std::string {
@@ -203,9 +201,9 @@ void VulkanRender::findPhysicalDevice()
 
         // surface format support
         uint32_t formatCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, nullptr);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, nullptr);
         std::vector<VkSurfaceFormatKHR> formats(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount, formats.data());
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, formats.data());
         for (const auto &format : formats) {
             if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 score += 100; // Add score for preferred format
@@ -247,7 +245,7 @@ void VulkanRender::findPhysicalDevice()
 
             // also need support for presentation queue
             VkBool32 bSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, m_Surface, &bSupport);
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, _surface, &bSupport);
             if (bSupport)
             {
                 presentQueueFamilies.push_back({
@@ -285,103 +283,197 @@ void VulkanRender::findPhysicalDevice()
                 _presentQueueFamily  = presentQueueFamilies[0];
             }
         }
-
-        // if (!isDeviceSuitable(device)) {
-        //     physicalDevice = device;
-        //     continue;
-        // }
     }
 
     NE_CORE_INFO("Selected physical device: {}", (uintptr_t)physicalDevice);
-	NE_CORE_INFO("graphics {} {}",_graphicsQueueFamily.queueFamilyIndex,_graphicsQueueFamily.queueCount);
-	NE_CORE_INFO("present {} {}",_presentQueueFamily.queueFamilyIndex,_graphicsQueueFamily.queueCount);
+    NE_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
+    NE_CORE_INFO("Present queue idx {} count: {}", _presentQueueFamily.queueFamilyIndex, _presentQueueFamily.queueCount);
     m_PhysicalDevice = physicalDevice;
 }
 
 void VulkanRender::createSurface()
 {
-    bool ok = onCreateSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
+    bool ok = onCreateSurface.ExecuteIfBound(&(*_instance), &_surface);
     NE_CORE_ASSERT(ok, "Failed to create surface!");
 }
 
-
-// Assign the m_physicalDevice, m_PresentQueue, m_GraphicsQueue
-void VulkanRender::createLogicDevice()
+bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount, const LogicDeviceSettings &settings)
 {
-    // QueueFamilyIndices familyIndices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
-    // std::vector<VkDeviceQueueCreateInfo> deviceQueueCIs;
-    // std::set<uint32_t>                   deviceQueueFamilies = {
-    //     static_cast<uint32_t>(familyIndices.queueFamilyIndex),
-    //     static_cast<uint32_t>(familyIndices.supportedFamilyIdx)};
+    if (graphicsQueueCount > _graphicsQueueFamily.queueCount)
+    {
+        NE_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
+                      graphicsQueueCount,
+                      _graphicsQueueFamily.queueCount,
+                      _graphicsQueueFamily.queueFamilyIndex);
+        return false;
+    }
 
-    // float queue_priority = 1.0f;
-    // for (uint32_t queue_family : deviceQueueFamilies) {
-    //     deviceQueueCIs.push_back({
-    //         .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-    //         .pNext            = nullptr,
-    //         .flags            = 0,
-    //         .queueFamilyIndex = queue_family,
-    //         .queueCount       = 1,
-    //         .pQueuePriorities = &queue_priority,
-    //     });
-    // }
+    if (presentQueueCount > _presentQueueFamily.queueCount)
+    {
+        NE_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
+                      presentQueueCount,
+                      _presentQueueFamily.queueCount,
+                      _presentQueueFamily.queueFamilyIndex);
+        return false;
+    }
 
-    // VkPhysicalDeviceFeatures device_features{
-    //     .samplerAnisotropy = VK_TRUE,
-    // };
+    // all graphics queue need lower than present queue
+    std::vector<float> graphicsQueuePriorities(graphicsQueueCount, 0.0f);
+    std::vector<float> presentQueuePriorities(presentQueueCount, 1.0f);
 
-    // VkDeviceCreateInfo deviceCreateInfo = {
-    //     .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-    //     .pNext                   = nullptr,
-    //     .flags                   = 0,
-    //     .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
-    //     .pQueueCreateInfos       = deviceQueueCIs.data(),
-    //     .enabledLayerCount       = 0,
-    //     .ppEnabledLayerNames     = nullptr,
-    //     .enabledExtensionCount   = static_cast<uint32_t>(_deviceExtensions.size()),
-    //     .ppEnabledExtensionNames = _deviceExtensions.data(),
-    //     .pEnabledFeatures        = &device_features
-
-    // };
-    // if (m_EnableValidationLayers)
-    // {
-    //     deviceCreateInfo.enabledLayerCount   = static_cast<uint32_t>(_validationLayers.size());
-    //     deviceCreateInfo.ppEnabledLayerNames = _validationLayers.data();
-    // }
+    bool bSameQueueFamily = isSameQueueFamily();
 
 
-    // VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
-    // NE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!");
+    std::vector<VkDeviceQueueCreateInfo> deviceQueueCIs;
+    deviceQueueCIs.push_back({
+        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext            = nullptr,
+        .flags            = 0,
+        .queueFamilyIndex = static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex),
+        .queueCount       = graphicsQueueCount,
+        .pQueuePriorities = graphicsQueuePriorities.data(),
+    });
+    if (bSameQueueFamily)
+    {
+        auto &graphicsQueueCI      = deviceQueueCIs.back();
+        graphicsQueueCI.queueCount = std::min(graphicsQueueCount, graphicsQueueCount + presentQueueCount);
+        graphicsQueuePriorities.insert(graphicsQueuePriorities.end(), presentQueuePriorities.begin(), presentQueuePriorities.end());
+        graphicsQueueCI.pQueuePriorities = graphicsQueuePriorities.data();
+    }
+    else
+    {
+        deviceQueueCIs.push_back({
+            .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .pNext            = nullptr,
+            .flags            = 0,
+            .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
+            .queueCount       = presentQueueCount,
+            .pQueuePriorities = presentQueuePriorities.data(),
+        });
+    }
 
-    // vkGetDeviceQueue(m_LogicalDevice, familyIndices.supportedFamilyIdx, 0, &m_PresentQueue);
-    // vkGetDeviceQueue(m_LogicalDevice, familyIndices.queueFamilyIndex, 0, &m_GraphicsQueue);
-    // NE_ASSERT(m_PresentQueue != VK_NULL_HANDLE, "failed to get present queue!");
-    // NE_ASSERT(m_GraphicsQueue != VK_NULL_HANDLE, "failed to get graphics queue!");
+
+    auto requestExtensions = _deviceExtensions;
+    auto requestLayers     = _deviceLayers;
+
+
+    uint32_t extensionCount = 0;
+    vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, availableExtensions.data());
+
+    uint32_t layerCount = 0;
+    vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, availableLayers.data());
+
+    std::vector<const char *> extensionNames;
+    std::vector<const char *> layerNames;
+
+
+    bool bSupported = isFeatureSupported(
+        "Vulkan device",
+        availableExtensions,
+        availableLayers,
+        requestExtensions,
+        requestLayers,
+        extensionNames,
+        layerNames);
+    if (!bSupported)
+    {
+        NE_CORE_ERROR("Vulkan instance is not suitable!");
+        return false;
+    }
+
+    VkPhysicalDeviceFeatures physicalDeviceFeatures = {
+        .samplerAnisotropy = VK_TRUE, // Enable anisotropic filtering
+        // .geometryShader    = VK_TRUE, // Enable geometry shader support
+        // .shaderClipDistance = VK_TRUE, // Enable clip distance support
+        // .shaderCullDistance = VK_TRUE, // Enable cull distance support
+    };
+
+    VkDeviceCreateInfo deviceCreateInfo = {
+        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0,
+        .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
+        .pQueueCreateInfos       = deviceQueueCIs.data(),
+        .enabledLayerCount       = static_cast<uint32_t>(layerNames.size()),
+        .ppEnabledLayerNames     = layerNames.data(),
+        .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
+        .ppEnabledExtensionNames = extensionNames.data(),
+        .pEnabledFeatures        = &physicalDeviceFeatures,
+
+    };
+
+
+    VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
+    NE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!");
+
+    for (int i = 0; i < graphicsQueueCount; i++)
+    {
+        VkQueue queue = VK_NULL_HANDLE;
+        vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
+        if (queue == VK_NULL_HANDLE) {
+            NE_CORE_ERROR("Failed to get graphics queue!");
+            return false;
+        }
+
+        _graphicsQueues.push_back(VulkanQueue(_graphicsQueueFamily.queueFamilyIndex, i, queue, false));
+    }
+    for (int i = 0; i < presentQueueCount; i++)
+    {
+        VkQueue queue = VK_NULL_HANDLE;
+        vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);
+        if (queue == VK_NULL_HANDLE) {
+            NE_CORE_ERROR("Failed to get present queue!");
+            return false;
+        }
+        _presentQueues.push_back(VulkanQueue(_presentQueueFamily.queueFamilyIndex, i, queue, true));
+    }
+
+    return true;
 }
 
-void VulkanRender::createCommandPool()
+bool VulkanRender::createCommandPool()
 {
     // QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
 
-    // VkCommandPoolCreateInfo poolInfo{
-    //     .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    //     .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    //     .queueFamilyIndex = static_cast<uint32_t>(queueFamilyIndices.queueFamilyIndex),
-    // };
+    VkCommandPoolCreateInfo graphicsCommandPoolCI{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex),
+    };
+    if (vkCreateCommandPool(m_LogicalDevice, &graphicsCommandPoolCI, nullptr, &_graphicsCommandPool) != VK_SUCCESS) {
+        NE_CORE_ERROR("failed to create graphics command pool!");
+        return false;
+    }
 
-    // if (vkCreateCommandPool(m_LogicalDevice, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-    //     NE_CORE_ASSERT(false, "failed to create command pool!");
-    // }
+    if (isSameQueueFamily()) {
+        VkCommandPoolCreateInfo presentCommandPoolCI{
+            .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
+        };
+
+        if (vkCreateCommandPool(m_LogicalDevice, &presentCommandPoolCI, nullptr, &_presentCommandPool) != VK_SUCCESS) {
+            NE_CORE_ERROR("failed to create present command pool!");
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void VulkanRender::createCommandBuffers()
 {
+    UNIMPLEMENTED();
     m_commandBuffers.resize(m_swapChain.getImages().size());
 
     VkCommandBufferAllocateInfo allocInfo{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool        = m_commandPool,
+        .commandPool        = _graphicsCommandPool,
         .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size()),
     };
@@ -475,86 +567,60 @@ void VulkanRender::createSemaphores()
 // }
 
 
-bool VulkanRender::isDeviceSuitable(VkPhysicalDevice device)
+
+bool VulkanRender::isFeatureSupported(
+    std::string_view                          contextStr,
+    const std::vector<VkExtensionProperties> &availableExtensions,
+    const std::vector<VkLayerProperties>     &availableLayers,
+    const std::vector<DeviceFeature>         &requestExtensions,
+    const std::vector<DeviceFeature>         &requestLayers,
+    std::vector<const char *>                &outExtensionNames,
+    std::vector<const char *>                &outLayerNames)
 {
-    // VkPhysicalDeviceProperties deviceProperties;
-    // vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
-    // VkPhysicalDeviceFeatures devicesFeatures;
-    // vkGetPhysicalDeviceFeatures(device, &devicesFeatures);
-
-    // return (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) && devicesFeatures.geometryShader;
-
-    // QueueFamilyIndices indices = QueueFamilyIndices::query(
-    //     m_Surface, device, VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT);
-
-    // bool bExtensionSupported = is_device_extension_support(device);
-
-    // bool bSwapchainComplete = false;
-    // if (bExtensionSupported)
-    // {
-    //     VulkanSwapChainSupportDetails swapchain_support_details = VulkanSwapChainSupportDetails::query(device, m_Surface);
-
-    //     bSwapchainComplete = !swapchain_support_details.formats.empty() &&
-    //                          !swapchain_support_details.present_modes.empty();
-    // }
-
-    // VkPhysicalDeviceFeatures supported_features;
-    // vkGetPhysicalDeviceFeatures(device, &supported_features);
-
-
-    // return indices.is_complete() &&
-    //        bExtensionSupported &&
-    //        bSwapchainComplete;
-    UNIMPLEMENTED();
-    return false;
-}
-
-
-bool VulkanRender::isInstanceSuitable(const std::set<DeviceFeature> &extensions,
-                                      const std::set<DeviceFeature> &layers,
-                                      std::vector<const char *>     &extensionNames,
-                                      std::vector<const char *>     &layerNames)
-{
-    uint32_t instanceExtensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensions(instanceExtensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, availableExtensions.data());
-
-    uint32_t instanceLayerCount = 0;
-    vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr);
-    std::vector<VkLayerProperties> availableLayers(instanceLayerCount);
-    vkEnumerateInstanceLayerProperties(&instanceLayerCount, availableLayers.data());
-
-    // Debug: Print available layers
-    NE_CORE_INFO("Available Instance Vulkan layers:");
-    for (const auto &layer : availableLayers) {
-        NE_CORE_INFO("  - {}: {}", layer.layerName, layer.description);
+    NE_CORE_INFO("=================================");
+    NE_CORE_INFO("Available {} layers:", contextStr);
+    for (size_t i = 0; i < availableLayers.size(); i += 3) {
+        std::string line = "";
+        for (size_t j = i; j < std::min(i + 3, availableLayers.size()); ++j) {
+            line += std::format("\t| {:<45} ", availableLayers[j].layerName);
+        }
+        NE_CORE_INFO("{}", line);
     }
-    NE_CORE_INFO("Available Instance Vulkan extensions:");
-    for (const auto &ext : availableExtensions) {
-        NE_CORE_INFO("  - {}: {}", ext.extensionName, ext.specVersion);
+    NE_CORE_INFO("Available {} extensions:", contextStr);
+    for (size_t i = 0; i < availableExtensions.size(); i += 3) {
+        std::string line = "  ";
+        for (size_t j = i; j < std::min(i + 3, availableExtensions.size()); ++j) {
+            line += std::format("| {:<45} ", availableExtensions[j].extensionName);
+        }
+        NE_CORE_INFO("{}", line);
     }
+
 
     // Clear the output vectors first
-    extensionNames.clear();
-    layerNames.clear();
+    outExtensionNames.clear();
+    outLayerNames.clear();
 
-    for (const auto &feat : extensions) {
-        if (!std::any_of(availableExtensions.begin(),
+    for (const auto &feat : requestExtensions) {
+        if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) == outExtensionNames.end() &&
+            !std::any_of(availableExtensions.begin(),
                          availableExtensions.end(),
                          [&feat](const VkExtensionProperties &ext) {
                              return std::strcmp(ext.extensionName, feat.name.c_str()) == 0;
-                         })) {
-            NE_CORE_WARN("Extension {} is not supported by the instance", feat.name);
-            NE_CORE_ASSERT(!feat.bRequired, "Required extension {} is not supported by the instance", feat.name);
+                         }))
+        {
+            NE_CORE_WARN("Extension {} is not supported by the {}", feat.name, contextStr);
+            if (feat.bRequired) {
+                return false; // If it's a required extension, return false
+            }
             continue;
         }
-        extensionNames.push_back(feat.name.c_str());
+        outExtensionNames.push_back(feat.name.c_str());
     }
 
-    for (const auto &feat : layers) {
-        if (!std::any_of(
+    for (const auto &feat : requestLayers) {
+        if (std::find(outLayerNames.begin(), outLayerNames.end(), feat.name.c_str()) == outLayerNames.end() &&
+            !std::any_of(
                 availableLayers.begin(),
                 availableLayers.end(),
                 [&feat](const VkLayerProperties &layer) {
@@ -562,22 +628,29 @@ bool VulkanRender::isInstanceSuitable(const std::set<DeviceFeature> &extensions,
                 }))
         {
 
-            NE_CORE_WARN("Layer {} is not supported by the instance", feat.name);
+            NE_CORE_WARN("Layer {} is not supported by the {}", feat.name, contextStr);
             if (feat.bRequired) {
                 return false; // If it's a required layer, return false
             }
             continue;
         }
         // Debug log to ensure we're adding the correct layer name
-        NE_CORE_INFO("Adding validation layer: {}", feat.name);
-        layerNames.push_back(feat.name.c_str());
+        outLayerNames.push_back(feat.name.c_str());
     }
+
+    NE_CORE_INFO("=================================");
+    NE_CORE_INFO("Final Extension Names({}):", outExtensionNames.size());
+    for (size_t i = 0; i < outExtensionNames.size(); ++i) {
+        NE_CORE_INFO("  Final Extension[{}]: {}", i, outExtensionNames[i]);
+    }
+    NE_CORE_INFO("Final Layer Names({}):", outLayerNames.size());
+    for (size_t i = 0; i < outLayerNames.size(); ++i) {
+        NE_CORE_INFO("  Final Layer[{}]: {}", i, outLayerNames[i]);
+    }
+
 
     return true;
 }
-
-
-
 
 
 

@@ -18,10 +18,12 @@ using namespace std::literals;
 
 #include "Render/Render.h"
 #include "VulkanPipeline.h"
+#include "VulkanQueue.h"
 #include "VulkanRenderPass.h"
 #include "VulkanResourceManager.h"
 #include "VulkanSwapChain.h"
 #include "VulkanUtils.h"
+
 
 
 #include "WindowProvider.h"
@@ -40,6 +42,7 @@ struct VulkanRender : public IRender
     friend struct VulkanUtils;
     friend struct VulkanRenderPass;
 
+    const std::vector<DeviceFeature> _instanceLayers           = {};
     const std::vector<DeviceFeature> _instanceValidationLayers = {
         {"VK_LAYER_KHRONOS_validation", true}, // "VK_LAYER_KHRONOS_validation"
     };
@@ -48,9 +51,8 @@ struct VulkanRender : public IRender
     };
 
     const std::vector<DeviceFeature> _deviceLayers = {
-        {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
+        // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
-
     const std::vector<DeviceFeature> _deviceExtensions = {
         {VK_KHR_SWAPCHAIN_EXTENSION_NAME, true}, // "VK_KHR_swapchain"
     };
@@ -58,8 +60,8 @@ struct VulkanRender : public IRender
 
   private:
 
-    VkInstance   m_Instance;
-    VkSurfaceKHR m_Surface;
+    VkInstance   _instance;
+    VkSurfaceKHR _surface;
 
     VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
     VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
@@ -73,11 +75,12 @@ struct VulkanRender : public IRender
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
 
-    VkQueue m_PresentQueue  = VK_NULL_HANDLE;
-    VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
+    std::vector<VulkanQueue> _presentQueues;
+    std::vector<VulkanQueue> _graphicsQueues;
 
     // Command pool belongs to device level
-    VkCommandPool m_commandPool = VK_NULL_HANDLE;
+    VkCommandPool _graphicsCommandPool = VK_NULL_HANDLE;
+    VkCommandPool _presentCommandPool  = VK_NULL_HANDLE;
 
     // Configuration parameters
     SwapchainCreateInfo m_swapchainCI;
@@ -139,7 +142,6 @@ struct VulkanRender : public IRender
             return extensions;
         });
 #endif
-
         bool success = initInternal(params);
         NE_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
 
@@ -148,9 +150,14 @@ struct VulkanRender : public IRender
     virtual void destroy() override
     {
         destroyInternal();
-        std::exit(-1);
     }
 
+
+    void terminate()
+    {
+        destroy();
+        std::exit(-1);
+    }
 
     bool initInternal(const InitParams &params)
     {
@@ -176,20 +183,22 @@ struct VulkanRender : public IRender
         findPhysicalDevice();
         if (m_PhysicalDevice == VK_NULL_HANDLE)
         {
-            destroy();
+            terminate();
         }
 
-        destroy();
-
-        // createLogicDevice();
-        createCommandPool();
+        if (!createLogicDevice(1, 1)) {
+            terminate();
+        }
+        if (!createCommandPool()) {
+            terminate();
+        }
 
         // Initialize separate components with configuration
-        m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
-        m_swapChain.create();
+        // m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
+        // m_swapChain.create();
 
         // Initialize resource manager
-        m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
+        // m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
 
         // Initialize render pass with custom configuration
         // m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat(), m_renderPassCI);
@@ -199,7 +208,7 @@ struct VulkanRender : public IRender
         // m_renderPass.createFramebuffers(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
 
         // Pipeline creation with custom configuration from render pass
-        m_pipelineManager.initialize(m_LogicalDevice, m_PhysicalDevice);
+        // m_pipelineManager.initialize(m_LogicalDevice, m_PhysicalDevice);
 
         // Create multiple pipelines if provided in render pass config
 
@@ -223,7 +232,7 @@ struct VulkanRender : public IRender
         //     }
         // }
 
-        createCommandBuffers();
+        // createCommandBuffers();
         createSemaphores();
         createFences();
 
@@ -268,8 +277,11 @@ struct VulkanRender : public IRender
         {
             vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
         }
-        if (m_commandPool) {
-            vkDestroyCommandPool(m_LogicalDevice, m_commandPool, nullptr);
+        if (_graphicsCommandPool) {
+            vkDestroyCommandPool(m_LogicalDevice, _graphicsCommandPool, nullptr);
+        }
+        if (_presentCommandPool) {
+            vkDestroyCommandPool(m_LogicalDevice, _presentCommandPool, nullptr);
         }
         if (m_LogicalDevice)
         {
@@ -282,8 +294,8 @@ struct VulkanRender : public IRender
             // destroyDebugReportCallbackExt();
         }
 
-        onReleaseSurface.ExecuteIfBound(&(*m_Instance), &m_Surface);
-        vkDestroyInstance(m_Instance, nullptr);
+        onReleaseSurface.ExecuteIfBound(&(*_instance), &_surface);
+        vkDestroyInstance(_instance, nullptr);
     }
 
 
@@ -306,10 +318,11 @@ struct VulkanRender : public IRender
     Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
 
     // Getter methods for 2D renderer access
+
+    VkInstance       getInstance() const { return _instance; }
+    VkSurfaceKHR     getSurface() const { return _surface; }
     VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
     VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
-    VkCommandPool    getCommandPool() const { return m_commandPool; }
-    VkQueue          getGraphicsQueue() const { return m_GraphicsQueue; }
 
   private:
 
@@ -317,13 +330,19 @@ struct VulkanRender : public IRender
     void findPhysicalDevice();
 
     void createSurface();
-    void createLogicDevice();
-    void createCommandPool();
+
+    struct LogicDeviceSettings
+    {
+    };
+    bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount, const LogicDeviceSettings &settings = {});
+    bool createCommandPool();
     // void createDepthResources();
     void createCommandBuffers();
     void createSemaphores();
     void createFences();
     void recreateSwapChain();
+
+    bool isSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
 
     // Triangle rendering functions
     // void createVertexBuffer();
@@ -376,7 +395,10 @@ struct VulkanRender : public IRender
     // void destroyDebugCallBackExt();
     // void destroyDebugReportCallbackExt();
 
-    bool isDeviceSuitable(VkPhysicalDevice device);
+    bool isDeviceSuitable(const std::set<DeviceFeature> &extensions,
+                          const std::set<DeviceFeature> &layers,
+                          std::vector<const char *>     &extensionNames,
+                          std::vector<const char *>     &layerNames);
     bool isInstanceSuitable(const std::set<DeviceFeature> &extensions,
                             const std::set<DeviceFeature> &layers,
                             std::vector<const char *>     &extensionNames,
@@ -399,6 +421,15 @@ struct VulkanRender : public IRender
         panic("failed to find suitable memory type!");
         return -1;
     }
+
+    bool isFeatureSupported(
+        std::string_view                          contextStr,
+        const std::vector<VkExtensionProperties> &availableExtensions,
+        const std::vector<VkLayerProperties>     &availableLayers,
+        const std::vector<DeviceFeature>         &requestExtensions,
+        const std::vector<DeviceFeature>         &requestLayers,
+        std::vector<const char *>                &outExtensionNames,
+        std::vector<const char *>                &outLayerNames);
 };
 
 

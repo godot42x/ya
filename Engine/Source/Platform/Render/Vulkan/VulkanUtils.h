@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Core/Log.h>
+#include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
+
 
 struct VulkanUtils
 {
@@ -33,11 +35,28 @@ struct VulkanUtils
     static void copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
                            VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-    static VkFormat findSupportedImageFormat(VkPhysicalDevice physicalDevice, 
+    static VkFormat findSupportedImageFormat(VkPhysicalDevice             physicalDevice,
                                              const std::vector<VkFormat> &candidates,
-                                             VkImageTiling tiling, 
-                                             VkFormatFeatureFlags features);
+                                             VkImageTiling                tiling,
+                                             VkFormatFeatureFlags         features);
 
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
 };
+
+template <>
+struct std::formatter<VkResult> : std::formatter<std::string>
+{
+    auto format(const VkResult &type, std::format_context &ctx) const
+    {
+        return std::format_to(ctx.out(), "{}({})", string_VkResult(type), static_cast<int32_t>(type));
+    }
+};
+
+#define VK_CALL(x)                                                       \
+    do {                                                                 \
+        VkResult result = (x);                                           \
+        if (result != VK_SUCCESS) {                                      \
+            NE_CORE_ERROR("Vulkan call failed with error: {} ", result); \
+        }                                                                \
+    } while (0)

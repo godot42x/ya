@@ -61,7 +61,7 @@ do
 
     -- Add math library for exp2 and log2 functions
     if is_plat("windows") then
-        add_ldflags("/NODEFAULTLIB:LIBCMT")  -- Fix runtime library conflict
+        add_ldflags("/NODEFAULTLIB:LIBCMT") -- Fix runtime library conflict
     end
 
 
@@ -88,6 +88,7 @@ do
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then
         add_ldflags("/subsystem:console")
+        add_defines("NOMINMAX")  -- Disable min and max macros
     end
 
     before_run(function(target)

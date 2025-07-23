@@ -151,6 +151,12 @@ int Neon::App::onEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_HDR_STATE_CHANGED:
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
+    {
+        if (event.key.key == SDLK_ESCAPE) {
+            bRunning = false;
+            return 1;
+        }
+    } break;
     case SDL_EVENT_TEXT_EDITING:
     case SDL_EVENT_TEXT_INPUT:
     case SDL_EVENT_KEYMAP_CHANGED:
