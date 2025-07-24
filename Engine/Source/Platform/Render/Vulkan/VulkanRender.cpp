@@ -578,21 +578,23 @@ bool VulkanRender::isFeatureSupported(
 
     NE_CORE_INFO("=================================");
     NE_CORE_INFO("Available {} layers:", contextStr);
+    std::string line = "\n";
     for (size_t i = 0; i < availableLayers.size(); i += 3) {
-        std::string line = "";
         for (size_t j = i; j < std::min(i + 3, availableLayers.size()); ++j) {
-            line += std::format("\t| {:<45} ", availableLayers[j].layerName);
+            line += std::format("{:<35}", availableLayers[j].layerName);
         }
-        NE_CORE_INFO("{}", line);
+        line.push_back('\n');
     }
+    NE_CORE_INFO("{}", line);
     NE_CORE_INFO("Available {} extensions:", contextStr);
+    line = "\n";
     for (size_t i = 0; i < availableExtensions.size(); i += 3) {
-        std::string line = "  ";
         for (size_t j = i; j < std::min(i + 3, availableExtensions.size()); ++j) {
-            line += std::format("| {:<45} ", availableExtensions[j].extensionName);
+            line += std::format("{:<35}|", availableExtensions[j].extensionName);
         }
-        NE_CORE_INFO("{}", line);
+        line.push_back('\n');
     }
+    NE_CORE_INFO("{}", line);
 
 
     // Clear the output vectors first
@@ -600,9 +602,10 @@ bool VulkanRender::isFeatureSupported(
     outLayerNames.clear();
 
     for (const auto &feat : requestExtensions) {
-        if ( // Check if the extension is already in the output list
-            std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) == outExtensionNames.end() &&
-            !std::any_of(availableExtensions.begin(),
+        if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) != outExtensionNames.end()) {
+            continue;
+        }
+        if (!std::any_of(availableExtensions.begin(),
                          availableExtensions.end(),
                          [&feat](const VkExtensionProperties &ext) {
                              return std::strcmp(ext.extensionName, feat.name.c_str()) == 0;
@@ -618,8 +621,10 @@ bool VulkanRender::isFeatureSupported(
     }
 
     for (const auto &feat : requestLayers) {
-        if (std::find(outLayerNames.begin(), outLayerNames.end(), feat.name.c_str()) == outLayerNames.end() &&
-            !std::any_of(
+        if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) != outExtensionNames.end()) {
+            continue;
+        }
+        if (!std::any_of(
                 availableLayers.begin(),
                 availableLayers.end(),
                 [&feat](const VkLayerProperties &layer) {
