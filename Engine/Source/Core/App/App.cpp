@@ -11,7 +11,7 @@
 namespace Neon
 {
 
-
+// Define the static member variable
 App *App::_instance = nullptr;
 
 App *App::create()
@@ -20,6 +20,8 @@ App *App::create()
     App::_instance = new App();
     return App::_instance;
 }
+
+VulkanRenderPass *pass;
 
 void App::init()
 {
@@ -51,11 +53,61 @@ void App::init()
 
     currentRenderAPI = ERenderAPI::Vulkan;
 
+
     // TODO: create pipelines
+    pass = new VulkanRenderPass(vkRender);
+    pass->create(RenderPassCreateInfo{
+        .attachments = {
+            AttachmentDescription{
+                .format                  = EFormat::R8G8B8A8_UNORM,
+                .samples                 = ESampleCount::Sample_1,
+                .loadOp                  = EAttachmentLoadOp::Clear,
+                .storeOp                 = EAttachmentStoreOp::Store,
+                .stencilLoadOp           = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp          = EAttachmentStoreOp::DontCare,
+                .bInitialLayoutUndefined = true,
+                .bFinalLayoutPresentSrc  = true, // for color attachments
+            },
+            // AttachmentDescription{
+            //     .format                  = EFormat::D32_SFLOAT,
+            //     .samples                 = ESampleCount::Sample_1,
+            //     .loadOp                  = EAttachmentLoadOp::Clear,
+            //     .storeOp                 = EAttachmentStoreOp::DontCare,
+            //     .stencilLoadOp           = EAttachmentLoadOp::DontCare,
+            //     .stencilStoreOp          = EAttachmentStoreOp::DontCare,
+            //     .bInitialLayoutUndefined = true,
+            //     .bFinalLayoutPresentSrc  = false, // for depth attachments
+            // },
+        },
+        .subpasses = {
+            RenderPassCreateInfo::SubpassInfo{
+                // .inputAttachments = {
+                //     RenderPassCreateInfo::AttachmentRef{
+                //         .ref    = 0, // color attachment
+                //         .layout = EImageLayout::ColorAttachmentOptimal,
+                //     },
+                // },
+                .colorAttachments = {
+                    RenderPassCreateInfo::AttachmentRef{
+                        .ref    = 0, // color attachment
+                        .layout = EImageLayout::ColorAttachmentOptimal,
+                    },
+                },
+            },
+        },
+        .dependencies = {
+            RenderPassCreateInfo::SubpassDependency{
+                .bSrcExternal = true,
+                .srcSubpass   = 0,
+                .dstSubpass   = 0,
+            },
+        },
+    });
 }
 
 void Neon::App::quit()
 {
+    delete pass;
     _render->destroy();
     windowProvider->destroy();
 

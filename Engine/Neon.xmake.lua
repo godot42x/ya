@@ -1,8 +1,4 @@
--- if is_mode("debug") then
---     set_runtimes("MTd")
--- else
-set_runtimes("MT") -- use static link and no debug runtime library
--- end
+
 
 includes("./Plugins/Plugins.xmake.lua")
 
@@ -14,7 +10,7 @@ add_requires("spirv-cross")
 add_requires("assimp", {
     configs = {
         shared = false,
-        runtime = "MT",
+        runtimes = "MT",
     }
 })
 
@@ -30,7 +26,7 @@ add_requires("imgui", {
 add_requires("shaderc", {
     configs = {
         shared = false,
-        runtime = "MT",
+        runtimes = "MT",
     }
 })
 

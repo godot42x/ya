@@ -50,7 +50,8 @@ struct App
 
     int iterate(float dt);
 
-    IRender    *getRender() { return _render; }
+    IRender *getRender() { return _render; }
+
     static App *get() { return _instance; }
 };
 

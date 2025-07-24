@@ -44,3 +44,6 @@ struct DefaultAllocator
 };
 
 static DefaultAllocator defaultAllocator;
+
+
+#define CASE_ENUM_TO_STR(x) case x: return #x;

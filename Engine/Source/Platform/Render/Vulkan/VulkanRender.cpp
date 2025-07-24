@@ -9,7 +9,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <vulkan/vk_enum_string_helper.h>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -117,7 +116,7 @@ void VulkanRender::createInstance()
 
     NE_CORE_INFO("About to call vkCreateInstance...");
     result = vkCreateInstance(&instanceCI, nullptr, &_instance);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), string_VkResult(result));
+    NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), result);
 
     NE_CORE_INFO("Vulkan instance created successfully!");
 
@@ -601,7 +600,8 @@ bool VulkanRender::isFeatureSupported(
     outLayerNames.clear();
 
     for (const auto &feat : requestExtensions) {
-        if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) == outExtensionNames.end() &&
+        if ( // Check if the extension is already in the output list
+            std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) == outExtensionNames.end() &&
             !std::any_of(availableExtensions.begin(),
                          availableExtensions.end(),
                          [&feat](const VkExtensionProperties &ext) {
@@ -652,45 +652,6 @@ bool VulkanRender::isFeatureSupported(
 }
 
 
-
-// void VulkanRender::createDepthResources()
-// {
-
-//     VkFormat depthFormat = VulkanUtils::findSupportedImageFormat(
-//         m_PhysicalDevice,
-//         {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-//         VK_IMAGE_TILING_OPTIMAL,
-//         VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-
-
-//     auto ext = m_swapChain.getExtent();
-
-//     VulkanUtils::createImage(
-//         m_LogicalDevice,
-//         m_PhysicalDevice,
-//         ext.width,
-//         ext.height,
-//         depthFormat,
-//         VK_IMAGE_TILING_OPTIMAL,
-//         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-//         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-//         m_depthImage,
-//         m_depthImageMemory);
-
-
-//     m_depthImageView = VulkanUtils::createImageView(m_LogicalDevice,
-//                                                     m_depthImage,
-//                                                     depthFormat,
-//                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
-
-//     VulkanUtils::transitionImageLayout(m_LogicalDevice,
-//                                        m_commandPool,
-//                                        m_GraphicsQueue,
-//                                        m_depthImage,
-//                                        depthFormat,
-//                                        VK_IMAGE_LAYOUT_UNDEFINED,
-//                                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-// }
 
 // void VulkanRender::loadDebugFunctionPointers()
 // {

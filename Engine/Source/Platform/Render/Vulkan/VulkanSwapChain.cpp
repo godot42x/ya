@@ -19,8 +19,8 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(VkSurf
     }
 
     NE_CORE_WARN("Preferred surface format {} and color space {} not found, using first format",
-                 string_VkFormat(preferredSurfaceFormat.format),
-                 string_VkColorSpaceKHR(preferredSurfaceFormat.colorSpace));
+                 std::to_string(preferredSurfaceFormat.format),
+                 std::to_string(preferredSurfaceFormat.colorSpace));
 
     return formats[0];
 }
@@ -178,9 +178,9 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
 
     NE_CORE_INFO("Using chosen surface format: {} with color space: {}",
-                 string_VkFormat(preferred.format),
-                 string_VkColorSpaceKHR(preferred.colorSpace));
-    NE_CORE_INFO("Using chosen present mode: {}", string_VkPresentModeKHR(presentMode));
+                 std::to_string(preferred.format),
+                 std::to_string(preferred.colorSpace));
+    NE_CORE_INFO("Using chosen present mode: {}", std::to_string(presentMode));
     NE_CORE_INFO("Current extent is: {}x{}",
                  _supportDetails.capabilities.currentExtent.width,
                  _supportDetails.capabilities.currentExtent.height);
@@ -227,6 +227,21 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
 
     VkSwapchainKHR oldSwapchain = m_swapChain;
 
+    VkCompositeAlphaFlagBitsKHR compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
+        compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) {
+        compositeAlpha = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
+        compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) {
+        compositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+    }
+
+
     VkSwapchainCreateInfoKHR vkSwapchainCI{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface               = _render->getSurface(),
@@ -240,7 +255,7 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
         .queueFamilyIndexCount = queueFamilyCount,
         .pQueueFamilyIndices   = queueFamilyIndices,
         .preTransform          = _supportDetails.capabilities.currentTransform,
-        .compositeAlpha        = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+        .compositeAlpha        = compositeAlpha,
         .presentMode           = presentMode,
         .clipped               = _ci.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain          = oldSwapchain,
@@ -255,14 +270,14 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     }
     // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
 
-    NE_CORE_INFO("-- Create  swapchain success {}, old swapchain {}, min image count {}, format {}, color space {}, present mode {}, sharing mode {}",
+    NE_CORE_INFO("-- Create  swapchain success {}\n\told swapchain {}\n\tmin image count {}\n\tformat {}\n\tcolor space {}\n\tpresent mode {}\n\tsharing mode {}",
                  (uintptr_t)m_swapChain,
                  (uintptr_t)oldSwapchain,
                  _minImageCount,
-                 string_VkFormat(_surfaceFormat),
-                 string_VkColorSpaceKHR(_surfaceColorSpace),
-                 string_VkPresentModeKHR(_presentMode),
-                 string_VkSharingMode(sharingMode));
+                 std::to_string(_surfaceFormat),
+                 std::to_string(_surfaceColorSpace),
+                 std::to_string(_presentMode),
+                 std::to_string(sharingMode));
 
 
     return true;

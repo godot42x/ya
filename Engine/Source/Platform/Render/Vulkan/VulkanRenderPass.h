@@ -7,6 +7,8 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 
+struct VulkanRender;
+
 
 /*
 Render Pass主导资源声明
@@ -15,12 +17,12 @@ Pipeline 需要兼容/依赖 Render Pass 的资源声明
 class VulkanRenderPass
 {
   private:
-    VkDevice         m_logicalDevice        = VK_NULL_HANDLE;
-    VkPhysicalDevice m_physicalDevice       = VK_NULL_HANDLE;
-    VkFormat         m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
-    VkFormat         m_depthFormat          = VK_FORMAT_UNDEFINED;
+    VulkanRender *_render      = nullptr;
+    VkRenderPass  m_renderPass = VK_NULL_HANDLE;
 
-    VkRenderPass               m_renderPass = VK_NULL_HANDLE;
+    VkFormat m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
+    VkFormat m_depthFormat          = VK_FORMAT_UNDEFINED;
+
     std::vector<VkFramebuffer> m_framebuffers;
 
     VulkanPipelineManager m_pipelineManager;
@@ -32,15 +34,13 @@ class VulkanRenderPass
     Delegate<void()> onRecreated;
 
   public:
-    VulkanRenderPass()  = default;
-    ~VulkanRenderPass() = default;
+    VulkanRenderPass(VulkanRender *render);
+    ~VulkanRenderPass() { cleanup(); }
 
     // Initialize the render pass with device and format information
-    void initialize(VkDevice logicalDevice, VkPhysicalDevice physicalDevice, VkFormat swapChainImageFormat, RenderPassCreateInfo renderPassCI);
-
 
     // Create the render pass with custom configuration
-    void create();
+    bool create(const RenderPassCreateInfo &ci);
 
     // Create framebuffers for the render pass
     void createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,
@@ -75,4 +75,6 @@ class VulkanRenderPass
     VkFormat findSupportedImageFormat(const std::vector<VkFormat> &candidates,
                                       VkImageTiling                tiling,
                                       VkFormatFeatureFlags         features);
+
+    bool createDefaultRenderPass();
 };

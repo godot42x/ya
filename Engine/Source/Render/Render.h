@@ -97,6 +97,20 @@ enum T
 };
 };
 
+namespace EImageLayout
+{
+enum T
+{
+    Undefined = 0,
+    ColorAttachmentOptimal,
+    DepthStencilAttachmentOptimal,
+    ShaderReadOnlyOptimal,
+    TransferSrcOptimal,
+    TransferDstOptimal,
+    PresentSrcKHR,
+};
+} // namespace EImageLayout
+
 namespace ESampleCount
 {
 enum T
@@ -288,7 +302,7 @@ enum T
 
 struct AttachmentDescription
 {
-    EFormat::T            format                  = EFormat::R8G8B8A8_UNORM;
+    EFormat::T            format                  = EFormat::Undefined;
     ESampleCount::T       samples                 = ESampleCount::Sample_1;
     EAttachmentLoadOp::T  loadOp                  = EAttachmentLoadOp::Clear;
     EAttachmentStoreOp::T storeOp                 = EAttachmentStoreOp::Store;
@@ -420,19 +434,27 @@ struct RenderPassCreateInfo
         // Simplified for basic usage - can be expanded later
     };
 
+    struct AttachmentRef
+    {
+        int32_t         ref    = -1;
+        EImageLayout::T layout = EImageLayout::Undefined;
+    };
+
     // Simplified subpass configuration - single subpass for now
     struct SubpassInfo
     {
-        std::vector<uint32_t> colorAttachmentIndices;
-        uint32_t              depthStencilAttachmentIndex = UINT32_MAX; // UINT32_MAX means no depth
-        std::vector<uint32_t> inputAttachmentIndices;
-        // std::vector<uint32_t> resolveAttachmentIndices;
+
+        std ::vector<AttachmentRef> inputAttachments;  // Single color attachment for now
+        std::vector<AttachmentRef>  colorAttachments;  // Single color attachment for now
+        AttachmentRef               depthAttachment;   // Single depth attachment for now
+        AttachmentRef               resolveAttachment; // Single depth attachment for now
     };
 
 
-    std::vector<AttachmentDescription>      attachments;
-    std::vector<SubpassDependency>          dependencies;
-    std::vector<SubpassInfo>                subpasses;   // Multiple subpasses can be defined, but currently we use a single subpass
+    std::vector<AttachmentDescription> attachments; // all attachment
+    std::vector<SubpassInfo>           subpasses;   // Multiple subpasses can be defined, but currently we use a single subpass
+    std::vector<SubpassDependency>     dependencies;
+
     std::vector<GraphicsPipelineCreateInfo> pipelineCIs; // For compatibility checks
 
 
@@ -440,49 +462,6 @@ struct RenderPassCreateInfo
     uint32_t getSubpassCount() const { return static_cast<uint32_t>(subpasses.size()); }
 
     bool isValidSubpassIndex(uint32_t index) const { return index < subpasses.size(); }
-
-    // Get attachment count for a specific subpass
-    uint32_t getColorAttachmentCount(uint32_t subpassIndex = 0) const
-    {
-        if (subpassIndex >= subpasses.size())
-            return 0;
-        return static_cast<uint32_t>(subpasses[subpassIndex].colorAttachmentIndices.size());
-    }
-
-    bool hasDepthAttachment(uint32_t subpassIndex = 0) const
-    {
-        if (subpassIndex >= subpasses.size())
-            return false;
-        return subpasses[subpassIndex].depthStencilAttachmentIndex != UINT32_MAX;
-    }
-
-    bool isCompatible(const GraphicsPipelineCreateInfo &pipelineCI, const RenderPassCreateInfo &renderPassCI)
-    {
-        // Check if subpass index is valid
-        if (!renderPassCI.isValidSubpassIndex(pipelineCI.subpass)) {
-            return false;
-        }
-
-        // Check if the number of color blend attachments matches the subpass color attachments
-        uint32_t expectedColorAttachments = renderPassCI.getColorAttachmentCount(pipelineCI.subpass);
-        if (pipelineCI.colorBlendState.attachments.size() != expectedColorAttachments) {
-            return false;
-        }
-
-        // Check depth testing compatibility
-        bool hasDepth = renderPassCI.hasDepthAttachment(pipelineCI.subpass);
-        if (pipelineCI.depthStencilState.bDepthTestEnable && !hasDepth) {
-            return false; // Pipeline expects depth but render pass doesn't have it
-        }
-
-        return true;
-    }
-
-    // Validate and adjust pipeline to match render pass requirements
-    void validateAndAdjust()
-    {
-        UNIMPLEMENTED();
-    }
 };
 
 

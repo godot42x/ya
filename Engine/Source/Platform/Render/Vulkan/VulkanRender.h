@@ -334,6 +334,7 @@ struct VulkanRender : public IRender
     VkSurfaceKHR     getSurface() const { return _surface; }
     VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
     VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
+    VulkanSwapChain *getSwapChain() const { return m_swapChain; }
 
   private:
 

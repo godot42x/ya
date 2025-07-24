@@ -20,9 +20,8 @@ struct VulkanSwapChainSupportDetails
 
 struct VulkanRender;
 
-class VulkanSwapChain
+struct VulkanSwapChain
 {
-  private:
     VulkanRender *_render = nullptr;
 
     VkSwapchainKHR                m_swapChain = VK_NULL_HANDLE;

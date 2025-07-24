@@ -1,5 +1,6 @@
-#include "Platform/Windows/WindowsDialogWindow.h"
 #include "Core/Log.h"
+
+#include "Platform/Windows/WindowsDialogWindow.h"
 #include <Windows.h>
 #include <commdlg.h>
 #include <knownfolders.h>
