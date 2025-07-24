@@ -468,7 +468,7 @@ struct RenderPassCreateInfo
 struct SwapchainCreateInfo
 {
     // Surface and format configuration
-    EFormat::T      imageFormat = EFormat::B8G8R8A8_UNORM;
+    EFormat::T      imageFormat = EFormat::R8G8B8A8_UNORM; // TODO: rename to surfaceFormat
     EColorSpace::T  colorSpace  = EColorSpace::SRGB_NONLINEAR;
     EPresentMode::T presentMode = EPresentMode::FIFO; // V-Sync by default
     bool            bVsync      = true;               // V-Sync enabled by default

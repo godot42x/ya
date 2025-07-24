@@ -3,6 +3,7 @@
 #include "VulkanUtils.h"
 #include <array>
 
+#include <ranges>
 
 #include "VulkanRender.h"
 
@@ -13,42 +14,8 @@ VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
 
 
 
-void VulkanRenderPass::createFramebuffers(const std::vector<VkImageView> &swapChainImageViews,
-                                          VkImageView                     depthImageView,
-                                          VkExtent2D                      swapChainExtent)
-{
-    m_framebuffers.resize(swapChainImageViews.size());
-
-    for (size_t i = 0; i < swapChainImageViews.size(); ++i)
-    {
-        std::array<VkImageView, 2> attachments = {
-            swapChainImageViews[i],
-            depthImageView};
-
-        VkFramebufferCreateInfo framebufferInfo = {
-            .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .renderPass      = m_renderPass,
-            .attachmentCount = static_cast<uint32_t>(attachments.size()),
-            .pAttachments    = attachments.data(),
-            .width           = swapChainExtent.width,
-            .height          = swapChainExtent.height,
-            .layers          = 1,
-        };
-
-        if (vkCreateFramebuffer(_render->getLogicalDevice(), &framebufferInfo, nullptr, &m_framebuffers[i]) != VK_SUCCESS)
-        {
-            NE_CORE_ASSERT(false, "Failed to create framebuffer!");
-        }
-    }
-}
-
 void VulkanRenderPass::cleanup()
 {
-    for (auto framebuffer : m_framebuffers)
-    {
-        vkDestroyFramebuffer(_render->getLogicalDevice(), framebuffer, nullptr);
-    }
-    m_framebuffers.clear();
 
     if (m_renderPass != VK_NULL_HANDLE)
     {
@@ -57,30 +24,20 @@ void VulkanRenderPass::cleanup()
     }
 }
 
-void VulkanRenderPass::recreate(const std::vector<VkImageView> &swapChainImageViews,
-                                VkImageView                     depthImageView,
-                                VkExtent2D                      swapChainExtent)
+void VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 {
-    // Clean up existing framebuffers
-    for (auto framebuffer : m_framebuffers)
-    {
-        vkDestroyFramebuffer(_render->getLogicalDevice(), framebuffer, nullptr);
-    }
-    m_framebuffers.clear();
-
-    // Recreate framebuffers with new swap chain
-    createFramebuffers(swapChainImageViews, depthImageView, swapChainExtent);
+    create(ci);
 }
 
 void VulkanRenderPass::beginRenderPass(VkCommandBuffer commandBuffer, uint32_t frameBufferIndex, VkExtent2D extent)
 {
     VkRenderPassBeginInfo renderPassInfo{
-        .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass  = m_renderPass,
-        .framebuffer = m_framebuffers[frameBufferIndex],
-        .renderArea  = {
-             .offset = {0, 0},
-             .extent = extent,
+        .sType      = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = m_renderPass,
+        // .framebuffer = m_framebuffers[frameBufferIndex],
+        .renderArea = {
+            .offset = {0, 0},
+            .extent = extent,
         },
     };
 
@@ -177,7 +134,7 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
         outVkDesc.samples = VK_SAMPLE_COUNT_64_BIT;
         break;
     default:
-        UNIMPLEMENTED();
+        UNREACHABLE();
     }
 
     // Convert load/store ops
@@ -192,7 +149,7 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
         outVkDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         break;
     default:
-        UNIMPLEMENTED();
+        UNREACHABLE();
     }
 
     switch (desc.storeOp) {
@@ -203,7 +160,7 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
         outVkDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         break;
     default:
-        UNIMPLEMENTED();
+        UNREACHABLE();
     }
 
     // Set stencil ops (simplified)
@@ -218,7 +175,7 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
         outVkDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         break;
     default:
-        UNIMPLEMENTED();
+        UNREACHABLE();
     }
 
     switch (desc.stencilStoreOp) {
@@ -229,7 +186,7 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
         outVkDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         break;
     default:
-        UNIMPLEMENTED();
+        UNREACHABLE();
     }
 
     // Set layouts
@@ -308,13 +265,22 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
     // Convert abstract configuration to Vulkan-specific values
     std::vector<VkAttachmentDescription> attachmentDescs;
 
+    VkFormat surfaceFormat = _render->getSwapChain()->getSurfaceFormat();
     // Convert attachments from config
+    int i = 0;
     for (const auto &attachmentDesc : _ci.attachments) {
         VkAttachmentDescription vkAttachmentDesc{
             .flags = 0,
         };
         convertToVkAttachmentDescription(attachmentDesc, vkAttachmentDesc);
+        if (vkAttachmentDesc.format != surfaceFormat) {
+            NE_CORE_WARN("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
+                         i,
+                         std::to_string(vkAttachmentDesc.format),
+                         std::to_string(surfaceFormat));
+        }
         attachmentDescs.push_back(vkAttachmentDesc);
+        ++i;
     }
 
 

@@ -2,6 +2,7 @@
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 
+#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "Render/Render.h"
@@ -21,7 +22,8 @@ App *App::create()
     return App::_instance;
 }
 
-VulkanRenderPass *pass;
+VulkanRenderPass              *pass;
+std::vector<VulkanFrameBuffer> frameBuffers;
 
 void App::init()
 {
@@ -45,13 +47,16 @@ void App::init()
         .renderAPI      = ERenderAPI::Vulkan,
         .windowProvider = windowProvider,
         .swapchainCI    = SwapchainCreateInfo{
-               .bVsync = true,
-               .width  = static_cast<uint32_t>(w),
-               .height = static_cast<uint32_t>(h),
+               .imageFormat = EFormat::R8G8B8A8_UNORM,
+               .bVsync      = true,
+               .width       = static_cast<uint32_t>(w),
+               .height      = static_cast<uint32_t>(h),
         },
     });
 
     currentRenderAPI = ERenderAPI::Vulkan;
+
+    VkFormat surfaceFormat = vkRender->getSwapChain()->getSurfaceFormat();
 
 
     // TODO: create pipelines
@@ -103,10 +108,26 @@ void App::init()
             },
         },
     });
+
+    VulkanSwapChain *vkSwapChain = vkRender->getSwapChain();
+
+    const std::vector<VkImage> &images = vkSwapChain->getImages();
+
+    // TODO: maybe copy and cause destruction?
+    frameBuffers.resize(images.size());
+    for (size_t i = 0; i < images.size(); ++i)
+    {
+        frameBuffers[i] = VulkanFrameBuffer(vkRender, pass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+        frameBuffers[i].recreate({images[i]}, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+    }
 }
 
 void Neon::App::quit()
 {
+    for (auto &frameBuffer : frameBuffers)
+    {
+        frameBuffer.clean();
+    }
     delete pass;
     _render->destroy();
     windowProvider->destroy();

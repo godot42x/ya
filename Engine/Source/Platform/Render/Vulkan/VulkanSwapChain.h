@@ -27,8 +27,7 @@ struct VulkanSwapChain
     VkSwapchainKHR                m_swapChain = VK_NULL_HANDLE;
     VulkanSwapChainSupportDetails _supportDetails;
 
-    std::vector<VkImage>     m_images;
-    std::vector<VkImageView> m_imageViews;
+    std::vector<VkImage> m_images;
 
     VkFormat         _surfaceFormat = VK_FORMAT_UNDEFINED;
     VkColorSpaceKHR  _surfaceColorSpace;
@@ -53,13 +52,16 @@ struct VulkanSwapChain
     const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 
     // Getters
-    VkSwapchainKHR                  getSwapChain() const { return m_swapChain; }
-    const std::vector<VkImage>     &getImages() const { return m_images; }
-    const std::vector<VkImageView> &getImageViews() const { return m_imageViews; }
+    VkSwapchainKHR              getSwapChain() const { return m_swapChain; }
+    const std::vector<VkImage> &getImages() const { return m_images; }
+    VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
+    uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
+    uint32_t                    getHeight() const { return _supportDetails.capabilities.currentExtent.height; };
 
     // Swap chain operations
     VkResult acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore);
     VkResult presentImage(uint32_t imageIndex, VkSemaphore semaphore, VkQueue presentQueue);
+
 
   private:
 };

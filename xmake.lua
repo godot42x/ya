@@ -14,3 +14,6 @@ includes("./Engine/Neon.xmake.lua")
 includes("./xmake/task.lua")
 
 set_rundir(os.scriptdir())
+
+
+add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })

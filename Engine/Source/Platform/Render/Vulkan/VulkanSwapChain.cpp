@@ -95,10 +95,6 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
 
 void VulkanSwapChain::cleanup()
 {
-    for (auto imageView : m_imageViews) {
-        vkDestroyImageView(_render->getLogicalDevice(), imageView, nullptr);
-    }
-    m_imageViews.clear();
 
     if (m_swapChain != VK_NULL_HANDLE) {
         vkDestroySwapchainKHR(_render->getLogicalDevice(), m_swapChain, nullptr);
@@ -280,20 +276,15 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
                  std::to_string(sharingMode));
 
 
-    return true;
 
     // Get swap chain images
     uint32_t imageCount;
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
+    NE_CORE_INFO("Swap chain created with {} images", m_images.size());
 
-    m_imageViews.resize(m_images.size());
-
-    for (size_t i = 0; i < m_images.size(); ++i)
-    {
-        m_imageViews[i] = VulkanUtils::createImageView(_render->getLogicalDevice(), m_images[i], _surfaceFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-    }
+    return true;
 }
 
 VkResult VulkanSwapChain::acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore)

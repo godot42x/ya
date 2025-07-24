@@ -125,7 +125,7 @@ std::string enum_name(T value)
 }
 
 
-#define GENERATED_ENUM_MISC(ENUM_TYPE_NAME)                                                                                \
+#define GENERATED_ENUM_MISC_WITH_RANGE(ENUM_TYPE_NAME, RANGE)                                                                    \
     inline std::unordered_map<ENUM_TYPE_NAME, std::string> ENUM_TYPE_NAME##2Strings;                                       \
     namespace __detail__##ENUM_TYPE_NAME                                                                                   \
     {                                                                                                                      \
@@ -133,7 +133,8 @@ std::string enum_name(T value)
         {                                                                                                                  \
             Generator()                                                                                                    \
             {                                                                                                              \
-                for (int i = 0; i < static_cast<int>(ENUM_TYPE_NAME::ENUM_MAX); i++) {                                     \
+                int range = static_cast<int>(ENUM_TYPE_NAME::RANGE);                                                       \
+                for (int i = 0; i < range; i++) {                                                                          \
                     ENUM_TYPE_NAME##2Strings [static_cast<ENUM_TYPE_NAME>(i)] = enum_name(static_cast<ENUM_TYPE_NAME>(i)); \
                 }                                                                                                          \
             }                                                                                                              \
@@ -141,6 +142,8 @@ std::string enum_name(T value)
         inline static Generator generator;                                                                                 \
     }
 
+#define GENERATED_ENUM_MISC(ENUM_TYPE_NAME) \
+    GENERATED_ENUM_MISC_WITH_RANGE(ENUM_TYPE_NAME, ENUM_MAX)
 
 
 namespace Test

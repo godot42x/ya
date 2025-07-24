@@ -70,6 +70,11 @@ struct std::formatter<VkResult> : std::formatter<std::string>
         }                                                                \
     } while (0)
 
+#define VK_DESTROY(t, device, obj)          \
+    if (obj != VK_NULL_HANDLE) {            \
+        vkDestroy##t(device, obj, nullptr); \
+        obj = VK_NULL_HANDLE;               \
+    }
 
 inline auto toVkImageLayout(EImageLayout::T layout) -> VkImageLayout
 {

@@ -104,8 +104,7 @@ void VulkanUtils::createImage(VkDevice device, VkPhysicalDevice physicalDevice,
     vkBindImageMemory(device, image, imageMemory, 0);
 }
 
-VkImageView VulkanUtils::createImageView(VkDevice device,
-                                         VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+VkImageView VulkanUtils::createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
 {
     VkImageViewCreateInfo createInfo{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
