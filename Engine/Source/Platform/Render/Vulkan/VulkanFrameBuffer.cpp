@@ -21,7 +21,7 @@ bool VulkanFrameBuffer::recreate(std::vector<VkImage> images, uint32_t width, ui
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass      = renderPass->getRenderPass(),
+        .renderPass      = renderPass->getHandle(),
         .attachmentCount = static_cast<uint32_t>(_imageViews.size()),
         .pAttachments    = _imageViews.data(),
         .width           = width,

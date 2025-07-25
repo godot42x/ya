@@ -42,7 +42,437 @@ struct VulkanUtils
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
 };
+namespace EPrimitiveType
+{
+inline VkPrimitiveTopology toVk(T primitiveType)
+{
+    switch (primitiveType) {
+    case TriangleList:
+        return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    case Line:
+        return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    default:
+        UNIMPLEMENTED();
+    }
+    return {};
+}
+} // namespace EPrimitiveType
 
+namespace EVertexAttributeFormat
+{
+inline auto toVk(T format) -> VkFormat
+{
+    switch (format) {
+    case Float2:
+        return VK_FORMAT_R32G32_SFLOAT;
+    case Float3:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case Float4:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    default:
+        UNIMPLEMENTED();
+    }
+    return {};
+}
+} // namespace EVertexAttributeFormat
+
+namespace ESampleCount
+{
+inline VkSampleCountFlagBits toVk(T sampleCount)
+{
+    switch (sampleCount) {
+    case Sample_1:
+        return VK_SAMPLE_COUNT_1_BIT;
+    case Sample_2:
+        return VK_SAMPLE_COUNT_2_BIT;
+    case Sample_4:
+        return VK_SAMPLE_COUNT_4_BIT;
+    case Sample_8:
+        return VK_SAMPLE_COUNT_8_BIT;
+    case Sample_16:
+        return VK_SAMPLE_COUNT_16_BIT;
+    case Sample_32:
+        return VK_SAMPLE_COUNT_32_BIT;
+    case Sample_64:
+        return VK_SAMPLE_COUNT_64_BIT;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ESampleCount
+
+namespace EPolygonMode
+{
+inline auto toVk(T mode) -> VkPolygonMode
+{
+    switch (mode) {
+    case Fill:
+        return VK_POLYGON_MODE_FILL;
+    case Line:
+        return VK_POLYGON_MODE_LINE;
+    case Point:
+        return VK_POLYGON_MODE_POINT;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EPolygonMode
+
+namespace ECullMode
+{
+inline auto toVk(T mode) -> VkCullModeFlags
+{
+    switch (mode) {
+    case Back:
+        return VK_CULL_MODE_BACK_BIT;
+    case Front:
+        return VK_CULL_MODE_FRONT_BIT;
+    case None:
+        return VK_CULL_MODE_NONE;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ECullMode
+
+namespace EFrontFaceType
+{
+inline auto toVk(T type) -> VkFrontFace
+{
+    switch (type) {
+    case CounterClockWise:
+        return VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    case ClockWise:
+        return VK_FRONT_FACE_CLOCKWISE;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EFrontFaceType
+
+namespace ECompareOp
+{
+inline auto toVk(T op) -> VkCompareOp
+{
+    switch (op) {
+    case Never:
+        return VK_COMPARE_OP_NEVER;
+    case Less:
+        return VK_COMPARE_OP_LESS;
+    case Equal:
+        return VK_COMPARE_OP_EQUAL;
+    case LessOrEqual:
+        return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case Greater:
+        return VK_COMPARE_OP_GREATER;
+    case NotEqual:
+        return VK_COMPARE_OP_NOT_EQUAL;
+    case GreaterOrEqual:
+        return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case Always:
+        return VK_COMPARE_OP_ALWAYS;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ECompareOp
+
+namespace EBlendFactor
+{
+inline auto toVk(T factor) -> VkBlendFactor
+{
+    switch (factor) {
+    case Zero:
+        return VK_BLEND_FACTOR_ZERO;
+    case One:
+        return VK_BLEND_FACTOR_ONE;
+    case SrcColor:
+        return VK_BLEND_FACTOR_SRC_COLOR;
+    case OneMinusSrcColor:
+        return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+    case DstColor:
+        return VK_BLEND_FACTOR_DST_COLOR;
+    case OneMinusDstColor:
+        return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+    case SrcAlpha:
+        return VK_BLEND_FACTOR_SRC_ALPHA;
+    case OneMinusSrcAlpha:
+        return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    case DstAlpha:
+        return VK_BLEND_FACTOR_DST_ALPHA;
+    case OneMinusDstAlpha:
+        return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EBlendFactor
+
+namespace EColorComponent
+{
+inline auto toVk(T mask) -> VkColorComponentFlags
+{
+    VkColorComponentFlags vkMask = 0;
+    if (mask & R)
+        vkMask |= VK_COLOR_COMPONENT_R_BIT;
+    if (mask & G)
+        vkMask |= VK_COLOR_COMPONENT_G_BIT;
+    if (mask & B)
+        vkMask |= VK_COLOR_COMPONENT_B_BIT;
+    if (mask & A)
+        vkMask |= VK_COLOR_COMPONENT_A_BIT;
+    return vkMask;
+}
+} // namespace EColorComponent
+
+namespace EImageUsage
+{
+inline auto toVk(T usage) -> VkImageUsageFlags
+{
+    VkImageUsageFlags vkUsage = 0;
+    if (usage & TransferSrc)
+        vkUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if (usage & TransferDst)
+        vkUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if (usage & Sampled)
+        vkUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    if (usage & Storage)
+        vkUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    if (usage & ColorAttachment)
+        vkUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (usage & DepthStencilAttachment)
+        vkUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    if (usage & TransientAttachment)
+        vkUsage |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    if (usage & InputAttachment)
+        vkUsage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    return vkUsage;
+}
+} // namespace EImageUsage
+
+namespace EBlendOp
+{
+inline auto toVk(T op) -> VkBlendOp
+{
+    switch (op) {
+    case Add:
+        return VK_BLEND_OP_ADD;
+    case Subtract:
+        return VK_BLEND_OP_SUBTRACT;
+    case ReverseSubtract:
+        return VK_BLEND_OP_REVERSE_SUBTRACT;
+    case Min:
+        return VK_BLEND_OP_MIN;
+    case Max:
+        return VK_BLEND_OP_MAX;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EBlendOp
+
+namespace ELogicOp
+{
+inline auto toVk(T op) -> VkLogicOp
+{
+    switch (op) {
+    case Clear:
+        return VK_LOGIC_OP_CLEAR;
+    case And:
+        return VK_LOGIC_OP_AND;
+    case AndReverse:
+        return VK_LOGIC_OP_AND_REVERSE;
+    case Copy:
+        return VK_LOGIC_OP_COPY;
+    case AndInverted:
+        return VK_LOGIC_OP_AND_INVERTED;
+    case NoOp:
+        return VK_LOGIC_OP_NO_OP;
+    case Xor:
+        return VK_LOGIC_OP_XOR;
+    case Or:
+        return VK_LOGIC_OP_OR;
+    case Nor:
+        return VK_LOGIC_OP_NOR;
+    case Equivalent:
+        return VK_LOGIC_OP_EQUIVALENT;
+    case Invert:
+        return VK_LOGIC_OP_INVERT;
+    case OrReverse:
+        return VK_LOGIC_OP_OR_REVERSE;
+    case CopyInverted:
+        return VK_LOGIC_OP_COPY_INVERTED;
+    case OrInverted:
+        return VK_LOGIC_OP_OR_INVERTED;
+    case Nand:
+        return VK_LOGIC_OP_NAND;
+    case Set:
+        return VK_LOGIC_OP_SET;
+    default:
+        UNREACHABLE();
+    }
+}
+} // namespace ELogicOp
+
+namespace EFormat
+{
+inline auto toVk(T format) -> VkFormat
+{
+    switch (format) {
+    case Undefined:
+        return VK_FORMAT_UNDEFINED;
+    case R8G8B8A8_UNORM:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case B8G8R8A8_UNORM:
+        return VK_FORMAT_B8G8R8A8_UNORM;
+    case D32_SFLOAT:
+        return VK_FORMAT_D32_SFLOAT;
+    case D24_UNORM_S8_UINT:
+        return VK_FORMAT_D24_UNORM_S8_UINT;
+    default:
+        UNREACHABLE();
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+} // namespace EFormat
+
+namespace EAttachmentLoadOp
+{
+inline auto toVk(T loadOp) -> VkAttachmentLoadOp
+{
+    switch (loadOp) {
+    case Load:
+        return VK_ATTACHMENT_LOAD_OP_LOAD;
+    case Clear:
+        return VK_ATTACHMENT_LOAD_OP_CLEAR;
+    case DontCare:
+        return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    default:
+        UNREACHABLE();
+    }
+    return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+}
+} // namespace EAttachmentLoadOp
+
+namespace EAttachmentStoreOp
+{
+inline auto toVk(T storeOp) -> VkAttachmentStoreOp
+{
+    switch (storeOp) {
+    case Store:
+        return VK_ATTACHMENT_STORE_OP_STORE;
+    case DontCare:
+        return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    default:
+        UNREACHABLE();
+    }
+    return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+}
+} // namespace EAttachmentStoreOp
+
+namespace EPresentMode
+{
+inline auto toVk(T presentMode) -> VkPresentModeKHR
+{
+    switch (presentMode) {
+    case Immediate:
+        return VK_PRESENT_MODE_IMMEDIATE_KHR;
+    case Mailbox:
+        return VK_PRESENT_MODE_MAILBOX_KHR;
+    case FIFO:
+        return VK_PRESENT_MODE_FIFO_KHR;
+    case FIFO_Relaxed:
+        return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    default:
+        UNREACHABLE();
+    }
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+} // namespace EPresentMode
+
+namespace EColorSpace
+{
+inline auto toVk(T colorSpace) -> VkColorSpaceKHR
+{
+    switch (colorSpace) {
+    case SRGB_NONLINEAR:
+        return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    case HDR10_ST2084:
+        return VK_COLOR_SPACE_HDR10_ST2084_EXT;
+    case HDR10_HLG:
+        return VK_COLOR_SPACE_HDR10_HLG_EXT;
+    default:
+        UNREACHABLE();
+    }
+    return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+}
+} // namespace EColorSpace
+
+namespace ESharingMode
+{
+inline auto toVk(T sharingMode) -> VkSharingMode
+{
+    switch (sharingMode) {
+    case Exclusive:
+        return VK_SHARING_MODE_EXCLUSIVE;
+    case Concurrent:
+        return VK_SHARING_MODE_CONCURRENT;
+    default:
+        UNREACHABLE();
+    }
+    return VK_SHARING_MODE_EXCLUSIVE;
+}
+} // namespace ESharingMode
+
+namespace EPipelineDescriptorType
+{
+inline auto toVk(T type) -> VkDescriptorType
+{
+    switch (type) {
+    case UniformBuffer:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case CombinedImageSampler:
+        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    case Sampler:
+        return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case SampledImage:
+        return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    case StorageImage:
+        return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    case StorageBuffer:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    default:
+        UNIMPLEMENTED();
+    }
+    return {};
+}
+
+} // namespace EPipelineDescriptorType
+
+namespace EShaderStage
+{
+inline auto toVk(T stage) -> VkShaderStageFlags
+{
+    VkShaderStageFlags bits = {};
+    if (stage & Vertex)
+        bits |= VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT;
+    if (stage & Fragment)
+        bits |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (stage & Geometry)
+        bits |= VK_SHADER_STAGE_GEOMETRY_BIT;
+    if (stage & Compute)
+        bits |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+    return bits;
+}
+}; // namespace EShaderStage
 
 namespace std
 {
@@ -62,6 +492,8 @@ struct std::formatter<VkResult> : std::formatter<std::string>
     }
 };
 
+
+
 #define VK_CALL(x)                                                       \
     do {                                                                 \
         VkResult result = (x);                                           \
@@ -69,6 +501,17 @@ struct std::formatter<VkResult> : std::formatter<std::string>
             NE_CORE_ERROR("Vulkan call failed with error: {} ", result); \
         }                                                                \
     } while (0)
+#define VK_CALL_RET(x)                                                         \
+    {                                                                          \
+        VkResult result = (x);                                                 \
+        if (result != VK_SUCCESS) {                                            \
+            NE_CORE_ERROR("Vulkan call " #x "failed with error: {} ", result); \
+            return {};                                                         \
+        }                                                                      \
+    }                                                                          \
+    while (0)
+#define CALL(x) (VkResult ret = (x), x ? ret : (NE_CORE_ERROR("Vulkan call failed with error: {} ", ret), false))
+
 
 #define VK_DESTROY(t, device, obj)          \
     if (obj != VK_NULL_HANDLE) {            \

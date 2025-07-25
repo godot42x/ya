@@ -97,12 +97,12 @@ constexpr auto generate_names_array(std::index_sequence<Is...>)
     return std::array<std::string_view, Num>{enum_name<static_cast<T>(Is)>()...};
 }
 
-template <typename T>
+template <int UpperBound, typename T>
     requires std::is_enum_v<T>
 constexpr auto enum_name(T value)
 {
-    constexpr auto num   = enum_size<T>::value;
-    constexpr auto names = generate_names_array<T, num>(std::make_index_sequence<num>{});
+    // constexpr auto num   = enum_size<T>::value;
+    constexpr auto names = generate_names_array<T, UpperBound + 1>(std::make_index_sequence<UpperBound + 1>{});
     return names.at(static_cast<std::size_t>(value));
 }
 
@@ -118,28 +118,28 @@ std::string enum_name()
     return std::string(detail::enum_name<value>());
 }
 
-template <typename T>
+template <int UpperBound, typename T>
 std::string enum_name(T value)
 {
-    return std::string(detail::enum_name<T>(value));
+    return std::string(detail::enum_name<UpperBound, T>(value));
 }
 
 
-#define GENERATED_ENUM_MISC_WITH_RANGE(ENUM_TYPE_NAME, RANGE)                                                                    \
-    inline std::unordered_map<ENUM_TYPE_NAME, std::string> ENUM_TYPE_NAME##2Strings;                                       \
-    namespace __detail__##ENUM_TYPE_NAME                                                                                   \
-    {                                                                                                                      \
-        struct Generator                                                                                                   \
-        {                                                                                                                  \
-            Generator()                                                                                                    \
-            {                                                                                                              \
-                int range = static_cast<int>(ENUM_TYPE_NAME::RANGE);                                                       \
-                for (int i = 0; i < range; i++) {                                                                          \
-                    ENUM_TYPE_NAME##2Strings [static_cast<ENUM_TYPE_NAME>(i)] = enum_name(static_cast<ENUM_TYPE_NAME>(i)); \
-                }                                                                                                          \
-            }                                                                                                              \
-        };                                                                                                                 \
-        inline static Generator generator;                                                                                 \
+#define GENERATED_ENUM_MISC_WITH_RANGE(ENUM_TYPE_NAME, UPPER_BOUND)                                                                                     \
+    inline std::unordered_map<ENUM_TYPE_NAME, std::string> ENUM_TYPE_NAME##2Strings;                                                                    \
+    namespace __detail__##ENUM_TYPE_NAME                                                                                                                \
+    {                                                                                                                                                   \
+        struct Generator                                                                                                                                \
+        {                                                                                                                                               \
+            Generator()                                                                                                                                 \
+            {                                                                                                                                           \
+                constexpr int upper_bound = static_cast<int>(ENUM_TYPE_NAME::UPPER_BOUND);                                                              \
+                for (int i = 0; i <= upper_bound; i++) {                                                                                                \
+                    ENUM_TYPE_NAME##2Strings [static_cast<ENUM_TYPE_NAME>(i)] = enum_name<upper_bound, ENUM_TYPE_NAME>(static_cast<ENUM_TYPE_NAME>(i)); \
+                }                                                                                                                                       \
+            }                                                                                                                                           \
+        };                                                                                                                                              \
+        inline static Generator generator;                                                                                                              \
     }
 
 #define GENERATED_ENUM_MISC(ENUM_TYPE_NAME) \
@@ -157,8 +157,9 @@ enum class ETestEnum
     Test3,
     ENUM_MAX,
 };
-
 GENERATED_ENUM_MISC(ETestEnum);
+
+// namespace __detail__ETestEnum
 
 inline void a()
 {

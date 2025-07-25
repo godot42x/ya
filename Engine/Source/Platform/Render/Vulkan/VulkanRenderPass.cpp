@@ -304,6 +304,7 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
     for (int i = 0; i < _ci.subpasses.size(); i++)
     {
         const auto &subpass = _ci.subpasses[i];
+        NE_ASSERT(subpass.subpassIndex == i, "Subpass index mismatch: expected {}, got {}", i, subpass.subpassIndex);
 
         for (const auto &colorAttachment : subpass.colorAttachments)
         {

@@ -69,6 +69,10 @@ struct VulkanRender : public IRender
     VkInstance   _instance;
     VkSurfaceKHR _surface;
 
+
+    QueueFamilyIndices _graphicsQueueFamily;
+    QueueFamilyIndices _presentQueueFamily;
+
     VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
     VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
 
@@ -81,20 +85,20 @@ struct VulkanRender : public IRender
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
 
-    std::vector<VulkanQueue> _presentQueues;
-    std::vector<VulkanQueue> _graphicsQueues;
 
     // Command pool belongs to device level
     VkCommandPool _graphicsCommandPool = VK_NULL_HANDLE;
     VkCommandPool _presentCommandPool  = VK_NULL_HANDLE;
 
-    // Configuration parameters
-    SwapchainCreateInfo m_swapChainCI;
+    // swapchain
+    SwapchainCreateInfo      m_swapChainCI;
+    VulkanSwapChain         *m_swapChain;
+    std::vector<VulkanQueue> _presentQueues;
+    std::vector<VulkanQueue> _graphicsQueues;
 
-    // Use separate classes for better organization
-    VulkanSwapChain      *m_swapChain;
-    VulkanPipelineManager m_pipelineManager;
-    VulkanResourceManager m_resourceManager;
+    //
+    VkPipelineCache _pipelineCache = VK_NULL_HANDLE;
+
 
     std::vector<VkCommandBuffer> m_commandBuffers;
 
@@ -102,9 +106,6 @@ struct VulkanRender : public IRender
     VkSemaphore m_renderFinishedSemaphore;
     VkFence     m_inFlightFence;
 
-
-    QueueFamilyIndices _graphicsQueueFamily;
-    QueueFamilyIndices _presentQueueFamily;
 
 
     void *nativeWindow = nullptr;
@@ -200,6 +201,8 @@ struct VulkanRender : public IRender
 
         m_swapChain = new VulkanSwapChain(this);
         m_swapChain->create(m_swapChainCI);
+
+        createPipelineCache();
         // Initialize separate components with configuration
         // m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
         // m_swapChain.create();
@@ -265,10 +268,8 @@ struct VulkanRender : public IRender
         //     vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
         // }
 
-        // Cleanup resource manager
-        m_resourceManager.cleanup();
+        VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
-        m_pipelineManager.cleanup();
         if (m_swapChain)
         {
             // Cleanup swap chain resources
@@ -336,6 +337,8 @@ struct VulkanRender : public IRender
     VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
     VulkanSwapChain *getSwapChain() const { return m_swapChain; }
 
+    VkPipelineCache getPipelineCache() const { return _pipelineCache; }
+
   private:
 
     void createInstance();
@@ -346,6 +349,8 @@ struct VulkanRender : public IRender
 
     bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount);
     bool createCommandPool();
+
+    void createPipelineCache();
     // void createDepthResources();
     void createCommandBuffers();
     void createSemaphores();

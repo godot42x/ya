@@ -24,7 +24,7 @@ class VulkanRenderPass
     VkFormat m_depthFormat          = VK_FORMAT_UNDEFINED;
 
 
-    VulkanPipelineManager m_pipelineManager;
+    VulkanPipeline m_pipelineManager;
 
     RenderPassCreateInfo _ci;
 
@@ -44,7 +44,7 @@ class VulkanRenderPass
     void recreate(const RenderPassCreateInfo &ci);
 
     // Getters
-    VkRenderPass getRenderPass() const { return m_renderPass; }
+    VkRenderPass getHandle() const { return m_renderPass; }
     VkFormat     getDepthFormat() const { return m_depthFormat; }
 
     // Begin render pass

@@ -426,11 +426,53 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
     return resources;
 }
 
-
-std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view fileName)
+auto getOption(bool bOptimized)
 {
+    TODO("Choose vulkan version?");
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+    options.SetTargetSpirv(shaderc_spirv_version_1_3);
+    const bool optimize = true;
+    if (optimize) {
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
+    }
+    return options;
+}
+
+
+
+bool GLSLScriptProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, std::vector<ir_t> &outSpv)
+{
+    shaderc::Compiler compiler;
+    auto              options = getOption(false);
+
+    // recompile
+    shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
+        content.data(),
+        EShaderStage::toShadercType(stage),
+        filename.data(),
+        stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
+        options);
+
+    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+    {
+        NE_CORE_ERROR("\n{}", result.GetErrorMessage());
+        // NE_CORE_ASSERT(false, "Shader compilation failed!");
+        return false;
+    }
+
+    // store compile result into memory
+    outSpv = spirv_ir_t(result.begin(), result.end());
+    return true;
+}
+
+std::unordered_map<EShaderStage::T, std::string> GLSLScriptProcessor::preprocessShaderSource(const std::string_view filename)
+{
+    std::unordered_map<EShaderStage::T, std::string> shaderSources;
+
     std::string contentStr;
-    std::string fullPath = this->shaderStoragePath + "/" + fileName.data();
+    std::string fullPath = this->shaderStoragePath + "/" + filename.data();
+
     if (!FileSystem::get()->readFileToString(fullPath, contentStr))
     {
         NE_CORE_ERROR("Failed to read shader file: {}", fullPath);
@@ -438,78 +480,71 @@ std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(s
     }
 
 
-    // Preprocess
-    std::unordered_map<EShaderStage::T, std::string> shaderSources;
+    std::string_view source(contentStr.begin(), contentStr.end());
+
+
+    // We split the source by "#type <vertex/fragment>" preprocessing directives
+    std::string_view typeToken    = "#type";
+    const size_t     typeTokenLen = typeToken.size();
+    size_t           pos          = source.find(typeToken, 0);
+
+    while (pos != std::string ::npos)
     {
-        std::string_view source(contentStr.begin(), contentStr.end());
+        // get the type string
+        size_t eol = source.find_first_of(eolFlag, pos);
+        NE_CORE_ASSERT(eol != std::string ::npos, "Syntax error");
+
+        size_t           begin = pos + typeTokenLen + 1;
+        std::string_view type  = source.substr(begin, eol - begin);
+        type                   = ut::str::trim(type);
+
+        EShaderStage::T shader_type = EShaderStage::fromString(type);
+        NE_CORE_ASSERT(shader_type, "Invalid shader type specific");
+
+        // get the shader content range
+        size_t nextLinePos = source.find_first_not_of(eolFlag, eol);
+
+        pos          = source.find(typeToken, nextLinePos);
+        size_t count = (nextLinePos == std::string ::npos ? source.size() - 1 : nextLinePos);
+
+        std::string codes = std::string(source.substr(nextLinePos, pos - count));
+
+        auto [_, Ok] = shaderSources.insert({shader_type, codes});
+
+        NE_CORE_ASSERT(Ok, "Failed to insert this shader source");
+    }
+    return shaderSources;
+}
 
 
-        // We split the source by "#type <vertex/fragment>" preprocessing directives
-        std::string_view typeToken    = "#type";
-        const size_t     typeTokenLen = typeToken.size();
-        size_t           pos          = source.find(typeToken, 0);
+std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view filename)
+{
+    // Record the processing path for reflection logging
+    tempProcessingPath = this->shaderStoragePath + "/" + filename.data();
+    // Preprocess
+    std::unordered_map<EShaderStage::T, std::string> shaderSources = preprocessShaderSource(filename);
 
-        while (pos != std::string ::npos)
-        {
-            // get the type string
-            size_t eol = source.find_first_of(eolFlag, pos);
-            NE_CORE_ASSERT(eol != std::string ::npos, "Syntax error");
-
-            size_t           begin = pos + typeTokenLen + 1;
-            std::string_view type  = source.substr(begin, eol - begin);
-            type                   = ut::str::trim(type);
-
-            EShaderStage::T shader_type = EShaderStage::fromString(type);
-            NE_CORE_ASSERT(shader_type, "Invalid shader type specific");
-
-            // get the shader content range
-            size_t nextLinePos = source.find_first_not_of(eolFlag, eol);
-
-            pos          = source.find(typeToken, nextLinePos);
-            size_t count = (nextLinePos == std::string ::npos ? source.size() - 1 : nextLinePos);
-
-            std::string codes = std::string(source.substr(nextLinePos, pos - count));
-
-            auto [_, Ok] = shaderSources.insert({shader_type, codes});
-
-            NE_CORE_ASSERT(Ok, "Failed to insert this shader source");
-        }
+    if (shaderSources.empty())
+    {
+        NE_CORE_ERROR("Failed to preprocess shader source: {}", filename);
+        return {};
     }
 
-    // Record the processing path for reflection logging
-    tempProcessingPath = fullPath;
 
     // Compile
     stage2spirv_t ret;
     {
-        shaderc::Compiler       compiler;
-        shaderc::CompileOptions options;
-        options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-        options.SetTargetSpirv(shaderc_spirv_version_1_3);
-        const bool optimize = true;
-        if (optimize) {
-            options.SetOptimizationLevel(shaderc_optimization_level_performance);
-        }
-
-
         for (auto &&[stage, source] : shaderSources)
         {
-            // recompile
-            shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
-                source,
-                EShaderStage::toShadercType(stage),
-                std::format("{} ({})", fullPath, EShaderStage::T2Strings[stage]).c_str(),
-                stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
-                options);
-
-            if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+            std::vector<ir_t> spv;
+            if (!compileToSpv(filename, source, stage, spv))
             {
-                NE_CORE_ERROR("\n{}", result.GetErrorMessage());
-                NE_CORE_ASSERT(false, "Shader compilation failed!");
+                NE_CORE_ERROR("Failed to compile shader: {}", filename);
+                return {};
             }
 
             // store compile result into memory
-            ret[stage] = spirv_ir_t(result.begin(), result.end());
+            ret[stage] = std::move(spv);
         }
     }
 

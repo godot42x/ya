@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "Render.h"
+
 
 #include "../Core/Log.h"
 
@@ -32,37 +34,6 @@ struct formatter<spirv_cross::SPIRType> : formatter<std::string>
 } // namespace std
 
 
-namespace EShaderStage
-{
-enum T
-{
-    Undefined = 0,
-    Vertex,
-    Fragment,
-    ENUM_MAX,
-};
-
-GENERATED_ENUM_MISC(T);
-
-inline T fromString(std::string_view type)
-{
-    if (type == "vertex")
-    {
-        return EShaderStage::Vertex;
-    }
-    else if (type == "fragment" || type == "pixel")
-    {
-        return EShaderStage::Fragment;
-    }
-
-    NE_CORE_ASSERT(false, "Unknown shader type! {}", type);
-    return EShaderStage::Undefined;
-}
-
-const char *toString(EShaderStage::T Stage);
-
-
-} // namespace EShaderStage
 
 namespace ShaderReflection
 {
@@ -206,11 +177,12 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     std::optional<stage2spirv_t>      process(std::string_view fileName) override;
     ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) override;
 
+    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, std::vector<ir_t> &outSpv) -> bool;
+
+    std::unordered_map<EShaderStage::T, std::string> preprocessShaderSource(std::string_view fullPath);
+
+
   private:
-
-
-    void CreateGLBinaries(bool bSourceChanged);
-    void CreateVulkanBinaries(const std::unordered_map<EShaderStage::T, std::string> &shader_sources, bool bSourceChanged);
 
     std::filesystem::path GetCachePath(bool bVulkan, EShaderStage::T stage);
     std::filesystem::path GetCacheMetaPath();

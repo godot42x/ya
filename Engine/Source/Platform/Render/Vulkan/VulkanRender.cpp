@@ -464,6 +464,20 @@ bool VulkanRender::createCommandPool()
     return true;
 }
 
+void VulkanRender::createPipelineCache()
+{
+    VkPipelineCacheCreateInfo ci{
+        .sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .pNext           = nullptr,
+        .flags           = 0,
+        .initialDataSize = 0,
+        .pInitialData    = nullptr,
+
+    };
+
+    vkCreatePipelineCache(getLogicalDevice(), &ci, nullptr, &_pipelineCache);
+}
+
 void VulkanRender::createCommandBuffers()
 {
     UNIMPLEMENTED();

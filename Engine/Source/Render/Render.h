@@ -10,6 +10,20 @@
 struct CommandBuffer;
 struct RenderPassCreateInfo;
 
+// enum bit flags support
+template <typename T>
+concept enum_t = std::is_enum_v<T>;
+template <enum_t Enum>
+constexpr Enum operator|(Enum lhs, Enum rhs) { return static_cast<Enum>(static_cast<std::underlying_type_t<Enum>>(lhs) | static_cast<std::underlying_type_t<Enum>>(rhs)); }
+template <enum_t Enum>
+constexpr Enum operator&(Enum lhs, Enum rhs) { return static_cast<Enum>(static_cast<std::underlying_type_t<Enum>>(lhs) & static_cast<std::underlying_type_t<Enum>>(rhs)); }
+template <enum_t Enum>
+constexpr Enum operator^(Enum lhs, Enum rhs) { return static_cast<Enum>(static_cast<std::underlying_type_t<Enum>>(lhs) ^ static_cast<std::underlying_type_t<Enum>>(rhs)); }
+template <enum_t Enum>
+constexpr Enum operator~(Enum lhs) { return static_cast<Enum>(~static_cast<std::underlying_type_t<Enum>>(lhs)); }
+template <enum_t Enum>
+constexpr Enum operator|=(Enum &lhs, Enum rhs) { return lhs = lhs | rhs; }
+
 namespace ERenderAPI
 {
 enum T
@@ -51,9 +65,47 @@ struct VertexAttribute
     uint32_t                  offset;
 };
 
+
+namespace EShaderStage
+{
+enum T
+{
+    Vertex   = 0x01,
+    Fragment = 0x02,
+    Geometry = 0x04,
+    Compute  = 0x08,
+
+};
+
+inline T fromString(std::string_view str)
+{
+    if (str == "vertex")
+        return Vertex;
+    if (str == "fragment")
+        return Fragment;
+    if (str == "geometry")
+        return Geometry;
+    if (str == "compute")
+        return Compute;
+
+    UNREACHABLE();
+    return {};
+}
+
+GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
+
+
+
+}; // namespace EShaderStage
+
+
+
 struct ShaderCreateInfo
 {
-    std::string shaderName; // we use single glsl now
+    std::string                          shaderName; // we use single glsl now
+    std::vector<VertexBufferDescription> vertexBufferDescs;
+    std::vector<VertexAttribute>         vertexAttributes;
+    bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
 };
 
 namespace EFrontFaceType
@@ -157,9 +209,9 @@ enum T
     ColorAttachment        = 0x10,
     DepthStencilAttachment = 0x20,
     TransientAttachment    = 0x40,
-    InputAttachment        = 0x80,
+    InputAttachment        = 0x80, // 128
 };
-};
+}; // namespace EImageUsage
 
 namespace ECompareOp
 {
@@ -235,7 +287,7 @@ enum T
 };
 };
 
-namespace EColorWriteMask
+namespace EColorComponent
 {
 enum T
 {
@@ -244,11 +296,10 @@ enum T
     G    = 0x2,
     B    = 0x4,
     A    = 0x8,
-    RGB  = R | G | B,
-    RGBA = R | G | B | A,
-    All  = RGBA,
 };
-};
+
+
+} // namespace EColorComponent
 
 namespace EBlendFactor
 {
@@ -300,6 +351,7 @@ enum T
 };
 };
 
+
 struct AttachmentDescription
 {
     EFormat::T            format                  = EFormat::Undefined;
@@ -327,8 +379,9 @@ struct RasterizationState
     float             lineWidth                = 1.0f;
 };
 
-struct BlendAttachmentState
+struct ColorBlendAttachmentState
 {
+    int                index               = -1; // should be ref to the renderpass's color attachment index?
     bool               bBlendEnable        = false;
     EBlendFactor::T    srcColorBlendFactor = EBlendFactor::One;
     EBlendFactor::T    dstColorBlendFactor = EBlendFactor::Zero;
@@ -336,15 +389,15 @@ struct BlendAttachmentState
     EBlendFactor::T    srcAlphaBlendFactor = EBlendFactor::One;
     EBlendFactor::T    dstAlphaBlendFactor = EBlendFactor::Zero;
     EBlendOp::T        alphaBlendOp        = EBlendOp::Add;
-    EColorWriteMask::T colorWriteMask      = EColorWriteMask::RGBA;
+    EColorComponent::T colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A;
 };
 
 struct ColorBlendState
 {
-    bool                              bLogicOpEnable = false;
-    ELogicOp::T                       logicOp        = ELogicOp::Copy;
-    std::vector<BlendAttachmentState> attachments;
-    float                             blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    bool                                   bLogicOpEnable = false;
+    ELogicOp::T                            logicOp        = ELogicOp::Copy;
+    std::vector<ColorBlendAttachmentState> attachments;
+    float                                  blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 struct DepthStencilState
@@ -361,7 +414,7 @@ struct DepthStencilState
 
 struct MultisampleState
 {
-    ESampleCount::T rasterizationSamples   = ESampleCount::Sample_1;
+    ESampleCount::T sampleCount            = ESampleCount::Sample_1;
     bool            bSampleShadingEnable   = false;
     float           minSampleShading       = 1.0f;
     bool            bAlphaToCoverageEnable = false;
@@ -394,38 +447,92 @@ struct ViewportState
     bool                  bDynamicScissor  = true;
 };
 
-struct GraphicsPipelineCreateInfo
+namespace EPrimitiveType
 {
-    enum class EPrimitiveType
+enum T
+{
+    TriangleList,
+    Line,
+    ENUM_MAX,
+};
+}
+
+namespace EPipelineDescriptorType
+{
+enum T
+{
+    UniformBuffer = 0,
+    Sampler,
+    CombinedImageSampler,
+    SampledImage,
+    StorageImage,
+    StorageBuffer,
+    ENUM_MAX,
+};
+};
+
+namespace EPipelineDynamicFeature
+{
+enum T
+{
+    DepthTest  = 0x01,
+    AlphaBlend = 0x02,
+};
+}
+
+struct GraphicsPipelineLayoutCreateInfo
+{
+    struct PushConstant
     {
-        TriangleList,
-        Line,
-        ENUM_MAX,
+        uint32_t        offset     = 0;
+        uint32_t        size       = 0;
+        EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
     };
 
-    // Basic pipeline configuration
-    bool                                 bDeriveInfoFromShader = true; // whether to use vertex layout by the shader's reflection
-    ShaderCreateInfo                     shaderCreateInfo;
-    std::vector<VertexBufferDescription> vertexBufferDescs;
-    std::vector<VertexAttribute>         vertexAttributes;
-    EPrimitiveType                       primitiveType = EPrimitiveType::TriangleList;
 
-    // Advanced pipeline states
-    RasterizationState rasterizationState;
-    MultisampleState   multisampleState;
-    DepthStencilState  depthStencilState;
-    ColorBlendState    colorBlendState;
-    ViewportState      viewportState;
 
-    // Render pass compatibility
-    uint32_t subpass = 0;
+    struct DescriptorBinding
+    {
+        uint32_t                   binding         = 0;
+        EPipelineDescriptorType::T descriptorType  = EPipelineDescriptorType::UniformBuffer;
+        uint32_t                   descriptorCount = 1;
+        EShaderStage::T            stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment;
+    };
+
+    struct DescriptorSetLayout
+    {
+        std::vector<DescriptorBinding> bindings;
+    };
+
+
+
+    std::vector<PushConstant>        pushConstants;
+    std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
 
 
+struct GraphicsPipelineCreateInfo
+{
+
+
+
+    // different shader/pipeline can use same pipeline layout
+    // GraphicsPipelineLayoutCreateInfo *pipelineLayout = nullptr;
+
+    ShaderCreateInfo shaderCreateInfo;
+
+    EPipelineDynamicFeature::T dynamicFeatures = {};
+    uint32_t                   subPassRef      = 0;
+    EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;
+    RasterizationState         rasterizationState;
+    MultisampleState           multisampleState;
+    DepthStencilState          depthStencilState;
+    ColorBlendState            colorBlendState;
+    ViewportState              viewportState;
+};
 
 struct RenderPassCreateInfo
 {
-
     struct SubpassDependency
     {
         bool     bSrcExternal = false; // If true, srcSubpass is VK_SUBPASS_EXTERNAL
@@ -443,7 +550,7 @@ struct RenderPassCreateInfo
     // Simplified subpass configuration - single subpass for now
     struct SubpassInfo
     {
-
+        uint32_t                    subpassIndex = 0;
         std ::vector<AttachmentRef> inputAttachments;  // Single color attachment for now
         std::vector<AttachmentRef>  colorAttachments;  // Single color attachment for now
         AttachmentRef               depthAttachment;   // Single depth attachment for now
@@ -524,35 +631,3 @@ struct IRender
     virtual bool init(const InitParams &params) = 0;
     virtual void destroy()                      = 0;
 };
-
-// Utility functions for combining image usage flags
-inline uint32_t combineImageUsageFlags(const std::vector<EImageUsage::T> &usages)
-{
-    uint32_t combined = 0;
-    for (auto usage : usages) {
-        combined |= static_cast<uint32_t>(usage);
-    }
-    return combined;
-}
-
-// Helper function to add image usage flags
-inline void addImageUsage(std::vector<EImageUsage::T> &usage, EImageUsage::T flag)
-{
-    // Check if usage already exists
-    for (auto existingUsage : usage) {
-        if (existingUsage == flag) {
-            return; // Already exists
-        }
-    }
-    usage.push_back(flag);
-}
-
-// Pipeline-RenderPass compatibility and management functions
-namespace PipelineRenderPassUtils
-{
-
-// Check if a pipeline is compatible with a render pass
-
-
-
-} // namespace PipelineRenderPassUtils

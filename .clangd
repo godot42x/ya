@@ -1,0 +1,12 @@
+Diagnostics:
+  ClangTidy:
+    Add: [cppcoreguidelines-*, bugprone-*, misc-unused-*, modernize-*]
+    Remove:
+      [
+        cppcoreguidelines-non-private-member-variables-in-classes,
+        cppcoreguidelines-prefer-member-initializer,
+        bugprone-easily-swappable-parameters,
+        cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+        cppcoreguidelines-owning-memory,
+        modernize-use-trailing-return-type,
+      ]
