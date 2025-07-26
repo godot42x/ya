@@ -3,15 +3,15 @@
 #version 450 core
 
 vec3 vertices[] = {
-    vec3(-0.5f, -0.5f, 0.0f), // Bottom left
-    vec3( 0.5f, -0.5f, 0.0f), // Bottom right
-    vec3( 0.0f,  0.5f, 0.0f)  // Top
+    vec3(-0.5f, -0.5f, 0.0f), // Top left
+    vec3( 0.0f,  0.5f, 0.0f),  // Bottom
+    vec3( 0.5f, -0.5f, 0.0f) // Top right
 };
 
 vec4 colors[] = {
     vec4(1.0f, 0.0f, 0.0f, 1.0f), // Red
-    vec4(0.0f, 1.0f, 0.0f, 1.0f), // Green
-    vec4(0.0f, 0.0f, 1.0f, 1.0f)  // Blue
+    vec4(0.0f, 0.0f, 1.0f, 1.0f), // Blue
+    vec4(0.0f, 1.0f, 0.0f, 1.0f)  // Green
 };
 
 layout(location = 0) out vec4 fragColor; // Output color to fragment shader
