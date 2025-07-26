@@ -52,15 +52,23 @@ struct VulkanSwapChain
     const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 
     // Getters
-    VkSwapchainKHR              getSwapChain() const { return m_swapChain; }
-    const std::vector<VkImage> &getImages() const { return m_images; }
-    VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
-    uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
-    uint32_t                    getHeight() const { return _supportDetails.capabilities.currentExtent.height; };
+    VkSwapchainKHR                            getSwapChain() const { return m_swapChain; }
+    [[nodiscard]] const std::vector<VkImage> &getImages() const { return m_images; }
+    [[nodiscard]] VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
+    [[nodiscard]] uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
+    [[nodiscard]] uint32_t                    getHeight() const { return _supportDetails.capabilities.currentExtent.height; };
 
     // Swap chain operations
-    VkResult acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore);
-    VkResult presentImage(uint32_t imageIndex, VkSemaphore semaphore, VkQueue presentQueue);
+    VkResult acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex);
+    VkResult presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> semaphores);
+
+    VkExtent2D getExtent() const
+    {
+        return {
+            _supportDetails.capabilities.currentExtent.width,
+            _supportDetails.capabilities.currentExtent.height,
+        };
+    }
 
 
   private:

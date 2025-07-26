@@ -57,8 +57,8 @@ void VulkanRender::createInstance()
         .apiVersion         = supportedVersion,
     };
 
-    auto requestExtensions = _instanceExtensions;
-    auto requestLayers     = _instanceLayers;
+    std::vector<DeviceFeature> requestExtensions = _instanceExtensions;
+    std::vector<DeviceFeature> requestLayers     = _instanceLayers;
 
     const auto &required = onGetRequiredInstanceExtensions.ExecuteIfBound();
     for (const auto &ext : required) {
@@ -76,6 +76,7 @@ void VulkanRender::createInstance()
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+
 
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -95,7 +96,15 @@ void VulkanRender::createInstance()
         layerNames);
     NE_CORE_ASSERT(bSupported, "Required feature not supported!");
 
-
+    if (std::find_if(extensionNames.begin(),
+                     extensionNames.end(),
+                     [](auto a) { return std::strcmp(a, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0; }) == extensionNames.end())
+    {
+        NE_CORE_WARN("VK_EXT_DEBUG_UTILS_EXTENSION_NAME is not supported, some features may not work!");
+    }
+    else {
+        this->bSupportDebugUtils = true;
+    }
 
     VkInstanceCreateInfo instanceCI{
         .sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -107,21 +116,18 @@ void VulkanRender::createInstance()
         .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
     };
+    // This lines did noting
+    // if (m_EnableValidationLayers) {
+    //     const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = getDebugMessengerCreateInfoExt();
+    //     instanceCI.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
+    // }
 
-    if (m_EnableValidationLayers) {
-        const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = getDebugMessengerCreateInfoExt();
-
-        instanceCI.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debug_messenger_create_info;
-    }
 
     NE_CORE_INFO("About to call vkCreateInstance...");
     result = vkCreateInstance(&instanceCI, nullptr, &_instance);
     NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), result);
 
     NE_CORE_INFO("Vulkan instance created successfully!");
-
-    // Load debug function pointers after instance creation
-    // loadDebugFunctionPointers();
 }
 
 void VulkanRender::findPhysicalDevice()
@@ -436,33 +442,26 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
 bool VulkanRender::createCommandPool()
 {
-    // QueueFamilyIndices queueFamilyIndices = QueueFamilyIndices::query(m_Surface, m_PhysicalDevice);
+    _graphicsCommandPool = std::make_unique<VulkanCommandPool>(this, _graphicsQueueFamily.queueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    // _presentCommandPool  = std::move(VulkanCommandPool(this, _presentQueueFamily.queueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT));
 
-    VkCommandPoolCreateInfo graphicsCommandPoolCI{
-        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex),
-    };
-    if (vkCreateCommandPool(m_LogicalDevice, &graphicsCommandPoolCI, nullptr, &_graphicsCommandPool) != VK_SUCCESS) {
-        NE_CORE_ERROR("failed to create graphics command pool!");
-        return false;
-    }
 
-    if (isGraphicsPresentSameQueueFamily()) {
-        VkCommandPoolCreateInfo presentCommandPoolCI{
-            .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-            .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
-        };
+    // if (isGraphicsPresentSameQueueFamily()) {
+    //     VkCommandPoolCreateInfo presentCommandPoolCI{
+    //         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    //         .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    //         .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
+    //     };
 
-        if (vkCreateCommandPool(m_LogicalDevice, &presentCommandPoolCI, nullptr, &_presentCommandPool) != VK_SUCCESS) {
-            NE_CORE_ERROR("failed to create present command pool!");
-            return false;
-        }
-    }
+    //     if (vkCreateCommandPool(m_LogicalDevice, &presentCommandPoolCI, nullptr, &_presentCommandPool) != VK_SUCCESS) {
+    //         NE_CORE_ERROR("failed to create present command pool!");
+    //         return false;
+    //     }
+    // }
 
-    return true;
+    return _graphicsCommandPool->_handle != VK_NULL_HANDLE;
 }
+
 
 void VulkanRender::createPipelineCache()
 {
@@ -480,20 +479,19 @@ void VulkanRender::createPipelineCache()
 
 void VulkanRender::createCommandBuffers()
 {
-    UNIMPLEMENTED();
-    m_commandBuffers.resize(m_swapChain->getImages().size());
 
-    VkCommandBufferAllocateInfo allocInfo{
-        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool        = _graphicsCommandPool,
-        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size()),
-    };
-
-    if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "failed to allocate command buffers!");
+    int size = getSwapChain()->getImages().size();
+    m_commandBuffers.resize(size);
+    for (int i = 0; i < size; ++i) {
+        bool ok = _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, m_commandBuffers[i]);
+        if (!ok) {
+            NE_CORE_ERROR("Failed to allocate command buffer for index {}", i);
+            return;
+        }
     }
 }
+
+
 
 void VulkanRender::createSemaphores()
 {
@@ -506,79 +504,6 @@ void VulkanRender::createSemaphores()
         NE_CORE_ASSERT(false, "failed to create semaphores!");
     }
 }
-
-// void VulkanRender::setupDebugMessengerExt()
-// {
-//     if (!m_EnableValidationLayers) {
-//         return;
-//     }
-
-
-//     VkDebugUtilsMessengerCreateInfoEXT createInfo = getDebugMessengerCreateInfoExt();
-
-//     // if (pfnCreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessengerCallback) != VK_SUCCESS) {
-//     //     NE_CORE_ASSERT(false, "failed to set up debug messenger!");
-//     // }
-//     if (vkCreateDebugUtilsMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessengerCallback) != VK_SUCCESS) {
-//         NE_CORE_ASSERT(false, "failed to set up debug messenger!");
-//     }
-//     NE_CORE_INFO("Debug messenger setup successfully");
-// }
-
-// void VulkanRender::setupReportCallbackExt()
-// {
-//     if (!m_EnableValidationLayers) {
-//         return;
-//     }
-//     // if (!pfnCreateDebugReportCallbackEXT) {
-//     //     NE_CORE_WARN("pfnCreateDebugReportCallbackEXT is not loaded, skipping debug report callback setup");
-//     //     return;
-//     // }
-
-//     VkDebugReportCallbackCreateInfoEXT createInfo{
-//         .sType       = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-//         .flags       = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT,
-//         .pfnCallback = [](VkDebugReportFlagsEXT      flags,
-//                           VkDebugReportObjectTypeEXT objectType,
-//                           uint64_t                   object,
-//                           size_t                     location,
-//                           int32_t                    messageCode,
-//                           const char                *pLayerPrefix,
-//                           const char                *pMessage,
-//                           void                      *pUserData) -> VkBool32 {
-//             NE_CORE_ERROR("[Validation Layer] {}: {}", pLayerPrefix, pMessage);
-//             return VK_FALSE;
-//         },
-//     };
-
-//     // if (pfnCreateDebugReportCallbackEXT(m_Instance, &createInfo, nullptr, &m_DebugReportCallback) != VK_SUCCESS) {
-//     //     NE_CORE_ASSERT(false, "failed to set up debug report callback!");
-//     // }
-//     if (vkCreateDebugReportCallbackEXT(m_Instance, &createInfo, nullptr, &m_DebugReportCallback) != VK_SUCCESS) {
-//         NE_CORE_ASSERT(false, "failed to set up debug report callback!");
-//     }
-
-//     NE_CORE_INFO("Debug report callback setup successfully");
-// }
-
-// void VulkanRender::destroyDebugCallBackExt()
-// {
-//     if (m_EnableValidationLayers) {
-//         // pfnDestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
-//         vkDestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessengerCallback, nullptr);
-//     }
-// }
-
-// void VulkanRender::destroyDebugReportCallbackExt()
-// {
-//     if (m_EnableValidationLayers) {
-//         // pfnDestroyDebugReportCallbackEXT(m_Instance, m_DebugReportCallback, nullptr);
-//         vkDestroyDebugReportCallbackEXT(m_Instance, m_DebugReportCallback, nullptr);
-//         m_DebugReportCallback = VK_NULL_HANDLE;
-//     }
-// }
-
-
 
 bool VulkanRender::isFeatureSupported(
     std::string_view                          contextStr,
@@ -671,40 +596,6 @@ bool VulkanRender::isFeatureSupported(
 }
 
 
-
-// void VulkanRender::loadDebugFunctionPointers()
-// {
-//     if (m_EnableValidationLayers) {
-//         // Load debug utils messenger functions
-//         pfnCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)
-//             vkGetInstanceProcAddr(m_Instance, "vkCreateDebugUtilsMessengerEXT");
-//         pfnDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)
-//             vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugUtilsMessengerEXT");
-
-//         // Load debug report callback functions (deprecated but still used)
-//         pfnCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)
-//             vkGetInstanceProcAddr(m_Instance, "vkCreateDebugReportCallbackEXT");
-//         pfnDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
-//             vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
-
-//         if (!pfnCreateDebugUtilsMessengerEXT) {
-//             NE_CORE_WARN("pfnCreateDebugUtilsMessengerEXT is not loaded, skipping debug utils messenger setup");
-//             pfnCreateDebugUtilsMessengerEXT = nullptr; // Set to nullptr to avoid using it later
-//         }
-//         if (!pfnCreateDebugReportCallbackEXT) {
-//             NE_CORE_WARN("pfnCreateDebugReportCallbackEXT is not loaded, skipping debug report callback setup");
-//             pfnCreateDebugReportCallbackEXT = nullptr; // Set to nullptr to avoid using it later
-//         }
-//         if (!pfnDestroyDebugUtilsMessengerEXT) {
-//             NE_CORE_WARN("pfnDestroyDebugUtilsMessengerEXT is not loaded, skipping debug utils messenger cleanup");
-//             pfnDestroyDebugUtilsMessengerEXT = nullptr; // Set to nullptr to avoid using it later
-//         }
-//         if (!pfnDestroyDebugReportCallbackEXT) {
-//             NE_CORE_WARN("pfnDestroyDebugReportCallbackEXT is not loaded, skipping debug report callback cleanup");
-//             pfnDestroyDebugReportCallbackEXT = nullptr; // Set to nullptr to avoid using it later
-//         }
-//     }
-// }
 
 /*
 void VulkanRender::createVertexBuffer()

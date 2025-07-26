@@ -42,6 +42,9 @@ struct VulkanUtils
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
 };
+
+
+
 namespace EPrimitiveType
 {
 inline VkPrimitiveTopology toVk(T primitiveType)
@@ -494,12 +497,12 @@ struct std::formatter<VkResult> : std::formatter<std::string>
 
 
 
-#define VK_CALL(x)                                                       \
-    do {                                                                 \
-        VkResult result = (x);                                           \
-        if (result != VK_SUCCESS) {                                      \
-            NE_CORE_ERROR("Vulkan call failed with error: {} ", result); \
-        }                                                                \
+#define VK_CALL(x)                                                            \
+    do {                                                                      \
+        VkResult result = (x);                                                \
+        if (result != VK_SUCCESS) {                                           \
+            NE_CORE_ERROR("Vulkan call" #x "failed with error: {} ", result); \
+        }                                                                     \
     } while (0)
 #define VK_CALL_RET(x)                                                         \
     {                                                                          \

@@ -20,6 +20,8 @@ enum class RenderStage
 
 struct RHICmdList; // Unimplemented
 
+struct CommandBuffer
+{};
 
 struct RenderCommand
 {

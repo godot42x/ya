@@ -9,7 +9,9 @@
 
 #include "Render/Render.h"
 
+#include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+
 
 namespace Neon
 {
@@ -24,7 +26,7 @@ App *App::create()
     return App::_instance;
 }
 
-VulkanRenderPass              *pass;
+VulkanRenderPass              *renderpass;
 std::vector<VulkanFrameBuffer> frameBuffers;
 VulkanPipelineLayout          *pipelineLayout = nullptr;
 VulkanPipeline                *pipeline       = nullptr;
@@ -64,8 +66,8 @@ void App::init()
 
 
     // TODO: create pipelines
-    pass = new VulkanRenderPass(vkRender);
-    pass->create(RenderPassCreateInfo{
+    renderpass = new VulkanRenderPass(vkRender);
+    renderpass->create(RenderPassCreateInfo{
         .attachments = {
             AttachmentDescription{
                 .format                  = EFormat::R8G8B8A8_UNORM,
@@ -122,7 +124,7 @@ void App::init()
     frameBuffers.resize(images.size());
     for (size_t i = 0; i < images.size(); ++i)
     {
-        frameBuffers[i] = VulkanFrameBuffer(vkRender, pass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+        frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
         frameBuffers[i].recreate({images[i]}, vkSwapChain->getWidth(), vkSwapChain->getHeight());
     }
     pipelineLayout = new VulkanPipelineLayout(vkRender);
@@ -130,22 +132,23 @@ void App::init()
         .pushConstants        = {},
         .descriptorSetLayouts = {
             GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
-                .bindings = {
-                    // GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
-                    //     .binding         = 0,
-                    //     .descriptorType  = EPipelineDescriptorType::StorageBuffer,
-                    //     .descriptorCount = 1,
-                    //     .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
-                    // },
-                },
+                // .bindings = {
+                // GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
+                //     .binding         = 0,
+                //     .descriptorType  = EPipelineDescriptorType::StorageBuffer,
+                //     .descriptorCount = 1,
+                //     .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                // },
+                // },
             },
         },
     });
-    pipeline = new VulkanPipeline(vkRender, pass, pipelineLayout);
+    pipeline = new VulkanPipeline(vkRender, renderpass, pipelineLayout);
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
             .shaderName        = "HelloTriangle.glsl",
+            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 // VertexBufferDescription{
                 //     .slot  = 0,
@@ -171,25 +174,32 @@ void App::init()
         },
         .subPassRef         = 0,
         .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = RasterizationState{},
-        .multisampleState   = MultisampleState{},
-        .depthStencilState  = DepthStencilState{},
-        .colorBlendState    = ColorBlendState{
-               .attachments = {
+        .rasterizationState = RasterizationState{
+            .polygonMode = EPolygonMode::Fill,
+            .frontFace   = EFrontFaceType::CounterClockWise, // GL
+        },
+        .multisampleState  = MultisampleState{},
+        .depthStencilState = DepthStencilState{},
+        .colorBlendState   = ColorBlendState{
+              .attachments = {
                 ColorBlendAttachmentState{
-                       .index               = 0,
-                       .bBlendEnable        = true,
-                       .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                       .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                       .colorBlendOp        = EBlendOp::Add,
-                       .srcAlphaBlendFactor = EBlendFactor::One,
-                       .dstAlphaBlendFactor = EBlendFactor::Zero,
-                       .alphaBlendOp        = EBlendOp::Add,
+                      .index               = 0,
+                      .bBlendEnable        = false,
+                      .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                      .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                      .colorBlendOp        = EBlendOp::Add,
+                      .srcAlphaBlendFactor = EBlendFactor::One,
+                      .dstAlphaBlendFactor = EBlendFactor::Zero,
+                      .alphaBlendOp        = EBlendOp::Add,
+                      .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                 },
             },
         },
         .viewportState = ViewportState{},
     });
+
+    _firstGraphicsQueue = &vkRender->getGraphicsQueues()[0];
+    _firstPresentQueue  = &vkRender->getPresentQueues()[0];
 }
 
 void Neon::App::quit()
@@ -206,7 +216,7 @@ void Neon::App::quit()
     {
         frameBuffer.clean();
     }
-    delete pass;
+    delete renderpass;
     _render->destroy();
     windowProvider->destroy();
 
@@ -401,9 +411,7 @@ int Neon::App::iterate(float dt)
 
 #if USE_VULKAN
     auto render = static_cast<VulkanRender *>(_render);
-    // render->DrawFrame(); // Draw triangle!
-    // render->OnPostUpdate();
-
+    drawTriangle();
 #endif
     // Handle input, update logic, render, etc.
     // This is where the main loop logic would go.
@@ -412,148 +420,115 @@ int Neon::App::iterate(float dt)
 
 void App::drawTriangle()
 {
-    //     // Wait for previous frame
-    //     // vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-    //     // vkResetFences(m_LogicalDevice, 1, &m_inFlightFence);
 
-    //     auto vkRender = static_cast<VulkanRender *>(_render);
-    //     // Acquire next image
-    //     uint32_t imageIndex;
-    //     // VkResult result = vkRender->getSwapChain().acquireNextImage(imageIndex, m_imageAvailableSemaphore);
+    auto vkRender = static_cast<VulkanRender *>(_render);
+    vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
-    //     // if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    //     //     recreateSwapChain();
-    //     //     return;
-    //     // }
-    //     // else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    //     //     NE_CORE_ASSERT(false, "Failed to acquire swap chain image!");
-    //     // }
-
-    //     // Update uniform buffer
-    //     // updateUniformBuffer();
-
-    //     // Reset and begin command buffer
-    //     // VkCommandBuffer commandBuffer = m_commandBuffers[imageIndex];
-    //     // vkResetCommandBuffer(commandBuffer, 0);
-
-    //     // VkCommandBufferBeginInfo beginInfo{};
-    //     // beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    //     // if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-    //     //     NE_CORE_ASSERT(false, "Failed to begin recording command buffer!");
-    //     // }
+    SDL_Delay(1000 / 30); // Simulate frame time, remove in production
 
 
-    //     // Begin render pass
-    //     VkRenderPassBeginInfo renderPassInfo{};
-    //     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    //     // renderPassInfo.renderPass        = m_renderPass.getRenderPass();
-    //     // renderPassInfo.framebuffer       = m_renderPass.getFramebuffers()[imageIndex];
-    //     renderPassInfo.renderArea.offset = {0, 0};
-    //     renderPassInfo.renderArea.extent = vkRender->getSwapChain().getExtent();
+    // 0: optional:use fence/semaphore to synchronize with previous frame
+    // Wait for previous frame
+    // vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+    // vkResetFences(m_LogicalDevice, 1, &m_inFlightFence);
 
-    //     std::array<VkClearValue, 2> clearValues{};
-    //     clearValues[0].color        = {{1.0f, 0.0f, 1.0f, 1.0f}}; // Clear color: black
-    //     clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
-
-    //     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    //     renderPassInfo.pClearValues    = clearValues.data();
-
-    //     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    //     // Bind graphics pipeline - use the first available pipeline or a specific one
-    //     FName pipelineName = "DefaultTriangle"; // Default name
-    //     if (!m_pipelineManager.hasPipeline(pipelineName)) {
-    //         // Get the first available pipeline
-    //         auto pipelineNames = m_pipelineManager.getPipelineNames();
-    //         if (!pipelineNames.empty()) {
-    //             pipelineName = pipelineNames[0];
-    //         }
-    //         else {
-    //             NE_CORE_ERROR("No pipelines available for rendering!");
-    //             return;
-    //         }
-    //     }
-
-    //     if (!m_pipelineManager.bindPipeline(commandBuffer, pipelineName)) {
-    //         NE_CORE_ERROR("Failed to bind pipeline: {}", pipelineName);
-    //         return;
-    //     }
-
-    //     // Bind descriptor sets for the active pipeline
-    //     m_pipelineManager.bindDescriptorSets(commandBuffer, pipelineName);
-
-    // #if 1 // need to set the vulkan dynamic state, see VkPipelineDynamicStateCreateInfo
-    //     // Set viewport
-    //     VkViewport viewport{};
-    //     viewport.x        = 0.0f;
-    //     viewport.y        = 0.0f;
-    //     viewport.width    = static_cast<float>(m_swapChain.getExtent().width);
-    //     viewport.height   = static_cast<float>(m_swapChain.getExtent().height);
-    //     viewport.minDepth = 0.0f;
-    //     viewport.maxDepth = 1.0f;
-    //     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    // 1. acquire swapchain image
+    uint32_t imageIndex = -1;
+    vkRender->getSwapChain()->acquireNextImage(nullptr, nullptr, imageIndex);
 
 
-    //     // Set scissor
-    //     VkRect2D scissor{};
-    //     scissor.offset = {0, 0};
-    //     scissor.extent = m_swapChain.getExtent();
-    //     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    // #endif
+    // 2. begin command buffer
+    VkCommandBuffer commandBuffer = vkRender->getCommandBuffers()[imageIndex];
+    // vkResetCommandBuffer(commandBuffer, 0);
+    begin(commandBuffer);
+
+    // 3 begin render pass && bind frame buffer
+    // TODO: subpasses?
+    std::vector<VkClearValue> clearValues{};
+    clearValues.resize(1);
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}}; // Clear color: black
+    // clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
+
+    renderpass->begin(commandBuffer,
+                      frameBuffers[imageIndex].getHandle(),
+                      vkRender->getSwapChain()->getExtent(),
+                      {clearValues.begin(), clearValues.end()});
+
+
+    // 4. bind descriptor sets,
+    // vkCmdBindDescriptorSets(commandBuffer,
+    //                         VK_PIPELINE_BIND_POINT_GRAPHICS,
+    //                         pipelineLayout->getHandle(),
+    //                         0,        // first set
+    //                         0,        // descriptor set count
+    //                         nullptr,  // descriptor sets
+    //                         0,        // dynamic offset count
+    //                         nullptr); // dynamic offsets
+
+    // 5. bind pipeline
+    pipeline->bind(commandBuffer);
+
+
+
+    // 6. setup vertex buffer, index buffer (2d payloads? upload?)
+    // 7. other resources, uniform buffers, etc.
+
+
+#if 1 // Dynamic state
+    // need set VkPipelineDynamicStateCreateInfo
+    // or those properties should be modified in the pipeline recreation if needed.
+    // but sometimes that we want to enable depth or color-blend state dynamically
+
+    // Set viewport
+    // VkViewport viewport{};
+    // viewport.x        = 0.0f;
+    // viewport.y        = 0.0f;
+    // viewport.width    = static_cast<float>(m_swapChain.getExtent().width);
+    // viewport.height   = static_cast<float>(m_swapChain.getExtent().height);
+    // viewport.minDepth = 0.0f;
+    // viewport.maxDepth = 1.0f;
+    // vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+
+    // Set scissor
+    // VkRect2D scissor{};
+    // scissor.offset = {0, 0};
+    // scissor.extent = m_swapChain.getExtent();
+    // vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+#endif
 
     //     // Bind vertex buffer
     //     VkBuffer     vertexBuffers[] = {m_vertexBuffer};
     //     VkDeviceSize offsets[]       = {0};
     //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    //     // Draw triangle
-    //     vkCmdDraw(commandBuffer, static_cast<uint32_t>(m_triangleVertices.size()), 1, 0, 0);
+    // 8. draw triangle
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
 
+
+    // 9. end render pass
+    // TODO: subpasses?
     // #if 1 // multiple renderpass
     //     // vkCmdNextSubpass2()
     //     // vkCmdNextSubpass()
     // #endif
+    renderpass->end(commandBuffer);
 
-    //     // End render pass and command buffer
-    //     vkCmdEndRenderPass(commandBuffer);
 
-    //     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-    //         NE_CORE_ASSERT(false, "Failed to record command buffer!");
-    //     }
+    // 10. end command buffer
+    end(commandBuffer);
 
-    //     // Submit command buffer
+    // 11. submit command buffer
     //     VkSemaphore          waitSemaphores[]   = {m_imageAvailableSemaphore};
     //     VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     //     VkSemaphore          signalSemaphores[] = {m_renderFinishedSemaphore};
+    // _firstGraphicsQueue.waitIdle();
+    _firstGraphicsQueue->submit({commandBuffer});
+    _firstPresentQueue->waitIdle();
 
-
-    //     VkSubmitInfo submitInfo{
-    //         .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    //         .waitSemaphoreCount   = 1,
-    //         .pWaitSemaphores      = waitSemaphores,
-    //         .pWaitDstStageMask    = waitStages,
-    //         .commandBufferCount   = 1,
-    //         .pCommandBuffers      = &commandBuffer,
-    //         .signalSemaphoreCount = 1,
-    //         .pSignalSemaphores    = signalSemaphores,
-    //     };
-
-
-    //     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
-    //         NE_CORE_ASSERT(false, "Failed to submit draw command buffer!");
-    //     }
-
-    //     // Present
-    //     result = m_swapChain.presentImage(imageIndex, m_renderFinishedSemaphore, m_PresentQueue);
-
-    //     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    //         recreateSwapChain();
-    //     }
-    //     else if (result != VK_SUCCESS) {
-    //         NE_CORE_ASSERT(false, "Failed to present swap chain image!");
-    //     }
+    // 12. present swapchain image
+    VkResult result = vkRender->getSwapChain()->presentImage(imageIndex, _firstGraphicsQueue->getHandle(), {});
 }
 
 } // namespace Neon

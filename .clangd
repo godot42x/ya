@@ -1,12 +1,18 @@
+CompileFlags:
+    Add: ["-Wno-c99-designator"]
 Diagnostics:
-  ClangTidy:
-    Add: [cppcoreguidelines-*, bugprone-*, misc-unused-*, modernize-*]
-    Remove:
-      [
-        cppcoreguidelines-non-private-member-variables-in-classes,
-        cppcoreguidelines-prefer-member-initializer,
-        bugprone-easily-swappable-parameters,
-        cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-        cppcoreguidelines-owning-memory,
-        modernize-use-trailing-return-type,
-      ]
+    ClangTidy:
+        Add: [cppcoreguidelines-*, bugprone-*, misc-unused-*, modernize-*]
+        Remove: [
+                bugprone-easily-swappable-parameters,
+                #
+                cppcoreguidelines-non-private-member-variables-in-classes,
+                cppcoreguidelines-prefer-member-initializer,
+                cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+                cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+                cppcoreguidelines-avoid-const-or-ref-data-members,
+                cppcoreguidelines-pro-type-union-access,
+                #
+                modernize-use-trailing-return-type,
+                #
+            ]

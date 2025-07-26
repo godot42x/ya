@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Input/InputManager.h"
+#include "Platform/Render/Vulkan/VulkanQueue.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
 #include <glm/glm.hpp>
@@ -39,6 +40,8 @@ struct App
 
     bool          bRunning         = true;
     ERenderAPI::T currentRenderAPI = ERenderAPI::None;
+    VulkanQueue  *_firstGraphicsQueue    = nullptr;
+    VulkanQueue  *_firstPresentQueue      = nullptr;
 
   public:
     static App *create();
@@ -53,6 +56,10 @@ struct App
     IRender *getRender() { return _render; }
 
     static App *get() { return _instance; }
+
+  private:
+
+    void drawTriangle();
 };
 
 } // namespace Neon

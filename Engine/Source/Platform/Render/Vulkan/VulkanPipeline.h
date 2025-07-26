@@ -85,6 +85,15 @@ struct VulkanPipeline
     void cleanup();
     bool recreate(const GraphicsPipelineCreateInfo &ci);
 
+    void bind(VkCommandBuffer commandBuffer)
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline);
+    }
+    void bind(VkCommandBuffer commandBuffer, VkPipelineBindPoint bindPoint)
+    {
+        vkCmdBindPipeline(commandBuffer, bindPoint, _pipeline);
+    }
+
 
 
   private:

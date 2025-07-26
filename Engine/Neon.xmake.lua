@@ -36,6 +36,7 @@ add_requires("vulkansdk", {
     configs = {
         utils = {
             "VkLayer_khronos_validation", -- import layer
+
         }
     }
 })

@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Render/RenderManager.h"
@@ -44,19 +45,15 @@ class VulkanRenderPass
     void recreate(const RenderPassCreateInfo &ci);
 
     // Getters
-    VkRenderPass getHandle() const { return m_renderPass; }
-    VkFormat     getDepthFormat() const { return m_depthFormat; }
+    [[nodiscard]] VkRenderPass getHandle() const { return m_renderPass; }
+    [[nodiscard]] VkFormat     getDepthFormat() const { return m_depthFormat; }
 
-    // Begin render pass
-    void beginRenderPass(VkCommandBuffer commandBuffer, uint32_t frameBufferIndex, VkExtent2D extent);
 
-    // End render pass
-    void endRenderPass(VkCommandBuffer commandBuffer);
+    void begin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues);
+    void end(VkCommandBuffer commandBuffer);
 
 
   private:
-    // Find suitable depth format
-    VkFormat findDepthFormat();
 
     // Find supported format from candidates
     VkFormat findSupportedImageFormat(const std::vector<VkFormat> &candidates,

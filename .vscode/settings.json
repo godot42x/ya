@@ -5,6 +5,7 @@
         "BLENDOP",
         "cmbf",
         "COLORCOMPONENT",
+        "cppcoreguidelines",
         "CULLMODE",
         "DXIL",
         "gltf",

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Core/Base.h"
 
 #include "Core/Delegate.h"
@@ -7,20 +8,16 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-
-using namespace std::literals;
-#include <cassert>
-#include <cstdint>
-#include <string>
-#include <vector>
+#include <vulkan/vulkan.h>
 
 
 
 #include "Render/Render.h"
+#include "VulkanCommandBuffer.h"
+#include "VulkanExt.h"
 #include "VulkanPipeline.h"
 #include "VulkanQueue.h"
 #include "VulkanRenderPass.h"
-#include "VulkanResourceManager.h"
 #include "VulkanSwapChain.h"
 #include "VulkanUtils.h"
 
@@ -28,10 +25,6 @@ using namespace std::literals;
 
 #include "WindowProvider.h"
 #include <Render/Shader.h>
-
-
-
-#include <vulkan/vulkan.h>
 
 
 
@@ -64,6 +57,8 @@ struct VulkanRender : public IRender
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
 
+    bool bSupportDebugUtils = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
+
   private:
 
     VkInstance   _instance;
@@ -73,42 +68,36 @@ struct VulkanRender : public IRender
     QueueFamilyIndices _graphicsQueueFamily;
     QueueFamilyIndices _presentQueueFamily;
 
-    VkDebugUtilsMessengerEXT m_DebugMessengerCallback;
-    VkDebugReportCallbackEXT m_DebugReportCallback; // deprecated
 
-    // Function pointers for debug extensions
-    // PFN_vkCreateDebugUtilsMessengerEXT  pfnCreateDebugUtilsMessengerEXT  = nullptr;
-    // PFN_vkDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessengerEXT = nullptr;
-    // PFN_vkCreateDebugReportCallbackEXT  pfnCreateDebugReportCallbackEXT  = nullptr;
-    // PFN_vkDestroyDebugReportCallbackEXT pfnDestroyDebugReportCallbackEXT = nullptr;
 
     VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
     VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
 
 
-    // Command pool belongs to device level
-    VkCommandPool _graphicsCommandPool = VK_NULL_HANDLE;
-    VkCommandPool _presentCommandPool  = VK_NULL_HANDLE;
 
-    // swapchain
+    // owning to swapchain
     SwapchainCreateInfo      m_swapChainCI;
     VulkanSwapChain         *m_swapChain;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
 
-    //
-    VkPipelineCache _pipelineCache = VK_NULL_HANDLE;
-
-
-    std::vector<VkCommandBuffer> m_commandBuffers;
+    // owning to logical device
+    std::unique_ptr<VulkanCommandPool> _graphicsCommandPool = nullptr;
+    std::unique_ptr<VulkanCommandPool> _presentCommandPool  = nullptr;
+    VkPipelineCache                    _pipelineCache       = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer>       m_commandBuffers;
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
     VkFence     m_inFlightFence;
 
+    std::unique_ptr<VulkanDebugUtils> _debugUtils = nullptr;
+
 
 
     void *nativeWindow = nullptr;
+
+
 
   public:
     WindowProvider *_windowProvider = nullptr;
@@ -119,13 +108,16 @@ struct VulkanRender : public IRender
 
 
   public:
+
+    VulkanRender() = default;
+
     template <typename T>
     void *getNativeWindow()
     {
         return static_cast<T *>(nativeWindow);
     }
 
-    virtual bool init(const InitParams &params) override
+    bool init(const InitParams &params) override
     {
 #if USE_SDL
         auto sdlWindow = static_cast<SDLWindowProvider *>(params.windowProvider);
@@ -177,10 +169,12 @@ struct VulkanRender : public IRender
 
         createInstance();
 
-        if (m_EnableValidationLayers)
+        if (m_EnableValidationLayers && bSupportDebugUtils)
         {
-            // setupDebugMessengerExt();
-            // setupReportCallbackExt();
+            // preferred default validation layers callback
+            // _debugUtils = std::make_unique<VulkanDebugUtils>(_instance);
+            // _debugUtils->init();
+            // _debugUtils->create();
         }
 
         createSurface();
@@ -195,12 +189,14 @@ struct VulkanRender : public IRender
         if (!createLogicDevice(1, 1)) {
             terminate();
         }
-        if (!createCommandPool()) {
-            terminate();
-        }
 
         m_swapChain = new VulkanSwapChain(this);
         m_swapChain->create(m_swapChainCI);
+
+        if (!createCommandPool()) {
+            terminate();
+        }
+        createCommandBuffers();
 
         createPipelineCache();
         // Initialize separate components with configuration
@@ -242,7 +238,6 @@ struct VulkanRender : public IRender
         //     }
         // }
 
-        // createCommandBuffers();
         createSemaphores();
         createFences();
 
@@ -290,21 +285,18 @@ struct VulkanRender : public IRender
         {
             vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
         }
-        if (_graphicsCommandPool) {
-            vkDestroyCommandPool(m_LogicalDevice, _graphicsCommandPool, nullptr);
-        }
+        _graphicsCommandPool->cleanup();
         if (_presentCommandPool) {
-            vkDestroyCommandPool(m_LogicalDevice, _presentCommandPool, nullptr);
+            _presentCommandPool->cleanup();
         }
         if (m_LogicalDevice)
         {
             vkDestroyDevice(m_LogicalDevice, nullptr);
         }
 
-        if (m_EnableValidationLayers)
+        if (m_EnableValidationLayers && bSupportDebugUtils)
         {
-            // destroyDebugCallBackExt();
-            // destroyDebugReportCallbackExt();
+            // _debugUtils->destroy();
         }
 
         onReleaseSurface.ExecuteIfBound(&(*_instance), &_surface);
@@ -339,6 +331,12 @@ struct VulkanRender : public IRender
 
     VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
+
+    [[nodiscard]] std::vector<VkCommandBuffer> getCommandBuffers() const { return m_commandBuffers; }
+
+    std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
+    std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
+
   private:
 
     void createInstance();
@@ -364,49 +362,8 @@ struct VulkanRender : public IRender
     // void drawTriangle();
 
     // Missing method declarations
-    const VkDebugUtilsMessengerCreateInfoEXT &getDebugMessengerCreateInfoExt()
-    {
-        static VkDebugUtilsMessengerCreateInfoEXT info{
-            .sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-            .pNext           = nullptr,
-            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-            .pfnUserCallback = // nullptr,
-            [](VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
-               VkDebugUtilsMessageTypeFlagsEXT             type,
-               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-               void                                       *pUserData) -> VkBool32 {
-                switch (severity) {
-                case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-                    NE_CORE_INFO("[ValidationLayer] {}", pCallbackData->pMessage);
-                    break;
-                case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-                    NE_CORE_WARN("[ValidationLayer] {}", pCallbackData->pMessage);
-                    break;
-                case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-                    NE_CORE_ERROR("[ValidationLayer] {}", pCallbackData->pMessage);
-                    break;
-                default:
-                    NE_CORE_ASSERT(false, "Unknown validation layer severity!");
-                }
-                return VK_FALSE;
-            },
-        };
-
-        return info;
-    }
 
 
-    // may be deprecated, not the debug was created in the create_instance()
-    // void loadDebugFunctionPointers();
-    // void setupDebugMessengerExt();
-    // void setupReportCallbackExt();
-    // void destroyDebugCallBackExt();
-    // void destroyDebugReportCallbackExt();
 
     bool isDeviceSuitable(const std::set<DeviceFeature> &extensions,
                           const std::set<DeviceFeature> &layers,

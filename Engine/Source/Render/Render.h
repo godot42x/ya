@@ -6,9 +6,6 @@
 #include "reflect.cc/enum"
 
 
-// Forward declarations
-struct CommandBuffer;
-struct RenderPassCreateInfo;
 
 // enum bit flags support
 template <typename T>
@@ -102,10 +99,10 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 struct ShaderCreateInfo
 {
-    std::string                          shaderName; // we use single glsl now
+    std::string                          shaderName;               // we use single glsl now
+    bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs;
     std::vector<VertexAttribute>         vertexAttributes;
-    bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
 };
 
 namespace EFrontFaceType
@@ -402,8 +399,8 @@ struct ColorBlendState
 
 struct DepthStencilState
 {
-    bool          bDepthTestEnable       = true;
-    bool          bDepthWriteEnable      = true;
+    bool          bDepthTestEnable       = false;
+    bool          bDepthWriteEnable      = false;
     ECompareOp::T depthCompareOp         = ECompareOp::Less;
     bool          bDepthBoundsTestEnable = false;
     bool          bStencilTestEnable     = false;
@@ -443,8 +440,6 @@ struct ViewportState
 {
     std::vector<Viewport> viewports;
     std::vector<Scissor>  scissors;
-    bool                  bDynamicViewport = true;
-    bool                  bDynamicScissor  = true;
 };
 
 namespace EPrimitiveType

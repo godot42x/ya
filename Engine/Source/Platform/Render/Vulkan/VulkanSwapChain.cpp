@@ -207,7 +207,7 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
         _minImageCount = _supportDetails.capabilities.maxImageCount;
     }
 
-    VkSharingMode sharingMode;
+    VkSharingMode sharingMode           = {};
     uint32_t      queueFamilyCount      = 0;
     uint32_t      queueFamilyIndices[2] = {0, 0};
     if (_render->isGraphicsPresentSameQueueFamily())
@@ -278,7 +278,7 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
 
 
     // Get swap chain images
-    uint32_t imageCount;
+    uint32_t imageCount = -1;
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
@@ -287,21 +287,35 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     return true;
 }
 
-VkResult VulkanSwapChain::acquireNextImage(uint32_t &imageIndex, VkSemaphore semaphore)
+VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex)
 {
-    return vkAcquireNextImageKHR(_render->getLogicalDevice(), m_swapChain, UINT64_MAX, semaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult ret = vkAcquireNextImageKHR(_render->getLogicalDevice(),
+                                         m_swapChain,
+                                         UINT64_MAX,
+                                         semaphore ? semaphore : VK_NULL_HANDLE,
+                                         fence ? fence : VK_NULL_HANDLE,
+                                         &outImageIndex);
+    if (ret != VK_SUCCESS) {
+        NE_CORE_ERROR("Failed to acquire next swap chain image: {}", ret);
+    }
+    return ret;
 }
 
-VkResult VulkanSwapChain::presentImage(uint32_t imageIndex, VkSemaphore semaphore, VkQueue presentQueue)
+VkResult VulkanSwapChain::presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> semaphores)
 {
     VkPresentInfoKHR presentInfo{
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores    = &semaphore,
-        .swapchainCount     = 1,
+        .pNext              = nullptr,
+        .waitSemaphoreCount = static_cast<uint32_t>(semaphores.size()),
+        .pWaitSemaphores    = semaphores.data(),
+        .swapchainCount     = 1, // ???
         .pSwapchains        = &m_swapChain,
         .pImageIndices      = &imageIndex,
     };
 
-    return vkQueuePresentKHR(presentQueue, &presentInfo);
+    VkResult ret = vkQueuePresentKHR(presentQueue, &presentInfo);
+    if (ret != VK_SUCCESS) {
+        NE_CORE_ERROR("Failed to present swap chain image: {}", ret);
+    }
+    return ret;
 }
