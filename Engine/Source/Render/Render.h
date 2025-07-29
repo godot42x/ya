@@ -516,8 +516,8 @@ struct GraphicsPipelineCreateInfo
 
     ShaderCreateInfo shaderCreateInfo;
 
-    EPipelineDynamicFeature::T dynamicFeatures = {};
     uint32_t                   subPassRef      = 0;
+    EPipelineDynamicFeature::T dynamicFeatures = {};
     EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;
     RasterizationState         rasterizationState;
     MultisampleState           multisampleState;
@@ -617,8 +617,8 @@ struct IRender
 
     struct InitParams
     {
-        bool                bVsync    = true;
         ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
+        bool                bVsync    = true;
         WindowProvider     *windowProvider;
         SwapchainCreateInfo swapchainCI;
     };

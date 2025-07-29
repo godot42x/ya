@@ -49,10 +49,10 @@ struct VulkanSwapChain
     void cleanup();
     void recreate(const SwapchainCreateInfo &ci);
 
-    const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
+    [[nodiscard]] const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 
     // Getters
-    VkSwapchainKHR                            getSwapChain() const { return m_swapChain; }
+    [[nodiscard]] VkSwapchainKHR              getSwapChain() const { return m_swapChain; }
     [[nodiscard]] const std::vector<VkImage> &getImages() const { return m_images; }
     [[nodiscard]] VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
     [[nodiscard]] uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }

@@ -2,8 +2,11 @@
 
 #include "Core/Base.h"
 
-#include <vulkan/vk_enum_string_helper.h>
+#include "reflect.cc/enum"
+#include <mutex>
+#include <unordered_map>
 #include <vulkan/vulkan.h>
+
 
 
 struct VulkanDebugUtils
@@ -96,7 +99,7 @@ struct VulkanDebugUtils
                     const auto &obj = pCallbackData->pObjects[i];
                     formattedMessage += std::format("\n    [{}] {} {} {:#x}",
                                                     i,
-                                                    string_VkObjectType(obj.objectType),
+                                                    std::to_string(obj.objectType),
                                                     obj.pObjectName ? obj.pObjectName : "Unnamed",
                                                     obj.objectHandle);
                 }

@@ -44,6 +44,23 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
 
     vkCreateDescriptorSetLayout(_render->getLogicalDevice(), &setLayoutCI, nullptr, &_descriptorSetLayout);
 
+    // example for the descriptor set meaning:
+
+    // layout(set=2, binding=0) uniform sampler2D uTexture0; // see comment of SDL_CreateGPUShader, the set is the rule of SDL3!!!
+
+    // layout(set = 3, binding = 0) uniform CameraBuffer{
+    //     mat4 model;
+    //     mat4 view;
+    //     mat4 projection;
+    // } uCamera;
+
+    // layout(set = 3, binding = 1) uniform LightBuffer {
+    //     vec4 lightDir;
+    //     vec4 lightColor;
+    //     float ambientIntensity;
+    //     float specularPower;
+    // } uLight;
+
     VkPipelineLayoutCreateInfo layoutCI{
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = nullptr,

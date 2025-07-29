@@ -45,12 +45,22 @@ void App::init()
     windowProvider->getWindowSize(w, h);
 
     _render        = new VulkanRender();
-    auto *vkRender = static_cast<VulkanRender *>(_render);
+    auto *vkRender = dynamic_cast<VulkanRender *>(_render);
 
-    // IRender::InitParams params =
+    currentRenderAPI = ERenderAPI::Vulkan;
+
+    /**
+      In vulkan:
+      1. Create instance
+      2. Create surface
+      3. Find physical device
+      4. Create logical device
+      5. Create swap chain
+      6. Other device resources: command pool{command buffers}, fences, semaphores, etc.
+     */
     vkRender->init(IRender::InitParams{
-        .bVsync         = true,
         .renderAPI      = ERenderAPI::Vulkan,
+        .bVsync         = true,
         .windowProvider = windowProvider,
         .swapchainCI    = SwapchainCreateInfo{
                .imageFormat = EFormat::R8G8B8A8_UNORM,
@@ -60,12 +70,17 @@ void App::init()
         },
     });
 
-    currentRenderAPI = ERenderAPI::Vulkan;
 
     VkFormat surfaceFormat = vkRender->getSwapChain()->getSurfaceFormat();
 
 
-    // TODO: create pipelines
+    /**
+      In Vulkan:
+        Create render pass and subpass
+        define all attachments,
+        input/color/depth/resolved attachment ref from all attachments
+        and each subpasses dependencies (source -> next)
+     */
     renderpass = new VulkanRenderPass(vkRender);
     renderpass->create(RenderPassCreateInfo{
         .attachments = {
@@ -121,12 +136,22 @@ void App::init()
     const std::vector<VkImage> &images = vkSwapChain->getImages();
 
     // TODO: maybe copy and cause destruction?
+    // TOD: this should be a resources part of logical device or swapchain. And should be recreated when swapchain is recreated
     frameBuffers.resize(images.size());
     for (size_t i = 0; i < images.size(); ++i)
     {
         frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
         frameBuffers[i].recreate({images[i]}, vkSwapChain->getWidth(), vkSwapChain->getHeight());
     }
+
+    /**
+     In Vulkan:
+        define pipeline layout
+        the layout(set=?, binding=?) for each descriptor set:
+        - uniform buffer(camera, light)
+        - push constants?
+        - texture samplers?
+    */
     pipelineLayout = new VulkanPipelineLayout(vkRender);
     pipelineLayout->create(GraphicsPipelineLayoutCreateInfo{
         .pushConstants        = {},
@@ -143,6 +168,22 @@ void App::init()
             },
         },
     });
+
+    /**
+      In Vulkan:
+        define the pipelines
+        1. Shader Part
+            -  shader programs from vert/frag/geom/comp shaders source codes
+            -  the vertex layout define/from reflection, like glVertexAttribPointer()
+        2. reference to the pipeline layout(seems one layout can be compatible with different pipelines)
+        3. reference to the subpass
+        4. other states initial settings (unlike OpenGL, all state are immutable in Vulkan by default):
+            -  rasterization state
+            -  multisample state
+            -  depth/stencil state
+            -  color blend state
+            -  viewport state
+    */
     pipeline = new VulkanPipeline(vkRender, renderpass, pipelineLayout);
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
@@ -172,7 +213,9 @@ void App::init()
                 // },
             },
         },
-        .subPassRef         = 0,
+        .subPassRef = 0,
+        // define what state need to dynamically modified in render pass execution
+        .dynamicFeatures    = {},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -410,7 +453,7 @@ int Neon::App::iterate(float dt)
 
 
 #if USE_VULKAN
-    auto render = static_cast<VulkanRender *>(_render);
+    auto render = dynamic_cast<VulkanRender *>(_render);
     drawTriangle();
 #endif
     // Handle input, update logic, render, etc.
@@ -424,7 +467,7 @@ void App::drawTriangle()
     auto vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
-    SDL_Delay(1000 / 30); // Simulate frame time, remove in production
+    // SDL_Delay(1000 / 30); // Simulate frame time, remove in production
 
 
     // 0: optional:use fence/semaphore to synchronize with previous frame
