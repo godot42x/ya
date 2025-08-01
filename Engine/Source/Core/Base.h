@@ -13,12 +13,12 @@
 
 #if defined(_WIN32)
     #if BUILD_SHARED_NEON
-        #define NEON_API __declspec(dllexport)
+        #define ENGINE_API __declspec(dllexport)
     #else
-        #define NEON_API __declspec(dllimport)
+        #define ENGINE_API __declspec(dllimport)
     #endif
 #else
-    #define NEON_API
+    #define ENGINE_API
 #endif
 
 template <typename T>

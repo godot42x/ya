@@ -477,7 +477,10 @@ void App::drawTriangle()
 
     // 1. acquire swapchain image
     uint32_t imageIndex = -1;
-    vkRender->getSwapChain()->acquireNextImage(nullptr, nullptr, imageIndex);
+    vkRender->getSwapChain()->acquireNextImage(
+        vkRender->getImageAvailableSemaphore(), // wait for image available semaphore
+        nullptr,
+        imageIndex);
 
 
     // 2. begin command buffer
@@ -567,11 +570,29 @@ void App::drawTriangle()
     //     VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     //     VkSemaphore          signalSemaphores[] = {m_renderFinishedSemaphore};
     // _firstGraphicsQueue.waitIdle();
-    _firstGraphicsQueue->submit({commandBuffer});
+    _firstGraphicsQueue->submit(
+        {
+            commandBuffer,
+        },
+        // this tell next submit, wait last render
+        {
+            vkRender->getImageAvailableSemaphore(),
+        },
+        // this semaphore will be emit after submit complete/ render finished?
+        {
+            vkRender->getRenderFinishedSemaphore(),
+
+        });
     _firstPresentQueue->waitIdle();
 
     // 12. present swapchain image
-    VkResult result = vkRender->getSwapChain()->presentImage(imageIndex, _firstGraphicsQueue->getHandle(), {});
+    VkResult result = vkRender->getSwapChain()->presentImage(
+        imageIndex,
+        _firstGraphicsQueue->getHandle(),
+        // and then do present image after render finished?
+        {
+            vkRender->getRenderFinishedSemaphore(),
+        });
 }
 
 } // namespace Neon

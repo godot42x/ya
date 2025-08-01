@@ -337,6 +337,9 @@ struct VulkanRender : public IRender
     std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
     std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
 
+    [[nodiscard]] VkSemaphore getImageAvailableSemaphore() const { return m_imageAvailableSemaphore; }
+    [[nodiscard]] VkSemaphore getRenderFinishedSemaphore() const { return m_renderFinishedSemaphore; }
+
   private:
 
     void createInstance();

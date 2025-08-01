@@ -9,7 +9,6 @@ Diagnostics:
                 cppcoreguidelines-non-private-member-variables-in-classes,
                 cppcoreguidelines-prefer-member-initializer,
                 cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-                cppcoreguidelines-pro-bounds-array-to-pointer-decay,
                 cppcoreguidelines-avoid-const-or-ref-data-members,
                 cppcoreguidelines-pro-type-union-access,
                 cppcoreguidelines-owning-memory,
