@@ -66,7 +66,6 @@ struct VulkanPipeline
     VulkanPipelineLayout      *_pipelineLayout = nullptr;
 
   public:
-    VulkanPipeline()  = default;
     ~VulkanPipeline() = default;
     VulkanPipeline(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *pipelineLayout)
     {

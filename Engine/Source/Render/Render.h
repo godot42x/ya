@@ -99,6 +99,7 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 struct ShaderCreateInfo
 {
+
     std::string                          shaderName;               // we use single glsl now
     bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs;

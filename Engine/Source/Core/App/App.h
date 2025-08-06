@@ -20,7 +20,7 @@
 
 struct LogicalDevice;
 struct VulkanRenderPass;
-
+struct VulkanPipelineLayout;
 
 namespace Neon
 {
@@ -35,13 +35,16 @@ struct App
     VulkanRenderPass *m_triangleRenderPass = nullptr;
     VulkanRenderPass *m_2DRenderPass       = nullptr;
 
+
+    VulkanPipelineLayout *defaultPipelineLayout = nullptr;
+
     InputManager inputManager;
 
 
-    bool          bRunning         = true;
-    ERenderAPI::T currentRenderAPI = ERenderAPI::None;
-    VulkanQueue  *_firstGraphicsQueue    = nullptr;
-    VulkanQueue  *_firstPresentQueue      = nullptr;
+    bool          bRunning            = true;
+    ERenderAPI::T currentRenderAPI    = ERenderAPI::None;
+    VulkanQueue  *_firstGraphicsQueue = nullptr;
+    VulkanQueue  *_firstPresentQueue  = nullptr;
 
   public:
     static App *create();

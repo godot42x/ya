@@ -28,7 +28,6 @@ App *App::create()
 
 VulkanRenderPass              *renderpass;
 std::vector<VulkanFrameBuffer> frameBuffers;
-VulkanPipelineLayout          *pipelineLayout = nullptr;
 VulkanPipeline                *pipeline       = nullptr;
 
 void App::init()
@@ -152,8 +151,8 @@ void App::init()
         - push constants?
         - texture samplers?
     */
-    pipelineLayout = new VulkanPipelineLayout(vkRender);
-    pipelineLayout->create(GraphicsPipelineLayoutCreateInfo{
+    defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
+    defaultPipelineLayout->create(GraphicsPipelineLayoutCreateInfo{
         .pushConstants        = {},
         .descriptorSetLayouts = {
             GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
@@ -184,7 +183,7 @@ void App::init()
             -  color blend state
             -  viewport state
     */
-    pipeline = new VulkanPipeline(vkRender, renderpass, pipelineLayout);
+    pipeline = new VulkanPipeline(vkRender, renderpass, defaultPipelineLayout);
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
@@ -252,8 +251,8 @@ void Neon::App::quit()
 
     pipeline->cleanup();
     delete pipeline;
-    pipelineLayout->cleanup();
-    delete pipelineLayout;
+    defaultPipelineLayout->cleanup();
+    delete defaultPipelineLayout;
 
     for (auto &frameBuffer : frameBuffers)
     {
