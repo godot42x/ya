@@ -27,9 +27,9 @@ struct VulkanQueue
     }
 
     void submit(const std::vector<VkCommandBuffer> &commandBuffers,
-                const std::vector<VkSemaphore>     &waitSemaphores,   // waiting
-                const std::vector<VkSemaphore>     &signalSemaphores, // trigger/signal semaphore after submission completed
-                VkFence                             fence)
+                const std::vector<VkSemaphore>     &waitSemaphores   = {}, // waiting
+                const std::vector<VkSemaphore>     &signalSemaphores = {}, // trigger/signal semaphore after submission completed
+                VkFence                             fence            = VK_NULL_HANDLE)
     {
         VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo         info{

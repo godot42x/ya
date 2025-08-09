@@ -34,14 +34,14 @@ struct Render2D
         renderpass->create(RenderPassCreateInfo{
             .attachments = {
                 AttachmentDescription{
-                    .format                  = EFormat::R8G8B8A8_UNORM,
-                    .samples                 = ESampleCount::Sample_1,
-                    .loadOp                  = EAttachmentLoadOp::Clear,
-                    .storeOp                 = EAttachmentStoreOp::Store,
-                    .stencilLoadOp           = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp          = EAttachmentStoreOp::DontCare,
-                    .bInitialLayoutUndefined = true,
-                    .bFinalLayoutPresentSrc  = true, // for color attachments
+                    .format         = EFormat::R8G8B8A8_UNORM,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    // .bInitialLayoutUndefined = true,
+                    // .bFinalLayoutPresentSrc  = true, // for color attachments
                 },
                 // AttachmentDescription{
                 //     .format                  = EFormat::D32_SFLOAT,
@@ -65,8 +65,7 @@ struct Render2D
                     // },
                     .colorAttachments = {
                         RenderPassCreateInfo::AttachmentRef{
-                            .ref    = 0, // color attachment
-                            .layout = EImageLayout::ColorAttachmentOptimal,
+                            .ref = 0, // color attachment
                         },
                     },
                 },
@@ -100,12 +99,17 @@ struct Render2D
                         .format     = EVertexAttributeFormat::Float3,
                         .offset     = 0,
                     },
-                    // (layout binding = 1, set = 0) in vec4 aColor,
                     VertexAttribute{
                         .location   = 1,
                         .bufferSlot = 0, // same buffer slot
                         .format     = EVertexAttributeFormat::Float4,
-                        .offset     = static_cast<uint32_t>(T2Size(EVertexAttributeFormat::Float4)),
+                        // .offset     = offsetof(VertexInput, texCoord),
+                    },
+                    VertexAttribute{
+                        .location   = 2,
+                        .bufferSlot = 0, // same buffer slot
+                        .format     = EVertexAttributeFormat::Float3,
+                        // .offset     = offsetof(VertexInput, normal),
                     },
 
                 },

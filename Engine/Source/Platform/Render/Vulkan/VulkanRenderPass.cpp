@@ -155,8 +155,8 @@ void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttac
     }
 
     // Set layouts
-    outVkDesc.initialLayout = desc.bInitialLayoutUndefined ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    outVkDesc.finalLayout   = desc.bFinalLayoutPresentSrc ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    outVkDesc.initialLayout = toVk(desc.initialLayout);
+    outVkDesc.finalLayout   = toVk(desc.finalLayout);
 }
 
 bool VulkanRenderPass::createDefaultRenderPass()
@@ -259,8 +259,8 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
     {
         std::vector<VkAttachmentReference> inputAttachments;
         std::vector<VkAttachmentReference> colorAttachments;
-        VkAttachmentReference              depthAttachment;
-        VkAttachmentReference              resolveAttachment;
+        VkAttachmentReference              depthAttachment{};
+        VkAttachmentReference              resolveAttachment{};
     };
     std::vector<VulkanSubPassAttachmentReferenceCache> referenceHandle(_ci.subpasses.size());
 
@@ -275,14 +275,14 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         {
             referenceHandle[i].colorAttachments.push_back(VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(colorAttachment.ref),
-                .layout     = toVkImageLayout(colorAttachment.layout),
+                .layout     = toVk(colorAttachment.layout),
             });
         }
 
         for (const auto &inputAttachment : subpass.inputAttachments) {
             referenceHandle[i].inputAttachments.push_back(VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(inputAttachment.ref),
-                .layout     = toVkImageLayout(inputAttachment.layout),
+                .layout     = toVk(inputAttachment.layout),
             });
         }
 
@@ -292,13 +292,13 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         if (hasDepthAttachment) {
             referenceHandle[i].depthAttachment = VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(subpass.depthAttachment.ref),
-                .layout     = toVkImageLayout(subpass.depthAttachment.layout),
+                .layout     = toVk(subpass.depthAttachment.layout),
             };
         }
         if (hasResolveAttachment) {
             referenceHandle[i].resolveAttachment = VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(subpass.resolveAttachment.ref),
-                .layout     = toVkImageLayout(subpass.resolveAttachment.layout),
+                .layout     = toVk(subpass.resolveAttachment.layout),
             };
         }
 

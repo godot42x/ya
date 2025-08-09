@@ -1,19 +1,21 @@
 #include "VulkanCommandBuffer.h"
+#include "VulkanQueue.h"
 #include "VulkanRender.h"
 
-VulkanCommandPool::VulkanCommandPool(VulkanRender *render, uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags)
+
+VulkanCommandPool::VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, VkCommandPoolCreateFlags flags)
 {
     _render = render;
     VkCommandPoolCreateInfo ci{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext            = nullptr,
         .flags            = flags,
-        .queueFamilyIndex = queueFamilyIndex,
+        .queueFamilyIndex = queue->_familyIndex,
     };
 
     NE_CORE_ASSERT(vkCreateCommandPool(render->getLogicalDevice(), &ci, nullptr, &_handle) == VK_SUCCESS,
                    "Failed to create command pool!");
-    NE_CORE_TRACE("Created command pool: {} success, queue family: {}", (uintptr_t)_handle, queueFamilyIndex);
+    NE_CORE_TRACE("Created command pool: {} success, queue family: {}", (uintptr_t)_handle, queue->_familyIndex);
 }
 
 bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer &outCommandBuffer)

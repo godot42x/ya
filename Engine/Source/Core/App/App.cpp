@@ -2,15 +2,21 @@
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 
+#include "Math/Geometry.h"
+#include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
+#include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+
 
 
 #include "Render/Render.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+
+#include "glm/glm.hpp"
 
 
 namespace Neon
@@ -37,9 +43,15 @@ std::vector<VkSemaphore> imageAvailableSemaphores;  // 每帧的图像可用信�
 std::vector<VkSemaphore> submittedSignalSemaphores; // 每帧的渲染完成信号量
 std::vector<VkFence>     frameFences;               // 每帧的CPU-GPU同步栅栏
 
+// std::vector<std::shared_ptr<VulkanImage>> depthImages;
+const auto DEPTH_FORMAT = EFormat::D32_SFLOAT;
+
 // 手动设置多层cpu缓冲，让 cpu 在多个帧之间轮转, cpu and gpu can work in parallel
 // but frame count should be limited and considered  with performance
 static uint32_t currentFrame = 0;
+
+std::shared_ptr<VulkanBuffer> vertexBuffer;
+std::shared_ptr<VulkanBuffer> indexBuffer;
 
 void App::init()
 {
@@ -95,41 +107,43 @@ void App::init()
     renderpass = new VulkanRenderPass(vkRender);
     renderpass->create(RenderPassCreateInfo{
         .attachments = {
+            // color to present
             AttachmentDescription{
-                .format                  = EFormat::R8G8B8A8_UNORM,
-                .samples                 = ESampleCount::Sample_1,
-                .loadOp                  = EAttachmentLoadOp::Clear,
-                .storeOp                 = EAttachmentStoreOp::Store,
-                .stencilLoadOp           = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp          = EAttachmentStoreOp::DontCare,
-                .bInitialLayoutUndefined = true,
-                .bFinalLayoutPresentSrc  = true, // for color attachments
+                .index          = 0,
+                .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::Undefined,
+                .finalLayout    = EImageLayout::PresentSrcKHR,
             },
-            // AttachmentDescription{
-            //     .format                  = EFormat::D32_SFLOAT,
-            //     .samples                 = ESampleCount::Sample_1,
-            //     .loadOp                  = EAttachmentLoadOp::Clear,
-            //     .storeOp                 = EAttachmentStoreOp::DontCare,
-            //     .stencilLoadOp           = EAttachmentLoadOp::DontCare,
-            //     .stencilStoreOp          = EAttachmentStoreOp::DontCare,
-            //     .bInitialLayoutUndefined = true,
-            //     .bFinalLayoutPresentSrc  = false, // for depth attachments
-            // },
+            // depth attachment
+            AttachmentDescription{
+                .index          = 1,
+                .format         = EFormat::D32_SFLOAT, // TODO: detect by device
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::Undefined,
+                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+            },
         },
         .subpasses = {
             RenderPassCreateInfo::SubpassInfo{
-                .subpassIndex = 0,
-                // .inputAttachments = {
-                //     RenderPassCreateInfo::AttachmentRef{
-                //         .ref    = 0, // color attachment
-                //         .layout = EImageLayout::ColorAttachmentOptimal,
-                //     },
-                // },
+                .subpassIndex     = 0,
                 .colorAttachments = {
                     RenderPassCreateInfo::AttachmentRef{
                         .ref    = 0, // color attachment
                         .layout = EImageLayout::ColorAttachmentOptimal,
                     },
+                },
+                .depthAttachment = RenderPassCreateInfo::AttachmentRef{
+                    .ref    = 1, // depth attachment
+                    .layout = EImageLayout::DepthStencilAttachmentOptimal,
                 },
             },
         },
@@ -146,16 +160,39 @@ void App::init()
 
     const std::vector<VkImage> &images = vkSwapChain->getImages();
 
-    submissionResourceSize = static_cast<int>(images.size());
+    swapchainImageSize = static_cast<int>(images.size());
 
     // TODO: maybe copy and cause destruction?
-    // TOD: this should be a resources part of logical device or swapchain. And should be recreated when swapchain is recreated
-    frameBuffers.resize(images.size());
+    // TODO: this should be a resources part of logical device or swapchain. And should be recreated when swapchain is recreated
+    frameBuffers.resize(swapchainImageSize);
+
     for (size_t i = 0; i < images.size(); ++i)
     {
         frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
-        frameBuffers[i].recreate({images[i]}, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+
+        std::vector<std::shared_ptr<VulkanImage>> fbAttachments = {
+            // color attachment
+            VulkanImage::from(vkRender, images[i], surfaceFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
+            VulkanImage::create(vkRender,
+                                VulkanImage::CreateInfo{
+                                    .format = DEPTH_FORMAT,
+                                    .extent = {
+                                        .width  = vkSwapChain->getWidth(),
+                                        .height = vkSwapChain->getHeight(),
+                                        .depth  = 1,
+                                    },
+                                    .mipLevels     = 1,
+                                    .samples       = ESampleCount::Sample_1,
+                                    .usage         = EImageUsage::DepthStencilAttachment,
+                                    .sharingMode   = ESharingMode::Exclusive,
+                                    .initialLayout = EImageLayout::Undefined,
+                                    // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                                }),
+        };
+
+        frameBuffers[i].recreate(fbAttachments, vkSwapChain->getWidth(), vkSwapChain->getHeight());
     }
+
 
     /**
      In Vulkan:
@@ -167,19 +204,25 @@ void App::init()
     */
     defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
     defaultPipelineLayout->create(GraphicsPipelineLayoutCreateInfo{
-        .pushConstants        = {},
-        .descriptorSetLayouts = {
-            GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
-                // .bindings = {
-                // GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
-                //     .binding         = 0,
-                //     .descriptorType  = EPipelineDescriptorType::StorageBuffer,
-                //     .descriptorCount = 1,
-                //     .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
-                // },
-                // },
+        .pushConstants = {
+            GraphicsPipelineLayoutCreateInfo::PushConstant{
+                .offset     = 0,
+                .size       = sizeof(glm::mat4), // for MVP matrix
+                .stageFlags = EShaderStage::Vertex,
             },
         },
+        // .descriptorSetLayouts = {
+        //     GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
+        //         .bindings = {
+        //             GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
+        //                 .binding         = 0,
+        //                 .descriptorType  = EPipelineDescriptorType::StorageBuffer,
+        //                 .descriptorCount = 1,
+        //                 .stageFlags      = EShaderStage::Vertex,
+        //             },
+        //         },
+        //     },
+        // },
     });
 
     /**
@@ -198,32 +241,41 @@ void App::init()
             -  viewport state
     */
     pipeline = new VulkanPipeline(vkRender, renderpass, defaultPipelineLayout);
+
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
-            .shaderName        = "HelloTriangle.glsl",
+            .shaderName        = "HelloBuffer.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
-                // VertexBufferDescription{
-                //     .slot  = 0,
-                //     .pitch = static_cast<uint32_t>(T2Size(EVertexAttributeFormat::Float3)),
-                // },
+                // pos
+                VertexBufferDescription{
+                    .slot  = 0,
+                    .pitch = sizeof(ya::Vertex),
+                },
             },
             .vertexAttributes = {
-                // // (layout binding = 0, set = 0) in vec3 aPos,
-                // VertexAttribute{
-                //     .location   = 0,
-                //     .bufferSlot = 0,
-                //     .format     = EVertexAttributeFormat::Float3,
-                //     .offset     = 0,
-                // },
-                // // (layout binding = 1, set = 0) in vec4 aColor,
-                // VertexAttribute{
-                //     .location   = 1,
-                //     .bufferSlot = 0, // same buffer slot
-                //     .format     = EVertexAttributeFormat::Float4,
-                //     .offset     = static_cast<uint32_t>(T2Size(EVertexAttributeFormat::Float4)),
-                // },
+                // (location=0) in vec3 aPos,
+                VertexAttribute{
+                    .bufferSlot = 0,
+                    .location   = 0,
+                    .format     = EVertexAttributeFormat::Float3,
+                    .offset     = offsetof(ya::Vertex, position),
+                },
+                //  texcoord
+                VertexAttribute{
+                    .bufferSlot = 0, // same buffer slot
+                    .location   = 1,
+                    .format     = EVertexAttributeFormat::Float2,
+                    .offset     = offsetof(ya::Vertex, texCoord0),
+                },
+                // normal
+                VertexAttribute{
+                    .bufferSlot = 0, // same buffer slot
+                    .location   = 2,
+                    .format     = EVertexAttributeFormat::Float4,
+                    .offset     = offsetof(ya::Vertex, normal),
+                },
             },
         },
         .subPassRef = 0,
@@ -235,19 +287,21 @@ void App::init()
             .frontFace   = EFrontFaceType::CounterClockWise, // GL
         },
         .multisampleState  = MultisampleState{},
-        .depthStencilState = DepthStencilState{},
-        .colorBlendState   = ColorBlendState{
-              .attachments = {
+        .depthStencilState = DepthStencilState{
+            .bDepthTestEnable = true,
+        },
+        .colorBlendState = ColorBlendState{
+            .attachments = {
                 ColorBlendAttachmentState{
-                      .index               = 0,
-                      .bBlendEnable        = false,
-                      .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                      .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                      .colorBlendOp        = EBlendOp::Add,
-                      .srcAlphaBlendFactor = EBlendFactor::One,
-                      .dstAlphaBlendFactor = EBlendFactor::Zero,
-                      .alphaBlendOp        = EBlendOp::Add,
-                      .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    .index               = 0,
+                    .bBlendEnable        = false,
+                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                    .colorBlendOp        = EBlendOp::Add,
+                    .srcAlphaBlendFactor = EBlendFactor::One,
+                    .dstAlphaBlendFactor = EBlendFactor::Zero,
+                    .alphaBlendOp        = EBlendOp::Add,
+                    .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                 },
             },
         },
@@ -619,7 +673,7 @@ void App::onDraw()
     // ✅ Flight Frames关键步骤5: 切换到下一个飞行帧
     // 使用模运算实现环形缓冲区，在多个帧之间循环
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
-    currentFrame = (currentFrame + 1) % submissionResourceSize;
+    currentFrame = (currentFrame + 1) % swapchainImageSize;
 }
 
 #pragma region synchronization resources
@@ -652,12 +706,12 @@ void App::initSemaphoreAndFence()
 
     // ✅ 为每个飞行帧分配独立的同步对象数组
     // 这是Flight Frames的核心：避免不同帧之间的资源竞争
-    imageAvailableSemaphores.resize(submissionResourceSize);
-    submittedSignalSemaphores.resize(submissionResourceSize);
-    frameFences.resize(submissionResourceSize);
+    imageAvailableSemaphores.resize(swapchainImageSize);
+    submittedSignalSemaphores.resize(swapchainImageSize);
+    frameFences.resize(swapchainImageSize);
 
     // ✅ 循环创建每个飞行帧的同步对象
-    for (uint32_t i = 0; i < submissionResourceSize; i++) {
+    for (uint32_t i = 0; i < swapchainImageSize; i++) {
         // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
         ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
         NE_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
@@ -693,7 +747,7 @@ void App::releaseSemaphoreAndFence()
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
-    for (uint32_t i = 0; i < submissionResourceSize; i++) {
+    for (uint32_t i = 0; i < swapchainImageSize; i++) {
         vkDestroySemaphore(vkRender->getLogicalDevice(), imageAvailableSemaphores[i], nullptr);
         vkDestroySemaphore(vkRender->getLogicalDevice(), submittedSignalSemaphores[i], nullptr);
         vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], nullptr);

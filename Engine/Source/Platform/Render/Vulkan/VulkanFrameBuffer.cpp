@@ -2,21 +2,24 @@
 
 
 
-bool VulkanFrameBuffer::recreate(std::vector<VkImage> images, uint32_t width, uint32_t height)
+bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height)
 {
     clean();
     this->width  = width;
     this->height = height;
 
 
-
+    _images = images;
     _imageViews.resize(images.size());
     for (int i = 0; i < images.size(); i++)
     {
-        _imageViews[i] = VulkanUtils::createImageView(render->getLogicalDevice(),
-                                                      images[i],
-                                                      render->getSwapChain()->getSurfaceFormat(),
-                                                      VK_IMAGE_ASPECT_COLOR_BIT);
+        auto format    = _images[i]->getFormat();
+        bool bDepth    = VulkanUtils::isDepthOnlyFormat(format);
+        _imageViews[i] = VulkanUtils::createImageView(
+            render->getLogicalDevice(),
+            _images[i]->getHandle(),
+            format,
+            bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     VkFramebufferCreateInfo createInfo{

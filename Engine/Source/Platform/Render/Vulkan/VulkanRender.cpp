@@ -243,8 +243,8 @@ void VulkanRender::findPhysicalDevice()
             // required graphics rendering queue
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 graphicsQueueFamilies.push_back({
-                    familyIndex,
-                    (int32_t)queueFamily.queueCount,
+                    .queueFamilyIndex = familyIndex,
+                    .queueCount       = (int32_t)queueFamily.queueCount,
                 });
             }
 
@@ -254,8 +254,8 @@ void VulkanRender::findPhysicalDevice()
             if (bSupport)
             {
                 presentQueueFamilies.push_back({
-                    familyIndex,
-                    (int32_t)queueFamily.queueCount,
+                    .queueFamilyIndex = familyIndex,
+                    .queueCount       = (int32_t)queueFamily.queueCount,
                 });
             }
 
@@ -294,6 +294,9 @@ void VulkanRender::findPhysicalDevice()
     NE_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
     NE_CORE_INFO("Present queue idx {} count: {}", _presentQueueFamily.queueFamilyIndex, _presentQueueFamily.queueCount);
     m_PhysicalDevice = physicalDevice;
+
+    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &_physicalMemoryProperties);
+    // NE_CORE_INFO("Memory Type Count: {}", _memoryProperties.memoryTypeCount);
 }
 
 void VulkanRender::createSurface()
@@ -424,7 +427,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             return false;
         }
 
-        _graphicsQueues.emplace_back(VulkanQueue(_graphicsQueueFamily.queueFamilyIndex, i, queue, false));
+        _graphicsQueues.emplace_back(_graphicsQueueFamily.queueFamilyIndex, i, queue, false);
         setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
                            (uintptr_t)queue,
                            std::format("GraphicsQueue_{}", i).c_str());
@@ -447,26 +450,14 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 }
 
 bool VulkanRender::createCommandPool()
+
 {
     _graphicsCommandPool = std::make_unique<VulkanCommandPool>(
         this,
-        _graphicsQueueFamily.queueFamilyIndex,
+        &getGraphicsQueues()[0],
         VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
     // _presentCommandPool  = std::move(VulkanCommandPool(this, _presentQueueFamily.queueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT));
-
-
-    // if (isGraphicsPresentSameQueueFamily()) {
-    //     VkCommandPoolCreateInfo presentCommandPoolCI{
-    //         .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    //         .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    //         .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
-    //     };
-
-    //     if (vkCreateCommandPool(m_LogicalDevice, &presentCommandPoolCI, nullptr, &_presentCommandPool) != VK_SUCCESS) {
-    //         NE_CORE_ERROR("failed to create present command pool!");
-    //         return false;
-    //     }
-    // }
 
     return _graphicsCommandPool->_handle != VK_NULL_HANDLE;
 }
@@ -620,4 +611,24 @@ void VulkanRender::recreateSwapChain()
     // m_pipelineManager.recreateAllPipelines(m_renderPass.getRenderPass(), m_swapChain.getExtent());
 
     NE_CORE_INFO("Swap chain and all pipelines recreated successfully");
+}
+
+
+int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const
+{
+    if (_physicalMemoryProperties.memoryTypeCount == 0)
+    {
+        NE_CORE_ERROR("Physical device has no memory types!");
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < _physicalMemoryProperties.memoryTypeCount; ++i) {
+        if ((memoryTypeBits & (1 << i)) && // Check if the bit is set
+            (_physicalMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return static_cast<int32_t>(i);
+        }
+    }
+
+    NE_CORE_ERROR("No suitable memory type found for properties: {} and memoryTypeBits: {}", (uint32_t)properties, memoryTypeBits);
+    return -1;
 }

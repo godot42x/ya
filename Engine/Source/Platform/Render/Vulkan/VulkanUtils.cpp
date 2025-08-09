@@ -1,4 +1,8 @@
 #include "VulkanUtils.h"
+#include "Core/Log.h"
+#include "VulkanQueue.h"
+#include "VulkanRender.h"
+
 
 
 #if USE_SDL_IMG
@@ -169,71 +173,71 @@ void VulkanUtils::endSingleTimeCommands(VkDevice device, VkCommandPool commandPo
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void VulkanUtils::transitionImageLayout(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
-                                        VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+void VulkanUtils::transitionImageLayout(VulkanCommandPool *pool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands(device, commandPool);
+    UNIMPLEMENTED();
+    // VkCommandBuffer commandBuffer = pool->beginSingleTimeCommands();
 
-    VkImageMemoryBarrier barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .oldLayout           = oldLayout,
-        .newLayout           = newLayout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = image,
-        .subresourceRange    = {
-               .baseMipLevel   = 0,
-               .levelCount     = 1,
-               .baseArrayLayer = 0,
-               .layerCount     = 1,
-        },
-    };
+    // VkImageMemoryBarrier barrier{
+    //     .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    //     .oldLayout           = oldLayout,
+    //     .newLayout           = newLayout,
+    //     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //     .image               = image,
+    //     .subresourceRange    = {
+    //            .baseMipLevel   = 0,
+    //            .levelCount     = 1,
+    //            .baseArrayLayer = 0,
+    //            .layerCount     = 1,
+    //     },
+    // };
 
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
+    // VkPipelineStageFlags sourceStage      = 0;
+    // VkPipelineStageFlags destinationStage = 0;
 
-    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (hasStencilComponent(format)) {
-            barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-        }
-    }
-    else {
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    }
+    // if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+    //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    //     if (hasStencilComponent(format)) {
+    //         barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    //     }
+    // }
+    // else {
+    //     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    // }
 
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        sourceStage           = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage      = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    }
-    // 可以添加更多转换案例，例如：
-    else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        sourceStage           = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        destinationStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else {
-        NE_CORE_ASSERT(false, "unsupported layout transition!");
-    }
+    // if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    //     barrier.srcAccessMask = 0;
+    //     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //     destinationStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    // }
+    // else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    //     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    //     sourceStage           = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    //     destinationStage      = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    // }
+    // else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+    //     barrier.srcAccessMask = 0;
+    //     barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    //     sourceStage           = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    //     destinationStage      = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    // }
+    // // 可以添加更多转换案例，例如：
+    // else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    //     barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    //     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    //     sourceStage           = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    //     destinationStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    // }
+    // else {
+    //     NE_CORE_ASSERT(false, "unsupported layout transition!");
+    // }
 
-    vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    // vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
-    endSingleTimeCommands(device, commandPool, graphicsQueue, commandBuffer);
+    // pool->endSingleTimeCommands(commandBuffer);
 }
 
 void VulkanUtils::copyBufferToImage(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
@@ -282,74 +286,76 @@ VkFormat VulkanUtils::findSupportedImageFormat(VkPhysicalDevice             phys
 void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                      const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory)
 {
-    int   texWidth, texHeight, texChannels;
-    void *pixels;
 
-#if USE_SDL_IMG
-    // SDL implementation
-#else
-    pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    NE_CORE_ASSERT(pixels, "failed to load texture image! {}", path);
-#endif
+    UNIMPLEMENTED();
+    //     int   texWidth, texHeight, texChannels;
+    //     void *pixels;
 
-    VkDeviceSize imageSize = texWidth * texHeight * 4;
+    // #if USE_SDL_IMG
+    //     // SDL implementation
+    // #else
+    //     pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    //     NE_CORE_ASSERT(pixels, "failed to load texture image! {}", path);
+    // #endif
 
-    VkBuffer       stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
+    //     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
-    if (!VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory)) {
-        NE_CORE_ERROR("Failed to create staging buffer");
-        return;
-    }
+    //     VkBuffer       stagingBuffer;
+    //     VkDeviceMemory stagingBufferMemory;
 
-    void *data;
-    vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-    std::memcpy(data, pixels, static_cast<size_t>(imageSize));
-    vkUnmapMemory(device, stagingBufferMemory);
+    //     if (!VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory)) {
+    //         NE_CORE_ERROR("Failed to create staging buffer");
+    //         return;
+    //     }
 
-#if USE_SDL_IMG
-    // SDL cleanup
-#else
-    stbi_image_free(pixels);
-#endif
+    //     void *data;
+    //     vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+    //     std::memcpy(data, pixels, static_cast<size_t>(imageSize));
+    //     vkUnmapMemory(device, stagingBufferMemory);
 
-    createImage(device,
-                physicalDevice,
-                texWidth,
-                texHeight,
-                VK_FORMAT_R8G8B8A8_UNORM,
-                VK_IMAGE_TILING_OPTIMAL,
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                outImage,
-                outImageMemory);
+    // #if USE_SDL_IMG
+    //     // SDL cleanup
+    // #else
+    //     stbi_image_free(pixels);
+    // #endif
 
-    transitionImageLayout(device,
-                          commandPool,
-                          graphicsQueue,
-                          outImage,
-                          VK_FORMAT_R8G8B8A8_UNORM,
-                          VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    //     createImage(device,
+    //                 physicalDevice,
+    //                 texWidth,
+    //                 texHeight,
+    //                 VK_FORMAT_R8G8B8A8_UNORM,
+    //                 VK_IMAGE_TILING_OPTIMAL,
+    //                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    //                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    //                 outImage,
+    //                 outImageMemory);
 
-    copyBufferToImage(device,
-                      commandPool,
-                      graphicsQueue,
-                      stagingBuffer,
-                      outImage,
-                      static_cast<uint32_t>(texWidth),
-                      static_cast<uint32_t>(texHeight));
+    //     transitionImageLayout(device,
+    //                           commandPool,
+    //                           graphicsQueue,
+    //                           outImage,
+    //                           VK_FORMAT_R8G8B8A8_UNORM,
+    //                           VK_IMAGE_LAYOUT_UNDEFINED,
+    //                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    transitionImageLayout(device,
-                          commandPool,
-                          graphicsQueue,
-                          outImage,
-                          VK_FORMAT_R8G8B8A8_UNORM,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    //     copyBufferToImage(device,
+    //                       commandPool,
+    //                       graphicsQueue,
+    //                       stagingBuffer,
+    //                       outImage,
+    //                       static_cast<uint32_t>(texWidth),
+    //                       static_cast<uint32_t>(texHeight));
 
-    vkDestroyBuffer(device, stagingBuffer, nullptr);
-    vkFreeMemory(device, stagingBufferMemory, nullptr);
+    //     transitionImageLayout(device,
+    //                           commandPool,
+    //                           graphicsQueue,
+    //                           outImage,
+    //                           VK_FORMAT_R8G8B8A8_UNORM,
+    //                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    //                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    //     vkDestroyBuffer(device, stagingBuffer, nullptr);
+    //     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
 void VulkanUtils::copyBuffer(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,

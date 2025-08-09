@@ -70,8 +70,10 @@ struct VulkanRender : public IRender
 
 
 
-    VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
-    VkDevice         m_LogicalDevice  = VK_NULL_HANDLE;
+    VkPhysicalDevice                 m_PhysicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDeviceMemoryProperties _physicalMemoryProperties;
+
+    VkDevice m_LogicalDevice = VK_NULL_HANDLE;
 
 
 
@@ -200,49 +202,6 @@ struct VulkanRender : public IRender
         createCommandBuffers();
 
         createPipelineCache();
-        // Initialize separate components with configuration
-        // m_swapChain.initialize(m_LogicalDevice, m_PhysicalDevice, m_Surface, _windowProvider, m_swapchainCI);
-        // m_swapChain.create();
-
-        // Initialize resource manager
-        // m_resourceManager.initialize(m_LogicalDevice, m_PhysicalDevice, m_commandPool, m_GraphicsQueue);
-
-        // Initialize render pass with custom configuration
-        // m_renderPass.initialize(m_LogicalDevice, m_PhysicalDevice, m_swapChain.getImageFormat(), m_renderPassCI);
-        // m_renderPass.create();
-
-        // createDepthResources();
-        // m_renderPass.createFramebuffers(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
-
-        // Pipeline creation with custom configuration from render pass
-        // m_pipelineManager.initialize(m_LogicalDevice, m_PhysicalDevice);
-
-        // Create multiple pipelines if provided in render pass config
-
-        // NE_CORE_ASSERT(!m_renderPassCI.subpasses.empty() && !m_renderPassCI.pipelineCIs.empty() && m_renderPassCI.pipelineCIs.size() == m_renderPassCI.subpasses.size(),
-        //                "Render pass configuration must have at least one subpass and matching pipeline configurations!");
-
-        // Create each pipeline from the configuration
-        // for (size_t i = 0; i < m_renderPassCI.pipelineCIs.size(); ++i) {
-
-        //     const auto &ci           = m_renderPassCI.pipelineCIs[i];
-        //     std::string pipelineName = "Pipeline_" + std::to_string(i);
-
-        //     // Use shader name as pipeline name if available
-        //     if (!ci.shaderCreateInfo.shaderName.empty()) {
-        //         pipelineName = ci.shaderCreateInfo.shaderName;
-        //     }
-
-        //     bool success = m_pipelineManager.createPipeline(pipelineName, ci, m_renderPass.getRenderPass(), m_swapChain.getExtent());
-        //     if (!success) {
-        //         NE_CORE_ERROR("Failed to create pipeline: {}", pipelineName);
-        //     }
-        // }
-
-        // Create triangle rendering resources
-        // createVertexBuffer();
-        // createUniformBuffer();
-
         return true;
     }
 
@@ -309,13 +268,13 @@ struct VulkanRender : public IRender
 
     // Getter methods for 2D renderer access
 
-    VkInstance       getInstance() const { return _instance; }
-    VkSurfaceKHR     getSurface() const { return _surface; }
-    VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
-    VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
-    VulkanSwapChain *getSwapChain() const { return m_swapChain; }
+    [[nodiscard]] VkInstance       getInstance() const { return _instance; }
+    [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
+    [[nodiscard]] VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
+    [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
+    [[nodiscard]] VulkanSwapChain *getSwapChain() const { return m_swapChain; }
 
-    VkPipelineCache getPipelineCache() const { return _pipelineCache; }
+    [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
 
     [[nodiscard]] std::vector<VkCommandBuffer> getCommandBuffers() const { return m_commandBuffers; }
@@ -332,6 +291,24 @@ struct VulkanRender : public IRender
         }
     }
 
+    [[nodiscard]] int32_t getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const;
+
+    std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
+
+    VkCommandBuffer beginIsolateCommands()
+    {
+        VkCommandBuffer ret = VK_NULL_HANDLE;
+        _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, ret);
+        begin(ret, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        return ret;
+    }
+    void endIsolateCommands(VkCommandBuffer commandBuffer)
+    {
+        end(commandBuffer);
+        getGraphicsQueues()[0].submit({commandBuffer});
+        getGraphicsQueues()[0].waitIdle();
+        vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &commandBuffer);
+    }
 
   private:
 
@@ -348,17 +325,6 @@ struct VulkanRender : public IRender
     // void createDepthResources();
     void createCommandBuffers();
 
-
-    // Triangle rendering functions
-    // void createVertexBuffer();
-    // void createUniformBuffer();
-    // void updateUniformBuffer();
-    // void drawTriangle();
-
-    // Missing method declarations
-
-
-
     bool isDeviceSuitable(const std::set<DeviceFeature> &extensions,
                           const std::set<DeviceFeature> &layers,
                           std::vector<const char *>     &extensionNames,
@@ -368,23 +334,6 @@ struct VulkanRender : public IRender
                             std::vector<const char *>     &extensionNames,
                             std::vector<const char *>     &layerNames);
 
-
-
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
-    {
-        VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
-
-        for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
-            if (typeFilter & (1 << i) &&                                                 // vertexbuffer
-                (memProperties.memoryTypes[i].propertyFlags & properties) == properties) // ����
-            {
-                return i;
-            }
-        }
-        panic("failed to find suitable memory type!");
-        return -1;
-    }
 
     bool isFeatureSupported(
         std::string_view                          contextStr,

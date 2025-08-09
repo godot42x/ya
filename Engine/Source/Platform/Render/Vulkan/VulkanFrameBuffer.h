@@ -2,7 +2,9 @@
 #pragma once
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "VulkanImage.h"
 #include <vulkan/vulkan.h>
+
 
 
 struct VulkanFrameBuffer
@@ -12,8 +14,10 @@ struct VulkanFrameBuffer
     uint32_t          width;
     uint32_t          height;
 
-    std::vector<VkImageView> _imageViews;
-    VkFramebuffer            _framebuffer = VK_NULL_HANDLE;
+    std::vector<std::shared_ptr<VulkanImage>> _images;
+    std::vector<VkImageView>                  _imageViews;
+
+    VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 
     VulkanFrameBuffer() = default;
     VulkanFrameBuffer(VulkanRender *render, VulkanRenderPass *renderPass,
@@ -26,7 +30,7 @@ struct VulkanFrameBuffer
     }
     ~VulkanFrameBuffer() {}
 
-    bool recreate(std::vector<VkImage> images, uint32_t width, uint32_t height);
+    bool recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height);
 
     void clean();
 

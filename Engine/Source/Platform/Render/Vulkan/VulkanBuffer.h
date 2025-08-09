@@ -1,27 +1,44 @@
 #pragma once
+#include "Core/Base.h"
 
 #include <vulkan/vulkan.h>
 
 
+
+struct VulkanRender;
+
 struct VulkanBuffer
 {
-    VkBuffer       buffer = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
-    VkDeviceSize   size   = 0;
+    VulkanRender *_render = nullptr;
 
-    // Optional: for staging buffers
-    VkBufferUsageFlags    usageFlags       = 0;
-    VkMemoryPropertyFlags memoryProperties = 0;
+    VkBuffer           _handle     = VK_NULL_HANDLE;
+    VkDeviceMemory     _memory     = VK_NULL_HANDLE;
+    VkBufferUsageFlags _usageFlags = 0;
+    VkDeviceSize       _size       = 0;
 
 
-    VulkanBuffer(uint32_t size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryProperties)
-        : size(size), usageFlags(usageFlags), memoryProperties(memoryProperties)
+
+    virtual ~VulkanBuffer();
+
+    static auto create(VulkanRender *render, VkBufferUsageFlags usage, std::size_t size, void *data = nullptr)
     {
+        auto ret         = std::make_shared<VulkanBuffer>();
+        ret->_render     = render;
+        ret->_usageFlags = usage;
 
-        VkBufferCreateInfo ci{
-            .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size        = size,
-            .usage       = usageFlags,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+
+        ret->createInternal(data, static_cast<uint32_t>(size));
+
+        return ret;
     }
+
+    void createInternal(void *data, uint32_t size);
+
+
+
+    static bool allocateBuffer(VulkanRender *render, uint32_t size,
+                               VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
+                               VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
+
+    static void transferData(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
 };

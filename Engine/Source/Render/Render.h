@@ -56,8 +56,8 @@ extern std::size_t T2Size(T type);
 
 struct VertexAttribute
 {
-    uint32_t                  location;
     uint32_t                  bufferSlot;
+    uint32_t                  location;
     EVertexAttributeFormat::T format;
     uint32_t                  offset;
 };
@@ -352,14 +352,15 @@ enum T
 
 struct AttachmentDescription
 {
-    EFormat::T            format                  = EFormat::Undefined;
-    ESampleCount::T       samples                 = ESampleCount::Sample_1;
-    EAttachmentLoadOp::T  loadOp                  = EAttachmentLoadOp::Clear;
-    EAttachmentStoreOp::T storeOp                 = EAttachmentStoreOp::Store;
-    EAttachmentLoadOp::T  stencilLoadOp           = EAttachmentLoadOp::DontCare;
-    EAttachmentStoreOp::T stencilStoreOp          = EAttachmentStoreOp::DontCare;
-    bool                  bInitialLayoutUndefined = true;
-    bool                  bFinalLayoutPresentSrc  = true; // for color attachments
+    uint32_t              index          = 0;
+    EFormat::T            format         = EFormat::Undefined;
+    ESampleCount::T       samples        = ESampleCount::Sample_1;
+    EAttachmentLoadOp::T  loadOp         = EAttachmentLoadOp::Clear;
+    EAttachmentStoreOp::T storeOp        = EAttachmentStoreOp::Store;
+    EAttachmentLoadOp::T  stencilLoadOp  = EAttachmentLoadOp::DontCare;
+    EAttachmentStoreOp::T stencilStoreOp = EAttachmentStoreOp::DontCare;
+    EImageLayout::T       initialLayout  = EImageLayout::Undefined;
+    EImageLayout::T       finalLayout    = EImageLayout::ColorAttachmentOptimal;
 };
 
 

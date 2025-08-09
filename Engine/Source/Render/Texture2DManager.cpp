@@ -258,11 +258,11 @@ std::shared_ptr<Texture2DManager::Texture2D> Texture2DManager::createVulkanTextu
             vkUnmapMemory(device, stagingBufferMemory);
 
             // Transition image layout and copy from buffer
-            VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             VulkanUtils::copyBufferToImage(device, commandPool, graphicsQueue, stagingBuffer, texture->image, width, height);
 
-            VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
             // Cleanup staging buffer
             vkDestroyBuffer(device, stagingBuffer, nullptr);

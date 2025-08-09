@@ -5,6 +5,9 @@
 #include <vulkan/vulkan.h>
 
 #include "Render/Render.h"
+
+struct VulkanCommandPool;
+
 struct VulkanUtils
 {
     static bool hasStencilComponent(VkFormat format);
@@ -22,8 +25,7 @@ struct VulkanUtils
 
     static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 
-    static void transitionImageLayout(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
-                                      VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    static void transitionImageLayout(VulkanCommandPool *pool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
     static void copyBufferToImage(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
                                   VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -41,6 +43,9 @@ struct VulkanUtils
 
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
+
+    static bool isDepthOnlyFormat(VkFormat format) { return format == VK_FORMAT_D16_UNORM || format == VK_FORMAT_D32_SFLOAT; }
+    static bool isDepthStencilFormat(VkFormat format) { return format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT; }
 };
 
 
@@ -499,12 +504,12 @@ struct std::formatter<VkResult> : std::formatter<std::string>
 
 
 
-#define VK_CALL(x)                                                            \
-    do {                                                                      \
-        VkResult result = (x);                                                \
-        if (result != VK_SUCCESS) {                                           \
+#define VK_CALL(x)                                                              \
+    do {                                                                        \
+        VkResult result = (x);                                                  \
+        if (result != VK_SUCCESS) {                                             \
             NE_CORE_ERROR("Vulkan call" #x ", failed with error: {} ", result); \
-        }                                                                     \
+        }                                                                       \
     } while (0)
 #define VK_CALL_RET(x)                                                         \
     {                                                                          \
@@ -524,28 +529,38 @@ struct std::formatter<VkResult> : std::formatter<std::string>
         obj = VK_NULL_HANDLE;               \
     }
 
-inline auto toVkImageLayout(EImageLayout::T layout) -> VkImageLayout
+#define VK_FREE(t, device, obj)          \
+    if (obj != VK_NULL_HANDLE) {         \
+        vkFree##t(device, obj, nullptr); \
+        obj = VK_NULL_HANDLE;            \
+    }
+
+
+namespace EImageLayout
+{
+inline auto toVk(T layout) -> VkImageLayout
 {
     switch (layout) {
-    case EImageLayout::Undefined:
+    case Undefined:
         return VK_IMAGE_LAYOUT_UNDEFINED;
-    case EImageLayout::ColorAttachmentOptimal:
+    case ColorAttachmentOptimal:
         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    case EImageLayout::DepthStencilAttachmentOptimal:
+    case DepthStencilAttachmentOptimal:
         return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    case EImageLayout::ShaderReadOnlyOptimal:
+    case ShaderReadOnlyOptimal:
         return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    case EImageLayout::TransferSrcOptimal:
+    case TransferSrcOptimal:
         return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    case EImageLayout::TransferDstOptimal:
+    case TransferDstOptimal:
         return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    case EImageLayout::PresentSrcKHR:
+    case PresentSrcKHR:
         return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     default:
         UNREACHABLE();
     }
-    return VK_IMAGE_LAYOUT_UNDEFINED;
-};
+}
+
+}; // namespace EImageLayout
 
 
 

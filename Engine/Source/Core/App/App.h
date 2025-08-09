@@ -46,7 +46,7 @@ struct App
     VulkanQueue  *_firstGraphicsQueue = nullptr;
     VulkanQueue  *_firstPresentQueue  = nullptr;
 
-    int submissionResourceSize = -1;
+    int swapchainImageSize = -1;
 
 
 

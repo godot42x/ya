@@ -9,14 +9,17 @@
 
 
 struct VulkanRender;
+struct VulkanQueue;
 
 
 struct VulkanCommandPool : disable_copy
 {
     VkCommandPool _handle = VK_NULL_HANDLE;
-    VulkanRender *_render = nullptr;
 
-    VulkanCommandPool(VulkanRender *render, uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0);
+    VulkanRender *_render = nullptr;
+    VulkanQueue  *_queue  = nullptr;
+
+    VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, VkCommandPoolCreateFlags flags = 0);
 
     bool allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer &outCommandBuffer);
 
