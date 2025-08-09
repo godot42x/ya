@@ -503,7 +503,7 @@ struct std::formatter<VkResult> : std::formatter<std::string>
     do {                                                                      \
         VkResult result = (x);                                                \
         if (result != VK_SUCCESS) {                                           \
-            NE_CORE_ERROR("Vulkan call" #x "failed with error: {} ", result); \
+            NE_CORE_ERROR("Vulkan call" #x ", failed with error: {} ", result); \
         }                                                                     \
     } while (0)
 #define VK_CALL_RET(x)                                                         \

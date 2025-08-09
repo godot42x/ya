@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 
+#include "Platform/Render/Vulkan/VulkanUtils.h"
 #include "reflect.cc/enum"
 #include <mutex>
 #include <unordered_map>
@@ -18,9 +19,12 @@ struct VulkanDebugUtils
 
     VkDebugUtilsMessengerEXT _debugUtilsMessenger = nullptr;
 
+    VkDevice   _device   = VK_NULL_HANDLE;
     VkInstance _instance = nullptr;
 
-    VulkanDebugUtils(VkInstance instance) : _instance(instance) {}
+    VulkanDebugUtils() = delete;
+    VulkanDebugUtils(VkInstance instance, VkDevice device)
+        : _instance(instance), _device(device) {}
 
     // report is old version api!
     // PFN_vkCreateDebugReportCallbackEXT  pfnCreateDebugReportCallbackEXT  = nullptr;
@@ -36,8 +40,11 @@ struct VulkanDebugUtils
         //     vkGetInstanceProcAddr(m_Instance, "vkCreateDebugReportCallbackEXT");
         // pfnDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
         //     vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
+
+        pfnSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(_instance, "vkSetDebugUtilsObjectNameEXT");
+        NE_CORE_ASSERT(pfnSetDebugUtilsObjectNameEXT, "Failed to load vkSetDebugUtilsObjectNameEXT function!");
     }
-    void create()
+    void rewriteDebugUtils()
     {
         if (!pfnCreateDebugUtilsMessengerEXT) {
             NE_CORE_WARN("Debug utils messenger creation function not available!");
@@ -53,7 +60,7 @@ struct VulkanDebugUtils
 
     void destroy()
     {
-        if (pfnDestroyDebugUtilsMessengerEXT) {
+        if (pfnDestroyDebugUtilsMessengerEXT && _debugUtilsMessenger) {
             pfnDestroyDebugUtilsMessengerEXT(VK_NULL_HANDLE, _debugUtilsMessenger, nullptr);
         }
     }
@@ -158,5 +165,20 @@ struct VulkanDebugUtils
         };
 
         return ci;
+    }
+
+    void setObjectName(VkObjectType objectType, uint64_t objectHandle, const char *name)
+    {
+        VkDebugUtilsObjectNameInfoEXT nameInfo{
+            .sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext        = nullptr,
+            .objectType   = objectType,
+            .objectHandle = objectHandle,
+            .pObjectName  = name,
+        };
+
+        if (pfnSetDebugUtilsObjectNameEXT) {
+            VK_CALL(pfnSetDebugUtilsObjectNameEXT(_device, &nameInfo));
+        }
     }
 };

@@ -43,17 +43,17 @@ struct VulkanRender : public IRender
 
     const std::vector<DeviceFeature> _instanceLayers           = {};
     const std::vector<DeviceFeature> _instanceValidationLayers = {
-        {"VK_LAYER_KHRONOS_validation", true}, // "VK_LAYER_KHRONOS_validation"
+        {.name = "VK_LAYER_KHRONOS_validation", .bRequired = true}, // "VK_LAYER_KHRONOS_validation"
     };
     const std::vector<DeviceFeature> _instanceExtensions = {
-        {VK_KHR_SURFACE_EXTENSION_NAME, true}, // "VK_KHR_surface"
+        {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_surface"
     };
 
     const std::vector<DeviceFeature> _deviceLayers = {
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
     const std::vector<DeviceFeature> _deviceExtensions = {
-        {VK_KHR_SWAPCHAIN_EXTENSION_NAME, true}, // "VK_KHR_swapchain"
+        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_swapchain"
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
 
@@ -169,13 +169,6 @@ struct VulkanRender : public IRender
 
         createInstance();
 
-        if (m_EnableValidationLayers && bSupportDebugUtils)
-        {
-            // preferred default validation layers callback
-            // _debugUtils = std::make_unique<VulkanDebugUtils>(_instance);
-            // _debugUtils->init();
-            // _debugUtils->create();
-        }
 
         createSurface();
 
@@ -188,6 +181,14 @@ struct VulkanRender : public IRender
 
         if (!createLogicDevice(1, 1)) {
             terminate();
+        }
+
+        if (m_EnableValidationLayers && bSupportDebugUtils)
+        {
+            // preferred default validation layers callback
+            _debugUtils = std::make_unique<VulkanDebugUtils>(_instance, m_LogicalDevice);
+            _debugUtils->init();
+            // _debugUtils->create();
         }
 
         m_swapChain = new VulkanSwapChain(this);
@@ -238,9 +239,6 @@ struct VulkanRender : public IRender
         //     }
         // }
 
-        createSemaphores();
-        createFences();
-
         // Create triangle rendering resources
         // createVertexBuffer();
         // createUniformBuffer();
@@ -273,18 +271,6 @@ struct VulkanRender : public IRender
         }
         // m_renderPass.cleanup();
 
-        if (m_inFlightFence)
-        {
-            vkDestroyFence(m_LogicalDevice, m_inFlightFence, nullptr);
-        }
-        if (m_renderFinishedSemaphore)
-        {
-            vkDestroySemaphore(m_LogicalDevice, m_renderFinishedSemaphore, nullptr);
-        }
-        if (m_imageAvailableSemaphore)
-        {
-            vkDestroySemaphore(m_LogicalDevice, m_imageAvailableSemaphore, nullptr);
-        }
         _graphicsCommandPool->cleanup();
         if (_presentCommandPool) {
             _presentCommandPool->cleanup();
@@ -296,7 +282,7 @@ struct VulkanRender : public IRender
 
         if (m_EnableValidationLayers && bSupportDebugUtils)
         {
-            // _debugUtils->destroy();
+            _debugUtils->destroy();
         }
 
         onReleaseSurface.ExecuteIfBound(&(*_instance), &_surface);
@@ -337,8 +323,15 @@ struct VulkanRender : public IRender
     std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
     std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
 
-    [[nodiscard]] VkSemaphore getImageAvailableSemaphore() const { return m_imageAvailableSemaphore; }
-    [[nodiscard]] VkSemaphore getRenderFinishedSemaphore() const { return m_renderFinishedSemaphore; }
+    [[nodiscard]] VulkanDebugUtils *getDebugUtils() const { return _debugUtils.get(); }
+
+    void setDebugObjectName(VkObjectType objectType, uintptr_t objectHandle, const std::string &name)
+    {
+        if (getDebugUtils()) {
+            getDebugUtils()->setObjectName(objectType, objectHandle, name.c_str());
+        }
+    }
+
 
   private:
 
@@ -354,8 +347,6 @@ struct VulkanRender : public IRender
     void createPipelineCache();
     // void createDepthResources();
     void createCommandBuffers();
-    void createSemaphores();
-    void createFences();
 
 
     // Triangle rendering functions

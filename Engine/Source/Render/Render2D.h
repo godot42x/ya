@@ -17,8 +17,8 @@ namespace ya
 struct Render2D
 {
 
-    VulkanRenderPass *renderpass;
-    VulkanPipeline   *pipeline;
+    VulkanRenderPass *renderpass = nullptr;
+    VulkanPipeline   *pipeline   = nullptr;
 
     Render2D()          = default;
     virtual ~Render2D() = default;

@@ -12,6 +12,8 @@ Diagnostics:
                 cppcoreguidelines-avoid-const-or-ref-data-members,
                 cppcoreguidelines-pro-type-union-access,
                 cppcoreguidelines-owning-memory,
+                cppcoreguidelines-avoid-non-const-global-variables,
+                cppcoreguidelines-avoid-do-while,
                 #
                 modernize-use-trailing-return-type,
                 #

@@ -93,6 +93,18 @@ struct VulkanPipeline
         vkCmdBindPipeline(commandBuffer, bindPoint, _pipeline);
     }
 
+    void bindLayoutSets(VkCommandBuffer commandBuffer, uint32_t firstSet = 0, uint32_t setCount = 1, const VkDescriptorSet *pDescriptorSets = nullptr)
+    {
+        UNIMPLEMENTED();
+        vkCmdBindDescriptorSets(commandBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                _pipelineLayout->getHandle(),
+                                firstSet,
+                                setCount,
+                                pDescriptorSets,
+                                0,
+                                nullptr);
+    }
 
 
   private:

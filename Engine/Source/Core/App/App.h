@@ -46,6 +46,10 @@ struct App
     VulkanQueue  *_firstGraphicsQueue = nullptr;
     VulkanQueue  *_firstPresentQueue  = nullptr;
 
+    int submissionResourceSize = -1;
+
+
+
   public:
     static App *create();
     void        init();
@@ -62,7 +66,12 @@ struct App
 
   private:
 
-    void drawTriangle();
+    void onDraw();
+
+
+    void initSemaphoreAndFence();
+    void releaseSemaphoreAndFence();
 };
+
 
 } // namespace Neon

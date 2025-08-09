@@ -24,12 +24,10 @@ class VulkanRenderPass
     VkFormat m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
     VkFormat m_depthFormat          = VK_FORMAT_UNDEFINED;
 
-
-    VulkanPipeline m_pipelineManager;
-
     RenderPassCreateInfo _ci;
 
   public:
+    VulkanRenderPass() = default;
     VulkanRenderPass(VulkanRender *render);
     ~VulkanRenderPass() { cleanup(); }
 

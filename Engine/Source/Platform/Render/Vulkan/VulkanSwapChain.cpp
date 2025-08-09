@@ -282,32 +282,51 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
-    NE_CORE_INFO("Swap chain created with {} images", m_images.size());
+    NE_CORE_INFO("Swapchain finally created with {} images", m_images.size());
 
     return true;
 }
 
 VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex)
 {
-    VkResult ret = vkAcquireNextImageKHR(_render->getLogicalDevice(),
-                                         m_swapChain,
-                                         UINT64_MAX,
-                                         semaphore ? semaphore : VK_NULL_HANDLE,
-                                         fence ? fence : VK_NULL_HANDLE,
-                                         &outImageIndex);
-    if (ret != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to acquire next swap chain image: {}", ret);
+    VkResult result = vkAcquireNextImageKHR(_render->getLogicalDevice(),
+                                            m_swapChain,
+                                            UINT64_MAX,
+                                            semaphore,
+                                            fence,
+                                            &outImageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        NE_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
+        return result;
     }
-    return ret;
+
+    if (result != VK_SUCCESS) {
+        NE_CORE_ERROR("Failed to acquire next image: {}", result);
+        return result;
+    }
+
+    if (fence != VK_NULL_HANDLE) {
+        VK_CALL(vkWaitForFences(_render->getLogicalDevice(),
+                                1,
+                                &fence,
+                                VK_TRUE,
+                                UINT64_MAX));
+        VK_CALL(vkResetFences(_render->getLogicalDevice(),
+                              1,
+                              &fence));
+    }
+
+    return result;
 }
 
-VkResult VulkanSwapChain::presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> semaphores)
+VkResult VulkanSwapChain::presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> waitSemaphores)
 {
     VkPresentInfoKHR presentInfo{
         .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext              = nullptr,
-        .waitSemaphoreCount = static_cast<uint32_t>(semaphores.size()),
-        .pWaitSemaphores    = semaphores.data(),
+        .waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size()),
+        .pWaitSemaphores    = waitSemaphores.data(),
         .swapchainCount     = 1, // ???
         .pSwapchains        = &m_swapChain,
         .pImageIndices      = &imageIndex,

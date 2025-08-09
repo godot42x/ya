@@ -27,27 +27,25 @@ struct VulkanQueue
     }
 
     void submit(const std::vector<VkCommandBuffer> &commandBuffers,
-                const std::vector<VkSemaphore>     &waitSemaphores,
-                const std::vector<VkSemaphore>     &signalSemaphores)
+                const std::vector<VkSemaphore>     &waitSemaphores,   // waiting
+                const std::vector<VkSemaphore>     &signalSemaphores, // trigger/signal semaphore after submission completed
+                VkFence                             fence)
     {
         VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        VkSubmitInfo info{
-            .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext                = nullptr,
-            .waitSemaphoreCount   = static_cast<uint32_t>(waitSemaphores.size()),
-            .pWaitSemaphores      = waitSemaphores.data(),
-            .pWaitDstStageMask    = &waitStageMask,
-            .commandBufferCount   = static_cast<uint32_t>(commandBuffers.size()),
-            .pCommandBuffers      = commandBuffers.data(),
-            .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
-            .pSignalSemaphores    = signalSemaphores.data(),
+        VkSubmitInfo         info{
+                    .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .pNext                = nullptr,
+                    .waitSemaphoreCount   = static_cast<uint32_t>(waitSemaphores.size()),
+                    .pWaitSemaphores      = waitSemaphores.data(),
+                    .pWaitDstStageMask    = &waitStageMask,
+                    .commandBufferCount   = static_cast<uint32_t>(commandBuffers.size()),
+                    .pCommandBuffers      = commandBuffers.data(),
+                    .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
+                    .pSignalSemaphores    = signalSemaphores.data(),
         };
 
-        VK_CALL(vkQueueSubmit(_handle, 1, &info, nullptr));
+        VK_CALL(vkQueueSubmit(_handle, 1, &info, fence));
     }
-
-
 
     [[nodiscard]] VkQueue getHandle() const { return _handle; }
 };

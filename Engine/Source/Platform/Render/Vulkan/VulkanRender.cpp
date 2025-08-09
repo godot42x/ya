@@ -424,7 +424,10 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             return false;
         }
 
-        _graphicsQueues.push_back(VulkanQueue(_graphicsQueueFamily.queueFamilyIndex, i, queue, false));
+        _graphicsQueues.emplace_back(VulkanQueue(_graphicsQueueFamily.queueFamilyIndex, i, queue, false));
+        setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
+                           (uintptr_t)queue,
+                           std::format("GraphicsQueue_{}", i).c_str());
     }
     for (int i = 0; i < presentQueueCount; i++)
     {
@@ -434,7 +437,10 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             NE_CORE_ERROR("Failed to get present queue!");
             return false;
         }
-        _presentQueues.push_back(VulkanQueue(_presentQueueFamily.queueFamilyIndex, i, queue, true));
+        _presentQueues.emplace_back(_presentQueueFamily.queueFamilyIndex, i, queue, true);
+        setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
+                           (uintptr_t)queue,
+                           std::format("PresentQueue_{}", i).c_str());
     }
 
     return true;
@@ -442,7 +448,10 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
 bool VulkanRender::createCommandPool()
 {
-    _graphicsCommandPool = std::make_unique<VulkanCommandPool>(this, _graphicsQueueFamily.queueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+    _graphicsCommandPool = std::make_unique<VulkanCommandPool>(
+        this,
+        _graphicsQueueFamily.queueFamilyIndex,
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     // _presentCommandPool  = std::move(VulkanCommandPool(this, _presentQueueFamily.queueFamilyIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT));
 
 
@@ -480,6 +489,8 @@ void VulkanRender::createPipelineCache()
 void VulkanRender::createCommandBuffers()
 {
 
+    // TODO: command buffer's size is equal to swap chain's image count
+    // so we should move the command buffer owner to swap chain
     int size = getSwapChain()->getImages().size();
     m_commandBuffers.resize(size);
     for (int i = 0; i < size; ++i) {
@@ -492,18 +503,6 @@ void VulkanRender::createCommandBuffers()
 }
 
 
-
-void VulkanRender::createSemaphores()
-{
-    VkSemaphoreCreateInfo semaphoreInfo{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-    };
-    VkResult ret;
-    ret = vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_imageAvailableSemaphore);
-    NE_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
-    ret = vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_renderFinishedSemaphore);
-    NE_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
-}
 
 bool VulkanRender::isFeatureSupported(
     std::string_view                          contextStr,
@@ -597,230 +596,6 @@ bool VulkanRender::isFeatureSupported(
 
 
 
-/*
-void VulkanRender::createVertexBuffer()
-{
-    // Define triangle vertices (centered triangle)
-    m_triangleVertices = {
-        {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}}, // Bottom vertex (red)
-        {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}, // Top left vertex (blue)
-        {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},  // Top right vertex (green)
-    };
-
-    VkDeviceSize bufferSize = sizeof(m_triangleVertices[0]) * m_triangleVertices.size();
-
-    // Create staging buffer
-    VkBuffer       stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-
-    VulkanUtils::createBuffer(
-        m_LogicalDevice,
-        m_PhysicalDevice,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        stagingBuffer,
-        stagingBufferMemory);
-
-    // Copy vertex data to staging buffer
-    void *data;
-    vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, m_triangleVertices.data(), (size_t)bufferSize);
-    vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
-
-    // Create vertex buffer
-    VulkanUtils::createBuffer(
-        m_LogicalDevice,
-        m_PhysicalDevice,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        m_vertexBuffer,
-        m_vertexBufferMemory);
-
-    // Copy from staging buffer to vertex buffer
-    VulkanUtils::copyBuffer(m_LogicalDevice,
-                            m_commandPool,
-                            m_GraphicsQueue,
-                            stagingBuffer,
-                            m_vertexBuffer,
-                            bufferSize);
-
-    // Cleanup staging buffer
-    vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
-    vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
-}
-
-void VulkanRender::createUniformBuffer()
-{
-    VkDeviceSize bufferSize = sizeof(CameraData);
-
-    VulkanUtils::createBuffer(
-        m_LogicalDevice,
-        m_PhysicalDevice,
-        bufferSize,
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_uniformBuffer,
-        m_uniformBufferMemory);
-
-    // Map the uniform buffer memory so we can update it
-    vkMapMemory(m_LogicalDevice, m_uniformBufferMemory, 0, bufferSize, 0, &m_uniformBufferMapped);
-}
-
-void VulkanRender::updateUniformBuffer()
-{
-    CameraData ubo{};
-    ubo.viewProjection = glm::mat4(1.0f); // Identity matrix for now (no transformation)
-
-    memcpy(m_uniformBufferMapped, &ubo, sizeof(ubo));
-}
-
-void VulkanRender::drawTriangle()
-{
-    // Wait for previous frame
-    vkWaitForFences(m_LogicalDevice, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences(m_LogicalDevice, 1, &m_inFlightFence);
-
-    // Acquire next image
-    uint32_t imageIndex;
-    VkResult result = m_swapChain.acquireNextImage(imageIndex, m_imageAvailableSemaphore);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreateSwapChain();
-        return;
-    }
-    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        NE_CORE_ASSERT(false, "Failed to acquire swap chain image!");
-    }
-
-    // Update uniform buffer
-    updateUniformBuffer();
-
-    // Reset and begin command buffer
-    VkCommandBuffer commandBuffer = m_commandBuffers[imageIndex];
-    vkResetCommandBuffer(commandBuffer, 0);
-
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "Failed to begin recording command buffer!");
-    }
-
-    // Begin render pass
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    // renderPassInfo.renderPass        = m_renderPass.getRenderPass();
-    // renderPassInfo.framebuffer       = m_renderPass.getFramebuffers()[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_swapChain.getExtent();
-
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color        = {{1.0f, 0.0f, 1.0f, 1.0f}}; // Clear color: black
-    clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
-
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-    renderPassInfo.pClearValues    = clearValues.data();
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    // Bind graphics pipeline - use the first available pipeline or a specific one
-    FName pipelineName = "DefaultTriangle"; // Default name
-    if (!m_pipelineManager.hasPipeline(pipelineName)) {
-        // Get the first available pipeline
-        auto pipelineNames = m_pipelineManager.getPipelineNames();
-        if (!pipelineNames.empty()) {
-            pipelineName = pipelineNames[0];
-        }
-        else {
-            NE_CORE_ERROR("No pipelines available for rendering!");
-            return;
-        }
-    }
-
-    if (!m_pipelineManager.bindPipeline(commandBuffer, pipelineName)) {
-        NE_CORE_ERROR("Failed to bind pipeline: {}", pipelineName);
-        return;
-    }
-
-    // Bind descriptor sets for the active pipeline
-    m_pipelineManager.bindDescriptorSets(commandBuffer, pipelineName);
-
-#if 1 // need to set the vulkan dynamic state, see VkPipelineDynamicStateCreateInfo
-    // Set viewport
-    VkViewport viewport{};
-    viewport.x        = 0.0f;
-    viewport.y        = 0.0f;
-    viewport.width    = static_cast<float>(m_swapChain.getExtent().width);
-    viewport.height   = static_cast<float>(m_swapChain.getExtent().height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-
-    // Set scissor
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = m_swapChain.getExtent();
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-#endif
-
-    // Bind vertex buffer
-    VkBuffer     vertexBuffers[] = {m_vertexBuffer};
-    VkDeviceSize offsets[]       = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-
-    // Draw triangle
-    vkCmdDraw(commandBuffer, static_cast<uint32_t>(m_triangleVertices.size()), 1, 0, 0);
-
-
-#if 1 // multiple renderpass
-    // vkCmdNextSubpass2()
-    // vkCmdNextSubpass()
-#endif
-
-    // End render pass and command buffer
-    vkCmdEndRenderPass(commandBuffer);
-
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "Failed to record command buffer!");
-    }
-
-    // Submit command buffer
-    VkSemaphore          waitSemaphores[]   = {m_imageAvailableSemaphore};
-    VkPipelineStageFlags waitStages[]       = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    VkSemaphore          signalSemaphores[] = {m_renderFinishedSemaphore};
-
-
-    VkSubmitInfo submitInfo{
-        .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount   = 1,
-        .pWaitSemaphores      = waitSemaphores,
-        .pWaitDstStageMask    = waitStages,
-        .commandBufferCount   = 1,
-        .pCommandBuffers      = &commandBuffer,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores    = signalSemaphores,
-    };
-
-
-    if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "Failed to submit draw command buffer!");
-    }
-
-    // Present
-    result = m_swapChain.presentImage(imageIndex, m_renderFinishedSemaphore, m_PresentQueue);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        recreateSwapChain();
-    }
-    else if (result != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "Failed to present swap chain image!");
-    }
-}
-    */
-
 void VulkanRender::recreateSwapChain()
 {
     vkDeviceWaitIdle(m_LogicalDevice);
@@ -845,16 +620,4 @@ void VulkanRender::recreateSwapChain()
     // m_pipelineManager.recreateAllPipelines(m_renderPass.getRenderPass(), m_swapChain.getExtent());
 
     NE_CORE_INFO("Swap chain and all pipelines recreated successfully");
-}
-
-void VulkanRender::createFences()
-{
-    VkFenceCreateInfo fenceInfo{
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .flags = VK_FENCE_CREATE_SIGNALED_BIT // Start in signaled state
-    };
-
-    if (vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_inFlightFence) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "failed to create fence!");
-    }
 }
