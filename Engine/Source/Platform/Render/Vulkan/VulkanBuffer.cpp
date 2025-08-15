@@ -20,37 +20,35 @@ void VulkanBuffer::createInternal(void *data, uint32_t size)
     VkBuffer       stageBuffer       = nullptr;
     VkDeviceMemory stageBufferMemory = nullptr;
 
-    VulkanBuffer::allocateBuffer(_render,
-                                 static_cast<uint32_t>(size),
-                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                 _usageFlags,
-                                 stageBuffer,
-                                 stageBufferMemory);
+    VulkanBuffer::allocate(_render,
+                           static_cast<uint32_t>(size),
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           stageBuffer,
+                           stageBufferMemory);
 
     void *mappedData = nullptr;
     VK_CALL(vkMapMemory(_render->getLogicalDevice(), stageBufferMemory, 0, size, 0, &mappedData));
     std::memcpy(mappedData, data, size);
     vkUnmapMemory(_render->getLogicalDevice(), stageBufferMemory);
 
-    VulkanBuffer::allocateBuffer(_render,
-                                 static_cast<uint32_t>(size),
-                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                 _usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                 _handle,
-                                 _memory);
+    VulkanBuffer::allocate(_render,
+                           static_cast<uint32_t>(size),
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           _usageFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           _handle,
+                           _memory);
 
-    VulkanBuffer::transferData(_render, stageBuffer, _handle, size);
+    VulkanBuffer::transfer(_render, stageBuffer, _handle, size);
 
     VK_DESTROY(Buffer, _render->getLogicalDevice(), stageBuffer);
     VK_FREE(Memory, _render->getLogicalDevice(), stageBufferMemory);
 }
 
-bool VulkanBuffer::allocateBuffer(VulkanRender *render, uint32_t size,
-                                  VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
-                                  VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
+bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
+                            VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
+                            VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
 {
-
-
     VkBufferCreateInfo bufferCreateInfo{
         .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext       = nullptr,
@@ -82,7 +80,7 @@ bool VulkanBuffer::allocateBuffer(VulkanRender *render, uint32_t size,
     return true;
 }
 
-void VulkanBuffer::transferData(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
+void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
 {
 
     VkCommandBuffer cmdBuf = render->beginIsolateCommands();
@@ -93,6 +91,7 @@ void VulkanBuffer::transferData(VulkanRender *render, VkBuffer srcBuffer, VkBuff
     //     srcBuffer,
     //     VK_IMAGE_LAYOUT_UNDEFINED,
     //     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
 
     VkBufferCopy copyRegion{
         .srcOffset = 0,

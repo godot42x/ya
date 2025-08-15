@@ -420,16 +420,18 @@ struct MultisampleState
     bool            bAlphaToOneEnable      = false;
 };
 
+// 把NDC（-1，1） 转化为屏幕坐标
 struct Viewport
 {
     float x        = 0.0f;
     float y        = 0.0f;
-    float width    = 0.0f;
-    float height   = 0.0f;
+    float width    = 5.0f;
+    float height   = 5.0f;
     float minDepth = 0.0f;
-    float maxDepth = 1.0f;
+    float maxDepth = 5.0f;
 };
 
+// limit render in specific area, clip
 struct Scissor
 {
     int32_t  offsetX = 0;
@@ -626,4 +628,25 @@ struct IRender
 
     virtual bool init(const InitParams &params) = 0;
     virtual void destroy()                      = 0;
+};
+
+
+struct ImageCreateInfo
+{
+    EFormat::T format = EFormat::Undefined;
+    struct
+    {
+        uint32_t width  = 0;
+        uint32_t height = 0;
+        uint32_t depth  = 1;
+    } extent;
+    uint32_t        mipLevels             = 1;
+    ESampleCount::T samples               = ESampleCount::Sample_1;
+    EImageUsage::T  usage                 = EImageUsage::Sampled | EImageUsage::TransferDst;
+    ESharingMode::T sharingMode           = {};
+    uint32_t        queueFamilyIndexCount = 0;
+    const uint32_t *pQueueFamilyIndices   = nullptr;
+    EImageLayout::T initialLayout         = EImageLayout::Undefined;
+    // TODO: manual conversion
+    // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };

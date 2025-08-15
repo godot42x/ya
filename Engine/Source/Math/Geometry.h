@@ -19,9 +19,10 @@ struct Vertex
 struct GeometryUtils
 {
 
-    static void createCube(
+    static void makeCube(
         float leftPlane, float rightPlane, float bottomPlane, float topPlane, float nearPlane, float farPlane,
         std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices,
-        bool bUseTexcoords = false, bool useNormals = false);
+        bool bGenTexcoords = false,
+        bool bGenNormals = false, glm::mat4 transform = glm::mat4(1.0f));
 };
 }; // namespace ya

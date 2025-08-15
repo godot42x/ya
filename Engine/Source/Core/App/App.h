@@ -64,6 +64,8 @@ struct App
 
     static App *get() { return _instance; }
 
+    void onUpdate(float dt);
+
   private:
 
     void onDraw();

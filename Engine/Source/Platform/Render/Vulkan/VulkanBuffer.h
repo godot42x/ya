@@ -32,13 +32,17 @@ struct VulkanBuffer
         return ret;
     }
 
+
     void createInternal(void *data, uint32_t size);
 
 
 
-    static bool allocateBuffer(VulkanRender *render, uint32_t size,
-                               VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
-                               VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
+    static bool allocate(VulkanRender *render, uint32_t size,
+                         VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
+                         VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
 
-    static void transferData(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
+    // do a copy pass
+    static void transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
+
+    [[nodiscard]] VkBuffer getHandle() const { return _handle; }
 };

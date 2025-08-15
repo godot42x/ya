@@ -1,9 +1,16 @@
 #include "Geometry.h"
+#include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
-void ya::GeometryUtils::createCube(
+
+namespace ya
+{
+
+void GeometryUtils::makeCube(
     float leftPlane, float rightPlane, float bottomPlane, float topPlane, float nearPlane, float farPlane,
     std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices,
-    bool bGenTexcoords, bool bGenNormals)
+    bool bGenTexcoords,
+    bool bGenNormals, glm::mat4 transform)
 {
 
     // to generate each vertex's normal or texcoord, we need not only 8 vertices
@@ -69,6 +76,12 @@ void ya::GeometryUtils::createCube(
     };
     // clang-format on
 
+    // Apply transform to all vertex positions
+    for (auto &vertex : outVertices) {
+        glm::vec4 transformedPos = transform * glm::vec4(vertex.position, 1.0f);
+        vertex.position          = glm::vec3(transformedPos);
+    }
+
 
 
     if (bGenTexcoords) {
@@ -81,17 +94,33 @@ void ya::GeometryUtils::createCube(
     }
 
     if (bGenNormals) {
-        // generate normal for each face from a view and model matrix
-        for (int i = 0; i < outVertices.size(); i += 4) {
-            UNIMPLEMENTED();
-            // glm::vec3 v0     = outVertices[i + 1].position - outVertices[i + 0].position;
-            // glm::vec3 v1     = outVertices[i + 3].position - outVertices[i + 0].position;
-            // glm::vec3 normal = glm::normalize(glm::cross(v0, v1));
+        // Calculate normal matrix (inverse transpose of transform matrix)
+        glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(transform)));
 
-            // outVertices[i + 0].normal = glm::vec4(normal, 0.0f);
-            // outVertices[i + 1].normal = glm::vec4(normal, 0.0f);
-            // outVertices[i + 2].normal = glm::vec4(normal, 0.0f);
-            // outVertices[i + 3].normal = glm::vec4(normal, 0.0f);
+        // Face normals in local space
+        std::vector<glm::vec3> faceNormals = {
+            glm::vec3(0.0f, 0.0f, -1.0f), // Front face
+            glm::vec3(1.0f, 0.0f, 0.0f),  // Right face
+            glm::vec3(0.0f, 1.0f, 0.0f),  // Top face
+            glm::vec3(-1.0f, 0.0f, 0.0f), // Left face
+            glm::vec3(0.0f, -1.0f, 0.0f), // Bottom face
+            glm::vec3(0.0f, 0.0f, 1.0f)   // Back face
+        };
+
+        // Apply normal matrix to transform normals and assign to vertices
+        for (int face = 0; face < 6; ++face) {
+            glm::vec3 transformedNormal = glm::normalize(normalMatrix * faceNormals[face]);
+            glm::vec4 normal4           = glm::vec4(transformedNormal, 0.0f);
+
+            int baseIndex                     = face * 4;
+            outVertices[baseIndex + 0].normal = normal4;
+            outVertices[baseIndex + 1].normal = normal4;
+            outVertices[baseIndex + 2].normal = normal4;
+            outVertices[baseIndex + 3].normal = normal4;
         }
     }
 }
+
+
+
+} // namespace ya

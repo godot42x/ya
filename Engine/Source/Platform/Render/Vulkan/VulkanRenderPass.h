@@ -50,6 +50,8 @@ class VulkanRenderPass
     void begin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues);
     void end(VkCommandBuffer commandBuffer);
 
+    [[nodiscard]] RenderPassCreateInfo getCI() const { return _ci; }
+
 
   private:
 

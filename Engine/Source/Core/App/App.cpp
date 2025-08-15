@@ -1,4 +1,5 @@
 #include "App.h"
+#include "Core/EditorCamera.h"
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 
@@ -52,6 +53,11 @@ static uint32_t currentFrame = 0;
 
 std::shared_ptr<VulkanBuffer> vertexBuffer;
 std::shared_ptr<VulkanBuffer> indexBuffer;
+uint32_t                      indexSize = -1;
+
+glm::mat4 matModel;
+
+EditorCamera camera;
 
 void App::init()
 {
@@ -173,21 +179,22 @@ void App::init()
         std::vector<std::shared_ptr<VulkanImage>> fbAttachments = {
             // color attachment
             VulkanImage::from(vkRender, images[i], surfaceFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
-            VulkanImage::create(vkRender,
-                                VulkanImage::CreateInfo{
-                                    .format = DEPTH_FORMAT,
-                                    .extent = {
-                                        .width  = vkSwapChain->getWidth(),
-                                        .height = vkSwapChain->getHeight(),
-                                        .depth  = 1,
-                                    },
-                                    .mipLevels     = 1,
-                                    .samples       = ESampleCount::Sample_1,
-                                    .usage         = EImageUsage::DepthStencilAttachment,
-                                    .sharingMode   = ESharingMode::Exclusive,
-                                    .initialLayout = EImageLayout::Undefined,
-                                    // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                                }),
+            VulkanImage::create(
+                vkRender,
+                ImageCreateInfo{
+                    .format = DEPTH_FORMAT,
+                    .extent = {
+                        .width  = vkSwapChain->getWidth(),
+                        .height = vkSwapChain->getHeight(),
+                        .depth  = 1,
+                    },
+                    .mipLevels     = 1,
+                    .samples       = ESampleCount::Sample_1,
+                    .usage         = EImageUsage::DepthStencilAttachment,
+                    .sharingMode   = ESharingMode::Exclusive,
+                    .initialLayout = EImageLayout::Undefined,
+                    // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                }),
         };
 
         frameBuffers[i].recreate(fbAttachments, vkSwapChain->getWidth(), vkSwapChain->getHeight());
@@ -221,8 +228,8 @@ void App::init()
         //                 .stageFlags      = EShaderStage::Vertex,
         //             },
         //         },
-        //     },
-        // },
+        //             },
+        // } ,
     });
 
     /**
@@ -245,10 +252,9 @@ void App::init()
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
-            .shaderName        = "HelloBuffer.glsl",
+            .shaderName        = "HelloCube.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
-                // pos
                 VertexBufferDescription{
                     .slot  = 0,
                     .pitch = sizeof(ya::Vertex),
@@ -305,19 +311,74 @@ void App::init()
                 },
             },
         },
-        .viewportState = ViewportState{},
+        .viewportState = ViewportState{
+            .viewports = {
+                {
+                    .x        = 0,
+                    .y        = 0,
+                    .width    = static_cast<float>(vkRender->getSwapChain()->getWidth()),
+                    .height   = static_cast<float>(vkRender->getSwapChain()->getHeight()),
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                },
+            },
+            .scissors = {Scissor{
+                .offsetX = 0,
+                .offsetY = 0,
+                .width   = static_cast<uint32_t>(vkRender->getSwapChain()->getWidth()),
+                .height  = static_cast<uint32_t>(vkRender->getSwapChain()->getHeight()),
+            }},
+        },
     });
 
     _firstGraphicsQueue = &vkRender->getGraphicsQueues()[0];
     _firstPresentQueue  = &vkRender->getPresentQueues()[0];
 
     initSemaphoreAndFence();
+
+
+    std::vector<ya::Vertex> vertices;
+    std::vector<uint32_t>   indices;
+    ya::GeometryUtils::makeCube(
+        -0.5,
+        0.5,
+        -0.5,
+        0.5,
+        -0.5,
+        0.5,
+        vertices,
+        indices,
+        true,
+        true);
+
+    vertexBuffer = VulkanBuffer::create(
+        vkRender,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        sizeof(vertices[0]) * vertices.size(),
+        vertices.data());
+    indexBuffer = VulkanBuffer::create(
+        vkRender,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        sizeof(indices[0]) * indices.size(),
+        indices.data());
+    indexSize = static_cast<uint32_t>(indices.size());
+
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)vertexBuffer->getHandle(), "VertexBuffer");
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)indexBuffer->getHandle(), "IndexBuffer");
+
+    matModel = glm::mat4(1.0f);
+    camera.setPosition(glm::vec3(0.0f, 0.0f, -3.0f));
+    camera.setRotation(glm::vec3(0.0f, 180.0f, 0.0f));
+    camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 }
 
 void Neon::App::quit()
 {
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
+
+    vertexBuffer.reset();
+    indexBuffer.reset();
 
     releaseSemaphoreAndFence();
 
@@ -521,10 +582,26 @@ int Neon::App::onEvent(SDL_Event &event)
 
 int Neon::App::iterate(float dt)
 {
-    inputManager.update();
 
+    onUpdate(dt);
     onDraw();
     return 0;
+}
+
+void App::onUpdate(float dt)
+{
+    inputManager.update();
+    static float degree = 0;
+    degree              = glm::clamp(degree + 1, 0.0f, 180.0f);
+    float rDegree       = glm::radians(degree);
+
+    // auto rotation by up-down and left-right
+    // glm::quat rotation = glm::quat(rDegree, rDegree, rDegree, degree);
+    // glm::mat4 rot      = glm::mat4_cast(rotation);
+
+    // matModel = rot * matModel;
+
+    camera.update(inputManager, dt);
 }
 
 void App::onDraw()
@@ -564,15 +641,19 @@ void App::onDraw()
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    std::vector<VkClearValue> clearValues{};
-    clearValues.resize(1);
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}}; // Clear color: black
-    // clearValues[1].depthStencil = {1.0f, 0};                  // Clear depth to 1.0
+    std::vector<VkClearValue> clearValues{
+        VkClearValue{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}}, // Clear color: black
+        VkClearValue{.depthStencil = {1.0f, 0}},           // Clear depth to 1.0
+    };
+
+    NE_CORE_ASSERT(
+        clearValues.size() == renderpass->getCI().attachments.size(),
+        "Clear values count must match attachment count!");
 
     renderpass->begin(curCmdBuf,
                       frameBuffers[imageIndex].getHandle(),
                       vkRender->getSwapChain()->getExtent(),
-                      {clearValues.begin(), clearValues.end()});
+                      std::move(clearValues));
 
 
     // 4. bind descriptor sets,
@@ -617,13 +698,36 @@ void App::onDraw()
     // vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 #endif
 
-    //     // Bind vertex buffer
-    //     VkBuffer     vertexBuffers[] = {m_vertexBuffer};
-    //     VkDeviceSize offsets[]       = {0};
-    //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    // push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
+    auto mat = camera.getViewProjectionMatrix() * matModel;
+    vkCmdPushConstants(curCmdBuf,
+                       defaultPipelineLayout->getHandle(),
+                       VK_SHADER_STAGE_VERTEX_BIT,
+                       0,
+                       sizeof(glm::mat4),
+                       glm::value_ptr(mat));
+
+    // Bind vertex buffer
+    VkBuffer vertexBuffers[] = {vertexBuffer->getHandle()};
+    // current no need to support subbuffer
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(curCmdBuf, 0, 1, vertexBuffers, offsets);
+
+    vkCmdBindIndexBuffer(curCmdBuf,
+                         indexBuffer->getHandle(),
+                         0,
+                         VK_INDEX_TYPE_UINT32);
 
     // 8. draw triangle
-    vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
+
+    // vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
+    vkCmdDrawIndexed(curCmdBuf,
+                     indexSize, // index count
+                     10,        // instance count
+                     0,         // first index
+                     0,         // vertex offset, this for merge vertex buffer?
+                     0          // first instance
+    );
 
 
 

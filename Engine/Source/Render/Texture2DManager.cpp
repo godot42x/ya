@@ -176,109 +176,110 @@ bool Texture2DManager::createWhiteTexture()
 
 std::shared_ptr<Texture2DManager::Texture2D> Texture2DManager::createVulkanTexture(const void *data, uint32_t width, uint32_t height, uint32_t channels)
 {
-    auto app = Neon::App::get();
-    if (!app)
-        return nullptr;
+    // auto app = Neon::App::get();
+    // if (!app)
+    //     return nullptr;
 
-    auto _render = static_cast<VulkanRender *>(app->getRender());
-    if (!_render)
-        return nullptr;
+    // auto _render = static_cast<VulkanRender *>(app->getRender());
+    // if (!_render)
+    //     return nullptr;
 
-    VkDevice         device         = _render->getLogicalDevice();
-    VkPhysicalDevice physicalDevice = _render->getPhysicalDevice();
-    VkCommandPool    commandPool    = VK_NULL_HANDLE;
-    // _render->getCommandPool();
-    UNIMPLEMENTED();
-    VkQueue graphicsQueue = nullptr; // _render->getGraphicsQueue();
+    // VkDevice         device         = _render->getLogicalDevice();
+    // VkPhysicalDevice physicalDevice = _render->getPhysicalDevice();
+    // VkCommandPool    commandPool    = VK_NULL_HANDLE;
+    // // _render->getCommandPool();
+    // UNIMPLEMENTED();
+    // VkQueue graphicsQueue = nullptr; // _render->getGraphicsQueue();
 
-    auto texture       = std::make_shared<Texture2D>();
-    texture->width     = width;
-    texture->height    = height;
-    texture->channels  = channels;
-    texture->textureId = s_nextTextureId++;
+    // auto texture       = std::make_shared<Texture2D>();
+    // texture->width     = width;
+    // texture->height    = height;
+    // texture->channels  = channels;
+    // texture->textureId = s_nextTextureId++;
 
-    // Convert channels to Vulkan format
-    VkFormat format = VK_FORMAT_R8G8B8A8_UNORM; // Default to RGBA
-    switch (channels) {
-    case 1:
-        format = VK_FORMAT_R8_UNORM;
-        break;
-    case 3:
-        format = VK_FORMAT_R8G8B8_UNORM;
-        break;
-    case 4:
-        format = VK_FORMAT_R8G8B8A8_UNORM;
-        break;
-    }
+    // // Convert channels to Vulkan format
+    // VkFormat format = VK_FORMAT_R8G8B8A8_UNORM; // Default to RGBA
+    // switch (channels) {
+    // case 1:
+    //     format = VK_FORMAT_R8_UNORM;
+    //     break;
+    // case 3:
+    //     format = VK_FORMAT_R8G8B8_UNORM;
+    //     break;
+    // case 4:
+    //     format = VK_FORMAT_R8G8B8A8_UNORM;
+    //     break;
+    // }
 
-    try {
-        // Create image
-        VulkanUtils::createImage(device, physicalDevice, width, height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture->image, texture->memory);
+    // try {
+    //     // Create image
+    //     VulkanUtils::createImage(device, physicalDevice, width, height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, texture->image, texture->memory);
 
-        // Create image view
-        texture->imageView = VulkanUtils::createImageView(device, texture->image, format, VK_IMAGE_ASPECT_COLOR_BIT);
+    //     // Create image view
+    //     texture->imageView = VulkanUtils::createImageView(device, texture->image, format, VK_IMAGE_ASPECT_COLOR_BIT);
 
-        // Create sampler
-        VkSamplerCreateInfo samplerInfo{};
-        samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        samplerInfo.magFilter               = VK_FILTER_LINEAR;
-        samplerInfo.minFilter               = VK_FILTER_LINEAR;
-        samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        samplerInfo.anisotropyEnable        = VK_FALSE;
-        samplerInfo.maxAnisotropy           = 1.0f;
-        samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-        samplerInfo.unnormalizedCoordinates = VK_FALSE;
-        samplerInfo.compareEnable           = VK_FALSE;
-        samplerInfo.compareOp               = VK_COMPARE_OP_ALWAYS;
-        samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        samplerInfo.mipLodBias              = 0.0f;
-        samplerInfo.minLod                  = 0.0f;
-        samplerInfo.maxLod                  = 0.0f;
+    //     // Create sampler
+    //     VkSamplerCreateInfo samplerInfo{};
+    //     samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    //     samplerInfo.magFilter               = VK_FILTER_LINEAR;
+    //     samplerInfo.minFilter               = VK_FILTER_LINEAR;
+    //     samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    //     samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    //     samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    //     samplerInfo.anisotropyEnable        = VK_FALSE;
+    //     samplerInfo.maxAnisotropy           = 1.0f;
+    //     samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    //     samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    //     samplerInfo.compareEnable           = VK_FALSE;
+    //     samplerInfo.compareOp               = VK_COMPARE_OP_ALWAYS;
+    //     samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    //     samplerInfo.mipLodBias              = 0.0f;
+    //     samplerInfo.minLod                  = 0.0f;
+    //     samplerInfo.maxLod                  = 0.0f;
 
-        if (vkCreateSampler(device, &samplerInfo, nullptr, &texture->sampler) != VK_SUCCESS) {
-            NE_CORE_ERROR("Failed to create texture sampler");
-            return nullptr;
-        }
+    //     if (vkCreateSampler(device, &samplerInfo, nullptr, &texture->sampler) != VK_SUCCESS) {
+    //         NE_CORE_ERROR("Failed to create texture sampler");
+    //         return nullptr;
+    //     }
 
-        // Upload texture data if provided
-        if (data) {
-            VkDeviceSize imageSize = width * height * channels;
+    //     // Upload texture data if provided
+    //     if (data) {
+    //         VkDeviceSize imageSize = width * height * channels;
 
-            // Create staging buffer
-            VkBuffer       stagingBuffer;
-            VkDeviceMemory stagingBufferMemory;
-            VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    //         // Create staging buffer
+    //         VkBuffer       stagingBuffer;
+    //         VkDeviceMemory stagingBufferMemory;
+    //         VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-            // Copy data to staging buffer
-            void *stagingData;
-            vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &stagingData);
-            memcpy(stagingData, data, static_cast<size_t>(imageSize));
-            vkUnmapMemory(device, stagingBufferMemory);
+    //         // Copy data to staging buffer
+    //         void *stagingData;
+    //         vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &stagingData);
+    //         memcpy(stagingData, data, static_cast<size_t>(imageSize));
+    //         vkUnmapMemory(device, stagingBufferMemory);
 
-            // Transition image layout and copy from buffer
-            // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    //         // Transition image layout and copy from buffer
+    //         // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-            VulkanUtils::copyBufferToImage(device, commandPool, graphicsQueue, stagingBuffer, texture->image, width, height);
+    //         VulkanUtils::copyBufferToImage(device, commandPool, graphicsQueue, stagingBuffer, texture->image, width, height);
 
-            // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    //         // VulkanUtils::transitionImageLayout(device, commandPool, graphicsQueue, texture->image, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-            // Cleanup staging buffer
-            vkDestroyBuffer(device, stagingBuffer, nullptr);
-            vkFreeMemory(device, stagingBufferMemory, nullptr);
-        }
+    //         // Cleanup staging buffer
+    //         vkDestroyBuffer(device, stagingBuffer, nullptr);
+    //         vkFreeMemory(device, stagingBufferMemory, nullptr);
+    //     }
 
-        // Add to texture array
-        if (texture->textureId < s_textureArray.size()) {
-            s_textureArray[texture->textureId] = texture;
-        }
+    //     // Add to texture array
+    //     if (texture->textureId < s_textureArray.size()) {
+    //         s_textureArray[texture->textureId] = texture;
+    //     }
 
-        NE_CORE_INFO("Created texture {}x{} with ID {}", width, height, texture->textureId);
-        return texture;
-    }
-    catch (const std::exception &e) {
-        NE_CORE_ERROR("Failed to create Vulkan texture: {}", e.what());
-        return nullptr;
-    }
+    //     NE_CORE_INFO("Created texture {}x{} with ID {}", width, height, texture->textureId);
+    //     return texture;
+    // }
+    // catch (const std::exception &e) {
+    //     NE_CORE_ERROR("Failed to create Vulkan texture: {}", e.what());
+    //     return nullptr;
+    // }
+    return {};
 }

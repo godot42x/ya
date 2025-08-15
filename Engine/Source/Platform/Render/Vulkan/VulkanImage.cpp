@@ -27,6 +27,7 @@ bool VulkanImage::allocate()
                .depth  = _ci->extent.depth,
         },
         .mipLevels             = _ci->mipLevels,
+        .arrayLayers           = 1,
         .samples               = toVk(_ci->samples),
         .tiling                = VK_IMAGE_TILING_OPTIMAL,
         .usage                 = _usageFlags,

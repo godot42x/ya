@@ -13,7 +13,7 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
 
     std::vector<VkPushConstantRange> ranges;
     for (const auto &pushConstant : _ci.pushConstants) {
-        ranges.push_back({
+        ranges.push_back(VkPushConstantRange{
             .stageFlags = toVk(pushConstant.stageFlags),
             .offset     = pushConstant.offset,
             .size       = pushConstant.size,
@@ -24,7 +24,7 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
     std::vector<VkDescriptorSetLayoutBinding> bindings = {};
     for (const auto &setLayout : _ci.descriptorSetLayouts) {
         for (const auto &binding : setLayout.bindings) {
-            bindings.push_back({
+            bindings.push_back(VkDescriptorSetLayoutBinding{
                 .binding            = binding.binding,
                 .descriptorType     = toVk(binding.descriptorType),
                 .descriptorCount    = binding.descriptorCount,
@@ -292,24 +292,32 @@ void VulkanPipeline::createPipelineInternal()
     };
 
 
-    VkViewport defaultViewport{
-        .x        = 0.0f,
-        .y        = 0.0f,
-        .width    = 100.f,
-        .height   = 100.f,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    VkRect2D defaultScissor{
-        .offset = {0, 0},
-        .extent = {100, 100},
-    };
+    std::vector<VkViewport> viewports;
+    for (const auto &viewport : _ci.viewportState.viewports) {
+        viewports.push_back({
+            .x        = viewport.x,
+            .y        = viewport.y,
+            .width    = viewport.width,
+            .height   = viewport.height,
+            .minDepth = viewport.minDepth,
+            .maxDepth = viewport.maxDepth,
+        });
+    }
+    std::vector<VkRect2D> scissors;
+    for (const auto &scissor : _ci.viewportState.scissors) {
+        scissors.push_back({
+            .offset = {scissor.offsetX, scissor.offsetY},
+            .extent = {scissor.width, scissor.height},
+        });
+    }
     VkPipelineViewportStateCreateInfo viewportStateCI{
         .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .pViewports    = &defaultViewport,
-        .scissorCount  = 1,
-        .pScissors     = &defaultScissor,
+        .pNext         = nullptr,
+        .flags         = 0,
+        .viewportCount = static_cast<uint32_t>(viewports.size()),
+        .pViewports    = viewports.data(),
+        .scissorCount  = static_cast<uint32_t>(scissors.size()),
+        .pScissors     = scissors.data(),
     };
 
     VkPipelineRasterizationStateCreateInfo rasterizationStateCI{

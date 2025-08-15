@@ -130,8 +130,8 @@ VkImageView VulkanUtils::createImageView(VkDevice device, VkImage image, VkForma
         },
     };
 
-    VkImageView imageView;
-    VkResult    result = vkCreateImageView(device, &createInfo, nullptr, &imageView);
+    VkImageView imageView = VK_NULL_HANDLE;
+    VkResult    result    = vkCreateImageView(device, &createInfo, nullptr, &imageView);
     NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create image view!");
 
     return imageView;
@@ -146,7 +146,7 @@ VkCommandBuffer VulkanUtils::beginSingleTimeCommands(VkDevice device, VkCommandP
         .commandBufferCount = 1,
     };
 
-    VkCommandBuffer commandBuffer;
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{

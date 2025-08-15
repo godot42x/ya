@@ -13,12 +13,11 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
     _imageViews.resize(images.size());
     for (int i = 0; i < images.size(); i++)
     {
-        auto format    = _images[i]->getFormat();
-        bool bDepth    = VulkanUtils::isDepthOnlyFormat(format);
+        bool bDepth    = VulkanUtils::isDepthOnlyFormat(_images[i]->getFormat());
         _imageViews[i] = VulkanUtils::createImageView(
             render->getLogicalDevice(),
             _images[i]->getHandle(),
-            format,
+            _images[i]->getFormat(),
             bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
@@ -48,5 +47,9 @@ void VulkanFrameBuffer::clean()
     for (auto &imageView : _imageViews)
     {
         VK_DESTROY(ImageView, render->getLogicalDevice(), imageView);
+    }
+    for (auto &image : _images)
+    {
+        image.reset(); // Reset shared pointers to release resources
     }
 }

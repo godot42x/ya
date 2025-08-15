@@ -238,14 +238,15 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
             .flags = 0,
         };
         convertToVkAttachmentDescription(attachmentDesc, vkAttachmentDesc);
-        if (vkAttachmentDesc.format != surfaceFormat) {
-            NE_CORE_WARN("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
-                         i,
-                         std::to_string(vkAttachmentDesc.format),
-                         std::to_string(surfaceFormat));
-        }
         attachmentDescs.push_back(vkAttachmentDesc);
         ++i;
+    }
+
+    if (attachmentDescs[0].format != surfaceFormat) {
+        NE_CORE_WARN("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
+                     i,
+                     std::to_string(attachmentDescs[0].format),
+                     std::to_string(surfaceFormat));
     }
 
 
