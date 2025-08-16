@@ -11,7 +11,7 @@
 
 #pragma comment(lib, "shlwapi.lib")
 
-namespace NeonEngine
+namespace yaEngine
 {
 
 std::optional<std::string> WindowsDialogWindow::showDialog(
@@ -143,4 +143,4 @@ std::optional<std::string> WindowsDialogWindow::showDialog(
     return std::nullopt;
 }
 
-} // namespace NeonEngine
+} // namespace yaEngine

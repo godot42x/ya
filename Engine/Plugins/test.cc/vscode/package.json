@@ -1,9 +1,9 @@
 {
-  "name": "neon-test-runner",
-  "displayName": "Neon Test Runner",
-  "description": "Run Neon inline tests directly from VS Code with integration to the test.cc framework",
+  "name": "ya-test-runner",
+  "displayName": "ya Test Runner",
+  "description": "Run ya inline tests directly from VS Code with integration to the test.cc framework",
   "version": "0.1.0",
-  "publisher": "neon-engine",
+  "publisher": "ya-engine",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -17,29 +17,29 @@
   "contributes": {
     "commands": [
       {
-        "command": "neon.runTest",
-        "title": "Neon: Run Test"
+        "command": "ya.runTest",
+        "title": "ya: Run Test"
       },
       {
-        "command": "neon.runAllTests",
-        "title": "Neon: Run All Tests"
+        "command": "ya.runAllTests",
+        "title": "ya: Run All Tests"
       }
     ],    "configuration": {
-      "title": "Neon Test",
+      "title": "ya Test",
       "properties": {
-        "neon.test.buildMode": {
+        "ya.test.buildMode": {
           "type": "string",
           "enum": ["debug", "release"],
           "default": "debug",
           "description": "Build mode for test runner (debug or release)"
         },
-        "neon.test.buildDir": {
+        "ya.test.buildDir": {
           "type": "string",
-          "default": "${workspaceFolder}/build/windows/x64/${neon.test.buildMode}",
+          "default": "${workspaceFolder}/build/windows/x64/${ya.test.buildMode}",
           "description": "Directory where built test files are located"
-        },        "neon.test.testRunnerPath": {
+        },        "ya.test.testRunnerPath": {
           "type": "string",
-          "default": "${neon.test.buildDir}/test_runner.exe",
+          "default": "${ya.test.buildDir}/test_runner.exe",
           "description": "Path to the test runner executable"
         }
       }

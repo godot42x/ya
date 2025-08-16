@@ -21,7 +21,7 @@
 
 
 
-namespace Neon
+namespace ya
 {
 
 // Define the static member variable
@@ -448,7 +448,7 @@ void App::init()
     imgui.init(vkRender->getNativeWindow<SDL_Window>(), initInfo);
 }
 
-void Neon::App::quit()
+void ya::App::quit()
 {
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
@@ -480,7 +480,7 @@ void Neon::App::quit()
 
 
 
-int Neon::App::run()
+int ya::App::run()
 {
     auto *sdlWindow = windowProvider->getNativeWindowPtr<SDL_Window>();
 
@@ -500,7 +500,7 @@ int Neon::App::run()
 }
 
 
-int Neon::App::onEvent(SDL_Event &event)
+int ya::App::onEvent(SDL_Event &event)
 {
     EventProcessState ret = imgui.processEvents(event);
     if (ret != EventProcessState::Continue) {
@@ -661,7 +661,7 @@ int Neon::App::onEvent(SDL_Event &event)
 
 
 FPSControl fpsCtrl;
-int        Neon::App::iterate(float dt)
+int        ya::App::iterate(float dt)
 {
 
     SDL_Event evt;
@@ -995,4 +995,4 @@ void App::releaseSemaphoreAndFence()
 #pragma endregion
 
 
-} // namespace Neon
+} // namespace ya

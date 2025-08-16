@@ -8,7 +8,7 @@
 // Include Linux implementation when available
 #endif
 
-namespace NeonEngine
+namespace yaEngine
 {
 
 std::unique_ptr<DialogWindow> DialogWindow::create()
@@ -28,4 +28,4 @@ std::unique_ptr<DialogWindow> DialogWindow::create()
 #endif
 }
 
-} // namespace NeonEngine
+} // namespace yaEngine

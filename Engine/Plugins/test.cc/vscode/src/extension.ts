@@ -17,7 +17,7 @@ function getProjectRoot(): string {
 
 // Function to get test runner path
 function getTestRunnerPath(): string {
-  const config = vscode.workspace.getConfiguration('neon.test');
+  const config = vscode.workspace.getConfiguration('ya.test');
   const buildMode = config.get<string>('buildMode', 'debug');
   const projectRoot = getProjectRoot();
   
@@ -118,10 +118,10 @@ function runTests(testName?: string): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('🚀 Neon Test Runner extension activated');
+  console.log('🚀 ya Test Runner extension activated');
   
   // Create output channel
-  outputChannel = vscode.window.createOutputChannel('Neon Test Runner');
+  outputChannel = vscode.window.createOutputChannel('ya Test Runner');
   context.subscriptions.push(outputChannel);
   
   // Register CodeLens provider for test cases
@@ -141,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
         
         lenses.push(new vscode.CodeLens(range, {
           title: '▶️ Run Test',
-          command: 'neon.runTest',
+          command: 'ya.runTest',
           arguments: [testName]
         }));
       }
@@ -151,7 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
         const topRange = new vscode.Range(0, 0, 0, 0);
         lenses.unshift(new vscode.CodeLens(topRange, {
           title: `🧪 Run All Tests (${lenses.length} found)`,
-          command: 'neon.runAllTests'
+          command: 'ya.runAllTests'
         }));
       }
       
@@ -169,7 +169,7 @@ export function activate(context: vscode.ExtensionContext) {
   
   // Command to run a specific test
   context.subscriptions.push(
-    vscode.commands.registerCommand('neon.runTest', async (testName: string) => {
+    vscode.commands.registerCommand('ya.runTest', async (testName: string) => {
       outputChannel.show();
       await runTests(testName);
     })
@@ -177,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
   
   // Command to run all tests
   context.subscriptions.push(
-    vscode.commands.registerCommand('neon.runAllTests', async () => {
+    vscode.commands.registerCommand('ya.runAllTests', async () => {
       outputChannel.show();
       await runTests();
     })
@@ -185,7 +185,7 @@ export function activate(context: vscode.ExtensionContext) {
   
   // Command to build tests
   context.subscriptions.push(
-    vscode.commands.registerCommand('neon.buildTests', async () => {
+    vscode.commands.registerCommand('ya.buildTests', async () => {
       outputChannel.show();
       await buildTests();
     })
@@ -193,5 +193,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log('👋 Neon Test Runner extension deactivated');
+  console.log('👋 ya Test Runner extension deactivated');
 }

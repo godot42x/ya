@@ -8,7 +8,7 @@
 
 #include "Core/Base.h"
 
-namespace NeonEngine
+namespace yaEngine
 {
 
 enum class DialogType
@@ -34,4 +34,4 @@ class DialogWindow
     static std::unique_ptr<DialogWindow> create();
 };
 
-} // namespace NeonEngine
+} // namespace yaEngine

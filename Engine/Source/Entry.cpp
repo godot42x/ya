@@ -61,7 +61,7 @@
 // SDL::SDLRender2D *render2d = new SDL::SDLRender2D();
 // #endif
 // #if ENABLE_IMGUI
-// Neon::ImguiState imguiState;
+// ya::ImguiState imguiState;
 // #endif
 
 // std::queue<std::function<void()>> asyncUpdateTask;
@@ -72,7 +72,7 @@
 // bool                   useModel = false;
 
 // // Dialog window for file operations
-// std::unique_ptr<NeonEngine::DialogWindow> dialogWindow;
+// std::unique_ptr<yaEngine::DialogWindow> dialogWindow;
 
 // // TODO: reflect this and auto generate VertexBufferDescription and VertexAttribute
 // struct VertexEntry
@@ -209,7 +209,7 @@
 //     });
 
 //     // Create dialog window
-//     dialogWindow = NeonEngine::DialogWindow::create();
+//     dialogWindow = yaEngine::DialogWindow::create();
 
 
 //     EGraphicPipeLinePrimitiveType primitiveType = EGraphicPipeLinePrimitiveType::TriangleList;
@@ -323,7 +323,7 @@
 // //     auto d = device->device;
 // //     auto w = device->window;
 
-// //     // TODO: abstract this to a function in NeonEngine::Render
+// //     // TODO: abstract this to a function in yaEngine::Render
 // //     NE_ASSERT(SDL_WindowSupportsGPUSwapchainComposition(d, w, SDL_GPU_SWAPCHAINCOMPOSITION_SDR),
 // //               "Window does not support GPU swapchain composition");
 
@@ -416,7 +416,7 @@
 // //     {
 // //         // Create dialog window if it doesn't exist yet
 // //         if (!dialogWindow) {
-// //             dialogWindow = NeonEngine::DialogWindow::create();
+// //             dialogWindow = yaEngine::DialogWindow::create();
 // //         }
 
 // //         if (dialogWindow) {
@@ -429,7 +429,7 @@
 // //                 {"All Files", "*.*"}};
 
 // //             auto result = dialogWindow->showDialog(
-// //                 NeonEngine::DialogType::OpenFile,
+// //                 yaEngine::DialogType::OpenFile,
 // //                 "Select 3D Model",
 // //                 filters);
 
@@ -887,7 +887,7 @@ int main()
 
 
     try {
-        auto *app = Neon::App::create();
+        auto *app = ya::App::create();
         app->init();
         app->run();
         app->quit();

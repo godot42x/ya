@@ -1,4 +1,3 @@
-
 // #include <shaderc/shaderc.hpp>
 
 // TODO: shaders should be compiled before engine build

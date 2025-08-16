@@ -32,7 +32,7 @@ task("vscode-extension")
 do
     set_menu {
         usage = "xmake vscode-extension",
-        description = "Build the VS Code extension for Neon Test"
+        description = "Build the VS Code extension for ya Test"
     }
     on_run(function()
         import("core.project.task")

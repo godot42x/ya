@@ -62,7 +62,7 @@ class SDLWindowProvider : public WindowProvider
         // TODO: handle dpi
         float dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 
-        SDL_Window *window = SDL_CreateWindow("Neon", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        SDL_Window *window = SDL_CreateWindow("ya", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         NE_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
         nativeWindowHandle = window;
 

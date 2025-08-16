@@ -2,7 +2,7 @@
 
 #include "Core/UI/DialogWindow.h"
 
-namespace NeonEngine
+namespace yaEngine
 {
 
 class WindowsDialogWindow : public DialogWindow
@@ -13,4 +13,4 @@ class WindowsDialogWindow : public DialogWindow
                                           const std::vector<std::pair<std::string, std::string>> &filters = {}) override;
 };
 
-} // namespace NeonEngine
+} // namespace yaEngine

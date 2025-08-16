@@ -82,7 +82,7 @@ static Render2DData s_data;
 // Helper functions
 static VulkanRender *GetVulkanRenderer()
 {
-    auto app = Neon::App::get();
+    auto app = ya::App::get();
     if (!app)
         return nullptr;
     return static_cast<VulkanRender *>(app->getRender());

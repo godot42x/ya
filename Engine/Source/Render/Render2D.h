@@ -27,7 +27,7 @@ struct Render2D
     void init()
     {
 
-        Neon::App *app      = Neon::App::get();
+        ya::App *app      = ya::App::get();
         auto      *vkRender = dynamic_cast<VulkanRender *>(app->getRender());
         renderpass          = new VulkanRenderPass(vkRender);
 

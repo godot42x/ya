@@ -12,7 +12,7 @@
 
 
 #if defined(_WIN32)
-    #if BUILD_SHARED_NEON
+    #if BUILD_SHARED_ya
         #define ENGINE_API __declspec(dllexport)
     #else
         #define ENGINE_API __declspec(dllimport)

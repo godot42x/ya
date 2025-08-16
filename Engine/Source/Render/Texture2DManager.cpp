@@ -41,7 +41,7 @@ void Texture2DManager::shutdown()
     if (!s_initialized)
         return;
 
-    auto app = Neon::App::get();
+    auto app = ya::App::get();
     if (!app)
         return;
 
@@ -176,7 +176,7 @@ bool Texture2DManager::createWhiteTexture()
 
 std::shared_ptr<Texture2DManager::Texture2D> Texture2DManager::createVulkanTexture(const void *data, uint32_t width, uint32_t height, uint32_t channels)
 {
-    // auto app = Neon::App::get();
+    // auto app = ya::App::get();
     // if (!app)
     //     return nullptr;
 

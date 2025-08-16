@@ -1,5 +1,3 @@
-
-
 includes("./Plugins/Plugins.xmake.lua")
 
 add_requires("spdlog")
@@ -42,7 +40,7 @@ add_requires("vulkansdk", {
 })
 add_requires("glad")
 
-target("Neon")
+target("ya")  --"Yet Another (Game) Engine"
 do
     set_kind("binary")
     add_files("./Source/**.cpp")
@@ -85,12 +83,12 @@ do
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then
         add_ldflags("/subsystem:console")
-        add_defines("NOMINMAX")  -- Disable min and max macros
+        add_defines("NOMINMAX") -- Disable min and max macros
     end
 
     before_run(function(target)
         print("before run", target:name())
         print("removing sdl log files")
-        os.rm("$(projectdir)/Neon.*-*-*.log")
+        os.rm("$(projectdir)/ya.*-*-*.log")
     end)
 end

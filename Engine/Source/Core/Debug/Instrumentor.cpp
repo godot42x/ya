@@ -55,7 +55,7 @@ void Instrumentor::WriteProfile(const ProfileResult &result)
 }
 void Instrumentor::WriteHeader()
 {
-    m_OutputStream << R"({"otherData": {},"traceEvents":[)";
+    m_OutputStream << "{\"otherData\": {},\"traceEvents\":[";
     m_OutputStream.flush();
 }
 void Instrumentor::WriteFooter()

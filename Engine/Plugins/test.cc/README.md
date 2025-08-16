@@ -1,6 +1,6 @@
-# Neon Test Framework
+# ya Test Framework
 
-A simple test framework for the Neon engine that allows writing Rust-style inline tests.
+A simple test framework for the ya engine that allows writing Rust-style inline tests.
 
 ## Features
 
@@ -63,9 +63,9 @@ build/windows/x64/debug/test_runner.exe Vector3Length
 
 ### VS Code Integration
 
-1. Install the extension from the Tool/vscode-neon-test directory:
+1. Install the extension from the Tool/vscode-ya-test directory:
    ```bash
-   cd Tool/vscode-neon-test
+   cd Tool/vscode-ya-test
    npm install
    npm run compile
    ```
@@ -77,8 +77,8 @@ build/windows/x64/debug/test_runner.exe Vector3Length
 
 3. Configure the extension in VS Code settings:
    ```json
-   "neon.test.testRunnerPath": "${workspaceFolder}/build/windows/x64/debug/test_runner.exe",
-   "neon.test.testDllPath": "${workspaceFolder}/build/windows/x64/debug/test.cc.dll"
+   "ya.test.testRunnerPath": "${workspaceFolder}/build/windows/x64/debug/test_runner.exe",
+   "ya.test.testDllPath": "${workspaceFolder}/build/windows/x64/debug/test.cc.dll"
    ```
 
 ## How It Works

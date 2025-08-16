@@ -22,7 +22,7 @@ struct LogicalDevice;
 struct VulkanRenderPass;
 struct VulkanPipelineLayout;
 
-namespace Neon
+namespace ya
 {
 
 struct FPSControl
@@ -102,4 +102,4 @@ struct App
 };
 
 
-} // namespace Neon
+} // namespace ya

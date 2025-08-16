@@ -50,7 +50,7 @@ void VulkanRender::createInstance()
     VkApplicationInfo appInfo{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext              = nullptr,
-        .pApplicationName   = "Neon Engine",
+        .pApplicationName   = "ya Engine",
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName        = "No Engine",
         .apiVersion         = apiVersion,
