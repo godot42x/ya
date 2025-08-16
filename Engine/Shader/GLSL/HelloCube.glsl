@@ -7,7 +7,8 @@ layout(location = 2) in vec4 aNormal;
 
 
 layout(push_constant) uniform PushConstants {
-    mat4 model;
+    mat4 viewProjection;  // VP矩阵，不包含Model
+    mat4 model;          // 基础Model矩阵（用于旋转等）
 } PC;
 
 
@@ -22,8 +23,32 @@ void main()
         0.0
     );
     
-    vec3 worldPos = aPos + instanceOffset;
-    gl_Position = PC.model * vec4(worldPos, 1.0);
+    // 为每个实例创建独立的Model矩阵
+    mat4 instanceModel = PC.model;
+    
+    // 为每个实例添加额外的旋转（围绕自身中心）
+    // float instanceRotation = float(gl_InstanceIndex) * 0.5; // 不同的旋转角度
+    // mat4 instanceRotationMatrix = mat4(1.0);
+    // float c = cos(instanceRotation);
+    // float s = sin(instanceRotation);
+    
+    // // Y轴旋转矩阵
+    // instanceRotationMatrix[0][0] = c;
+    // instanceRotationMatrix[0][2] = s;
+    // instanceRotationMatrix[2][0] = -s;
+    // instanceRotationMatrix[2][2] = c;
+    
+    // 组合变换: 基础旋转 * 实例旋转 * 平移
+    // instanceModel = instanceModel * instanceRotationMatrix;
+
+    // offset and rotation was added to model matrix
+    // 这样不会出现所有物体围绕一个轴运动的效果
+    instanceModel[3].xyz += instanceOffset;
+    
+    // 计算最终位置
+    vec4 worldPos = instanceModel * vec4(aPos, 1.0);
+    gl_Position = PC.viewProjection * worldPos;
+
     
     // Color each instance differently based on instance index
     float hue = float(gl_InstanceIndex) / 9.0;

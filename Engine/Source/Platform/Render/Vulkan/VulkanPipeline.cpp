@@ -385,11 +385,15 @@ void VulkanPipeline::createPipelineInternal()
     };
 
     std::vector<VkDynamicState> dynamicStates = {};
+    // TODO: do not use bitmask enum
     if (_ci.dynamicFeatures & EPipelineDynamicFeature::DepthTest) {
         dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE);
     }
     if (_ci.dynamicFeatures & EPipelineDynamicFeature::AlphaBlend) {
         dynamicStates.push_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
+    }
+    if (_ci.dynamicFeatures & EPipelineDynamicFeature::Viewport) {
+        dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
     }
 
     VkPipelineDynamicStateCreateInfo dynamicStateCI{

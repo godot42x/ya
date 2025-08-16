@@ -214,7 +214,7 @@ void App::init()
         .pushConstants = {
             GraphicsPipelineLayoutCreateInfo::PushConstant{
                 .offset     = 0,
-                .size       = sizeof(glm::mat4), // for MVP matrix
+                .size       = sizeof(glm::mat4) * 2, // dynamical allocated buffer
                 .stageFlags = EShaderStage::Vertex,
             },
         },
@@ -285,8 +285,9 @@ void App::init()
             },
         },
         .subPassRef = 0,
+
         // define what state need to dynamically modified in render pass execution
-        // .dynamicFeatures = EPipelineDynamicFeature::DepthTest | EPipelineDynamicFeature::AlphaBlend,
+        .dynamicFeatures    = EPipelineDynamicFeature::Viewport,
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -591,15 +592,22 @@ int Neon::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     inputManager.update();
-    static float degree = 0;
-    degree              = glm::clamp(degree + 1, 0.0f, 180.0f);
-    float rDegree       = glm::radians(degree);
+
+    static auto time = 0.f;
+    time += dt;
+    float speed = glm::radians(45.f); // 45. per second
+    float alpha = speed * time;
+
+    glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
+    glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
+    glm::quat rotZ = glm::angleAxis(alpha, glm::vec3(0, 0, 1));
+
+    // xyz rotation
+    glm::quat combinedRot = rotZ * rotY * rotX;
 
     // auto rotation by up-down and left-right
-    // glm::quat rotation = glm::quat(rDegree, rDegree, rDegree, degree);
-    // glm::mat4 rot      = glm::mat4_cast(rotation);
-
-    // matModel = rot * matModel;
+    glm::mat4 rot = glm::mat4_cast(combinedRot);
+    matModel      = rot;
 
     camera.update(inputManager, dt);
 }
@@ -676,36 +684,46 @@ void App::onDraw()
 
 
 #if 1 // Dynamic state
-    // need set VkPipelineDynamicStateCreateInfo
-    // or those properties should be modified in the pipeline recreation if needed.
-    // but sometimes that we want to enable depth or color-blend state dynamically
+      // need set VkPipelineDynamicStateCreateInfo
+      // or those properties should be modified in the pipeline recreation if needed.
+      // but sometimes that we want to enable depth or color-blend state dynamically
 
-    // Set viewport
-    // VkViewport viewport{};
-    // viewport.x        = 0.0f;
-    // viewport.y        = 0.0f;
-    // viewport.width    = static_cast<float>(m_swapChain.getExtent().width);
-    // viewport.height   = static_cast<float>(m_swapChain.getExtent().height);
-    // viewport.minDepth = 0.0f;
-    // viewport.maxDepth = 1.0f;
-    // vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    VkViewport viewport{
+        .x        = 0,
+        .y        = 0,
+        .width    = static_cast<float>(frameBuffers[imageIndex].width),
+        .height   = static_cast<float>(frameBuffers[imageIndex].height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(curCmdBuf, 0, 1, &viewport);
 
 
-    // Set scissor
-    // VkRect2D scissor{};
-    // scissor.offset = {0, 0};
-    // scissor.extent = m_swapChain.getExtent();
-    // vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+// Set scissor
+// VkRect2D scissor{};
+// scissor.offset = {0, 0};
+// scissor.extent = m_swapChain.getExtent();
+// vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 #endif
 
+#pragma region render
+
     // push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
-    auto mat = camera.getViewProjectionMatrix() * matModel;
+    struct PushConstantData
+    {
+        glm::mat4 viewProjection;
+        glm::mat4 model;
+    } pushData;
+
+    pushData.viewProjection = camera.getViewProjectionMatrix();
+    pushData.model          = matModel;
+
     vkCmdPushConstants(curCmdBuf,
                        defaultPipelineLayout->getHandle(),
                        VK_SHADER_STAGE_VERTEX_BIT,
                        0,
-                       sizeof(glm::mat4),
-                       glm::value_ptr(mat));
+                       sizeof(PushConstantData),
+                       &pushData);
 
     // Bind vertex buffer
     VkBuffer vertexBuffers[] = {vertexBuffer->getHandle()};
@@ -723,11 +741,13 @@ void App::onDraw()
     // vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
     vkCmdDrawIndexed(curCmdBuf,
                      indexSize, // index count
-                     10,        // instance count
+                     9,         // instance count
                      0,         // first index
                      0,         // vertex offset, this for merge vertex buffer?
                      0          // first instance
     );
+
+#pragma endregion
 
 
 

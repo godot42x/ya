@@ -476,6 +476,7 @@ enum T
 {
     DepthTest  = 0x01,
     AlphaBlend = 0x02,
+    Viewport   = 0x04,
 };
 }
 
