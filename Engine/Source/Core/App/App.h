@@ -56,19 +56,18 @@ struct App
     int         run();
     void        quit();
 
-    int onEvent(SDL_Event &event);
 
-    int iterate(float dt);
+    int  iterate(float dt);
+    void onUpdate(float dt);
+    void onDraw(float dt);
+    int  onEvent(SDL_Event &event);
 
-    IRender *getRender() { return _render; }
-
+    IRender    *getRender() { return _render; }
     static App *get() { return _instance; }
 
-    void onUpdate(float dt);
 
   private:
 
-    void onDraw();
 
 
     void initSemaphoreAndFence();

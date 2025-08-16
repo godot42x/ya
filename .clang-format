@@ -1,16 +1,20 @@
+# $schema: https://json.schemastore.org/clang-format.json # this is ignored in vscode, config this in settings.json
+---
 Language: Cpp
 BasedOnStyle: LLVM
 IndentWidth: 4
 BreakBeforeBraces: Custom
 TabWidth: 4
 
-AllowShortFunctionsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
 AlwaysBreakTemplateDeclarations: MultiLine
 BinPackArguments: false
+AlignOperands: AlignAfterOperator
+# ternary 三元
+BreakBeforeTernaryOperators: true
+# BreakBeforeBinaryOperators: All
 
 IndentPPDirectives: BeforeHash
-
-
 
 # Works after clang-format 16
 #BreakAfterAttributes: Leave
@@ -51,10 +55,10 @@ BraceWrapping:
   SplitEmptyNamespace: false
 
 # 连续赋值时，对齐所有等号
-AlignConsecutiveAssignments: true
+AlignConsecutiveAssignments: Consecutive
 
 # 连续声明时，对齐所有声明的变量名
-AlignConsecutiveDeclarations: true
+AlignConsecutiveDeclarations: Consecutive
 
 # 保留在块开始处的空行
 KeepEmptyLinesAtTheStartOfBlocks: true

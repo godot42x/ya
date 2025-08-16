@@ -50,6 +50,7 @@
         "WINDOWPOS"
     ],
     "yaml.schemas": {
-        "https://www.schemastore.org/clangd.json": ".clangd"
-    },
+        "https://www.schemastore.org/clangd.json": ".clangd",
+        "https://json.schemastore.org/clang-format.json": ".clang-format"
+    }
 }

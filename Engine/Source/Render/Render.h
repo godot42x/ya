@@ -477,6 +477,7 @@ enum T
     DepthTest  = 0x01,
     AlphaBlend = 0x02,
     Viewport   = 0x04,
+    Scissor    = 0x08,
 };
 }
 
@@ -622,7 +623,6 @@ struct IRender
     struct InitParams
     {
         ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
-        bool                bVsync    = true;
         WindowProvider     *windowProvider;
         SwapchainCreateInfo swapchainCI;
     };

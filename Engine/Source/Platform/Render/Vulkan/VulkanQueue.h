@@ -47,5 +47,6 @@ struct VulkanQueue
         VK_CALL(vkQueueSubmit(_handle, 1, &info, fence));
     }
 
-    [[nodiscard]] VkQueue getHandle() const { return _handle; }
+    [[nodiscard]] VkQueue  getHandle() const { return _handle; }
+    [[nodiscard]] uint32_t getFamilyIndex() const { return _familyIndex; }
 };

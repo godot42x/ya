@@ -23,30 +23,29 @@
 void VulkanRender::createInstance()
 {
     // Check supported Vulkan API version
-    uint32_t supportedVersion = 0;
-    VkResult result           = vkEnumerateInstanceVersion(&supportedVersion);
+    VkResult result = vkEnumerateInstanceVersion(&apiVersion);
     if (result == VK_SUCCESS) {
-        uint32_t major = VK_VERSION_MAJOR(supportedVersion);
-        uint32_t minor = VK_VERSION_MINOR(supportedVersion);
-        uint32_t patch = VK_VERSION_PATCH(supportedVersion);
-        NE_CORE_INFO("Supported Vulkan API version:{} {}.{}.{}", supportedVersion, major, minor, patch);
+        uint32_t major = VK_VERSION_MAJOR(apiVersion);
+        uint32_t minor = VK_VERSION_MINOR(apiVersion);
+        uint32_t patch = VK_VERSION_PATCH(apiVersion);
+        NE_CORE_INFO("Supported Vulkan API version:{} {}.{}.{}", apiVersion, major, minor, patch);
     }
-    NE_CORE_ASSERT(supportedVersion >= VK_API_VERSION_1_0, "Vulkan API version 1.0 or higher is required!");
-    if (supportedVersion < VK_API_VERSION_1_1) {
-        supportedVersion = VK_API_VERSION_1_0;
+    NE_CORE_ASSERT(apiVersion >= VK_API_VERSION_1_0, "Vulkan API version 1.0 or higher is required!");
+    if (apiVersion < VK_API_VERSION_1_1) {
+        apiVersion = VK_API_VERSION_1_0;
     }
-    else if (supportedVersion < VK_API_VERSION_1_2) {
-        supportedVersion = VK_API_VERSION_1_1;
+    else if (apiVersion < VK_API_VERSION_1_2) {
+        apiVersion = VK_API_VERSION_1_1;
     }
-    else if (supportedVersion < VK_API_VERSION_1_3) {
-        supportedVersion = VK_API_VERSION_1_2;
+    else if (apiVersion < VK_API_VERSION_1_3) {
+        apiVersion = VK_API_VERSION_1_2;
     }
     else {
-        supportedVersion = VK_API_VERSION_1_3;
+        apiVersion = VK_API_VERSION_1_3;
     }
     // supportedVersion = VK_API_VERSION_1_2;
 
-    NE_CORE_INFO("Using Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(supportedVersion), VK_VERSION_MINOR(supportedVersion), VK_VERSION_PATCH(supportedVersion));
+    NE_CORE_INFO("Using Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(apiVersion), VK_VERSION_MINOR(apiVersion), VK_VERSION_PATCH(apiVersion));
 
     VkApplicationInfo appInfo{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -54,7 +53,7 @@ void VulkanRender::createInstance()
         .pApplicationName   = "Neon Engine",
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName        = "No Engine",
-        .apiVersion         = supportedVersion,
+        .apiVersion         = apiVersion,
     };
 
     std::vector<DeviceFeature> requestExtensions = _instanceExtensions;

@@ -171,6 +171,7 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
             break;
         }
     }
+
     _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
 
     NE_CORE_INFO("Using chosen surface format: {} with color space: {}",
@@ -252,7 +253,7 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
         .pQueueFamilyIndices   = queueFamilyIndices,
         .preTransform          = _supportDetails.capabilities.currentTransform,
         .compositeAlpha        = compositeAlpha,
-        .presentMode           = presentMode,
+        .presentMode           = _presentMode,
         .clipped               = _ci.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain          = oldSwapchain,
     };

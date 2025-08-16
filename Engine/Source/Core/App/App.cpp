@@ -20,6 +20,7 @@
 #include "glm/glm.hpp"
 
 
+
 namespace Neon
 {
 
@@ -57,7 +58,37 @@ uint32_t                      indexSize = -1;
 
 glm::mat4 matModel;
 
-EditorCamera camera;
+EditorCamera   camera;
+vk::ImguiState imgui;
+
+
+bool imcEditorCamera(EditorCamera &camera)
+{
+    auto position = camera.position;
+    auto rotation = camera.rotation;
+    bool bChanged = false;
+
+    // Add camera control settings to UI
+    if (ImGui::CollapsingHeader("Camera Controls")) {
+        if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
+            bChanged = true;
+        }
+        if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
+            bChanged = true;
+        }
+        ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
+        ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 0.01f, 0.01f, 1.0f);
+        ImGui::Text("Hold right mouse button to rotate camera");
+        ImGui::Text("WASD: Move horizontally, QE: Move vertically");
+    }
+
+    if (bChanged) {
+        camera.setPositionAndRotation(position, rotation);
+    }
+    return bChanged;
+}
+
+
 
 void App::init()
 {
@@ -88,7 +119,6 @@ void App::init()
      */
     vkRender->init(IRender::InitParams{
         .renderAPI      = ERenderAPI::Vulkan,
-        .bVsync         = true,
         .windowProvider = windowProvider,
         .swapchainCI    = SwapchainCreateInfo{
                .imageFormat   = EFormat::R8G8B8A8_UNORM,
@@ -287,7 +317,8 @@ void App::init()
         .subPassRef = 0,
 
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures    = EPipelineDynamicFeature::Viewport,
+        .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
+                           EPipelineDynamicFeature::Viewport,
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -368,15 +399,61 @@ void App::init()
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)indexBuffer->getHandle(), "IndexBuffer");
 
     matModel = glm::mat4(1.0f);
-    camera.setPosition(glm::vec3(0.0f, 0.0f, -3.0f));
-    camera.setRotation(glm::vec3(0.0f, 180.0f, 0.0f));
+    // we span at z = 3 and look at the origin ( right hand? and the cubes all place on xy plane )
+    camera.setPosition(glm::vec3(0.0f, 0.0f, 3.0f));
+    camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
     camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
+
+
+
+    // imgui init
+    auto                      queue = _firstGraphicsQueue;
+    ImGui_ImplVulkan_InitInfo initInfo{
+        .ApiVersion     = vkRender->getApiVersion(),
+        .Instance       = vkRender->getInstance(),
+        .PhysicalDevice = vkRender->getPhysicalDevice(),
+        .Device         = vkRender->getLogicalDevice(),
+        .QueueFamily    = queue->getFamilyIndex(),
+        .Queue          = queue->getHandle(),
+        .DescriptorPool = nullptr,
+        .RenderPass     = renderpass->getHandle(),
+        .MinImageCount  = 2,
+        .ImageCount     = static_cast<uint32_t>(vkRender->getSwapChain()->getImages().size()),
+        .MSAASamples    = VK_SAMPLE_COUNT_1_BIT,
+
+        // (Optional)
+        .PipelineCache = vkRender->getPipelineCache(),
+        .Subpass       = 0,
+
+        // (Optional) Set to create internal descriptor pool instead of using DescriptorPool
+        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE, // let imgui create it by itself internal
+
+        // (Optional) Dynamic Rendering
+        // Need to explicitly enable VK_KHR_dynamic_rendering extension to use this, even for Vulkan 1.3.
+        .UseDynamicRendering = false,
+#ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+        .PipelineRenderingCreateInfo = VkPipelineRenderingCreateInfoKHR{},
+#endif
+
+        // (Optional) Allocation, Debugging
+        .Allocator       = VK_NULL_HANDLE,
+        .CheckVkResultFn = [](VkResult err) {
+            if (err != VK_SUCCESS) {
+                NE_CORE_ERROR("Vulkan error: {}", err);
+            }
+        },
+        // Minimum allocation size. Set to 1024*1024 to satisfy zealous best practices validation layer and waste a little memory.
+        .MinAllocationSize = static_cast<VkDeviceSize>(1024 * 1024),
+    };
+    imgui.init(vkRender->getNativeWindow<SDL_Window>(), initInfo);
 }
 
 void Neon::App::quit()
 {
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
+
+    imgui.shutdown();
 
     vertexBuffer.reset();
     indexBuffer.reset();
@@ -407,21 +484,14 @@ int Neon::App::run()
 {
     auto *sdlWindow = windowProvider->getNativeWindowPtr<SDL_Window>();
 
+    static Uint64 lastTimeMS = SDL_GetTicks();
     while (bRunning) {
 
-        static Uint64 lastTime    = SDL_GetTicks();
-        Uint64        currentTime = SDL_GetTicks();
-        float         deltaTime   = (currentTime - lastTime) / 1000.0f;
-        float         fps         = deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f;
-        lastTime                  = currentTime;
+        Uint64 nowMS = SDL_GetTicks(); // return milliseconds
+        float  dtMS  = nowMS - lastTimeMS;
+        lastTimeMS   = nowMS;
 
-
-        SDL_Event evt;
-        SDL_PollEvent(&evt);
-        if (auto result = onEvent(evt); result != 0) {
-            break;
-        }
-        if (auto result = iterate(deltaTime); result != 0) {
+        if (auto result = iterate(dt); result != 0) {
             break;
         }
     }
@@ -432,8 +502,14 @@ int Neon::App::run()
 
 int Neon::App::onEvent(SDL_Event &event)
 {
+    EventProcessState ret = imgui.processEvents(event);
+    if (ret != EventProcessState::Continue) {
+        return 0;
+    }
     inputManager.processEvent(event);
 
+
+#pragma region sdl event match
 
     switch (SDL_EventType(event.type))
     {
@@ -577,6 +653,9 @@ int Neon::App::onEvent(SDL_Event &event)
     case SDL_EVENT_ENUM_PADDING:
         break;
     }
+#pragma endregion
+
+
     return 0;
 };
 
@@ -584,8 +663,14 @@ int Neon::App::onEvent(SDL_Event &event)
 int Neon::App::iterate(float dt)
 {
 
+    SDL_Event evt;
+    SDL_PollEvent(&evt);
+    if (auto result = onEvent(evt); result != 0) {
+        return 1;
+    }
+
     onUpdate(dt);
-    onDraw();
+    onDraw(dt);
     return 0;
 }
 
@@ -595,8 +680,8 @@ void App::onUpdate(float dt)
 
     static auto time = 0.f;
     time += dt;
-    float speed = glm::radians(45.f); // 45. per second
-    float alpha = speed * time;
+    float speed = glm::radians(45.f);
+    float alpha = speed * time * 1000.0f; // 45. per second
 
     glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
     glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
@@ -612,7 +697,7 @@ void App::onUpdate(float dt)
     camera.update(inputManager, dt);
 }
 
-void App::onDraw()
+void App::onDraw(float dt)
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
     // vkDeviceWaitIdle(vkRender->getLogicalDevice());
@@ -699,11 +784,12 @@ void App::onDraw()
     vkCmdSetViewport(curCmdBuf, 0, 1, &viewport);
 
 
-// Set scissor
-// VkRect2D scissor{};
-// scissor.offset = {0, 0};
-// scissor.extent = m_swapChain.getExtent();
-// vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    // Set scissor (required by imgui , and cause I must call this here)
+    VkRect2D scissor{
+        .offset = {0, 0},
+        .extent = vkRender->getSwapChain()->getExtent(),
+    };
+    vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
 #endif
 
 #pragma region render
@@ -746,6 +832,29 @@ void App::onDraw()
                      0,         // vertex offset, this for merge vertex buffer?
                      0          // first instance
     );
+
+    imgui.beginFrame();
+    if (ImGui::Begin("Test")) {
+        float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
+        ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt, fps);
+        ImGui::Text("Current frame: %d", currentFrame);
+
+        // Check if actual timing is way off from expected
+        if (fps > 200.0f) {
+            ImGui::TextColored(ImVec4(1, 0, 0, 1), "WARNING: VSync may not be working!");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Possible causes:");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- High refresh rate monitor (144Hz/240Hz/1000Hz)");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- VSync disabled in GPU driver");
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- Present mode not set to FIFO");
+        }
+
+        imcEditorCamera(camera);
+        ImGui::End();
+    }
+    imgui.render();
+    // imgui.submit(curCmdBuf, pipeline->getHandle());
+    imgui.submit(curCmdBuf); // leave nullptr to let imgui use its pipeline
+    imgui.endFrame();
 
 #pragma endregion
 

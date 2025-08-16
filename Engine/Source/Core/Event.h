@@ -18,4 +18,9 @@ struct EventProcessState
         return result == Handled;
     }
 
+    bool operator==(EResult rhs) const
+    {
+        return result == rhs;
+    }
+
 }; // namespace EventProcessState

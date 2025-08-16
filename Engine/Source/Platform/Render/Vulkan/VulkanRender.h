@@ -61,6 +61,8 @@ struct VulkanRender : public IRender
 
   private:
 
+    uint32_t apiVersion = 0;
+
     VkInstance   _instance;
     VkSurfaceKHR _surface;
 
@@ -114,7 +116,7 @@ struct VulkanRender : public IRender
     VulkanRender() = default;
 
     template <typename T>
-    void *getNativeWindow()
+    T *getNativeWindow()
     {
         return static_cast<T *>(nativeWindow);
     }
@@ -265,9 +267,7 @@ struct VulkanRender : public IRender
   public:
     void recreateSwapChain();
 
-
-    // Getter methods for 2D renderer access
-
+    [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
@@ -279,8 +279,8 @@ struct VulkanRender : public IRender
 
     [[nodiscard]] std::vector<VkCommandBuffer> getCommandBuffers() const { return m_commandBuffers; }
 
-    std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
     std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
+    std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
 
     [[nodiscard]] VulkanDebugUtils *getDebugUtils() const { return _debugUtils.get(); }
 
@@ -309,6 +309,7 @@ struct VulkanRender : public IRender
         getGraphicsQueues()[0].waitIdle();
         vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &commandBuffer);
     }
+
 
   private:
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Render.h"
 #include <Core/Base.h>
 
 #include <SDL3/SDL.h>
@@ -7,100 +8,120 @@
 
 #include <ImGui.h>
 #include <imgui_impl_sdl3.h>
-#if USE_VULKAN
-    #include <imgui_impl_vulkan.h>
-#else
-    #include <imgui_impl_sdlgpu3.h>
-#endif
 
+#include <imgui_impl_sdlgpu3.h>
 
-#include "Core/App/App.h"
+#define IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+#include <imgui_impl_vulkan.h>
+
 #include "Core/Event.h"
 #include "Core/Log.h"
 
-
-namespace Neon
+struct VulkanRender;
+struct VulkanRenderPass;
+namespace vk
 {
 
 struct ImguiState
 {
+
+    struct VulkanImpl
+    {
+
+        static void init(IRender *render, VulkanRenderPass *renderPass);
+    };
+
+    struct SDLGPUImpl
+    {};
+
     ImDrawData *drawData = nullptr;
 
-    // Initialize ImGui with SDL and SDLGPU backends
-    void init(SDL_GPUDevice *device, SDL_Window *window)
+    // Initialize ImGui self
+    void init()
     {
-        NE_CORE_ASSERT(device != nullptr && window != nullptr, "SDL GPU device or window is null");
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO *io = &ImGui::GetIO();
         io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         ImGui::StyleColorsDark();
+    }
 
-        ImGui_ImplSDL3_InitForVulkan(window);
+    // Initialize ImGui with SDL and SDLGPU backends
+    void init(SDL_Window *window, SDL_GPUDevice *device)
+    {
+        init();
 
-#if USE_SDL3_GPU
         ImGui_ImplSDL3_InitForSDLGPU(window);
-#endif
-
         SDL_WaitForGPUSwapchain(device, window);
         auto swapChianFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
-        NE_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}", static_cast<int>(swapChianFormat), (uintptr_t)device, (uintptr_t)window);
+        NE_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}",
+                      static_cast<int>(swapChianFormat),
+                      (uintptr_t)device,
+                      (uintptr_t)window);
         if (swapChianFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
-            NE_CORE_ERROR("Failed to get swapchain texture format: {}", SDL_GetError());
+            NE_CORE_ERROR("Failed to get swapchain texture format: {}",
+                          SDL_GetError());
         }
-#if USE_VULKAN
-        // ImGui_ImplVulkan_InitInfo initInfo{
-        //     .MSAASamples = SDL_GPU_SAMPLECOUNT_1,
-        // };
-        // ImGui_ImplVulkan_Init(&initInfo);
-#else
-        ImGui_ImplSDLGPU3_InitInfo info{
-            .Device            = device,
-            .ColorTargetFormat = swapChianFormat,
-            .MSAASamples       = SDL_GPU_SAMPLECOUNT_1,
-        };
-        ImGui_ImplSDLGPU3_Init(&info);
-#endif
+    }
+
+    //  Initialize ImGui with Vulkan backend
+    void init(SDL_Window *window, const ImGui_ImplVulkan_InitInfo &initInfo)
+    {
+        init();
+        ImGui_ImplSDL3_InitForVulkan(window);
+        ImGui_ImplVulkan_Init(const_cast<ImGui_ImplVulkan_InitInfo *>(&initInfo));
     }
 
     // Begin new ImGui frame
     void beginFrame()
     {
-#if USE_VULKAN
-#else
-// ImGui_ImplSDLGPU3_NewFrame();
-#endif
+        // ImGui_ImplSDLGPU3_NewFrame();
 
         ImGui_ImplSDL3_NewFrame();
+        ImGui_ImplVulkan_NewFrame();
         ImGui::NewFrame();
     }
 
-    bool render(SDL_GPUCommandBuffer *commandBuffer)
+    void endFrame() { ImGui::EndFrame(); }
+
+    bool render()
     {
+        // here to manage all imgui elements into drawData (cmds, resources:
+        // vertexBuffer)
         ImGui::Render();
         drawData = ImGui::GetDrawData();
         // should after check minimized and swapchain texture?
-        const bool bMinimized = drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f;
+        const bool bMinimized =
+            drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f;
         return bMinimized;
     }
 
-    void prepareDrawData(SDL_GPUCommandBuffer *commandBuffer)
+    // only sdlgpu need to be call
+    void prepareDrawdata(SDL_GPUCommandBuffer *cmdBuffer)
     {
-#if USE_VULKAN
-#else
-        Imgui_ImplSDLGPU3_PrepareDrawData(drawData, commandBuffer);
-#endif
+        // in sdlGPU, should be upload data?
+        ImGui_ImplSDLGPU3_PrepareDrawData(drawData,
+                                          (SDL_GPUCommandBuffer *)cmdBuffer);
+
+        // we could control the time for upload textures?
+        // ImGui_ImplVulkan_AddTexture()
     }
 
-
+    // sdlGPU
     // Prepare and render ImGui draw data
-    void draw(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass)
+    void submit(SDL_GPUCommandBuffer *commandBuffer,
+                SDL_GPURenderPass    *renderpass)
     {
         if (drawData && drawData->CmdListsCount > 0) {
-#if 0 
             ImGui_ImplSDLGPU3_RenderDrawData(drawData, commandBuffer, renderpass);
-#endif
+        }
+    }
+    // vulkan
+    void submit(VkCommandBuffer cmdBuf, VkPipeline pipeline = VK_NULL_HANDLE)
+    {
+        if (drawData && drawData->CmdListsCount > 0) {
+            ImGui_ImplVulkan_RenderDrawData(drawData, cmdBuf, pipeline);
         }
     }
 
@@ -108,13 +129,10 @@ struct ImguiState
     void shutdown()
     {
         ImGui_ImplSDL3_Shutdown();
-#if 0
-        ImGui_ImplSDLGPU3_Shutdown();
-#endif
+        ImGui_ImplVulkan_Shutdown();
         ImGui::DestroyContext();
     }
 
-    // Process SDL events for ImGui
     EventProcessState processEvents(const SDL_Event &event)
     {
         ImGui_ImplSDL3_ProcessEvent(&event);
@@ -130,4 +148,5 @@ struct ImguiState
         return io.WantCaptureMouse || io.WantCaptureKeyboard;
     }
 };
-} // namespace Neon
+
+} // namespace vk

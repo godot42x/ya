@@ -55,6 +55,7 @@ struct VulkanSwapChain
     [[nodiscard]] VkSwapchainKHR              getSwapChain() const { return m_swapChain; }
     [[nodiscard]] const std::vector<VkImage> &getImages() const { return m_images; }
     [[nodiscard]] VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
+    [[nodiscard]] VkPresentModeKHR            getPresentMode() const { return _presentMode; }
     [[nodiscard]] uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
     [[nodiscard]] uint32_t                    getHeight() const { return _supportDetails.capabilities.currentExtent.height; };
 

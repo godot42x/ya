@@ -106,6 +106,8 @@ struct VulkanPipeline
                                 nullptr);
     }
 
+    VkPipeline getHandle() const { return _pipeline; }
+
 
   private:
     // Pipeline creation helpers
