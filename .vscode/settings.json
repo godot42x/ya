@@ -10,6 +10,7 @@
         "DXIL",
         "gltf",
         "HLSL",
+        "Instrumentor",
         "logcc",
         "Lsizeiptr",
         "MSAA",
