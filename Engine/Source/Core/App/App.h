@@ -25,6 +25,33 @@ struct VulkanPipelineLayout;
 namespace Neon
 {
 
+struct FPSControl
+{
+    float fps = 0.0f;
+
+    float fpsLimit = 144.0f;
+    float wantedDT = 1.f / 144.0f;
+
+    float update(float &dt)
+    {
+        if (dt < wantedDT)
+        {
+            float delayTimeSec = wantedDT - dt;
+            // NE_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
+            SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
+            return delayTimeSec;
+        }
+
+        return 0;
+    }
+
+    void setFPSLimit(float limit)
+    {
+        fpsLimit = limit;
+        wantedDT = 1.f / fpsLimit;
+    }
+};
+
 struct App
 {
     static App *_instance;

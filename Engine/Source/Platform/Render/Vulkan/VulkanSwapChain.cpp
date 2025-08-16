@@ -27,6 +27,7 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(VkSurf
 
 VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentModeKHR preferredMode)
 {
+    // First try to find the preferred mode
     for (const auto &modes : presentModes)
     {
         if (modes == preferredMode) {
@@ -34,6 +35,30 @@ VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentM
         }
     }
 
+    // If preferred mode not found, try fallback strategies
+    NE_CORE_WARN("Preferred present mode {} not available", std::to_string(preferredMode));
+    
+    // If we wanted FIFO (VSync) but it's not available, warn user
+    if (preferredMode == VK_PRESENT_MODE_FIFO_KHR) {
+        NE_CORE_WARN("VK_PRESENT_MODE_FIFO_KHR not supported! VSync may not work correctly.");
+        
+        // Try FIFO_RELAXED as fallback for VSync
+        for (const auto &modes : presentModes) {
+            if (modes == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
+                NE_CORE_INFO("Using VK_PRESENT_MODE_FIFO_RELAXED_KHR as fallback");
+                return modes;
+            }
+        }
+    }
+
+    // Log available modes for debugging
+    NE_CORE_INFO("Available present modes:");
+    for (const auto &modes : presentModes) {
+        NE_CORE_INFO("  - {}", std::to_string(modes));
+    }
+
+    // Use first available mode as last resort
+    NE_CORE_WARN("Using first available present mode: {}", std::to_string(presentModes[0]));
     return presentModes[0];
 }
 
@@ -177,7 +202,9 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     NE_CORE_INFO("Using chosen surface format: {} with color space: {}",
                  std::to_string(preferred.format),
                  std::to_string(preferred.colorSpace));
-    NE_CORE_INFO("Using chosen present mode: {}", std::to_string(presentMode));
+    NE_CORE_INFO("Requested present mode: {}, Actually using: {}", 
+                 std::to_string(presentMode), 
+                 std::to_string(_presentMode));
     NE_CORE_INFO("Current extent is: {}x{}",
                  _supportDetails.capabilities.currentExtent.width,
                  _supportDetails.capabilities.currentExtent.height);

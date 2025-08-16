@@ -123,7 +123,7 @@ void App::init()
         .swapchainCI    = SwapchainCreateInfo{
                .imageFormat   = EFormat::R8G8B8A8_UNORM,
                .bVsync        = true,
-               .minImageCount = 3,
+               .minImageCount = 2,
                .width         = static_cast<uint32_t>(w),
                .height        = static_cast<uint32_t>(h),
         },
@@ -488,10 +488,10 @@ int Neon::App::run()
     while (bRunning) {
 
         Uint64 nowMS = SDL_GetTicks(); // return milliseconds
-        float  dtMS  = nowMS - lastTimeMS;
+        float  dtSec = (nowMS - lastTimeMS) / 1000.0f;
         lastTimeMS   = nowMS;
 
-        if (auto result = iterate(dt); result != 0) {
+        if (auto result = iterate(dtSec); result != 0) {
             break;
         }
     }
@@ -660,14 +660,18 @@ int Neon::App::onEvent(SDL_Event &event)
 };
 
 
-int Neon::App::iterate(float dt)
+FPSControl fpsCtrl;
+int        Neon::App::iterate(float dt)
 {
 
     SDL_Event evt;
     SDL_PollEvent(&evt);
+
     if (auto result = onEvent(evt); result != 0) {
         return 1;
     }
+
+    dt += fpsCtrl.update(dt);
 
     onUpdate(dt);
     onDraw(dt);
@@ -679,9 +683,9 @@ void App::onUpdate(float dt)
     inputManager.update();
 
     static auto time = 0.f;
-    time += dt;
-    float speed = glm::radians(45.f);
-    float alpha = speed * time * 1000.0f; // 45. per second
+    time += dt;                       // dt is in milliseconds
+    float speed = glm::radians(45.f); // 45 degrees per second
+    float alpha = speed * time;       // Convert time from ms to seconds
 
     glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
     glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
@@ -694,7 +698,7 @@ void App::onUpdate(float dt)
     glm::mat4 rot = glm::mat4_cast(combinedRot);
     matModel      = rot;
 
-    camera.update(inputManager, dt);
+    camera.update(inputManager, dt); // Camera expects dt in seconds
 }
 
 void App::onDraw(float dt)
@@ -723,7 +727,8 @@ void App::onDraw(float dt)
     uint32_t imageIndex = -1;
     vkRender->getSwapChain()->acquireNextImage(
         imageAvailableSemaphores[currentFrame], // 当前帧的图像可用信号量
-        frameFences[currentFrame],
+        frameFences[currentFrame],              // 等待上一帧渲完成
+        // VK_NULL_HANDLE,                         // or 不传递 fence，避免双重等待问题
         imageIndex);
 
 
@@ -835,8 +840,8 @@ void App::onDraw(float dt)
 
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
-        float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
-        ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt, fps);
+        float fps = 1.0f / dt;
+        ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
         ImGui::Text("Current frame: %d", currentFrame);
 
         // Check if actual timing is way off from expected
