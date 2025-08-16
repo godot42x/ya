@@ -25,32 +25,7 @@ struct VulkanPipelineLayout;
 namespace ya
 {
 
-struct FPSControl
-{
-    float fps = 0.0f;
 
-    float fpsLimit = 144.0f;
-    float wantedDT = 1.f / 144.0f;
-
-    float update(float &dt)
-    {
-        if (dt < wantedDT)
-        {
-            float delayTimeSec = wantedDT - dt;
-            // NE_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
-            SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
-            return delayTimeSec;
-        }
-
-        return 0;
-    }
-
-    void setFPSLimit(float limit)
-    {
-        fpsLimit = limit;
-        wantedDT = 1.f / fpsLimit;
-    }
-};
 
 struct App
 {
@@ -78,10 +53,14 @@ struct App
 
 
   public:
-    static App *create();
-    void        init();
-    int         run();
-    void        quit();
+    App()
+    {
+        NE_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
+        _instance = this;
+    }
+    void init();
+    int  run();
+    void quit();
 
 
     int  iterate(float dt);

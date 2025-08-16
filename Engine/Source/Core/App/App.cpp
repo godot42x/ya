@@ -27,12 +27,6 @@ namespace ya
 // Define the static member variable
 App *App::_instance = nullptr;
 
-App *App::create()
-{
-    NE_CORE_ASSERT(App::_instance == nullptr, "App instance already exists!");
-    App::_instance = new App();
-    return App::_instance;
-}
 
 VulkanRenderPass              *renderpass;
 std::vector<VulkanFrameBuffer> frameBuffers;
@@ -61,6 +55,32 @@ glm::mat4 matModel;
 EditorCamera   camera;
 vk::ImguiState imgui;
 
+struct FPSControl
+{
+    float fps = 0.0f;
+
+    float fpsLimit = 144.0f;
+    float wantedDT = 1.f / 144.0f;
+
+    float update(float &dt)
+    {
+        if (dt < wantedDT)
+        {
+            float delayTimeSec = wantedDT - dt;
+            // NE_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
+            SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
+            return delayTimeSec;
+        }
+
+        return 0;
+    }
+
+    void setFPSLimit(float limit)
+    {
+        fpsLimit = limit;
+        wantedDT = 1.f / fpsLimit;
+    }
+};
 
 bool imcEditorCamera(EditorCamera &camera)
 {
