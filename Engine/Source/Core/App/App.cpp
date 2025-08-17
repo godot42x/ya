@@ -59,8 +59,10 @@ struct FPSControl
 {
     float fps = 0.0f;
 
-    float fpsLimit = 144.0f;
-    float wantedDT = 1.f / 144.0f;
+    static constexpr float defaultFps = 60.f;
+
+    float fpsLimit = defaultFps;
+    float wantedDT = 1.f / defaultFps;
 
     float update(float &dt)
     {
@@ -502,14 +504,15 @@ void ya::App::quit()
 
 int ya::App::run()
 {
-    auto *sdlWindow = windowProvider->getNativeWindowPtr<SDL_Window>();
 
-    static Uint64 lastTimeMS = SDL_GetTicks();
+    _startTime = std::chrono::steady_clock::now();
+    _lastTime  = _startTime;
+
     while (bRunning) {
 
-        Uint64 nowMS = SDL_GetTicks(); // return milliseconds
-        float  dtSec = (nowMS - lastTimeMS) / 1000.0f;
-        lastTimeMS   = nowMS;
+        time_point_t now   = clock_t::now();
+        float        dtSec = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastTime).count() / 1000.f;
+        _lastTime          = now;
 
         if (auto result = iterate(dtSec); result != 0) {
             break;
@@ -680,9 +683,10 @@ int ya::App::onEvent(SDL_Event &event)
 };
 
 
-FPSControl fpsCtrl;
-int        ya::App::iterate(float dt)
+int ya::App::iterate(float dt)
 {
+
+    static FPSControl fpsCtrl;
 
     SDL_Event evt;
     SDL_PollEvent(&evt);
@@ -693,8 +697,10 @@ int        ya::App::iterate(float dt)
 
     dt += fpsCtrl.update(dt);
 
-    onUpdate(dt);
-    onDraw(dt);
+    if (!_bPause) {
+        onUpdate(dt);
+    }
+    onRender(dt);
     return 0;
 }
 
@@ -719,6 +725,11 @@ void App::onUpdate(float dt)
     matModel      = rot;
 
     camera.update(inputManager, dt); // Camera expects dt in seconds
+}
+
+void App::onRender(float dt)
+{
+    onDraw(dt);
 }
 
 void App::onDraw(float dt)
@@ -862,7 +873,7 @@ void App::onDraw(float dt)
     if (ImGui::Begin("Test")) {
         float fps = 1.0f / dt;
         ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
-        ImGui::Text("Current frame: %d", currentFrame);
+        ImGui::Text("Fame index:  %d", _frameIndex);
 
         // Check if actual timing is way off from expected
         if (fps > 200.0f) {
@@ -1011,6 +1022,8 @@ void App::releaseSemaphoreAndFence()
         vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], nullptr);
     }
 }
+
+
 
 #pragma endregion
 

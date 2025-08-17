@@ -39,14 +39,15 @@ add_requires("vulkansdk", {
     }
 })
 add_requires("glad")
+add_requires("cxxopts")
 
-target("ya")  --"Yet Another (Game) Engine"
+target("ya") --"Yet Another (Game) Engine"
 do
     set_kind("binary")
     add_files("./Source/**.cpp")
     add_headerfiles("./Source/**.h")
 
-    add_includedirs("./Source")
+    add_includedirs("./Source", { public = true })
 
     add_deps("utility.cc")
     add_deps("log.cc")
@@ -78,6 +79,7 @@ do
         add_packages("vulkansdk")
     end
     add_packages("glad")
+    add_packages("cxxopts")
 
 
     -- Add subsystem specification to fix LNK4031 warning

@@ -7,11 +7,16 @@ if is_plat("windows") then
 end
 
 
-includes("./xmake/rule.lua")
-includes("./xmake/package/xmake.lua")
-includes("./Engine/YA.xmake.lua")
+set_policy("build.warning", true)
+set_warnings("all", "extra")
 
-includes("./xmake/task.lua")
+
+includes("./Xmake/Rule.lua")
+includes("./Xmake/package/xmake.lua")
+includes("./Engine/YA.xmake.lua")
+includes("./Xmake/task.lua")
+
+-- add_rules("SourceFiles")
 
 set_rundir(os.scriptdir())
 

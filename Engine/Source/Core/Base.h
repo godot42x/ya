@@ -21,6 +21,14 @@
     #define ENGINE_API
 #endif
 
+#if _WIN32
+    #define FUNCTION_SIG __FUNCSIG__
+#elif defined(__clang__) || defined(__GNUC__)
+    #define FUNCTION_SIG __PRETTY_FUNCTION__
+#else
+    #define FUNCTION_SIG
+#endif
+
 template <typename T>
 using Ref = std::shared_ptr<T>;
 template <typename T>

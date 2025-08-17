@@ -1,3 +1,11 @@
 target("app")
-set_kind("binary")
-add_files("src/*.cpp")
+do
+    set_kind("binary")
+    add_files("src/*.cpp")
+    add_files("Source/*.cpp")
+    -- add_rules("SourceFiles")
+    add_deps("ya")
+end
+
+
+-- YaModule("app", { type = "binary" })

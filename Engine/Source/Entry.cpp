@@ -6,10 +6,13 @@
 
 #pragma region Entry
 
-int main()
+int main(int argc, char **argv)
 {
     try {
-        auto *app = new ya::App;
+
+        ya::AppCreateInfo ci;
+        ci.init(argc, argv);
+        auto *app = new ya::App(ci);
         app->init();
         app->run();
         app->quit();

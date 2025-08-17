@@ -14,6 +14,7 @@
 #include "Render/Render.h"
 #include "WindowProvider.h"
 
+#include "ClLIParams.h"
 
 
 // #include "utility.cc/stack_deleter.h"
@@ -27,8 +28,36 @@ namespace ya
 
 
 
+struct AppCreateInfo
+{
+    CliParams params = CliParams("Yet Another Game Engine", "Command line options");
+
+    std::string title      = "Yet Another Game Engine";
+    int         width      = 1024;
+    int         height     = 768;
+    bool        fullscreen = false;
+
+
+    void init(int argc, char **argv)
+    {
+        NE_CORE_INFO(FUNCTION_SIG);
+        params
+            .opt<int>("w", {"width"}, "Window width", "1024")
+            .opt<int>("h", {"height"}, "Window height", "768")
+            .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
+            .parse(argc, argv);
+
+        params.tryGet<std::string>("title", title);
+        params.tryGet<int>("width", width);
+        params.tryGet<int>("height", height);
+        params.tryGet<bool>("fullscreen", fullscreen);
+    }
+};
+
+
 struct App
 {
+
     static App *_instance;
 
     // StackDeleter    deleteStack;
@@ -51,10 +80,23 @@ struct App
     int swapchainImageSize = -1;
 
 
+    using clock_t      = std::chrono::steady_clock;
+    using time_point_t = clock_t::time_point;
+    time_point_t _lastTime;
+    time_point_t _startTime;
+    uint32_t     _frameIndex = 0;
+    bool         _bPause     = false;
+
+    AppCreateInfo _ci;
+
 
   public:
-    App()
+    App()          = delete;
+    virtual ~App() = default;
+
+    App(AppCreateInfo ci)
     {
+        _ci = ci;
         NE_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
         _instance = this;
     }
@@ -63,13 +105,17 @@ struct App
     void quit();
 
 
-    int  iterate(float dt);
-    void onUpdate(float dt);
+    int          iterate(float dt);
+    virtual void onUpdate(float dt);
+    virtual void onRender(float dt);
+    virtual int  onEvent(SDL_Event &event);
+
     void onDraw(float dt);
-    int  onEvent(SDL_Event &event);
 
     IRender    *getRender() { return _render; }
     static App *get() { return _instance; }
+
+    [[nodiscard]] const AppCreateInfo &getCI() const { return _ci; }
 
 
   private:

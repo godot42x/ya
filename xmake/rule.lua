@@ -12,6 +12,12 @@ do
     end)
 end
 
+-- on_load -> after_load -> on_config -> before_build -> on_build -> after_build
+
+for _, files in ipairs(os.files(os.projectdir() .. "/Example/**/*xmake.lua")) do
+    -- print("Including xmake.lua from:", files)
+    includes(files)
+end
 -- #pragma once
 
 -- #if _WIN32
@@ -23,3 +29,19 @@ end
 -- #else
 --     #define UTILITY_API
 -- #endif
+
+rule("SourceFiles")
+do
+    on_load(function(t)
+        print(t:sourcefiles())
+        print(t:get("files"))
+        t:add("files", "Source/**.cpp")
+
+        print(t:get("files"))
+        print("sourcefiles", t:get("sourcefiles"))
+        print("???")
+        print(t:get("scriptdir"))
+        print(os.scriptdir())
+        -- os.raise()
+    end)
+end
