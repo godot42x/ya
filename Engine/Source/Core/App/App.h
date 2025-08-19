@@ -1,14 +1,14 @@
 #pragma once
 
-#include "Core/Input/InputManager.h"
-#include "Platform/Render/Vulkan/VulkanQueue.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <memory>
-#include <string>
-#include <vector>
+
+#include "Core/Base.h"
+#include "Core/Input/InputManager.h"
+#include "Platform/Render/Vulkan/VulkanQueue.h"
+
 
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
@@ -33,8 +33,8 @@ struct AppCreateInfo
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 
     std::string title      = "Yet Another Game Engine";
-    int         width      = 1024;
-    int         height     = 768;
+    int         width      = 800;
+    int         height     = 600;
     bool        fullscreen = false;
 
 
@@ -42,8 +42,8 @@ struct AppCreateInfo
     {
         NE_CORE_INFO(FUNCTION_SIG);
         params
-            .opt<int>("w", {"width"}, "Window width", "1024")
-            .opt<int>("h", {"height"}, "Window height", "768")
+            .opt<int>("w", {"width"}, "Window width")
+            .opt<int>("h", {"height"}, "Window height")
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
             .parse(argc, argv);
 
@@ -57,11 +57,10 @@ struct AppCreateInfo
 
 struct App
 {
-
     static App *_instance;
 
     // StackDeleter    deleteStack;
-    WindowProvider   *windowProvider       = nullptr;
+    IWindowProvider  *windowProvider       = nullptr;
     IRender          *_render              = nullptr;
     VulkanRenderPass *m_triangleRenderPass = nullptr;
     VulkanRenderPass *m_2DRenderPass       = nullptr;

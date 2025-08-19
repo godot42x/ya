@@ -104,12 +104,11 @@ struct VulkanRender : public IRender
 
 
   public:
-    WindowProvider *_windowProvider = nullptr;
+    IWindowProvider *_windowProvider = nullptr;
 
     Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
     Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
     Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
-
 
   public:
 
@@ -121,26 +120,10 @@ struct VulkanRender : public IRender
         return static_cast<T *>(nativeWindow);
     }
 
-    bool init(const InitParams &params) override
+    bool init(const RenderCreateInfo &ci) override
     {
-#if USE_SDL
-        auto sdlWindow = static_cast<SDLWindowProvider *>(params.windowProvider);
 
-        onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            return sdlWindow->onCreateVkSurface(instance, surface);
-        });
-        onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
-            sdlWindow->onDestroyVkSurface(instance, surface);
-        });
-        onGetRequiredInstanceExtensions.set([sdlWindow]() {
-            std::vector<DeviceFeature> extensions;
-            for (const char *ext : sdlWindow->onGetVkInstanceExtensions()) {
-                extensions.push_back({ext, true});
-            }
-            return extensions;
-        });
-#endif
-        bool success = initInternal(params);
+        bool success = initInternal(ci);
         NE_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
 
         return true;
@@ -162,14 +145,12 @@ struct VulkanRender : public IRender
         std::exit(-1);
     }
 
-    bool initInternal(const InitParams &params)
+    bool initInternal(const RenderCreateInfo &ci)
     {
-
-        _windowProvider = params.windowProvider;
-        nativeWindow    = _windowProvider->getNativeWindowPtr();
-
+        initWindow(ci);
+        nativeWindow = _windowProvider->getNativeWindowPtr<SDL_Window>();
         // Store configurations
-        m_swapChainCI = params.swapchainCI;
+        m_swapChainCI = ci.swapchainCI;
 
         createInstance();
 
@@ -183,17 +164,18 @@ struct VulkanRender : public IRender
             terminate();
         }
 
+        if (m_EnableValidationLayers && bSupportDebugUtils)
+        {
+            _debugUtils = std::make_unique<VulkanDebugUtils>(this);
+            _debugUtils->init();
+            // preferred default validation layers callback
+            // _debugUtils->create();
+        }
+
         if (!createLogicDevice(1, 1)) {
             terminate();
         }
 
-        if (m_EnableValidationLayers && bSupportDebugUtils)
-        {
-            // preferred default validation layers callback
-            _debugUtils = std::make_unique<VulkanDebugUtils>(_instance, m_LogicalDevice);
-            _debugUtils->init();
-            // _debugUtils->create();
-        }
 
         m_swapChain = new VulkanSwapChain(this);
         m_swapChain->create(m_swapChainCI);
@@ -311,8 +293,10 @@ struct VulkanRender : public IRender
     }
 
 
+
   private:
 
+    void initWindow(const RenderCreateInfo &ci);
     void createInstance();
     void findPhysicalDevice();
 

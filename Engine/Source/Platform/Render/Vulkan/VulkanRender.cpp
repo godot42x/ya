@@ -631,3 +631,36 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
     NE_CORE_ERROR("No suitable memory type found for properties: {} and memoryTypeBits: {}", (uint32_t)properties, memoryTypeBits);
     return -1;
 }
+
+void VulkanRender::initWindow(const RenderCreateInfo &ci)
+{
+#if USE_SDL
+    _windowProvider = new SDLWindowProvider();
+    _windowProvider->init();
+    _windowProvider->recreate(WindowCreateInfo{
+        .renderAPI = ci.renderAPI,
+        .width     = ci.swapchainCI.width,
+        .height    = ci.swapchainCI.height,
+    });
+
+    auto sdlWindow = static_cast<SDLWindowProvider *>(_windowProvider);
+    NE_CORE_ASSERT(sdlWindow, "SDLWindowProvider is not initialized correctly");
+
+    onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
+        return sdlWindow->onCreateVkSurface(instance, surface);
+    });
+    onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
+        sdlWindow->onDestroyVkSurface(instance, surface);
+    });
+    onGetRequiredInstanceExtensions.set([sdlWindow]() {
+        std::vector<DeviceFeature> extensions;
+        for (const char *ext : sdlWindow->onGetVkInstanceExtensions()) {
+            extensions.push_back({
+                .name      = ext,
+                .bRequired = true,
+            });
+        }
+        return extensions;
+    });
+#endif
+}

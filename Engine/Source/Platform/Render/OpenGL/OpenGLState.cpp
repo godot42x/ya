@@ -1,8 +1,9 @@
-#include "Core/Base.h"
 #include "OpenGLState.h"
+#include "Core/Base.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
 
 
 OpenGLState::~OpenGLState()
@@ -34,6 +35,97 @@ bool OpenGLState::initialize()
     return true;
 }
 
+void OpenGLState::init(const RenderCreateInfo &renderCI)
+{
+    _window = new SDLWindowProvider();
+    _window->init();
+    _window->recreate(WindowCreateInfo{
+        .renderAPI = renderCI.renderAPI,
+        .width     = renderCI.swapchainCI.width,
+        .height    = renderCI.swapchainCI.height,
+    });
+    m_Window = _window->getNativeWindowPtr<SDL_Window>();
+
+    // EFormat::T      imageFormat = EFormat::R8G8B8A8_UNORM; // TODO: rename to surfaceFormat
+    // EColorSpace::T  colorSpace  = EColorSpace::SRGB_NONLINEAR;
+    // EPresentMode::T presentMode = EPresentMode::FIFO; // V-Sync by default
+    // bool            bVsync      = true;               // V-Sync enabled by default
+
+    // // Image configuration
+    // uint32_t minImageCount    = 2; // Double buffering by default
+    // uint32_t imageArrayLayers = 1;
+    // // std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
+
+    // // Transform and composite
+    // // ESurfaceTransform::T preTransform   = ESurfaceTransform::Identity;
+    // // ECompositeAlpha::T   compositeAlpha = ECompositeAlpha::Opaque;
+
+    // // Clipping and sharing
+    // bool bClipped                = true;
+    // bool preferredDifferentQueue = true; // Use different queues for graphics and present if possible
+
+    // uint32_t width  = 800;
+    // uint32_t height = 600;
+
+    // buffers
+
+    SDL_GL_CreateContext(m_Window);
+}
+
+void OpenGLState::recreateSwapchain(const SwapchainCreateInfo &swapchainCI)
+{
+    // Store swapchain configuration
+    m_SwapchainCI = swapchainCI;
+
+    // Configure buffering first
+    configureBuffering(swapchainCI);
+
+    // Configure swap interval based on present mode and buffer count
+    int swapInterval = 0;
+
+    if (swapchainCI.bVsync) {
+        switch (swapchainCI.presentMode) {
+        case EPresentMode::FIFO:
+            swapInterval = 1; // V-Sync enabled
+            break;
+        case EPresentMode::FIFO_Relaxed:
+            swapInterval = -1; // Adaptive V-Sync (if supported)
+            break;
+        case EPresentMode::Mailbox:
+            // For mailbox mode (triple buffering), we still use 1 but rely on driver optimization
+            swapInterval = 1;
+            break;
+        case EPresentMode::Immediate:
+        default:
+            swapInterval = 0; // No V-Sync
+            break;
+        }
+    }
+    else {
+        swapInterval = 0; // V-Sync disabled
+    }
+
+// Set swap interval
+#if USE_SDL
+    int result = SDL_GL_SetSwapInterval(swapInterval);
+    if (result != 0) {
+        NE_CORE_WARN("Failed to set swap interval to {}: {}", swapInterval, SDL_GetError());
+        // Try fallback
+        SDL_GL_SetSwapInterval(swapchainCI.bVsync ? 1 : 0);
+    }
+#elif USE_GLFW
+    glfwSwapInterval(swapInterval);
+#endif
+
+    // Log triple buffering configuration
+    if (swapchainCI.minImageCount >= 3) {
+        NE_CORE_INFO("OpenGL: Triple buffering requested (minImageCount: {})", swapchainCI.minImageCount);
+        if (swapchainCI.presentMode == EPresentMode::Mailbox) {
+            NE_CORE_INFO("OpenGL: Using mailbox present mode for optimal triple buffering");
+        }
+    }
+}
+
 void OpenGLState::destroy()
 {
     if (!m_Initialized) {
@@ -43,6 +135,7 @@ void OpenGLState::destroy()
     destroyContext();
     m_Initialized = false;
 }
+
 
 bool OpenGLState::createContext()
 {
@@ -75,8 +168,8 @@ void OpenGLState::destroyContext()
 void OpenGLState::makeCurrent()
 {
 #if USE_SDL
-    if (m_Window && m_GLContext) {
-        SDL_GL_MakeCurrent(m_Window, m_GLContext);
+    if (_window && m_GLContext) {
+        SDL_GL_MakeCurrent(_window->getNativeWindowPtr<SDL_Window>(), m_GLContext);
     }
 #elif USE_GLFW
     if (m_Window) {
@@ -98,12 +191,88 @@ void OpenGLState::swapBuffers()
 #endif
 }
 
+// Triple buffering support
+void OpenGLState::enableTripleBuffering()
+{
+    // Enable triple buffering via OpenGL context attributes
+#if USE_SDL
+    // Set double buffering attribute (which enables triple buffering when available)
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+    // Try to enable triple buffering through context creation flags
+    // Note: This depends on driver support
+    if (m_SwapchainCI.minImageCount >= 3) {
+        NE_CORE_INFO("Attempting to enable triple buffering (3+ images requested)");
+        // On some drivers, setting a higher swap interval might help with triple buffering
+        if (m_SwapchainCI.presentMode == EPresentMode::Mailbox) {
+            SDL_GL_SetSwapInterval(1); // Let driver decide optimal buffering
+        }
+    }
+#elif USE_GLFW
+    // GLFW doesn't have explicit triple buffering control
+    // But modern drivers will automatically use triple buffering when beneficial
+    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+#endif
+}
+
+bool OpenGLState::isTripleBufferingSupported()
+{
+    // Query if triple buffering is supported
+    // This is driver-dependent and not directly queryable in OpenGL
+    // We can make educated guesses based on context and extensions
+
+#if USE_SDL
+    // Check if we have a valid context
+    if (!m_GLContext) {
+        return false;
+    }
+
+    // Modern drivers typically support triple buffering automatically
+    // when using mailbox present mode or when beneficial
+    const GLubyte *vendor = glGetString(GL_VENDOR);
+    if (vendor) {
+        std::string vendorStr = reinterpret_cast<const char *>(vendor);
+        // NVIDIA, AMD, and Intel modern drivers generally support triple buffering
+        if (vendorStr.find("NVIDIA") != std::string::npos ||
+            vendorStr.find("AMD") != std::string::npos ||
+            vendorStr.find("Intel") != std::string::npos) {
+            return true;
+        }
+    }
+#elif USE_GLFW
+    // Similar logic for GLFW
+    return true; // Most modern OpenGL contexts support triple buffering
+#endif
+
+    return false; // Conservative fallback
+}
+
+void OpenGLState::configureBuffering(const SwapchainCreateInfo &swapchainCI)
+{
+    // Configure buffering based on swapchain requirements
+    if (swapchainCI.minImageCount >= 3) {
+        if (isTripleBufferingSupported()) {
+            enableTripleBuffering();
+            NE_CORE_INFO("Triple buffering enabled (requested {} images)", swapchainCI.minImageCount);
+        }
+        else {
+            NE_CORE_WARN("Triple buffering requested but not supported, falling back to double buffering");
+        }
+    }
+
+    // Log the buffering configuration
+    NE_CORE_INFO("OpenGL buffering configured:");
+    NE_CORE_INFO("  - Requested images: {}", swapchainCI.minImageCount);
+    NE_CORE_INFO("  - Present mode: {}", static_cast<int>(swapchainCI.presentMode));
+    NE_CORE_INFO("  - VSync enabled: {}", swapchainCI.bVsync);
+}
+
 // Buffer management
 GLuint OpenGLState::createBuffer(GLenum target, GLsizeiptr size, const void *data, GLenum usage)
 {
     GLuint buffer;
     glGenBuffers(1, &buffer);
-    my_glBindBuffer(target, buffer);
+    glBindBuffer(target, buffer);
     glBufferData(target, size, data, usage);
     checkGLError("createBuffer");
     return buffer;
@@ -117,20 +286,20 @@ void OpenGLState::deleteBuffer(GLuint buffer)
 
 void OpenGLState::bindBuffer(GLenum target, GLuint buffer)
 {
-    my_glBindBuffer(target, buffer);
+    glBindBuffer(target, buffer);
     checkGLError("bindBuffer");
 }
 
 void OpenGLState::updateBuffer(GLuint buffer, GLenum target, GLsizeiptr size, const void *data, GLsizeiptr offset)
 {
-    my_glBindBuffer(target, buffer);
+    glBindBuffer(target, buffer);
     glBufferSubData(target, offset, size, data);
     checkGLError("updateBuffer");
 }
 
 void *OpenGLState::mapBuffer(GLuint buffer, GLenum target, GLenum access)
 {
-    my_glBindBuffer(target, buffer);
+    glBindBuffer(target, buffer);
     void *ptr = glMapBuffer(target, access);
     checkGLError("mapBuffer");
     return ptr;
@@ -159,7 +328,7 @@ void OpenGLState::deleteVertexArray(GLuint vao)
 
 void OpenGLState::bindVertexArray(GLuint vao)
 {
-    my_glBindVertexArray(vao);
+    glBindVertexArray(vao);
     checkGLError("bindVertexArray");
 }
 
@@ -204,7 +373,7 @@ void OpenGLState::deleteTexture(GLuint texture)
 
 void OpenGLState::bindTexture(GLenum target, GLuint texture)
 {
-    my_glBindTexture(target, texture);
+    glBindTexture(target, texture);
     checkGLError("bindTexture");
 }
 
@@ -217,7 +386,7 @@ void OpenGLState::activeTexture(GLenum texture)
 void OpenGLState::setupTexture2D(GLuint texture, GLint level, GLint internalformat, GLsizei width, GLsizei height,
                                  GLenum format, GLenum type, const void *data)
 {
-    my_glBindTexture(GL_TEXTURE_2D, texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, level, internalformat, width, height, 0, format, type, data);
     checkGLError("setupTexture2D");
 }
@@ -378,7 +547,7 @@ void OpenGLState::deleteFramebuffer(GLuint fbo)
 
 void OpenGLState::bindFramebuffer(GLenum target, GLuint fbo)
 {
-    my_glBindFramebuffer(target, fbo);
+    glBindFramebuffer(target, fbo);
     checkGLError("bindFramebuffer");
 }
 
@@ -415,7 +584,7 @@ void OpenGLState::deleteRenderbuffer(GLuint rbo)
 
 void OpenGLState::bindRenderbuffer(GLuint rbo)
 {
-    my_glBindRenderbuffer(rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
     checkGLError("bindRenderbuffer");
 }
 
@@ -599,6 +768,7 @@ void OpenGLState::queryGLInfo()
     const GLubyte *renderer = glGetString(GL_RENDERER);
     const GLubyte *version  = glGetString(GL_VERSION);
     const GLubyte *vendor   = glGetString(GL_VENDOR);
+
 
     if (renderer)
         m_RendererString = reinterpret_cast<const char *>(renderer);

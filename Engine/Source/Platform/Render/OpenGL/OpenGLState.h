@@ -2,6 +2,8 @@
 
 #include "Core/Log.h"
 
+#include "Render/Render.h"
+#include "WindowProvider.h"
 #include "glad/glad.h"
 #include <string>
 #include <unordered_map>
@@ -29,6 +31,11 @@ class OpenGLState
     std::string m_VersionString;
     std::string m_VendorString;
 
+    // Swapchain configuration
+    SwapchainCreateInfo m_SwapchainCI;
+
+    IWindowProvider *_window = nullptr;
+
     // Platform-specific context
 #if USE_SDL
     SDL_GLContext m_GLContext = nullptr;
@@ -37,55 +44,7 @@ class OpenGLState
     GLFWwindow *m_Window = nullptr;
 #endif
 
-#if DEBUG_GL_STATE
-    GLuint _currentBuffer       = 0;
-    GLenum _currentBufferTarget = 0;
-
-    GLenum _currentTextureTarget = 0;
-    GLuint _currentTexture       = 0; // Using buffer for texture binding
-
-    GLuint _currentVAO = 0;
-
-    GLuint _currentFrameBufferBuffer = 0;
-    GLenum _currentFrameBufferTarget = 0;
-
-    GLuint _currentRenderBuffer = 0;
-
-#endif
-
   public:
-    void my_glBindBuffer(GLenum target, GLuint buffer)
-    {
-        _currentBuffer       = buffer;
-        _currentBufferTarget = target;
-        glBindBuffer(target, buffer);
-    }
-
-    void my_glBindTexture(GLenum target, GLuint texture)
-    {
-        _currentBufferTarget = target;
-        _currentBuffer       = texture; // Using buffer for texture binding
-        glBindTexture(target, texture);
-    }
-    void my_glBindVertexArray(GLuint vao)
-    {
-        _currentVAO = vao;
-        glBindVertexArray(vao);
-    }
-    void my_glBindFramebuffer(GLenum target, GLuint fbo)
-    {
-        _currentFrameBufferTarget = target;
-        _currentFrameBufferBuffer = fbo; // Using buffer for framebuffer binding
-        glBindFramebuffer(target, fbo);
-    }
-    void my_glBindRenderbuffer(GLuint rbo)
-    {
-        _currentRenderBuffer = rbo;
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-    }
-
-
-
   public:
     OpenGLState() = default;
     ~OpenGLState();
@@ -94,11 +53,28 @@ class OpenGLState
     bool initialize();
     void destroy();
 
+    void init(const RenderCreateInfo &renderCI);
+    void recreateSwapchain(const SwapchainCreateInfo &swapchainCI);
+    void recreateRenderPass(const RenderPassCreateInfo &renderPassCI) {};
+
+
+    struct FrameBufferCreateInfo
+    {
+    };
+
+    void recreateFramebuffer(const FrameBufferCreateInfo &framebufferCI) {};
+    void recreatePipeline(const GraphicsPipelineCreateInfo &pipelineCI) {};
+
     // Context management
     bool createContext();
     void destroyContext();
     void makeCurrent();
     void swapBuffers();
+
+    // Triple buffering support
+    void enableTripleBuffering();
+    bool isTripleBufferingSupported();
+    void configureBuffering(const SwapchainCreateInfo &swapchainCI);
 
 
     // Buffer management

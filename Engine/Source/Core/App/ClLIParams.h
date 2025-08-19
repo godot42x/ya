@@ -21,8 +21,8 @@ struct CliParams
         const char                       *sn,   // short name
         const std::vector<std::string>   &lns,  // long names
         const char                       *desc, // description
-        const std::optional<std::string> &defaultStr,
-        const char                       *helpStr = "")
+        const std::optional<std::string> &defaultStr = {},
+        const char                       *helpStr    = "")
     {
         _opt.add_option(
             "",

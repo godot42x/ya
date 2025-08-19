@@ -118,17 +118,21 @@ void App::init()
     FileSystem::init();
     NameRegistry::init(); // Initialize FName registry
 
-    windowProvider = new SDLWindowProvider();
-    // deleteStack.push("SDLWindowProvider", windowProvider);
-    windowProvider->init();
+    currentRenderAPI = ERenderAPI::Vulkan;
+    RenderCreateInfo renderCI{
+        .renderAPI   = currentRenderAPI,
+        .swapchainCI = SwapchainCreateInfo{
+            .imageFormat   = EFormat::R8G8B8A8_UNORM,
+            .bVsync        = true,
+            .minImageCount = 2,
+            .width         = static_cast<uint32_t>(_ci.width),
+            .height        = static_cast<uint32_t>(_ci.height),
+        },
+    };
 
-    int w = 0, h = 0;
-    windowProvider->getWindowSize(w, h);
-
-    _render        = new VulkanRender();
+    _render        = IRender::create(renderCI);
     auto *vkRender = dynamic_cast<VulkanRender *>(_render);
 
-    currentRenderAPI = ERenderAPI::Vulkan;
 
     /**
       In vulkan:
@@ -139,17 +143,7 @@ void App::init()
       5. Create swap chain
       6. Other device resources: command pool{command buffers}, fences, semaphores, etc.
      */
-    vkRender->init(IRender::InitParams{
-        .renderAPI      = ERenderAPI::Vulkan,
-        .windowProvider = windowProvider,
-        .swapchainCI    = SwapchainCreateInfo{
-               .imageFormat   = EFormat::R8G8B8A8_UNORM,
-               .bVsync        = true,
-               .minImageCount = 2,
-               .width         = static_cast<uint32_t>(w),
-               .height        = static_cast<uint32_t>(h),
-        },
-    });
+    vkRender->init(renderCI);
 
 
     VkFormat surfaceFormat = vkRender->getSwapChain()->getSurfaceFormat();
@@ -193,6 +187,7 @@ void App::init()
         .subpasses = {
             RenderPassCreateInfo::SubpassInfo{
                 .subpassIndex     = 0,
+                .inputAttachments = {},
                 .colorAttachments = {
                     RenderPassCreateInfo::AttachmentRef{
                         .ref    = 0, // color attachment
@@ -203,6 +198,7 @@ void App::init()
                     .ref    = 1, // depth attachment
                     .layout = EImageLayout::DepthStencilAttachmentOptimal,
                 },
+                .resolveAttachment = {},
             },
         },
         .dependencies = {
@@ -494,10 +490,8 @@ void ya::App::quit()
     }
     delete renderpass;
     _render->destroy();
-    windowProvider->destroy();
 
     delete _render;
-    delete windowProvider;
 }
 
 
@@ -701,6 +695,7 @@ int ya::App::iterate(float dt)
         onUpdate(dt);
     }
     onRender(dt);
+    ++_frameIndex;
     return 0;
 }
 
@@ -863,7 +858,7 @@ void App::onDraw(float dt)
     // vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
     vkCmdDrawIndexed(curCmdBuf,
                      indexSize, // index count
-                     9,         // instance count
+                     9,         // instance count: 9 cubes
                      0,         // first index
                      0,         // vertex offset, this for merge vertex buffer?
                      0          // first instance

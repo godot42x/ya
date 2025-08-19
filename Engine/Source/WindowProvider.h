@@ -2,9 +2,23 @@
 #pragma once
 
 #include "Core/Log.h"
+#include "Render/Render.h"
 #include "SDL3/SDL.h"
 
-class WindowProvider
+
+
+struct WindowCreateInfo
+{
+    uint32_t      index      = 0;
+    ERenderAPI::T renderAPI  = ERenderAPI::None;
+    std::string   title      = "Window Title";
+    uint32_t      width      = 1024;
+    uint32_t      height     = 768;
+    float         scale      = 1.0f;
+    bool          bResizable = true;
+};
+
+class IWindowProvider
 {
 
   protected:
@@ -16,18 +30,20 @@ class WindowProvider
     template <typename T>
     T *getNativeWindowPtr() { return static_cast<T *>(nativeWindowHandle); }
 
-    virtual ~WindowProvider()
+    virtual ~IWindowProvider()
     {
         NE_CORE_TRACE("WindowProvider::~WindowProvider()");
     }
 
-    virtual bool init()    = 0;
-    virtual void destroy() = 0;
+    // TODO: support multiple windows
+    virtual bool init()                               = 0;
+    virtual void destroy()                            = 0;
+    virtual bool recreate(const WindowCreateInfo &ci) = 0;
 
     virtual void getWindowSize(int &width, int &height) = 0;
     virtual bool setWindowSize(int width, int height)
     {
-        NE_CORE_ERROR("setWindowSize not implemented in WindowProvider");
+        NE_CORE_ERROR("setWindowSize not implemented in IWindowProvider");
         return false;
     }
 };
@@ -37,7 +53,7 @@ class WindowProvider
     #include "SDL3/SDL_vulkan.h"
 #endif
 
-class SDLWindowProvider : public WindowProvider
+class SDLWindowProvider : public IWindowProvider
 {
   public:
     SDLWindowProvider() = default;
@@ -58,11 +74,34 @@ class SDLWindowProvider : public WindowProvider
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
             return false;
         }
-
+    }
+    bool recreate(const WindowCreateInfo &ci) override
+    {
         // TODO: handle dpi
         float dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+        NE_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
+        double scale = dpiScale * ci.scale;
+        int    w     = (int)(ci.width * scale);
+        int    h     = (int)(ci.height * scale);
 
-        SDL_Window *window = SDL_CreateWindow("ya", 1024, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        int flags = 0;
+        switch (ci.renderAPI) {
+        case ERenderAPI::Vulkan:
+            flags |= SDL_WINDOW_VULKAN;
+            break;
+        case ERenderAPI::None:
+        case ERenderAPI::OpenGL:
+        case ERenderAPI::DirectX12:
+        case ERenderAPI::Metal:
+        case ERenderAPI::ENUM_MAX:
+            UNREACHABLE();
+            break;
+        }
+        if (ci.bResizable) {
+            flags |= SDL_WINDOW_RESIZABLE;
+        }
+
+        SDL_Window *window = SDL_CreateWindow(ci.title.c_str(), w, h, flags);
         NE_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
         nativeWindowHandle = window;
 

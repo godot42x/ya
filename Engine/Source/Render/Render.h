@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 #include "Core/Log.h"
-#include "WindowProvider.h"
 #include "reflect.cc/enum"
 
 
@@ -563,13 +562,8 @@ struct RenderPassCreateInfo
     std::vector<SubpassInfo>           subpasses;   // Multiple subpasses can be defined, but currently we use a single subpass
     std::vector<SubpassDependency>     dependencies;
 
-    std::vector<GraphicsPipelineCreateInfo> pipelineCIs; // For compatibility checks
-
-
-
-    uint32_t getSubpassCount() const { return static_cast<uint32_t>(subpasses.size()); }
-
-    bool isValidSubpassIndex(uint32_t index) const { return index < subpasses.size(); }
+    [[nodiscard]] uint32_t getSubpassCount() const { return static_cast<uint32_t>(subpasses.size()); }
+    [[nodiscard]] bool     isValidSubpassIndex(uint32_t index) const { return index < subpasses.size(); }
 };
 
 
@@ -615,20 +609,22 @@ struct DeviceFeature
     }
 };
 
+
+struct RenderCreateInfo
+{
+    ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
+    SwapchainCreateInfo swapchainCI;
+};
+
 struct IRender
 {
-
+    IRender() = default;
     virtual ~IRender() { NE_CORE_TRACE("IRender::~IRender()"); }
 
-    struct InitParams
-    {
-        ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
-        WindowProvider     *windowProvider;
-        SwapchainCreateInfo swapchainCI;
-    };
+    static IRender *create(const RenderCreateInfo &ci);
 
-    virtual bool init(const InitParams &params) = 0;
-    virtual void destroy()                      = 0;
+    virtual bool init(const RenderCreateInfo &ci) = 0;
+    virtual void destroy()                        = 0;
 };
 
 

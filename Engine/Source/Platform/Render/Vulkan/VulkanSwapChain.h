@@ -13,7 +13,7 @@ struct VulkanSwapChainSupportDetails
 
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR preferredSurfaceFormat);
     VkPresentModeKHR   ChooseSwapPresentMode(VkPresentModeKHR preferredMode);
-    VkExtent2D         ChooseSwapExtent(WindowProvider *provider, int preferredWidth = 0, int preferredHeight = 0);
+    VkExtent2D         ChooseSwapExtent(IWindowProvider *provider, int preferredWidth = 0, int preferredHeight = 0);
 
     static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };

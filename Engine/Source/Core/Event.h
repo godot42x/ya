@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SDL3/SDL_events.h"
 struct EventProcessState
 {
     enum EResult
@@ -24,3 +25,5 @@ struct EventProcessState
     }
 
 }; // namespace EventProcessState
+
+using Event = SDL_Event;

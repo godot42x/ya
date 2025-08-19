@@ -37,11 +37,11 @@ VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentM
 
     // If preferred mode not found, try fallback strategies
     NE_CORE_WARN("Preferred present mode {} not available", std::to_string(preferredMode));
-    
+
     // If we wanted FIFO (VSync) but it's not available, warn user
     if (preferredMode == VK_PRESENT_MODE_FIFO_KHR) {
         NE_CORE_WARN("VK_PRESENT_MODE_FIFO_KHR not supported! VSync may not work correctly.");
-        
+
         // Try FIFO_RELAXED as fallback for VSync
         for (const auto &modes : presentModes) {
             if (modes == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
@@ -62,7 +62,7 @@ VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentM
     return presentModes[0];
 }
 
-VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(WindowProvider *provider, int preferredWidth, int preferredHeight)
+VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(IWindowProvider *provider, int preferredWidth, int preferredHeight)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
@@ -202,8 +202,8 @@ bool VulkanSwapChain::create(const SwapchainCreateInfo &ci)
     NE_CORE_INFO("Using chosen surface format: {} with color space: {}",
                  std::to_string(preferred.format),
                  std::to_string(preferred.colorSpace));
-    NE_CORE_INFO("Requested present mode: {}, Actually using: {}", 
-                 std::to_string(presentMode), 
+    NE_CORE_INFO("Requested present mode: {}, Actually using: {}",
+                 std::to_string(presentMode),
                  std::to_string(_presentMode));
     NE_CORE_INFO("Current extent is: {}x{}",
                  _supportDetails.capabilities.currentExtent.width,
