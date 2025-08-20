@@ -4,9 +4,9 @@
 
 struct Camera
 {
-    glm::mat4 projectionMatrix;
-    glm::mat4 viewMatrix;
-    glm::mat4 viewProjectionMatrix;
+    glm::mat4 projectionMatrix     = {};
+    glm::mat4 viewMatrix           = {};
+    glm::mat4 viewProjectionMatrix = {};
 
     [[nodiscard]] const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
 

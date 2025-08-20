@@ -141,6 +141,7 @@ enum T
     R8G8B8A8_UNORM,
     B8G8R8A8_UNORM,
     D32_SFLOAT,
+    D32_SFLOAT_S8_UINT,
     D24_UNORM_S8_UINT,
     ENUM_MAX,
 };
@@ -360,6 +361,9 @@ struct AttachmentDescription
     EAttachmentStoreOp::T stencilStoreOp = EAttachmentStoreOp::DontCare;
     EImageLayout::T       initialLayout  = EImageLayout::Undefined;
     EImageLayout::T       finalLayout    = EImageLayout::ColorAttachmentOptimal;
+
+    // declare here for RT/framebuffer
+    EImageUsage::T usage = EImageUsage::ColorAttachment;
 };
 
 
@@ -616,6 +620,10 @@ struct RenderCreateInfo
     SwapchainCreateInfo swapchainCI;
 };
 
+struct ISwapChain
+{
+};
+
 struct IRender
 {
     IRender() = default;
@@ -646,4 +654,11 @@ struct ImageCreateInfo
     EImageLayout::T initialLayout         = EImageLayout::Undefined;
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
+};
+
+
+struct RenderHelper
+{
+    static bool isDepthOnlyFormat(EFormat::T format) { return format == EFormat::D32_SFLOAT || format == EFormat::D24_UNORM_S8_UINT; }
+    static bool isDepthStencilFormat(EFormat::T format) { return format == EFormat::D24_UNORM_S8_UINT || format == EFormat::D32_SFLOAT_S8_UINT; }
 };

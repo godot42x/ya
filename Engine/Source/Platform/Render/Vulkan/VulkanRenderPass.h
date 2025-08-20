@@ -33,14 +33,9 @@ class VulkanRenderPass
 
     // Initialize the render pass with device and format information
 
-    // Create the render pass with custom configuration
-    bool create(const RenderPassCreateInfo &ci);
-
-    // Cleanup resources
+    bool recreate(const RenderPassCreateInfo &ci);
     void cleanup();
 
-    // Recreate render pass and framebuffers (for swap chain recreation)
-    void recreate(const RenderPassCreateInfo &ci);
 
     // Getters
     [[nodiscard]] VkRenderPass getHandle() const { return m_renderPass; }
@@ -51,6 +46,11 @@ class VulkanRenderPass
     void end(VkCommandBuffer commandBuffer);
 
     [[nodiscard]] RenderPassCreateInfo getCI() const { return _ci; }
+    [[nodiscard]] auto                 getAttachmentCount() const { return _ci.attachments.size(); }
+
+    // span is 16 bytes, but can aware of the copy if use not const auto& = getxxx()
+    // but performance?
+    [[nodiscard]] const std::vector<AttachmentDescription> &getAttachments() const { return _ci.attachments; }
 
 
   private:

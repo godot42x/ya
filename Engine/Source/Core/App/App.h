@@ -111,7 +111,9 @@ struct App
 
     void onDraw(float dt);
 
-    IRender    *getRender() { return _render; }
+    IRender *getRender() { return _render; }
+    template <typename T>
+    T          *getRender() { return static_cast<T *>(_render); }
     static App *get() { return _instance; }
 
     [[nodiscard]] const AppCreateInfo &getCI() const { return _ci; }

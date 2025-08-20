@@ -13,7 +13,7 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
     _imageViews.resize(images.size());
     for (int i = 0; i < images.size(); i++)
     {
-        bool bDepth    = VulkanUtils::isDepthOnlyFormat(_images[i]->getFormat());
+        bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getFormat());
         _imageViews[i] = VulkanUtils::createImageView(
             render->getLogicalDevice(),
             _images[i]->getHandle(),

@@ -323,6 +323,7 @@ VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence,
                                             semaphore,
                                             fence,
                                             &outImageIndex);
+    _curImageIndex  = outImageIndex;
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         NE_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);

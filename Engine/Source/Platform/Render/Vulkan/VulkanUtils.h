@@ -343,10 +343,14 @@ inline auto toVk(T format) -> VkFormat
         return VK_FORMAT_B8G8R8A8_UNORM;
     case D32_SFLOAT:
         return VK_FORMAT_D32_SFLOAT;
+    case D32_SFLOAT_S8_UINT: // with stencil?
+        return VK_FORMAT_D32_SFLOAT_S8_UINT;
     case D24_UNORM_S8_UINT:
         return VK_FORMAT_D24_UNORM_S8_UINT;
+    case ENUM_MAX:
     default:
         UNREACHABLE();
+        break;
     }
     return VK_FORMAT_UNDEFINED;
 }

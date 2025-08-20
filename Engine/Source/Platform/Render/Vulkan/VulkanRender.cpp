@@ -428,7 +428,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
         _graphicsQueues.emplace_back(_graphicsQueueFamily.queueFamilyIndex, i, queue, false);
         setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
-                           (uintptr_t)queue,
+                           queue,
                            std::format("GraphicsQueue_{}", i).c_str());
     }
     for (int i = 0; i < presentQueueCount; i++)
@@ -441,7 +441,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         }
         _presentQueues.emplace_back(_presentQueueFamily.queueFamilyIndex, i, queue, true);
         setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
-                           (uintptr_t)queue,
+                           queue,
                            std::format("PresentQueue_{}", i).c_str());
     }
 
@@ -476,15 +476,11 @@ void VulkanRender::createPipelineCache()
     vkCreatePipelineCache(getLogicalDevice(), &ci, nullptr, &_pipelineCache);
 }
 
-void VulkanRender::createCommandBuffers()
+void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)
 {
-
-    // TODO: command buffer's size is equal to swap chain's image count
-    // so we should move the command buffer owner to swap chain
-    int size = getSwapChain()->getImages().size();
-    m_commandBuffers.resize(size);
+    outCommandBuffers.resize(size, VK_NULL_HANDLE);
     for (int i = 0; i < size; ++i) {
-        bool ok = _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, m_commandBuffers[i]);
+        bool ok = _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, outCommandBuffers[i]);
         if (!ok) {
             NE_CORE_ERROR("Failed to allocate command buffer for index {}", i);
             return;
@@ -501,28 +497,31 @@ bool VulkanRender::isFeatureSupported(
     const std::vector<DeviceFeature>         &requestExtensions,
     const std::vector<DeviceFeature>         &requestLayers,
     std::vector<const char *>                &outExtensionNames,
-    std::vector<const char *>                &outLayerNames)
+    std::vector<const char *>                &outLayerNames,
+    bool                                      bDebug)
 {
 
-    NE_CORE_INFO("=================================");
-    NE_CORE_INFO("Available {} layers:", contextStr);
-    std::string line = "\n";
-    for (size_t i = 0; i < availableLayers.size(); i += 3) {
-        for (size_t j = i; j < std::min(i + 3, availableLayers.size()); ++j) {
-            line += std::format("{:<35}", availableLayers[j].layerName);
+    if (bDebug) {
+        NE_CORE_INFO("=================================");
+        NE_CORE_INFO("Available {} layers:", contextStr);
+        std::string line = "\n";
+        for (size_t i = 0; i < availableLayers.size(); i += 3) {
+            for (size_t j = i; j < std::min(i + 3, availableLayers.size()); ++j) {
+                line += std::format("{:<35}", availableLayers[j].layerName);
+            }
+            line.push_back('\n');
         }
-        line.push_back('\n');
-    }
-    NE_CORE_INFO("{}", line);
-    NE_CORE_INFO("Available {} extensions:", contextStr);
-    line = "\n";
-    for (size_t i = 0; i < availableExtensions.size(); i += 3) {
-        for (size_t j = i; j < std::min(i + 3, availableExtensions.size()); ++j) {
-            line += std::format("{:<35}|", availableExtensions[j].extensionName);
+        NE_CORE_INFO("{}", line);
+        NE_CORE_INFO("Available {} extensions:", contextStr);
+        line = "\n";
+        for (size_t i = 0; i < availableExtensions.size(); i += 3) {
+            for (size_t j = i; j < std::min(i + 3, availableExtensions.size()); ++j) {
+                line += std::format("{:<35}|", availableExtensions[j].extensionName);
+            }
+            line.push_back('\n');
         }
-        line.push_back('\n');
+        NE_CORE_INFO("{}", line);
     }
-    NE_CORE_INFO("{}", line);
 
 
     // Clear the output vectors first

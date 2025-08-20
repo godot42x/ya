@@ -23,10 +23,6 @@ void VulkanRenderPass::cleanup()
     }
 }
 
-void VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
-{
-    create(ci);
-}
 
 void VulkanRenderPass::begin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues)
 {
@@ -52,112 +48,6 @@ void VulkanRenderPass::end(VkCommandBuffer commandBuffer)
     vkCmdEndRenderPass(commandBuffer);
 }
 
-
-
-void convertToVkAttachmentDescription(const AttachmentDescription &desc, VkAttachmentDescription &outVkDesc)
-{
-    // Convert format
-    switch (desc.format) {
-    case EFormat::R8G8B8A8_UNORM:
-        outVkDesc.format = VK_FORMAT_R8G8B8A8_UNORM;
-        break;
-    case EFormat::B8G8R8A8_UNORM:
-        outVkDesc.format = VK_FORMAT_B8G8R8A8_UNORM;
-        break;
-    case EFormat::D32_SFLOAT:
-        outVkDesc.format = VK_FORMAT_D32_SFLOAT;
-        break;
-    case EFormat::D24_UNORM_S8_UINT:
-        outVkDesc.format = VK_FORMAT_D24_UNORM_S8_UINT;
-        break;
-    default:
-        UNIMPLEMENTED();
-        break;
-    }
-
-    // Convert sample count
-    switch (desc.samples) {
-    case ESampleCount::Sample_1:
-        outVkDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-        break;
-    case ESampleCount::Sample_2:
-        outVkDesc.samples = VK_SAMPLE_COUNT_2_BIT;
-        break;
-    case ESampleCount::Sample_4:
-        outVkDesc.samples = VK_SAMPLE_COUNT_4_BIT;
-        break;
-    case ESampleCount::Sample_8:
-        outVkDesc.samples = VK_SAMPLE_COUNT_8_BIT;
-        break;
-    case ESampleCount::Sample_16:
-        outVkDesc.samples = VK_SAMPLE_COUNT_16_BIT;
-        break;
-    case ESampleCount::Sample_32:
-        outVkDesc.samples = VK_SAMPLE_COUNT_32_BIT;
-        break;
-    case ESampleCount::Sample_64:
-        outVkDesc.samples = VK_SAMPLE_COUNT_64_BIT;
-        break;
-    default:
-        UNREACHABLE();
-    }
-
-    // Convert load/store ops
-    switch (desc.loadOp) {
-    case EAttachmentLoadOp::Load:
-        outVkDesc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        break;
-    case EAttachmentLoadOp::Clear:
-        outVkDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        break;
-    case EAttachmentLoadOp::DontCare:
-        outVkDesc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        break;
-    default:
-        UNREACHABLE();
-    }
-
-    switch (desc.storeOp) {
-    case EAttachmentStoreOp::Store:
-        outVkDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        break;
-    case EAttachmentStoreOp::DontCare:
-        outVkDesc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        break;
-    default:
-        UNREACHABLE();
-    }
-
-    // Set stencil ops (simplified)
-    switch (desc.stencilLoadOp) {
-    case EAttachmentLoadOp::Load:
-        outVkDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        break;
-    case EAttachmentLoadOp::Clear:
-        outVkDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        break;
-    case EAttachmentLoadOp::DontCare:
-        outVkDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        break;
-    default:
-        UNREACHABLE();
-    }
-
-    switch (desc.stencilStoreOp) {
-    case EAttachmentStoreOp::Store:
-        outVkDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-        break;
-    case EAttachmentStoreOp::DontCare:
-        outVkDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        break;
-    default:
-        UNREACHABLE();
-    }
-
-    // Set layouts
-    outVkDesc.initialLayout = toVk(desc.initialLayout);
-    outVkDesc.finalLayout   = toVk(desc.finalLayout);
-}
 
 bool VulkanRenderPass::createDefaultRenderPass()
 {
@@ -218,7 +108,7 @@ bool VulkanRenderPass::createDefaultRenderPass()
     return false;
 }
 
-bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
+bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 {
     _ci = ci;
 
@@ -232,30 +122,33 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
 
     VkFormat surfaceFormat = _render->getSwapChain()->getSurfaceFormat();
     // Convert attachments from config
-    int i = 0;
-    for (const auto &attachmentDesc : _ci.attachments) {
+    for (const AttachmentDescription &attachmentDesc : _ci.attachments) {
         VkAttachmentDescription vkAttachmentDesc{
-            .flags = 0,
+            .flags          = 0,
+            .format         = toVk(attachmentDesc.format),
+            .samples        = toVk(attachmentDesc.samples),
+            .loadOp         = toVk(attachmentDesc.loadOp),
+            .storeOp        = toVk(attachmentDesc.storeOp),
+            .stencilLoadOp  = toVk(attachmentDesc.stencilLoadOp),
+            .stencilStoreOp = toVk(attachmentDesc.stencilStoreOp),
+            .initialLayout  = toVk(attachmentDesc.initialLayout),
+            .finalLayout    = toVk(attachmentDesc.finalLayout),
         };
-        convertToVkAttachmentDescription(attachmentDesc, vkAttachmentDesc);
         attachmentDescs.push_back(vkAttachmentDesc);
-        ++i;
     }
 
     if (attachmentDescs[0].format != surfaceFormat) {
-        NE_CORE_WARN("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
-                     i,
-                     std::to_string(attachmentDescs[0].format),
-                     std::to_string(surfaceFormat));
+        NE_CORE_ERROR("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
+                      0,
+                      std::to_string(attachmentDescs[0].format),
+                      std::to_string(surfaceFormat));
     }
 
 
-
     // Create subpass configuration
-    std::vector<VkSubpassDescription> vkSubpasses;
+    std::vector<VkSubpassDescription> vkSubpassDescs;
 
-    // the VkAttachmentReference  create in loop region will be destroyed after the loop
-    // so we store them in outer region
+    // Also do translation, but we define it outside for lifetime in {}
     struct VulkanSubPassAttachmentReferenceCache
     {
         std::vector<VkAttachmentReference> inputAttachments;
@@ -263,25 +156,25 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         VkAttachmentReference              depthAttachment{};
         VkAttachmentReference              resolveAttachment{};
     };
-    std::vector<VulkanSubPassAttachmentReferenceCache> referenceHandle(_ci.subpasses.size());
+    std::vector<VulkanSubPassAttachmentReferenceCache> subPassAttachments(_ci.subpasses.size());
 
     // vkSubpasses.reserve(_ci.subpasses.size());
 
-    for (int i = 0; i < _ci.subpasses.size(); i++)
+    for (std::size_t subPassIdx = 0; subPassIdx < _ci.subpasses.size(); subPassIdx++)
     {
-        const auto &subpass = _ci.subpasses[i];
-        NE_ASSERT(subpass.subpassIndex == i, "Subpass index mismatch: expected {}, got {}", i, subpass.subpassIndex);
+        const auto &subpass = _ci.subpasses[subPassIdx];
+        NE_ASSERT(subpass.subpassIndex == subPassIdx, "Subpass index mismatch: expected {}, got {}", subPassIdx, subpass.subpassIndex);
 
         for (const auto &colorAttachment : subpass.colorAttachments)
         {
-            referenceHandle[i].colorAttachments.push_back(VkAttachmentReference{
+            subPassAttachments[subPassIdx].colorAttachments.push_back(VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(colorAttachment.ref),
                 .layout     = toVk(colorAttachment.layout),
             });
         }
 
         for (const auto &inputAttachment : subpass.inputAttachments) {
-            referenceHandle[i].inputAttachments.push_back(VkAttachmentReference{
+            subPassAttachments[subPassIdx].inputAttachments.push_back(VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(inputAttachment.ref),
                 .layout     = toVk(inputAttachment.layout),
             });
@@ -291,13 +184,13 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         bool hasResolveAttachment = subpass.resolveAttachment.ref >= 0;
 
         if (hasDepthAttachment) {
-            referenceHandle[i].depthAttachment = VkAttachmentReference{
+            subPassAttachments[subPassIdx].depthAttachment = VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(subpass.depthAttachment.ref),
                 .layout     = toVk(subpass.depthAttachment.layout),
             };
         }
         if (hasResolveAttachment) {
-            referenceHandle[i].resolveAttachment = VkAttachmentReference{
+            subPassAttachments[subPassIdx].resolveAttachment = VkAttachmentReference{
                 .attachment = static_cast<uint32_t>(subpass.resolveAttachment.ref),
                 .layout     = toVk(subpass.resolveAttachment.layout),
             };
@@ -307,18 +200,18 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         VkSubpassDescription desc{
             .flags                   = 0,
             .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .inputAttachmentCount    = static_cast<uint32_t>(referenceHandle[i].inputAttachments.size()),
-            .pInputAttachments       = referenceHandle[i].inputAttachments.empty() ? nullptr : referenceHandle[i].inputAttachments.data(),
-            .colorAttachmentCount    = static_cast<uint32_t>(referenceHandle[i].colorAttachments.size()),
-            .pColorAttachments       = referenceHandle[i].colorAttachments.empty() ? nullptr : referenceHandle[i].colorAttachments.data(),
-            .pResolveAttachments     = hasResolveAttachment ? &referenceHandle[i].resolveAttachment : nullptr,
-            .pDepthStencilAttachment = hasDepthAttachment ? &referenceHandle[i].depthAttachment : nullptr,
+            .inputAttachmentCount    = static_cast<uint32_t>(subPassAttachments[subPassIdx].inputAttachments.size()),
+            .pInputAttachments       = subPassAttachments[subPassIdx].inputAttachments.empty() ? nullptr : subPassAttachments[subPassIdx].inputAttachments.data(),
+            .colorAttachmentCount    = static_cast<uint32_t>(subPassAttachments[subPassIdx].colorAttachments.size()),
+            .pColorAttachments       = subPassAttachments[subPassIdx].colorAttachments.empty() ? nullptr : subPassAttachments[subPassIdx].colorAttachments.data(),
+            .pResolveAttachments     = hasResolveAttachment ? &subPassAttachments[subPassIdx].resolveAttachment : nullptr,
+            .pDepthStencilAttachment = hasDepthAttachment ? &subPassAttachments[subPassIdx].depthAttachment : nullptr,
             // No preserve attachments for now
             .preserveAttachmentCount = 0,
             .pPreserveAttachments    = nullptr,
         };
 
-        vkSubpasses.push_back(desc);
+        vkSubpassDescs.push_back(desc);
     }
 
 
@@ -345,8 +238,8 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = static_cast<uint32_t>(attachmentDescs.size()),
         .pAttachments    = attachmentDescs.data(),
-        .subpassCount    = static_cast<uint32_t>(vkSubpasses.size()),
-        .pSubpasses      = vkSubpasses.data(),
+        .subpassCount    = static_cast<uint32_t>(vkSubpassDescs.size()),
+        .pSubpasses      = vkSubpassDescs.data(),
         .dependencyCount = static_cast<uint32_t>(vkDependencies.size()),
         .pDependencies   = vkDependencies.data(),
     };
@@ -358,7 +251,7 @@ bool VulkanRenderPass::create(const RenderPassCreateInfo &ci)
     }
     // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass with config!");
 
-    NE_CORE_INFO("Created render pass with {} attachments, {} subpasses", attachmentDescs.size(), vkSubpasses.size());
+    NE_CORE_INFO("Created render pass with {} attachments, {} subpasses", attachmentDescs.size(), vkSubpassDescs.size());
 
     return true;
 }

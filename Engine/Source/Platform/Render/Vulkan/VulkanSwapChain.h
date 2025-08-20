@@ -36,6 +36,8 @@ struct VulkanSwapChain
 
     SwapchainCreateInfo _ci;
 
+    uint32_t _curImageIndex;
+
   public:
     VulkanSwapChain(VulkanRender *render)
         : _render(render)
@@ -63,13 +65,15 @@ struct VulkanSwapChain
     VkResult acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex);
     VkResult presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> semaphores);
 
-    VkExtent2D getExtent() const
+    [[nodiscard]] VkExtent2D getExtent() const
     {
         return {
             _supportDetails.capabilities.currentExtent.width,
             _supportDetails.capabilities.currentExtent.height,
         };
     }
+
+    [[nodiscard]] uint32_t getCurImageIndex() const { return _curImageIndex; }
 
 
   private:

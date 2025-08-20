@@ -42,10 +42,10 @@ struct EditorCamera : public Camera
     {
         Perspective,
         Orthographic
-    } projectionType;
+    } projectionType = Perspective;
 
   public:
-    EditorCamera() {}
+    EditorCamera() : Camera() {}
     ~EditorCamera() {}
 
     void setPerspective(float fov, float aspectRatio, float nearClip, float farClip)

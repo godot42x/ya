@@ -89,7 +89,6 @@ struct VulkanRender : public IRender
     std::unique_ptr<VulkanCommandPool> _graphicsCommandPool = nullptr;
     std::unique_ptr<VulkanCommandPool> _presentCommandPool  = nullptr;
     VkPipelineCache                    _pipelineCache       = VK_NULL_HANDLE;
-    std::vector<VkCommandBuffer>       m_commandBuffers;
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
@@ -183,7 +182,6 @@ struct VulkanRender : public IRender
         if (!createCommandPool()) {
             terminate();
         }
-        createCommandBuffers();
 
         createPipelineCache();
         return true;
@@ -258,18 +256,15 @@ struct VulkanRender : public IRender
 
     [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
-
-    [[nodiscard]] std::vector<VkCommandBuffer> getCommandBuffers() const { return m_commandBuffers; }
-
     std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
     std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
 
     [[nodiscard]] VulkanDebugUtils *getDebugUtils() const { return _debugUtils.get(); }
 
-    void setDebugObjectName(VkObjectType objectType, uintptr_t objectHandle, const std::string &name)
+    void setDebugObjectName(VkObjectType objectType, void *objectHandle, const std::string &name)
     {
         if (getDebugUtils()) {
-            getDebugUtils()->setObjectName(objectType, objectHandle, name.c_str());
+            getDebugUtils()->setObjectName(objectType, (uint64_t)objectHandle, name.c_str());
         }
     }
 
@@ -292,6 +287,8 @@ struct VulkanRender : public IRender
         vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &commandBuffer);
     }
 
+    void allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers);
+
 
 
   private:
@@ -308,7 +305,6 @@ struct VulkanRender : public IRender
 
     void createPipelineCache();
     // void createDepthResources();
-    void createCommandBuffers();
 
     bool isDeviceSuitable(const std::set<DeviceFeature> &extensions,
                           const std::set<DeviceFeature> &layers,
@@ -327,7 +323,8 @@ struct VulkanRender : public IRender
         const std::vector<DeviceFeature>         &requestExtensions,
         const std::vector<DeviceFeature>         &requestLayers,
         std::vector<const char *>                &outExtensionNames,
-        std::vector<const char *>                &outLayerNames);
+        std::vector<const char *>                &outLayerNames,
+        bool                                      bDebug = false);
 };
 
 

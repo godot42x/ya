@@ -6,13 +6,13 @@
 #include <vulkan/vulkan.h>
 
 
-
-struct VulkanFrameBuffer
+struct VulkanFrameBuffer 
 {
-    VulkanRender     *render;
-    VulkanRenderPass *renderPass;
-    uint32_t          width;
-    uint32_t          height;
+    // TODO: replace render with logicalDevice if without other sub access
+    VulkanRender     *render{};
+    VulkanRenderPass *renderPass{};
+    uint32_t          width{};
+    uint32_t          height{};
 
     std::vector<std::shared_ptr<VulkanImage>> _images;
     std::vector<VkImageView>                  _imageViews;
@@ -28,11 +28,16 @@ struct VulkanFrameBuffer
         this->width      = width;
         this->height     = height;
     }
-    ~VulkanFrameBuffer() {}
+    virtual ~VulkanFrameBuffer()
+    {
+        clean();
+    }
 
     bool recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height);
 
     void clean();
 
-    VkFramebuffer getHandle() const { return _framebuffer; }
+    [[nodiscard]] VkFramebuffer getHandle() const { return _framebuffer; }
+    [[nodiscard]] uint32_t      getWidth() const { return width; }
+    [[nodiscard]] uint32_t      getHeight() const { return height; }
 };

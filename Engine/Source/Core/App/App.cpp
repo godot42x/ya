@@ -12,7 +12,9 @@
 
 
 
+#include "Render/Core/RenderTarget.h"
 #include "Render/Render.h"
+
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
@@ -28,9 +30,13 @@ namespace ya
 App *App::_instance = nullptr;
 
 
-VulkanRenderPass              *renderpass;
-std::vector<VulkanFrameBuffer> frameBuffers;
-VulkanPipeline                *pipeline = nullptr;
+VulkanRenderPass *renderpass;
+// std::vector<VulkanFrameBuffer> frameBuffers;
+IRenderTarget *renderTarget = nullptr;
+
+std::vector<VkCommandBuffer> commandBuffers;
+
+VulkanPipeline *pipeline = nullptr;
 
 
 // 每帧需要独立的同步对象
@@ -39,12 +45,14 @@ std::vector<VkSemaphore> imageAvailableSemaphores;  // 每帧的图像可用信�
 std::vector<VkSemaphore> submittedSignalSemaphores; // 每帧的渲染完成信号量
 std::vector<VkFence>     frameFences;               // 每帧的CPU-GPU同步栅栏
 
+
 // std::vector<std::shared_ptr<VulkanImage>> depthImages;
-const auto DEPTH_FORMAT = EFormat::D32_SFLOAT;
+const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
 // 手动设置多层cpu缓冲，让 cpu 在多个帧之间轮转, cpu and gpu can work in parallel
 // but frame count should be limited and considered  with performance
-static uint32_t currentFrame = 0;
+static uint32_t currentFrameIdx = 0;
+int             fps             = 60;
 
 std::shared_ptr<VulkanBuffer> vertexBuffer;
 std::shared_ptr<VulkanBuffer> indexBuffer;
@@ -54,6 +62,22 @@ glm::mat4 matModel;
 
 EditorCamera   camera;
 vk::ImguiState imgui;
+
+VkClearValue colorClearValue = {
+    .color = {
+        .float32 = {
+            0,
+            0,
+            0,
+            1,
+        },
+    },
+};
+VkClearValue depthClearValue = {
+    .depthStencil = {
+        .depth   = 1,
+        .stencil = 0},
+};
 
 struct FPSControl
 {
@@ -91,7 +115,7 @@ bool imcEditorCamera(EditorCamera &camera)
     bool bChanged = false;
 
     // Add camera control settings to UI
-    if (ImGui::CollapsingHeader("Camera Controls")) {
+    if (ImGui::CollapsingHeader("Camera Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
             bChanged = true;
         }
@@ -110,6 +134,13 @@ bool imcEditorCamera(EditorCamera &camera)
     return bChanged;
 }
 
+void imcClearValues()
+{
+    if (ImGui::CollapsingHeader("Clear Values", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ColorEdit4("Color Clear Value", colorClearValue.color.float32);
+        ImGui::DragFloat("Depth Clear Value", &depthClearValue.depthStencil.depth, 0.01f, 0.0f, 1.0f);
+    }
+}
 
 
 void App::init()
@@ -157,7 +188,7 @@ void App::init()
         and each subpasses dependencies (source -> next)
      */
     renderpass = new VulkanRenderPass(vkRender);
-    renderpass->create(RenderPassCreateInfo{
+    renderpass->recreate(RenderPassCreateInfo{
         .attachments = {
             // color to present
             AttachmentDescription{
@@ -170,11 +201,12 @@ void App::init()
                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
                 .initialLayout  = EImageLayout::Undefined,
                 .finalLayout    = EImageLayout::PresentSrcKHR,
+                .usage          = EImageUsage::ColorAttachment,
             },
             // depth attachment
             AttachmentDescription{
                 .index          = 1,
-                .format         = EFormat::D32_SFLOAT, // TODO: detect by device
+                .format         = DEPTH_FORMAT,
                 .samples        = ESampleCount::Sample_1,
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
@@ -182,6 +214,7 @@ void App::init()
                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
                 .initialLayout  = EImageLayout::Undefined,
                 .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment,
             },
         },
         .subpasses = {
@@ -216,37 +249,42 @@ void App::init()
 
     swapchainImageSize = static_cast<int>(images.size());
 
+    vkRender->allocateCommandBuffers(swapchainImageSize, commandBuffers);
+
     // TODO: maybe copy and cause destruction?
     // TODO: this should be a resources part of logical device or swapchain. And should be recreated when swapchain is recreated
-    frameBuffers.resize(swapchainImageSize);
+    // frameBuffers.resize(swapchainImageSize);
 
-    for (size_t i = 0; i < images.size(); ++i)
-    {
-        frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+    // for (size_t i = 0; i < images.size(); ++i)
+    // {
+    //     frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
 
-        std::vector<std::shared_ptr<VulkanImage>> fbAttachments = {
-            // color attachment
-            VulkanImage::from(vkRender, images[i], surfaceFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
-            VulkanImage::create(
-                vkRender,
-                ImageCreateInfo{
-                    .format = DEPTH_FORMAT,
-                    .extent = {
-                        .width  = vkSwapChain->getWidth(),
-                        .height = vkSwapChain->getHeight(),
-                        .depth  = 1,
-                    },
-                    .mipLevels     = 1,
-                    .samples       = ESampleCount::Sample_1,
-                    .usage         = EImageUsage::DepthStencilAttachment,
-                    .sharingMode   = ESharingMode::Exclusive,
-                    .initialLayout = EImageLayout::Undefined,
-                    // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                }),
-        };
+    //     std::vector<std::shared_ptr<VulkanImage>> fbAttachments = {
+    //         // color attachment
+    //         VulkanImage::from(vkRender, images[i], surfaceFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
+    //         VulkanImage::create(
+    //             vkRender,
+    //             ImageCreateInfo{
+    //                 .format = DEPTH_FORMAT,
+    //                 .extent = {
+    //                     .width  = vkSwapChain->getWidth(),
+    //                     .height = vkSwapChain->getHeight(),
+    //                     .depth  = 1,
+    //                 },
+    //                 .mipLevels     = 1,
+    //                 .samples       = ESampleCount::Sample_1,
+    //                 .usage         = EImageUsage::DepthStencilAttachment,
+    //                 .sharingMode   = ESharingMode::Exclusive,
+    //                 .initialLayout = EImageLayout::Undefined,
+    //                 // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+    //             }),
+    //     };
 
-        frameBuffers[i].recreate(fbAttachments, vkSwapChain->getWidth(), vkSwapChain->getHeight());
-    }
+    //     frameBuffers[i].recreate(fbAttachments, vkSwapChain->getWidth(), vkSwapChain->getHeight());
+    // }
+
+    // use the RT instead of framebuffers directly
+    renderTarget = new IRenderTarget(renderpass);
 
 
     /**
@@ -413,8 +451,8 @@ void App::init()
         indices.data());
     indexSize = static_cast<uint32_t>(indices.size());
 
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)vertexBuffer->getHandle(), "VertexBuffer");
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, (uint64_t)indexBuffer->getHandle(), "IndexBuffer");
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, vertexBuffer->getHandle(), "VertexBuffer");
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, indexBuffer->getHandle(), "IndexBuffer");
 
     matModel = glm::mat4(1.0f);
     // we span at z = 3 and look at the origin ( right hand? and the cubes all place on xy plane )
@@ -484,10 +522,11 @@ void ya::App::quit()
     delete defaultPipelineLayout;
 
 
-    for (auto &frameBuffer : frameBuffers)
-    {
-        frameBuffer.clean();
-    }
+    // for (auto &frameBuffer : frameBuffers)
+    // {
+    //     frameBuffer.clean();
+    // }
+    delete renderTarget;
     delete renderpass;
     _render->destroy();
 
@@ -677,10 +716,10 @@ int ya::App::onEvent(SDL_Event &event)
 };
 
 
-int ya::App::iterate(float dt)
+static FPSControl fpsCtrl;
+int               ya::App::iterate(float dt)
 {
 
-    static FPSControl fpsCtrl;
 
     SDL_Event evt;
     SDL_PollEvent(&evt);
@@ -739,45 +778,56 @@ void App::onDraw(float dt)
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
     VK_CALL(vkWaitForFences(vkRender->getLogicalDevice(),
                             1,
-                            &frameFences[currentFrame],
+                            &frameFences[currentFrameIdx],
                             VK_TRUE,
                             UINT64_MAX));
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
     VK_CALL(vkResetFences(vkRender->getLogicalDevice(),
                           1,
-                          &frameFences[currentFrame]));
+                          &frameFences[currentFrameIdx]));
 
 
     // 目前启用fence，否则 semaphore 会被不同的帧重用. TODO:  Use a separate semaphore per swapchain image. Index these semaphores using the index of the acquired image.
     uint32_t imageIndex = -1;
     vkRender->getSwapChain()->acquireNextImage(
-        imageAvailableSemaphores[currentFrame], // 当前帧的图像可用信号量
-        frameFences[currentFrame],              // 等待上一帧渲完成
+        imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
+        frameFences[currentFrameIdx],              // 等待上一帧渲完成
         // VK_NULL_HANDLE,                         // or 不传递 fence，避免双重等待问题
         imageIndex);
 
 
     // 2. begin command buffer
-    VkCommandBuffer curCmdBuf = vkRender->getCommandBuffers()[imageIndex];
+    VkCommandBuffer curCmdBuf = commandBuffers[imageIndex];
     vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
     begin(curCmdBuf);
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
     std::vector<VkClearValue> clearValues{
-        VkClearValue{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}}, // Clear color: black
-        VkClearValue{.depthStencil = {1.0f, 0}},           // Clear depth to 1.0
+        colorClearValue,
+        depthClearValue,
     };
 
-    NE_CORE_ASSERT(
-        clearValues.size() == renderpass->getCI().attachments.size(),
-        "Clear values count must match attachment count!");
+    // NE_CORE_ASSERT(
+    //     clearValues.size() == renderpass->getCI().attachments.size(),
+    //     "Clear values count must match attachment count!");
 
-    renderpass->begin(curCmdBuf,
-                      frameBuffers[imageIndex].getHandle(),
-                      vkRender->getSwapChain()->getExtent(),
-                      std::move(clearValues));
+    // renderTarget->_currentFrameIndex  = currentFrame;
+
+
+    // renderpass->begin(curCmdBuf,
+    //                   curFrameBuffer->getHandle(),
+    //                   vkRender->getSwapChain()->getExtent(),
+    //                   std::move(clearValues));
+    renderTarget->setColorClearValue(colorClearValue);
+    renderTarget->setDepthStencilClearValue(depthClearValue);
+    renderTarget->begin(curCmdBuf);
+
+
+
+    VulkanFrameBuffer *curFrameBuffer = renderTarget->getFrameBuffer();
+
 
 
     // 4. bind descriptor sets,
@@ -804,11 +854,13 @@ void App::onDraw(float dt)
       // or those properties should be modified in the pipeline recreation if needed.
       // but sometimes that we want to enable depth or color-blend state dynamically
 
+
+
     VkViewport viewport{
         .x        = 0,
         .y        = 0,
-        .width    = static_cast<float>(frameBuffers[imageIndex].width),
-        .height   = static_cast<float>(frameBuffers[imageIndex].height),
+        .width    = static_cast<float>(curFrameBuffer->getWidth()),
+        .height   = static_cast<float>(curFrameBuffer->getHeight()),
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
@@ -869,6 +921,11 @@ void App::onDraw(float dt)
         float fps = 1.0f / dt;
         ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
         ImGui::Text("Fame index:  %d", _frameIndex);
+        ImGui::Text("Image index:  %d, FameIndex %d", imageIndex, currentFrameIdx);
+
+        if (ImGui::InputFloat("FPS Limit", &fps)) {
+            fpsCtrl.setFPSLimit(fps);
+        }
 
         // Check if actual timing is way off from expected
         if (fps > 200.0f) {
@@ -879,7 +936,9 @@ void App::onDraw(float dt)
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "- Present mode not set to FIFO");
         }
 
+
         imcEditorCamera(camera);
+        imcClearValues();
         ImGui::End();
     }
     imgui.render();
@@ -897,8 +956,9 @@ void App::onDraw(float dt)
     //     // vkCmdNextSubpass2()
     //     // vkCmdNextSubpass()
     // #endif
-    renderpass->end(curCmdBuf);
+    // renderpass->end(curCmdBuf);
 
+    renderTarget->end(curCmdBuf);
 
     // 10. end command buffer
     end(curCmdBuf);
@@ -912,13 +972,13 @@ void App::onDraw(float dt)
         },
         // 等待条件：当前帧的图像可用信号量被触发后才开始渲染
         {
-            imageAvailableSemaphores[currentFrame],
+            imageAvailableSemaphores[currentFrameIdx],
         },
         // 完成信号：渲染完成后触发当前帧的提交完成信号量
         {
-            submittedSignalSemaphores[currentFrame],
+            submittedSignalSemaphores[currentFrameIdx],
         },
-        frameFences[currentFrame] // GPU完成所有工作后会发送此fence信号
+        frameFences[currentFrameIdx] // GPU完成所有工作后会发送此fence信号
     );
 
 
@@ -927,7 +987,7 @@ void App::onDraw(float dt)
         _firstPresentQueue->getHandle(),
         // 等待条件：当前帧的渲染完成信号量被触发后才呈现
         {
-            submittedSignalSemaphores[currentFrame],
+            submittedSignalSemaphores[currentFrameIdx],
         });
 
     if (result != VK_SUCCESS) {
@@ -937,7 +997,7 @@ void App::onDraw(float dt)
     // ✅ Flight Frames关键步骤5: 切换到下一个飞行帧
     // 使用模运算实现环形缓冲区，在多个帧之间循环
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
-    currentFrame = (currentFrame + 1) % swapchainImageSize;
+    currentFrameIdx = (currentFrameIdx + 1) % swapchainImageSize;
 }
 
 #pragma region synchronization resources
@@ -996,13 +1056,13 @@ void App::initSemaphoreAndFence()
         NE_CORE_ASSERT(ret == VK_SUCCESS, "failed to create fence!");
 
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     (uintptr_t)imageAvailableSemaphores[i],
+                                     imageAvailableSemaphores[i],
                                      std::format("ImageAvailableSemaphore_{}", i).c_str());
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     (uintptr_t)submittedSignalSemaphores[i],
+                                     submittedSignalSemaphores[i],
                                      std::format("SubmittedSignalSemaphore_{}", i).c_str());
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
-                                     (uintptr_t)frameFences[i],
+                                     frameFences[i],
                                      std::format("FrameFence_{}", i).c_str());
     }
 }
