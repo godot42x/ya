@@ -97,7 +97,7 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
 
-    uint32_t formatCount;
+    uint32_t formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
     if (formatCount != 0)
     {
@@ -105,7 +105,7 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
     }
 
-    uint32_t presentModeCount;
+    uint32_t presentModeCount = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
     if (presentModeCount != 0)
     {
@@ -138,7 +138,6 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     static uint32_t version = 0;
     version++;
 
-    vkDeviceWaitIdle(_render->getLogicalDevice());
     cleanup();
     _supportDetails = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
 
@@ -286,41 +285,37 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     return true;
 }
 
-VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outidx)
+VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIdx)
 {
-    VkResult result = vkAcquireNextImageKHR(_render->getLogicalDevice(),
+    auto     device = _render->getLogicalDevice();
+    VkResult result = vkAcquireNextImageKHR(device,
                                             m_swapChain,
                                             UINT64_MAX,
                                             semaphore,
                                             fence,
-                                            &outidx);
-    _curImageIndex         = outidx;
+                                            &outImageIdx);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        NE_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
-        return result;
+    if (fence != VK_NULL_HANDLE) {
+        if (result == VK_SUCCESS) {
+            VK_CALL(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+        }
+        VK_CALL(vkResetFences(device, 1, &fence));
     }
 
     if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to acquire next image: {}", result);
-        return result;
+        if (result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR) {
+            NE_CORE_ERROR("Failed to acquire next image: {}", result);
+            return result;
+        }
+        else {
+            NE_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
+        }
     }
-
-    if (fence != VK_NULL_HANDLE) {
-        VK_CALL(vkWaitForFences(_render->getLogicalDevice(),
-                                1,
-                                &fence,
-                                VK_TRUE,
-                                UINT64_MAX));
-        VK_CALL(vkResetFences(_render->getLogicalDevice(),
-                              1,
-                              &fence));
-    }
-
+    _curImageIndex = outImageIdx;
     return result;
 }
 
-VkResult VulkanSwapChain::presentImage(uint32_t idx, VkQueue presentQueue, std::vector<VkSemaphore> waitSemaphores)
+VkResult VulkanSwapChain::presentImage(uint32_t idx, std::vector<VkSemaphore> waitSemaphores)
 {
     VkResult         result = {};
     VkPresentInfoKHR presentInfo{
@@ -334,12 +329,14 @@ VkResult VulkanSwapChain::presentImage(uint32_t idx, VkQueue presentQueue, std::
         .pResults           = &result,
     };
 
-    VkResult ret = vkQueuePresentKHR(presentQueue, &presentInfo);
-    if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to present swap chain image {} : {}", idx, result);
-    }
+    VkResult ret = vkQueuePresentKHR(_render->getPresentQueues()[0].getHandle(), &presentInfo);
     if (ret != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to present swap chain image {}: {}", idx, ret);
+        if (ret == VK_SUBOPTIMAL_KHR || ret == VK_ERROR_OUT_OF_DATE_KHR) {
+            NE_CORE_WARN("Swap chain is out of date or suboptimal {}: {}", idx, ret);
+        }
+        else {
+            NE_CORE_ERROR("Failed to present swap chain image {}: {}", idx, ret);
+        }
     }
     return ret;
 }

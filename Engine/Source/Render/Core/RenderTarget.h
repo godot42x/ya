@@ -42,7 +42,7 @@ struct IRenderTarget
     void end(void *cmdBuf);
 
   public:
-    void setExtent(glm::vec2 extent);
+    void setExtent(VkExtent2D extent);
     void setBufferCount(uint32_t count);
     void setColorClearValue(VkClearValue clearValue);
     void setColorClearValue(uint32_t attachmentIdx, VkClearValue clearValue);

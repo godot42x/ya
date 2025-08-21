@@ -33,8 +33,8 @@ struct AppCreateInfo
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 
     std::string title      = "Yet Another Game Engine";
-    int         width      = 800;
-    int         height     = 600;
+    int         width      = 1024;
+    int         height     = 768;
     bool        fullscreen = false;
 
 

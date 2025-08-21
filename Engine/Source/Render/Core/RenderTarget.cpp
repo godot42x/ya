@@ -19,7 +19,6 @@ IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass)
 
 
     swapChain->onRecreate.addLambda(this, [this]() {
-        // this->recreate(this->getCI());
         bDirty = true; // Mark as dirty to recreate frame buffers
     });
 
@@ -162,9 +161,9 @@ void IRenderTarget::end(void *cmdBuf)
     bBeginTarget = false;
 }
 
-void IRenderTarget::setExtent(glm::vec2 extent)
+void IRenderTarget::setExtent(VkExtent2D extent)
 {
-    _extent = {.width = static_cast<uint32_t>(extent.x), .height = static_cast<uint32_t>(extent.y)};
+    _extent = extent;
     bDirty  = true;
 }
 

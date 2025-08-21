@@ -51,13 +51,26 @@ void main()
 
     
     // Color each instance differently based on instance index
-    float hue = float(gl_InstanceIndex) / 9.0;
-    fragColor = vec4(
-        sin(hue * 6.28318) * 0.5 + 0.5,
-        cos(hue * 6.28318) * 0.5 + 0.5,
-        sin(hue * 3.14159) * 0.5 + 0.5,
-        1.0
-    );
+    // float hue = float(gl_InstanceIndex) / 9.0;
+    // fragColor = vec4(
+    //     sin(hue * 6.28318) * 0.5 + 0.5,
+    //     cos(hue * 6.28318) * 0.5 + 0.5,
+    //     sin(hue * 3.14159) * 0.5 + 0.5,
+    //     1.0
+    // );
+
+    vec3 normal = normalize(aNormal.xyz);
+
+    if (abs(normal.x) > 0.9) {
+        // Left/Right faces (X axis)
+        fragColor = normal.x > 0.0 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.5, 0.0, 0.0, 1.0); // Red/Dark Red
+    } else if (abs(normal.y) > 0.9) {
+        // Top/Bottom faces (Y axis)
+        fragColor = normal.y > 0.0 ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(0.0, 0.5, 0.0, 1.0); // Green/Dark Green
+    } else {
+        // Front/Back faces (Z axis)
+        fragColor = normal.z > 0.0 ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.5, 1.0); // Blue/Dark Blue
+    }
 }
 
 ////////////////////////

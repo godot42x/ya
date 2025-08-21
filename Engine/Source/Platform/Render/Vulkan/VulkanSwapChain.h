@@ -53,6 +53,11 @@ struct VulkanSwapChain
 
     void cleanup();
     bool recreate(const SwapchainCreateInfo &ci);
+
+    // Swap chain operations
+    VkResult acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex);
+    VkResult presentImage(uint32_t imageIndex, std::vector<VkSemaphore> semaphores);
+
     void setVsync(bool vsync)
     {
         bVsync          = vsync;
@@ -72,9 +77,6 @@ struct VulkanSwapChain
     [[nodiscard]] uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
     [[nodiscard]] uint32_t                    getHeight() const { return _supportDetails.capabilities.currentExtent.height; };
 
-    // Swap chain operations
-    VkResult acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIndex);
-    VkResult presentImage(uint32_t imageIndex, VkQueue presentQueue, std::vector<VkSemaphore> semaphores);
 
     [[nodiscard]] VkExtent2D getExtent() const
     {
@@ -85,6 +87,7 @@ struct VulkanSwapChain
     }
 
     [[nodiscard]] uint32_t getCurImageIndex() const { return _curImageIndex; }
+
 
 
   private:

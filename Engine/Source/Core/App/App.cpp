@@ -54,7 +54,8 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 // but frame count should be limited and considered  with performance
 static uint32_t currentFrameIdx = 0;
 int             fps             = 60;
-uint32_t        frameCount      = 0;
+
+uint32_t frameCount = 2; // CPU queue can submit 2 frames at most
 
 
 std::shared_ptr<ya::Mesh> cubeMesh;
@@ -208,6 +209,7 @@ void App::init()
 
     VkFormat surfaceFormat = vkRender->getSwapChain()->getSurfaceFormat();
 
+    constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
 
     /**
       In Vulkan:
@@ -223,7 +225,7 @@ void App::init()
             AttachmentDescription{
                 .index          = 0,
                 .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
-                .samples        = ESampleCount::Sample_1,
+                .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
@@ -236,7 +238,7 @@ void App::init()
             AttachmentDescription{
                 .index          = 1,
                 .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
+                .samples        = _sampleCount,
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
@@ -377,7 +379,10 @@ void App::init()
             .polygonMode = EPolygonMode::Fill,
             .frontFace   = EFrontFaceType::CounterClockWise, // GL
         },
-        .multisampleState  = MultisampleState{},
+        .multisampleState = MultisampleState{
+            .sampleCount          = _sampleCount,
+            .bSampleShadingEnable = false,
+        },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = true,
             .bDepthWriteEnable      = true,
@@ -586,6 +591,7 @@ int ya::App::onEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_HIDDEN:
     case SDL_EVENT_WINDOW_EXPOSED:
     case SDL_EVENT_WINDOW_MOVED:
+        break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
         // NE_CORE_INFO("window resized {}x{}",
@@ -593,6 +599,9 @@ int ya::App::onEvent(SDL_Event &event)
         //              event.window.data2);
         // auto vkRender = static_cast<VulkanRender *>(_render);
         // vkRender->recreateSwapChain();
+        float aspectRatio = event.window.data2 > 0 ? static_cast<float>(event.window.data1) / static_cast<float>(event.window.data2) : 1.f;
+        NE_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", event.window.data1, event.window.data2, aspectRatio);
+        camera.setAspectRatio(aspectRatio);
 
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -774,18 +783,54 @@ void App::onDraw(float dt)
                             UINT64_MAX));
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
-    VK_CALL(vkResetFences(vkRender->getLogicalDevice(),
-                          1,
-                          &frameFences[currentFrameIdx]));
+    VK_CALL(vkResetFences(vkRender->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
 
 
     // 目前启用fence，否则 semaphore 会被不同的帧重用. TODO:  Use a separate semaphore per swapchain image. Index these semaphores using the index of the acquired image.
     uint32_t imageIndex = -1;
-    vkRender->getSwapChain()->acquireNextImage(
+
+    auto swapchain = vkRender->getSwapChain();
+
+    VkResult ret = swapchain->acquireNextImage(
         imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
         frameFences[currentFrameIdx],              // 等待上一present完成
-        // VK_NULL_HANDLE,                         // or 不传递 fence，避免双重等待问题
         imageIndex);
+
+    // Do a sync recreation here, Can it be async?(just return and register a frame task)
+    if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
+        vkDeviceWaitIdle(vkRender->getLogicalDevice());
+
+        VK_CALL(vkResetFences(vkRender->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
+        // current ignore the size in ci
+        VkExtent2D originalExtent = swapchain->getExtent();
+        bool       ok             = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
+
+        if (ok) {
+            if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
+                // recreate renderpass and pipeline
+                // rebind frame buffer
+                renderTarget->setExtent(swapchain->getExtent());
+            }
+            if (imageIndex == -1) {
+                ret = vkRender->getSwapChain()->acquireNextImage(
+                    imageAvailableSemaphores[currentFrameIdx],
+                    frameFences[currentFrameIdx],
+                    imageIndex);
+                if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
+                    NE_CORE_ERROR("Failed to acquire next image: {}", ret);
+                }
+            }
+        }
+        else {
+            NE_CORE_ERROR("Failed to recreate swapchain, exiting application.");
+            bRunning = false; // Exit the application if swapchain recreation fails
+            return;
+        }
+    }
+    NE_CORE_ASSERT(imageIndex >= 0 && imageIndex < swapchainImageSize,
+                   "Invalid image index: {}. Swapchain image size: {}",
+                   imageIndex,
+                   swapchainImageSize);
 
 
     // 2. begin command buffer
@@ -898,6 +943,11 @@ void App::onDraw(float dt)
         ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
         ImGui::Text("Fame index:  %d", _frameIndex);
         ImGui::Text("Image index:  %d, FameIndex %d", currentFrameIdx, currentFrameIdx);
+        static int count = 0;
+        if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
+            count++;
+            NE_CORE_INFO("=====================================");
+        }
 
         bool bVsync = vkRender->getSwapChain()->bVsync;
         if (ImGui::Checkbox("VSync", &bVsync)) {
@@ -908,6 +958,7 @@ void App::onDraw(float dt)
             // rebind frame buffer
             // renderTarget->recreate();
             taskManager.registerFrameTask([vkRender, bVsync]() {
+                // TODO :bind dirty link
                 vkRender->getSwapChain()->setVsync(bVsync);
             });
         }
@@ -962,26 +1013,38 @@ void App::onDraw(float dt)
     // submit and present are asynchronous operations,
     VkResult result = vkRender->getSwapChain()->presentImage(
         imageIndex,
-        _firstPresentQueue->getHandle(),
-        //  only wait submit completed, and next frame can be render already
         {
             submittedSignalSemaphores[imageIndex], // ⚠️ the wait sema of the Present operation  should be the IMAGE_INDEX!!!
         });
-
 
     // if not use gl, this should be eq?
     // NE_CORE_INFO("Presenting image index: {}, current frame index: {}", curFrameIdx, curFrameIdx);
     // NE_ASSERT(curFrameIdx == curImageIdx, "Image index mismatch! Expected {}, got {}", curFrameIdx, curImageIdx);
 
-    if (result != VK_SUCCESS) {
-        NE_CORE_WARN("Failed to present swap chain image! Result: {}", result);
+    // SUB: submit
+    if (result == VK_SUBOPTIMAL_KHR) {
+        // recreate swapchain
+        VK_CALL(vkDeviceWaitIdle(vkRender->getLogicalDevice()));
+        VkExtent2D originalExtent = swapchain->getExtent();
+
+        bool ok = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
+        if (ok) {
+            if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
+                // recreate renderpass and pipeline
+                // rebind frame buffer
+                renderTarget->setExtent(swapchain->getExtent());
+            }
+        }
+        else {
+            NE_CORE_ERROR("Failed to recreate swapchain after suboptimal!");
+        }
     }
 
     // ✅ Flight Frames关键步骤5: 切换到下一个飞行帧
     // 使用模运算实现环形缓冲区，在多个帧之间循环
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
     // ⚠️ frameCount can not equal to imageSize of swapchain!!
-    currentFrameIdx = (currentFrameIdx + 1) % frameCount; 
+    currentFrameIdx = (currentFrameIdx + 1) % frameCount;
 }
 
 #pragma region synchronization resources

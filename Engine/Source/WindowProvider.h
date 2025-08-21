@@ -23,6 +23,7 @@ class IWindowProvider
 
   protected:
     void *nativeWindowHandle = nullptr;
+    float dpiScale           = 1.0f; // DPI scale factor, default is 1.0
 
   public:
 
@@ -55,6 +56,7 @@ class IWindowProvider
 
 class SDLWindowProvider : public IWindowProvider
 {
+
   public:
     SDLWindowProvider() = default;
     ~SDLWindowProvider() override
@@ -78,11 +80,11 @@ class SDLWindowProvider : public IWindowProvider
     bool recreate(const WindowCreateInfo &ci) override
     {
         // TODO: handle dpi
-        float dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+        dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
         NE_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
-        double scale = dpiScale * ci.scale;
-        int    w     = (int)(ci.width * scale);
-        int    h     = (int)(ci.height * scale);
+        // double scale = dpiScale * ci.scale;
+        int w = (int)(ci.width);
+        int h = (int)(ci.height);
 
         int flags = 0;
         switch (ci.renderAPI) {
