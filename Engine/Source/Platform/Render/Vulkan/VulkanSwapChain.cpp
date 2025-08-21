@@ -295,14 +295,14 @@ VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence,
                                             fence,
                                             &outImageIdx);
 
-    if (fence != VK_NULL_HANDLE) {
-        if (result == VK_SUCCESS) {
+    if (result == VK_SUCCESS) {
+        if (fence != VK_NULL_HANDLE) {
             VK_CALL(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+            VK_CALL(vkResetFences(device, 1, &fence));
         }
-        VK_CALL(vkResetFences(device, 1, &fence));
     }
-
-    if (result != VK_SUCCESS) {
+    else
+    {
         if (result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR) {
             NE_CORE_ERROR("Failed to acquire next image: {}", result);
             return result;

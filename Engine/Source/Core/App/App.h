@@ -85,7 +85,6 @@ struct App
     VulkanRenderPass *m_2DRenderPass       = nullptr;
 
 
-    VulkanPipelineLayout *defaultPipelineLayout = nullptr;
 
     InputManager inputManager;
 

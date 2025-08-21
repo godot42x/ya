@@ -509,6 +509,7 @@ struct GraphicsPipelineLayoutCreateInfo
 
     struct DescriptorSetLayout
     {
+        int32_t                        index = -1;
         std::vector<DescriptorBinding> bindings;
     };
 

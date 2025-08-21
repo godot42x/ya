@@ -37,6 +37,10 @@ IRenderTarget *renderTarget = nullptr;
 
 std::vector<VkCommandBuffer> commandBuffers;
 
+VulkanPipelineLayout         *defaultPipelineLayout = nullptr;
+std::vector<VkDescriptorPool> descriptorPools;
+std::vector<VkDescriptorSet>  descriptorSets;
+
 VulkanPipeline *pipeline = nullptr;
 
 
@@ -81,10 +85,12 @@ VkClearValue depthClearValue = {
         .stencil = 0},
 };
 
+#pragma region misc
+
 struct FPSControl
 {
     float fps     = 0.0f;
-    bool  bEnable = true;
+    bool  bEnable = false;
 
     static constexpr float defaultFps = 60.f;
 
@@ -172,6 +178,7 @@ void imcClearValues()
     }
 }
 
+#pragma endregion
 
 void App::init()
 {
@@ -294,8 +301,8 @@ void App::init()
         - push constants?
         - texture samplers?
     */
-    defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
-    defaultPipelineLayout->create(GraphicsPipelineLayoutCreateInfo{
+    defaultPipelineLayout                  = new VulkanPipelineLayout(vkRender);
+    GraphicsPipelineLayoutCreateInfo gplCI = GraphicsPipelineLayoutCreateInfo{
         .pushConstants = {
             GraphicsPipelineLayoutCreateInfo::PushConstant{
                 .offset     = 0,
@@ -303,19 +310,34 @@ void App::init()
                 .stageFlags = EShaderStage::Vertex,
             },
         },
-        // .descriptorSetLayouts = {
-        //     GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
-        //         .bindings = {
-        //             GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
-        //                 .binding         = 0,
-        //                 .descriptorType  = EPipelineDescriptorType::StorageBuffer,
-        //                 .descriptorCount = 1,
-        //                 .stageFlags      = EShaderStage::Vertex,
-        //             },
-        //         },
-        //             },
-        // } ,
-    });
+        .descriptorSetLayouts = {
+            GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
+                .index    = 0,
+                .bindings = {
+                    // GBuffer
+                    GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                    },
+                    // samplers array
+                    GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
+                        .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 16,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
+        },
+    };
+
+    defaultPipelineLayout->create(gplCI);
+
+    // TODO: we could create in other sides, and combined them if match the descriptor set layout?
+    defaultPipelineLayout->allocateDescriptorSets(descriptorPools, descriptorSets);
+
 
     /**
       In Vulkan:
@@ -459,6 +481,7 @@ void App::init()
 
 
 
+#pragma region ImGui Init
     // imgui init
     auto                      queue = _firstGraphicsQueue;
     ImGui_ImplVulkan_InitInfo initInfo{
@@ -499,6 +522,7 @@ void App::init()
         .MinAllocationSize = static_cast<VkDeviceSize>(1024 * 1024),
     };
     imgui.init(vkRender->getNativeWindow<SDL_Window>(), initInfo);
+#pragma endregion
 
 
     // wait something done
@@ -630,6 +654,7 @@ int ya::App::onEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_DESTROYED:
     case SDL_EVENT_WINDOW_HDR_STATE_CHANGED:
     case SDL_EVENT_KEY_DOWN:
+        break;
     case SDL_EVENT_KEY_UP:
     {
         if (event.key.key == SDLK_ESCAPE) {
@@ -719,7 +744,6 @@ int ya::App::onEvent(SDL_Event &event)
 int ya::App::iterate(float dt)
 {
 
-
     SDL_Event evt;
     SDL_PollEvent(&evt);
 
@@ -785,52 +809,51 @@ void App::onDraw(float dt)
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
     VK_CALL(vkResetFences(vkRender->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
 
-
-    // 目前启用fence，否则 semaphore 会被不同的帧重用. TODO:  Use a separate semaphore per swapchain image. Index these semaphores using the index of the acquired image.
-    uint32_t imageIndex = -1;
-
     auto swapchain = vkRender->getSwapChain();
 
-    VkResult ret = swapchain->acquireNextImage(
-        imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-        frameFences[currentFrameIdx],              // 等待上一present完成
-        imageIndex);
+    // get imageIndex
+    uint32_t imageIndex = -1;
+    {
+        VkResult ret = swapchain->acquireNextImage(
+            imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
+            frameFences[currentFrameIdx],              // 等待上一present完成
+            imageIndex);
 
-    // Do a sync recreation here, Can it be async?(just return and register a frame task)
-    if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
-        vkDeviceWaitIdle(vkRender->getLogicalDevice());
+        // Do a sync recreation here, Can it be async?(just return and register a frame task)
+        if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
+            vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
-        VK_CALL(vkResetFences(vkRender->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
-        // current ignore the size in ci
-        VkExtent2D originalExtent = swapchain->getExtent();
-        bool       ok             = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
+            // current ignore the size in ci
+            VkExtent2D originalExtent = swapchain->getExtent();
+            bool       ok             = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
 
-        if (ok) {
-            if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
-                // recreate renderpass and pipeline
-                // rebind frame buffer
-                renderTarget->setExtent(swapchain->getExtent());
-            }
-            if (imageIndex == -1) {
-                ret = vkRender->getSwapChain()->acquireNextImage(
-                    imageAvailableSemaphores[currentFrameIdx],
-                    frameFences[currentFrameIdx],
-                    imageIndex);
-                if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-                    NE_CORE_ERROR("Failed to acquire next image: {}", ret);
+            if (ok) {
+                if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
+                    // recreate renderpass and pipeline
+                    // rebind frame buffer
+                    renderTarget->setExtent(swapchain->getExtent());
+                }
+                if (imageIndex == -1) {
+                    ret = vkRender->getSwapChain()->acquireNextImage(
+                        imageAvailableSemaphores[currentFrameIdx],
+                        frameFences[currentFrameIdx],
+                        imageIndex);
+                    if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
+                        NE_CORE_ERROR("Failed to acquire next image: {}", ret);
+                    }
                 }
             }
+            else {
+                NE_CORE_ERROR("Failed to recreate swapchain, exiting application.");
+                bRunning = false; // Exit the application if swapchain recreation fails
+                return;
+            }
         }
-        else {
-            NE_CORE_ERROR("Failed to recreate swapchain, exiting application.");
-            bRunning = false; // Exit the application if swapchain recreation fails
-            return;
-        }
+        NE_CORE_ASSERT(imageIndex >= 0 && imageIndex < swapchainImageSize,
+                       "Invalid image index: {}. Swapchain image size: {}",
+                       imageIndex,
+                       swapchainImageSize);
     }
-    NE_CORE_ASSERT(imageIndex >= 0 && imageIndex < swapchainImageSize,
-                   "Invalid image index: {}. Swapchain image size: {}",
-                   imageIndex,
-                   swapchainImageSize);
 
 
     // 2. begin command buffer
@@ -848,16 +871,6 @@ void App::onDraw(float dt)
     VulkanFrameBuffer *curFrameBuffer = renderTarget->getFrameBuffer();
 
 
-
-    // 4. bind descriptor sets,
-    // vkCmdBindDescriptorSets(commandBuffer,
-    //                         VK_PIPELINE_BIND_POINT_GRAPHICS,
-    //                         pipelineLayout->getHandle(),
-    //                         0,        // first set
-    //                         0,        // descriptor set count
-    //                         nullptr,  // descriptor sets
-    //                         0,        // dynamic offset count
-    //                         nullptr); // dynamic offsets
 
     // 5. bind pipeline
     pipeline->bind(curCmdBuf);
@@ -894,7 +907,21 @@ void App::onDraw(float dt)
     vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
 #endif
 
-#pragma region render
+#pragma region CopyPass
+
+
+    // 4. bind descriptor sets, as global concepts
+    vkCmdBindDescriptorSets(curCmdBuf,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            defaultPipelineLayout->getHandle(),
+                            0, // first set
+                            descriptorSets.size(),
+                            descriptorSets.data(),
+                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
+                            // This can avoid of creating a new descriptor set?
+                            0,        // dynamic offset count
+                            nullptr); // dynamic offsets
+
 
     // push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
     struct PushConstantData
@@ -913,6 +940,93 @@ void App::onDraw(float dt)
                        sizeof(PushConstantData),
                        &pushData);
 
+    struct GBuffer
+    {
+        // should be aligned by vec4
+        glm::vec4 dirLight;
+    } gBuffer;
+
+    static std::shared_ptr<VulkanBuffer> ubGBuffer = VulkanBuffer::create(
+        vkRender,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        sizeof(GBuffer));
+    static std::shared_ptr<VulkanBuffer> ubGBufferStaging = VulkanBuffer::create(
+        vkRender,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        sizeof(GBuffer));
+
+    void *mappedData = nullptr;
+    VK_CALL(vkMapMemory(vkRender->getLogicalDevice(), ubGBufferStaging->getMemory(), 0, sizeof(GBuffer), 0, &mappedData));
+    std::memcpy(mappedData, &gBuffer, sizeof(GBuffer));
+    vkUnmapMemory(vkRender->getLogicalDevice(), ubGBufferStaging->getMemory());
+
+    VulkanBuffer::transfer(curCmdBuf,
+                           ubGBuffer->getHandle(),
+                           ubGBufferStaging->getHandle(),
+                           sizeof(GBuffer));
+
+
+    // Add memory barrier to ensure copy completes before shader reads
+    std::vector<VkBufferMemoryBarrier> bmBarriers{
+        VkBufferMemoryBarrier{
+            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .pNext               = nullptr,
+            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask       = VK_ACCESS_UNIFORM_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer              = ubGBuffer->getHandle(),
+            .offset              = 0,
+            .size                = sizeof(GBuffer),
+        },
+    };
+
+    vkCmdPipelineBarrier(curCmdBuf,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         bmBarriers.size(),
+                         bmBarriers.data(),
+                         0,
+                         nullptr);
+
+
+
+    VkDescriptorBufferInfo dbi{
+        .buffer = ubGBuffer->getHandle(), // 🤣 this is the buffer contains the data
+        .offset = 0,
+        .range  = sizeof(GBuffer), // size of the uniform buffer
+    };
+
+
+    std::vector<VkWriteDescriptorSet> writeDSs;
+    // dirLight
+    writeDSs.push_back(VkWriteDescriptorSet{
+        .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext            = nullptr,
+        .dstSet           = descriptorSets[0], // the first descriptor set
+        .dstBinding       = 0,                 // see gplCI[0].bindings[0].binding
+        .dstArrayElement  = 0,                 // the index of array
+        .descriptorCount  = 1,                 // see gplCI[0].bindings[0].descriptorCount
+        .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pImageInfo       = nullptr,
+        .pBufferInfo      = &dbi,
+        .pTexelBufferView = nullptr,
+    });
+
+    vkCmdPushDescriptorSet(curCmdBuf,
+                           VK_PIPELINE_BIND_POINT_GRAPHICS,
+                           defaultPipelineLayout->getHandle(),
+                           0,
+                           writeDSs.size(),
+                           writeDSs.data());
+
+
+#pragma endregion
+
+#pragma region RenderPass
     // Bind vertex buffer
     VkBuffer vertexBuffers[] = {cubeMesh->getVertexBuffer()->getHandle()};
     // current no need to support subbuffer
@@ -939,10 +1053,11 @@ void App::onDraw(float dt)
 
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
-        float fps = 1.0f / dt;
-        ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
-        ImGui::Text("Fame index:  %d", _frameIndex);
-        ImGui::Text("Image index:  %d, FameIndex %d", currentFrameIdx, currentFrameIdx);
+        float        fps       = 1.0f / dt;
+        static float averageDt = dt;
+
+        ImGui::Text("DeltaTime: %.1f ms,\t FPS: %.1f", dt * 1000.0f, fps);
+        ImGui::Text("Frame: %d, SwapchainImage: %d, FameIndex: %d", _frameIndex, currentFrameIdx, currentFrameIdx);
         static int count = 0;
         if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
             count++;
@@ -965,7 +1080,7 @@ void App::onDraw(float dt)
 
         imcEditorCamera(camera);
         imcClearValues();
-        imcFpsControl(fpsCtrl);
+        // imcFpsControl(fpsCtrl);
         ImGui::End();
     }
     imgui.render();
@@ -975,10 +1090,6 @@ void App::onDraw(float dt)
 
 #pragma endregion
 
-#pragma endregion
-
-
-
     // 9. end render pass
     // TODO: subpasses?
     // #if 1 // multiple renderpass
@@ -987,6 +1098,10 @@ void App::onDraw(float dt)
     // #endif
     // renderpass->end(curCmdBuf);
     renderTarget->end(curCmdBuf);
+
+#pragma endregion
+
+
 
     // 10. end command buffer
     end(curCmdBuf);

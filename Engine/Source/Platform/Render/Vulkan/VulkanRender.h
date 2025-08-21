@@ -87,6 +87,7 @@ struct VulkanRender : public IRender
     std::unique_ptr<VulkanCommandPool> _graphicsCommandPool = nullptr;
     std::unique_ptr<VulkanCommandPool> _presentCommandPool  = nullptr;
     VkPipelineCache                    _pipelineCache       = VK_NULL_HANDLE;
+    VkDescriptorPool                   _descriptorPool      = VK_NULL_HANDLE;
 
     VkSemaphore m_imageAvailableSemaphore;
     VkSemaphore m_renderFinishedSemaphore;
@@ -267,6 +268,8 @@ struct VulkanRender : public IRender
     [[nodiscard]] int32_t getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const;
 
     std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
+
+    const VkAllocationCallbacks *getAllocator();
 
     VkCommandBuffer beginIsolateCommands()
     {

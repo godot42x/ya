@@ -26,9 +26,9 @@ struct VulkanRender;
 struct VulkanRenderPass;
 struct VulkanPipelineLayout
 {
-    VulkanRender         *_render              = nullptr;
-    VkPipelineLayout      _pipelineLayout      = VK_NULL_HANDLE;
-    VkDescriptorSetLayout _descriptorSetLayout = VK_NULL_HANDLE;
+    VulkanRender                      *_render               = nullptr;
+    VkPipelineLayout                   _pipelineLayout       = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
     GraphicsPipelineLayoutCreateInfo _ci;
 
@@ -36,9 +36,11 @@ struct VulkanPipelineLayout
     VulkanPipelineLayout(VulkanRender *render)
         : _render(render) {}
 
-    void create(GraphicsPipelineLayoutCreateInfo);
+    void create(GraphicsPipelineLayoutCreateInfo ci);
     auto getHandle() { return _pipelineLayout; }
     void cleanup();
+
+    bool allocateDescriptorSets(std::vector<VkDescriptorPool> &pools, std::vector<VkDescriptorSet> &sets);
 };
 
 
@@ -48,8 +50,8 @@ struct VulkanPipeline
   public:
     FName name;
 
-    VkPipeline _pipeline = VK_NULL_HANDLE;
-    // VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
+    VkPipeline       _pipeline       = VK_NULL_HANDLE;
+    VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
     // VkDescriptorSet  _descriptorSet  = VK_NULL_HANDLE;
 
 
@@ -93,29 +95,12 @@ struct VulkanPipeline
         vkCmdBindPipeline(commandBuffer, bindPoint, _pipeline);
     }
 
-    void bindLayoutSets(VkCommandBuffer commandBuffer, uint32_t firstSet = 0, uint32_t setCount = 1, const VkDescriptorSet *pDescriptorSets = nullptr)
-    {
-        UNIMPLEMENTED();
-        vkCmdBindDescriptorSets(commandBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                _pipelineLayout->getHandle(),
-                                firstSet,
-                                setCount,
-                                pDescriptorSets,
-                                0,
-                                nullptr);
-    }
-
     VkPipeline getHandle() const { return _pipeline; }
 
 
   private:
     // Pipeline creation helpers
     VkShaderModule createShaderModule(const std::vector<uint32_t> &spv_binary);
-    void           createDescriptorSetLayout();
-    void           createPipelineLayout();
-    void           createDescriptorPool();
-    void           createDescriptorSets();
     void           createPipelineInternal();
 
     void queryPhysicalDeviceLimits();

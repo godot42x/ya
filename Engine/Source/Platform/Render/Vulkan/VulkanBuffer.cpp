@@ -14,7 +14,7 @@ VulkanBuffer::~VulkanBuffer()
     }
 }
 
-void VulkanBuffer::createInternal(const void *data, uint32_t size)
+void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size)
 {
 
     VkBuffer       stageBuffer       = nullptr;
@@ -45,23 +45,33 @@ void VulkanBuffer::createInternal(const void *data, uint32_t size)
     VK_FREE(Memory, _render->getLogicalDevice(), stageBufferMemory);
 }
 
+void VulkanBuffer::createDefaultInternal(uint32_t size)
+{
+    VulkanBuffer::allocate(_render,
+                           size,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           _usageFlags,
+                           _handle,
+                           _memory);
+}
+
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
                             VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
                             VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
 {
-    VkBufferCreateInfo bufferCreateInfo{
+    VkBufferCreateInfo vkBufferCI{
         .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .pNext       = nullptr,
         .flags       = 0,
         .size        = size,
         .usage       = usage,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .sharingMode = render->isGraphicsPresentSameQueueFamily() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
         // TODO: why we need this?
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices   = nullptr,
     };
 
-    VK_CALL(vkCreateBuffer(render->getLogicalDevice(), &bufferCreateInfo, nullptr, &outBuffer));
+    VK_CALL(vkCreateBuffer(render->getLogicalDevice(), &vkBufferCI, nullptr, &outBuffer));
 
 
     VkMemoryRequirements memRequirements;
@@ -82,8 +92,13 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
 
 void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
 {
-
     VkCommandBuffer cmdBuf = render->beginIsolateCommands();
+    transfer(cmdBuf, srcBuffer, dstBuffer, size);
+    render->endIsolateCommands(cmdBuf);
+}
+
+void VulkanBuffer::transfer(VkCommandBuffer cmdBuf, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
+{
 
     // VulkanUtils::transitionImageLayout(
     //     render->getLogicalDevice(),
@@ -92,13 +107,10 @@ void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer d
     //     VK_IMAGE_LAYOUT_UNDEFINED,
     //     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-
     VkBufferCopy copyRegion{
         .srcOffset = 0,
         .dstOffset = 0,
         .size      = size,
     };
     vkCmdCopyBuffer(cmdBuf, srcBuffer, dstBuffer, 1, &copyRegion);
-
-    render->endIsolateCommands(cmdBuf);
 }

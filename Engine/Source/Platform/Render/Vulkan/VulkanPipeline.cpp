@@ -11,18 +11,22 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
 {
     _ci = ci;
 
-    std::vector<VkPushConstantRange> ranges;
+    std::vector<VkPushConstantRange> pcRanges;
     for (const auto &pushConstant : _ci.pushConstants) {
-        ranges.push_back(VkPushConstantRange{
+        pcRanges.push_back(VkPushConstantRange{
             .stageFlags = toVk(pushConstant.stageFlags),
             .offset     = pushConstant.offset,
             .size       = pushConstant.size,
         });
     }
 
+    _descriptorSetLayouts.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
+
     // currently only one layout
-    std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+    int i = 0;
     for (const auto &setLayout : _ci.descriptorSetLayouts) {
+
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {};
         for (const auto &binding : setLayout.bindings) {
             bindings.push_back(VkDescriptorSetLayoutBinding{
                 .binding            = binding.binding,
@@ -32,17 +36,22 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
                 .pImmutableSamplers = nullptr, // TODO: handle immutable samplers
             });
         }
+
+        VkDescriptorSetLayoutCreateInfo dslCI{
+            .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext        = nullptr,
+            .flags        = 0,
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings    = bindings.data(),
+        };
+
+        vkCreateDescriptorSetLayout(_render->getLogicalDevice(),
+                                    &dslCI,
+                                    _render->getAllocator(),
+                                    &_descriptorSetLayouts[i]);
+        ++i;
     }
 
-    VkDescriptorSetLayoutCreateInfo setLayoutCI{
-        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext        = nullptr,
-        .flags        = 0,
-        .bindingCount = static_cast<uint32_t>(bindings.size()),
-        .pBindings    = bindings.data(),
-    };
-
-    vkCreateDescriptorSetLayout(_render->getLogicalDevice(), &setLayoutCI, nullptr, &_descriptorSetLayout);
 
     // example for the descriptor set meaning:
 
@@ -65,10 +74,10 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
         .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext                  = nullptr,
         .flags                  = 0,
-        .setLayoutCount         = 1,
-        .pSetLayouts            = &_descriptorSetLayout,
-        .pushConstantRangeCount = static_cast<uint32_t>(ranges.size()),
-        .pPushConstantRanges    = ranges.data(),
+        .setLayoutCount         = static_cast<uint32_t>(_descriptorSetLayouts.size()),
+        .pSetLayouts            = _descriptorSetLayouts.data(),
+        .pushConstantRangeCount = static_cast<uint32_t>(pcRanges.size()),
+        .pPushConstantRanges    = pcRanges.data(),
     };
 
     VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, nullptr, &_pipelineLayout);
@@ -82,8 +91,55 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
 
 void VulkanPipelineLayout::cleanup()
 {
+    for (auto layout : _descriptorSetLayouts) {
+        VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
+    }
     VK_DESTROY(PipelineLayout, _render->getLogicalDevice(), _pipelineLayout);
-    VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), _descriptorSetLayout);
+}
+
+bool VulkanPipelineLayout::allocateDescriptorSets(std::vector<VkDescriptorPool> &pools, std::vector<VkDescriptorSet> &sets)
+{
+    // std::vector<VkDescriptorPool> pools;
+    // std::vector<VkDescriptorSet>  sets;
+    pools.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
+    sets.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
+
+    int i = 0;
+    for (const auto &dsLayout : _ci.descriptorSetLayouts) {
+
+        std::vector<VkDescriptorPoolSize> dpSizes;
+        for (const auto &binding : dsLayout.bindings) {
+            VkDescriptorPoolSize poolSize{
+                .type            = toVk(binding.descriptorType),
+                .descriptorCount = binding.descriptorCount,
+            };
+            dpSizes.push_back(poolSize);
+        }
+
+        VkDescriptorPoolCreateInfo dspCI{
+            .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .pNext         = nullptr,
+            .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+            .maxSets       = static_cast<uint32_t>(_ci.descriptorSetLayouts.size()), // or a  bigger size? SDL have more than 3 sets
+            .poolSizeCount = static_cast<uint32_t>(dpSizes.size()),
+            .pPoolSizes    = dpSizes.data(),
+        };
+        VK_CALL(vkCreateDescriptorPool(_render->getLogicalDevice(), &dspCI, _render->getAllocator(), &pools[i]));
+
+        VkDescriptorSetAllocateInfo dsAI{
+            .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .pNext              = nullptr,
+            .descriptorPool     = pools[i],
+            .descriptorSetCount = static_cast<uint32_t>(_descriptorSetLayouts.size()),
+            .pSetLayouts        = _descriptorSetLayouts.data(),
+
+        };
+
+        VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(), &dsAI, &sets[i]));
+
+        ++i;
+    }
+    return true;
 }
 
 
@@ -106,86 +162,6 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
     return true;
 }
 
-
-// Pipeline creation helper methods
-void VulkanPipeline::createDescriptorSetLayout()
-{
-    // // For now, use default descriptor layout - can be extended based on config
-    // VkDescriptorSetLayoutBinding uboLayoutBinding{
-    //     .binding            = 0,
-    //     .descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    //     .descriptorCount    = 1,
-    //     .stageFlags         = VK_SHADER_STAGE_VERTEX_BIT,
-    //     .pImmutableSamplers = nullptr,
-    // };
-
-    // VkDescriptorSetLayoutBinding samplerLayoutBinding{
-    //     .binding            = 1,
-    //     .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    //     .descriptorCount    = 1,
-    //     .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
-    //     .pImmutableSamplers = nullptr,
-    // };
-
-    // std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
-
-    // VkDescriptorSetLayoutCreateInfo layoutInfo{
-    //     .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-    //     .bindingCount = static_cast<uint32_t>(bindings.size()),
-    //     .pBindings    = bindings.data(),
-    // };
-
-    // VkResult ret = vkCreateDescriptorSetLayout(_render->getLogicalDevice(), &layoutInfo, nullptr, &_descriptorSetLayout);
-    // if (ret != VK_SUCCESS) {
-    //     NE_CORE_ERROR("Failed to create descriptor set layout: {}", ret);
-    //     return;
-    // }
-}
-
-void VulkanPipeline::createPipelineLayout()
-{
-    // VkPipelineLayoutCreateInfo pipelineLayoutInfo{
-    //     .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    //     .setLayoutCount         = 1,
-    //     .pSetLayouts            = &_descriptorSetLayout,
-    //     .pushConstantRangeCount = 0,
-    // };
-
-    // VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &pipelineLayoutInfo, nullptr, &_pipelineLayout);
-    // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create pipeline layout!");
-}
-
-void VulkanPipeline::createDescriptorPool()
-{
-    // std::array<VkDescriptorPoolSize, 2> poolSizes{};
-    // poolSizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    // poolSizes[0].descriptorCount = 1;
-    // poolSizes[1].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    // poolSizes[1].descriptorCount = 1;
-
-    // VkDescriptorPoolCreateInfo poolInfo{
-    //     .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    //     .maxSets       = 1,
-    //     .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-    //     .pPoolSizes    = poolSizes.data(),
-    // };
-
-    // VkResult result = vkCreateDescriptorPool(_render->getLogicalDevice(), &poolInfo, nullptr, &_descriptorPool);
-    // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create descriptor pool!");
-}
-
-void VulkanPipeline::createDescriptorSets()
-{
-    // VkDescriptorSetAllocateInfo allocInfo{
-    //     .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-    //     .descriptorPool     = _descriptorPool,
-    //     .descriptorSetCount = 1,
-    //     .pSetLayouts        = &_descriptorSetLayout,
-    // };
-
-    // VkResult result = vkAllocateDescriptorSets(_render->getLogicalDevice(), &allocInfo, &_descriptorSet);
-    // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor sets!");
-}
 
 void VulkanPipeline::createPipelineInternal()
 {

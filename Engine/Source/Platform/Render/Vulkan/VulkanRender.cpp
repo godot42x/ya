@@ -461,7 +461,6 @@ bool VulkanRender::createCommandPool()
     return _graphicsCommandPool->_handle != VK_NULL_HANDLE;
 }
 
-
 void VulkanRender::createPipelineCache()
 {
     VkPipelineCacheCreateInfo ci{
@@ -584,6 +583,28 @@ bool VulkanRender::isFeatureSupported(
 }
 
 
+
+const VkAllocationCallbacks *VulkanRender::getAllocator()
+{
+    // static VkAllocationCallbacks allocator{
+    //     .pUserData     = nullptr,
+    //     .pfnAllocation = [](void *pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope) -> void * {
+    //     },
+    //     .pfnReallocation = [](void *pUserData, void *pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope) -> void * {
+    //         if (pOriginal) {
+    //             free(pOriginal);
+    //         }
+    //         return aligned_alloc(alignment, size);
+    //     },
+    //     .pfnFree          = [](void *pUserData, void *pMemory) {
+    //         if (pMemory) {
+    //             free(pMemory);
+    //         } },
+    //     .pfnInternalAlloc = nullptr,
+    //     .pfnInternalFree  = nullptr,
+    // };
+    return VK_NULL_HANDLE;
+}
 
 void VulkanRender::recreateSwapChain()
 {
