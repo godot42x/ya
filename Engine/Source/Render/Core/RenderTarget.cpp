@@ -10,10 +10,18 @@ IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass)
     _renderPass = renderPass;
 
     auto vkRender     = static_cast<VulkanRender *>(App::get()->getRender());
+    auto swapChain    = vkRender->getSwapChain();
     auto ext          = vkRender->getSwapChain()->getExtent();
     _extent           = {.width = ext.width, .height = ext.height};
     _frameBufferCount = vkRender->getSwapChain()->getImages().size();
     bSwapChainTarget  = true;
+
+
+
+    swapChain->onRecreate.addLambda(this, [this]() {
+        // this->recreate(this->getCI());
+        bDirty = true; // Mark as dirty to recreate frame buffers
+    });
 
     init();
     recreate();

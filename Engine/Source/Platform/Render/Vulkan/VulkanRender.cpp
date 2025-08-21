@@ -59,7 +59,7 @@ void VulkanRender::createInstance()
     std::vector<DeviceFeature> requestExtensions = _instanceExtensions;
     std::vector<DeviceFeature> requestLayers     = _instanceLayers;
 
-    const auto &required = onGetRequiredInstanceExtensions.ExecuteIfBound();
+    const auto &required = onGetRequiredInstanceExtensions.executeIfBound();
     for (const auto &ext : required) {
         requestExtensions.push_back(ext);
     }
@@ -300,7 +300,7 @@ void VulkanRender::findPhysicalDevice()
 
 void VulkanRender::createSurface()
 {
-    bool ok = onCreateSurface.ExecuteIfBound(&(*_instance), &_surface);
+    bool ok = onCreateSurface.executeIfBound(&(*_instance), &_surface);
     NE_CORE_ASSERT(ok, "Failed to create surface!");
 }
 

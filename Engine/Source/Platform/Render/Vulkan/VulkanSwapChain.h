@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Delegate.h"
 #include "Render/Render.h"
 #include "WindowProvider.h"
 #include <vector>
@@ -33,10 +34,13 @@ struct VulkanSwapChain
     VkColorSpaceKHR  _surfaceColorSpace;
     uint32_t         _minImageCount = 0; // Minimum image count based on surface capabilities
     VkPresentModeKHR _presentMode;
+    bool             bVsync = true;
 
     SwapchainCreateInfo _ci;
 
-    uint32_t _curImageIndex;
+    uint32_t _curImageIndex = 0;
+
+    MulticastDelegate<void()> onRecreate;
 
   public:
     VulkanSwapChain(VulkanRender *render)
@@ -47,9 +51,16 @@ struct VulkanSwapChain
     ~VulkanSwapChain();
 
 
-    bool create(const SwapchainCreateInfo &ci);
     void cleanup();
-    void recreate(const SwapchainCreateInfo &ci);
+    bool recreate(const SwapchainCreateInfo &ci);
+    void setVsync(bool vsync)
+    {
+        bVsync          = vsync;
+        _presentMode    = bVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+        _ci.bVsync      = bVsync;
+        _ci.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
+        recreate(_ci);
+    }
 
     [[nodiscard]] const SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 

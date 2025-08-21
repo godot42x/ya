@@ -9,6 +9,7 @@
 #include <vulkan/vulkan.h>
 
 struct VulkanRender;
+struct VulkanSwapChain;
 
 
 /*
@@ -21,13 +22,13 @@ class VulkanRenderPass
     VulkanRender *_render      = nullptr;
     VkRenderPass  m_renderPass = VK_NULL_HANDLE;
 
-    VkFormat m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
-    VkFormat m_depthFormat          = VK_FORMAT_UNDEFINED;
+    VkFormat         m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
+    VkFormat         m_depthFormat          = VK_FORMAT_UNDEFINED;
+    VulkanSwapChain *_swapChain             = nullptr;
 
     RenderPassCreateInfo _ci;
 
   public:
-    VulkanRenderPass() = default;
     VulkanRenderPass(VulkanRender *render);
     ~VulkanRenderPass() { cleanup(); }
 

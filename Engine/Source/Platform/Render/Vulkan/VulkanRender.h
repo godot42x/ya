@@ -79,8 +79,6 @@ struct VulkanRender : public IRender
 
 
 
-    // owning to swapchain
-    SwapchainCreateInfo      m_swapChainCI;
     VulkanSwapChain         *m_swapChain;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
@@ -148,8 +146,6 @@ struct VulkanRender : public IRender
     {
         initWindow(ci);
         nativeWindow = _windowProvider->getNativeWindowPtr<SDL_Window>();
-        // Store configurations
-        m_swapChainCI = ci.swapchainCI;
 
         createInstance();
 
@@ -177,7 +173,7 @@ struct VulkanRender : public IRender
 
 
         m_swapChain = new VulkanSwapChain(this);
-        m_swapChain->create(m_swapChainCI);
+        m_swapChain->recreate(ci.swapchainCI);
 
         if (!createCommandPool()) {
             terminate();
@@ -226,7 +222,7 @@ struct VulkanRender : public IRender
             _debugUtils->destroy();
         }
 
-        onReleaseSurface.ExecuteIfBound(&(*_instance), &_surface);
+        onReleaseSurface.executeIfBound(&(*_instance), &_surface);
         vkDestroyInstance(_instance, nullptr);
     }
 

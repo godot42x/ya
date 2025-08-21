@@ -9,7 +9,12 @@
 
 VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
 {
-    _render = render;
+    _render    = render;
+    _swapChain = _render->getSwapChain();
+
+    _swapChain->onRecreate.addLambda([this]() {
+        // this->recreate(this->getCI());
+    });
 }
 
 
@@ -110,6 +115,7 @@ bool VulkanRenderPass::createDefaultRenderPass()
 
 bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 {
+    NE_CORE_INFO("Recreating render pass...");
     _ci = ci;
 
     // NE_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");

@@ -29,7 +29,7 @@ struct VulkanQueue
     void submit(const std::vector<VkCommandBuffer> &commandBuffers,
                 const std::vector<VkSemaphore>     &waitSemaphores   = {}, // waiting
                 const std::vector<VkSemaphore>     &signalSemaphores = {}, // trigger/signal semaphore after submission completed
-                VkFence                             fence            = VK_NULL_HANDLE)
+                VkFence                             emitFence        = VK_NULL_HANDLE)
     {
         VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo         info{
@@ -44,7 +44,7 @@ struct VulkanQueue
                     .pSignalSemaphores    = signalSemaphores.data(),
         };
 
-        VK_CALL(vkQueueSubmit(_handle, 1, &info, fence));
+        VK_CALL(vkQueueSubmit(_handle, 1, &info, emitFence));
     }
 
     [[nodiscard]] VkQueue  getHandle() const { return _handle; }
