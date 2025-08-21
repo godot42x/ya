@@ -411,6 +411,10 @@ struct DepthStencilState
     bool          bStencilTestEnable     = false;
     float         minDepthBounds         = 0.0f;
     float         maxDepthBounds         = 1.0f;
+
+    // TODO
+    // VkStencilOpState                          front;
+    // VkStencilOpState                          back;
     // Stencil ops can be added later if needed
 };
 

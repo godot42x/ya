@@ -14,6 +14,7 @@
 
 #include "Render/Core/RenderTarget.h"
 #include "Render/Render.h"
+#include "render/Mesh.h"
 
 
 #include <SDL3/SDL.h>
@@ -52,11 +53,11 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 // 手动设置多层cpu缓冲，让 cpu 在多个帧之间轮转, cpu and gpu can work in parallel
 // but frame count should be limited and considered  with performance
 static uint32_t currentFrameIdx = 0;
-int             fps         = 60;
+int             fps             = 60;
+uint32_t        frameCount      = 0;
 
-std::shared_ptr<VulkanBuffer> vertexBuffer;
-std::shared_ptr<VulkanBuffer> indexBuffer;
-uint32_t                      indexSize = -1;
+
+std::shared_ptr<ya::Mesh> cubeMesh;
 
 glm::mat4 matModel;
 
@@ -129,7 +130,7 @@ void imcFpsControl(FPSControl &fpsCtrl)
         ImGui::SameLine();
         if (ImGui::Button("Confirm")) {
             fpsCtrl.setFPSLimit(newFpsLimit);
-            fps = newFpsLimit;
+            fps = (int)newFpsLimit;
         }
 
         ImGui::Checkbox("Enable FPS Control", &fpsCtrl.bEnable);
@@ -279,38 +280,6 @@ void App::init()
 
     vkRender->allocateCommandBuffers(swapchainImageSize, commandBuffers);
 
-    // TODO: maybe copy and cause destruction?
-    // TODO: this should be a resources part of logical device or swapchain. And should be recreated when swapchain is recreated
-    // frameBuffers.resize(swapchainImageSize);
-
-    // for (size_t i = 0; i < images.size(); ++i)
-    // {
-    //     frameBuffers[i] = VulkanFrameBuffer(vkRender, renderpass, vkSwapChain->getWidth(), vkSwapChain->getHeight());
-
-    //     std::vector<std::shared_ptr<VulkanImage>> fbAttachments = {
-    //         // color attachment
-    //         VulkanImage::from(vkRender, images[i], surfaceFormat, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT),
-    //         VulkanImage::create(
-    //             vkRender,
-    //             ImageCreateInfo{
-    //                 .format = DEPTH_FORMAT,
-    //                 .extent = {
-    //                     .width  = vkSwapChain->getWidth(),
-    //                     .height = vkSwapChain->getHeight(),
-    //                     .depth  = 1,
-    //                 },
-    //                 .mipLevels     = 1,
-    //                 .samples       = ESampleCount::Sample_1,
-    //                 .usage         = EImageUsage::DepthStencilAttachment,
-    //                 .sharingMode   = ESharingMode::Exclusive,
-    //                 .initialLayout = EImageLayout::Undefined,
-    //                 // .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-    //             }),
-    //     };
-
-    //     frameBuffers[i].recreate(fbAttachments, vkSwapChain->getWidth(), vkSwapChain->getHeight());
-    // }
-
     // use the RT instead of framebuffers directly
     renderTarget = new IRenderTarget(renderpass);
 
@@ -410,7 +379,13 @@ void App::init()
         },
         .multisampleState  = MultisampleState{},
         .depthStencilState = DepthStencilState{
-            .bDepthTestEnable = true,
+            .bDepthTestEnable       = true,
+            .bDepthWriteEnable      = true,
+            .depthCompareOp         = ECompareOp::Less,
+            .bDepthBoundsTestEnable = false,
+            .bStencilTestEnable     = false,
+            .minDepthBounds         = 0.0f,
+            .maxDepthBounds         = 1.0f,
         },
         .colorBlendState = ColorBlendState{
             .attachments = {
@@ -467,20 +442,9 @@ void App::init()
         true,
         true);
 
-    vertexBuffer = VulkanBuffer::create(
-        vkRender,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        sizeof(vertices[0]) * vertices.size(),
-        vertices.data());
-    indexBuffer = VulkanBuffer::create(
-        vkRender,
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        sizeof(indices[0]) * indices.size(),
-        indices.data());
-    indexSize = static_cast<uint32_t>(indices.size());
+    cubeMesh = std::make_shared<ya::Mesh>(vertices, indices);
+    cubeMesh->setDebugName("CubeMesh");
 
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, vertexBuffer->getHandle(), "VertexBuffer");
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, indexBuffer->getHandle(), "IndexBuffer");
 
     matModel = glm::mat4(1.0f);
     // we span at z = 3 and look at the origin ( right hand? and the cubes all place on xy plane )
@@ -541,10 +505,9 @@ void ya::App::quit()
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
-    imgui.shutdown();
+    cubeMesh.reset();
 
-    vertexBuffer.reset();
-    indexBuffer.reset();
+    imgui.shutdown();
 
     releaseSemaphoreAndFence();
 
@@ -554,10 +517,6 @@ void ya::App::quit()
     delete defaultPipelineLayout;
 
 
-    // for (auto &frameBuffer : frameBuffers)
-    // {
-    //     frameBuffer.clean();
-    // }
     delete renderTarget;
     delete renderpass;
     _render->destroy();
@@ -836,21 +795,9 @@ void App::onDraw(float dt)
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    // std::vector<VkClearValue> clearValues{
-    //     colorClearValue,
-    //     depthClearValue,
-    // };
-    // NE_CORE_ASSERT(
-    //     clearValues.size() == renderpass->getCI().attachments.size(),
-    //     "Clear values count must match attachment count!");
-    // renderpass->begin(curCmdBuf,
-    //                   curFrameBuffer->getHandle(),
-    //                   vkRender->getSwapChain()->getExtent(),
-    //                   std::move(clearValues));
     renderTarget->setColorClearValue(colorClearValue);
     renderTarget->setDepthStencilClearValue(depthClearValue);
     renderTarget->begin(curCmdBuf);
-
 
 
     VulkanFrameBuffer *curFrameBuffer = renderTarget->getFrameBuffer();
@@ -922,13 +869,13 @@ void App::onDraw(float dt)
                        &pushData);
 
     // Bind vertex buffer
-    VkBuffer vertexBuffers[] = {vertexBuffer->getHandle()};
+    VkBuffer vertexBuffers[] = {cubeMesh->getVertexBuffer()->getHandle()};
     // current no need to support subbuffer
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(curCmdBuf, 0, 1, vertexBuffers, offsets);
 
     vkCmdBindIndexBuffer(curCmdBuf,
-                         indexBuffer->getHandle(),
+                         cubeMesh->getIndexBuffer()->getHandle(),
                          0,
                          VK_INDEX_TYPE_UINT32);
 
@@ -936,11 +883,11 @@ void App::onDraw(float dt)
 
     // vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
     vkCmdDrawIndexed(curCmdBuf,
-                     indexSize, // index count
-                     9,         // instance count: 9 cubes
-                     0,         // first index
-                     0,         // vertex offset, this for merge vertex buffer?
-                     0          // first instance
+                     cubeMesh->getIndexCount(), // index count
+                     9,                         // instance count: 9 cubes
+                     0,                         // first index
+                     0,                         // vertex offset, this for merge vertex buffer?
+                     0                          // first instance
     );
 
 #pragma region UI
@@ -988,7 +935,6 @@ void App::onDraw(float dt)
     //     // vkCmdNextSubpass()
     // #endif
     // renderpass->end(curCmdBuf);
-
     renderTarget->end(curCmdBuf);
 
     // 10. end command buffer
@@ -1034,7 +980,8 @@ void App::onDraw(float dt)
     // ✅ Flight Frames关键步骤5: 切换到下一个飞行帧
     // 使用模运算实现环形缓冲区，在多个帧之间循环
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
-    currentFrameIdx = (currentFrameIdx + 1) % swapchainImageSize;
+    // ⚠️ frameCount can not equal to imageSize of swapchain!!
+    currentFrameIdx = (currentFrameIdx + 1) % frameCount; 
 }
 
 #pragma region synchronization resources
@@ -1072,7 +1019,7 @@ void App::initSemaphoreAndFence()
     frameFences.resize(swapchainImageSize);
 
     // ✅ 循环创建每个飞行帧的同步对象
-    for (uint32_t i = 0; i < swapchainImageSize; i++) {
+    for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
         // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
         ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
         NE_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);

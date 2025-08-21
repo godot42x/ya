@@ -20,7 +20,7 @@ struct VulkanBuffer
 
     virtual ~VulkanBuffer();
 
-    static auto create(VulkanRender *render, VkBufferUsageFlags usage, std::size_t size, void *data = nullptr)
+    static auto create(VulkanRender *render, VkBufferUsageFlags usage, std::size_t size, const void *data = nullptr)
     {
         auto ret         = std::make_shared<VulkanBuffer>();
         ret->_render     = render;
@@ -33,7 +33,7 @@ struct VulkanBuffer
     }
 
 
-    void createInternal(void *data, uint32_t size);
+    void createInternal(const void *data, uint32_t size);
 
 
 

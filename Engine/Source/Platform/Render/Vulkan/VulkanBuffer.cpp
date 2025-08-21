@@ -14,7 +14,7 @@ VulkanBuffer::~VulkanBuffer()
     }
 }
 
-void VulkanBuffer::createInternal(void *data, uint32_t size)
+void VulkanBuffer::createInternal(const void *data, uint32_t size)
 {
 
     VkBuffer       stageBuffer       = nullptr;
