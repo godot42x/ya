@@ -52,7 +52,7 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 // 手动设置多层cpu缓冲，让 cpu 在多个帧之间轮转, cpu and gpu can work in parallel
 // but frame count should be limited and considered  with performance
 static uint32_t currentFrameIdx = 0;
-int             fps             = 60;
+int             fps         = 60;
 
 std::shared_ptr<VulkanBuffer> vertexBuffer;
 std::shared_ptr<VulkanBuffer> indexBuffer;
@@ -81,7 +81,8 @@ VkClearValue depthClearValue = {
 
 struct FPSControl
 {
-    float fps = 0.0f;
+    float fps     = 0.0f;
+    bool  bEnable = true;
 
     static constexpr float defaultFps = 60.f;
 
@@ -90,6 +91,10 @@ struct FPSControl
 
     float update(float &dt)
     {
+        if (!bEnable) {
+            return 0;
+        }
+
         if (dt < wantedDT)
         {
             float delayTimeSec = wantedDT - dt;
@@ -107,6 +112,29 @@ struct FPSControl
         wantedDT = 1.f / fpsLimit;
     }
 };
+
+static FPSControl fpsCtrl;
+
+void imcFpsControl(FPSControl &fpsCtrl)
+{
+    if (ImGui::CollapsingHeader("FPS Control", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+        ImGui::Text("FPS Limit: %.1f", fpsCtrl.fpsLimit);
+
+        static float newFpsLimit = fpsCtrl.fpsLimit;
+        ImGui::PushItemWidth(100.0f);
+        ImGui::InputFloat("New: ", &newFpsLimit, 10.0f, 10.0f, "%.1f");
+        ImGui::PopItemWidth();
+
+        ImGui::SameLine();
+        if (ImGui::Button("Confirm")) {
+            fpsCtrl.setFPSLimit(newFpsLimit);
+            fps = newFpsLimit;
+        }
+
+        ImGui::Checkbox("Enable FPS Control", &fpsCtrl.bEnable);
+    }
+}
 
 bool imcEditorCamera(EditorCamera &camera)
 {
@@ -154,13 +182,13 @@ void App::init()
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .bVsync        = true,
-            .minImageCount = 2,
+            .presentMode   = EPresentMode::Immediate, // vsync
+            .bVsync        = false,
+            .minImageCount = 3,
             .width         = static_cast<uint32_t>(_ci.width),
             .height        = static_cast<uint32_t>(_ci.height),
         },
     };
-
     _render        = IRender::create(renderCI);
     auto *vkRender = dynamic_cast<VulkanRender *>(_render);
 
@@ -502,6 +530,10 @@ void App::init()
         .MinAllocationSize = static_cast<VkDeviceSize>(1024 * 1024),
     };
     imgui.init(vkRender->getNativeWindow<SDL_Window>(), initInfo);
+
+
+    // wait something done
+    vkDeviceWaitIdle(vkRender->getLogicalDevice());
 }
 
 void ya::App::quit()
@@ -716,8 +748,7 @@ int ya::App::onEvent(SDL_Event &event)
 };
 
 
-static FPSControl fpsCtrl;
-int               ya::App::iterate(float dt)
+int ya::App::iterate(float dt)
 {
 
 
@@ -734,6 +765,7 @@ int               ya::App::iterate(float dt)
         onUpdate(dt);
     }
     onRender(dt);
+    taskManager.update();
     ++_frameIndex;
     return 0;
 }
@@ -774,7 +806,7 @@ void App::onDraw(float dt)
 
 
     // ✅ Flight Frames关键步骤1: CPU等待当前帧对应的fence
-    // 这确保CPU不会在GPU还在使用资源时就开始修改它们
+    // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
     VK_CALL(vkWaitForFences(vkRender->getLogicalDevice(),
                             1,
@@ -792,7 +824,7 @@ void App::onDraw(float dt)
     uint32_t imageIndex = -1;
     vkRender->getSwapChain()->acquireNextImage(
         imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-        frameFences[currentFrameIdx],              // 等待上一帧渲完成
+        frameFences[currentFrameIdx],              // 等待上一present完成
         // VK_NULL_HANDLE,                         // or 不传递 fence，避免双重等待问题
         imageIndex);
 
@@ -804,18 +836,13 @@ void App::onDraw(float dt)
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    std::vector<VkClearValue> clearValues{
-        colorClearValue,
-        depthClearValue,
-    };
-
+    // std::vector<VkClearValue> clearValues{
+    //     colorClearValue,
+    //     depthClearValue,
+    // };
     // NE_CORE_ASSERT(
     //     clearValues.size() == renderpass->getCI().attachments.size(),
     //     "Clear values count must match attachment count!");
-
-    // renderTarget->_currentFrameIndex  = currentFrame;
-
-
     // renderpass->begin(curCmdBuf,
     //                   curFrameBuffer->getHandle(),
     //                   vkRender->getSwapChain()->getExtent(),
@@ -916,35 +943,39 @@ void App::onDraw(float dt)
                      0          // first instance
     );
 
+#pragma region UI
+
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
         float fps = 1.0f / dt;
         ImGui::Text("DeltaTime: %.2f ms , FPS: %.1f", dt * 1000.0f, fps);
         ImGui::Text("Fame index:  %d", _frameIndex);
-        ImGui::Text("Image index:  %d, FameIndex %d", imageIndex, currentFrameIdx);
+        ImGui::Text("Image index:  %d, FameIndex %d", currentFrameIdx, currentFrameIdx);
 
-        if (ImGui::InputFloat("FPS Limit", &fps)) {
-            fpsCtrl.setFPSLimit(fps);
+        bool bVsync = vkRender->getSwapChain()->bVsync;
+        if (ImGui::Checkbox("VSync", &bVsync)) {
+            // vkRender->getSwapChain()->recreate();
+            // recreate renderpass and pipeline
+            // renderpass->recreate();
+            // pipeline->recreate();
+            // rebind frame buffer
+            // renderTarget->recreate();
+            taskManager.registerFrameTask([vkRender, bVsync]() {
+                vkRender->getSwapChain()->setVsync(bVsync);
+            });
         }
-
-        // Check if actual timing is way off from expected
-        if (fps > 200.0f) {
-            ImGui::TextColored(ImVec4(1, 0, 0, 1), "WARNING: VSync may not be working!");
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "Possible causes:");
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- High refresh rate monitor (144Hz/240Hz/1000Hz)");
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- VSync disabled in GPU driver");
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "- Present mode not set to FIFO");
-        }
-
 
         imcEditorCamera(camera);
         imcClearValues();
+        imcFpsControl(fpsCtrl);
         ImGui::End();
     }
     imgui.render();
     // imgui.submit(curCmdBuf, pipeline->getHandle());
     imgui.submit(curCmdBuf); // leave nullptr to let imgui use its pipeline
     imgui.endFrame();
+
+#pragma endregion
 
 #pragma endregion
 
@@ -970,25 +1001,31 @@ void App::onDraw(float dt)
         {
             curCmdBuf,
         },
-        // 等待条件：当前帧的图像可用信号量被触发后才开始渲染
+        //  wait image available to submit, after acquire image done
         {
-            imageAvailableSemaphores[currentFrameIdx],
+            imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
         },
-        // 完成信号：渲染完成后触发当前帧的提交完成信号量
+        // send submitted signal after command buffer submitted completed
         {
-            submittedSignalSemaphores[currentFrameIdx],
+            submittedSignalSemaphores[imageIndex], // ⚠️ the signal sema of the submit operation should be the IMAGE_INDEX!!!
         },
-        frameFences[currentFrameIdx] // GPU完成所有工作后会发送此fence信号
+        frameFences[currentFrameIdx] // GPU完成所有(submit)工作后会发送此fence信号;
     );
 
 
+    // submit and present are asynchronous operations,
     VkResult result = vkRender->getSwapChain()->presentImage(
         imageIndex,
         _firstPresentQueue->getHandle(),
-        // 等待条件：当前帧的渲染完成信号量被触发后才呈现
+        //  only wait submit completed, and next frame can be render already
         {
-            submittedSignalSemaphores[currentFrameIdx],
+            submittedSignalSemaphores[imageIndex], // ⚠️ the wait sema of the Present operation  should be the IMAGE_INDEX!!!
         });
+
+
+    // if not use gl, this should be eq?
+    // NE_CORE_INFO("Presenting image index: {}, current frame index: {}", curFrameIdx, curFrameIdx);
+    // NE_ASSERT(curFrameIdx == curImageIdx, "Image index mismatch! Expected {}, got {}", curFrameIdx, curImageIdx);
 
     if (result != VK_SUCCESS) {
         NE_CORE_WARN("Failed to present swap chain image! Result: {}", result);
@@ -1071,7 +1108,7 @@ void App::releaseSemaphoreAndFence()
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
-    for (uint32_t i = 0; i < swapchainImageSize; i++) {
+    for (uint32_t i = 0; i < imageAvailableSemaphores.size(); i++) {
         vkDestroySemaphore(vkRender->getLogicalDevice(), imageAvailableSemaphores[i], nullptr);
         vkDestroySemaphore(vkRender->getLogicalDevice(), submittedSignalSemaphores[i], nullptr);
         vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], nullptr);

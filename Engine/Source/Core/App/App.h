@@ -54,6 +54,25 @@ struct AppCreateInfo
     }
 };
 
+struct TaskManager
+{
+    std::queue<std::function<void()>> tasks;
+
+    void registerFrameTask(std::function<void()> task)
+    {
+        tasks.push(std::move(task));
+    }
+
+    void update()
+    {
+        while (!tasks.empty()) {
+            auto task = std::move(tasks.front());
+            tasks.pop();
+            task();
+        }
+    }
+};
+
 
 struct App
 {
@@ -88,6 +107,7 @@ struct App
 
     AppCreateInfo _ci;
 
+    TaskManager taskManager;
 
   public:
     App()          = delete;
