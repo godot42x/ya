@@ -14,7 +14,6 @@
         }
     ],
     "configurations": [
-        
         {
             "type": "cppvsdbg",
             "request": "attach",
@@ -31,7 +30,7 @@
                 "threadExit": true,
                 "processExit": true,
                 "programOutput": true,
-                "engineLogging": true,
+                "engineLogging": false,
                 "exceptions": true
             },
             "cwd": "${workspaceRoot}",

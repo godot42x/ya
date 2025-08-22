@@ -306,8 +306,8 @@ void App::init()
         .pushConstants = {
             GraphicsPipelineLayoutCreateInfo::PushConstant{
                 .offset     = 0,
-                .size       = sizeof(glm::mat4) * 2, // dynamical allocated buffer
-                .stageFlags = EShaderStage::Vertex,
+                .size       = sizeof(char) * 256, // dynamical allocated buffer
+                .stageFlags = EShaderStage::Fragment,
             },
         },
         .descriptorSetLayouts = {
@@ -359,7 +359,7 @@ void App::init()
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
-            .shaderName        = "HelloCube.glsl",
+            .shaderName        = "Test/HelloTexture.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -881,10 +881,10 @@ void App::onDraw(float dt)
     // 7. other resources, uniform buffers, etc.
 
 
-#if 1 // Dynamic state
-      // need set VkPipelineDynamicStateCreateInfo
-      // or those properties should be modified in the pipeline recreation if needed.
-      // but sometimes that we want to enable depth or color-blend state dynamically
+#pragma region Dynamic State
+    // need set VkPipelineDynamicStateCreateInfo
+    // or those properties should be modified in the pipeline recreation if needed.
+    // but sometimes that we want to enable depth or color-blend state dynamically
 
 
 
@@ -905,7 +905,7 @@ void App::onDraw(float dt)
         .extent = vkRender->getSwapChain()->getExtent(),
     };
     vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
-#endif
+#pragma enndregion
 
 #pragma region CopyPass
 

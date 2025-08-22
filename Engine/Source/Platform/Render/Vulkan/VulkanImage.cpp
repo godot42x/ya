@@ -12,8 +12,8 @@ VulkanImage::~VulkanImage()
 
 bool VulkanImage::allocate()
 {
-    _format     = toVk(_ci->format);
-    _usageFlags = toVk(_ci->usage);
+    _format     = toVk(_ci.format);
+    _usageFlags = toVk(_ci.usage);
 
     VkImageCreateInfo imageCreateInfo{
         .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -22,19 +22,19 @@ bool VulkanImage::allocate()
         .imageType = VK_IMAGE_TYPE_2D,
         .format    = _format,
         .extent    = {
-               .width  = _ci->extent.width,
-               .height = _ci->extent.height,
-               .depth  = _ci->extent.depth,
+               .width  = _ci.extent.width,
+               .height = _ci.extent.height,
+               .depth  = _ci.extent.depth,
         },
-        .mipLevels             = _ci->mipLevels,
+        .mipLevels             = _ci.mipLevels,
         .arrayLayers           = 1,
-        .samples               = toVk(_ci->samples),
+        .samples               = toVk(_ci.samples),
         .tiling                = VK_IMAGE_TILING_OPTIMAL,
         .usage                 = _usageFlags,
-        .sharingMode           = toVk(_ci->sharingMode),
-        .queueFamilyIndexCount = _ci->queueFamilyIndexCount,
-        .pQueueFamilyIndices   = _ci->pQueueFamilyIndices,
-        .initialLayout         = toVk(_ci->initialLayout),
+        .sharingMode           = toVk(_ci.sharingMode),
+        .queueFamilyIndexCount = _ci.queueFamilyIndexCount,
+        .pQueueFamilyIndices   = _ci.pQueueFamilyIndices,
+        .initialLayout         = toVk(_ci.initialLayout),
     };
 
     VK_CALL(vkCreateImage(_render->getLogicalDevice(), &imageCreateInfo, nullptr, &_handle));

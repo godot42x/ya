@@ -20,7 +20,7 @@ struct VulkanImage
     VkImageUsageFlags _usageFlags = 0;
     bool              bOwned      = false;
 
-    std::unique_ptr<ImageCreateInfo> _ci = nullptr;
+    ImageCreateInfo _ci;
 
 
   public:
@@ -44,7 +44,7 @@ inline std::shared_ptr<VulkanImage> VulkanImage::create(VulkanRender *render, co
 {
     auto ret     = std::make_shared<VulkanImage>();
     ret->_render = render;
-    ret->_ci     = std::make_unique<ImageCreateInfo>(ci);
+    ret->_ci     = ci;
 
     NE_CORE_ASSERT(ret->allocate(), "Failed to create VulkanImage");
 

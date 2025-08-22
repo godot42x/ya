@@ -1,4 +1,5 @@
 includes("./Plugins/Plugins.xmake.lua")
+includes("./Shader/Shader.xmake.lua")
 
 add_requires("spdlog")
 add_requires("libsdl3")
@@ -81,6 +82,7 @@ do
     add_packages("glad")
     add_packages("cxxopts")
 
+    add_deps("shader")
 
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then

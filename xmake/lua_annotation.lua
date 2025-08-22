@@ -34,8 +34,6 @@ function set_targetdir(dir) end
 ---@param app string
 function target(app) end
 
----@param app string
-function task(app) end
 
 ---@param v "cxx"|"no-cxx"
 function set_exceptions(v) end

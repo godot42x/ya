@@ -84,6 +84,21 @@ const char *getVulkanCacheFileExtension(EShaderStage::T stage)
     return "";
 }
 
+const char *getSpvOutputExtension(EShaderStage::T stage)
+{
+    switch (stage)
+    {
+    case EShaderStage::Vertex:
+        return "vert.spv";
+    case EShaderStage::Fragment:
+        return "frag.spv";
+    default:
+        break;
+    }
+    // NE_CORE_ASSERT(false);
+    return "";
+}
+
 
 SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
 {
@@ -113,7 +128,6 @@ std::filesystem::path GLSLScriptProcessor::GetCachePath(bool bVulkan, EShaderSta
 
     return "";
 }
-
 
 
 // Get size of a SPIRV type with proper alignment for C++ structs
@@ -266,7 +280,7 @@ ShaderReflection::ShaderResources GLSLScriptProcessor::reflect(EShaderStage::T s
     resources.spirvResources = spirvResources; // Store original spirv resources
 
     NE_CORE_TRACE("===============================================================================");
-    NE_CORE_TRACE("OpenGLShader:Reflect {} -> {}", tempProcessingPath, EShaderStage::T2Strings[stage]);
+    NE_CORE_TRACE("OpenGLShader:Reflect {} -> {}", curFileName, EShaderStage::T2Strings[stage]);
     NE_CORE_TRACE("\t {} uniform buffers ", spirvResources.uniform_buffers.size());
     NE_CORE_TRACE("\t {} storage buffers ", spirvResources.storage_buffers.size());
     NE_CORE_TRACE("\t {} stage inputs ", spirvResources.stage_inputs.size());
@@ -466,13 +480,13 @@ bool GLSLScriptProcessor::compileToSpv(std::string_view filename, std::string_vi
     return true;
 }
 
-std::unordered_map<EShaderStage::T, std::string> GLSLScriptProcessor::preprocessShaderSource(const std::string_view filename)
+std::unordered_map<EShaderStage::T, std::string> GLSLScriptProcessor::preprocessCombinedSource(const std::string_view filename)
 {
     std::unordered_map<EShaderStage::T, std::string> shaderSources;
 
     std::string contentStr;
-    std::string fullPath = this->shaderStoragePath + "/" + filename.data();
 
+    std::string fullPath = this->shaderStoragePath + "/" + filename.data() + ".glsl";
     if (!FileSystem::get()->readFileToString(fullPath, contentStr))
     {
         NE_CORE_ERROR("Failed to read shader file: {}", fullPath);
@@ -516,45 +530,125 @@ std::unordered_map<EShaderStage::T, std::string> GLSLScriptProcessor::preprocess
     return shaderSources;
 }
 
-
-std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view filename)
+bool GLSLScriptProcessor::processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap)
 {
-    // Record the processing path for reflection logging
-    tempProcessingPath = this->shaderStoragePath + "/" + filename.data();
-    // Preprocess
-    std::unordered_map<EShaderStage::T, std::string> shaderSources = preprocessShaderSource(filename);
+    NE_CORE_INFO("Found spv shader files for {}: {} and {}", curFileName, vertFile, fragFile);
+
+
+    auto toSpirv = [](std::string_view ctx, const std::string &src, std::vector<ir_t> &spirv) {
+        if (src.size() % sizeof(ir_t) != 0)
+        {
+            NE_CORE_WARN("Cached vertex shader file size is not a multiple of ir_t size: {}", ctx);
+            return false;
+        }
+        spirv.resize(src.size() / sizeof(ir_t));
+        std::memcpy(spirv.data(), src.data(), src.size());
+        return true;
+    };
+
+    std::vector<ir_t> vertSpv;
+    std::string       vertFileStr;
+    if (!FileSystem::get()->readFileToString(vertFile, vertFileStr))
+    {
+        NE_CORE_WARN("Failed to read cached vertex shader file: {}", vertFile);
+        return false;
+    }
+    if (!toSpirv(curFileName, vertFileStr, vertSpv)) {
+        NE_CORE_ERROR("Failed to convert cached vertex shader file to SPIR-V: {}", vertFile);
+        return false;
+    }
+    outSpvMap[EShaderStage::Vertex] = std::move(vertSpv);
+
+    std::vector<ir_t> fragSpv;
+    std::string       fragFileStr;
+    if (!FileSystem::get()->readFileToString(fragFile, fragFileStr))
+    {
+        NE_CORE_ERROR("Failed to read cached fragment shader file: {}", fragFile);
+        return false;
+    }
+    if (!toSpirv(curFileName, fragFileStr, fragSpv)) {
+        NE_CORE_ERROR("Failed to convert cached fragment shader file to SPIR-V: {}", fragFile);
+        return false;
+    }
+    outSpvMap[EShaderStage::Fragment] = std::move(fragSpv);
+
+    return true;
+}
+
+bool GLSLScriptProcessor::processCombinedSource(std::string_view filename, stage2spirv_t &outSpvMap)
+{
+    std::unordered_map<EShaderStage::T, std::string> shaderSources = preprocessCombinedSource(filename);
 
     if (shaderSources.empty())
     {
         NE_CORE_ERROR("Failed to preprocess shader source: {}", filename);
-        return {};
+        return false;
     }
 
 
     // Compile
-    stage2spirv_t ret;
+    for (auto &&[stage, source] : shaderSources)
     {
-        for (auto &&[stage, source] : shaderSources)
+        std::vector<ir_t> spv;
+        if (!compileToSpv(filename, source, stage, spv))
         {
-            std::vector<ir_t> spv;
-            if (!compileToSpv(filename, source, stage, spv))
-            {
-                NE_CORE_ERROR("Failed to compile shader: {}", filename);
-                return {};
-            }
+            NE_CORE_ERROR("Failed to compile shader: {}", filename);
+            return false;
+        }
 
-            // store compile result into memory
-            ret[stage] = std::move(spv);
+        // store compile result into memory
+        outSpvMap[stage] = std::move(spv);
+    }
+
+    return true;
+}
+
+
+
+std::optional<GLSLScriptProcessor::stage2spirv_t> GLSLScriptProcessor::process(std::string_view filename_)
+{
+
+    NE_CORE_ASSERT(filename_.ends_with(".glsl"), "Shader filename must end with .glsl, got: {}", filename_);
+    std::string_view filename = filename_.substr(0, filename_.find_last_of('.'));
+    // Record the processing path for reflection logging
+    curFileName = this->shaderStoragePath + "/" + filename.data();
+
+    stage2spirv_t ret;
+
+    // 1. detect file changed unimplemented for now
+    // TODO: use hash to detect shader source change, and output to "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" and a "xxx.metadata" file
+
+    // C:\Users\dexzhou\1\craft\Neon\Engine\Intermediate\Shader\GLSL\HelloCube.vert.spv
+    // C:\Users\dexzhou\1\craft\Neon\Engine\Intermediate\Shader\GLSL\Test\HelloCube.vert.glsl
+
+    // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
+    auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
+    auto fragFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Fragment));
+    if (FileSystem::get()->isFileExists(vertFile) && FileSystem::get()->isFileExists(fragFile))
+    {
+        if (processSpvFiles(vertFile, fragFile, ret)) {
+            return std::move(ret);
         }
     }
 
+    ret.clear();
+    // Preprocess
+    if (processCombinedSource(filename, ret)) {
+        NE_CORE_INFO("Preprocessed shader source for {}: {} stages found", curFileName, ret.size());
+    }
+    else {
+        NE_CORE_ERROR("Failed to preprocess shader source: {}", filename);
+        return {};
+    }
+
     // Validate SPIR-V magic number
-    for (auto &[stage, spirv] : ret) {
+    for (const auto &[stage, spirv] : ret) {
         if (spirv.empty() || spirv[0] != 0x07230203) {
             NE_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::T2Strings[stage]);
             NE_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::T2Strings[stage]);
         }
     }
+
 
 
     return {std::move(ret)};

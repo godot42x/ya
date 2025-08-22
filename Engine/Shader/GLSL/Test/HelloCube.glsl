@@ -74,6 +74,7 @@ void main()
 }
 
 ////////////////////////
+#next_shader_stage
 #type fragment
 #version 450
 

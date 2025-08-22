@@ -134,12 +134,12 @@ struct ShaderScriptProcessor
 
   protected:
 
-    std::string shaderStoragePath = "Shader/";
-    std::string cachedStoragePath = "Intermediate/Shader/";
+    std::string shaderStoragePath       = "Shader/";
+    std::string intermediateStoragePath = "Intermediate/Shader/";
     std::string cachedFileSuffix;
 
   public:
-    std::string tempProcessingPath;
+    std::string curFileName;
 
   public:
     using ir_t          = uint32_t;
@@ -179,13 +179,17 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
 
     auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, std::vector<ir_t> &outSpv) -> bool;
 
-    std::unordered_map<EShaderStage::T, std::string> preprocessShaderSource(std::string_view fullPath);
 
 
   private:
 
     std::filesystem::path GetCachePath(bool bVulkan, EShaderStage::T stage);
     std::filesystem::path GetCacheMetaPath();
+
+    bool                                             processCombinedSource(std::string_view filename, stage2spirv_t &outSpvMap);
+    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(std::string_view fullPath);
+
+    bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap);
 };
 
 
@@ -237,7 +241,7 @@ struct ShaderScriptProcessorFactory
         };
 
         processor->shaderStoragePath = shaderStoragePath;
-        processor->cachedStoragePath = cachedStoragePath;
+        processor->intermediateStoragePath  = cachedStoragePath;
 
         return processor;
     }
