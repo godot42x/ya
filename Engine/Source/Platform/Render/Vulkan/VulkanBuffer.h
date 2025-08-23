@@ -7,10 +7,21 @@
 
 struct VulkanRender;
 
+struct BufferCreateInfo
+{
+    VkBufferUsageFlags usage;
+    // do not set nullptr, if you want empty buffer, set data to std::nullopt
+    std::optional<void *> data = std::nullopt;
+    uint32_t              size;
+    VkMemoryPropertyFlags memProperties;
+    std::string           debugName;
+};
+
 struct VulkanBuffer
 {
     VulkanRender *_render = nullptr;
 
+    std::string        name;
     VkBuffer           _handle     = VK_NULL_HANDLE;
     VkDeviceMemory     _memory     = VK_NULL_HANDLE;
     VkBufferUsageFlags _usageFlags = 0;
@@ -20,33 +31,27 @@ struct VulkanBuffer
 
     virtual ~VulkanBuffer();
 
-    static auto create(VulkanRender *render, VkBufferUsageFlags usage, std::size_t size, const void *data)
+
+
+    static auto create(VulkanRender *render, const BufferCreateInfo &ci)
     {
         auto ret         = std::make_shared<VulkanBuffer>();
         ret->_render     = render;
-        ret->_usageFlags = usage;
+        ret->_usageFlags = ci.usage;
+        ret->name        = ci.debugName;
 
-
-        ret->createWithDataInternal(data, static_cast<uint32_t>(size));
-
-
-        return ret;
-    }
-    static auto create(VulkanRender *render, VkBufferUsageFlags usage, std::size_t size)
-    {
-        auto ret         = std::make_shared<VulkanBuffer>();
-        ret->_render     = render;
-        ret->_usageFlags = usage;
-
-        ret->createDefaultInternal(static_cast<uint32_t>(size));
+        if (ci.data.has_value()) {
+            ret->createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), ci.memProperties);
+        }
+        else {
+            ret->createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
+        }
 
         return ret;
     }
 
-
-
-    void createWithDataInternal(const void *data, uint32_t size);
-    void createDefaultInternal(uint32_t size);
+    void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
+    void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
 
 
 

@@ -488,8 +488,10 @@ enum T
 };
 }
 
+namespace ya
+{
 
-struct DescriptorBinding
+struct DescriptorSetLayoutBinding
 {
     uint32_t                   binding         = 0;
     EPipelineDescriptorType::T descriptorType  = EPipelineDescriptorType::UniformBuffer;
@@ -499,8 +501,8 @@ struct DescriptorBinding
 
 struct DescriptorSetLayout
 {
-    int32_t                        index = -1;
-    std::vector<DescriptorBinding> bindings;
+    int32_t                                 index = -1;
+    std::vector<DescriptorSetLayoutBinding> bindings;
 };
 
 
@@ -518,6 +520,7 @@ struct GraphicsPipelineLayoutCreateInfo
     std::vector<PushConstant>        pushConstants;
     std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
+} // namespace ya
 
 
 struct GraphicsPipelineCreateInfo

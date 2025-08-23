@@ -30,17 +30,17 @@ struct VulkanPipelineLayout
     VkPipelineLayout                   _pipelineLayout       = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
-    GraphicsPipelineLayoutCreateInfo _ci;
+    ya::GraphicsPipelineLayoutCreateInfo _ci;
 
     VulkanPipelineLayout() = default;
     VulkanPipelineLayout(VulkanRender *render)
         : _render(render) {}
 
-    void create(GraphicsPipelineLayoutCreateInfo ci);
+    void create(ya::GraphicsPipelineLayoutCreateInfo ci);
     auto getHandle() { return _pipelineLayout; }
     void cleanup();
 
-    bool allocateDescriptorSets(std::vector<VkDescriptorPool> &pools, std::vector<VkDescriptorSet> &sets);
+    ya::GraphicsPipelineLayoutCreateInfo getCI() const { return _ci; }
 };
 
 

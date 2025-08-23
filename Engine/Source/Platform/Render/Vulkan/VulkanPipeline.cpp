@@ -8,7 +8,7 @@
 
 
 
-void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
+void VulkanPipelineLayout::create(ya::GraphicsPipelineLayoutCreateInfo ci)
 {
     _ci = ci;
 
@@ -95,56 +95,7 @@ void VulkanPipelineLayout::cleanup()
     for (auto layout : _descriptorSetLayouts) {
         VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
     }
-    VK_DESTROY(PipelineLayout, _render->getLogicalDevice(), _pipelineLayout);
 }
-
-bool VulkanPipelineLayout::allocateDescriptorSets(std::vector<VkDescriptorPool> &pools, std::vector<VkDescriptorSet> &sets)
-{
-    // std::vector<VkDescriptorPool> pools;
-    // std::vector<VkDescriptorSet>  sets;
-    pools.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
-    sets.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
-
-    int i = 0;
-    for (const auto &dsLayout : _ci.descriptorSetLayouts) {
-
-        std::vector<VkDescriptorPoolSize> dpSizes;
-        for (const auto &binding : dsLayout.bindings) {
-            VkDescriptorPoolSize poolSize{
-                .type            = toVk(binding.descriptorType),
-                .descriptorCount = binding.descriptorCount,
-            };
-            dpSizes.push_back(poolSize);
-        }
-
-        VkDescriptorPoolCreateInfo dspCI{
-            .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .pNext         = nullptr,
-            .flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-            .maxSets       = static_cast<uint32_t>(_ci.descriptorSetLayouts.size()), // or a  bigger size? SDL have more than 3 sets
-            .poolSizeCount = static_cast<uint32_t>(dpSizes.size()),
-            .pPoolSizes    = dpSizes.data(),
-        };
-        VK_CALL(vkCreateDescriptorPool(_render->getLogicalDevice(), &dspCI, _render->getAllocator(), &pools[i]));
-        _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, pools[i], std::format("DescriptorPool_{}", i).c_str());
-
-        VkDescriptorSetAllocateInfo dsAI{
-            .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext              = nullptr,
-            .descriptorPool     = pools[i],
-            .descriptorSetCount = static_cast<uint32_t>(_descriptorSetLayouts.size()),
-            .pSetLayouts        = _descriptorSetLayouts.data(),
-
-        };
-
-        VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(), &dsAI, &sets[i]));
-        _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, sets[i], std::format("DescriptorSet_{}", i).c_str());
-
-        ++i;
-    }
-    return true;
-}
-
 
 
 void VulkanPipeline::cleanup()
@@ -169,6 +120,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
+    name               = _ci.shaderCreateInfo.shaderName;
     auto shaderStorage = ya::App::get()->getShaderStorage();
     auto stage2Spirv   = shaderStorage->getCache(_ci.shaderCreateInfo.shaderName);
     if (!stage2Spirv) {

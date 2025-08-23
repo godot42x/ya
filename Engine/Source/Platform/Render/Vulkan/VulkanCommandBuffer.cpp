@@ -29,7 +29,7 @@ bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkComm
 
     YA_CORE_ASSERT(vkAllocateCommandBuffers(_render->getLogicalDevice(), &allocInfo, &outCommandBuffer) == VK_SUCCESS,
                    "Failed to allocate command buffer!");
-    YA_CORE_TRACE("Allocated command buffer success: {}", (uintptr_t)outCommandBuffer);
+    // YA_CORE_TRACE("Allocated command buffer success: {}", (uintptr_t)outCommandBuffer);
 
     return true;
 }

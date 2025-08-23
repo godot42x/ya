@@ -14,7 +14,7 @@ VulkanBuffer::~VulkanBuffer()
     }
 }
 
-void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size)
+void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties)
 {
 
     VkBuffer       stageBuffer       = nullptr;
@@ -22,7 +22,7 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size)
 
     VulkanBuffer::allocate(_render,
                            static_cast<uint32_t>(size),
-                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           memProperties | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                            stageBuffer,
                            stageBufferMemory);
@@ -43,16 +43,27 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size)
 
     VK_DESTROY(Buffer, _render->getLogicalDevice(), stageBuffer);
     VK_FREE(Memory, _render->getLogicalDevice(), stageBufferMemory);
+
+    if (!name.empty()) {
+        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
+    }
+    YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
-void VulkanBuffer::createDefaultInternal(uint32_t size)
+void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties)
 {
     VulkanBuffer::allocate(_render,
                            size,
-                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           memProperties,
                            _usageFlags,
                            _handle,
                            _memory);
+    if (!name.empty()) {
+        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
+    }
+    YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
@@ -60,12 +71,13 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
                             VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
 {
     VkBufferCreateInfo vkBufferCI{
-        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext       = nullptr,
-        .flags       = 0,
-        .size        = size,
-        .usage       = usage,
-        .sharingMode = render->isGraphicsPresentSameQueueFamily() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .size  = size,
+        .usage = usage,
+        // .sharingMode = render->isGraphicsPresentSameQueueFamily() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         // TODO: why we need this?
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices   = nullptr,
