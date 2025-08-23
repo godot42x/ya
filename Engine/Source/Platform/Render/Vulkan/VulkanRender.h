@@ -224,6 +224,7 @@ struct VulkanRender : public IRender
 
     bool init(const RenderCreateInfo &ci) override
     {
+        YA_PROFILE_FUNCTION();
 
         bool success = initInternal(ci);
         YA_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
@@ -314,6 +315,12 @@ struct VulkanRender : public IRender
         if (_presentCommandPool) {
             _presentCommandPool->cleanup();
         }
+        for (auto &[name, sampler] : _samplers) {
+            VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
+        }
+
+        // MARK: destroy device
+
         if (m_LogicalDevice)
         {
             vkDestroyDevice(m_LogicalDevice, nullptr);
@@ -323,10 +330,6 @@ struct VulkanRender : public IRender
         {
             _debugUtils->destroy();
         }
-        for (auto &[name, sampler] : _samplers) {
-            VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
-        }
-
         onReleaseSurface.executeIfBound(&(*_instance), &_surface);
         vkDestroyInstance(_instance, getAllocator());
     }

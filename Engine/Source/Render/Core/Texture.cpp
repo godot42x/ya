@@ -54,7 +54,7 @@ Texture::Texture(const std::string &filepath)
 
     imageView = std::make_shared<VulkanImageView>(vkRender, image, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    auto stagingBuffer = VulkanBuffer::create(
+    std::shared_ptr<VulkanBuffer> stagingBuffer = VulkanBuffer::create(
         vkRender,
         {
             .usage         = VK_BUFFER_USAGE_TRANSFER_SRC_BIT, // from buffer to image
@@ -102,5 +102,8 @@ Texture::Texture(const std::string &filepath)
     //                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
     //                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
+
+VkImage     Texture::getVkImage() { return image->_handle; }
+VkImageView Texture::getVkImageView() { return imageView->_handle; }
 
 } // namespace ya

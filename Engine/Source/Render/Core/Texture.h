@@ -2,6 +2,7 @@
 
 
 #include "Core/Base.h"
+#include "vulkan/vulkan_core.h"
 
 
 struct VulkanImage;
@@ -18,5 +19,9 @@ struct Texture
 
 
     Texture(const std::string &filepath);
+
+    VkImage     getVkImage();
+    VkImageView getVkImageView();
+
 };
 } // namespace ya

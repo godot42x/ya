@@ -11,6 +11,7 @@
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
+#include "Core/AssetManager.h"
 
 
 #include "Render/Core/RenderTarget.h"
@@ -59,9 +60,6 @@ struct UboInstanceBuffer
     glm::mat4 model;
 } instanceBuffer;
 
-std::shared_ptr<Texture> textureFace;
-std::shared_ptr<Texture> textureUv1;
-
 VulkanPipeline *pipeline = nullptr;
 
 
@@ -83,8 +81,11 @@ uint32_t frameCount = 2; // CPU queue can submit 2 frames at most
 
 
 std::shared_ptr<ya::Mesh> cubeMesh;
+bool                      bRotating = true;
 
-glm::mat4 matModel;
+const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
+const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
+
 
 EditorCamera   camera;
 vk::ImguiState imgui;
@@ -202,9 +203,11 @@ void imcClearValues()
 
 void App::init()
 {
+    YA_PROFILE_FUNCTION();
     Logger::init();
     FileSystem::init();
     NameRegistry::init(); // Initialize FName registry
+    AssetManager::init();
 
     currentRenderAPI          = ERenderAPI::Vulkan;
     std::string currentShader = "Test/HelloTexture.glsl";
@@ -223,8 +226,8 @@ void App::init()
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .presentMode   = EPresentMode::Immediate, // vsync
-            .bVsync        = false,
+            .presentMode   = EPresentMode::FIFO, // vsync
+            .bVsync        = true,
             .minImageCount = 3,
             .width         = static_cast<uint32_t>(_ci.width),
             .height        = static_cast<uint32_t>(_ci.height),
@@ -246,9 +249,12 @@ void App::init()
     vkRender->init(renderCI);
 
 
-    VkFormat surfaceFormat = vkRender->getSwapChain()->getSurfaceFormat();
+
+    // WHY: my ARC 730M must need to recreate with FIFO again to enable vsync
+    vkRender->getSwapChain()->setVsync(renderCI.swapchainCI.bVsync);
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
+    // MARK: RenderPass
 
     /**
       In Vulkan:
@@ -323,7 +329,7 @@ void App::init()
     // use the RT instead of framebuffers directly
     renderTarget = new IRenderTarget(renderpass);
 
-#pragma region PipelinePLayout
+#pragma region Layout
 
     /**
      In Vulkan:
@@ -333,7 +339,6 @@ void App::init()
         - push constants?
         - texture samplers?
     */
-    defaultPipelineLayout                       = new VulkanPipelineLayout(vkRender);
     GraphicsPipelineLayoutCreateInfo gpLayoutCI = GraphicsPipelineLayoutCreateInfo{
         .pushConstants = {
             GraphicsPipelineLayoutCreateInfo::PushConstant{
@@ -387,16 +392,7 @@ void App::init()
         },
     };
 
-    defaultPipelineLayout->create(gpLayoutCI);
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, defaultPipelineLayout->getHandle(), "DefaultPipelineLayout");
-
-#pragma endregion
-
-#pragma region Descriptor
-    // TODO: we could create in other sides, and combined them if match the descriptor set layout?
-
-
-    // TODO: calculate the pool sizes based on the descriptor set layout
+    // Create descriptor pool and sets (Dose size has any particular cases?)
     std::vector<VkDescriptorPoolSize> poolSizes = {
         // set 0
         VkDescriptorPoolSize{
@@ -409,49 +405,22 @@ void App::init()
         },
     };
 
-    // Create descriptor pool and sets
-    descriptorPool = std::make_shared<VulkanDescriptorPool>(vkRender, 1, poolSizes);
-    // descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, defaultPipelineLayout->getCI().descriptorSetLayouts[0]);
+
+    descriptorPool       = std::make_shared<VulkanDescriptorPool>(vkRender, 1, poolSizes);
     descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, gpLayoutCI.descriptorSetLayouts[0]);
     descriptorPool->allocateDescriptorSets({descriptorSetLayout0}, descriptorSets);
 
-    uGBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            .debugName     = "uGBuffer",
-        });
-    uInstanceBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .data          = std::nullopt,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            .debugName     = "uGBufferStaging",
-        });
-    textureFace = std::make_shared<Texture>("Engine/Content/TestTextures/face.png");
-    textureUv1  = std::make_shared<Texture>("Engine/Content/TestTextures/uv1.png");
-
-    VkSampler dummySampler = VK_NULL_HANDLE;
-    vkRender->createSampler("DefaultSampler",
-                            SamplerCreateInfo{
-                                .minFilter     = EFilter::Linear,
-                                .magFilter     = EFilter::Linear,
-                                .mipmapMode    = ESamplerMipmapMode::Linear,
-                                .addressModeU  = ESamplerAddressMode::Repeat,
-                                .addressModeV  = ESamplerAddressMode::Repeat,
-                                .addressModeW  = ESamplerAddressMode::Repeat,
-                                .mipLodBias    = 0.0f,
-                                .maxAnisotropy = 1.0f,
-                            },
-                            dummySampler);
-
+    defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
+    defaultPipelineLayout->create(gpLayoutCI.pushConstants,
+                                  {
+                                      descriptorSetLayout0->getHandle(),
+                                  }); // we create the descriptor set layout outside
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, defaultPipelineLayout->getHandle(), "DefaultPipelineLayout");
 
 #pragma endregion
 
+
+    // MARK: Pipeline
 
     /**
       In Vulkan:
@@ -568,8 +537,9 @@ void App::init()
     _firstGraphicsQueue = &vkRender->getGraphicsQueues()[0];
     _firstPresentQueue  = &vkRender->getPresentQueues()[0];
 
-    initSemaphoreAndFence();
 
+    // MARK: Resources
+    initSemaphoreAndFence();
 
     std::vector<ya::Vertex> vertices;
     std::vector<uint32_t>   indices;
@@ -587,8 +557,40 @@ void App::init()
 
     cubeMesh = std::make_shared<ya::Mesh>(vertices, indices, "cube");
 
+    uGBuffer = VulkanBuffer::create(
+        vkRender,
+        BufferCreateInfo{
+            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .size          = sizeof(UboGBuffer),
+            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            .debugName     = "uGBuffer",
+        });
+    uInstanceBuffer = VulkanBuffer::create(
+        vkRender,
+        BufferCreateInfo{
+            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .data          = std::nullopt,
+            .size          = sizeof(UboGBuffer),
+            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .debugName     = "uGBufferStaging",
+        });
+    AssetManager::get()->loadTexture(faceTexturePath);
+    AssetManager::get()->loadTexture(uv1TexturePath);
 
-    matModel = glm::mat4(1.0f);
+    VkSampler dummySampler = VK_NULL_HANDLE;
+    vkRender->createSampler("DefaultSampler",
+                            SamplerCreateInfo{
+                                .minFilter     = EFilter::Linear,
+                                .magFilter     = EFilter::Linear,
+                                .mipmapMode    = ESamplerMipmapMode::Linear,
+                                .addressModeU  = ESamplerAddressMode::Repeat,
+                                .addressModeV  = ESamplerAddressMode::Repeat,
+                                .addressModeW  = ESamplerAddressMode::Repeat,
+                                .mipLodBias    = 0.0f,
+                                .maxAnisotropy = 1.0f,
+                            },
+                            dummySampler);
+
     // we span at z = 3 and look at the origin ( right hand? and the cubes all place on xy plane )
     camera.setPosition(glm::vec3(0.0f, 0.0f, 3.0f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -644,12 +646,16 @@ void App::init()
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 }
 
+// MARK: QUIT
 void ya::App::quit()
 {
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
+
     cubeMesh.reset();
+    uGBuffer.reset();
+    uInstanceBuffer.reset();
 
     imgui.shutdown();
 
@@ -657,12 +663,17 @@ void ya::App::quit()
 
     pipeline->cleanup();
     delete pipeline;
+
     defaultPipelineLayout->cleanup();
     delete defaultPipelineLayout;
+    descriptorSetLayout0.reset();
+    descriptorPool.reset();
 
 
     delete renderTarget;
     delete renderpass;
+
+    AssetManager::get()->cleanup();
     _render->destroy();
 
     delete _render;
@@ -680,6 +691,7 @@ int ya::App::run()
 
         time_point_t now   = clock_t::now();
         float        dtSec = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastTime).count() / 1000.f;
+        dtSec              = std::max(dtSec, 0.0001f);
         _lastTime          = now;
 
         if (auto result = iterate(dtSec); result != 0) {
@@ -700,7 +712,7 @@ int ya::App::onEvent(SDL_Event &event)
     inputManager.processEvent(event);
 
 
-#pragma region sdl event match
+#pragma region Sdl Event
 
     switch (SDL_EventType(event.type))
     {
@@ -895,15 +907,16 @@ void App::onUpdate(float dt)
 
     // auto rotation by up-down and left-right
     glm::mat4 rot = glm::mat4_cast(combinedRot);
-    matModel      = rot;
 
 
     camera.update(inputManager, dt); // Camera expects dt in seconds
 
-    gBuffer.view         = camera.getViewMatrix();
-    gBuffer.proj         = camera.getProjectionMatrix();
-    gBuffer.dirLight     = glm::normalize(glm::vec4(-1.0f, -3.0f, -1.0f, 1.f));
-    instanceBuffer.model = matModel;
+    gBuffer.view     = camera.getViewMatrix();
+    gBuffer.proj     = camera.getProjectionMatrix();
+    gBuffer.dirLight = glm::normalize(glm::vec4(-1.0f, -3.0f, -1.0f, 1.f));
+    if (bRotating) {
+        instanceBuffer.model = rot;
+    }
 }
 
 void App::onRender(float dt)
@@ -982,153 +995,160 @@ void App::onDraw(float dt)
     vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
     begin(curCmdBuf);
 
-#pragma region Copy Pass
+#pragma region Update uniform
 #if 1
-
 
     uGBuffer->writeData(&gBuffer, sizeof(UboGBuffer), 0);
     uInstanceBuffer->writeData(&instanceBuffer, sizeof(UboInstanceBuffer), 0);
 
 
     // Add memory barrier to ensure copy completes before shader reads
-    std::vector<VkBufferMemoryBarrier> bmBarriers{
-        VkBufferMemoryBarrier{
-            .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            .pNext               = nullptr,
-            .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
-            .dstAccessMask       = VK_ACCESS_UNIFORM_READ_BIT,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .buffer              = uGBuffer->getHandle(),
-            .offset              = 0,
-            .size                = sizeof(UboGBuffer),
+    // std::vector<VkBufferMemoryBarrier> bmBarriers{
+    //     VkBufferMemoryBarrier{
+    //         .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+    //         .pNext               = nullptr,
+    //         .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
+    //         .dstAccessMask       = VK_ACCESS_UNIFORM_READ_BIT,
+    //         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //         .buffer              = uGBuffer->getHandle(),
+    //         .offset              = 0,
+    //         .size                = sizeof(UboGBuffer),
+    //     },
+    // };
+
+
+    auto set = descriptorSets[0];
+
+    VkDescriptorBufferInfo gBuffer{
+        .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
+        .offset = 0,
+        .range  = sizeof(UboGBuffer), // size of the uniform buffer
+    };
+    VkDescriptorBufferInfo instanceBuffer{
+        .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
+        .offset = 0,
+        .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
+    };
+
+    VkDescriptorImageInfo texture0{
+        .sampler     = vkRender->getSampler("DefaultSampler"),
+        .imageView   = AssetManager::get()->getTexture(faceTexturePath)->getVkImageView(),
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkDescriptorImageInfo texture1{
+        .sampler     = vkRender->getSampler("DefaultSampler"),
+        .imageView   = AssetManager::get()->getTexture(uv1TexturePath)->getVkImageView(),
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+
+    std::vector<VkWriteDescriptorSet> writeDSs{
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo       = nullptr,
+            .pBufferInfo      = &gBuffer,
+            .pTexelBufferView = nullptr,
+        },
+
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo       = nullptr,
+            .pBufferInfo      = &instanceBuffer,
+            .pTexelBufferView = nullptr,
+        },
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo       = &texture0,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        },
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo       = &texture1,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
         },
     };
 
-    // only 1 for now
-    for (int i = 0; i < descriptorSets.size(); ++i) {
-
-        auto set = descriptorSets[i];
-
-        std::vector<VkDescriptorBufferInfo> dbInfos = {
-            VkDescriptorBufferInfo{
-                .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
-                .offset = 0,
-                .range  = sizeof(UboGBuffer), // size of the uniform buffer
-            },
-            VkDescriptorBufferInfo{
-                .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
-                .offset = 0,
-                .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
-            },
-        };
-
-        // each image have different sampler?
-        std::vector<VkDescriptorImageInfo> diInfos = {
-            VkDescriptorImageInfo{
-                .sampler     = vkRender->getSampler("DefaultSampler"),
-                .imageView   = textureFace->imageView->_handle,
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
-            VkDescriptorImageInfo{
-                .sampler     = vkRender->getSampler("DefaultSampler"),
-                .imageView   = textureUv1->imageView->_handle,
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            },
-        };
-
-
-        std::vector<VkWriteDescriptorSet> writeDSs{
-            VkWriteDescriptorSet{
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext            = nullptr,
-                .dstSet           = set, // the first descriptor set
-                .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
-                .dstArrayElement  = 0,   // the index of array
-                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-                .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pImageInfo       = nullptr,
-                .pBufferInfo      = &dbInfos[0],
-                .pTexelBufferView = nullptr,
-            },
-
-            VkWriteDescriptorSet{
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext            = nullptr,
-                .dstSet           = set, // the first descriptor set
-                .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
-                .dstArrayElement  = 0,   // the index of array
-                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-                .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pImageInfo       = nullptr,
-                .pBufferInfo      = &dbInfos[1],
-                .pTexelBufferView = nullptr,
-            },
-            VkWriteDescriptorSet{
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext            = nullptr,
-                .dstSet           = set, // the first descriptor set
-                .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
-                .dstArrayElement  = 0,   // the index of array
-                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-                .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo       = &diInfos[0],
-                .pBufferInfo      = nullptr,
-                .pTexelBufferView = nullptr,
-            },
-            VkWriteDescriptorSet{
-                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .pNext            = nullptr,
-                .dstSet           = set, // the first descriptor set
-                .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
-                .dstArrayElement  = 0,   // the index of array
-                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-                .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo       = &diInfos[1],
-                .pBufferInfo      = nullptr,
-                .pTexelBufferView = nullptr,
-            },
-        };
-
-        // 4. bind descriptor sets, as global concepts
-        vkCmdBindDescriptorSets(curCmdBuf,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                defaultPipelineLayout->getHandle(),
-                                0, // first set
-                                descriptorSets.size(),
-                                descriptorSets.data(),
-                                // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
-                                // This can avoid of creating a new descriptor set?
-                                0,        // dynamic offset count
-                                nullptr); // dynamic offsets
+    // 4. bind descriptor sets, as global concepts
+    vkCmdBindDescriptorSets(curCmdBuf,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            defaultPipelineLayout->getHandle(),
+                            0, // first set
+                            descriptorSets.size(),
+                            descriptorSets.data(),
+                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
+                            // This can avoid of creating a new descriptor set?
+                            0,        // dynamic offset count
+                            nullptr); // dynamic offsets
 
 
 
-        // vkCmdPushDescriptorSet(curCmdBuf,
-        //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        //                        defaultPipelineLayout->getHandle(),
-        //                        0,
-        //                        writeDSs.size(),
-        //                        writeDSs.data());
+    // vkCmdPushDescriptorSet(curCmdBuf,
+    //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+    //                        defaultPipelineLayout->getHandle(),
+    //                        0,
+    //                        writeDSs.size(),
+    //                        writeDSs.data());
 
-        // TODO: make a copy pass like SDL
-        vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
-                               writeDSs.size(),
-                               writeDSs.data(),
-                               0,
-                               nullptr);
+    // TODO: make a copy pass like SDL
+    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
+                           writeDSs.size(),
+                           writeDSs.data(),
+                           0,
+                           nullptr);
 
-        // vkCmdPipelineBarrier(curCmdBuf,
-        //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
-        //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        //                      0,
-        //                      0,
-        //                      nullptr,
-        //                      bmBarriers.size(),
-        //                      bmBarriers.data(),
-        //                      0,
-        //                      nullptr);
-    }
+    // vkCmdPipelineBarrier(curCmdBuf,
+    //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+    //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    //                      0,
+    //                      0,
+    //                      nullptr,
+    //                      bmBarriers.size(),
+    //                      bmBarriers.data(),
+    //                      0,
+    //                      nullptr);
+
+    // MARK: Push Constant
+    //  push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
+    static struct PushConstantData
+    {
+        float textureMixAlpha = 0.5f;
+    } pushData;
+
+    vkCmdPushConstants(curCmdBuf,
+                       defaultPipelineLayout->getHandle(),
+                       VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0,
+                       sizeof(PushConstantData),
+                       &pushData);
+
+
 
 #endif
 #pragma endregion
@@ -1154,7 +1174,6 @@ void App::onDraw(float dt)
 
     // 6. setup vertex buffer, index buffer (2d payloads? upload?)
     // 7. other resources, uniform buffers, etc.
-
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo
@@ -1184,21 +1203,6 @@ void App::onDraw(float dt)
 
 
 
-    // push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
-    struct PushConstantData
-    {
-        float textureMixAlpha = 0.5f;
-    } pushData;
-
-    vkCmdPushConstants(curCmdBuf,
-                       defaultPipelineLayout->getHandle(),
-                       VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0,
-                       sizeof(PushConstantData),
-                       &pushData);
-
-
-
     // Bind vertex buffer
     VkBuffer vertexBuffers[] = {cubeMesh->getVertexBuffer()->getHandle()};
     // current no need to support subbuffer
@@ -1225,9 +1229,7 @@ void App::onDraw(float dt)
 
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
-        float        fps       = 1.0f / dt;
-        static float averageDt = dt;
-
+        float fps = 1.0f / dt;
         ImGui::Text("DeltaTime: %.1f ms,\t FPS: %.1f", dt * 1000.0f, fps);
         ImGui::Text("Frame: %d, SwapchainImage: %d, FameIndex: %d", _frameIndex, currentFrameIdx, currentFrameIdx);
         static int count = 0;
@@ -1235,6 +1237,9 @@ void App::onDraw(float dt)
             count++;
             YA_CORE_INFO("=====================================");
         }
+
+        ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
+        ImGui::Checkbox("Is Rotating", &bRotating);
 
         bool bVsync = vkRender->getSwapChain()->bVsync;
         if (ImGui::Checkbox("VSync", &bVsync)) {

@@ -123,7 +123,7 @@ void VulkanRender::createInstance()
 
 
     YA_CORE_INFO("About to call vkCreateInstance...");
-    result = vkCreateInstance(&instanceCI, nullptr, &_instance);
+    result = vkCreateInstance(&instanceCI, getAllocator(), &_instance);
     YA_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), result);
 
     YA_CORE_INFO("Vulkan instance created successfully!");
@@ -605,6 +605,7 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
     // };
     return VK_NULL_HANDLE;
 }
+
 
 
 bool VulkanRender::createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler)

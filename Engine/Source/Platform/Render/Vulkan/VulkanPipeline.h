@@ -19,21 +19,26 @@ struct VulkanRender;
 struct VulkanRenderPass;
 struct VulkanPipelineLayout
 {
-    VulkanRender                      *_render               = nullptr;
-    VkPipelineLayout                   _pipelineLayout       = VK_NULL_HANDLE;
-    std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
+    VulkanRender    *_render         = nullptr;
+    VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
+    // std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
-    ya::GraphicsPipelineLayoutCreateInfo _ci;
+    // ya::GraphicsPipelineLayoutCreateInfo _ci;
 
     VulkanPipelineLayout() = default;
     VulkanPipelineLayout(VulkanRender *render)
         : _render(render) {}
 
-    void create(ya::GraphicsPipelineLayoutCreateInfo ci);
-    auto getHandle() { return _pipelineLayout; }
+    void create(const std::vector<ya::GraphicsPipelineLayoutCreateInfo::PushConstant> pushConstants,
+                const std::vector<VkDescriptorSetLayout>                             &layouts);
+
+    auto getHandle()
+    {
+        return _pipelineLayout;
+    }
     void cleanup();
 
-    ya::GraphicsPipelineLayoutCreateInfo getCI() const { return _ci; }
+    // ya::GraphicsPipelineLayoutCreateInfo getCI() const { return _ci; }
 };
 
 

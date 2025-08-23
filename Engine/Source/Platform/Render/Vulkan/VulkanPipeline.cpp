@@ -8,50 +8,52 @@
 
 
 
-void VulkanPipelineLayout::create(ya::GraphicsPipelineLayoutCreateInfo ci)
+void VulkanPipelineLayout::create(
+    const std::vector<ya::GraphicsPipelineLayoutCreateInfo::PushConstant> pushConstants,
+    const std::vector<VkDescriptorSetLayout>                             &layouts)
 {
-    _ci = ci;
+    // _ci = ci;
 
-    std::vector<VkPushConstantRange> pcRanges;
-    for (const auto &pushConstant : _ci.pushConstants) {
-        pcRanges.push_back(VkPushConstantRange{
+    std::vector<VkPushConstantRange> vkPSs;
+    for (const auto &pushConstant : pushConstants) {
+        vkPSs.push_back(VkPushConstantRange{
             .stageFlags = toVk(pushConstant.stageFlags),
             .offset     = pushConstant.offset,
             .size       = pushConstant.size,
         });
     }
 
-    _descriptorSetLayouts.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
+    // Create it outside the ci
+    // _descriptorSetLayouts.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
 
-    // currently only one layout
-    int i = 0;
-    for (const auto &setLayout : _ci.descriptorSetLayouts) {
+    // int i = 0;
+    // for (const auto &setLayout : _ci.descriptorSetLayouts) {
 
-        std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-        for (const auto &binding : setLayout.bindings) {
-            bindings.push_back(VkDescriptorSetLayoutBinding{
-                .binding            = binding.binding,
-                .descriptorType     = toVk(binding.descriptorType),
-                .descriptorCount    = binding.descriptorCount,
-                .stageFlags         = toVk(binding.stageFlags),
-                .pImmutableSamplers = nullptr, // TODO: handle immutable samplers
-            });
-        }
+    //     std::vector<VkDescriptorSetLayoutBinding> bindings = {};
+    //     for (const auto &binding : setLayout.bindings) {
+    //         bindings.push_back(VkDescriptorSetLayoutBinding{
+    //             .binding            = binding.binding,
+    //             .descriptorType     = toVk(binding.descriptorType),
+    //             .descriptorCount    = binding.descriptorCount,
+    //             .stageFlags         = toVk(binding.stageFlags),
+    //             .pImmutableSamplers = nullptr, // TODO: handle immutable samplers
+    //         });
+    //     }
 
-        VkDescriptorSetLayoutCreateInfo dslCI{
-            .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .pNext        = nullptr,
-            .flags        = 0,
-            .bindingCount = static_cast<uint32_t>(bindings.size()),
-            .pBindings    = bindings.data(),
-        };
+    //     VkDescriptorSetLayoutCreateInfo dslCI{
+    //         .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+    //         .pNext        = nullptr,
+    //         .flags        = 0,
+    //         .bindingCount = static_cast<uint32_t>(bindings.size()),
+    //         .pBindings    = bindings.data(),
+    //     };
 
-        vkCreateDescriptorSetLayout(_render->getLogicalDevice(),
-                                    &dslCI,
-                                    _render->getAllocator(),
-                                    &_descriptorSetLayouts[i]);
-        ++i;
-    }
+    //     vkCreateDescriptorSetLayout(_render->getLogicalDevice(),
+    //                                 &dslCI,
+    //                                 _render->getAllocator(),
+    //                                 &_descriptorSetLayouts[i]);
+    //     ++i;
+    // }
 
 
     // example for the descriptor set meaning:
@@ -72,13 +74,15 @@ void VulkanPipelineLayout::create(ya::GraphicsPipelineLayoutCreateInfo ci)
     // } uLight;
 
     VkPipelineLayoutCreateInfo layoutCI{
-        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext                  = nullptr,
-        .flags                  = 0,
-        .setLayoutCount         = static_cast<uint32_t>(_descriptorSetLayouts.size()),
-        .pSetLayouts            = _descriptorSetLayouts.data(),
-        .pushConstantRangeCount = static_cast<uint32_t>(pcRanges.size()),
-        .pPushConstantRanges    = pcRanges.data(),
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        // .setLayoutCount         = static_cast<uint32_t>(_descriptorSetLayouts.size()),
+        // .pSetLayouts            = _descriptorSetLayouts.data(),
+        .setLayoutCount         = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts            = layouts.data(),
+        .pushConstantRangeCount = static_cast<uint32_t>(vkPSs.size()),
+        .pPushConstantRanges    = vkPSs.data(),
     };
 
     VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, nullptr, &_pipelineLayout);
@@ -92,9 +96,9 @@ void VulkanPipelineLayout::create(ya::GraphicsPipelineLayoutCreateInfo ci)
 
 void VulkanPipelineLayout::cleanup()
 {
-    for (auto layout : _descriptorSetLayouts) {
-        VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
-    }
+    // for (auto layout : _descriptorSetLayouts) {
+    //     VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
+    // }
 }
 
 

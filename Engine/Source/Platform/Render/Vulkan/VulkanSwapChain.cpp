@@ -135,6 +135,7 @@ VulkanSwapChain::~VulkanSwapChain()
 
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 {
+    YA_PROFILE_FUNCTION();
     static uint32_t version = 0;
     version++;
 
@@ -159,7 +160,9 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         presentMode = toVk(_ci.presentMode);
     }
 
-    _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
+    _presentMode = presentMode;
+    // TODO: we not use compat present mode for now, let it crash if not support
+    // _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
 
     YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
                  std::to_string(preferred.format),

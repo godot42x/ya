@@ -7,6 +7,9 @@
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
 
+namespace ya
+{
+
 
 
 AssetManager *AssetManager::instance = nullptr;
@@ -158,3 +161,16 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
     }
     return nullptr;
 }
+
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
+{
+    if (isTextureLoaded(filepath)) {
+        return _textures.find(filepath)->second;
+    }
+
+    auto texture        = std::make_shared<Texture>(filepath);
+    _textures[filepath] = texture;
+    return texture;
+}
+
+} // namespace ya
