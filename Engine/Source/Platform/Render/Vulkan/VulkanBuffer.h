@@ -22,10 +22,11 @@ struct VulkanBuffer
     VulkanRender *_render = nullptr;
 
     std::string        name;
-    VkBuffer           _handle     = VK_NULL_HANDLE;
-    VkDeviceMemory     _memory     = VK_NULL_HANDLE;
-    VkBufferUsageFlags _usageFlags = 0;
-    VkDeviceSize       _size       = 0;
+    VkBuffer           _handle      = VK_NULL_HANDLE;
+    VkDeviceMemory     _memory      = VK_NULL_HANDLE;
+    VkBufferUsageFlags _usageFlags  = 0;
+    VkDeviceSize       _size        = 0;
+    bool               bHostVisible = false; // CPU can access the memory directly
 
 
 
@@ -35,10 +36,12 @@ struct VulkanBuffer
 
     static auto create(VulkanRender *render, const BufferCreateInfo &ci)
     {
-        auto ret         = std::make_shared<VulkanBuffer>();
-        ret->_render     = render;
-        ret->_usageFlags = ci.usage;
-        ret->name        = ci.debugName;
+        auto ret          = std::make_shared<VulkanBuffer>();
+        ret->_render      = render;
+        ret->_usageFlags  = ci.usage;
+        ret->name         = ci.debugName;
+        ret->bHostVisible = ci.memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        ret->_size        = ci.size;
 
         if (ci.data.has_value()) {
             ret->createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), ci.memProperties);
@@ -53,6 +56,7 @@ struct VulkanBuffer
     void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
     void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
 
+    bool writeData(const void *data, uint32_t size, uint32_t offset = 0);
 
 
     static bool allocate(VulkanRender *render, uint32_t size,

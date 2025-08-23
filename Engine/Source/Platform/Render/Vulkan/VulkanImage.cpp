@@ -1,4 +1,5 @@
 #include "VulkanImage.h"
+#include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "VulkanRender.h"
 
 VulkanImage::~VulkanImage()
@@ -7,6 +8,34 @@ VulkanImage::~VulkanImage()
         VK_FREE(Memory, _render->getLogicalDevice(), imageMemory);
         VK_DESTROY(Image, _render->getLogicalDevice(), _handle);
     }
+}
+
+void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage)
+{
+
+    VkBufferImageCopy copyRegion{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = VkImageSubresourceLayers{
+             .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+             .mipLevel       = 0,
+             .baseArrayLayer = 0,
+             .layerCount     = 1,
+        },
+        .imageOffset = VkOffset3D{0, 0, 0},
+        .imageExtent = VkExtent3D{
+            .width  = dstImage->getWidth(),
+            .height = dstImage->getHeight(),
+            .depth  = 1,
+        },
+    };
+    vkCmdCopyBufferToImage(cmdBuf,
+                           srcBuffer->getHandle(),
+                           dstImage->getHandle(),
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1,
+                           &copyRegion);
 }
 
 
@@ -55,4 +84,36 @@ bool VulkanImage::allocate()
 
     bOwned = true;
     return true;
+}
+
+VulkanImageView::VulkanImageView(VulkanRender *render, std::shared_ptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
+{
+    _render = render;
+    VkImageViewCreateInfo ci{
+        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image      = image->getHandle(),
+        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .format     = image->getFormat(),
+        .components = {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+        },
+        .subresourceRange = {
+            .aspectMask     = aspectFlags,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    };
+
+    VK_CALL(vkCreateImageView(_render->getLogicalDevice(), &ci, _render->getAllocator(), &_handle));
+}
+
+VulkanImageView::~VulkanImageView()
+{
+    // Note: image view is destroyed along with the image
+    VK_DESTROY(ImageView, _render->getLogicalDevice(), _handle);
 }

@@ -606,30 +606,57 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
     return VK_NULL_HANDLE;
 }
 
-void VulkanRender::recreateSwapChain()
+
+bool VulkanRender::createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler)
 {
-    vkDeviceWaitIdle(m_LogicalDevice);
+    auto it = _samplers.find(name);
+    if (it != _samplers.end())
+    {
+        outSampler = it->second;
+        YA_CORE_INFO("Reusing existing created sampler {}: {}", name, (uintptr_t)outSampler);
+        return true;
+    }
 
-    // Clean up depth resources
-    // if (m_depthImage) {
-    //     vkDestroyImage(m_LogicalDevice, m_depthImage, nullptr);
-    //     vkDestroyImageView(m_LogicalDevice, m_depthImageView, nullptr);
-    //     vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
-    // }
+    VkSamplerCreateInfo samplerCI{
+        .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext                   = nullptr,
+        .flags                   = 0,
+        .magFilter               = VkFilter::VK_FILTER_LINEAR,
+        .minFilter               = toVk(ci.minFilter),
+        .mipmapMode              = toVk(ci.mipmapMode),
+        .addressModeU            = toVk(ci.addressModeU),
+        .addressModeV            = toVk(ci.addressModeV),
+        .addressModeW            = toVk(ci.addressModeW),
+        .mipLodBias              = ci.mipLodBias,
+        .anisotropyEnable        = ci.anisotropyEnable ? VK_TRUE : VK_FALSE,
+        .maxAnisotropy           = ci.maxAnisotropy,
+        .compareEnable           = ci.compareEnable ? VK_TRUE : VK_FALSE,
+        .compareOp               = toVk(ci.compareOp),
+        .minLod                  = ci.minLod,
+        .maxLod                  = ci.maxLod,
+        .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = ci.unnormalizedCoordinates ? VK_TRUE : VK_FALSE,
+    };
 
-    // Recreate swap chain
-    m_swapChain->recreate(m_swapChain->getCreateInfo());
+    if (samplerCI.anisotropyEnable == VK_TRUE)
+    {
+        VkPhysicalDeviceFeatures deviceFeatures;
+        vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &deviceFeatures);
+        if (deviceFeatures.samplerAnisotropy != VK_TRUE)
+        {
+            YA_CORE_WARN("Anisotropic filtering is not supported by the physical device, disabling it.");
+            samplerCI.anisotropyEnable = VK_FALSE;
+            samplerCI.maxAnisotropy    = 1.0f;
+        }
+    }
 
-    // Recreate depth resources with new extent
-    // createDepthResources();
+    VK_CALL_RET(vkCreateSampler(getLogicalDevice(), &samplerCI, getAllocator(), &outSampler));
+    setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, name.c_str());
+    YA_CORE_TRACE("Created sampler {}: {}", name, (uintptr_t)outSampler);
 
-    // Recreate render pass framebuffers
-    // m_renderPass.recreate(m_swapChain.getImageViews(), m_depthImageView, m_swapChain.getExtent());
+    _samplers[name] = outSampler;
 
-    // Recreate all pipelines with new render pass and extent
-    // m_pipelineManager.recreateAllPipelines(m_renderPass.getRenderPass(), m_swapChain.getExtent());
-
-    YA_CORE_INFO("Swap chain and all pipelines recreated successfully");
+    return true;
 }
 
 

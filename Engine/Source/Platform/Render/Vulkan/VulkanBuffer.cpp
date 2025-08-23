@@ -66,6 +66,29 @@ void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags me
     YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
+bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
+{
+    if (!data) {
+        YA_CORE_ERROR("Write data to buffer {} failed: data is nullptr", name);
+        return false;
+    }
+    if (!bHostVisible) {
+        YA_CORE_ERROR("Write data to buffer {} failed: buffer is not host visible", name);
+        return false;
+    }
+    YA_CORE_ASSERT(offset + size <= _size, "Write data out of range!");
+    void *mappedData = nullptr;
+    VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+                        _memory,
+                        offset,
+                        VK_WHOLE_SIZE, // map the whole memory
+                        0,
+                        &mappedData));
+    std::memcpy(mappedData, data, size);
+    vkUnmapMemory(_render->getLogicalDevice(), _memory);
+    return true;
+}
+
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
                             VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
                             VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)

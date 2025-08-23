@@ -36,6 +36,109 @@ struct QueueFamilyIndices
     int32_t queueCount       = -1;
 };
 
+namespace ya
+{
+
+namespace EFilter
+{
+enum T
+{
+    Nearest,
+    Linear,
+    CubicExt,
+    CubicImg,
+};
+inline auto toVk(T filter) -> VkFilter
+{
+    switch (filter)
+    {
+    case Nearest:
+        return VkFilter::VK_FILTER_NEAREST;
+    case Linear:
+        return VkFilter::VK_FILTER_LINEAR;
+    case CubicExt:
+        return VkFilter::VK_FILTER_CUBIC_EXT;
+    case CubicImg:
+        return VkFilter::VK_FILTER_CUBIC_IMG;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EFilter
+
+namespace ESamplerMipmapMode
+{
+enum T
+{
+    Nearest,
+    Linear,
+};
+inline auto toVk(T mode) -> VkSamplerMipmapMode
+{
+    switch (mode)
+    {
+    case Nearest:
+        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    case Linear:
+        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ESamplerMipmapMode
+
+namespace ESamplerAddressMode
+{
+enum T
+{
+    Repeat,
+    MirroredRepeat,
+    ClampToEdge,
+    ClampToBorder,
+};
+
+inline auto toVk(T mode) -> VkSamplerAddressMode
+{
+    switch (mode)
+    {
+    case Repeat:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case MirroredRepeat:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    case ClampToEdge:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case ClampToBorder:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ESamplerAddressMode
+
+
+struct SamplerCreateInfo
+{
+    EFilter::T             minFilter               = EFilter::Linear;
+    EFilter::T             magFilter               = EFilter::Linear;
+    ESamplerMipmapMode::T  mipmapMode              = ESamplerMipmapMode::Linear;
+    ESamplerAddressMode::T addressModeU            = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode::T addressModeV            = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode::T addressModeW            = ESamplerAddressMode::Repeat;
+    float                  mipLodBias              = 0.0f;
+    bool                   anisotropyEnable        = false;
+    float                  maxAnisotropy           = 1.0f;
+    bool                   compareEnable           = false;
+    ECompareOp::T          compareOp               = ECompareOp::Always;
+    float                  minLod                  = 0.0f;
+    float                  maxLod                  = 1.0f;
+    bool                   unnormalizedCoordinates = false;
+};
+
+} // namespace ya
+
 struct VulkanRender : public IRender
 {
     friend struct VulkanUtils;
@@ -96,6 +199,7 @@ struct VulkanRender : public IRender
     std::unique_ptr<VulkanDebugUtils> _debugUtils = nullptr;
 
 
+    std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
 
     void *nativeWindow = nullptr;
 
@@ -132,9 +236,6 @@ struct VulkanRender : public IRender
     }
 
 
-    bool                      isGraphicsPresentSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
-    const QueueFamilyIndices &getGraphicsQueueFamilyInfo() const { return _graphicsQueueFamily; }
-    const QueueFamilyIndices &getPresentQueueFamilyInfo() const { return _presentQueueFamily; }
 
   private:
     void terminate()
@@ -222,9 +323,12 @@ struct VulkanRender : public IRender
         {
             _debugUtils->destroy();
         }
+        for (auto &[name, sampler] : _samplers) {
+            VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
+        }
 
         onReleaseSurface.executeIfBound(&(*_instance), &_surface);
-        vkDestroyInstance(_instance, nullptr);
+        vkDestroyInstance(_instance, getAllocator());
     }
 
 
@@ -242,7 +346,6 @@ struct VulkanRender : public IRender
 
 
   public:
-    void recreateSwapChain();
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
@@ -252,6 +355,10 @@ struct VulkanRender : public IRender
     [[nodiscard]] VulkanSwapChain *getSwapChain() const { return m_swapChain; }
 
     [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
+
+    [[nodiscard]] bool                      isGraphicsPresentSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
+    [[nodiscard]] const QueueFamilyIndices &getGraphicsQueueFamilyInfo() const { return _graphicsQueueFamily; }
+    [[nodiscard]] const QueueFamilyIndices &getPresentQueueFamilyInfo() const { return _presentQueueFamily; }
 
     std::vector<VulkanQueue> &getGraphicsQueues() { return _graphicsQueues; }
     std::vector<VulkanQueue> &getPresentQueues() { return _presentQueues; }
@@ -268,9 +375,21 @@ struct VulkanRender : public IRender
     [[nodiscard]] int32_t getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const;
 
     std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
+    const VkAllocationCallbacks                *getAllocator();
 
-    const VkAllocationCallbacks *getAllocator();
 
+    bool      createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler);
+    VkSampler getSampler(const std::string &name)
+    {
+        auto it = _samplers.find(name);
+        if (it != _samplers.end()) {
+            return it->second;
+        }
+        YA_CORE_WARN("Sampler not found: {}", name);
+        return VK_NULL_HANDLE;
+    }
+
+  public:
     VkCommandBuffer beginIsolateCommands()
     {
         VkCommandBuffer ret = VK_NULL_HANDLE;

@@ -14,6 +14,7 @@
 
 
 #include "Render/Core/RenderTarget.h"
+#include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "render/Mesh.h"
 
@@ -42,8 +43,24 @@ VulkanPipelineLayout                      *defaultPipelineLayout = nullptr;
 std::shared_ptr<VulkanDescriptorPool>      descriptorPool;
 std::shared_ptr<VulkanDescriptorSetLayout> descriptorSetLayout0;
 std::vector<VkDescriptorSet>               descriptorSets;
-std::shared_ptr<VulkanBuffer>              uGBuffer;
-std::shared_ptr<VulkanBuffer>              uGBufferStaging;
+
+std::shared_ptr<VulkanBuffer> uGBuffer;
+struct UboGBuffer
+{
+    // should be aligned by vec4
+    glm::mat4 proj;
+    glm::mat4 view;
+    glm::vec4 dirLight;
+} gBuffer;
+
+std::shared_ptr<VulkanBuffer> uInstanceBuffer;
+struct UboInstanceBuffer
+{
+    glm::mat4 model;
+} instanceBuffer;
+
+std::shared_ptr<Texture> textureFace;
+std::shared_ptr<Texture> textureUv1;
 
 VulkanPipeline *pipeline = nullptr;
 
@@ -306,6 +323,7 @@ void App::init()
     // use the RT instead of framebuffers directly
     renderTarget = new IRenderTarget(renderpass);
 
+#pragma region PipelinePLayout
 
     /**
      In Vulkan:
@@ -372,6 +390,9 @@ void App::init()
     defaultPipelineLayout->create(gpLayoutCI);
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, defaultPipelineLayout->getHandle(), "DefaultPipelineLayout");
 
+#pragma endregion
+
+#pragma region Descriptor
     // TODO: we could create in other sides, and combined them if match the descriptor set layout?
 
 
@@ -394,6 +415,42 @@ void App::init()
     descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, gpLayoutCI.descriptorSetLayouts[0]);
     descriptorPool->allocateDescriptorSets({descriptorSetLayout0}, descriptorSets);
 
+    uGBuffer = VulkanBuffer::create(
+        vkRender,
+        BufferCreateInfo{
+            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .size          = sizeof(UboGBuffer),
+            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            .debugName     = "uGBuffer",
+        });
+    uInstanceBuffer = VulkanBuffer::create(
+        vkRender,
+        BufferCreateInfo{
+            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            .data          = std::nullopt,
+            .size          = sizeof(UboGBuffer),
+            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .debugName     = "uGBufferStaging",
+        });
+    textureFace = std::make_shared<Texture>("Engine/Content/TestTextures/face.png");
+    textureUv1  = std::make_shared<Texture>("Engine/Content/TestTextures/uv1.png");
+
+    VkSampler dummySampler = VK_NULL_HANDLE;
+    vkRender->createSampler("DefaultSampler",
+                            SamplerCreateInfo{
+                                .minFilter     = EFilter::Linear,
+                                .magFilter     = EFilter::Linear,
+                                .mipmapMode    = ESamplerMipmapMode::Linear,
+                                .addressModeU  = ESamplerAddressMode::Repeat,
+                                .addressModeV  = ESamplerAddressMode::Repeat,
+                                .addressModeW  = ESamplerAddressMode::Repeat,
+                                .mipLodBias    = 0.0f,
+                                .maxAnisotropy = 1.0f,
+                            },
+                            dummySampler);
+
+
+#pragma endregion
 
 
     /**
@@ -840,7 +897,13 @@ void App::onUpdate(float dt)
     glm::mat4 rot = glm::mat4_cast(combinedRot);
     matModel      = rot;
 
+
     camera.update(inputManager, dt); // Camera expects dt in seconds
+
+    gBuffer.view         = camera.getViewMatrix();
+    gBuffer.proj         = camera.getProjectionMatrix();
+    gBuffer.dirLight     = glm::normalize(glm::vec4(-1.0f, -3.0f, -1.0f, 1.f));
+    instanceBuffer.model = matModel;
 }
 
 void App::onRender(float dt)
@@ -922,58 +985,9 @@ void App::onDraw(float dt)
 #pragma region Copy Pass
 #if 1
 
-    // 4. bind descriptor sets, as global concepts
-    vkCmdBindDescriptorSets(curCmdBuf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            defaultPipelineLayout->getHandle(),
-                            0, // first set
-                            descriptorSets.size(),
-                            descriptorSets.data(),
-                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
-                            // This can avoid of creating a new descriptor set?
-                            0,        // dynamic offset count
-                            nullptr); // dynamic offsets
 
-
-    struct UboGBuffer
-    {
-        // should be aligned by vec4
-        glm::mat4 proj;
-        glm::mat4 view;
-        glm::vec4 dirLight;
-    } gBuffer;
-    struct UboInstanceBuffer
-    {
-        glm::mat4 model;
-    } instanceBuffer;
-
-    uGBuffer = VulkanBuffer::create(
-        vkRender,
-        {
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            .debugName     = "uGBuffer",
-        });
-    uGBufferStaging = VulkanBuffer::create(
-        vkRender,
-        {
-            .usage         = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            .data          = std::nullopt,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            .debugName     = "uGBufferStaging",
-        });
-
-    void *mappedData = nullptr;
-    VK_CALL(vkMapMemory(vkRender->getLogicalDevice(), uGBufferStaging->getMemory(), 0, sizeof(UboGBuffer), 0, &mappedData));
-    std::memcpy(mappedData, &gBuffer, sizeof(UboGBuffer));
-    vkUnmapMemory(vkRender->getLogicalDevice(), uGBufferStaging->getMemory());
-
-    VulkanBuffer::transfer(curCmdBuf,
-                           uGBufferStaging->getHandle(),
-                           uGBuffer->getHandle(),
-                           sizeof(UboGBuffer));
+    uGBuffer->writeData(&gBuffer, sizeof(UboGBuffer), 0);
+    uInstanceBuffer->writeData(&instanceBuffer, sizeof(UboInstanceBuffer), 0);
 
 
     // Add memory barrier to ensure copy completes before shader reads
@@ -991,47 +1005,130 @@ void App::onDraw(float dt)
         },
     };
 
-    VkDescriptorBufferInfo dbi{
-        .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
-        .offset = 0,
-        .range  = sizeof(UboGBuffer), // size of the uniform buffer
-    };
+    // only 1 for now
+    for (int i = 0; i < descriptorSets.size(); ++i) {
+
+        auto set = descriptorSets[i];
+
+        std::vector<VkDescriptorBufferInfo> dbInfos = {
+            VkDescriptorBufferInfo{
+                .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
+                .offset = 0,
+                .range  = sizeof(UboGBuffer), // size of the uniform buffer
+            },
+            VkDescriptorBufferInfo{
+                .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
+                .offset = 0,
+                .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
+            },
+        };
+
+        // each image have different sampler?
+        std::vector<VkDescriptorImageInfo> diInfos = {
+            VkDescriptorImageInfo{
+                .sampler     = vkRender->getSampler("DefaultSampler"),
+                .imageView   = textureFace->imageView->_handle,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+            VkDescriptorImageInfo{
+                .sampler     = vkRender->getSampler("DefaultSampler"),
+                .imageView   = textureUv1->imageView->_handle,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            },
+        };
 
 
-    std::vector<VkWriteDescriptorSet> writeDSs;
-    // dirLight
-    writeDSs.push_back(VkWriteDescriptorSet{
-        .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .pNext            = nullptr,
-        .dstSet           = descriptorSets[0], // the first descriptor set
-        .dstBinding       = 0,                 // see gplCI[0].bindings[0].binding
-        .dstArrayElement  = 0,                 // the index of array
-        .descriptorCount  = 1,                 // see gplCI[0].bindings[0].descriptorCount
-        .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pImageInfo       = nullptr,
-        .pBufferInfo      = &dbi,
-        .pTexelBufferView = nullptr,
-    });
+        std::vector<VkWriteDescriptorSet> writeDSs{
+            VkWriteDescriptorSet{
+                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext            = nullptr,
+                .dstSet           = set, // the first descriptor set
+                .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
+                .dstArrayElement  = 0,   // the index of array
+                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+                .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pImageInfo       = nullptr,
+                .pBufferInfo      = &dbInfos[0],
+                .pTexelBufferView = nullptr,
+            },
+
+            VkWriteDescriptorSet{
+                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext            = nullptr,
+                .dstSet           = set, // the first descriptor set
+                .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
+                .dstArrayElement  = 0,   // the index of array
+                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+                .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pImageInfo       = nullptr,
+                .pBufferInfo      = &dbInfos[1],
+                .pTexelBufferView = nullptr,
+            },
+            VkWriteDescriptorSet{
+                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext            = nullptr,
+                .dstSet           = set, // the first descriptor set
+                .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
+                .dstArrayElement  = 0,   // the index of array
+                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+                .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo       = &diInfos[0],
+                .pBufferInfo      = nullptr,
+                .pTexelBufferView = nullptr,
+            },
+            VkWriteDescriptorSet{
+                .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext            = nullptr,
+                .dstSet           = set, // the first descriptor set
+                .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
+                .dstArrayElement  = 0,   // the index of array
+                .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+                .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo       = &diInfos[1],
+                .pBufferInfo      = nullptr,
+                .pTexelBufferView = nullptr,
+            },
+        };
+
+        // 4. bind descriptor sets, as global concepts
+        vkCmdBindDescriptorSets(curCmdBuf,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                defaultPipelineLayout->getHandle(),
+                                0, // first set
+                                descriptorSets.size(),
+                                descriptorSets.data(),
+                                // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
+                                // This can avoid of creating a new descriptor set?
+                                0,        // dynamic offset count
+                                nullptr); // dynamic offsets
 
 
-    vkCmdPushDescriptorSet(curCmdBuf,
-                           VK_PIPELINE_BIND_POINT_GRAPHICS,
-                           defaultPipelineLayout->getHandle(),
-                           0,
-                           writeDSs.size(),
-                           writeDSs.data());
 
-    vkCmdPipelineBarrier(curCmdBuf,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         0,
-                         0,
-                         nullptr,
-                         bmBarriers.size(),
-                         bmBarriers.data(),
-                         0,
-                         nullptr);
+        // vkCmdPushDescriptorSet(curCmdBuf,
+        //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        //                        defaultPipelineLayout->getHandle(),
+        //                        0,
+        //                        writeDSs.size(),
+        //                        writeDSs.data());
 
+        // TODO: make a copy pass like SDL
+        vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
+                               writeDSs.size(),
+                               writeDSs.data(),
+                               0,
+                               nullptr);
+
+        // vkCmdPipelineBarrier(curCmdBuf,
+        //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+        //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        //                      0,
+        //                      0,
+        //                      nullptr,
+        //                      bmBarriers.size(),
+        //                      bmBarriers.data(),
+        //                      0,
+        //                      nullptr);
+    }
 
 #endif
 #pragma endregion
@@ -1235,9 +1332,9 @@ void App::onDraw(float dt)
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
     // ⚠️ frameCount can not equal to imageSize of swapchain!!
     currentFrameIdx = (currentFrameIdx + 1) % frameCount;
-}
+} // namespace ya
 
-#pragma region synchronization resources
+#pragma region Sync Resources
 
 void App::initSemaphoreAndFence()
 {

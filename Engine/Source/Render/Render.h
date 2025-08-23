@@ -644,6 +644,8 @@ struct IRender
 };
 
 
+namespace ya
+{
 struct ImageCreateInfo
 {
     EFormat::T format = EFormat::Undefined;
@@ -663,6 +665,7 @@ struct ImageCreateInfo
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
+} // namespace ya
 
 
 struct RenderHelper

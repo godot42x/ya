@@ -14,13 +14,6 @@
 
 
 // Texture management (shared across all pipelines)
-struct VulkanTexture2D
-{
-    VkImage        image     = VK_NULL_HANDLE;
-    VkImageView    imageView = VK_NULL_HANDLE;
-    VkDeviceMemory memory    = VK_NULL_HANDLE;
-};
-
 
 struct VulkanRender;
 struct VulkanRenderPass;
@@ -52,11 +45,6 @@ struct VulkanPipeline
 
     VkPipeline       _pipeline       = VK_NULL_HANDLE;
     VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
-    // VkDescriptorSet  _descriptorSet  = VK_NULL_HANDLE;
-
-
-    // Resource tracking for cleanup
-    // std::vector<std::shared_ptr<VulkanTexture2D>> textures;
 
   private:
 
