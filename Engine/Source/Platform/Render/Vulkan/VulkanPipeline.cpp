@@ -83,11 +83,11 @@ void VulkanPipelineLayout::create(GraphicsPipelineLayoutCreateInfo ci)
 
     VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, nullptr, &_pipelineLayout);
     if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to create Vulkan pipeline layout: {}", result);
+        YA_CORE_ERROR("Failed to create Vulkan pipeline layout: {}", result);
         return; // false
     }
 
-    NE_CORE_INFO("Vulkan pipeline layout created successfully: {}", (uintptr_t)_pipelineLayout);
+    YA_CORE_INFO("Vulkan pipeline layout created successfully: {}", (uintptr_t)_pipelineLayout);
 }
 
 void VulkanPipelineLayout::cleanup()
@@ -126,6 +126,7 @@ bool VulkanPipelineLayout::allocateDescriptorSets(std::vector<VkDescriptorPool> 
             .pPoolSizes    = dpSizes.data(),
         };
         VK_CALL(vkCreateDescriptorPool(_render->getLogicalDevice(), &dspCI, _render->getAllocator(), &pools[i]));
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, pools[i], std::format("DescriptorPool_{}", i).c_str());
 
         VkDescriptorSetAllocateInfo dsAI{
             .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -137,6 +138,7 @@ bool VulkanPipelineLayout::allocateDescriptorSets(std::vector<VkDescriptorPool> 
         };
 
         VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(), &dsAI, &sets[i]));
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, sets[i], std::format("DescriptorSet_{}", i).c_str());
 
         ++i;
     }
@@ -172,11 +174,14 @@ void VulkanPipeline::createPipelineInternal()
     if (!stage2Spirv) {
         stage2Spirv = shaderStorage->load(_ci.shaderCreateInfo.shaderName);
     }
-    NE_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderCreateInfo.shaderName);
+    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderCreateInfo.shaderName);
 
     // Create shader modules
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
     auto fragShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Fragment));
+
+    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", name).c_str());
+    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", name).c_str());
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
         VkPipelineShaderStageCreateInfo{
@@ -409,13 +414,13 @@ void VulkanPipeline::createPipelineInternal()
                                                 &pipelineCreateInfo,
                                                 nullptr,
                                                 &_pipeline);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
+    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
 
     // Cleanup shader modules
     vkDestroyShaderModule(_render->getLogicalDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(_render->getLogicalDevice(), vertShaderModule, nullptr);
 
-    NE_CORE_INFO("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
+    YA_CORE_INFO("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
 }
 
 
@@ -441,7 +446,7 @@ void VulkanPipeline::createPipelineInternal()
 //     };
 
 //     VkResult result = vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &m_defaultTextureSampler);
-//     NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create texture sampler!");
+//     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create texture sampler!");
 // }
 
 VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t> &spv_binary)

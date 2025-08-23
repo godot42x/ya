@@ -28,7 +28,7 @@
 
 
 
-#define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
+#define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
 
 struct QueueFamilyIndices
 {
@@ -122,7 +122,7 @@ struct VulkanRender : public IRender
     {
 
         bool success = initInternal(ci);
-        NE_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
+        YA_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
 
         return true;
     }

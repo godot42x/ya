@@ -56,7 +56,7 @@ void VulkanRenderPass::end(VkCommandBuffer commandBuffer)
 
 bool VulkanRenderPass::createDefaultRenderPass()
 {
-    NE_CORE_INFO("no attachments defined, using default attachments preset");
+    YA_CORE_INFO("no attachments defined, using default attachments preset");
 
     std::vector<VkAttachmentDescription> vkAttachments;
 
@@ -105,20 +105,20 @@ bool VulkanRenderPass::createDefaultRenderPass()
 
     vkCreateRenderPass(_render->getLogicalDevice(), &createInfo, nullptr, &m_renderPass);
     if (m_renderPass == VK_NULL_HANDLE) {
-        NE_CORE_ERROR("Failed to create default render pass!");
+        YA_CORE_ERROR("Failed to create default render pass!");
         return false;
     }
-    NE_CORE_INFO("Default render pass created successfully");
+    YA_CORE_INFO("Default render pass created successfully");
 
     return false;
 }
 
 bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 {
-    NE_CORE_INFO("Recreating render pass...");
+    YA_CORE_INFO("Recreating render pass...");
     _ci = ci;
 
-    // NE_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");
+    // YA_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");
     if (_ci.attachments.empty() && _ci.subpasses.empty()) {
         return createDefaultRenderPass();
     }
@@ -144,7 +144,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     }
 
     if (attachmentDescs[0].format != surfaceFormat) {
-        NE_CORE_ERROR("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
+        YA_CORE_ERROR("RenderPassCI.attachments[{}]  Attachment format {} does not match surface format {}",
                       0,
                       std::to_string(attachmentDescs[0].format),
                       std::to_string(surfaceFormat));
@@ -169,7 +169,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     for (std::size_t subPassIdx = 0; subPassIdx < _ci.subpasses.size(); subPassIdx++)
     {
         const auto &subpass = _ci.subpasses[subPassIdx];
-        NE_ASSERT(subpass.subpassIndex == subPassIdx, "Subpass index mismatch: expected {}, got {}", subPassIdx, subpass.subpassIndex);
+        YA_CORE_ASSERT(subpass.subpassIndex == subPassIdx, "Subpass index mismatch: expected {}, got {}", subPassIdx, subpass.subpassIndex);
 
         for (const auto &colorAttachment : subpass.colorAttachments)
         {
@@ -223,7 +223,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 
     // Create subpass dependencies
     std::vector<VkSubpassDependency> vkDependencies;
-    NE_CORE_ASSERT(!_ci.dependencies.empty(), "Render pass must have at least one subpass dependency defined!");
+    YA_CORE_ASSERT(!_ci.dependencies.empty(), "Render pass must have at least one subpass dependency defined!");
     for (const auto &dependency : _ci.dependencies) {
         VkSubpassDependency vkDependency{
             .srcSubpass   = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
@@ -252,12 +252,12 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 
     VkResult result = vkCreateRenderPass(_render->getLogicalDevice(), &createInfo, nullptr, &m_renderPass);
     if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to create Vulkan render pass: {}", result);
+        YA_CORE_ERROR("Failed to create Vulkan render pass: {}", result);
         return false;
     }
-    // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass with config!");
+    // YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass with config!");
 
-    NE_CORE_INFO("Created render pass with {} attachments, {} subpasses", attachmentDescs.size(), vkSubpassDescs.size());
+    YA_CORE_INFO("Created render pass with {} attachments, {} subpasses", attachmentDescs.size(), vkSubpassDescs.size());
 
     return true;
 }

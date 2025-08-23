@@ -29,10 +29,10 @@ VkSampler VulkanResourceManager::getOrCreateSampler(SamplerType samplerType, VkS
     }
 
     // Create new sampler
-    NE_CORE_ASSERT(ci != nullptr, "SamplerCreateInfo must not be null!");
+    YA_CORE_ASSERT(ci != nullptr, "SamplerCreateInfo must not be null!");
     VkSampler sampler;
     VkResult  result = vkCreateSampler(m_logicalDevice, ci, nullptr, &sampler);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create sampler!");
+    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create sampler!");
     m_samplers[samplerType] = sampler; // Store the new sampler
     return sampler;
 }

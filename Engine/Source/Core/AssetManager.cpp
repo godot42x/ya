@@ -33,14 +33,14 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
 
     // Check if file exists using FileSystem
     if (!FileSystem::get()->isFileExists(filepath)) {
-        NE_CORE_ERROR("Model file does not exist: {}", filepath);
+        YA_CORE_ERROR("Model file does not exist: {}", filepath);
         return nullptr;
     }
 
     // Read the file using FileSystem
     std::string fileContent;
     if (!FileSystem::get()->readFileToString(filepath, fileContent)) {
-        NE_CORE_ERROR("Failed to read model file: {}", filepath);
+        YA_CORE_ERROR("Failed to read model file: {}", filepath);
         return nullptr;
     }
 
@@ -56,7 +56,7 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
 
     // Check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        NE_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
+        YA_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
         return nullptr;
     }
 

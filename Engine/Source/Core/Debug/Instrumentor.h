@@ -87,7 +87,7 @@ class InstrumentationTimer
 
         uint32_t threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
         // Instrumentor::Get().WriteProfile({.Name = _name, .Start = start, .End = end, .ThreadID = threadID});
-        NE_CORE_DEBUG("Profile: [{0}] {1}ms,  on thread {2}", _name, ms, threadID);
+        YA_CORE_DEBUG("Profile: [{0}] {1}ms,  on thread {2}", _name, ms, threadID);
 
         bStop = true;
     }

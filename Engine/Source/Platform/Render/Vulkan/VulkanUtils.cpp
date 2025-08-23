@@ -31,7 +31,7 @@ uint32_t VulkanUtils::findMemoryType(VkPhysicalDevice physicalDevice, uint32_t t
             return i;
         }
     }
-    NE_CORE_ASSERT(false, "failed to find suitable memory type!");
+    YA_CORE_ASSERT(false, "failed to find suitable memory type!");
     return -1;
 }
 
@@ -47,7 +47,7 @@ bool VulkanUtils::createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
 
     if (vkCreateBuffer(device, &bufferInfo, nullptr, &outBuffer) != VK_SUCCESS)
     {
-        NE_CORE_ASSERT(false, "failed to create buffer");
+        YA_CORE_ASSERT(false, "failed to create buffer");
     }
 
     VkMemoryRequirements memoryRequirements;
@@ -61,7 +61,7 @@ bool VulkanUtils::createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
 
     if (vkAllocateMemory(device, &allocInfo, nullptr, &outBufferMemory) != VK_SUCCESS)
     {
-        NE_CORE_ASSERT(false, "failed to allocate buffer memory!");
+        YA_CORE_ASSERT(false, "failed to allocate buffer memory!");
     }
     vkBindBufferMemory(device, outBuffer, outBufferMemory, 0);
 
@@ -88,7 +88,7 @@ void VulkanUtils::createImage(VkDevice device, VkPhysicalDevice physicalDevice,
 
     if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS)
     {
-        NE_CORE_ASSERT(false, "failed to create image!");
+        YA_CORE_ASSERT(false, "failed to create image!");
     }
 
     VkMemoryRequirements memRequirements;
@@ -102,7 +102,7 @@ void VulkanUtils::createImage(VkDevice device, VkPhysicalDevice physicalDevice,
 
     if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
     {
-        NE_CORE_ASSERT(false, "failed to allocate image memory!");
+        YA_CORE_ASSERT(false, "failed to allocate image memory!");
     }
 
     vkBindImageMemory(device, image, imageMemory, 0);
@@ -132,7 +132,7 @@ VkImageView VulkanUtils::createImageView(VkDevice device, VkImage image, VkForma
 
     VkImageView imageView = VK_NULL_HANDLE;
     VkResult    result    = vkCreateImageView(device, &createInfo, nullptr, &imageView);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create image view!");
+    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create image view!");
 
     return imageView;
 }
@@ -232,7 +232,7 @@ void VulkanUtils::transitionImageLayout(VulkanCommandPool *pool, VkImage image, 
     //     destinationStage      = VK_PIPELINE_STAGE_TRANSFER_BIT;
     // }
     // else {
-    //     NE_CORE_ASSERT(false, "unsupported layout transition!");
+    //     YA_CORE_ASSERT(false, "unsupported layout transition!");
     // }
 
     // vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
@@ -279,7 +279,7 @@ VkFormat VulkanUtils::findSupportedImageFormat(VkPhysicalDevice             phys
         }
     }
 
-    NE_CORE_ASSERT(false, "failed to find supported format!");
+    YA_CORE_ASSERT(false, "failed to find supported format!");
     return VK_FORMAT_UNDEFINED;
 }
 
@@ -295,7 +295,7 @@ void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalD
     //     // SDL implementation
     // #else
     //     pixels = stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    //     NE_CORE_ASSERT(pixels, "failed to load texture image! {}", path);
+    //     YA_CORE_ASSERT(pixels, "failed to load texture image! {}", path);
     // #endif
 
     //     VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -304,7 +304,7 @@ void VulkanUtils::createTextureImage(VkDevice device, VkPhysicalDevice physicalD
     //     VkDeviceMemory stagingBufferMemory;
 
     //     if (!VulkanUtils::createBuffer(device, physicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory)) {
-    //         NE_CORE_ERROR("Failed to create staging buffer");
+    //         YA_CORE_ERROR("Failed to create staging buffer");
     //         return;
     //     }
 

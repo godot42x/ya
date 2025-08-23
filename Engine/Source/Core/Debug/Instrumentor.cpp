@@ -14,12 +14,12 @@ void Instrumentor::BeginSession(const std::string &name, const std::string &file
     auto path = std::filesystem::path(filepath);
     if (!std::filesystem::exists(path.parent_path())) {
         if (auto res = std::filesystem::create_directories(path.parent_path())) {
-            NE_CORE_ASSERT(res, "No such dir, and then failed when creating");
+            YA_CORE_ASSERT(res, "No such dir, and then failed when creating");
         }
     }
 
     m_OutputStream.open(filepath, std::ios::trunc);
-    NE_CORE_ASSERT(m_OutputStream.is_open() && !m_OutputStream.fail(), "Opening result file failed");
+    YA_CORE_ASSERT(m_OutputStream.is_open() && !m_OutputStream.fail(), "Opening result file failed");
     m_CurrentSession = new InstrumentationSession{name};
     WriteHeader();
 }

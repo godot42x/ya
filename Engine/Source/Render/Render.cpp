@@ -17,7 +17,7 @@ std::size_t T2Size(T type)
     case Float4:
         return sizeof(float) * 4;
     default:
-        NE_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(type));
+        YA_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(type));
         return 0;
     }
 }

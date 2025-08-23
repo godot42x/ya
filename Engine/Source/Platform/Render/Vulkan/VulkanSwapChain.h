@@ -46,7 +46,7 @@ struct VulkanSwapChain
     VulkanSwapChain(VulkanRender *render)
         : _render(render)
     {
-        NE_CORE_ASSERT(_render != nullptr, "VulkanRender is null!");
+        YA_CORE_ASSERT(_render != nullptr, "VulkanRender is null!");
     }
     ~VulkanSwapChain();
 

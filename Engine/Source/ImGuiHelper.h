@@ -55,12 +55,12 @@ struct ImguiState
         ImGui_ImplSDL3_InitForSDLGPU(window);
         SDL_WaitForGPUSwapchain(device, window);
         auto swapChianFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
-        NE_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}",
+        YA_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}",
                       static_cast<int>(swapChianFormat),
                       (uintptr_t)device,
                       (uintptr_t)window);
         if (swapChianFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
-            NE_CORE_ERROR("Failed to get swapchain texture format: {}",
+            YA_CORE_ERROR("Failed to get swapchain texture format: {}",
                           SDL_GetError());
         }
     }

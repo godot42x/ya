@@ -41,7 +41,7 @@ struct AppCreateInfo
 
     void init(int argc, char **argv)
     {
-        NE_CORE_INFO(FUNCTION_SIG);
+        YA_CORE_INFO(FUNCTION_SIG);
         params
             .opt<int>("w", {"width"}, "Window width")
             .opt<int>("h", {"height"}, "Window height")
@@ -117,7 +117,7 @@ struct App
     App(AppCreateInfo ci)
     {
         _ci = ci;
-        NE_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
+        YA_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
         _instance = this;
     }
     void init();

@@ -53,7 +53,7 @@ struct EditorCamera : public Camera
         this->projectionType = EProjectionType::Perspective;
         this->fov            = fov;
         if (fov < 1.f) {
-            NE_WARN("FOV is too small {}", fov);
+            YA_CORE_WARN("FOV is too small {}", fov);
         }
         this->aspectRatio = aspectRatio;
         this->nearClip    = nearClip;

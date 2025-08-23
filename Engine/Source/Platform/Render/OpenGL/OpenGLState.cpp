@@ -21,7 +21,7 @@ bool OpenGLState::initialize()
 
     // Load OpenGL extensions
     if (!loadGLExtensions()) {
-        NE_CORE_ERROR("Failed to load OpenGL extensions");
+        YA_CORE_ERROR("Failed to load OpenGL extensions");
         return false;
     }
 
@@ -109,7 +109,7 @@ void OpenGLState::recreateSwapchain(const SwapchainCreateInfo &swapchainCI)
 #if USE_SDL
     int result = SDL_GL_SetSwapInterval(swapInterval);
     if (result != 0) {
-        NE_CORE_WARN("Failed to set swap interval to {}: {}", swapInterval, SDL_GetError());
+        YA_CORE_WARN("Failed to set swap interval to {}: {}", swapInterval, SDL_GetError());
         // Try fallback
         SDL_GL_SetSwapInterval(swapchainCI.bVsync ? 1 : 0);
     }
@@ -119,9 +119,9 @@ void OpenGLState::recreateSwapchain(const SwapchainCreateInfo &swapchainCI)
 
     // Log triple buffering configuration
     if (swapchainCI.minImageCount >= 3) {
-        NE_CORE_INFO("OpenGL: Triple buffering requested (minImageCount: {})", swapchainCI.minImageCount);
+        YA_CORE_INFO("OpenGL: Triple buffering requested (minImageCount: {})", swapchainCI.minImageCount);
         if (swapchainCI.presentMode == EPresentMode::Mailbox) {
-            NE_CORE_INFO("OpenGL: Using mailbox present mode for optimal triple buffering");
+            YA_CORE_INFO("OpenGL: Using mailbox present mode for optimal triple buffering");
         }
     }
 }
@@ -202,7 +202,7 @@ void OpenGLState::enableTripleBuffering()
     // Try to enable triple buffering through context creation flags
     // Note: This depends on driver support
     if (m_SwapchainCI.minImageCount >= 3) {
-        NE_CORE_INFO("Attempting to enable triple buffering (3+ images requested)");
+        YA_CORE_INFO("Attempting to enable triple buffering (3+ images requested)");
         // On some drivers, setting a higher swap interval might help with triple buffering
         if (m_SwapchainCI.presentMode == EPresentMode::Mailbox) {
             SDL_GL_SetSwapInterval(1); // Let driver decide optimal buffering
@@ -253,18 +253,18 @@ void OpenGLState::configureBuffering(const SwapchainCreateInfo &swapchainCI)
     if (swapchainCI.minImageCount >= 3) {
         if (isTripleBufferingSupported()) {
             enableTripleBuffering();
-            NE_CORE_INFO("Triple buffering enabled (requested {} images)", swapchainCI.minImageCount);
+            YA_CORE_INFO("Triple buffering enabled (requested {} images)", swapchainCI.minImageCount);
         }
         else {
-            NE_CORE_WARN("Triple buffering requested but not supported, falling back to double buffering");
+            YA_CORE_WARN("Triple buffering requested but not supported, falling back to double buffering");
         }
     }
 
     // Log the buffering configuration
-    NE_CORE_INFO("OpenGL buffering configured:");
-    NE_CORE_INFO("  - Requested images: {}", swapchainCI.minImageCount);
-    NE_CORE_INFO("  - Present mode: {}", static_cast<int>(swapchainCI.presentMode));
-    NE_CORE_INFO("  - VSync enabled: {}", swapchainCI.bVsync);
+    YA_CORE_INFO("OpenGL buffering configured:");
+    YA_CORE_INFO("  - Requested images: {}", swapchainCI.minImageCount);
+    YA_CORE_INFO("  - Present mode: {}", static_cast<int>(swapchainCI.presentMode));
+    YA_CORE_INFO("  - VSync enabled: {}", swapchainCI.bVsync);
 }
 
 // Buffer management
@@ -416,7 +416,7 @@ GLuint OpenGLState::createShader(GLenum type, const std::string &source)
 
     std::string errorLog;
     if (!checkShaderCompileStatus(shader, errorLog)) {
-        NE_CORE_ERROR("Shader compilation failed: {0}", errorLog);
+        YA_CORE_ERROR("Shader compilation failed: {0}", errorLog);
         glDeleteShader(shader);
         return 0;
     }
@@ -437,7 +437,7 @@ GLuint OpenGLState::createProgram(const std::vector<GLuint> &shaders)
 
     std::string errorLog;
     if (!checkProgramLinkStatus(program, errorLog)) {
-        NE_CORE_ERROR("Program linking failed: {0}", errorLog);
+        YA_CORE_ERROR("Program linking failed: {0}", errorLog);
         glDeleteProgram(program);
         return 0;
     }
@@ -457,7 +457,7 @@ GLuint OpenGLState::createProgramFromFiles(const std::string &vertexPath, const 
     std::string fragmentSource = readShaderSource(fragmentPath);
 
     if (vertexSource.empty() || fragmentSource.empty()) {
-        NE_CORE_ERROR("Failed to read shader files");
+        YA_CORE_ERROR("Failed to read shader files");
         return 0;
     }
 
@@ -561,7 +561,7 @@ bool OpenGLState::checkFramebufferStatus(GLenum target)
 {
     GLenum status = glCheckFramebufferStatus(target);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        NE_CORE_ERROR("Framebuffer is not complete: {0}", status);
+        YA_CORE_ERROR("Framebuffer is not complete: {0}", status);
         return false;
     }
     return true;
@@ -724,7 +724,7 @@ void OpenGLState::checkGLError(const std::string &operation)
     GLenum error = glGetError();
     if (error != GL_NO_ERROR) {
         std::string errorStr = getGLErrorString(error);
-        NE_CORE_ERROR("OpenGL Error in {0}: {1}", operation, errorStr);
+        YA_CORE_ERROR("OpenGL Error in {0}: {1}", operation, errorStr);
     }
 }
 
@@ -744,9 +744,9 @@ std::string OpenGLState::getGLErrorString(GLenum error)
 
 void OpenGLState::printGLInfo()
 {
-    NE_CORE_INFO("OpenGL Renderer: {0}", m_RendererString);
-    NE_CORE_INFO("OpenGL Version: {0}", m_VersionString);
-    NE_CORE_INFO("OpenGL Vendor: {0}", m_VendorString);
+    YA_CORE_INFO("OpenGL Renderer: {0}", m_RendererString);
+    YA_CORE_INFO("OpenGL Version: {0}", m_VersionString);
+    YA_CORE_INFO("OpenGL Vendor: {0}", m_VendorString);
 }
 
 // Private helper functions
@@ -782,7 +782,7 @@ std::string OpenGLState::readShaderSource(const std::string &filepath)
 {
     std::ifstream file(filepath);
     if (!file.is_open()) {
-        NE_CORE_ERROR("Failed to open shader file: {0}", filepath);
+        YA_CORE_ERROR("Failed to open shader file: {0}", filepath);
         return "";
     }
 

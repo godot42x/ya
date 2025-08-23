@@ -27,7 +27,7 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
 
 void Mesh::setDebugName(const std::string &name)
 {
-    NE_CORE_ASSERT(_vertexBuffer && _indexBuffer, "Mesh buffers are not initialized!");
+    YA_CORE_ASSERT(_vertexBuffer && _indexBuffer, "Mesh buffers are not initialized!");
     auto render = App::get()->getRender<VulkanRender>();
     render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _vertexBuffer->getHandle(), name + "_VertexBuffer");
     render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _indexBuffer->getHandle(), name + "_IndexBuffer");

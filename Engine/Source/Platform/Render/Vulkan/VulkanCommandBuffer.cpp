@@ -13,9 +13,9 @@ VulkanCommandPool::VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, V
         .queueFamilyIndex = queue->_familyIndex,
     };
 
-    NE_CORE_ASSERT(vkCreateCommandPool(render->getLogicalDevice(), &ci, nullptr, &_handle) == VK_SUCCESS,
+    YA_CORE_ASSERT(vkCreateCommandPool(render->getLogicalDevice(), &ci, nullptr, &_handle) == VK_SUCCESS,
                    "Failed to create command pool!");
-    NE_CORE_TRACE("Created command pool: {} success, queue family: {}", (uintptr_t)_handle, queue->_familyIndex);
+    YA_CORE_TRACE("Created command pool: {} success, queue family: {}", (uintptr_t)_handle, queue->_familyIndex);
 }
 
 bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer &outCommandBuffer)
@@ -27,9 +27,9 @@ bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkComm
         .commandBufferCount = 1,
     };
 
-    NE_CORE_ASSERT(vkAllocateCommandBuffers(_render->getLogicalDevice(), &allocInfo, &outCommandBuffer) == VK_SUCCESS,
+    YA_CORE_ASSERT(vkAllocateCommandBuffers(_render->getLogicalDevice(), &allocInfo, &outCommandBuffer) == VK_SUCCESS,
                    "Failed to allocate command buffer!");
-    NE_CORE_TRACE("Allocated command buffer success: {}", (uintptr_t)outCommandBuffer);
+    YA_CORE_TRACE("Allocated command buffer success: {}", (uintptr_t)outCommandBuffer);
 
     return true;
 }

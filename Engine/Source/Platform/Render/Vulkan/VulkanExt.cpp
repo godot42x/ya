@@ -16,20 +16,20 @@ void VulkanDebugUtils::init()
     //     vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
 
     GET_VK_FUNC(pfnSetDebugUtilsObjectNameEXT, vkSetDebugUtilsObjectNameEXT);
-    NE_CORE_ASSERT(pfnSetDebugUtilsObjectNameEXT, "Failed to load vkSetDebugUtilsObjectNameEXT function!");
+    YA_CORE_ASSERT(pfnSetDebugUtilsObjectNameEXT, "Failed to load vkSetDebugUtilsObjectNameEXT function!");
 }
 
 void VulkanDebugUtils::rewriteDebugUtils()
 {
     if (!pfnCreateDebugUtilsMessengerEXT) {
-        NE_CORE_WARN("Debug utils messenger creation function not available!");
+        YA_CORE_WARN("Debug utils messenger creation function not available!");
         return;
     }
 
     // Create the debug utils messenger
     const VkDebugUtilsMessengerCreateInfoEXT &createInfo = getDebugMessengerCreateInfoExt();
     if (pfnCreateDebugUtilsMessengerEXT(_renderer->getInstance(), &createInfo, nullptr, &_debugUtilsMessenger) != VK_SUCCESS) {
-        NE_CORE_ASSERT(false, "Failed to create debug utils messenger!");
+        YA_CORE_ASSERT(false, "Failed to create debug utils messenger!");
     }
 }
 
@@ -105,19 +105,19 @@ const VkDebugUtilsMessengerCreateInfoEXT &VulkanDebugUtils::getDebugMessengerCre
         // Log based on severity
         switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            NE_CORE_TRACE("{}", formattedMessage);
+            YA_CORE_TRACE("{}", formattedMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            NE_CORE_INFO("{}", formattedMessage);
+            YA_CORE_INFO("{}", formattedMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            NE_CORE_WARN("{}", formattedMessage);
+            YA_CORE_WARN("{}", formattedMessage);
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            NE_CORE_ERROR("{}", formattedMessage);
+            YA_CORE_ERROR("{}", formattedMessage);
             break;
         default:
-            NE_CORE_ERROR("Unknown severity: {}", formattedMessage);
+            YA_CORE_ERROR("Unknown severity: {}", formattedMessage);
             break;
         }
 

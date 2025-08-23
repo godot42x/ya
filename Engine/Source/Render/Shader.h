@@ -214,7 +214,7 @@ struct ShaderStorage
     {
         auto it = _shaderCache.find(key);
         if (it == _shaderCache.end()) {
-            NE_CORE_WARN("Shader not found in cache: {}", key);
+            YA_CORE_WARN("Shader not found in cache: {}", key);
             return nullptr;
         }
         return &it->second;
@@ -223,7 +223,7 @@ struct ShaderStorage
     const IShaderProcessor::stage2spirv_t *load(const std::string &shaderName)
     {
         if (_shaderCache.find(shaderName) != _shaderCache.end()) {
-            NE_CORE_INFO("Shader already in cache: {}", shaderName);
+            YA_CORE_INFO("Shader already in cache: {}", shaderName);
         }
         YA_PROFILE_SCOPE(std::format("ShaderStorage::load {}", shaderName).c_str());
         if (auto opt = getProcessor()->process(shaderName)) {

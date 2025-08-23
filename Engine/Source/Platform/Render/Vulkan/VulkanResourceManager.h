@@ -30,7 +30,7 @@ class VulkanResourceManager
     VulkanResourceManager() = default;
     virtual ~VulkanResourceManager()
     {
-        NE_CORE_INFO("VulkanResourceManager cleanup");
+        YA_CORE_INFO("VulkanResourceManager cleanup");
         cleanup();
     }
 

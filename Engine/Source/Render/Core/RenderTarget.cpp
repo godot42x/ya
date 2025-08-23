@@ -125,7 +125,7 @@ void IRenderTarget::destroy()
 
 void IRenderTarget::begin(void *cmdBuf)
 {
-    NE_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
+    YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
     VkCommandBuffer vkCmdBuf = static_cast<VkCommandBuffer>(cmdBuf);
     if (bDirty)
@@ -155,7 +155,7 @@ void IRenderTarget::begin(void *cmdBuf)
 void IRenderTarget::end(void *cmdBuf)
 {
 
-    // NE_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
+    // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
     auto vkCmdBuf = static_cast<VkCommandBuffer>(cmdBuf);
     _renderPass->end(vkCmdBuf);
     bBeginTarget = false;
@@ -194,7 +194,7 @@ void IRenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
                 _clearValues[index].color = clearValue.color;
             }
             else {
-                NE_CORE_WARN("Attempting to set color clear value on non-color attachment, {}", index);
+                YA_CORE_WARN("Attempting to set color clear value on non-color attachment, {}", index);
             }
         }
     }
@@ -221,7 +221,7 @@ void IRenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clear
                 _clearValues[index].depthStencil = clearValue.depthStencil;
             }
             else {
-                NE_CORE_WARN("Attempting to set depth stencil clear value on non-depth attachment, {}", index);
+                YA_CORE_WARN("Attempting to set depth stencil clear value on non-depth attachment, {}", index);
             }
         }
     }

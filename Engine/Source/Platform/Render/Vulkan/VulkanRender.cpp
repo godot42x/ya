@@ -16,7 +16,7 @@
 
 
 
-#define panic(...) NE_CORE_ASSERT(false, __VA_ARGS__);
+#define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
 
 
 
@@ -28,9 +28,9 @@ void VulkanRender::createInstance()
         uint32_t major = VK_VERSION_MAJOR(apiVersion);
         uint32_t minor = VK_VERSION_MINOR(apiVersion);
         uint32_t patch = VK_VERSION_PATCH(apiVersion);
-        NE_CORE_INFO("Supported Vulkan API version:{} {}.{}.{}", apiVersion, major, minor, patch);
+        YA_CORE_INFO("Supported Vulkan API version:{} {}.{}.{}", apiVersion, major, minor, patch);
     }
-    NE_CORE_ASSERT(apiVersion >= VK_API_VERSION_1_0, "Vulkan API version 1.0 or higher is required!");
+    YA_CORE_ASSERT(apiVersion >= VK_API_VERSION_1_0, "Vulkan API version 1.0 or higher is required!");
     if (apiVersion < VK_API_VERSION_1_1) {
         apiVersion = VK_API_VERSION_1_0;
     }
@@ -45,7 +45,7 @@ void VulkanRender::createInstance()
     }
     // supportedVersion = VK_API_VERSION_1_2;
 
-    NE_CORE_INFO("Using Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(apiVersion), VK_VERSION_MINOR(apiVersion), VK_VERSION_PATCH(apiVersion));
+    YA_CORE_INFO("Using Vulkan API version: {}.{}.{}", VK_VERSION_MAJOR(apiVersion), VK_VERSION_MINOR(apiVersion), VK_VERSION_PATCH(apiVersion));
 
     VkApplicationInfo appInfo{
         .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -93,13 +93,13 @@ void VulkanRender::createInstance()
         requestLayers,
         extensionNames,
         layerNames);
-    NE_CORE_ASSERT(bSupported, "Required feature not supported!");
+    YA_CORE_ASSERT(bSupported, "Required feature not supported!");
 
     if (std::find_if(extensionNames.begin(),
                      extensionNames.end(),
                      [](auto a) { return std::strcmp(a, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0; }) == extensionNames.end())
     {
-        NE_CORE_WARN("VK_EXT_DEBUG_UTILS_EXTENSION_NAME is not supported, some features may not work!");
+        YA_CORE_WARN("VK_EXT_DEBUG_UTILS_EXTENSION_NAME is not supported, some features may not work!");
     }
     else {
         this->bSupportDebugUtils = true;
@@ -122,11 +122,11 @@ void VulkanRender::createInstance()
     // }
 
 
-    NE_CORE_INFO("About to call vkCreateInstance...");
+    YA_CORE_INFO("About to call vkCreateInstance...");
     result = vkCreateInstance(&instanceCI, nullptr, &_instance);
-    NE_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), result);
+    YA_CORE_ASSERT(result == VK_SUCCESS, "failed to create instance! Result: {} {}", static_cast<int32_t>(result), result);
 
-    NE_CORE_INFO("Vulkan instance created successfully!");
+    YA_CORE_INFO("Vulkan instance created successfully!");
 }
 
 void VulkanRender::findPhysicalDevice()
@@ -136,10 +136,10 @@ void VulkanRender::findPhysicalDevice()
     // Enumerate physical devices
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
-    NE_CORE_ASSERT(deviceCount > 0, "Failed to find GPUs with Vulkan support!");
+    YA_CORE_ASSERT(deviceCount > 0, "Failed to find GPUs with Vulkan support!");
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data());
-    NE_CORE_INFO("Found {} physical devices", deviceCount);
+    YA_CORE_INFO("Found {} physical devices", deviceCount);
 
     auto getDeviceTypeStr = [](VkPhysicalDeviceType type) -> std::string {
         switch (type) {
@@ -193,15 +193,15 @@ void VulkanRender::findPhysicalDevice()
     for (const auto &device : devices) {
         vkGetPhysicalDeviceProperties(device, &deviceProperties);
         printf("==========================================\n");
-        NE_CORE_INFO("Found device: {} {}", deviceProperties.deviceName, (uintptr_t)device);
-        NE_CORE_INFO("Device type: {}", getDeviceTypeStr(deviceProperties.deviceType));
-        NE_CORE_INFO("Vendor ID: {}", deviceProperties.vendorID);
-        NE_CORE_INFO("Device ID: {}", deviceProperties.deviceID);
-        NE_CORE_INFO("API version: {}.{}.{}", VK_VERSION_MAJOR(deviceProperties.apiVersion), VK_VERSION_MINOR(deviceProperties.apiVersion), VK_VERSION_PATCH(deviceProperties.apiVersion));
+        YA_CORE_INFO("Found device: {} {}", deviceProperties.deviceName, (uintptr_t)device);
+        YA_CORE_INFO("Device type: {}", getDeviceTypeStr(deviceProperties.deviceType));
+        YA_CORE_INFO("Vendor ID: {}", deviceProperties.vendorID);
+        YA_CORE_INFO("Device ID: {}", deviceProperties.deviceID);
+        YA_CORE_INFO("API version: {}.{}.{}", VK_VERSION_MAJOR(deviceProperties.apiVersion), VK_VERSION_MINOR(deviceProperties.apiVersion), VK_VERSION_PATCH(deviceProperties.apiVersion));
 
 
         int score = getDeviceScore(device);
-        NE_CORE_INFO("Device score: {}", score);
+        YA_CORE_INFO("Device score: {}", score);
 
         // surface format support
         uint32_t formatCount = 0;
@@ -221,7 +221,7 @@ void VulkanRender::findPhysicalDevice()
         std::vector<VkQueueFamilyProperties> families(count);
         vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families.data());
 
-        NE_CORE_INFO("Queue family count: {}", count);
+        YA_CORE_INFO("Queue family count: {}", count);
 
         printf("==========================================\n");
 
@@ -289,26 +289,26 @@ void VulkanRender::findPhysicalDevice()
         }
     }
 
-    NE_CORE_INFO("Selected physical device: {}", (uintptr_t)physicalDevice);
-    NE_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
-    NE_CORE_INFO("Present queue idx {} count: {}", _presentQueueFamily.queueFamilyIndex, _presentQueueFamily.queueCount);
+    YA_CORE_INFO("Selected physical device: {}", (uintptr_t)physicalDevice);
+    YA_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
+    YA_CORE_INFO("Present queue idx {} count: {}", _presentQueueFamily.queueFamilyIndex, _presentQueueFamily.queueCount);
     m_PhysicalDevice = physicalDevice;
 
     vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &_physicalMemoryProperties);
-    // NE_CORE_INFO("Memory Type Count: {}", _memoryProperties.memoryTypeCount);
+    // YA_CORE_INFO("Memory Type Count: {}", _memoryProperties.memoryTypeCount);
 }
 
 void VulkanRender::createSurface()
 {
     bool ok = onCreateSurface.executeIfBound(&(*_instance), &_surface);
-    NE_CORE_ASSERT(ok, "Failed to create surface!");
+    YA_CORE_ASSERT(ok, "Failed to create surface!");
 }
 
 bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
 {
     if (graphicsQueueCount > _graphicsQueueFamily.queueCount)
     {
-        NE_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
+        YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
                       graphicsQueueCount,
                       _graphicsQueueFamily.queueCount,
                       _graphicsQueueFamily.queueFamilyIndex);
@@ -317,7 +317,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
     if (presentQueueCount > _presentQueueFamily.queueCount)
     {
-        NE_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
+        YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
                       presentQueueCount,
                       _presentQueueFamily.queueCount,
                       _presentQueueFamily.queueFamilyIndex);
@@ -388,7 +388,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         layerNames);
     if (!bSupported)
     {
-        NE_CORE_ERROR("Vulkan instance is not suitable!");
+        YA_CORE_ERROR("Vulkan instance is not suitable!");
         return false;
     }
 
@@ -415,14 +415,14 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
 
     VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
-    NE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!");
+    YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!");
 
     for (int i = 0; i < graphicsQueueCount; i++)
     {
         VkQueue queue = VK_NULL_HANDLE;
         vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
         if (queue == VK_NULL_HANDLE) {
-            NE_CORE_ERROR("Failed to get graphics queue!");
+            YA_CORE_ERROR("Failed to get graphics queue!");
             return false;
         }
 
@@ -436,7 +436,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         VkQueue queue = VK_NULL_HANDLE;
         vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);
         if (queue == VK_NULL_HANDLE) {
-            NE_CORE_ERROR("Failed to get present queue!");
+            YA_CORE_ERROR("Failed to get present queue!");
             return false;
         }
         _presentQueues.emplace_back(_presentQueueFamily.queueFamilyIndex, i, queue, true);
@@ -481,7 +481,7 @@ void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBu
     for (int i = 0; i < size; ++i) {
         bool ok = _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, outCommandBuffers[i]);
         if (!ok) {
-            NE_CORE_ERROR("Failed to allocate command buffer for index {}", i);
+            YA_CORE_ERROR("Failed to allocate command buffer for index {}", i);
             return;
         }
     }
@@ -501,8 +501,8 @@ bool VulkanRender::isFeatureSupported(
 {
 
     if (bDebug) {
-        NE_CORE_INFO("=================================");
-        NE_CORE_INFO("Available {} layers:", contextStr);
+        YA_CORE_INFO("=================================");
+        YA_CORE_INFO("Available {} layers:", contextStr);
         std::string line = "\n";
         for (size_t i = 0; i < availableLayers.size(); i += 3) {
             for (size_t j = i; j < std::min(i + 3, availableLayers.size()); ++j) {
@@ -510,8 +510,8 @@ bool VulkanRender::isFeatureSupported(
             }
             line.push_back('\n');
         }
-        NE_CORE_INFO("{}", line);
-        NE_CORE_INFO("Available {} extensions:", contextStr);
+        YA_CORE_INFO("{}", line);
+        YA_CORE_INFO("Available {} extensions:", contextStr);
         line = "\n";
         for (size_t i = 0; i < availableExtensions.size(); i += 3) {
             for (size_t j = i; j < std::min(i + 3, availableExtensions.size()); ++j) {
@@ -519,7 +519,7 @@ bool VulkanRender::isFeatureSupported(
             }
             line.push_back('\n');
         }
-        NE_CORE_INFO("{}", line);
+        YA_CORE_INFO("{}", line);
     }
 
 
@@ -537,7 +537,7 @@ bool VulkanRender::isFeatureSupported(
                              return std::strcmp(ext.extensionName, feat.name.c_str()) == 0;
                          }))
         {
-            NE_CORE_WARN("Extension {} is not supported by the {}", feat.name, contextStr);
+            YA_CORE_WARN("Extension {} is not supported by the {}", feat.name, contextStr);
             if (feat.bRequired) {
                 return false; // If it's a required extension, return false
             }
@@ -558,7 +558,7 @@ bool VulkanRender::isFeatureSupported(
                 }))
         {
 
-            NE_CORE_WARN("Layer {} is not supported by the {}", feat.name, contextStr);
+            YA_CORE_WARN("Layer {} is not supported by the {}", feat.name, contextStr);
             if (feat.bRequired) {
                 return false; // If it's a required layer, return false
             }
@@ -568,14 +568,14 @@ bool VulkanRender::isFeatureSupported(
         outLayerNames.push_back(feat.name.c_str());
     }
 
-    NE_CORE_INFO("=================================");
-    NE_CORE_INFO("Final Extension Names({}):", outExtensionNames.size());
+    YA_CORE_INFO("=================================");
+    YA_CORE_INFO("Final Extension Names({}):", outExtensionNames.size());
     for (size_t i = 0; i < outExtensionNames.size(); ++i) {
-        NE_CORE_INFO("  Final Extension[{}]: {}", i, outExtensionNames[i]);
+        YA_CORE_INFO("  Final Extension[{}]: {}", i, outExtensionNames[i]);
     }
-    NE_CORE_INFO("Final Layer Names({}):", outLayerNames.size());
+    YA_CORE_INFO("Final Layer Names({}):", outLayerNames.size());
     for (size_t i = 0; i < outLayerNames.size(); ++i) {
-        NE_CORE_INFO("  Final Layer[{}]: {}", i, outLayerNames[i]);
+        YA_CORE_INFO("  Final Layer[{}]: {}", i, outLayerNames[i]);
     }
 
 
@@ -629,7 +629,7 @@ void VulkanRender::recreateSwapChain()
     // Recreate all pipelines with new render pass and extent
     // m_pipelineManager.recreateAllPipelines(m_renderPass.getRenderPass(), m_swapChain.getExtent());
 
-    NE_CORE_INFO("Swap chain and all pipelines recreated successfully");
+    YA_CORE_INFO("Swap chain and all pipelines recreated successfully");
 }
 
 
@@ -637,7 +637,7 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
 {
     if (_physicalMemoryProperties.memoryTypeCount == 0)
     {
-        NE_CORE_ERROR("Physical device has no memory types!");
+        YA_CORE_ERROR("Physical device has no memory types!");
         return -1;
     }
 
@@ -648,7 +648,7 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
         }
     }
 
-    NE_CORE_ERROR("No suitable memory type found for properties: {} and memoryTypeBits: {}", (uint32_t)properties, memoryTypeBits);
+    YA_CORE_ERROR("No suitable memory type found for properties: {} and memoryTypeBits: {}", (uint32_t)properties, memoryTypeBits);
     return -1;
 }
 
@@ -664,7 +664,7 @@ void VulkanRender::initWindow(const RenderCreateInfo &ci)
     });
 
     auto sdlWindow = static_cast<SDLWindowProvider *>(_windowProvider);
-    NE_CORE_ASSERT(sdlWindow, "SDLWindowProvider is not initialized correctly");
+    YA_CORE_ASSERT(sdlWindow, "SDLWindowProvider is not initialized correctly");
 
     onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
         return sdlWindow->onCreateVkSurface(instance, surface);

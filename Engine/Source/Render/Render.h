@@ -632,7 +632,7 @@ struct ISwapChain
 struct IRender
 {
     IRender() = default;
-    virtual ~IRender() { NE_CORE_TRACE("IRender::~IRender()"); }
+    virtual ~IRender() { YA_CORE_TRACE("IRender::~IRender()"); }
 
     static IRender *create(const RenderCreateInfo &ci);
 

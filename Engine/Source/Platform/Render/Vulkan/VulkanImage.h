@@ -46,7 +46,7 @@ inline std::shared_ptr<VulkanImage> VulkanImage::create(VulkanRender *render, co
     ret->_render = render;
     ret->_ci     = ci;
 
-    NE_CORE_ASSERT(ret->allocate(), "Failed to create VulkanImage");
+    YA_CORE_ASSERT(ret->allocate(), "Failed to create VulkanImage");
 
     return ret;
 }

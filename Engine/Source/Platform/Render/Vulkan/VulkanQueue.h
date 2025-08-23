@@ -17,7 +17,7 @@ struct VulkanQueue
     VulkanQueue(uint32_t familyIndex, uint32_t index, VkQueue queue, bool canPresent)
         : _familyIndex(familyIndex), _index(index), _handle(queue), _canPresent(canPresent)
     {
-        NE_CORE_ASSERT(_handle != VK_NULL_HANDLE, "Vulkan queue is null!");
+        YA_CORE_ASSERT(_handle != VK_NULL_HANDLE, "Vulkan queue is null!");
     }
     ~VulkanQueue() = default;
 

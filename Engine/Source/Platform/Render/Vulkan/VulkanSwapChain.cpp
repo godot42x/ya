@@ -18,7 +18,7 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(VkSurf
         }
     }
 
-    NE_CORE_WARN("Preferred surface format {} and color space {} not found, using first format",
+    YA_CORE_WARN("Preferred surface format {} and color space {} not found, using first format",
                  std::to_string(preferredSurfaceFormat.format),
                  std::to_string(preferredSurfaceFormat.colorSpace));
 
@@ -36,29 +36,29 @@ VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentM
     }
 
     // If preferred mode not found, try fallback strategies
-    NE_CORE_WARN("Preferred present mode {} not available", std::to_string(preferredMode));
+    YA_CORE_WARN("Preferred present mode {} not available", std::to_string(preferredMode));
 
     // If we wanted FIFO (VSync) but it's not available, warn user
     if (preferredMode == VK_PRESENT_MODE_FIFO_KHR) {
-        NE_CORE_WARN("VK_PRESENT_MODE_FIFO_KHR not supported! VSync may not work correctly.");
+        YA_CORE_WARN("VK_PRESENT_MODE_FIFO_KHR not supported! VSync may not work correctly.");
 
         // Try FIFO_RELAXED as fallback for VSync
         for (const auto &modes : presentModes) {
             if (modes == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
-                NE_CORE_INFO("Using VK_PRESENT_MODE_FIFO_RELAXED_KHR as fallback");
+                YA_CORE_INFO("Using VK_PRESENT_MODE_FIFO_RELAXED_KHR as fallback");
                 return modes;
             }
         }
     }
 
     // Log available modes for debugging
-    NE_CORE_INFO("Available present modes:");
+    YA_CORE_INFO("Available present modes:");
     for (const auto &modes : presentModes) {
-        NE_CORE_INFO("  - {}", std::to_string(modes));
+        YA_CORE_INFO("  - {}", std::to_string(modes));
     }
 
     // Use first available mode as last resort
-    NE_CORE_WARN("Using first available present mode: {}", std::to_string(presentModes[0]));
+    YA_CORE_WARN("Using first available present mode: {}", std::to_string(presentModes[0]));
     return presentModes[0];
 }
 
@@ -161,15 +161,15 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
     _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
 
-    NE_CORE_INFO("Using chosen surface format: {} with color space: {}",
+    YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
                  std::to_string(preferred.format),
                  std::to_string(preferred.colorSpace));
     if (presentMode != _presentMode) {
-        NE_CORE_ERROR("Requested present mode: {}, Actually using: {}",
+        YA_CORE_ERROR("Requested present mode: {}, Actually using: {}",
                       std::to_string(presentMode),
                       std::to_string(_presentMode));
     }
-    NE_CORE_INFO("Current extent is: {}x{}",
+    YA_CORE_INFO("Current extent is: {}x{}",
                  _supportDetails.capabilities.currentExtent.width,
                  _supportDetails.capabilities.currentExtent.height);
 
@@ -255,12 +255,12 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
     VkResult result = vkCreateSwapchainKHR(_render->getLogicalDevice(), &vkSwapchainCI, nullptr, &m_swapChain);
     if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Swap chain creation failed {}", result);
+        YA_CORE_ERROR("Swap chain creation failed {}", result);
         return false;
     }
-    // NE_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
+    // YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
 
-    NE_CORE_INFO("-- Create  swapchain success {}\n\told swapchain {}\n\tmin image count {}\n\tformat {}\n\tcolor space {}\n\tpresent mode {}\n\tsharing mode {}",
+    YA_CORE_INFO("-- Create  swapchain success {}\n\told swapchain {}\n\tmin image count {}\n\tformat {}\n\tcolor space {}\n\tpresent mode {}\n\tsharing mode {}",
                  (uintptr_t)m_swapChain,
                  (uintptr_t)oldSwapchain,
                  _minImageCount,
@@ -276,7 +276,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
-    NE_CORE_INFO("Swapchain finally created with {} images", m_images.size());
+    YA_CORE_INFO("Swapchain finally created with {} images", m_images.size());
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,
@@ -304,11 +304,11 @@ VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence,
     else
     {
         if (result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR) {
-            NE_CORE_ERROR("Failed to acquire next image: {}", result);
+            YA_CORE_ERROR("Failed to acquire next image: {}", result);
             return result;
         }
         else {
-            NE_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
+            YA_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
         }
     }
     _curImageIndex = outImageIdx;
@@ -332,10 +332,10 @@ VkResult VulkanSwapChain::presentImage(uint32_t idx, std::vector<VkSemaphore> wa
     VkResult ret = vkQueuePresentKHR(_render->getPresentQueues()[0].getHandle(), &presentInfo);
     if (ret != VK_SUCCESS) {
         if (ret == VK_SUBOPTIMAL_KHR || ret == VK_ERROR_OUT_OF_DATE_KHR) {
-            NE_CORE_WARN("Swap chain is out of date or suboptimal {}: {}", idx, ret);
+            YA_CORE_WARN("Swap chain is out of date or suboptimal {}: {}", idx, ret);
         }
         else {
-            NE_CORE_ERROR("Failed to present swap chain image {}: {}", idx, ret);
+            YA_CORE_ERROR("Failed to present swap chain image {}: {}", idx, ret);
         }
     }
     return ret;

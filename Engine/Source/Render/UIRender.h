@@ -36,7 +36,7 @@ enum T {
 
 inline bool check(T &flags) {
   if (flags & SelfOnly && (flags & Collapsed || flags & Hidden)) {
-    NE_CORE_ASSERT(false, "SelfOnly cannot be set with Collapsed or Hidden");
+    YA_CORE_ASSERT(false, "SelfOnly cannot be set with Collapsed or Hidden");
     return false;
   }
 

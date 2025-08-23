@@ -33,7 +33,7 @@ class IWindowProvider
 
     virtual ~IWindowProvider()
     {
-        NE_CORE_TRACE("WindowProvider::~WindowProvider()");
+        YA_CORE_TRACE("WindowProvider::~WindowProvider()");
     }
 
     // TODO: support multiple windows
@@ -44,7 +44,7 @@ class IWindowProvider
     virtual void getWindowSize(int &width, int &height) = 0;
     virtual bool setWindowSize(int width, int height)
     {
-        NE_CORE_ERROR("setWindowSize not implemented in IWindowProvider");
+        YA_CORE_ERROR("setWindowSize not implemented in IWindowProvider");
         return false;
     }
 };
@@ -61,7 +61,7 @@ class SDLWindowProvider : public IWindowProvider
     SDLWindowProvider() = default;
     ~SDLWindowProvider() override
     {
-        NE_CORE_INFO("SDLWindowProvider::~SDLWindowProvider()");
+        YA_CORE_INFO("SDLWindowProvider::~SDLWindowProvider()");
         if (nativeWindowHandle) {
             SDL_DestroyWindow(static_cast<SDL_Window *>(nativeWindowHandle));
             SDL_Quit();
@@ -71,7 +71,7 @@ class SDLWindowProvider : public IWindowProvider
 
     bool init() override
     {
-        NE_CORE_INFO("SDLWindowProvider::init()");
+        YA_CORE_INFO("SDLWindowProvider::init()");
         if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
             return false;
@@ -81,7 +81,7 @@ class SDLWindowProvider : public IWindowProvider
     {
         // TODO: handle dpi
         dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
-        NE_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
+        YA_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
         // double scale = dpiScale * ci.scale;
         int w = (int)(ci.width);
         int h = (int)(ci.height);
@@ -104,7 +104,7 @@ class SDLWindowProvider : public IWindowProvider
         }
 
         SDL_Window *window = SDL_CreateWindow(ci.title.c_str(), w, h, flags);
-        NE_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
+        YA_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
         nativeWindowHandle = window;
 
         return true;
@@ -112,7 +112,7 @@ class SDLWindowProvider : public IWindowProvider
 
     void destroy() override
     {
-        NE_CORE_INFO("SDLWindowProvider::destroy()");
+        YA_CORE_INFO("SDLWindowProvider::destroy()");
         if (nativeWindowHandle) {
             SDL_DestroyWindow(static_cast<SDL_Window *>(nativeWindowHandle));
             nativeWindowHandle = nullptr;
@@ -130,7 +130,7 @@ class SDLWindowProvider : public IWindowProvider
             SDL_SetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), width, height);
             return true;
         }
-        NE_CORE_ERROR("Failed to set window size: native window handle is null.");
+        YA_CORE_ERROR("Failed to set window size: native window handle is null.");
         return false;
     }
 
@@ -142,17 +142,17 @@ class SDLWindowProvider : public IWindowProvider
                                       nullptr, // if needed
                                       surface))
         {
-            NE_CORE_ERROR("Failed to create Vulkan surface: {}", SDL_GetError());
+            YA_CORE_ERROR("Failed to create Vulkan surface: {}", SDL_GetError());
             return false;
         }
-        NE_CORE_INFO("Vulkan surface created successfully.");
+        YA_CORE_INFO("Vulkan surface created successfully.");
         return true;
     }
 
     void onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
     {
         SDL_Vulkan_DestroySurface(instance, *surface, nullptr); // if needed
-        NE_CORE_INFO("Vulkan surface destroyed successfully.");
+        YA_CORE_INFO("Vulkan surface destroyed successfully.");
     }
 
     std::vector<const char *> onGetVkInstanceExtensions()
@@ -161,7 +161,7 @@ class SDLWindowProvider : public IWindowProvider
         // VK_KHR_win32_surface
         const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&count);
         if (!extensions) {
-            NE_CORE_ERROR("Failed to get Vulkan instance extensions: {}", SDL_GetError());
+            YA_CORE_ERROR("Failed to get Vulkan instance extensions: {}", SDL_GetError());
             return {};
         }
         return std::vector<const char *>(extensions, extensions + count);

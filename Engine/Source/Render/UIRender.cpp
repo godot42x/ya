@@ -101,7 +101,7 @@ static bool CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to create buffer");
+        YA_CORE_ERROR("Failed to create buffer");
         return false;
     }
 
@@ -114,7 +114,7 @@ static bool CreateBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
     allocInfo.memoryTypeIndex = VulkanUtils::findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to allocate buffer memory");
+        YA_CORE_ERROR("Failed to allocate buffer memory");
         return false;
     }
 
@@ -220,13 +220,13 @@ const UIButton::ButtonStyle &UIButton::getCurrentStyle() const
 bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
 {
     if (s_data.isInitialized) {
-        NE_CORE_WARN("F2DRender already initialized");
+        YA_CORE_WARN("F2DRender already initialized");
         return true;
     }
 
     auto _render = GetVulkanRenderer();
     if (!_render) {
-        NE_CORE_ERROR("Failed to get Vulkan renderer");
+        YA_CORE_ERROR("Failed to get Vulkan renderer");
         return false;
     }
 
@@ -251,7 +251,7 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    s_data.vertexBuffer,
                                    s_data.vertexBufferMemory)) {
-        NE_CORE_ERROR("Failed to create vertex buffer");
+        YA_CORE_ERROR("Failed to create vertex buffer");
         return false;
     }
 
@@ -260,7 +260,7 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
     // Index buffer
     VkDeviceSize indexBufferSize = maxIndices * sizeof(uint32_t);
     if (!CreateBuffer(device, physicalDevice, indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, s_data.indexBuffer, s_data.indexBufferMemory)) {
-        NE_CORE_ERROR("Failed to create index buffer");
+        YA_CORE_ERROR("Failed to create index buffer");
         return false;
     }
 
@@ -269,7 +269,7 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
     // Uniform buffer
     VkDeviceSize uniformBufferSize = sizeof(Render2DData::CameraData);
     if (!CreateBuffer(device, physicalDevice, uniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, s_data.uniformBuffer, s_data.uniformBufferMemory)) {
-        NE_CORE_ERROR("Failed to create uniform buffer");
+        YA_CORE_ERROR("Failed to create uniform buffer");
         return false;
     }
 
@@ -279,7 +279,7 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
     // This would involve creating a dedicated 2D rendering pipeline
 
     s_data.isInitialized = true;
-    NE_CORE_INFO("F2DRender initialized successfully");
+    YA_CORE_INFO("F2DRender initialized successfully");
 
     return true;
 }
@@ -287,12 +287,12 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
 void F2DRender::shutdown()
 {
     if (!s_data.isInitialized) {
-        NE_CORE_WARN("F2DRender not initialized");
+        YA_CORE_WARN("F2DRender not initialized");
         return;
     }
     auto _render = GetVulkanRenderer();
     if (!_render) {
-        NE_CORE_ERROR("Failed to get Vulkan renderer");
+        YA_CORE_ERROR("Failed to get Vulkan renderer");
         return;
     }
 
@@ -324,12 +324,12 @@ void F2DRender::shutdown()
 void F2DRender::beginFrame(const glm::mat4 &projectionMatrix)
 {
     if (!s_data.isInitialized) {
-        NE_CORE_ERROR("F2DRender not initialized");
+        YA_CORE_ERROR("F2DRender not initialized");
         return;
     }
 
     if (s_data.isFrameBegun) {
-        NE_CORE_WARN("Frame already begun");
+        YA_CORE_WARN("Frame already begun");
         return;
     }
 
@@ -350,7 +350,7 @@ void F2DRender::beginFrame(const glm::mat4 &projectionMatrix)
 void F2DRender::endFrame()
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_WARN("Frame not begun");
+        YA_CORE_WARN("Frame not begun");
         return;
     }
 
@@ -404,7 +404,7 @@ void F2DRender::drawQuad(const glm::vec2 &position, const glm::vec2 &size,
                          uint32_t textureId)
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_ERROR("Begin frame must be called before drawing");
+        YA_CORE_ERROR("Begin frame must be called before drawing");
         return;
     }
 
@@ -463,7 +463,7 @@ void F2DRender::drawCircle(const glm::vec2 &center, float radius,
                            const glm::vec4 &color)
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_ERROR("Begin frame must be called before drawing");
+        YA_CORE_ERROR("Begin frame must be called before drawing");
         return;
     }
 
@@ -521,7 +521,7 @@ void F2DRender::drawText(const std::string &text, const glm::vec2 &position,
                          uint32_t fontTextureId)
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_ERROR("Begin frame must be called before drawing");
+        YA_CORE_ERROR("Begin frame must be called before drawing");
         return;
     }
 
@@ -567,12 +567,12 @@ void F2DRender::drawImage(const std::shared_ptr<Texture2D> &texture,
                           bool maintainAspectRatio)
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_ERROR("Begin frame must be called before drawing");
+        YA_CORE_ERROR("Begin frame must be called before drawing");
         return;
     }
 
     if (!texture) {
-        NE_CORE_ERROR("Texture is null");
+        YA_CORE_ERROR("Texture is null");
         return;
     }
 
@@ -642,7 +642,7 @@ void F2DRender::drawLine(const glm::vec2 &start, const glm::vec2 &end,
                          float thickness)
 {
     if (!s_data.isFrameBegun) {
-        NE_CORE_ERROR("Begin frame must be called before drawing");
+        YA_CORE_ERROR("Begin frame must be called before drawing");
         return;
     }
 

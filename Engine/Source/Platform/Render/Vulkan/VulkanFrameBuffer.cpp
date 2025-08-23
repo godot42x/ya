@@ -33,10 +33,10 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
     };
     VkResult result = vkCreateFramebuffer(render->getLogicalDevice(), &createInfo, nullptr, &_framebuffer);
     if (result != VK_SUCCESS) {
-        NE_CORE_ERROR("Failed to create framebuffer: {}", result);
+        YA_CORE_ERROR("Failed to create framebuffer: {}", result);
         return false;
     }
-    NE_CORE_INFO("Created framebuffer: {} with {} attachments", (uintptr_t)_framebuffer, _imageViews.size());
+    YA_CORE_INFO("Created framebuffer: {} with {} attachments", (uintptr_t)_framebuffer, _imageViews.size());
 
     return true;
 }
