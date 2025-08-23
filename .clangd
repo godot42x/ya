@@ -20,6 +20,7 @@ Diagnostics:
                 cppcoreguidelines-avoid-c-arrays,
                 cppcoreguidelines-pro-type-reinterpret-cast,
                 cppcoreguidelines-pro-type-static-cast-downcast,
+                cppcoreguidelines-macro-usage,
                 #
                 modernize-use-trailing-return-type,
                 #

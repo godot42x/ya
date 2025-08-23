@@ -9,8 +9,11 @@
 
 #include "../Core/Log.h"
 
+#include "Core/Debug/Instrumentor.h"
 #include "reflect.cc/enum"
 #include <spirv_cross/spirv_cross.hpp>
+#include <utility>
+
 
 
 namespace std
@@ -128,18 +131,20 @@ struct GLSLShader : public Shader
     uint32_t m_ShaderID{0};
 };
 
-struct ShaderScriptProcessor
+struct IShaderProcessor
 {
-    friend class ShaderScriptProcessorFactory;
+    friend class ShaderProcessorFactory;
+    using stdpath = std::filesystem::path;
 
   protected:
 
-    std::string shaderStoragePath       = "Shader/";
-    std::string intermediateStoragePath = "Intermediate/Shader/";
+    stdpath     shaderStoragePath       = "Engine/Shader/";
+    stdpath     intermediateStoragePath = "Intermediate/Shader/";
     std::string cachedFileSuffix;
 
   public:
-    std::string curFileName;
+    std::string           curFileName;
+    std::filesystem::path curFilePath;
 
   public:
     using ir_t          = uint32_t;
@@ -158,10 +163,10 @@ struct ShaderScriptProcessor
 };
 
 
-struct GLSLScriptProcessor : public ShaderScriptProcessor
+struct GLSLProcessor : public IShaderProcessor
 {
 
-    friend class ShaderScriptProcessorFactory;
+    friend class ShaderProcessorFactory;
 
 
   private:
@@ -170,7 +175,7 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     bool bValid              = false;
 
   protected:
-    // GLSLScriptProcessor() {}
+    // GLSLProcessor() {}
 
   public:
 
@@ -186,16 +191,55 @@ struct GLSLScriptProcessor : public ShaderScriptProcessor
     std::filesystem::path GetCachePath(bool bVulkan, EShaderStage::T stage);
     std::filesystem::path GetCacheMetaPath();
 
-    bool                                             processCombinedSource(std::string_view filename, stage2spirv_t &outSpvMap);
-    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(std::string_view fullPath);
+
+    bool                                             processCombinedSource(const stdpath &filepath, stage2spirv_t &outSpvMap);
+    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath &filepath);
 
     bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap);
 };
 
 
-struct ShaderScriptProcessorFactory
+struct ShaderStorage
 {
-    using Self = ShaderScriptProcessorFactory;
+    std::shared_ptr<IShaderProcessor>                                _processor;
+    std::unordered_map<std::string, IShaderProcessor::stage2spirv_t> _shaderCache;
+
+    ShaderStorage(std::shared_ptr<IShaderProcessor> processor)
+        : _processor(std::move(processor)) {}
+
+
+    [[nodiscard]] std::shared_ptr<IShaderProcessor> getProcessor() const { return _processor; }
+
+    [[nodiscard]] const IShaderProcessor::stage2spirv_t *getCache(const std::string &key) const
+    {
+        auto it = _shaderCache.find(key);
+        if (it == _shaderCache.end()) {
+            NE_CORE_WARN("Shader not found in cache: {}", key);
+            return nullptr;
+        }
+        return &it->second;
+    }
+
+    const IShaderProcessor::stage2spirv_t *load(const std::string &shaderName)
+    {
+        if (_shaderCache.find(shaderName) != _shaderCache.end()) {
+            NE_CORE_INFO("Shader already in cache: {}", shaderName);
+        }
+        YA_PROFILE_SCOPE(std::format("ShaderStorage::load {}", shaderName).c_str());
+        if (auto opt = getProcessor()->process(shaderName)) {
+            _shaderCache[shaderName.data()] = std::move(*opt);
+        }
+        else {
+            throw std::runtime_error(std::format("Failed to process shader: {}", shaderName));
+        }
+        return &_shaderCache.at(shaderName);
+    }
+};
+
+
+struct ShaderProcessorFactory
+{
+    using Self = ShaderProcessorFactory;
 
     enum EProcessorType
     {
@@ -233,15 +277,15 @@ struct ShaderScriptProcessorFactory
 
         switch (processorType) {
         case GLSL:
-            processor = std::make_shared<GLSLScriptProcessor>();
+            processor = std::make_shared<GLSLProcessor>();
             break;
         case HLSL:
             throw std::runtime_error("HLSL not supported yet");
             break;
         };
 
-        processor->shaderStoragePath = shaderStoragePath;
-        processor->intermediateStoragePath  = cachedStoragePath;
+        processor->shaderStoragePath       = shaderStoragePath;
+        processor->intermediateStoragePath = cachedStoragePath;
 
         return processor;
     }

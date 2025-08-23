@@ -169,7 +169,7 @@ end
 --         local bAbort = false
 
 --         local executor = function(fileName)
---             -- Lua version of GLSLScriptProcessor::preprocessCombinedSource (simplified)
+--             -- Lua version of GLSLProcessor::preprocessCombinedSource (simplified)
 --             local function preprocessCombinedSource(filepath)
 --                 -- Read file content
 --                 -- print("Reading shader file:", filepath)

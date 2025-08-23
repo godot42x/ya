@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Shader.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
 #include <glm/glm.hpp>
@@ -84,6 +85,7 @@ struct App
     VulkanRenderPass *m_triangleRenderPass = nullptr;
     VulkanRenderPass *m_2DRenderPass       = nullptr;
 
+    std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
 
 
     InputManager inputManager;
@@ -130,12 +132,14 @@ struct App
 
     void onDraw(float dt);
 
-    IRender *getRender() { return _render; }
-    template <typename T>
-    T          *getRender() { return static_cast<T *>(_render); }
     static App *get() { return _instance; }
 
-    [[nodiscard]] const AppCreateInfo &getCI() const { return _ci; }
+    template <typename T>
+    [[nodiscard]] T       *getRender() { return static_cast<T *>(_render); }
+    [[nodiscard]] IRender *getRender() { return _render; }
+
+    [[nodiscard]] const AppCreateInfo           &getCI() const { return _ci; }
+    [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
 
   private:

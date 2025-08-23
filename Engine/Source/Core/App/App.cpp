@@ -186,7 +186,19 @@ void App::init()
     FileSystem::init();
     NameRegistry::init(); // Initialize FName registry
 
-    currentRenderAPI = ERenderAPI::Vulkan;
+    currentRenderAPI          = ERenderAPI::Vulkan;
+    std::string currentShader = "Test/HelloTexture.glsl";
+
+    auto shaderProcessor = ShaderProcessorFactory()
+                               .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
+                               .withShaderStoragePath("Engine/Shader/GLSL")
+                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
+                               .FactoryNew<GLSLProcessor>();
+
+    _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
+    _shaderStorage->load(currentShader);
+
+
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
@@ -311,6 +323,7 @@ void App::init()
             },
         },
         .descriptorSetLayouts = {
+            // set 0
             GraphicsPipelineLayoutCreateInfo::DescriptorSetLayout{
                 .index    = 0,
                 .bindings = {
@@ -321,7 +334,6 @@ void App::init()
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                     },
-                    // samplers array
                     GraphicsPipelineLayoutCreateInfo::DescriptorBinding{
                         .binding         = 1,
                         .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
@@ -359,7 +371,7 @@ void App::init()
     pipeline->recreate(GraphicsPipelineCreateInfo{
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
-            .shaderName        = "Test/HelloTexture.glsl",
+            .shaderName        = currentShader,
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{

@@ -1,5 +1,6 @@
 #include <array>
 
+#include "Core/App/App.h"
 #include "Core/Log.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
@@ -166,16 +167,16 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
-    auto stage2Spirv_opt = _shaderProcessor->process(_ci.shaderCreateInfo.shaderName);
-    if (!stage2Spirv_opt.has_value()) {
-        NE_CORE_ERROR("Failed to process shader: {}", _ci.shaderCreateInfo.shaderName);
-        return;
+    auto shaderStorage = ya::App::get()->getShaderStorage();
+    auto stage2Spirv   = shaderStorage->getCache(_ci.shaderCreateInfo.shaderName);
+    if (!stage2Spirv) {
+        stage2Spirv = shaderStorage->load(_ci.shaderCreateInfo.shaderName);
     }
-    auto &stage2Spirv = stage2Spirv_opt.value();
+    NE_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderCreateInfo.shaderName);
 
     // Create shader modules
-    auto vertShaderModule = createShaderModule(stage2Spirv[EShaderStage::Vertex]);
-    auto fragShaderModule = createShaderModule(stage2Spirv[EShaderStage::Fragment]);
+    auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
+    auto fragShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Fragment));
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
         VkPipelineShaderStageCreateInfo{
@@ -201,7 +202,7 @@ void VulkanPipeline::createPipelineInternal()
 
     if (_ci.shaderCreateInfo.bDeriveFromShader) {
         // Get vertex input info from shader reflection
-        auto vertexReflectInfo = _shaderProcessor->reflect(EShaderStage::Vertex, stage2Spirv[EShaderStage::Vertex]);
+        auto vertexReflectInfo = shaderStorage->getProcessor()->reflect(EShaderStage::Vertex, stage2Spirv->at(EShaderStage::Vertex));
 
         auto spirvType2VulkanFormat = [](const auto &type) -> VkFormat {
             if (type.vecsize == 3 && type.basetype == 0)

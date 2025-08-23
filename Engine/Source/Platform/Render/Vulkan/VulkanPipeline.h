@@ -59,7 +59,6 @@ struct VulkanPipeline
     // std::vector<std::shared_ptr<VulkanTexture2D>> textures;
 
   private:
-    std::shared_ptr<GLSLScriptProcessor> _shaderProcessor;
 
 
     GraphicsPipelineCreateInfo _ci;
@@ -71,14 +70,9 @@ struct VulkanPipeline
     ~VulkanPipeline() = default;
     VulkanPipeline(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *pipelineLayout)
     {
-        _render          = render;
-        _renderPass      = renderPass;
-        _pipelineLayout  = pipelineLayout;
-        _shaderProcessor = ShaderScriptProcessorFactory()
-                               .withProcessorType(ShaderScriptProcessorFactory::EProcessorType::GLSL)
-                               .withShaderStoragePath("Engine/Shader/GLSL")
-                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-                               .FactoryNew<GLSLScriptProcessor>();
+        _render         = render;
+        _renderPass     = renderPass;
+        _pipelineLayout = pipelineLayout;
         queryPhysicalDeviceLimits(); // maxTextureSlots
     }
 

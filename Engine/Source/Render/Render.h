@@ -488,6 +488,22 @@ enum T
 };
 }
 
+
+struct DescriptorBinding
+{
+    uint32_t                   binding         = 0;
+    EPipelineDescriptorType::T descriptorType  = EPipelineDescriptorType::UniformBuffer;
+    uint32_t                   descriptorCount = 1;
+    EShaderStage::T            stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment;
+};
+
+struct DescriptorSetLayout
+{
+    int32_t                        index = -1;
+    std::vector<DescriptorBinding> bindings;
+};
+
+
 struct GraphicsPipelineLayoutCreateInfo
 {
     struct PushConstant
@@ -495,22 +511,6 @@ struct GraphicsPipelineLayoutCreateInfo
         uint32_t        offset     = 0;
         uint32_t        size       = 0;
         EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
-    };
-
-
-
-    struct DescriptorBinding
-    {
-        uint32_t                   binding         = 0;
-        EPipelineDescriptorType::T descriptorType  = EPipelineDescriptorType::UniformBuffer;
-        uint32_t                   descriptorCount = 1;
-        EShaderStage::T            stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment;
-    };
-
-    struct DescriptorSetLayout
-    {
-        int32_t                        index = -1;
-        std::vector<DescriptorBinding> bindings;
     };
 
 

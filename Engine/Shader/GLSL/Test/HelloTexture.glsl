@@ -10,11 +10,11 @@ layout(location = 2) in vec4 aNormal;
 layout(set=0, binding =0, std140) uniform  GBuffer{
     mat4 projMat;
     mat4 viewMat;
-}gBuffer;
+}uGBuffer;
 
 layout(set=0, binding =1, std140) uniform  InstanceBuffer{
     mat4 modelMat;
-} instanceBuffer;
+} uInstanceBuffer;
 
 
 out gl_PerVertex {
@@ -34,13 +34,13 @@ void main()
     );
     
     // 为每个实例创建独立的Model矩阵
-    mat4 instanceModel = instanceBuffer.modelMat;
+    mat4 instanceModel = uInstanceBuffer.modelMat;
     instanceModel[3].xyz += instanceOffset;
     
     //  vulkan origin point at left-top, opengl origin point at left-bottom
     // if you want to flip the Y axis, you can use this:
     // instanceModel[1][1] *= -1.0;
-    vec4 worldPos = gBuffer.projMat*  gBuffer.viewMat * instanceModel * vec4(aPos, 1.0);
+    vec4 worldPos = uGBuffer.projMat*  uGBuffer.viewMat * instanceModel * vec4(aPos, 1.0);
     gl_Position =  worldPos;
 
     
@@ -60,8 +60,8 @@ void main()
     vTexCoord = aTexCoord;
 }
 
-////////////////////////
-#next_shader_stage
+// token: split-stage
+
 #type fragment
 #version 450
 

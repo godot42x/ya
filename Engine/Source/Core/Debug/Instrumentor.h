@@ -3,44 +3,21 @@
 //
 
 #ifndef HAZEL_INSTRUMENTOR_H
-#define HAZEL_INSTRUMENTOR_H
+    #define HAZEL_INSTRUMENTOR_H
 
-#include <chrono>
-#include <fstream>
-#include <string>
-#include <thread>
-
-
-#include "Core/Base.h"
+    #include <chrono>
+    #include <fstream>
+    #include <string>
+    #include <thread>
 
 
-// TODO: Stores data for drawing on overlay
-#ifndef PROFILING_WITH_OVERLAY
-#endif
+    #include "Core/Base.h"
 
 
-#if _WIN32
-    #define THE_PRETTY_FUNCTION __FUNCSIG__
-#elif __linux__
-    #define THE_PRETTY_FUNCTION __PRETTY_FUNCTION__
-#else
-    #error Need your implementation
-#endif
-
-#if ENABLE_PROFILING
-    #define HZ_PROFILE_SESSION_BEGIN(session_name, filepath) ::hazel::Instrumentor::Get().BeginSession(session_name, filepath)
-    #define HZ_PROFILE_SESSION_END() ::hazel::Instrumentor::Get().EndSession()
-    #define HZ_PROFILE_SCOPE(name) ::hazel::InstrumentationTimer timer##__LINE__(name)
-    #define HZ_PROFILE_FUNCTION() HZ_PROFILE_SCOPE(THE_PRETTY_FUNCTION)
-#else
-    #define HZ_PROFILE_SESSION_BEGIN(session_name, filepath)
-    #define HZ_PROFILE_SESSION_END()
-    #define HZ_PROFILE_SCOPE(name)
-    #define HZ_PROFILE_FUNCTION() ;
-#endif
 
 namespace ya
 {
+
 
 
 struct ProfileResult
@@ -81,37 +58,68 @@ class Instrumentor
 
 class InstrumentationTimer
 {
-    const char                                                 *m_Name;
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_StartTimePoint;
-    bool                                                        m_Stopped = false;
+    using clock_t = std::chrono::steady_clock;
+
+    std::string                      _name;
+    std::chrono::time_point<clock_t> _startTime;
+    bool                             bStop = false;
 
   public:
-    explicit InstrumentationTimer(const char *name)
-        : m_Name(name), m_Stopped(false)
+    explicit InstrumentationTimer(const char *name, std::source_location loc = std::source_location::current())
     {
-        m_StartTimePoint = std::chrono::high_resolution_clock::now();
+        // TODO: optimize the name performance
+        _name      = std::format("{}:{} ({})", loc.file_name(), loc.line(), name);
+        _startTime = std::chrono::high_resolution_clock::now();
     }
 
     ~InstrumentationTimer()
     {
-        if (!m_Stopped)
-            Stop();
+        if (!bStop) {
+            stop();
+        }
     }
 
-    void Stop()
+    void stop()
     {
-        auto end_tp = std::chrono::high_resolution_clock::now();
+        auto dur = clock_t::now() - _startTime;
+        auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
 
-        long long start = std::chrono::time_point_cast<std::chrono::microseconds>(m_StartTimePoint).time_since_epoch().count();
-        long long end   = std::chrono::time_point_cast<std::chrono::microseconds>(end_tp).time_since_epoch().count();
 
         uint32_t threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
-        Instrumentor::Get().WriteProfile({.Name = m_Name, .Start = start, .End = end, .ThreadID = threadID});
+        // Instrumentor::Get().WriteProfile({.Name = _name, .Start = start, .End = end, .ThreadID = threadID});
+        NE_CORE_DEBUG("Profile: [{0}] {1}ms,  on thread {2}", _name, ms, threadID);
 
-        m_Stopped = true;
+        bStop = true;
     }
 };
 
 }; // namespace ya
 
+#endif
+
+
+// TODO: Stores data for drawing on overlay
+#ifndef PROFILING_WITH_OVERLAY
+#endif
+
+
+#if _WIN32
+    #define THE_PRETTY_FUNCTION __FUNCSIG__
+#elif __linux__
+    #define THE_PRETTY_FUNCTION __PRETTY_FUNCTION__
+#else
+    #error Need your implementation
+#endif
+
+#define ENABLE_PROFILING 1
+#if ENABLE_PROFILING
+    #define YA_PROFILE_SESSION_BEGIN(session_name, filepath) ::ya::Instrumentor::Get().BeginSession(session_name, filepath)
+    #define YA_PROFILE_SESSION_END() ::ya::Instrumentor::Get().EndSession()
+    #define YA_PROFILE_SCOPE(name) ::ya::InstrumentationTimer timer##__LINE__(name)
+    #define YA_PROFILE_FUNCTION() YA_PROFILE_SCOPE(THE_PRETTY_FUNCTION)
+#else
+    #define YA_PROFILE_SESSION_BEGIN(session_name, filepath)
+    #define YA_PROFILE_SESSION_END()
+    #define YA_PROFILE_SCOPE(name)
+    #define YA_PROFILE_FUNCTION() ;
 #endif
