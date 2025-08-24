@@ -63,10 +63,12 @@ struct UboInstanceBuffer
 VulkanPipeline *pipeline = nullptr;
 
 
+// unlike glfw have double buffer, we only need one frameFence
+uint32_t flightFrameSize = 1;
 // 每帧需要独立的同步对象
-std::vector<VkSemaphore> imageAvailableSemaphores;  // 每帧的图像可用信号量
-std::vector<VkSemaphore> submittedSignalSemaphores; // 每张swapchain image渲染完成信号量
-std::vector<VkFence>     frameFences;               // 每帧的CPU-GPU同步栅栏
+std::vector<VkSemaphore> frameImageAvailableSemaphores; // 每帧的图像可用信号量
+std::vector<VkFence>     frameFences;                   // 每帧的CPU-GPU同步栅栏
+std::vector<VkSemaphore> submittedSignalSemaphores;     // 每张swapchain image渲染完成信号量
 
 
 // std::vector<std::shared_ptr<VulkanImage>> depthImages;
@@ -77,7 +79,6 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 static uint32_t currentFrameIdx = 0;
 int             fps             = 60;
 
-uint32_t frameCount = 2; // CPU queue can submit 2 frames at most
 
 
 std::shared_ptr<ya::Mesh> cubeMesh;
@@ -241,6 +242,8 @@ void App::init(AppCreateInfo ci)
     };
     _render        = IRender::create(renderCI);
     auto *vkRender = dynamic_cast<VulkanRender *>(_render);
+    // assume the size as we want
+    _windowSize = glm::vec2((float)renderCI.swapchainCI.width, (float)renderCI.swapchainCI.height);
 
 
     /**
@@ -351,6 +354,7 @@ void App::init(AppCreateInfo ci)
                 .offset     = 0,
                 .size       = sizeof(char) * 256, // dynamical allocated buffer
                 .stageFlags = EShaderStage::Fragment,
+
             },
         },
         .descriptorSetLayouts = {
@@ -419,12 +423,16 @@ void App::init(AppCreateInfo ci)
     descriptorPool       = std::make_shared<VulkanDescriptorPool>(vkRender, 1, vkPoolSizes);
     descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[0]);
     descriptorPool->allocateDescriptorSets({descriptorSetLayout0}, descriptorSets);
+    for (int i = 0; i < descriptorSets.size(); i++) {
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, descriptorSets[i], std::format("Set_{}", i).c_str());
+    }
 
     defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
-    defaultPipelineLayout->create(pipelineLayout.pushConstants,
-                                  {
-                                      descriptorSetLayout0->getHandle(),
-                                  }); // we create the descriptor set layout outside
+    defaultPipelineLayout->create(
+        pipelineLayout.pushConstants,
+        {
+            descriptorSetLayout0->getHandle(),
+        });
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, defaultPipelineLayout->getHandle(), "DefaultPipelineLayout");
 
 #pragma endregion
@@ -479,7 +487,7 @@ void App::init(AppCreateInfo ci)
                 VertexAttribute{
                     .bufferSlot = 0, // same buffer slot
                     .location   = 2,
-                    .format     = EVertexAttributeFormat::Float4,
+                    .format     = EVertexAttributeFormat::Float3,
                     .offset     = offsetof(ya::Vertex, normal),
                 },
             },
@@ -756,14 +764,13 @@ int ya::App::onEvent(SDL_Event &event)
         break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
-        // YA_CORE_INFO("window resized {}x{}",
-        //              event.window.data1,
-        //              event.window.data2);
-        // auto vkRender = static_cast<VulkanRender *>(_render);
+        YA_CORE_INFO("window resized {}x{}", event.window.data1, event.window.data2);
+        // auto vkRender = static_cast<VulkanRender *>(_render)
         // vkRender->recreateSwapChain();
         float aspectRatio = event.window.data2 > 0 ? static_cast<float>(event.window.data1) / static_cast<float>(event.window.data2) : 1.f;
         YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", event.window.data1, event.window.data2, aspectRatio);
         camera.setAspectRatio(aspectRatio);
+        _windowSize = {static_cast<float>(event.window.data1), static_cast<float>(event.window.data2)};
 
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -941,6 +948,11 @@ void App::onDraw(float dt)
     // vkDeviceWaitIdle(vkRender->getLogicalDevice());
     // SDL_Delay(1000 / 30); // Simulate frame time, remove in production
 
+    if (_windowSize.x <= 0 || _windowSize.y <= 0) {
+        YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
+        return;
+    }
+
 
     // ✅ Flight Frames关键步骤1: CPU等待当前帧对应的fence
     // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
@@ -956,12 +968,13 @@ void App::onDraw(float dt)
 
     auto swapchain = vkRender->getSwapChain();
 
+
     // get imageIndex
     uint32_t imageIndex = -1;
     {
         VkResult ret = swapchain->acquireNextImage(
-            imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-            frameFences[currentFrameIdx],              // 等待上一present完成
+            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
+            frameFences[currentFrameIdx],                   // 等待上一present完成
             imageIndex);
 
         // Do a sync recreation here, Can it be async?(just return and register a frame task)
@@ -980,7 +993,7 @@ void App::onDraw(float dt)
                 }
                 if (imageIndex == -1) {
                     ret = vkRender->getSwapChain()->acquireNextImage(
-                        imageAvailableSemaphores[currentFrameIdx],
+                        frameImageAvailableSemaphores[currentFrameIdx],
                         frameFences[currentFrameIdx],
                         imageIndex);
                     if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
@@ -1001,169 +1014,11 @@ void App::onDraw(float dt)
     }
 
 
+
     // 2. begin command buffer
     VkCommandBuffer curCmdBuf = commandBuffers[imageIndex];
     vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
     begin(curCmdBuf);
-
-#pragma region Update uniform
-#if 1
-
-    uGBuffer->writeData(&gBuffer, sizeof(UboGBuffer), 0);
-    uInstanceBuffer->writeData(&instanceBuffer, sizeof(UboInstanceBuffer), 0);
-
-
-    // Add memory barrier to ensure copy completes before shader reads
-    // std::vector<VkBufferMemoryBarrier> bmBarriers{
-    //     VkBufferMemoryBarrier{
-    //         .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-    //         .pNext               = nullptr,
-    //         .srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT,
-    //         .dstAccessMask       = VK_ACCESS_UNIFORM_READ_BIT,
-    //         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    //         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    //         .buffer              = uGBuffer->getHandle(),
-    //         .offset              = 0,
-    //         .size                = sizeof(UboGBuffer),
-    //     },
-    // };
-
-
-    auto set = descriptorSets[0];
-
-    VkDescriptorBufferInfo gBuffer{
-        .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
-        .offset = 0,
-        .range  = sizeof(UboGBuffer), // size of the uniform buffer
-    };
-    VkDescriptorBufferInfo instanceBuffer{
-        .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
-        .offset = 0,
-        .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
-    };
-
-    VkDescriptorImageInfo texture0{
-        .sampler     = vkRender->getSampler("DefaultSampler"),
-        .imageView   = AssetManager::get()->getTexture(faceTexturePath)->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-    VkDescriptorImageInfo texture1{
-        .sampler     = vkRender->getSampler("DefaultSampler"),
-        .imageView   = AssetManager::get()->getTexture(uv1TexturePath)->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-
-
-    std::vector<VkWriteDescriptorSet> writeDSs{
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo       = nullptr,
-            .pBufferInfo      = &gBuffer,
-            .pTexelBufferView = nullptr,
-        },
-
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo       = nullptr,
-            .pBufferInfo      = &instanceBuffer,
-            .pTexelBufferView = nullptr,
-        },
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo       = &texture0,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        },
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo       = &texture1,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        },
-    };
-
-    // 4. bind descriptor sets, as global concepts
-    vkCmdBindDescriptorSets(curCmdBuf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            defaultPipelineLayout->getHandle(),
-                            0, // first set
-                            descriptorSets.size(),
-                            descriptorSets.data(),
-                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
-                            // This can avoid of creating a new descriptor set?
-                            0,        // dynamic offset count
-                            nullptr); // dynamic offsets
-
-
-
-    // vkCmdPushDescriptorSet(curCmdBuf,
-    //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-    //                        defaultPipelineLayout->getHandle(),
-    //                        0,
-    //                        writeDSs.size(),
-    //                        writeDSs.data());
-
-    // TODO: make a copy pass like SDL
-    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
-                           writeDSs.size(),
-                           writeDSs.data(),
-                           0,
-                           nullptr);
-
-    // vkCmdPipelineBarrier(curCmdBuf,
-    //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
-    //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //                      0,
-    //                      0,
-    //                      nullptr,
-    //                      bmBarriers.size(),
-    //                      bmBarriers.data(),
-    //                      0,
-    //                      nullptr);
-
-    // MARK: Push Constant
-    //  push constants: dynamical stack push, high performance, reduce descriptor usage (to ubo)
-    static struct PushConstantData
-    {
-        float textureMixAlpha = 0.5f;
-    } pushData;
-
-    vkCmdPushConstants(curCmdBuf,
-                       defaultPipelineLayout->getHandle(),
-                       VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0,
-                       sizeof(PushConstantData),
-                       &pushData);
-
-
-
-#endif
-#pragma endregion
-
 
 #pragma region RenderPass
 
@@ -1182,9 +1037,6 @@ void App::onDraw(float dt)
     pipeline->bind(curCmdBuf);
 
 
-
-    // 6. setup vertex buffer, index buffer (2d payloads? upload?)
-    // 7. other resources, uniform buffers, etc.
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo
@@ -1211,6 +1063,40 @@ void App::onDraw(float dt)
     };
     vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
 #pragma endregion
+
+
+    // MARK: update descriptor
+    // 6. setup vertex buffer, index buffer (2d payloads? upload?)
+    // 7. other resources, uniform buffers, etc.
+    updateDescriptors();
+
+
+    // MARK: Push Constants
+    // dynamical stack push, high performance, reduce descriptor usage (to ubo)
+    static struct PushConstantData
+    {
+        float textureMixAlpha = 0.5f;
+    } pushData;
+
+    vkCmdPushConstants(curCmdBuf,
+                       defaultPipelineLayout->getHandle(),
+                       VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0,
+                       sizeof(PushConstantData),
+                       &pushData);
+
+    // bind this for current pipeline?
+    // 4. bind descriptor sets, as global concepts
+    vkCmdBindDescriptorSets(curCmdBuf,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            defaultPipelineLayout->getHandle(),
+                            0, // first set
+                            descriptorSets.size(),
+                            descriptorSets.data(),
+                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
+                            // This can avoid of creating a new descriptor set?
+                            0,        // dynamic offset count
+                            nullptr); // dynamic offsets
 
 
 
@@ -1294,6 +1180,8 @@ void App::onDraw(float dt)
     // 10. end command buffer
     end(curCmdBuf);
 
+
+    // MARK: submit
     // 11. submit command buffer
     // _firstGraphicsQueue.waitIdle();
     // auto curQue = currentFrame == 0 ? _firstGraphicsQueue : _firstPresentQueue;
@@ -1303,7 +1191,7 @@ void App::onDraw(float dt)
         },
         //  wait image available to submit, after acquire image done
         {
-            imageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
+            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
         },
         // send submitted signal after command buffer submitted completed
         {
@@ -1313,6 +1201,7 @@ void App::onDraw(float dt)
     );
 
 
+    // MARK: present
     // submit and present are asynchronous operations,
     VkResult result = vkRender->getSwapChain()->presentImage(
         imageIndex,
@@ -1324,7 +1213,6 @@ void App::onDraw(float dt)
     // YA_CORE_INFO("Presenting image index: {}, current frame index: {}", curFrameIdx, curFrameIdx);
     // NE_ASSERT(curFrameIdx == curImageIdx, "Image index mismatch! Expected {}, got {}", curFrameIdx, curImageIdx);
 
-    // SUB: submit
     if (result == VK_SUBOPTIMAL_KHR) {
         // recreate swapchain
         VK_CALL(vkDeviceWaitIdle(vkRender->getLogicalDevice()));
@@ -1347,8 +1235,127 @@ void App::onDraw(float dt)
     // 使用模运算实现环形缓冲区，在多个帧之间循环
     // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
     // ⚠️ frameCount can not equal to imageSize of swapchain!!
-    currentFrameIdx = (currentFrameIdx + 1) % frameCount;
+    currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
 } // namespace ya
+
+void App::updateDescriptors()
+{
+    // TODO: some thing like the proj need to update every frame
+    // But something is not changed, descriptor need to be set(initial set),
+    // but not required to set every frame
+    auto vkRender = getRender<VulkanRender>();
+    auto set      = descriptorSets[0];
+
+    uGBuffer->writeData(&gBuffer, sizeof(UboGBuffer), 0);
+    uInstanceBuffer->writeData(&instanceBuffer, sizeof(UboInstanceBuffer), 0);
+
+    VkDescriptorBufferInfo gBuffer{
+        .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
+        .offset = 0,
+        .range  = sizeof(UboGBuffer), // size of the uniform buffer
+    };
+    VkDescriptorBufferInfo instanceBuffer{
+        .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
+        .offset = 0,
+        .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
+    };
+
+    VkDescriptorImageInfo texture0{
+        .sampler     = vkRender->getSampler("DefaultSampler"),
+        .imageView   = AssetManager::get()->getTexture(faceTexturePath)->getVkImageView(),
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkDescriptorImageInfo texture1{
+        .sampler     = vkRender->getSampler("DefaultSampler"),
+        .imageView   = AssetManager::get()->getTexture(uv1TexturePath)->getVkImageView(),
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+
+    std::vector<VkWriteDescriptorSet> writeDSs{
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo       = nullptr,
+            .pBufferInfo      = &gBuffer,
+            .pTexelBufferView = nullptr,
+        },
+
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo       = nullptr,
+            .pBufferInfo      = &instanceBuffer,
+            .pTexelBufferView = nullptr,
+        },
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo       = &texture0,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        },
+        VkWriteDescriptorSet{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = set, // the first descriptor set
+            .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
+            .dstArrayElement  = 0,   // the index of array
+            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
+            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo       = &texture1,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
+        },
+    };
+
+
+
+    // vkCmdPushDescriptorSet(curCmdBuf,
+    //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+    //                        defaultPipelineLayout->getHandle(),
+    //                        0,
+    //                        writeDSs.size(),
+    //                        writeDSs.data());
+
+    // TODO: make a copy pass like SDL
+    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
+                           writeDSs.size(),
+                           writeDSs.data(),
+                           0,
+                           nullptr);
+    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
+                           writeDSs.size(),
+                           writeDSs.data(),
+                           0,
+                           nullptr);
+
+    // vkCmdPipelineBarrier(curCmdBuf,
+    //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
+    //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    //                      0,
+    //                      0,
+    //                      nullptr,
+    //                      bmBarriers.size(),
+    //                      bmBarriers.data(),
+    //                      0,
+    //                      nullptr);
+}
 
 #pragma region Sync Resources
 
@@ -1380,20 +1387,28 @@ void App::initSemaphoreAndFence()
 
     // ✅ 为每个飞行帧分配独立的同步对象数组
     // 这是Flight Frames的核心：避免不同帧之间的资源竞争
-    imageAvailableSemaphores.resize(swapchainImageSize);
     submittedSignalSemaphores.resize(swapchainImageSize);
-    frameFences.resize(swapchainImageSize);
+    frameImageAvailableSemaphores.resize(flightFrameSize);
+    frameFences.resize(flightFrameSize);
 
     // ✅ 循环创建每个飞行帧的同步对象
     for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
-        // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
-        ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
 
         // 创建渲染完成信号量：当GPU完成渲染命令时发出信号
         ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &submittedSignalSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
 
+
+
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
+                                     submittedSignalSemaphores[i],
+                                     std::format("SubmittedSignalSemaphore_{}", i).c_str());
+    }
+
+    for (uint32_t i = 0; i < flightFrameSize; i++) {
+        // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
+        ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
         // 创建帧fence：用于CPU等待GPU完成整个帧的处理
         // ⚠️ 重要：初始状态设为已信号(SIGNALED)，这样第一帧不会被阻塞
         VkFenceCreateInfo fenceInfo{
@@ -1404,16 +1419,12 @@ void App::initSemaphoreAndFence()
 
         ret = vkCreateFence(vkRender->getLogicalDevice(), &fenceInfo, nullptr, &frameFences[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create fence!");
-
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     imageAvailableSemaphores[i],
-                                     std::format("ImageAvailableSemaphore_{}", i).c_str());
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     submittedSignalSemaphores[i],
-                                     std::format("SubmittedSignalSemaphore_{}", i).c_str());
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
                                      frameFences[i],
                                      std::format("FrameFence_{}", i).c_str());
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
+                                     frameImageAvailableSemaphores[i],
+                                     std::format("ImageAvailableSemaphore_{}", i).c_str());
     }
 }
 
@@ -1421,10 +1432,12 @@ void App::releaseSemaphoreAndFence()
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
-    for (uint32_t i = 0; i < imageAvailableSemaphores.size(); i++) {
-        vkDestroySemaphore(vkRender->getLogicalDevice(), imageAvailableSemaphores[i], nullptr);
-        vkDestroySemaphore(vkRender->getLogicalDevice(), submittedSignalSemaphores[i], nullptr);
-        vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], nullptr);
+    for (uint32_t i = 0; i < flightFrameSize; i++) {
+        vkDestroySemaphore(vkRender->getLogicalDevice(), frameImageAvailableSemaphores[i], vkRender->getAllocator());
+        vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], vkRender->getAllocator());
+    }
+    for (uint32_t i = 0; i < swapchainImageSize; i++) {
+        vkDestroySemaphore(vkRender->getLogicalDevice(), submittedSignalSemaphores[i], vkRender->getAllocator());
     }
 }
 

@@ -96,6 +96,7 @@ void VulkanPipelineLayout::create(
 
 void VulkanPipelineLayout::cleanup()
 {
+    VK_DESTROY(PipelineLayout, _render->getLogicalDevice(), _pipelineLayout);
     // for (auto layout : _descriptorSetLayouts) {
     //     VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
     // }

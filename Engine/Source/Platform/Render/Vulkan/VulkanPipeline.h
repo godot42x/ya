@@ -32,10 +32,7 @@ struct VulkanPipelineLayout
     void create(const std::vector<ya::PushConstant>       pushConstants,
                 const std::vector<VkDescriptorSetLayout> &layouts);
 
-    auto getHandle()
-    {
-        return _pipelineLayout;
-    }
+    auto getHandle() { return _pipelineLayout; }
     void cleanup();
 
     // ya::PipelineLayout getCI() const { return _ci; }

@@ -1,6 +1,7 @@
 #include "VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "VulkanRender.h"
+#include "VulkanUtils.h"
 
 VulkanImage::~VulkanImage()
 {
@@ -36,6 +37,153 @@ void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, Vulk
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1,
                            &copyRegion);
+}
+
+bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
+                                   VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+    if (image == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("VulkanImage::transitionImageLayout image is null");
+        return false;
+    }
+    if (newLayout == oldLayout) {
+        return true;
+    }
+
+    VkImageMemoryBarrier imb{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        // TODO
+        .srcAccessMask       = {},
+        .dstAccessMask       = {},
+        .oldLayout           = oldLayout,
+        .newLayout           = newLayout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = image->getHandle(),
+        .subresourceRange    = {
+               .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+               .baseMipLevel   = 0,
+               .levelCount     = 1,
+               .baseArrayLayer = 0,
+               .layerCount     = 1,
+        },
+
+    };
+
+    VkPipelineStageFlags srcStage  = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkPipelineStageFlags destStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    // Source layouts (old)
+    // The source access mask controls actions to be finished on the old
+    // layout before it will be transitioned to the new layout.
+    switch (oldLayout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED:
+        // Image layout is undefined (or does not matter).
+        // Only valid as initial layout. No flags required.
+        imb.srcAccessMask = 0;
+        break;
+
+    case VK_IMAGE_LAYOUT_PREINITIALIZED:
+        // Image is preinitialized.
+        // Only valid as initial layout for linear images; preserves memory
+        // contents. Make sure host writes have finished.
+        imb.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        // Image is a color attachment.
+        // Make sure writes to the color buffer have finished
+        imb.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        // Image is a depth/stencil attachment.
+        // Make sure any writes to the depth/stencil buffer have finished.
+        imb.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        // Image is a transfer source.
+        // Make sure any reads from the image have finished
+        imb.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        // Image is a transfer destination.
+        // Make sure any writes to the image have finished.
+        imb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        // Image is read by a shader.
+        // Make sure any shader reads from the image have finished
+        imb.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        break;
+    default:
+        YA_ERROR("Unsupported layout transition: {}->{}", std::to_string(oldLayout), std::to_string(newLayout));
+        UNREACHABLE();
+        return false;
+    }
+
+    // Target layouts (new)
+    // The destination access mask controls the dependency for the new image
+    // layout.
+    switch (newLayout) {
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        // Image will be used as a transfer destination.
+        // Make sure any writes to the image have finished.
+        imb.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        // Image will be used as a transfer source.
+        // Make sure any reads from and writes to the image have finished.
+        imb.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
+        imb.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        // Image will be used as a color attachment.
+        // Make sure any writes to the color buffer have finished.
+        imb.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        imb.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        // Image layout will be used as a depth/stencil attachment.
+        // Make sure any writes to depth/stencil buffer have finished.
+        imb.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        break;
+
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        // Image will be read in a shader (sampler, input attachment).
+        // Make sure any writes to the image have finished.
+        if (imb.srcAccessMask == 0)
+        {
+            imb.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        }
+        imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        break;
+    default:
+        YA_ERROR("Unsupported layout transition: {}->{}", std::to_string(oldLayout), std::to_string(newLayout));
+        UNREACHABLE();
+        return false;
+    }
+
+
+    vkCmdPipelineBarrier(cmdBuf,
+                         srcStage,
+                         destStage,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &imb);
+
+    return true;
 }
 
 
@@ -84,36 +232,4 @@ bool VulkanImage::allocate()
 
     bOwned = true;
     return true;
-}
-
-VulkanImageView::VulkanImageView(VulkanRender *render, std::shared_ptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
-{
-    _render = render;
-    VkImageViewCreateInfo ci{
-        .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image      = image->getHandle(),
-        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = image->getFormat(),
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = VK_COMPONENT_SWIZZLE_IDENTITY,
-        },
-        .subresourceRange = {
-            .aspectMask     = aspectFlags,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        },
-    };
-
-    VK_CALL(vkCreateImageView(_render->getLogicalDevice(), &ci, _render->getAllocator(), &_handle));
-}
-
-VulkanImageView::~VulkanImageView()
-{
-    // Note: image view is destroyed along with the image
-    VK_DESTROY(ImageView, _render->getLogicalDevice(), _handle);
 }

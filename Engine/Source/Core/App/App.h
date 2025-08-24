@@ -80,7 +80,6 @@ struct App
     static App *_instance;
 
     // StackDeleter    deleteStack;
-    IWindowProvider  *windowProvider       = nullptr;
     IRender          *_render              = nullptr;
     VulkanRenderPass *m_triangleRenderPass = nullptr;
     VulkanRenderPass *m_2DRenderPass       = nullptr;
@@ -107,6 +106,7 @@ struct App
     bool         _bPause     = false;
 
     AppCreateInfo _ci;
+    glm::vec2     _windowSize = {0, 0};
 
     TaskManager taskManager;
 
@@ -141,7 +141,7 @@ struct App
 
   private:
 
-
+    void updateDescriptors();
 
     void initSemaphoreAndFence();
     void releaseSemaphoreAndFence();

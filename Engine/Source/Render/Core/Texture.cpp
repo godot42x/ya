@@ -5,6 +5,7 @@
 
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
+#include "Platform/Render/Vulkan/VulkanImageView.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 
@@ -52,7 +53,7 @@ Texture::Texture(const std::string &filepath)
             .initialLayout = EImageLayout::Undefined,
         });
 
-    imageView = std::make_shared<VulkanImageView>(vkRender, image, VK_IMAGE_ASPECT_COLOR_BIT);
+    imageView = std::make_shared<VulkanImageView>(vkRender, image.get(), VK_IMAGE_ASPECT_COLOR_BIT);
 
     std::shared_ptr<VulkanBuffer> stagingBuffer = VulkanBuffer::create(
         vkRender,
@@ -73,34 +74,11 @@ Texture::Texture(const std::string &filepath)
 
 
     auto cmdBuf = vkRender->beginIsolateCommands();
+    // Do layout transition image: UNDEFINED -> TRANSFER_DST, copy, TRANSFER_DST -> SHADER_READ_ONLY
+    VulkanImage::transitionLayout(cmdBuf, image.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VulkanImage::transfer(cmdBuf, stagingBuffer.get(), image.get());
+    VulkanImage::transitionLayout(cmdBuf, image.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkRender->endIsolateCommands(cmdBuf);
-
-
-
-    //     transitionImageLayout(device,
-    //                           commandPool,
-    //                           graphicsQueue,
-    //                           outImage,
-    //                           VK_FORMAT_R8G8B8A8_UNORM,
-    //                           VK_IMAGE_LAYOUT_UNDEFINED,
-    //                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    //     copyBufferToImage(device,
-    //                       commandPool,
-    //                       graphicsQueue,
-    //                       stagingBuffer,
-    //                       outImage,
-    //                       static_cast<uint32_t>(texWidth),
-    //                       static_cast<uint32_t>(texHeight));
-
-    //     transitionImageLayout(device,
-    //                           commandPool,
-    //                           graphicsQueue,
-    //                           outImage,
-    //                           VK_FORMAT_R8G8B8A8_UNORM,
-    //                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-    //                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 VkImage     Texture::getVkImage() { return image->_handle; }

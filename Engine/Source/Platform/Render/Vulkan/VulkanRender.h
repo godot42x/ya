@@ -369,6 +369,7 @@ struct VulkanRender : public IRender
   public:
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
+    [[nodiscard]] IWindowProvider *getWindowProvider() const { return _windowProvider; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getLogicalDevice() const { return m_LogicalDevice; }

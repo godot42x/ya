@@ -172,9 +172,12 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
                       std::to_string(presentMode),
                       std::to_string(_presentMode));
     }
-    YA_CORE_INFO("Current extent is: {}x{}",
-                 _supportDetails.capabilities.currentExtent.width,
-                 _supportDetails.capabilities.currentExtent.height);
+    const auto &curExtent = _supportDetails.capabilities.currentExtent;
+    YA_CORE_INFO("Current extent is: {}x{}", curExtent.width, curExtent.height);
+    if (curExtent.width <= 0 || curExtent.height <= 0) {
+        YA_CORE_ERROR("Current extent is invalid!");
+        return false;
+    }
 
     // Use configured dimensions or fall back to window size
     // if (_ci.width > 0 && _ci.height > 0) {
