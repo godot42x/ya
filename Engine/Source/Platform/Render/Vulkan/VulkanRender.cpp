@@ -415,9 +415,9 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
 
     VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
-    YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!");
+    YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!,{}", ret);
 
-    for (int i = 0; i < graphicsQueueCount; i++)
+    for (uint32_t i = 0; i < graphicsQueueCount; i++)
     {
         VkQueue queue = VK_NULL_HANDLE;
         vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
@@ -431,7 +431,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
                            queue,
                            std::format("GraphicsQueue_{}", i).c_str());
     }
-    for (int i = 0; i < presentQueueCount; i++)
+    for (uint32_t i = 0; i < presentQueueCount; i++)
     {
         VkQueue queue = VK_NULL_HANDLE;
         vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);

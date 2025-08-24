@@ -23,14 +23,14 @@ struct VulkanPipelineLayout
     VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
     // std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
-    // ya::GraphicsPipelineLayoutCreateInfo _ci;
+    // ya::PipelineLayout _ci;
 
     VulkanPipelineLayout() = default;
     VulkanPipelineLayout(VulkanRender *render)
         : _render(render) {}
 
-    void create(const std::vector<ya::GraphicsPipelineLayoutCreateInfo::PushConstant> pushConstants,
-                const std::vector<VkDescriptorSetLayout>                             &layouts);
+    void create(const std::vector<ya::PushConstant>       pushConstants,
+                const std::vector<VkDescriptorSetLayout> &layouts);
 
     auto getHandle()
     {
@@ -38,7 +38,7 @@ struct VulkanPipelineLayout
     }
     void cleanup();
 
-    // ya::GraphicsPipelineLayoutCreateInfo getCI() const { return _ci; }
+    // ya::PipelineLayout getCI() const { return _ci; }
 };
 
 

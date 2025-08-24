@@ -533,10 +533,10 @@ struct std::formatter<VkResult> : std::formatter<std::string>
         obj = VK_NULL_HANDLE;               \
     }
 
-#define VK_DESTROY_A(t, device, obj,allocator)          \
-    if (obj != VK_NULL_HANDLE) {            \
-        vkDestroy##t(device, obj, allocator); \
-        obj = VK_NULL_HANDLE;               \
+#define VK_DESTROY_A(t, device, obj, allocator) \
+    if (obj != VK_NULL_HANDLE) {                \
+        vkDestroy##t(device, obj, allocator);   \
+        obj = VK_NULL_HANDLE;                   \
     }
 
 #define VK_FREE(t, device, obj)          \

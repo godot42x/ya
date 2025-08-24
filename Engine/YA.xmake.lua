@@ -63,11 +63,11 @@ do
 
 
     add_packages("stb")
-    add_packages("spdlog")
-    add_packages("libsdl3")
+    -- add_packages("spdlog")
+    add_packages("libsdl3", { public = true })
     add_packages("libsdl3_image")
-    add_packages("glm")
-    add_packages("imgui")
+    add_packages("glm", { public = true })
+    add_packages("imgui", { public = true })
     --add_packages("glad")
     add_packages("assimp")
 
@@ -75,12 +75,12 @@ do
         --NOTICE: must before vulkansdk or it will cause error
         -- because vulkansdk's linkdir contains those libs like ["shaderc.lib", "spirv-cross.lib"]
         add_packages("shaderc")
-        add_packages("spirv-cross")
+        add_packages("spirv-cross", { public = true })
 
         add_packages("vulkansdk")
     end
     add_packages("glad")
-    add_packages("cxxopts")
+    add_packages("cxxopts", { public = true })
 
     -- add_deps("shader")
 

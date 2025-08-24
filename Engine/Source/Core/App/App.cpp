@@ -201,13 +201,19 @@ void imcClearValues()
 
 #pragma endregion
 
-void App::init()
+void App::init(AppCreateInfo ci)
 {
+    _ci = ci;
+    YA_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
+    _instance = this;
+
     YA_PROFILE_FUNCTION();
     Logger::init();
     FileSystem::init();
     NameRegistry::init(); // Initialize FName registry
     AssetManager::init();
+
+    onInit(ci);
 
     currentRenderAPI          = ERenderAPI::Vulkan;
     std::string currentShader = "Test/HelloTexture.glsl";
@@ -339,18 +345,17 @@ void App::init()
         - push constants?
         - texture samplers?
     */
-    GraphicsPipelineLayoutCreateInfo gpLayoutCI = GraphicsPipelineLayoutCreateInfo{
+    PipelineLayout pipelineLayout{
         .pushConstants = {
-            GraphicsPipelineLayoutCreateInfo::PushConstant{
+            PushConstant{
                 .offset     = 0,
                 .size       = sizeof(char) * 256, // dynamical allocated buffer
                 .stageFlags = EShaderStage::Fragment,
             },
         },
         .descriptorSetLayouts = {
-            // set 0
             DescriptorSetLayout{
-                .index    = 0,
+                .set      = 0,
                 .bindings = {
                     // uGBuffer
                     DescriptorSetLayoutBinding{
@@ -392,26 +397,31 @@ void App::init()
         },
     };
 
-    // Create descriptor pool and sets (Dose size has any particular cases?)
-    std::vector<VkDescriptorPoolSize> poolSizes = {
-        // set 0
-        VkDescriptorPoolSize{
-            .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    std::vector<ya::DescriptorPoolSize> poolSizes = {
+        ya::DescriptorPoolSize{
+            .type            = EPipelineDescriptorType::UniformBuffer,
             .descriptorCount = 2 + 6, // uGBuffer + uInstanceBuffer
         },
-        VkDescriptorPoolSize{
-            .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        ya::DescriptorPoolSize{
+            .type            = EPipelineDescriptorType::CombinedImageSampler,
             .descriptorCount = 1 + 1 + 16, // uTexture0 + uTexture1 + uTextures
         },
     };
 
+    std::vector<VkDescriptorPoolSize> vkPoolSizes;
+    for (const auto &poolSize : poolSizes) {
+        vkPoolSizes.push_back(VkDescriptorPoolSize{
+            .type            = toVk(poolSize.type),
+            .descriptorCount = poolSize.descriptorCount,
+        });
+    }
 
-    descriptorPool       = std::make_shared<VulkanDescriptorPool>(vkRender, 1, poolSizes);
-    descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, gpLayoutCI.descriptorSetLayouts[0]);
+    descriptorPool       = std::make_shared<VulkanDescriptorPool>(vkRender, 1, vkPoolSizes);
+    descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[0]);
     descriptorPool->allocateDescriptorSets({descriptorSetLayout0}, descriptorSets);
 
     defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
-    defaultPipelineLayout->create(gpLayoutCI.pushConstants,
+    defaultPipelineLayout->create(pipelineLayout.pushConstants,
                                   {
                                       descriptorSetLayout0->getHandle(),
                                   }); // we create the descriptor set layout outside
@@ -689,10 +699,11 @@ int ya::App::run()
 
     while (bRunning) {
 
-        time_point_t now   = clock_t::now();
-        float        dtSec = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastTime).count() / 1000.f;
-        dtSec              = std::max(dtSec, 0.0001f);
-        _lastTime          = now;
+        time_point_t now        = clock_t::now();
+        auto         dtMicroSec = std::chrono::duration_cast<std::chrono::microseconds>(now - _lastTime).count();
+        float        dtSec      = (double)dtMicroSec / 1000000.0;
+        dtSec                   = std::max(dtSec, 0.0001f);
+        _lastTime               = now;
 
         if (auto result = iterate(dtSec); result != 0) {
             break;
@@ -870,7 +881,6 @@ int ya::App::onEvent(SDL_Event &event)
 
 int ya::App::iterate(float dt)
 {
-
     SDL_Event evt;
     SDL_PollEvent(&evt);
 
@@ -888,6 +898,7 @@ int ya::App::iterate(float dt)
     ++_frameIndex;
     return 0;
 }
+
 
 void App::onUpdate(float dt)
 {

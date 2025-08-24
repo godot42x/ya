@@ -168,8 +168,13 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
         return _textures.find(filepath)->second;
     }
 
-    auto texture        = std::make_shared<Texture>(filepath);
-    _textures[filepath] = texture;
+    auto texture = std::make_shared<Texture>(filepath);
+    if (!texture) {
+        YA_CORE_WARN("Failed to create texture: {}", filepath);
+    }
+    else {
+        _textures[filepath] = texture;
+    }
     return texture;
 }
 

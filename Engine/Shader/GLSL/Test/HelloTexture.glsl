@@ -46,16 +46,17 @@ void main()
     
     vec3 normal = normalize(aNormal.xyz);
 
-    if (abs(normal.x) > 0.9) {
-        // Left/Right faces (X axis)
-        vColor = normal.x > 0.0 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.5, 0.0, 0.0, 1.0); // Red/Dark Red
-    } else if (abs(normal.y) > 0.9) {
-        // Top/Bottom faces (Y axis)
-        vColor = normal.y > 0.0 ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(0.0, 0.5, 0.0, 1.0); // Green/Dark Green
-    } else {
-        // Front/Back faces (Z axis)
-        vColor = normal.z > 0.0 ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.5, 1.0); // Blue/Dark Blue
-    }
+    // if (abs(normal.x) > 0.9) {
+    //     // Left/Right faces (X axis)
+    //     vColor = normal.x > 0.0 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.5, 0.0, 0.0, 1.0); // Red/Dark Red
+    // } else if (abs(normal.y) > 0.9) {
+    //     // Top/Bottom faces (Y axis)
+    //     vColor = normal.y > 0.0 ? vec4(0.0, 1.0, 0.0, 1.0) : vec4(0.0, 0.5, 0.0, 1.0); // Green/Dark Green
+    // } else {
+    //     // Front/Back faces (Z axis)
+    //     vColor = normal.z > 0.0 ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.5, 1.0); // Blue/Dark Blue
+    // }
+    vColor = vec4(1.0, 1.0, 1.0, 1.0);
 
     vTexCoord = aTexCoord;
 }

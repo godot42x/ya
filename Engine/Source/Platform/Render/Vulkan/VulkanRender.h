@@ -135,6 +135,24 @@ struct SamplerCreateInfo
     float                  minLod                  = 0.0f;
     float                  maxLod                  = 1.0f;
     bool                   unnormalizedCoordinates = false;
+
+    bool operator==(const SamplerCreateInfo &other) const
+    {
+        return minFilter == other.minFilter &&
+               magFilter == other.magFilter &&
+               mipmapMode == other.mipmapMode &&
+               addressModeU == other.addressModeU &&
+               addressModeV == other.addressModeV &&
+               addressModeW == other.addressModeW &&
+               mipLodBias == other.mipLodBias &&
+               anisotropyEnable == other.anisotropyEnable &&
+               maxAnisotropy == other.maxAnisotropy &&
+               compareEnable == other.compareEnable &&
+               compareOp == other.compareOp &&
+               minLod == other.minLod &&
+               maxLod == other.maxLod &&
+               unnormalizedCoordinates == other.unnormalizedCoordinates;
+    }
 };
 
 } // namespace ya

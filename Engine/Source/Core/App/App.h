@@ -111,21 +111,18 @@ struct App
     TaskManager taskManager;
 
   public:
-    App()          = delete;
+    App()          = default;
     virtual ~App() = default;
 
-    App(AppCreateInfo ci)
-    {
-        _ci = ci;
-        YA_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
-        _instance = this;
-    }
-    void init();
+    void init(AppCreateInfo ci);
     int  run();
+    int  iterate(float dt);
     void quit();
 
+    virtual void onInit(AppCreateInfo ci) {}
+    virtual void onQuit() {}
 
-    int          iterate(float dt);
+
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
     virtual int  onEvent(SDL_Event &event);

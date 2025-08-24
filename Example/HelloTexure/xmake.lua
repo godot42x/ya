@@ -1,4 +1,4 @@
-target("app")
+target("HelloTexture")
 do
     set_kind("binary")
     add_files("src/*.cpp")

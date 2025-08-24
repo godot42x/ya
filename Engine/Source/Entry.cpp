@@ -12,8 +12,8 @@ int main(int argc, char **argv)
 
         ya::AppCreateInfo ci;
         ci.init(argc, argv);
-        auto *app = new ya::App(ci);
-        app->init();
+        auto *app = new ya::App();
+        app->init(ci);
         app->run();
         app->quit();
     }

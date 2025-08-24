@@ -9,8 +9,8 @@
 
 
 void VulkanPipelineLayout::create(
-    const std::vector<ya::GraphicsPipelineLayoutCreateInfo::PushConstant> pushConstants,
-    const std::vector<VkDescriptorSetLayout>                             &layouts)
+    const std::vector<ya::PushConstant>       pushConstants,
+    const std::vector<VkDescriptorSetLayout> &layouts)
 {
     // _ci = ci;
 

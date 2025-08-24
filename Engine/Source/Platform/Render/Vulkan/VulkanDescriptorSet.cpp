@@ -65,7 +65,8 @@ void VulkanDescriptorPool::setDebugName(const char *name)
 }
 
 
-bool VulkanDescriptorPool::allocateDescriptorSets(const std::vector<std::shared_ptr<VulkanDescriptorSetLayout>> &layouts, std::vector<VkDescriptorSet> &sets)
+bool VulkanDescriptorPool::allocateDescriptorSets(const std::vector<std::shared_ptr<VulkanDescriptorSetLayout>> &layouts,
+                                                  std::vector<VkDescriptorSet>                                  &outSets)
 {
     std::vector<VkDescriptorSetLayout> vkLayouts;
     for (const auto &layout : layouts) {
@@ -79,10 +80,10 @@ bool VulkanDescriptorPool::allocateDescriptorSets(const std::vector<std::shared_
         .pSetLayouts        = vkLayouts.data(),
     };
 
-    sets.resize(layouts.size());
+    outSets.resize(layouts.size());
 
     VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(),
                                      &dsAI,
-                                     sets.data()));
+                                     outSets.data()));
     return true;
 }

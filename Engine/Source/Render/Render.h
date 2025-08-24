@@ -501,25 +501,31 @@ struct DescriptorSetLayoutBinding
 
 struct DescriptorSetLayout
 {
-    int32_t                                 index = -1;
+    int32_t                                 set = -1;
     std::vector<DescriptorSetLayoutBinding> bindings;
 };
 
 
-struct GraphicsPipelineLayoutCreateInfo
+struct PushConstant
 {
-    struct PushConstant
-    {
-        uint32_t        offset     = 0;
-        uint32_t        size       = 0;
-        EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
-    };
+    uint32_t        offset     = 0;
+    uint32_t        size       = 0;
+    EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
+};
 
-
-
+struct PipelineLayout
+{
     std::vector<PushConstant>        pushConstants;
     std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
+
+struct DescriptorPoolSize
+{
+    EPipelineDescriptorType::T type;
+    uint32_t                   descriptorCount;
+};
+
+
 } // namespace ya
 
 
@@ -529,7 +535,7 @@ struct GraphicsPipelineCreateInfo
 
 
     // different shader/pipeline can use same pipeline layout
-    // GraphicsPipelineLayoutCreateInfo *pipelineLayout = nullptr;
+    // PipelineLayout *pipelineLayout = nullptr;
 
     ShaderCreateInfo shaderCreateInfo;
 
