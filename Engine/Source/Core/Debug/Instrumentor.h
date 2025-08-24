@@ -68,7 +68,10 @@ class InstrumentationTimer
     explicit InstrumentationTimer(const char *name, std::source_location loc = std::source_location::current())
     {
         // TODO: optimize the name performance
-        _name      = std::format("{}:{} ({})", loc.file_name(), loc.line(), name);
+        _name      = std::format("{}:{} ({})",
+                            std::filesystem::path(loc.file_name()).filename().string(),
+                            loc.line(),
+                            name);
         _startTime = std::chrono::high_resolution_clock::now();
     }
 

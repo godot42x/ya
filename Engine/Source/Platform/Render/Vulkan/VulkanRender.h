@@ -157,7 +157,7 @@ struct SamplerCreateInfo
 
 } // namespace ya
 
-struct VulkanRender : public IRender
+struct VulkanRender : public ya::IRender
 {
     friend struct VulkanUtils;
     friend struct VulkanRenderPass;
@@ -200,7 +200,7 @@ struct VulkanRender : public IRender
 
 
 
-    VulkanSwapChain         *m_swapChain;
+    VulkanSwapChain         *_swapChain;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
 
@@ -222,6 +222,13 @@ struct VulkanRender : public IRender
     void *nativeWindow = nullptr;
 
 
+    // used for GPU-CPU(fame), GPU internal(image) sync
+    static constexpr uint32_t flightFrameSize = 1;
+    uint32_t                  currentFrameIdx = 0;
+    std::vector<VkSemaphore>  frameImageAvailableSemaphores;
+    std::vector<VkFence>      frameFences;
+    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
+
 
   public:
     IWindowProvider *_windowProvider = nullptr;
@@ -242,6 +249,7 @@ struct VulkanRender : public IRender
 
     bool init(const RenderCreateInfo &ci) override
     {
+        ya::IRender::init(ci);
         YA_PROFILE_FUNCTION();
 
         bool success = initInternal(ci);
@@ -249,10 +257,13 @@ struct VulkanRender : public IRender
 
         return true;
     }
-    virtual void destroy() override
+    void destroy() override
     {
         destroyInternal();
     }
+
+    bool begin(int32_t *imageIndex) override;
+    bool end(int32_t imageIndex, std::vector<void *> CommandBuffers) override;
 
 
 
@@ -293,14 +304,14 @@ struct VulkanRender : public IRender
         }
 
 
-        m_swapChain = new VulkanSwapChain(this);
-        m_swapChain->recreate(ci.swapchainCI);
+        _swapChain = new VulkanSwapChain(this);
+        _swapChain->recreate(ci.swapchainCI);
 
         if (!createCommandPool()) {
             terminate();
         }
-
         createPipelineCache();
+        createSyncResources(_swapChain->getImages().size());
         return true;
     }
 
@@ -313,19 +324,14 @@ struct VulkanRender : public IRender
             std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         }
 
-        // if (m_depthImage) {
-        //     vkDestroyImage(m_LogicalDevice, m_depthImage, nullptr);
-        //     vkDestroyImageView(m_LogicalDevice, m_depthImageView, nullptr);
-        //     vkFreeMemory(m_LogicalDevice, m_depthImageMemory, nullptr);
-        // }
-
+        releaseSyncResources();
         VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
-        if (m_swapChain)
+        if (_swapChain)
         {
             // Cleanup swap chain resources
-            m_swapChain->cleanup();
-            delete m_swapChain;
+            _swapChain->cleanup();
+            delete _swapChain;
         }
         // m_renderPass.cleanup();
 
@@ -374,7 +380,7 @@ struct VulkanRender : public IRender
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
-    [[nodiscard]] VulkanSwapChain *getSwapChain() const { return m_swapChain; }
+    [[nodiscard]] VulkanSwapChain *getSwapChain() const { return _swapChain; }
 
     [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
@@ -416,12 +422,12 @@ struct VulkanRender : public IRender
     {
         VkCommandBuffer ret = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, ret);
-        begin(ret, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        VulkanCommandPool::begin(ret, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         return ret;
     }
     void endIsolateCommands(VkCommandBuffer commandBuffer)
     {
-        end(commandBuffer);
+        VulkanCommandPool::end(commandBuffer);
         getGraphicsQueues()[0].submit({commandBuffer});
         getGraphicsQueues()[0].waitIdle();
         vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &commandBuffer);
@@ -465,6 +471,9 @@ struct VulkanRender : public IRender
         std::vector<const char *>                &outExtensionNames,
         std::vector<const char *>                &outLayerNames,
         bool                                      bDebug = false);
+
+    void createSyncResources(int32_t swapchainImageSize);
+    void releaseSyncResources();
 };
 
 

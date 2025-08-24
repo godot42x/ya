@@ -135,6 +135,10 @@ VulkanSwapChain::~VulkanSwapChain()
 
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 {
+    DiffInfo old{
+        .extent = _supportDetails.capabilities.currentExtent,
+    };
+
     YA_PROFILE_FUNCTION();
     static uint32_t version = 0;
     version++;
@@ -287,7 +291,10 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,
                                 std::format("SwapChain_{}", version).c_str());
-    onRecreate.broadcast();
+    DiffInfo now{
+        .extent = _supportDetails.capabilities.currentExtent,
+    };
+    onRecreate.broadcast(old, now);
     return true;
 }
 

@@ -24,21 +24,20 @@ struct VulkanCommandPool : disable_copy
     bool allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer &outCommandBuffer);
 
     void cleanup();
+
+    static void begin(VkCommandBuffer commandBuffer, VkCommandBufferUsageFlags flags = 0)
+    {
+        VkCommandBufferBeginInfo beginInfo{
+            .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext            = nullptr,
+            .flags            = flags,
+            .pInheritanceInfo = nullptr,
+        };
+        VK_CALL(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+    }
+
+    static void end(VkCommandBuffer commandBuffer)
+    {
+        VK_CALL(vkEndCommandBuffer(commandBuffer));
+    }
 };
-
-
-inline void begin(VkCommandBuffer commandBuffer, VkCommandBufferUsageFlags flags = 0)
-{
-    VkCommandBufferBeginInfo beginInfo{
-        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext            = nullptr,
-        .flags            = flags,
-        .pInheritanceInfo = nullptr,
-    };
-    VK_CALL(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-}
-
-inline void end(VkCommandBuffer commandBuffer)
-{
-    VK_CALL(vkEndCommandBuffer(commandBuffer));
-}

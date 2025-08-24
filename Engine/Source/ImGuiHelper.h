@@ -19,7 +19,7 @@
 
 struct VulkanRender;
 struct VulkanRenderPass;
-namespace vk
+namespace ya
 {
 
 struct ImguiState
@@ -149,4 +149,4 @@ struct ImguiState
     }
 };
 
-} // namespace vk
+} // namespace ya

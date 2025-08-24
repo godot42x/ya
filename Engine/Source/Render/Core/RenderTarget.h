@@ -8,7 +8,7 @@
 namespace ya
 {
 
-struct IRenderTarget
+struct RenderTarget
 {
 
     VulkanRenderPass *_renderPass       = nullptr;
@@ -30,9 +30,9 @@ struct IRenderTarget
   public:
 
     // TODO : abstract API-independent class -> "IRenderPass"
-    IRenderTarget(VulkanRenderPass *renderPass);
-    IRenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
-    virtual ~IRenderTarget() = default;
+    RenderTarget(VulkanRenderPass *renderPass);
+    RenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
+    virtual ~RenderTarget() = default;
 
     void init();
     void recreate();

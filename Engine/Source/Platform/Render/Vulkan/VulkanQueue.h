@@ -31,6 +31,18 @@ struct VulkanQueue
                 const std::vector<VkSemaphore>     &signalSemaphores = {}, // trigger/signal semaphore after submission completed
                 VkFence                             emitFence        = VK_NULL_HANDLE)
     {
+        submit((void *)commandBuffers.data(),
+               static_cast<uint32_t>(commandBuffers.size()),
+               waitSemaphores,
+               signalSemaphores,
+               emitFence);
+    }
+
+    void submit(const void *commandBuffers, uint32_t size,
+                const std::vector<VkSemaphore> &waitSemaphores   = {}, // waiting
+                const std::vector<VkSemaphore> &signalSemaphores = {}, // trigger/signal semaphore after submission completed
+                VkFence                         emitFence        = VK_NULL_HANDLE)
+    {
         VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo         info{
                     .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -38,8 +50,8 @@ struct VulkanQueue
                     .waitSemaphoreCount   = static_cast<uint32_t>(waitSemaphores.size()),
                     .pWaitSemaphores      = waitSemaphores.data(),
                     .pWaitDstStageMask    = &waitStageMask,
-                    .commandBufferCount   = static_cast<uint32_t>(commandBuffers.size()),
-                    .pCommandBuffers      = commandBuffers.data(),
+                    .commandBufferCount   = size,
+                    .pCommandBuffers      = static_cast<const VkCommandBuffer *>(commandBuffers),
                     .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
                     .pSignalSemaphores    = signalSemaphores.data(),
         };

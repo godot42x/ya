@@ -5,7 +5,7 @@
 namespace ya
 {
 
-IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass)
+RenderTarget::RenderTarget(VulkanRenderPass *renderPass)
 {
     _renderPass = renderPass;
 
@@ -18,15 +18,17 @@ IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass)
 
 
 
-    swapChain->onRecreate.addLambda(this, [this]() {
-        bDirty = true; // Mark as dirty to recreate frame buffers
+    swapChain->onRecreate.addLambda(this, [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
+        if (now.extent.width != old.extent.width || now.extent.height != old.extent.height) {
+            this->setExtent(now.extent);
+        }
     });
 
     init();
     recreate();
 }
 
-IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
+RenderTarget::RenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
 {
     _renderPass       = renderPass;
     _frameBufferCount = frameBufferCount;
@@ -36,7 +38,7 @@ IRenderTarget::IRenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferC
     recreate();
 }
 
-void IRenderTarget::init()
+void RenderTarget::init()
 {
     _clearValues.resize(_renderPass->getAttachmentCount());
     setColorClearValue(VkClearValue{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}});
@@ -44,7 +46,7 @@ void IRenderTarget::init()
 }
 
 
-void IRenderTarget::recreate()
+void RenderTarget::recreate()
 {
     if (_extent.width <= 0 || _extent.height <= 0)
     {
@@ -118,12 +120,12 @@ void IRenderTarget::recreate()
     }
 }
 
-void IRenderTarget::destroy()
+void RenderTarget::destroy()
 {
 }
 
 
-void IRenderTarget::begin(void *cmdBuf)
+void RenderTarget::begin(void *cmdBuf)
 {
     YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
@@ -152,7 +154,7 @@ void IRenderTarget::begin(void *cmdBuf)
     bBeginTarget = true;
 }
 
-void IRenderTarget::end(void *cmdBuf)
+void RenderTarget::end(void *cmdBuf)
 {
 
     // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
@@ -161,19 +163,19 @@ void IRenderTarget::end(void *cmdBuf)
     bBeginTarget = false;
 }
 
-void IRenderTarget::setExtent(VkExtent2D extent)
+void RenderTarget::setExtent(VkExtent2D extent)
 {
     _extent = extent;
     bDirty  = true;
 }
 
-void IRenderTarget::setBufferCount(uint32_t count)
+void RenderTarget::setBufferCount(uint32_t count)
 {
     _frameBufferCount = count;
     bDirty            = true;
 }
 
-void IRenderTarget::setColorClearValue(VkClearValue clearValue)
+void RenderTarget::setColorClearValue(VkClearValue clearValue)
 {
     for (int i = 0; i < _clearValues.size(); i++)
     {
@@ -181,7 +183,7 @@ void IRenderTarget::setColorClearValue(VkClearValue clearValue)
     }
 }
 
-void IRenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
+void RenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size()) {
@@ -200,7 +202,7 @@ void IRenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
     }
 }
 
-void IRenderTarget::setDepthStencilClearValue(VkClearValue clearValue)
+void RenderTarget::setDepthStencilClearValue(VkClearValue clearValue)
 {
     for (int i = 0; i < _clearValues.size(); i++)
     {
@@ -208,7 +210,7 @@ void IRenderTarget::setDepthStencilClearValue(VkClearValue clearValue)
     }
 }
 
-void IRenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearValue)
+void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size())

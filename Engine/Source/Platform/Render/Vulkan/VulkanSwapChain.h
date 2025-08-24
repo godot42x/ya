@@ -40,7 +40,11 @@ struct VulkanSwapChain
 
     uint32_t _curImageIndex = 0;
 
-    MulticastDelegate<void()> onRecreate;
+    struct DiffInfo
+    {
+        VkExtent2D extent;
+    };
+    MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now)> onRecreate;
 
   public:
     VulkanSwapChain(VulkanRender *render)
@@ -72,6 +76,7 @@ struct VulkanSwapChain
     // Getters
     [[nodiscard]] VkSwapchainKHR              getSwapChain() const { return m_swapChain; }
     [[nodiscard]] const std::vector<VkImage> &getImages() const { return m_images; }
+    [[nodiscard]] uint32_t                    getImageSize() const { return static_cast<uint32_t>(m_images.size()); }
     [[nodiscard]] VkFormat                    getSurfaceFormat() const { return _surfaceFormat; }
     [[nodiscard]] VkPresentModeKHR            getPresentMode() const { return _presentMode; }
     [[nodiscard]] uint32_t                    getWidth() const { return _supportDetails.capabilities.currentExtent.width; }

@@ -2,30 +2,11 @@
 #include "Render.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
-
-
-namespace EVertexAttributeFormat
+namespace ya
 {
-
-std::size_t T2Size(T type)
-{
-    switch (type) {
-    case Float2:
-        return sizeof(float) * 2;
-    case Float3:
-        return sizeof(float) * 3;
-    case Float4:
-        return sizeof(float) * 4;
-    default:
-        YA_CORE_ASSERT(false, "Invalid vertex attribute format {}", int(type));
-        return 0;
-    }
-}
-}; // namespace EVertexAttributeFormat
 
 IRender *IRender::create(const RenderCreateInfo &ci)
 {
-
     switch (ci.renderAPI) {
     case ERenderAPI::Vulkan:
     {
@@ -42,3 +23,5 @@ IRender *IRender::create(const RenderCreateInfo &ci)
     }
     return nullptr;
 }
+
+} // namespace ya

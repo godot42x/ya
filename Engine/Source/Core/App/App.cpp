@@ -36,7 +36,7 @@ App *App::_instance = nullptr;
 
 VulkanRenderPass *renderpass;
 // std::vector<VulkanFrameBuffer> frameBuffers;
-IRenderTarget *renderTarget = nullptr;
+RenderTarget *renderTarget = nullptr;
 
 std::vector<VkCommandBuffer> commandBuffers;
 
@@ -63,14 +63,6 @@ struct UboInstanceBuffer
 VulkanPipeline *pipeline = nullptr;
 
 
-// unlike glfw have double buffer, we only need one frameFence
-uint32_t flightFrameSize = 1;
-// 每帧需要独立的同步对象
-std::vector<VkSemaphore> frameImageAvailableSemaphores; // 每帧的图像可用信号量
-std::vector<VkFence>     frameFences;                   // 每帧的CPU-GPU同步栅栏
-std::vector<VkSemaphore> submittedSignalSemaphores;     // 每张swapchain image渲染完成信号量
-
-
 // std::vector<std::shared_ptr<VulkanImage>> depthImages;
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
@@ -88,8 +80,8 @@ const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
 const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
 
-EditorCamera   camera;
-vk::ImguiState imgui;
+EditorCamera camera;
+ImguiState   imgui;
 
 VkClearValue colorClearValue = {
     .color = {
@@ -336,7 +328,7 @@ void App::init(AppCreateInfo ci)
     vkRender->allocateCommandBuffers(swapchainImageSize, commandBuffers);
 
     // use the RT instead of framebuffers directly
-    renderTarget = new IRenderTarget(renderpass);
+    renderTarget = new RenderTarget(renderpass);
 
 #pragma region Layout
 
@@ -556,8 +548,6 @@ void App::init(AppCreateInfo ci)
     _firstPresentQueue  = &vkRender->getPresentQueues()[0];
 
 
-    // MARK: Resources
-    initSemaphoreAndFence();
 
     std::vector<ya::Vertex> vertices;
     std::vector<uint32_t>   indices;
@@ -677,8 +667,6 @@ void ya::App::quit()
 
     imgui.shutdown();
 
-    releaseSemaphoreAndFence();
-
     pipeline->cleanup();
     delete pipeline;
 
@@ -765,7 +753,7 @@ int ya::App::onEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_RESIZED:
     {
         YA_CORE_INFO("window resized {}x{}", event.window.data1, event.window.data2);
-        // auto vkRender = static_cast<VulkanRender *>(_render)
+        // auto vkRender = static_cast<VulkanRender*>(_render)
         // vkRender->recreateSwapChain();
         float aspectRatio = event.window.data2 > 0 ? static_cast<float>(event.window.data1) / static_cast<float>(event.window.data2) : 1.f;
         YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", event.window.data1, event.window.data2, aspectRatio);
@@ -954,71 +942,14 @@ void App::onDraw(float dt)
     }
 
 
-    // ✅ Flight Frames关键步骤1: CPU等待当前帧对应的fence
-    // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
-    // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
-    VK_CALL(vkWaitForFences(vkRender->getLogicalDevice(),
-                            1,
-                            &frameFences[currentFrameIdx],
-                            VK_TRUE,
-                            UINT64_MAX));
 
-    // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
-    VK_CALL(vkResetFences(vkRender->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
-
-    auto swapchain = vkRender->getSwapChain();
-
-
-    // get imageIndex
-    uint32_t imageIndex = -1;
-    {
-        VkResult ret = swapchain->acquireNextImage(
-            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-            frameFences[currentFrameIdx],                   // 等待上一present完成
-            imageIndex);
-
-        // Do a sync recreation here, Can it be async?(just return and register a frame task)
-        if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
-            vkDeviceWaitIdle(vkRender->getLogicalDevice());
-
-            // current ignore the size in ci
-            VkExtent2D originalExtent = swapchain->getExtent();
-            bool       ok             = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
-
-            if (ok) {
-                if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
-                    // recreate renderpass and pipeline
-                    // rebind frame buffer
-                    renderTarget->setExtent(swapchain->getExtent());
-                }
-                if (imageIndex == -1) {
-                    ret = vkRender->getSwapChain()->acquireNextImage(
-                        frameImageAvailableSemaphores[currentFrameIdx],
-                        frameFences[currentFrameIdx],
-                        imageIndex);
-                    if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-                        YA_CORE_ERROR("Failed to acquire next image: {}", ret);
-                    }
-                }
-            }
-            else {
-                YA_CORE_ERROR("Failed to recreate swapchain, exiting application.");
-                bRunning = false; // Exit the application if swapchain recreation fails
-                return;
-            }
-        }
-        YA_CORE_ASSERT(imageIndex >= 0 && imageIndex < swapchainImageSize,
-                       "Invalid image index: {}. Swapchain image size: {}",
-                       imageIndex,
-                       swapchainImageSize);
-    }
-
-
+    int32_t imageIndex = -1;
+    vkRender->begin(&imageIndex);
 
     // 2. begin command buffer
     VkCommandBuffer curCmdBuf = commandBuffers[imageIndex];
     vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
-    begin(curCmdBuf);
+    VulkanCommandPool::begin(curCmdBuf);
 
 #pragma region RenderPass
 
@@ -1176,66 +1107,11 @@ void App::onDraw(float dt)
 #pragma endregion
 
 
-
     // 10. end command buffer
-    end(curCmdBuf);
+    VulkanCommandPool::end(curCmdBuf);
 
+    vkRender->end(imageIndex, {curCmdBuf});
 
-    // MARK: submit
-    // 11. submit command buffer
-    // _firstGraphicsQueue.waitIdle();
-    // auto curQue = currentFrame == 0 ? _firstGraphicsQueue : _firstPresentQueue;
-    _firstGraphicsQueue->submit(
-        {
-            curCmdBuf,
-        },
-        //  wait image available to submit, after acquire image done
-        {
-            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-        },
-        // send submitted signal after command buffer submitted completed
-        {
-            submittedSignalSemaphores[imageIndex], // ⚠️ the signal sema of the submit operation should be the IMAGE_INDEX!!!
-        },
-        frameFences[currentFrameIdx] // GPU完成所有(submit)工作后会发送此fence信号;
-    );
-
-
-    // MARK: present
-    // submit and present are asynchronous operations,
-    VkResult result = vkRender->getSwapChain()->presentImage(
-        imageIndex,
-        {
-            submittedSignalSemaphores[imageIndex], // ⚠️ the wait sema of the Present operation  should be the IMAGE_INDEX!!!
-        });
-
-    // if not use gl, this should be eq?
-    // YA_CORE_INFO("Presenting image index: {}, current frame index: {}", curFrameIdx, curFrameIdx);
-    // NE_ASSERT(curFrameIdx == curImageIdx, "Image index mismatch! Expected {}, got {}", curFrameIdx, curImageIdx);
-
-    if (result == VK_SUBOPTIMAL_KHR) {
-        // recreate swapchain
-        VK_CALL(vkDeviceWaitIdle(vkRender->getLogicalDevice()));
-        VkExtent2D originalExtent = swapchain->getExtent();
-
-        bool ok = swapchain->recreate(vkRender->getSwapChain()->getCreateInfo());
-        if (ok) {
-            if (swapchain->getWidth() != originalExtent.width || swapchain->getHeight() != originalExtent.height) {
-                // recreate renderpass and pipeline
-                // rebind frame buffer
-                renderTarget->setExtent(swapchain->getExtent());
-            }
-        }
-        else {
-            YA_CORE_ERROR("Failed to recreate swapchain after suboptimal!");
-        }
-    }
-
-    // ✅ Flight Frames关键步骤5: 切换到下一个飞行帧
-    // 使用模运算实现环形缓冲区，在多个帧之间循环
-    // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
-    // ⚠️ frameCount can not equal to imageSize of swapchain!!
-    currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
 } // namespace ya
 
 void App::updateDescriptors()
@@ -1357,93 +1233,6 @@ void App::updateDescriptors()
     //                      nullptr);
 }
 
-#pragma region Sync Resources
-
-void App::initSemaphoreAndFence()
-{
-    /* ✅ Flight Frames机制的同步对象初始化
-
-       SDL与Vulkan没有像OpenGL那样的"swap buffers"概念（如SDL_GL_SwapWindow()）。
-       在Vulkan中，呈现机制通过Vulkan的swapchain扩展来管理，
-       因此我们使用semaphore和fence来同步图像获取和渲染完成。
-
-       Flight Frames需要为每个并行帧创建独立的同步对象：
-       - imageAvailableSemaphores: GPU-GPU同步，swapchain图像可用信号
-       - submittedSignalSemaphores: GPU-GPU同步，渲染完成信号
-       - frameFences: CPU-GPU同步，CPU等待GPU完成帧渲染
-    */
-
-    auto vkRender = static_cast<VulkanRender *>(_render);
-
-    VkSemaphoreCreateInfo semaphoreInfo{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0, // No special flags
-    };
-
-    VkResult ret = {};
-    // NOTICE : 应该创建与swapchain图像数量相同的信号量数量
-    // 以避免不同图像之间的资源竞争（如信号量) VUID-vkQueueSubmit-pSignalSemaphores-00067
-
-    // ✅ 为每个飞行帧分配独立的同步对象数组
-    // 这是Flight Frames的核心：避免不同帧之间的资源竞争
-    submittedSignalSemaphores.resize(swapchainImageSize);
-    frameImageAvailableSemaphores.resize(flightFrameSize);
-    frameFences.resize(flightFrameSize);
-
-    // ✅ 循环创建每个飞行帧的同步对象
-    for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
-
-        // 创建渲染完成信号量：当GPU完成渲染命令时发出信号
-        ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &submittedSignalSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
-
-
-
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     submittedSignalSemaphores[i],
-                                     std::format("SubmittedSignalSemaphore_{}", i).c_str());
-    }
-
-    for (uint32_t i = 0; i < flightFrameSize; i++) {
-        // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
-        ret = vkCreateSemaphore(vkRender->getLogicalDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
-        // 创建帧fence：用于CPU等待GPU完成整个帧的处理
-        // ⚠️ 重要：初始状态设为已信号(SIGNALED)，这样第一帧不会被阻塞
-        VkFenceCreateInfo fenceInfo{
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = VK_FENCE_CREATE_SIGNALED_BIT // 开始时就处于已信号状态
-        };
-
-        ret = vkCreateFence(vkRender->getLogicalDevice(), &fenceInfo, nullptr, &frameFences[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create fence!");
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
-                                     frameFences[i],
-                                     std::format("FrameFence_{}", i).c_str());
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                     frameImageAvailableSemaphores[i],
-                                     std::format("ImageAvailableSemaphore_{}", i).c_str());
-    }
-}
-
-void App::releaseSemaphoreAndFence()
-{
-    auto vkRender = static_cast<VulkanRender *>(_render);
-    vkDeviceWaitIdle(vkRender->getLogicalDevice());
-    for (uint32_t i = 0; i < flightFrameSize; i++) {
-        vkDestroySemaphore(vkRender->getLogicalDevice(), frameImageAvailableSemaphores[i], vkRender->getAllocator());
-        vkDestroyFence(vkRender->getLogicalDevice(), frameFences[i], vkRender->getAllocator());
-    }
-    for (uint32_t i = 0; i < swapchainImageSize; i++) {
-        vkDestroySemaphore(vkRender->getLogicalDevice(), submittedSignalSemaphores[i], vkRender->getAllocator());
-    }
-}
-
-
-
-#pragma endregion
 
 
 } // namespace ya

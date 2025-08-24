@@ -142,9 +142,6 @@ struct App
   private:
 
     void updateDescriptors();
-
-    void initSemaphoreAndFence();
-    void releaseSemaphoreAndFence();
 };
 
 

@@ -12,9 +12,9 @@ VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
     _render    = render;
     _swapChain = _render->getSwapChain();
 
-    _swapChain->onRecreate.addLambda([this]() {
-        // this->recreate(this->getCI());
-    });
+    // _swapChain->onRecreate.addLambda([this]() {
+    // this->recreate(this->getCI());
+    // });
 }
 
 
