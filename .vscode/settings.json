@@ -9,6 +9,7 @@
         "CULLMODE",
         "cxxopts",
         "DXIL",
+        "entt",
         "fshader",
         "glsl",
         "glslc",

@@ -41,6 +41,7 @@ add_requires("vulkansdk", {
 })
 add_requires("glad")
 add_requires("cxxopts")
+add_requires("entt v3.15.0")
 
 target("ya") --"Yet Another (Game) Engine"
 do
@@ -81,6 +82,7 @@ do
     end
     add_packages("glad")
     add_packages("cxxopts", { public = true })
+    add_packages("entt")
 
     -- add_deps("shader")
 
