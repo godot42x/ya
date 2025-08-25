@@ -71,6 +71,8 @@ EmptyLineAfterAccessModifier: Leave
 
 # 在一个注释中引入换行的penalty
 PenaltyBreakComment: 300
+AllowShortLambdasOnASingleLine: All
+LambdaBodyIndentation: Signature
 
 # 每行字符的限制，0表示没有限制
 ColumnLimit: 0

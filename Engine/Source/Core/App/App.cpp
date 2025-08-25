@@ -3,6 +3,8 @@
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 
+#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/TransformComponent.h"
 #include "Math/Geometry.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
@@ -26,6 +28,10 @@
 #include "glm/glm.hpp"
 
 
+#include "ECS/Entity.h"
+#include "ECS/System/BaseMaterialSystem.h"
+
+
 
 namespace ya
 {
@@ -40,29 +46,6 @@ RenderTarget *renderTarget = nullptr;
 
 std::vector<VkCommandBuffer> commandBuffers;
 
-VulkanPipelineLayout                      *defaultPipelineLayout = nullptr;
-std::shared_ptr<VulkanDescriptorPool>      descriptorPool;
-std::shared_ptr<VulkanDescriptorSetLayout> descriptorSetLayout0;
-std::vector<VkDescriptorSet>               descriptorSets;
-
-std::shared_ptr<VulkanBuffer> uGBuffer;
-struct UboGBuffer
-{
-    // should be aligned by vec4
-    glm::mat4 proj;
-    glm::mat4 view;
-    glm::vec4 dirLight;
-} gBuffer;
-
-std::shared_ptr<VulkanBuffer> uInstanceBuffer;
-struct UboInstanceBuffer
-{
-    glm::mat4 model;
-} instanceBuffer;
-
-VulkanPipeline *pipeline = nullptr;
-
-
 // std::vector<std::shared_ptr<VulkanImage>> depthImages;
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
@@ -73,15 +56,14 @@ int             fps             = 60;
 
 
 
-std::shared_ptr<ya::Mesh> cubeMesh;
-bool                      bRotating = true;
+std::shared_ptr<Mesh> cubeMesh;
+bool                  bRotating = true;
 
 const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
 const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
 
-EditorCamera camera;
-ImguiState   imgui;
+ImguiState imgui;
 
 VkClearValue colorClearValue = {
     .color = {
@@ -209,7 +191,7 @@ void App::init(AppCreateInfo ci)
     onInit(ci);
 
     currentRenderAPI          = ERenderAPI::Vulkan;
-    std::string currentShader = "Test/HelloTexture.glsl";
+    std::string currentShader = "Test/BaseMaterial.glsl";
 
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
@@ -323,265 +305,17 @@ void App::init(AppCreateInfo ci)
     VulkanSwapChain *vkSwapChain = vkRender->getSwapChain();
 
     const std::vector<VkImage> &images = vkSwapChain->getImages();
-    swapchainImageSize                 = static_cast<int>(images.size());
-
-    vkRender->allocateCommandBuffers(swapchainImageSize, commandBuffers);
+    vkRender->allocateCommandBuffers(images.size(), commandBuffers);
 
     // use the RT instead of framebuffers directly
     renderTarget = new RenderTarget(renderpass);
-
-#pragma region Layout
-
-    /**
-     In Vulkan:
-        define pipeline layout
-        the layout(set=?, binding=?) for each descriptor set:
-        - uniform buffer(camera, light)
-        - push constants?
-        - texture samplers?
-    */
-    PipelineLayout pipelineLayout{
-        .pushConstants = {
-            PushConstant{
-                .offset     = 0,
-                .size       = sizeof(char) * 256, // dynamical allocated buffer
-                .stageFlags = EShaderStage::Fragment,
-
-            },
-        },
-        .descriptorSetLayouts = {
-            DescriptorSetLayout{
-                .set      = 0,
-                .bindings = {
-                    // uGBuffer
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex,
-                    },
-                    // uInstanceBuffer
-                    DescriptorSetLayoutBinding{
-                        .binding         = 1,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex,
-                    },
-                    // uTexture0
-                    DescriptorSetLayoutBinding{
-                        .binding         = 2,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    // uTexture1
-                    DescriptorSetLayoutBinding{
-                        .binding         = 3,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    // uTextures
-                    DescriptorSetLayoutBinding{
-                        .binding         = 4,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 16,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-        },
-    };
-
-    std::vector<ya::DescriptorPoolSize> poolSizes = {
-        ya::DescriptorPoolSize{
-            .type            = EPipelineDescriptorType::UniformBuffer,
-            .descriptorCount = 2 + 6, // uGBuffer + uInstanceBuffer
-        },
-        ya::DescriptorPoolSize{
-            .type            = EPipelineDescriptorType::CombinedImageSampler,
-            .descriptorCount = 1 + 1 + 16, // uTexture0 + uTexture1 + uTextures
-        },
-    };
-
-    std::vector<VkDescriptorPoolSize> vkPoolSizes;
-    for (const auto &poolSize : poolSizes) {
-        vkPoolSizes.push_back(VkDescriptorPoolSize{
-            .type            = toVk(poolSize.type),
-            .descriptorCount = poolSize.descriptorCount,
-        });
-    }
-
-    descriptorPool       = std::make_shared<VulkanDescriptorPool>(vkRender, 1, vkPoolSizes);
-    descriptorSetLayout0 = std::make_shared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[0]);
-    descriptorPool->allocateDescriptorSets({descriptorSetLayout0}, descriptorSets);
-    for (int i = 0; i < descriptorSets.size(); i++) {
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, descriptorSets[i], std::format("Set_{}", i).c_str());
-    }
-
-    defaultPipelineLayout = new VulkanPipelineLayout(vkRender);
-    defaultPipelineLayout->create(
-        pipelineLayout.pushConstants,
-        {
-            descriptorSetLayout0->getHandle(),
-        });
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, defaultPipelineLayout->getHandle(), "DefaultPipelineLayout");
-
-#pragma endregion
-
-
-    // MARK: Pipeline
-
-    /**
-      In Vulkan:
-        define the pipelines
-        1. Shader Part
-            -  shader programs from vert/frag/geom/comp shaders source codes
-            -  the vertex layout define/from reflection, like glVertexAttribPointer()
-        2. reference to the pipeline layout(seems one layout can be compatible with different pipelines)
-        3. reference to the subpass
-        4. other states initial settings (unlike OpenGL, all state are immutable in Vulkan by default):
-            -  rasterization state
-            -  multisample state
-            -  depth/stencil state
-            -  color blend state
-            -  viewport state
-    */
-    pipeline = new VulkanPipeline(vkRender, renderpass, defaultPipelineLayout);
-
-    pipeline->recreate(GraphicsPipelineCreateInfo{
-        // .pipelineLayout   = pipelineLayout,
-        .shaderCreateInfo = ShaderCreateInfo{
-            .shaderName        = currentShader,
-            .bDeriveFromShader = false,
-            .vertexBufferDescs = {
-                VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(ya::Vertex),
-                },
-            },
-            .vertexAttributes = {
-                // (location=0) in vec3 aPos,
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 0,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(ya::Vertex, position),
-                },
-                //  texcoord
-                VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 1,
-                    .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(ya::Vertex, texCoord0),
-                },
-                // normal
-                VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 2,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(ya::Vertex, normal),
-                },
-            },
-        },
-        .subPassRef = 0,
-
-        // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
-                           EPipelineDynamicFeature::Viewport,
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = RasterizationState{
-            .polygonMode = EPolygonMode::Fill,
-            .frontFace   = EFrontFaceType::CounterClockWise, // GL
-        },
-        .multisampleState = MultisampleState{
-            .sampleCount          = _sampleCount,
-            .bSampleShadingEnable = false,
-        },
-        .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = true,
-            .bDepthWriteEnable      = true,
-            .depthCompareOp         = ECompareOp::Less,
-            .bDepthBoundsTestEnable = false,
-            .bStencilTestEnable     = false,
-            .minDepthBounds         = 0.0f,
-            .maxDepthBounds         = 1.0f,
-        },
-        .colorBlendState = ColorBlendState{
-            .attachments = {
-                ColorBlendAttachmentState{
-                    .index               = 0,
-                    .bBlendEnable        = false,
-                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                    .colorBlendOp        = EBlendOp::Add,
-                    .srcAlphaBlendFactor = EBlendFactor::One,
-                    .dstAlphaBlendFactor = EBlendFactor::Zero,
-                    .alphaBlendOp        = EBlendOp::Add,
-                    .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                },
-            },
-        },
-        .viewportState = ViewportState{
-            .viewports = {
-                {
-                    .x        = 0,
-                    .y        = 0,
-                    .width    = static_cast<float>(vkRender->getSwapChain()->getWidth()),
-                    .height   = static_cast<float>(vkRender->getSwapChain()->getHeight()),
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                },
-            },
-            .scissors = {Scissor{
-                .offsetX = 0,
-                .offsetY = 0,
-                .width   = static_cast<uint32_t>(vkRender->getSwapChain()->getWidth()),
-                .height  = static_cast<uint32_t>(vkRender->getSwapChain()->getHeight()),
-            }},
-        },
-    });
-
-
+    renderTarget->addMaterialSystem<BaseMaterialSystem>();
 
     _firstGraphicsQueue = &vkRender->getGraphicsQueues()[0];
     _firstPresentQueue  = &vkRender->getPresentQueues()[0];
 
 
 
-    std::vector<ya::Vertex> vertices;
-    std::vector<uint32_t>   indices;
-    ya::GeometryUtils::makeCube(
-        -0.5,
-        0.5,
-        -0.5,
-        0.5,
-        -0.5,
-        0.5,
-        vertices,
-        indices,
-        true,
-        true);
-
-    cubeMesh = std::make_shared<ya::Mesh>(vertices, indices, "cube");
-
-    uGBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            .debugName     = "uGBuffer",
-        });
-    uInstanceBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            .data          = std::nullopt,
-            .size          = sizeof(UboGBuffer),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            .debugName     = "uGBufferStaging",
-        });
     AssetManager::get()->loadTexture(faceTexturePath);
     AssetManager::get()->loadTexture(uv1TexturePath);
 
@@ -623,7 +357,7 @@ void App::init(AppCreateInfo ci)
         .MSAASamples    = VK_SAMPLE_COUNT_1_BIT,
 
         // (Optional)
-        .PipelineCache = vkRender->getPipelineCache(),
+        .PipelineCache = nullptr,
         .Subpass       = 0,
 
         // (Optional) Set to create internal descriptor pool instead of using DescriptorPool
@@ -637,7 +371,7 @@ void App::init(AppCreateInfo ci)
 #endif
 
         // (Optional) Allocation, Debugging
-        .Allocator       = VK_NULL_HANDLE,
+        .Allocator       = vkRender->getAllocator(),
         .CheckVkResultFn = [](VkResult err) {
             if (err != VK_SUCCESS) {
                 YA_CORE_ERROR("Vulkan error: {}", err);
@@ -650,6 +384,8 @@ void App::init(AppCreateInfo ci)
 #pragma endregion
 
 
+
+    loadScene(ci.defaultScenePath);
     // wait something done
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 }
@@ -660,20 +396,18 @@ void ya::App::quit()
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
+    unloadScene();
 
-    cubeMesh.reset();
-    uGBuffer.reset();
-    uInstanceBuffer.reset();
 
     imgui.shutdown();
 
-    pipeline->cleanup();
-    delete pipeline;
+    // pipeline->cleanup();
+    // delete pipeline;
 
-    defaultPipelineLayout->cleanup();
-    delete defaultPipelineLayout;
-    descriptorSetLayout0.reset();
-    descriptorPool.reset();
+    // defaultPipelineLayout->cleanup();
+    // delete defaultPipelineLayout;
+    // descriptorSetLayout0.reset();
+    // descriptorPool.reset();
 
 
     delete renderTarget;
@@ -898,39 +632,29 @@ int ya::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     inputManager.update();
-
-    static auto time = 0.f;
-    time += dt;                       // dt is in milliseconds
-    float speed = glm::radians(45.f); // 45 degrees per second
-    float alpha = speed * time;       // Convert time from ms to seconds
-
-    glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
-    glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
-    glm::quat rotZ = glm::angleAxis(alpha, glm::vec3(0, 0, 1));
-
-    // xyz rotation
-    glm::quat combinedRot = rotZ * rotY * rotX;
-
-    // auto rotation by up-down and left-right
-    glm::mat4 rot = glm::mat4_cast(combinedRot);
-
-
     camera.update(inputManager, dt); // Camera expects dt in seconds
 
-    gBuffer.view     = camera.getViewMatrix();
-    gBuffer.proj     = camera.getProjectionMatrix();
-    gBuffer.dirLight = glm::normalize(glm::vec4(-1.0f, -3.0f, -1.0f, 1.f));
-    if (bRotating) {
-        instanceBuffer.model = rot;
-    }
+    // static auto time = 0.f;
+    // time += dt;                       // dt is in milliseconds
+    // float speed = glm::radians(45.f); // 45 degrees per second
+    // float alpha = speed * time;       // Convert time from ms to seconds
+
+    // glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
+    // glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
+    // glm::quat rotZ = glm::angleAxis(alpha, glm::vec3(0, 0, 1));
+
+    // // xyz rotation
+    // glm::quat combinedRot = rotZ * rotY * rotX;
+
+    // // auto rotation by up-down and left-right
+    // glm::mat4 rot = glm::mat4_cast(combinedRot);
+
+    renderTarget->setColorClearValue(colorClearValue);
+    renderTarget->setDepthStencilClearValue(depthClearValue);
+    renderTarget->onUpdate(dt);
 }
 
 void App::onRender(float dt)
-{
-    onDraw(dt);
-}
-
-void App::onDraw(float dt)
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
     // vkDeviceWaitIdle(vkRender->getLogicalDevice());
@@ -941,8 +665,6 @@ void App::onDraw(float dt)
         return;
     }
 
-
-
     int32_t imageIndex = -1;
     vkRender->begin(&imageIndex);
 
@@ -951,107 +673,11 @@ void App::onDraw(float dt)
     vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
     VulkanCommandPool::begin(curCmdBuf);
 
-#pragma region RenderPass
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    renderTarget->setColorClearValue(colorClearValue);
-    renderTarget->setDepthStencilClearValue(depthClearValue);
     renderTarget->begin(curCmdBuf);
-
-
-    VulkanFrameBuffer *curFrameBuffer = renderTarget->getFrameBuffer();
-
-
-
-    // 5. bind pipeline
-    pipeline->bind(curCmdBuf);
-
-
-
-#pragma region Dynamic State
-    // need set VkPipelineDynamicStateCreateInfo
-    // or those properties should be modified in the pipeline recreation if needed.
-    // but sometimes that we want to enable depth or color-blend state dynamically
-
-
-
-    VkViewport viewport{
-        .x        = 0,
-        .y        = 0,
-        .width    = static_cast<float>(curFrameBuffer->getWidth()),
-        .height   = static_cast<float>(curFrameBuffer->getHeight()),
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    vkCmdSetViewport(curCmdBuf, 0, 1, &viewport);
-
-
-    // Set scissor (required by imgui , and cause I must call this here)
-    VkRect2D scissor{
-        .offset = {0, 0},
-        .extent = vkRender->getSwapChain()->getExtent(),
-    };
-    vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
-#pragma endregion
-
-
-    // MARK: update descriptor
-    // 6. setup vertex buffer, index buffer (2d payloads? upload?)
-    // 7. other resources, uniform buffers, etc.
-    updateDescriptors();
-
-
-    // MARK: Push Constants
-    // dynamical stack push, high performance, reduce descriptor usage (to ubo)
-    static struct PushConstantData
-    {
-        float textureMixAlpha = 0.5f;
-    } pushData;
-
-    vkCmdPushConstants(curCmdBuf,
-                       defaultPipelineLayout->getHandle(),
-                       VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0,
-                       sizeof(PushConstantData),
-                       &pushData);
-
-    // bind this for current pipeline?
-    // 4. bind descriptor sets, as global concepts
-    vkCmdBindDescriptorSets(curCmdBuf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            defaultPipelineLayout->getHandle(),
-                            0, // first set
-                            descriptorSets.size(),
-                            descriptorSets.data(),
-                            // 😁 We can use {2,4,6} at the firstOffset{3} to make a new layoutSet  from old layoutSet{1,2,3...}
-                            // This can avoid of creating a new descriptor set?
-                            0,        // dynamic offset count
-                            nullptr); // dynamic offsets
-
-
-
-    // Bind vertex buffer
-    VkBuffer vertexBuffers[] = {cubeMesh->getVertexBuffer()->getHandle()};
-    // current no need to support subbuffer
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(curCmdBuf, 0, 1, vertexBuffers, offsets);
-
-    vkCmdBindIndexBuffer(curCmdBuf,
-                         cubeMesh->getIndexBuffer()->getHandle(),
-                         0,
-                         VK_INDEX_TYPE_UINT32);
-
-    // 8. draw triangle
-
-    // vkCmdDraw(curCmdBuf, 3, 1, 0, 0);
-    vkCmdDrawIndexed(curCmdBuf,
-                     cubeMesh->getIndexCount(), // index count
-                     9,                         // instance count: 9 cubes
-                     0,                         // first index
-                     0,                         // vertex offset, this for merge vertex buffer?
-                     0                          // first instance
-    );
+    renderTarget->onRender(curCmdBuf);
 
 #pragma region UI
 
@@ -1066,7 +692,7 @@ void App::onDraw(float dt)
             YA_CORE_INFO("=====================================");
         }
 
-        ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
+        // ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
         ImGui::Checkbox("Is Rotating", &bRotating);
 
         bool bVsync = vkRender->getSwapChain()->bVsync;
@@ -1092,145 +718,79 @@ void App::onDraw(float dt)
     // imgui.submit(curCmdBuf, pipeline->getHandle());
     imgui.submit(curCmdBuf); // leave nullptr to let imgui use its pipeline
     imgui.endFrame();
-
 #pragma endregion
 
-    // 9. end render pass
     // TODO: subpasses?
-    // #if 1 // multiple renderpass
-    //     // vkCmdNextSubpass2()
-    //     // vkCmdNextSubpass()
-    // #endif
-    // renderpass->end(curCmdBuf);
     renderTarget->end(curCmdBuf);
-
-#pragma endregion
-
-
-    // 10. end command buffer
     VulkanCommandPool::end(curCmdBuf);
 
     vkRender->end(imageIndex, {curCmdBuf});
+}
 
-} // namespace ya
 
-void App::updateDescriptors()
+bool App::loadScene(const std::string &path)
 {
-    // TODO: some thing like the proj need to update every frame
-    // But something is not changed, descriptor need to be set(initial set),
-    // but not required to set every frame
-    auto vkRender = getRender<VulkanRender>();
-    auto set      = descriptorSets[0];
+    if (_scene)
+    {
+        unloadScene();
+    }
 
-    uGBuffer->writeData(&gBuffer, sizeof(UboGBuffer), 0);
-    uInstanceBuffer->writeData(&instanceBuffer, sizeof(UboInstanceBuffer), 0);
+    _scene = std::make_unique<Scene>();
+    onSceneInit(_scene.get());
+    return true;
+}
 
-    VkDescriptorBufferInfo gBuffer{
-        .buffer = uGBuffer->getHandle(), // 🤣 this is the buffer contains the data
-        .offset = 0,
-        .range  = sizeof(UboGBuffer), // size of the uniform buffer
-    };
-    VkDescriptorBufferInfo instanceBuffer{
-        .buffer = uInstanceBuffer->getHandle(), // 🤣 this is the buffer contains the data
-        .offset = 0,
-        .range  = sizeof(UboInstanceBuffer), // size of the uniform buffer
-    };
+bool App::unloadScene()
+{
+    cubeMesh.reset();
+    if (_scene)
+    {
+        onSceneDestroy(_scene.get());
+        _scene.reset();
+    }
+    return true;
+}
 
-    VkDescriptorImageInfo texture0{
-        .sampler     = vkRender->getSampler("DefaultSampler"),
-        .imageView   = AssetManager::get()->getTexture(faceTexturePath)->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-    VkDescriptorImageInfo texture1{
-        .sampler     = vkRender->getSampler("DefaultSampler"),
-        .imageView   = AssetManager::get()->getTexture(uv1TexturePath)->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+void App::onSceneInit(Scene *scene)
+{
+    std::vector<ya::Vertex> vertices;
+    std::vector<uint32_t>   indices;
+    ya::GeometryUtils::makeCube(
+        -0.5,
+        0.5,
+        -0.5,
+        0.5,
+        -0.5,
+        0.5,
+        vertices,
+        indices,
+        true,
+        true);
+    cubeMesh = std::make_shared<Mesh>(vertices, indices, "cube");
 
+    auto cube = scene->createEntity("cube1");
+    {
+        auto &tc = cube.addComponent<TransformComponent>();
+        tc.setRotation({45, 45, 0});
 
-    std::vector<VkWriteDescriptorSet> writeDSs{
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 0,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo       = nullptr,
-            .pBufferInfo      = &gBuffer,
-            .pTexelBufferView = nullptr,
-        },
+        auto &mc = cube.addComponent<MeshComponent>();
+        mc.mesh  = cubeMesh.get();
 
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 1,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pImageInfo       = nullptr,
-            .pBufferInfo      = &instanceBuffer,
-            .pTexelBufferView = nullptr,
-        },
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 2,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo       = &texture0,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        },
-        VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = set, // the first descriptor set
-            .dstBinding       = 3,   // see gplCI[0].bindings[0].binding
-            .dstArrayElement  = 0,   // the index of array
-            .descriptorCount  = 1,   // see gplCI[0].bindings[0].descriptorCount
-            .descriptorType   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo       = &texture1,
-            .pBufferInfo      = nullptr,
-            .pTexelBufferView = nullptr,
-        },
-    };
+        cube.addComponent<BaseMaterialComponent>();
+    }
 
+    auto cube2 = scene->createEntity("cube2");
+    {
+        auto &tc = cube2.addComponent<TransformComponent>();
+        tc.setPosition({2, 0, 0});
+        tc.setScale({0.5f, 0.5f, 0.5f});
 
+        auto &mc = cube2.addComponent<MeshComponent>();
+        mc.mesh  = cubeMesh.get();
 
-    // vkCmdPushDescriptorSet(curCmdBuf,
-    //                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-    //                        defaultPipelineLayout->getHandle(),
-    //                        0,
-    //                        writeDSs.size(),
-    //                        writeDSs.data());
-
-    // TODO: make a copy pass like SDL
-    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
-                           writeDSs.size(),
-                           writeDSs.data(),
-                           0,
-                           nullptr);
-    vkUpdateDescriptorSets(vkRender->getLogicalDevice(),
-                           writeDSs.size(),
-                           writeDSs.data(),
-                           0,
-                           nullptr);
-
-    // vkCmdPipelineBarrier(curCmdBuf,
-    //                      VK_PIPELINE_STAGE_TRANSFER_BIT,
-    //                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    //                      0,
-    //                      0,
-    //                      nullptr,
-    //                      bmBarriers.size(),
-    //                      bmBarriers.data(),
-    //                      0,
-    //                      nullptr);
+        auto &mat     = cube2.addComponent<BaseMaterialComponent>();
+        mat.colorType = 0;
+    }
 }
 
 

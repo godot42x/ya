@@ -759,10 +759,10 @@ bool VulkanRender::begin(int32_t *outImageIndex)
         // current ignore the size in ci
         bool ok = swapchain->recreate(this->getSwapChain()->getCreateInfo());
         if (ok) {
-            ret = getSwapChain()->acquireNextImage(
-                frameImageAvailableSemaphores[currentFrameIdx],
-                frameFences[currentFrameIdx],
-                imageIndex);
+            ret = getSwapChain()->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
+                                                   frameFences[currentFrameIdx],
+                                                   imageIndex);
+
             if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
                 YA_CORE_ERROR("Failed to acquire next image: {}", ret);
                 return false;

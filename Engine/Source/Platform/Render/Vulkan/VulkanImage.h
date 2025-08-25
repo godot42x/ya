@@ -15,12 +15,12 @@ struct VulkanBuffer;
 struct VulkanImage
 {
 
-    VulkanRender     *_render     = nullptr;
-    VkImage           _handle     = VK_NULL_HANDLE;
-    VkDeviceMemory    imageMemory = VK_NULL_HANDLE;
-    VkFormat          _format     = VK_FORMAT_UNDEFINED;
-    VkImageUsageFlags _usageFlags = 0;
-    bool              bOwned      = false;
+    VulkanRender     *_render      = nullptr;
+    VkImage           _handle      = VK_NULL_HANDLE;
+    VkDeviceMemory    _imageMemory = VK_NULL_HANDLE;
+    VkFormat          _format      = VK_FORMAT_UNDEFINED;
+    VkImageUsageFlags _usageFlags  = 0;
+    bool              bOwned       = false;
 
     ya::ImageCreateInfo _ci;
 
@@ -58,7 +58,7 @@ struct VulkanImage
   public:
     static void transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage);
     static bool transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
-                                      VkImageLayout oldLayout, VkImageLayout newLayout);
+                                 VkImageLayout oldLayout, VkImageLayout newLayout);
 
   public:
     [[nodiscard]] uint32_t getWidth() const { return static_cast<int>(_ci.extent.width); }

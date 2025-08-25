@@ -136,7 +136,8 @@ VulkanSwapChain::~VulkanSwapChain()
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 {
     DiffInfo old{
-        .extent = _supportDetails.capabilities.currentExtent,
+        .extent      = _supportDetails.capabilities.currentExtent,
+        .presentMode = _presentMode,
     };
 
     YA_PROFILE_FUNCTION();
@@ -156,26 +157,27 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
     // TODO: extend
     // Choose present mode based on config and V-Sync setting
-    VkPresentModeKHR presentMode;
-    if (_ci.bVsync) {
-        presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync enabled
-    }
-    else {
-        presentMode = toVk(_ci.presentMode);
-    }
+    // VkPresentModeKHR presentMode = VK_NULL_HANDLE;
+    // if (ci.bVsync) {
+    //     presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync enabled
+    // }
+    // else {
+    //     presentMode = toVk(ci.presentMode);
+    // }
+    // _presentMode = presentMode;
+    _presentMode = toVk(ci.presentMode);
 
-    _presentMode = presentMode;
     // TODO: we not use compat present mode for now, let it crash if not support
     // _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
 
     YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
                  std::to_string(preferred.format),
                  std::to_string(preferred.colorSpace));
-    if (presentMode != _presentMode) {
-        YA_CORE_ERROR("Requested present mode: {}, Actually using: {}",
-                      std::to_string(presentMode),
-                      std::to_string(_presentMode));
-    }
+    // if (presentMode != _presentMode) {
+    //     YA_CORE_ERROR("Requested present mode: {}, Actually using: {}",
+    //                   std::to_string(presentMode),
+    //                   std::to_string(_presentMode));
+    // }
     const auto &curExtent = _supportDetails.capabilities.currentExtent;
     YA_CORE_INFO("Current extent is: {}x{}", curExtent.width, curExtent.height);
     if (curExtent.width <= 0 || curExtent.height <= 0) {
@@ -203,7 +205,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     _surfaceFormat     = preferred.format;
     _surfaceColorSpace = preferred.colorSpace;
 
-    _minImageCount = std::max(_ci.minImageCount, _supportDetails.capabilities.minImageCount);
+    _minImageCount = std::max(ci.minImageCount, _supportDetails.capabilities.minImageCount);
     if (_supportDetails.capabilities.maxImageCount > 0 && _minImageCount > _supportDetails.capabilities.maxImageCount)
     {
         _minImageCount = _supportDetails.capabilities.maxImageCount;
@@ -249,7 +251,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .imageFormat           = _surfaceFormat,
         .imageColorSpace       = _surfaceColorSpace,
         .imageExtent           = _supportDetails.capabilities.currentExtent, // reuse current extent
-        .imageArrayLayers      = _ci.imageArrayLayers,
+        .imageArrayLayers      = ci.imageArrayLayers,
         .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // Convert from config if needed
         .imageSharingMode      = sharingMode,                         // Exclusive mode for now
         .queueFamilyIndexCount = queueFamilyCount,
@@ -257,7 +259,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .preTransform          = _supportDetails.capabilities.currentTransform,
         .compositeAlpha        = compositeAlpha,
         .presentMode           = _presentMode,
-        .clipped               = _ci.bClipped ? VK_TRUE : VK_FALSE,
+        .clipped               = ci.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain          = oldSwapchain,
     };
 
@@ -291,8 +293,11 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,
                                 std::format("SwapChain_{}", version).c_str());
+
+    _ci = ci;
     DiffInfo now{
-        .extent = _supportDetails.capabilities.currentExtent,
+        .extent      = _supportDetails.capabilities.currentExtent,
+        .presentMode = _presentMode,
     };
     onRecreate.broadcast(old, now);
     return true;

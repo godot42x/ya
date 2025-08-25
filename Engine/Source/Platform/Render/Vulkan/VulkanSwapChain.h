@@ -42,7 +42,8 @@ struct VulkanSwapChain
 
     struct DiffInfo
     {
-        VkExtent2D extent;
+        VkExtent2D       extent;
+        VkPresentModeKHR presentMode;
     };
     MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now)> onRecreate;
 
@@ -64,11 +65,11 @@ struct VulkanSwapChain
 
     void setVsync(bool vsync)
     {
-        bVsync          = vsync;
-        _presentMode    = bVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-        _ci.bVsync      = bVsync;
-        _ci.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
-        recreate(_ci);
+        bVsync         = vsync;
+        auto ci        = _ci;
+        ci.bVsync      = bVsync;
+        ci.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
+        recreate(ci);
     }
 
     [[nodiscard]] const SwapchainCreateInfo &getCreateInfo() const { return _ci; }

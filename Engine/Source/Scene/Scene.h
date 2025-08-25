@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Node.h"
 #include <entt/entt.hpp>
 #include <string>
 #include <vector>
@@ -10,6 +11,15 @@ class Entity;
 
 class Scene
 {
+    friend class Entity;
+
+    std::string    _name;
+    entt::registry _registry;
+    uint32_t       _entityCounter = 0;
+
+    std::unordered_map<entt::entity, Entity> _entityMap;
+    std::shared_ptr<Node>                    _rootNode = nullptr;
+
   public:
     Scene(const std::string &name = "Untitled Scene");
     ~Scene();
@@ -46,13 +56,6 @@ class Scene
     // Find entities
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
-
-  private:
-    std::string    _name;
-    entt::registry _registry;
-    uint32_t       _entityCounter = 0;
-
-    friend class Entity;
 };
 
 } // namespace ya

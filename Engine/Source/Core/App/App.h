@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/EditorCamera.h"
 #include "Render/Shader.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
@@ -13,6 +14,7 @@
 
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
+#include "Scene/Scene.h"
 #include "WindowProvider.h"
 
 #include "ClLIParams.h"
@@ -37,6 +39,7 @@ struct AppCreateInfo
     int         width      = 1024;
     int         height     = 768;
     bool        fullscreen = false;
+    std::string defaultScenePath;
 
 
     void init(int argc, char **argv)
@@ -48,7 +51,7 @@ struct AppCreateInfo
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
             .parse(argc, argv);
 
-        params.tryGet<std::string>("title", title);
+        title = params._opt.program();
         params.tryGet<int>("width", width);
         params.tryGet<int>("height", height);
         params.tryGet<bool>("fullscreen", fullscreen);
@@ -80,23 +83,16 @@ struct App
     static App *_instance;
 
     // StackDeleter    deleteStack;
-    IRender          *_render              = nullptr;
-    VulkanRenderPass *m_triangleRenderPass = nullptr;
-    VulkanRenderPass *m_2DRenderPass       = nullptr;
-
+    IRender *_render = nullptr;
+    // VulkanRenderPass *m_triangleRenderPass = nullptr;
+    // VulkanRenderPass *m_2DRenderPass       = nullptr;
     std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
-
-
-    InputManager inputManager;
 
 
     bool          bRunning            = true;
     ERenderAPI::T currentRenderAPI    = ERenderAPI::None;
     VulkanQueue  *_firstGraphicsQueue = nullptr;
     VulkanQueue  *_firstPresentQueue  = nullptr;
-
-    int swapchainImageSize = -1;
-
 
     using clock_t      = std::chrono::steady_clock;
     using time_point_t = clock_t::time_point;
@@ -108,7 +104,13 @@ struct App
     AppCreateInfo _ci;
     glm::vec2     _windowSize = {0, 0};
 
-    TaskManager taskManager;
+    InputManager inputManager;
+    TaskManager  taskManager;
+    EditorCamera camera;
+
+
+    std::unique_ptr<Scene> _scene = nullptr;
+
 
   public:
     App()          = default;
@@ -127,8 +129,6 @@ struct App
     virtual void onRender(float dt);
     virtual int  onEvent(SDL_Event &event);
 
-    void onDraw(float dt);
-
     static App *get() { return _instance; }
 
     template <typename T>
@@ -138,10 +138,15 @@ struct App
     [[nodiscard]] const AppCreateInfo           &getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
+    [[nodiscard]] Scene *getScene() const { return _scene.get(); }
 
   private:
 
-    void updateDescriptors();
+    bool         loadScene(const std::string &path);
+    bool         unloadScene();
+    bool         saveScene(const std::string &path) {}
+    virtual void onSceneInit(Scene *scene);
+    virtual void onSceneDestroy(Scene *scene) {}
 };
 
 

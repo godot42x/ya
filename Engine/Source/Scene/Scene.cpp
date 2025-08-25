@@ -1,7 +1,8 @@
 #include "Scene.h"
-#include "Component.h"
-#include "Entity.h"
+#include "ECS/Component.h"
+#include "ECS/Entity.h"
 #include <algorithm>
+
 
 
 namespace ya
@@ -27,7 +28,7 @@ Entity Scene::createEntity(const std::string &name)
     auto &tagComponent = entity.addComponent<TagComponent>();
     tagComponent._tag  = name.empty() ? "Entity" : name;
 
-    auto &transformComponent = entity.addComponent<TransformComponent>();
+    // auto &transformComponent = entity.addComponent<TransformComponent>();
 
     return entity;
 }
@@ -43,7 +44,7 @@ Entity Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
     auto &tagComponent = entity.addComponent<TagComponent>();
     tagComponent._tag  = name.empty() ? "Entity" : name;
 
-    auto &transformComponent = entity.addComponent<TransformComponent>();
+    // auto &transformComponent = entity.addComponent<TransformComponent>();
 
     return entity;
 }
@@ -73,11 +74,11 @@ void Scene::onUpdateRuntime(float deltaTime)
     // Example: Update transform hierarchy, physics, animations, etc.
 
     // For now, just iterate through entities with transform components
-    auto view = _registry.view<TransformComponent>();
-    for (auto entity : view)
-    {
-        // Update entity logic here
-    }
+    // auto view = _registry.view<TransformComponent>();
+    // for (auto entity : view)
+    // {
+    // Update entity logic here
+    // }
 }
 
 void Scene::onUpdateEditor(float deltaTime)
@@ -89,12 +90,12 @@ void Scene::onUpdateEditor(float deltaTime)
 void Scene::onRenderRuntime()
 {
     // Render entities with renderable components
-    auto view = _registry.view<TransformComponent, SpriteRendererComponent>();
-    for (auto entity : view)
-    {
-        auto [transform, sprite] = view.get<TransformComponent, SpriteRendererComponent>(entity);
-        // Render sprite with transform
-    }
+    // auto view = _registry.view<TransformComponent, SpriteRendererComponent>();
+    // for (auto entity : view)
+    // {
+    //     auto [transform, sprite] = view.get<TransformComponent, SpriteRendererComponent>(entity);
+    // Render sprite with transform
+    // }
 }
 
 void Scene::onRenderEditor()

@@ -9,7 +9,7 @@
 
 
 void VulkanPipelineLayout::create(
-    const std::vector<ya::PushConstant>       pushConstants,
+    const std::vector<ya::PushConstantRange>  pushConstants,
     const std::vector<VkDescriptorSetLayout> &layouts)
 {
     // _ci = ci;
@@ -126,6 +126,7 @@ void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
     name               = _ci.shaderCreateInfo.shaderName;
+    YA_CORE_INFO("Creating pipeline for: {}", name);
     auto shaderStorage = ya::App::get()->getShaderStorage();
     auto stage2Spirv   = shaderStorage->getCache(_ci.shaderCreateInfo.shaderName);
     if (!stage2Spirv) {
@@ -378,6 +379,8 @@ void VulkanPipeline::createPipelineInternal()
     vkDestroyShaderModule(_render->getLogicalDevice(), vertShaderModule, nullptr);
 
     YA_CORE_INFO("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
+
+    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getHandle(), std::format("Pipeline_{}", name).c_str());
 }
 
 

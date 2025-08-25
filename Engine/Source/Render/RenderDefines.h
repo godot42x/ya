@@ -505,7 +505,7 @@ struct DescriptorSetLayout
 };
 
 
-struct PushConstant
+struct PushConstantRange
 {
     uint32_t        offset     = 0;
     uint32_t        size       = 0;
@@ -514,7 +514,7 @@ struct PushConstant
 
 struct PipelineLayout
 {
-    std::vector<PushConstant>        pushConstants;
+    std::vector<PushConstantRange>        pushConstants;
     std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
 

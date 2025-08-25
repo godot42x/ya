@@ -8,10 +8,8 @@
 
 VulkanBuffer::~VulkanBuffer()
 {
-    if (_handle != VK_NULL_HANDLE) {
-        VK_FREE(Memory, _render->getLogicalDevice(), _memory);
-        VK_DESTROY(Buffer, _render->getLogicalDevice(), _handle);
-    }
+    VK_FREE(Memory, _render->getLogicalDevice(), _memory);
+    VK_DESTROY(Buffer, _render->getLogicalDevice(), _handle);
 }
 
 void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties)

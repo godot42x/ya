@@ -18,11 +18,16 @@ RenderTarget::RenderTarget(VulkanRenderPass *renderPass)
 
 
 
-    swapChain->onRecreate.addLambda(this, [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
-        if (now.extent.width != old.extent.width || now.extent.height != old.extent.height) {
-            this->setExtent(now.extent);
-        }
-    });
+    swapChain->onRecreate.addLambda(
+        this,
+        [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
+            if (now.extent.width != old.extent.width ||
+                now.extent.height != old.extent.height ||
+                old.presentMode != now.presentMode)
+            {
+                this->setExtent(now.extent);
+            }
+        });
 
     init();
     recreate();
@@ -48,6 +53,7 @@ void RenderTarget::init()
 
 void RenderTarget::recreate()
 {
+    YA_CORE_INFO("Recreating RenderTarget with extent: {}x{}, frameBufferCount: {}", _extent.width, _extent.height, _frameBufferCount);
     if (_extent.width <= 0 || _extent.height <= 0)
     {
         return;
@@ -113,15 +119,13 @@ void RenderTarget::recreate()
         _frameBuffers[i]->recreate(fbAttachments, _extent.width, _extent.height);
 
 
-        vkRender->setDebugObjectName(
-            VK_OBJECT_TYPE_FRAMEBUFFER,
-            _frameBuffers[i]->getHandle(),
-            std::format("RT_FrameBuffer_{}", i).c_str());
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandle(), std::format("RT_FrameBuffer_{}", i));
     }
 }
 
 void RenderTarget::destroy()
 {
+    _materialSystems.clear();
 }
 
 

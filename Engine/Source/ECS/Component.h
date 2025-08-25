@@ -9,8 +9,13 @@
 
 namespace ya
 {
+
+struct IComponent
+{
+};
+
 // Basic component for entity identification
-struct IDComponent
+struct IDComponent : public IComponent
 {
     uint32_t _id = 0;
 
@@ -19,7 +24,7 @@ struct IDComponent
     IDComponent(uint32_t id) : _id(id) {}
 };
 
-struct TagComponent
+struct TagComponent : public IComponent
 {
     std::string _tag;
 
@@ -28,24 +33,9 @@ struct TagComponent
     TagComponent(std::string tag) : _tag(std::move(tag)) {}
 };
 
-struct TransformComponent
-{
-    glm::vec3 _translation = {0.0f, 0.0f, 0.0f};
-    glm::vec3 _rotation    = {0.0f, 0.0f, 0.0f};
-    glm::vec3 _scale       = {1.0f, 1.0f, 1.0f};
 
-    TransformComponent()                           = default;
-    TransformComponent(const TransformComponent &) = default;
-    TransformComponent(const glm::vec3 &translation) : _translation(translation) {}
 
-    glm::mat4 getTransform() const
-    {
-        glm::mat4 rotation = glm::mat4_cast(glm::quat(_rotation));
-        return glm::translate(glm::mat4(1.0f), _translation) * rotation * glm::scale(glm::mat4(1.0f), _scale);
-    }
-};
-
-struct SpriteRendererComponent
+struct SpriteRendererComponent : public IComponent
 {
     glm::vec4 _color{1.0f, 1.0f, 1.0f, 1.0f};
     uint32_t  _textureID    = 0;
@@ -56,7 +46,7 @@ struct SpriteRendererComponent
     SpriteRendererComponent(const glm::vec4 &color) : _color(color) {}
 };
 
-struct CameraComponent
+struct CameraComponent : public IComponent
 {
     bool _primary          = true; // TODO: think about moving to Scene
     bool _fixedAspectRatio = false;
@@ -76,7 +66,7 @@ struct CameraComponent
 };
 
 // Mesh renderer component for 3D rendering
-struct MeshRendererComponent
+struct MeshRendererComponent : public IComponent
 {
     uint32_t _meshID         = 0;
     uint32_t _materialID     = 0;
@@ -90,7 +80,7 @@ struct MeshRendererComponent
 };
 
 // Light component for lighting
-struct LightComponent
+struct LightComponent : public IComponent
 {
     enum class Type
     {
@@ -113,7 +103,7 @@ struct LightComponent
 };
 
 // Physics body component (placeholder for future physics integration)
-struct RigidBodyComponent
+struct RigidBodyComponent : public IComponent
 {
     enum class BodyType
     {
@@ -136,7 +126,7 @@ struct RigidBodyComponent
 };
 
 // Box collider component
-struct BoxColliderComponent
+struct BoxColliderComponent : public IComponent
 {
     glm::vec3 _offset    = {0.0f, 0.0f, 0.0f};
     glm::vec3 _size      = {1.0f, 1.0f, 1.0f};
@@ -148,7 +138,7 @@ struct BoxColliderComponent
 };
 
 // Audio source component
-struct AudioSourceComponent
+struct AudioSourceComponent : public IComponent
 {
     uint32_t _audioClipID  = 0;
     bool     _playOnAwake  = false;
@@ -163,7 +153,7 @@ struct AudioSourceComponent
 };
 
 // Script component for custom behavior
-struct ScriptComponent
+struct ScriptComponent : public IComponent
 {
     std::string _scriptName;
     // Additional script-related data would go here

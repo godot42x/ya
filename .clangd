@@ -23,5 +23,6 @@ Diagnostics:
                 cppcoreguidelines-macro-usage,
                 #
                 modernize-use-trailing-return-type,
+                modernize-avoid-c-arrays,
                 #
             ]

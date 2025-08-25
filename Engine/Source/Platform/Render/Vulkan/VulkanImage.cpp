@@ -6,7 +6,7 @@
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
-        VK_FREE(Memory, _render->getLogicalDevice(), imageMemory);
+        VK_FREE(Memory, _render->getLogicalDevice(), _imageMemory);
         VK_DESTROY(Image, _render->getLogicalDevice(), _handle);
     }
 }
@@ -227,8 +227,8 @@ bool VulkanImage::allocate()
         .memoryTypeIndex = static_cast<uint32_t>(_render->getMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits)),
     };
 
-    VK_CALL(vkAllocateMemory(_render->getLogicalDevice(), &allocInfo, nullptr, &imageMemory));
-    VK_CALL(vkBindImageMemory(_render->getLogicalDevice(), _handle, imageMemory, 0));
+    VK_CALL(vkAllocateMemory(_render->getLogicalDevice(), &allocInfo, nullptr, &_imageMemory));
+    VK_CALL(vkBindImageMemory(_render->getLogicalDevice(), _handle, _imageMemory, 0));
 
     bOwned = true;
     return true;

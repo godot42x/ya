@@ -25,11 +25,12 @@ struct VulkanPipelineLayout
 
     // ya::PipelineLayout _ci;
 
-    VulkanPipelineLayout() = default;
     VulkanPipelineLayout(VulkanRender *render)
         : _render(render) {}
 
-    void create(const std::vector<ya::PushConstant>       pushConstants,
+    ~VulkanPipelineLayout() { cleanup(); }
+
+    void create(const std::vector<ya::PushConstantRange>  pushConstants,
                 const std::vector<VkDescriptorSetLayout> &layouts);
 
     auto getHandle() { return _pipelineLayout; }
@@ -57,7 +58,7 @@ struct VulkanPipeline
     VulkanPipelineLayout      *_pipelineLayout = nullptr;
 
   public:
-    ~VulkanPipeline() = default;
+    ~VulkanPipeline() { cleanup(); }
     VulkanPipeline(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *pipelineLayout)
     {
         _render         = render;
