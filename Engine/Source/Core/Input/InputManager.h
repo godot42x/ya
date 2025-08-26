@@ -35,7 +35,7 @@ class InputManager
     InputManager();
     ~InputManager() = default;
 
-    void                   update();
+    void              update();
     EventProcessState processEvent(const SDL_Event &event);
 
     bool isKeyPressed(SDL_Keycode keycode) const;

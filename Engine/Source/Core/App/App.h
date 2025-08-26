@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/EditorCamera.h"
+#include "Core/Camera.h"
 #include "Render/Shader.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
@@ -106,7 +106,7 @@ struct App
 
     InputManager inputManager;
     TaskManager  taskManager;
-    EditorCamera camera;
+    FreeCamera   camera;
 
 
     std::unique_ptr<Scene> _scene = nullptr;
@@ -120,6 +120,7 @@ struct App
     int  run();
     int  iterate(float dt);
     void quit();
+    int  processEvent(SDL_Event &event);
 
     virtual void onInit(AppCreateInfo ci) {}
     virtual void onQuit() {}
@@ -127,7 +128,8 @@ struct App
 
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
-    virtual int  onEvent(SDL_Event &event);
+    virtual int  onEvent(Event &event);
+
 
     static App *get() { return _instance; }
 

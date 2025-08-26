@@ -1,7 +1,9 @@
 #include "App.h"
-#include "Core/EditorCamera.h"
+#include "Core/Camera.h"
+#include "Core/Event.h"
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
+
 
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -140,7 +142,7 @@ void imcFpsControl(FPSControl &fpsCtrl)
     }
 }
 
-bool imcEditorCamera(EditorCamera &camera)
+bool imcEditorCamera(FreeCamera &camera)
 {
     auto position = camera.position;
     auto rotation = camera.rotation;
@@ -155,7 +157,7 @@ bool imcEditorCamera(EditorCamera &camera)
             bChanged = true;
         }
         ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
-        ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 0.01f, 0.01f, 1.0f);
+        ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 1.f, 10.f, 180.f);
         ImGui::Text("Hold right mouse button to rotate camera");
         ImGui::Text("WASD: Move horizontally, QE: Move vertically");
     }
@@ -444,7 +446,7 @@ int ya::App::run()
 }
 
 
-int ya::App::onEvent(SDL_Event &event)
+int ya::App::processEvent(SDL_Event &event)
 {
     EventProcessState ret = imgui.processEvents(event);
     if (ret != EventProcessState::Continue) {
@@ -538,7 +540,11 @@ int ya::App::onEvent(SDL_Event &event)
     case SDL_EVENT_MOUSE_MOTION:
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
+        break;
     case SDL_EVENT_MOUSE_WHEEL:
+    {
+        break;
+    }
     case SDL_EVENT_MOUSE_ADDED:
     case SDL_EVENT_MOUSE_REMOVED:
     case SDL_EVENT_JOYSTICK_AXIS_MOTION:
@@ -613,7 +619,7 @@ int ya::App::iterate(float dt)
     SDL_Event evt;
     SDL_PollEvent(&evt);
 
-    if (auto result = onEvent(evt); result != 0) {
+    if (auto result = processEvent(evt); result != 0) {
         return 1;
     }
 
@@ -727,6 +733,10 @@ void App::onRender(float dt)
     vkRender->end(imageIndex, {curCmdBuf});
 }
 
+int App::onEvent(Event &event)
+{
+    return 0;
+}
 
 bool App::loadScene(const std::string &path)
 {
@@ -776,7 +786,8 @@ void App::onSceneInit(Scene *scene)
         auto &mc = cube.addComponent<MeshComponent>();
         mc.mesh  = cubeMesh.get();
 
-        cube.addComponent<BaseMaterialComponent>();
+        auto &bmc     = cube.addComponent<BaseMaterialComponent>();
+        bmc.colorType = 0;
     }
 
     auto cube2 = scene->createEntity("cube2");
@@ -788,8 +799,8 @@ void App::onSceneInit(Scene *scene)
         auto &mc = cube2.addComponent<MeshComponent>();
         mc.mesh  = cubeMesh.get();
 
-        auto &mat     = cube2.addComponent<BaseMaterialComponent>();
-        mat.colorType = 0;
+        auto &bmc     = cube2.addComponent<BaseMaterialComponent>();
+        bmc.colorType = 1;
     }
 }
 

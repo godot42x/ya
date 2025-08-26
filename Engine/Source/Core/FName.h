@@ -11,73 +11,124 @@
 
 using index_t = uint32_t;
 
+struct FName;
 
 class NameRegistry
 {
     static NameRegistry *_instance;
 
-    std::map<std::string, index_t> _str2Index;
-    index_t                        _nextIndex = 1; // 0 is reserved for empty name
+    struct Elem
+    {
+        index_t     index;
+        uint32_t    refCount;
+        std::string data;
+    };
+
+    std::map<std::string, Elem> _str2Index;
+    index_t                     _nextIndex = 1; // 0 is reserved for empty name
 
   public:
 
     static void          init();
-    static NameRegistry &instance() { return *_instance; }
+    static NameRegistry &get() { return *_instance; }
 
-    index_t getIndex(const std::string &name)
+
+    const Elem *newIndex(const std::string &name)
     {
         auto it = _str2Index.find(name);
         if (it != _str2Index.end())
         {
-            return it->second;
+            it->second.refCount++;
+            return &it->second;
         }
-        else
+
+        // If name not found, add it
+        index_t     index = _nextIndex++;
+        const auto &ret   = _str2Index.insert({
+            name,
+            Elem{
+                  .index    = index,
+                  .refCount = 1,
+                  .data     = name},
+        });
+        return &ret.first->second;
+    }
+    bool ref(const std::string &name)
+    {
+        auto it = _str2Index.find(name);
+        if (it != _str2Index.end())
         {
-            // If name not found, add it
-            index_t index    = _nextIndex++;
-            _str2Index[name] = index;
-            return index;
+            it->second.refCount++;
+            return true;
+        }
+        return false;
+    }
+
+    void deref(const std::string &name)
+    {
+        auto it = _str2Index.find(name);
+        if (it != _str2Index.end())
+        {
+            --it->second.refCount;
+            if (it->second.refCount == 0)
+            {
+                _str2Index.erase(it);
+            }
         }
     }
 };
 
 struct FName
 {
-
-    index_t     index;
-    std::string data;
+    index_t          index;
+    std::string_view data;
+    std::shared_ptr<int> a;
 
     FName() : index(0), data("") {}
+    FName(const FName &)            = default;
+    FName(FName &&)                 = delete;
+    FName &operator=(const FName &) = default;
+    FName &operator=(FName &&)      = delete;
     FName(const std::string &name)
-        : index(NameRegistry::instance().getIndex(name)), data(name)
     {
+        auto *elem = NameRegistry::get().newIndex(name);
+        index      = elem->index;
+        data       = elem->data;
     }
     FName(const char *name)
-        : index(NameRegistry::instance().getIndex(std::string(name))), data(name)
+        : FName(std::string(name))
     {
+    }
+    ~FName()
+    {
+        clear();
     }
 
     void clear()
     {
+        NameRegistry::get().deref(data);
         index = 0;
-        data.clear();
     }
+    std::string toString() { return std::string(data); }
+
     operator index_t() const { return index; }
-    operator const std::string &() const { return data; }
-    operator const char *() const { return data.c_str(); }
+    operator std::string_view() const { return data; }
+    operator const char *() const { return data.data(); }
+
     bool operator==(const FName &other) const { return index == other.index; }
 };
 
-
 namespace std
 {
-// Add formatter specialization for spirv_cross::SPIRType
 template <>
 struct formatter<FName> : formatter<std::string>
 {
-    auto format(const FName &type, std::format_context &ctx) const
+    auto format(const FName &name, std::format_context &ctx) const
     {
-        return std::format_to(ctx.out(), "{}", type.data.c_str());
+        return std::format_to_n(ctx.out(),
+                                static_cast<long long>(name.data.size()),
+                                "{}",
+                                name.data);
     }
 };
 

@@ -1,6 +1,7 @@
-#include "EditorCamera.h"
+#include "Camera.h"
+namespace ya{
 
-void EditorCamera::update(const InputManager &inputManager, float deltaTime)
+void FreeCamera::update(const InputManager &inputManager, float deltaTime)
 {
     bool cameraChanged = false;
 
@@ -18,7 +19,7 @@ void EditorCamera::update(const InputManager &inputManager, float deltaTime)
         recalculateAll();
     }
 }
-bool EditorCamera::handleKeyboardInput(const InputManager &inputManager, float deltaTime)
+bool FreeCamera::handleKeyboardInput(const InputManager &inputManager, float deltaTime)
 {
     bool  moved      = false;
     float moveAmount = moveSpeed * deltaTime;
@@ -57,15 +58,15 @@ bool EditorCamera::handleKeyboardInput(const InputManager &inputManager, float d
 
     return moved;
 }
-bool EditorCamera::handleMouseRotation(const InputManager &inputManager, float deltaTime)
+bool FreeCamera::handleMouseRotation(const InputManager &inputManager, float deltaTime)
 {
     if (inputManager.isMouseButtonPressed(rotateButton)) {
         glm::vec2 mouseDelta = inputManager.getMouseDelta();
 
         if (glm::length(mouseDelta) > 0.0f) {
             // Apply rotation (yaw around Y axis, pitch around X axis)
-            rotation.y -= mouseDelta.x * rotationSpeed;
-            rotation.x -= mouseDelta.y * rotationSpeed;
+            rotation.y -= mouseDelta.x * rotationSpeed * deltaTime;
+            rotation.x -= mouseDelta.y * rotationSpeed * deltaTime;
 
             // Clamp pitch to avoid gimbal lock
             rotation.x = glm::clamp(rotation.x, -89.0f, 89.0f);
@@ -81,4 +82,6 @@ bool EditorCamera::handleMouseRotation(const InputManager &inputManager, float d
     }
 
     return false;
+}
+
 }

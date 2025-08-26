@@ -2,6 +2,12 @@
 #include "FWD.h"
 #include "Trait.h"
 
+using stdpath  = std::filesystem::path;
+using stdclock = std::chrono::steady_clock;
+using namespace std::string_literals;
+using namespace std::literals;
+
+
 #if _WIN32
     #define PLATFORM_BREAK() __debugbreak()
 #elif defined(__clang__) || defined(__GNUC__)
@@ -12,7 +18,7 @@
 
 
 #if defined(_WIN32)
-    #if BUILD_SHARED_ya
+    #if BUILD_SHARED_YA
         #define ENGINE_API __declspec(dllexport)
     #else
         #define ENGINE_API __declspec(dllimport)

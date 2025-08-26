@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 
 #include <SDL3/SDL_mouse.h>
+#include <math.h>
 
 InputManager::InputManager()
 {
@@ -22,7 +23,7 @@ void InputManager::update()
 
     // Update mouse delta
     previousMousePosition = mousePosition;
-    float x, y;
+    float x = 0, y = 0;
     SDL_GetMouseState(&x, &y);
     mousePosition = {static_cast<float>(x), static_cast<float>(y)};
     mouseDelta    = mousePosition - previousMousePosition;

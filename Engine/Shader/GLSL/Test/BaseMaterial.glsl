@@ -19,10 +19,10 @@ void main()
 {
     mat4 instanceModel = pc.model;
     vec4 worldPos = instanceModel * vec4(aPos, 1.0);
-    vec3 normal = normalize(aNormal.xyz);
+    // vec3 normal = normalize(aNormal.xyz);
 
     gl_Position = pc.viewProjection * worldPos;
-    vColor = pc.colorType == 0? vec4(normal * 0.5 + 0.5, 1.0): vec4(aTexCoord, 0.0, 1.0);
+    vColor = pc.colorType == 0? vec4(aNormal * 0.5 + 0.5, 1.0): vec4(aTexCoord, 0.0, 1.0);
 }
 
 #type fragment
