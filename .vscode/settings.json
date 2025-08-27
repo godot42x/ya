@@ -16,6 +16,7 @@
         "gltf",
         "HLSL",
         "Instrumentor",
+        "libsdl",
         "logcc",
         "Lsizeiptr",
         "MSAA",

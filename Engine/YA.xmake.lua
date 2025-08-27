@@ -1,11 +1,16 @@
 includes("./Plugins/Plugins.xmake.lua")
 includes("./Shader/xmake.lua")
+includes("./Test/xmake.lua")
 
-add_requires("spdlog")
-add_requires("libsdl3")
-add_requires("libsdl3_image")
-add_requires("glm")
-add_requires("spirv-cross")
+add_requires(
+    "spdlog",
+    "libsdl3",
+    "libsdl3_image",
+    "glm",
+    "spirv-cross",
+    "stb",
+    "cxxopts"
+)
 add_requires("assimp", {
     configs = {
         shared = false,
@@ -28,9 +33,6 @@ add_requires("shaderc", {
         runtimes = "MT",
     }
 })
-
-add_requires("stb")
-
 add_requires("vulkansdk", {
     configs = {
         utils = {
@@ -40,8 +42,14 @@ add_requires("vulkansdk", {
     }
 })
 add_requires("glad")
-add_requires("cxxopts")
 add_requires("entt v3.15.0")
+
+rule("testing")
+do
+    on_config(function(t)
+        t:remove("files", "**.test.cpp")
+    end)
+end
 
 target("ya") --"Yet Another (Game) Engine"
 do
@@ -49,6 +57,7 @@ do
     add_files("./Source/**.cpp")
     add_headerfiles("./Source/**.h")
 
+    add_rules("testing")
     add_includedirs("./Source", { public = true })
 
     add_deps("utility.cc")
@@ -97,4 +106,8 @@ do
         print("removing sdl log files")
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
+end
+
+target("ya-testing")
+do
 end

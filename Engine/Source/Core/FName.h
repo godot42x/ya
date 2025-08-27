@@ -15,16 +15,21 @@ struct FName;
 
 class NameRegistry
 {
+  public:
+    friend struct FName;
+
     static NameRegistry *_instance;
 
     struct Elem
     {
-        index_t     index;
-        uint32_t    refCount;
-        std::string data;
+        index_t               index;
+        std::atomic<uint32_t> refCount;
+        std::string           data;
     };
 
-    std::map<std::string, Elem> _str2Index;
+  private:
+    std::map<std::string, Elem> _str2Elem;
+    std::map<index_t, Elem *>   _index2Elem;
     index_t                     _nextIndex = 1; // 0 is reserved for empty name
 
   public:
@@ -33,71 +38,68 @@ class NameRegistry
     static NameRegistry &get() { return *_instance; }
 
 
-    const Elem *newIndex(const std::string &name)
+    const Elem *indexing(const std::string &name)
     {
-        auto it = _str2Index.find(name);
-        if (it != _str2Index.end())
+        if (auto it = _str2Elem.find(name); it != _str2Elem.end())
         {
-            it->second.refCount++;
+            ++it->second.refCount;
             return &it->second;
         }
 
         // If name not found, add it
-        index_t     index = _nextIndex++;
-        const auto &ret   = _str2Index.insert({
+        index_t index = ++_nextIndex;
+
+        auto it = _str2Elem.emplace(
             name,
             Elem{
-                  .index    = index,
-                  .refCount = 1,
-                  .data     = name},
-        });
-        return &ret.first->second;
-    }
-    bool ref(const std::string &name)
-    {
-        auto it = _str2Index.find(name);
-        if (it != _str2Index.end())
-        {
-            it->second.refCount++;
-            return true;
-        }
-        return false;
+                .index    = index,
+                .refCount = std::atomic<uint32_t>(1),
+                .data     = name,
+            });
+
+        _index2Elem[index] = &it.first->second;
+        return &it.first->second;
     }
 
-    void deref(const std::string &name)
+  protected:
+    const Elem *indexing(index_t index)
     {
-        auto it = _str2Index.find(name);
-        if (it != _str2Index.end())
+        if (auto it = _index2Elem.find(index); it != _index2Elem.end())
         {
-            --it->second.refCount;
-            if (it->second.refCount == 0)
-            {
-                _str2Index.erase(it);
-            }
+            ++it->second->refCount;
+            return it->second;
         }
+        return nullptr;
     }
+
+    void onRemove(const FName &name);
 };
 
 struct FName
 {
-    index_t          index;
-    std::string_view data;
-    std::shared_ptr<int> a;
+    index_t          _index;
+    std::string_view _data;
 
-    FName() : index(0), data("") {}
-    FName(const FName &)            = default;
-    FName(FName &&)                 = delete;
-    FName &operator=(const FName &) = default;
-    FName &operator=(FName &&)      = delete;
+    FName() : _index(0), _data("") {}
     FName(const std::string &name)
     {
-        auto *elem = NameRegistry::get().newIndex(name);
-        index      = elem->index;
-        data       = elem->data;
+        auto *elem = NameRegistry::get().indexing(name);
+        _index     = elem->index;
+        _data      = elem->data;
     }
-    FName(const char *name)
-        : FName(std::string(name))
+    FName(const char *name) : FName(std::string(name)) {}
+    FName(std::string_view name) : FName(std::string(name)) {}
+    FName(const FName &other)
     {
+        assert(nullptr != NameRegistry::get().indexing(other._index)); // add ref
+        _index = other._index;
+        _data  = other._data;
+    }
+    FName(FName &&other)
+    {
+        // do nothing, but access a moved FName is undefined behavior
+        // maybe it already destruct in name registry, or also could be used elsewhere
+        (void)other;
     }
     ~FName()
     {
@@ -106,16 +108,15 @@ struct FName
 
     void clear()
     {
-        NameRegistry::get().deref(data);
-        index = 0;
+        NameRegistry::get().onRemove(*this);
     }
-    std::string toString() { return std::string(data); }
+    std::string toString() { return std::string(_data); }
 
-    operator index_t() const { return index; }
-    operator std::string_view() const { return data; }
-    operator const char *() const { return data.data(); }
+    operator index_t() const { return _index; }
+    operator std::string_view() const { return _data; }
+    operator const char *() const { return _data.data(); }
 
-    bool operator==(const FName &other) const { return index == other.index; }
+    bool operator==(const FName &other) const { return _index == other._index; }
 };
 
 namespace std
@@ -126,9 +127,9 @@ struct formatter<FName> : formatter<std::string>
     auto format(const FName &name, std::format_context &ctx) const
     {
         return std::format_to_n(ctx.out(),
-                                static_cast<long long>(name.data.size()),
+                                static_cast<long long>(name._data.size()),
                                 "{}",
-                                name.data);
+                                name._data);
     }
 };
 
@@ -138,11 +139,25 @@ struct hash<FName>
     std::size_t operator()(const FName &name) const
     {
         // Use a simple hash function for FName
-        return name.index;
+        return name._index;
     }
 };
 
 } // namespace std
+
+inline void NameRegistry::onRemove(const FName &name)
+{
+
+    if (auto it = _index2Elem.find(name._index); it != _index2Elem.end())
+    {
+        // atomic
+        auto refCount = --it->second->refCount;
+        if (refCount == 0) {
+            _index2Elem.erase(it);
+            _str2Elem.erase(std::string(name._data));
+        }
+    }
+}
 
 #ifndef ENABLE_TEST
     #define ENABLE_TEST 0

@@ -15,6 +15,7 @@ includes("./Xmake/Rule.lua")
 includes("./Xmake/package/xmake.lua")
 includes("./Engine/YA.xmake.lua")
 includes("./Xmake/task.lua")
+includes("./Test/xmake.lua")
 
 -- add_rules("SourceFiles")
 
