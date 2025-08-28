@@ -1,17 +1,15 @@
 #include "App.h"
+
 #include "Core/Camera.h"
 #include "Core/Event.h"
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
-
-
 #include "Core/KeyCode.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Math/Geometry.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
-#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -20,9 +18,10 @@
 
 
 #include "Render/Core/RenderTarget.h"
-#include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "render/Mesh.h"
+
+#include "ImGuiHelper.h"
 
 
 #include <SDL3/SDL.h>
@@ -145,8 +144,8 @@ void imcFpsControl(FPSControl &fpsCtrl)
 
 bool imcEditorCamera(FreeCamera &camera)
 {
-    auto position = camera.position;
-    auto rotation = camera.rotation;
+    auto position = camera._position;
+    auto rotation = camera._rotation;
     bool bChanged = false;
 
     // Add camera control settings to UI
@@ -157,8 +156,8 @@ bool imcEditorCamera(FreeCamera &camera)
         if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
             bChanged = true;
         }
-        ImGui::DragFloat("Move Speed", &camera.moveSpeed, 0.1f, 0.1f, 20.0f);
-        ImGui::DragFloat("Rotation Speed", &camera.rotationSpeed, 1.f, 10.f, 180.f);
+        ImGui::DragFloat("Move Speed", &camera._moveSpeed, 0.1f, 0.1f, 20.0f);
+        ImGui::DragFloat("Rotation Speed", &camera._rotationSpeed, 1.f, 10.f, 180.f);
         ImGui::Text("Hold right mouse button to rotate camera");
         ImGui::Text("WASD: Move horizontally, QE: Move vertically");
     }

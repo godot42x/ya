@@ -306,7 +306,7 @@ void VulkanRender::createSurface()
 
 bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
 {
-    if (graphicsQueueCount > _graphicsQueueFamily.queueCount)
+    if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount)
     {
         YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
                       graphicsQueueCount,
@@ -315,7 +315,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return false;
     }
 
-    if (presentQueueCount > _presentQueueFamily.queueCount)
+    if ((int)presentQueueCount > _presentQueueFamily.queueCount)
     {
         YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
                       presentQueueCount,
@@ -478,7 +478,7 @@ void VulkanRender::createPipelineCache()
 void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)
 {
     outCommandBuffers.resize(size, VK_NULL_HANDLE);
-    for (int i = 0; i < size; ++i) {
+    for (uint32_t i = 0; i < size; ++i) {
         bool ok = _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, outCommandBuffers[i]);
         if (!ok) {
             YA_CORE_ERROR("Failed to allocate command buffer for index {}", i);

@@ -9,6 +9,15 @@ end
 
 set_policy("build.warning", true)
 set_warnings("all", "extra")
+if is_plat("windows") then
+    if is_mode("debug") then
+        add_cxflags(
+            "/wd4251"    --  needs to have dll-interface to be used by clients of class
+            , "/wd4100"  --  unreferenced formal parameter
+            , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
+        )
+    end
+end
 
 
 includes("./Xmake/Rule.lua")

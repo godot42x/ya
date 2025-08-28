@@ -88,7 +88,7 @@ class InstrumentationTimer
         auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
 
 
-        uint32_t threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
+        uint32_t threadID = (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id());
         // Instrumentor::Get().WriteProfile({.Name = _name, .Start = start, .End = end, .ThreadID = threadID});
         YA_CORE_DEBUG("Profile: [{0}] {1}ms,  on thread {2}", _name, ms, threadID);
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Base.h"
 
 #include "Core/Camera.h"
 #include "Render/Shader.h"
@@ -7,12 +8,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "Core/Base.h"
 #include "Core/Input/InputManager.h"
 #include "Platform/Render/Vulkan/VulkanQueue.h"
 
 
-#include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Scene/Scene.h"
 #include "WindowProvider.h"

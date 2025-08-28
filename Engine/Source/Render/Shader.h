@@ -237,8 +237,9 @@ struct ShaderStorage
 };
 
 
-struct ShaderProcessorFactory
+class ShaderProcessorFactory
 {
+  public:
     using Self = ShaderProcessorFactory;
 
     enum EProcessorType

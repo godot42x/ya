@@ -56,6 +56,8 @@ do
     set_kind("binary")
     add_files("./Source/**.cpp")
     add_headerfiles("./Source/**.h")
+    set_pcheader("./Source/Core/FWD.h")
+    add_rules("c++.unity_build", {batchsize = 2})
 
     add_rules("testing")
     add_includedirs("./Source", { public = true })

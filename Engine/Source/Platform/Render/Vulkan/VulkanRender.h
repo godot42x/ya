@@ -160,7 +160,7 @@ struct SamplerCreateInfo
 struct VulkanRender : public ya::IRender
 {
     friend struct VulkanUtils;
-    friend struct VulkanRenderPass;
+    friend class VulkanRenderPass;
 
     const std::vector<DeviceFeature> _instanceLayers           = {};
     const std::vector<DeviceFeature> _instanceValidationLayers = {

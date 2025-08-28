@@ -5,8 +5,8 @@
 
 struct CliParams
 {
-    int                  argc = 0;
-    char               **argv = nullptr;
+    int                  _argc = 0;
+    char               **_argv = nullptr;
     cxxopts::Options     _opt;
     cxxopts::ParseResult _optResult;
 
@@ -62,8 +62,8 @@ struct CliParams
 
     [[nodiscard]] const char *getRaw(uint32_t index) const
     {
-        if (index < static_cast<uint32_t>(argc)) {
-            return argv[index];
+        if (index < static_cast<uint32_t>(_argc)) {
+            return _argv[index];
         }
         else {
             throw std::out_of_range("Index out of range for command line arguments");

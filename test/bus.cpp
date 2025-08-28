@@ -9,13 +9,18 @@
 
 constexpr const char *a = "123";
 
+using FName = std::string;
 
 
-struct Tag
+struct FTagBuilder
 {
+
     std::vector<std::string> parts;
 
-    constexpr Tag() {}
+    FTagBuilder(const char *main)
+    {
+        parts.emplace_back(main);
+    }
 
 
     auto toString() const
@@ -31,29 +36,22 @@ struct Tag
         }
         return result;
     }
-    constexpr Tag &operator,(const char *what)
+    FTagBuilder operator()(std::string sub)
     {
-        parts.emplace_back(what);
+        parts.emplace_back(sub);
         return *this;
     }
-    constexpr Tag &operator[](const std::string &what)
+    FName operator()() const
     {
-        parts.emplace_back(what);
-        return *this;
+        return FName(toString());
     }
 };
 
 
-Tag b = (Tag{}, "123", "1235");
-#define TAG(...) (Tag{}, __VA_ARGS__)
-
-Tag c = TAG("game", "event", "123");
-Tag D = Tag()["game"]["event"]["123"];
-
-using FName = std::string;
 
 struct MessageBus
 {
+
 
     using cb_t = std::function<void(void *)>;
 
@@ -84,9 +82,9 @@ struct MessageBus
 
     // 便利的Lambda订阅
     template <typename T, typename Lambda>
-    void subscribe(const FName &Topic, Lambda &&Callback)
+    void subscribe(const FName &topic, Lambda &&callback)
     {
-        subscribe<T>(Topic, std::function<void(const T &)>(std::forward<Lambda>(Callback)));
+        subscribe<T>(topic, std::function<void(const T &)>(std::forward<Lambda>(callback)));
     }
 
     // 广播特定类型的消息
@@ -200,6 +198,9 @@ int main()
 {
     Test::test_message_bus();
 
-    std::cout << b.toString() << std::endl;
+    std::string v;
+    std::cin >> v;
+    FName a = FTagBuilder("game")(v)();
+
     return 0;
 }

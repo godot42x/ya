@@ -1,6 +1,5 @@
 #pragma once
 #include "FWD.h"
-#include "Trait.h"
 
 using stdpath  = std::filesystem::path;
 using stdclock = std::chrono::steady_clock;
@@ -63,7 +62,6 @@ Owned<T> MakeOwned(Args &&...args)
 #define USE_STB_IMG 1
 #define USE_SDL 1
 
-#include "Log.h"
 
 
 struct DefaultAllocator

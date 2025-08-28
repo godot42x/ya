@@ -32,25 +32,25 @@ struct Camera
 
 struct FreeCamera : public Camera
 {
-    float fov         = 45.0f;
-    float aspectRatio = 1.6 / 0.9f;
-    float nearClip    = 0.1f;
-    float farClip     = 1000.0f;
+    float _fov         = 45.0f;
+    float _aspectRatio = 1.6f / 0.9f;
+    float _nearClip    = 0.1f;
+    float _farClip     = 1000.0f;
 
-    glm::vec3 position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
-    glm::vec3 rotation = {0.0f, 0.0f, 0.0f}; // pitch, yaw, roll
+    glm::vec3 _position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
+    glm::vec3 _rotation = {0.0f, 0.0f, 0.0f}; // pitch, yaw, roll
 
     // Camera control settings
-    float moveSpeed     = 5.0f; // Units per second
-    float rotationSpeed = 0.5f; // Degrees per second
+    float _moveSpeed     = 5.0f; // Units per second
+    float _rotationSpeed = 0.5f; // Degrees per second
 
     // Movement keys (configurable)
-    SDL_Keycode forwardKey = SDLK_W;
-    SDL_Keycode backKey    = SDLK_S;
-    SDL_Keycode leftKey    = SDLK_A;
-    SDL_Keycode rightKey   = SDLK_D;
-    SDL_Keycode upKey      = SDLK_Q;
-    SDL_Keycode downKey    = SDLK_E;
+    SDL_Keycode _forwardKey = SDLK_W;
+    SDL_Keycode _backKey    = SDLK_S;
+    SDL_Keycode _leftKey    = SDLK_A;
+    SDL_Keycode _rightKey   = SDLK_D;
+    SDL_Keycode _upKey      = SDLK_Q;
+    SDL_Keycode _downKey    = SDLK_E;
 
     // Mouse button for rotation
     Uint8 rotateButton = SDL_BUTTON_RIGHT;
@@ -68,14 +68,14 @@ struct FreeCamera : public Camera
     void setPerspective(float fov, float aspectRatio, float nearClip, float farClip)
     {
         this->projectionType = EProjectionType::Perspective;
-        this->fov            = fov;
+        this->_fov           = fov;
         if (fov < 1.f) {
             YA_CORE_WARN("FOV is too small {}", fov);
         }
-        this->aspectRatio = aspectRatio;
-        this->nearClip    = nearClip;
-        this->farClip     = farClip;
-        projectionMatrix  = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
+        this->_aspectRatio = aspectRatio;
+        this->_nearClip    = nearClip;
+        this->_farClip     = farClip;
+        projectionMatrix   = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
 
         recalculateViewProjectionMatrix();
     }
@@ -83,8 +83,8 @@ struct FreeCamera : public Camera
     void setOrthographic(float left, float right, float bottom, float top, float nearClip, float farClip)
     {
         this->projectionType = EProjectionType::Orthographic;
-        this->nearClip       = nearClip;
-        this->farClip        = farClip;
+        this->_nearClip      = nearClip;
+        this->_farClip       = farClip;
         projectionMatrix     = glm::ortho(left, right, bottom, top, nearClip, farClip);
 
         recalculateViewProjectionMatrix();
@@ -94,9 +94,9 @@ struct FreeCamera : public Camera
 
     void recalculateViewMatrix()
     {
-        const glm::quat rotQuat = glm::quat(glm::radians(rotation));
+        const glm::quat rotQuat = glm::quat(glm::radians(_rotation));
 
-        viewMatrix = glm::translate(glm::mat4(1.0f), position) *
+        viewMatrix = glm::translate(glm::mat4(1.0f), _position) *
                      glm::mat4_cast(rotQuat);
 
         viewMatrix = glm::inverse(viewMatrix);
@@ -113,33 +113,33 @@ struct FreeCamera : public Camera
         recalculateViewProjectionMatrix();
     }
 
-    void setPosition(const glm::vec3 &position)
+    void setPosition(const glm::vec3 &position_)
     {
-        this->position = position;
+        _position = position_;
         recalculateAll();
     }
 
-    void setRotation(const glm::vec3 &rotation)
+    void setRotation(const glm::vec3 &rotation_)
     {
-        this->rotation = rotation;
+        _rotation = rotation_;
         recalculateAll();
     }
 
-    void setPositionAndRotation(const glm::vec3 &position, const glm::vec3 &rotation)
+    void setPositionAndRotation(const glm::vec3 &position_, const glm::vec3 &rotation_)
     {
-        this->position = position;
-        this->rotation = rotation;
+        _position = position_;
+        _rotation = rotation_;
         recalculateAll();
     }
 
     void setAspectRatio(float aspectRatio)
     {
-        this->aspectRatio = aspectRatio;
+        this->_aspectRatio = aspectRatio;
         if (projectionType == EProjectionType::Perspective) {
-            projectionMatrix = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
+            projectionMatrix = glm::perspective(glm::radians(_fov), aspectRatio, _nearClip, _farClip);
         }
         else {
-            projectionMatrix = glm::ortho(-aspectRatio, aspectRatio, -1.0f, 1.0f, nearClip, farClip);
+            projectionMatrix = glm::ortho(-aspectRatio, aspectRatio, -1.0f, 1.0f, _nearClip, _farClip);
         }
         recalculateViewProjectionMatrix();
     }
@@ -156,11 +156,11 @@ struct FreeCamera : public Camera
 
 struct OrbitCamera : public Camera
 {
-    glm::vec3 focalPoint = {0.0f, 0.0f, 0.0f};
-    float     distance   = 10.0f;
+    glm::vec3 _focalPoint = {0.0f, 0.0f, 0.0f};
+    float     _distance   = 10.0f;
 
-    glm::vec3 position;
-    glm::vec3 rotation; // pitch, yaw, roll
+    glm::vec3 _position;
+    glm::vec3 _rotation; // pitch, yaw, roll
 
     EMouse::T rotateButton = EMouse::Left;
     EMouse::T zoomButton   = EMouse::Middle;
@@ -168,14 +168,14 @@ struct OrbitCamera : public Camera
   public:
     void setDistance(float distance)
     {
-        this->distance = distance;
+        this->_distance = distance;
         recalculateViewMatrix();
         recalculateViewProjectionMatrix();
     }
 
     void setFocalPoint(const glm::vec3 &focalPoint)
     {
-        this->focalPoint = focalPoint;
+        this->_focalPoint = focalPoint;
         recalculateViewMatrix();
         recalculateViewProjectionMatrix();
     }
