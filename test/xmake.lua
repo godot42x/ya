@@ -1,13 +1,12 @@
 do -- grab all cpp file under test folder as a target
     local bDebug = false
     local files = os.files("./*.cpp")
-    for _, file in ipairs(files) do
-        file = file:gsub("/", ".")
+    for _, filepath in ipairs(files) do
+        local file = filepath:gsub("/", ".")
         file = file:gsub("\\", ".")
         file = file:gsub(".cpp", "")
         local targetName = "test." .. file
 
-        print("add test target:", targetName)
         target(targetName)
         do
             if bDebug then
@@ -15,7 +14,7 @@ do -- grab all cpp file under test folder as a target
             end
             set_group("test")
             set_kind("binary")
-            add_files(file)
+            add_files(filepath)
             target_end()
         end
     end

@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <cassert>
@@ -22,9 +21,31 @@ class NameRegistry
 
     struct Elem
     {
-        index_t               index;
-        std::atomic<uint32_t> refCount;
+        index_t               index = 0;
+        std::atomic<uint32_t> refCount{0};
         std::string           data;
+
+        // Make Elem movable but not copyable
+        Elem() = default;
+        Elem(index_t idx, uint32_t count, std::string str) 
+            : index(idx), refCount(count), data(std::move(str)) {}
+        
+        ~Elem() = default;
+        
+        Elem(const Elem&) = delete;
+        Elem& operator=(const Elem&) = delete;
+        
+        Elem(Elem&& other) noexcept 
+            : index(other.index), refCount(other.refCount.load()), data(std::move(other.data)) {}
+        
+        Elem& operator=(Elem&& other) noexcept {
+            if (this != &other) {
+                index = other.index;
+                refCount.store(other.refCount.load());
+                data = std::move(other.data);
+            }
+            return *this;
+        }
     };
 
   private:
@@ -49,13 +70,9 @@ class NameRegistry
         // If name not found, add it
         index_t index = ++_nextIndex;
 
-        auto it = _str2Elem.emplace(
-            name,
-            Elem{
-                .index    = index,
-                .refCount = std::atomic<uint32_t>(1),
-                .data     = name,
-            });
+        auto it = _str2Elem.emplace(std::piecewise_construct,
+                                   std::forward_as_tuple(name),
+                                   std::forward_as_tuple(index, 1, name));
 
         _index2Elem[index] = &it.first->second;
         return &it.first->second;
@@ -77,10 +94,10 @@ class NameRegistry
 
 struct FName
 {
-    index_t          _index;
+    index_t          _index = 0;
     std::string_view _data;
 
-    FName() : _index(0), _data("") {}
+    FName() : _data("") {}
     FName(const std::string &name)
     {
         auto *elem = NameRegistry::get().indexing(name);
@@ -95,12 +112,36 @@ struct FName
         _index = other._index;
         _data  = other._data;
     }
-    FName(FName &&other)
+    FName(FName &&other) noexcept : _index(other._index), _data(other._data)
     {
-        // do nothing, but access a moved FName is undefined behavior
-        // maybe it already destruct in name registry, or also could be used elsewhere
-        (void)other;
+        // Reset the moved-from object
+        other._index = 0;
+        other._data = "";
     }
+    
+    FName& operator=(const FName& other)
+    {
+        if (this != &other) {
+            clear();
+            assert(nullptr != NameRegistry::get().indexing(other._index)); // add ref
+            _index = other._index;
+            _data = other._data;
+        }
+        return *this;
+    }
+    
+    FName& operator=(FName&& other) noexcept
+    {
+        if (this != &other) {
+            clear();
+            _index = other._index;
+            _data = other._data;
+            other._index = 0;
+            other._data = "";
+        }
+        return *this;
+    }
+    
     ~FName()
     {
         clear();
@@ -126,10 +167,7 @@ struct formatter<FName> : formatter<std::string>
 {
     auto format(const FName &name, std::format_context &ctx) const
     {
-        return std::format_to_n(ctx.out(),
-                                static_cast<long long>(name._data.size()),
-                                "{}",
-                                name._data);
+        return std::format_to(ctx.out(), "{}", name._data);
     }
 };
 

@@ -121,6 +121,7 @@ struct App
     int  iterate(float dt);
     void quit();
     int  processEvent(SDL_Event &event);
+    void requestQuit() { bRunning = false; }
 
     virtual void onInit(AppCreateInfo ci) {}
     virtual void onQuit() {}
@@ -128,7 +129,8 @@ struct App
 
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
-    virtual int  onEvent(Event &event);
+    virtual int  onEvent(const Event &event);
+
 
 
     static App *get() { return _instance; }
@@ -149,6 +151,10 @@ struct App
     bool         saveScene(const std::string &path) {}
     virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene) {}
+
+    bool                           onWindowResized(const WindowResizeEvent &event);
+    bool                           onKeyReleased(const KeyReleasedEvent &event);
+    [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
 };
 
 

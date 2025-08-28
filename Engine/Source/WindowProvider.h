@@ -41,6 +41,13 @@ class IWindowProvider
     virtual void destroy()                            = 0;
     virtual bool recreate(const WindowCreateInfo &ci) = 0;
 
+    void getWindowSize(float &width, float &height)
+    {
+        int w = 0, h = 0;
+        getWindowSize(w, h);
+        width  = static_cast<float>(w);
+        height = static_cast<float>(h);
+    }
     virtual void getWindowSize(int &width, int &height) = 0;
     virtual bool setWindowSize(int width, int height)
     {

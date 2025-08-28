@@ -18,10 +18,14 @@ using namespace std::literals;
 
 
 #if defined(_WIN32)
-    #if BUILD_SHARED_YA
-        #define ENGINE_API __declspec(dllexport)
+    #if BUILD_LIBRARY
+        #if BUILD_SHARED_YA
+            #define ENGINE_API __declspec(dllexport)
+        #else
+            #define ENGINE_API __declspec(dllimport)
+        #endif
     #else
-        #define ENGINE_API __declspec(dllimport)
+        #define ENGINE_API
     #endif
 #else
     #define ENGINE_API

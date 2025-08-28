@@ -1,5 +1,6 @@
 #include "Camera.h"
-namespace ya{
+namespace ya
+{
 
 void FreeCamera::update(const InputManager &inputManager, float deltaTime)
 {
@@ -65,8 +66,8 @@ bool FreeCamera::handleMouseRotation(const InputManager &inputManager, float del
 
         if (glm::length(mouseDelta) > 0.0f) {
             // Apply rotation (yaw around Y axis, pitch around X axis)
-            rotation.y -= mouseDelta.x * rotationSpeed * deltaTime;
-            rotation.x -= mouseDelta.y * rotationSpeed * deltaTime;
+            rotation.y -= mouseDelta.x * rotationSpeed; //* deltaTime; this cannot multiply deltaTime, because mouseDelta is already frame-rate independent
+            rotation.x -= mouseDelta.y * rotationSpeed; //* deltaTime;
 
             // Clamp pitch to avoid gimbal lock
             rotation.x = glm::clamp(rotation.x, -89.0f, 89.0f);
@@ -84,4 +85,4 @@ bool FreeCamera::handleMouseRotation(const InputManager &inputManager, float del
     return false;
 }
 
-}
+} // namespace ya

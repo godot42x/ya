@@ -5,6 +5,12 @@
 #include "SDL3/SDL_oldnames.h"
 #include "reflect.cc/enum"
 
+#include "KeyCode.h"
+
+namespace ya
+{
+
+
 struct EventProcessState
 {
     enum EResult
@@ -30,9 +36,6 @@ struct EventProcessState
 
 }; // namespace EventProcessState
 
-
-namespace ya
-{
 
 
 namespace EEvent
@@ -77,8 +80,8 @@ enum T : uint32_t
     Window      = 0x02,
     Input       = 0x10,
     Keyboard    = 0x20,
-    Mouse       = 0x30,
-    MouseButton = 0x40
+    Mouse       = 0x40,
+    MouseButton = 0x80
 };
 }
 
@@ -98,7 +101,7 @@ class Event
     friend class EventDispatcher;
 
   public:
-    bool bHandled = false;
+    EEvent::T _type = EEvent::None;
 
   public:
     virtual ~Event() = default;
@@ -116,7 +119,8 @@ class Event
 
 class EventDispatcher
 {
-    Event &_event;
+    const Event &_event;
+    bool         bHandled = false;
 
   public:
 
@@ -125,15 +129,15 @@ class EventDispatcher
 
   public:
 
-    EventDispatcher(Event &ev) : _event(ev) {}
+    EventDispatcher(const Event &ev) : _event(ev) {}
 
     template <class T>
     bool dispatch(event_func_t<T> func)
     {
         if (_event.getEventType() == T::getStaticType())
         {
-            _event.bHandled = func(std ::ref(*(T *)&_event));
-            return true;
+            bHandled = func(std ::ref(*(T *)&_event));
+            return bHandled;
         }
         return false;
     }
@@ -143,8 +147,8 @@ class EventDispatcher
     {
         if (_event.getEventType() == EventType::getStaticType())
         {
-            _event.bHandled = (instance->*func)(std::ref(*(EventType *)&_event));
-            return true;
+            bHandled = (instance->*func)(std::ref(*(EventType *)&_event));
+            return bHandled;
         }
         return false;
     }
@@ -222,59 +226,48 @@ struct WindowMovedEvent : public WindowEvent
 
 
 // MARK: KeyEvent
-class ENGINE_API KeyEvent : public Event
+struct ENGINE_API KeyEvent : public Event
 {
-  public:
-    // using key_code_t = SDL_KW;
+    uint32_t _mod;
 
 
-  protected:
-    KeyEvent(int key_code) : _keyCode(key_code) {}
-    int _keyCode;
+    [[nodiscard]] bool isCtrlPressed() const { return _mod & EKeyMod::LCtrl || _mod & EKeyMod::RCtrl; }
+    [[nodiscard]] bool isShiftPressed() const { return _mod & EKeyMod::LShift || _mod & EKeyMod::RShift; }
+    [[nodiscard]] bool isAltPressed() const { return _mod & EKeyMod::LAlt || _mod & EKeyMod::RAlt; }
+#if defined(__APPLE__)
+    bool isMetaPressed() const { return _mod & EKeyMod::LMeta || _mod & EKeyMod::RMeta; }
+#endif
 
-  public:
-    inline int GetKeyCode() const { return _keyCode; }
 
     EVENT_CLASS_CATEGORY(EEventCategory::Keyboard | EEventCategory::Input);
 };
 
 
 
-class ENGINE_API KeyPressedEvent : public KeyEvent
+struct ENGINE_API KeyPressedEvent : public KeyEvent
 {
-  public:
-    KeyPressedEvent(int keycode, bool bRepeat) : KeyEvent(keycode), bRepeat(bRepeat) {}
-
     EVENT_CLASS_CATEGORY(EEventCategory::Keyboard | EEventCategory::Input);
     EVENT_CLASS_TYPE(KeyPressed)
 
-  protected:
-    bool bRepeat;
+    enum EKey::T          _keyCode;
+    [[nodiscard]] EKey::T getKeyCode() const { return _keyCode; }
+
+    [[nodiscard]] std::string toString() const override { return std::format("KeyPressedEvent: {} ", EKey::toString(_keyCode)); }
 };
 
 class ENGINE_API KeyReleasedEvent : public KeyEvent
 {
   public:
-    explicit KeyReleasedEvent(int keycode) : KeyEvent(keycode) {};
 
-    [[nodiscard]] std::string toString() const override { return std::format("KeyReleasedEvent: {} ", _keyCode); }
 
     EVENT_CLASS_TYPE(KeyReleased)
+    enum EKey::T              _keyCode;
+    [[nodiscard]] EKey::T     getKeyCode() const { return _keyCode; }
+    [[nodiscard]] std::string toString() const override { return std::format("KeyReleasedEvent: {} ", EKey::toString(_keyCode)); }
 
   protected:
 };
 
-
-
-class ENGINE_API KeyTypedEvent : public KeyEvent
-{
-  public:
-    explicit KeyTypedEvent(int keycode) : KeyEvent(keycode) {}
-
-    [[nodiscard]] std::string toString() const override { return std::format("KeyTypeEvent: {} ", _keyCode); }
-
-    EVENT_CLASS_TYPE(KeyTyped)
-};
 
 
 // MARK: MouseEvent

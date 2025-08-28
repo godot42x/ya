@@ -5,6 +5,7 @@
 #include "Core/FileSystem/FileSystem.h"
 
 
+#include "Core/KeyCode.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Math/Geometry.h"
@@ -218,8 +219,6 @@ void App::init(AppCreateInfo ci)
     };
     _render        = IRender::create(renderCI);
     auto *vkRender = dynamic_cast<VulkanRender *>(_render);
-    // assume the size as we want
-    _windowSize = glm::vec2((float)renderCI.swapchainCI.width, (float)renderCI.swapchainCI.height);
 
 
     /**
@@ -233,6 +232,7 @@ void App::init(AppCreateInfo ci)
      */
     vkRender->init(renderCI);
 
+    vkRender->getWindowProvider()->getWindowSize(_windowSize.x, _windowSize.y);
 
 
     // WHY: my ARC 730M must need to recreate with FIFO again to enable vsync
@@ -488,13 +488,8 @@ int ya::App::processEvent(SDL_Event &event)
         break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
-        YA_CORE_INFO("window resized {}x{}", event.window.data1, event.window.data2);
-        // auto vkRender = static_cast<VulkanRender*>(_render)
-        // vkRender->recreateSwapChain();
-        float aspectRatio = event.window.data2 > 0 ? static_cast<float>(event.window.data1) / static_cast<float>(event.window.data2) : 1.f;
-        YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", event.window.data1, event.window.data2, aspectRatio);
-        camera.setAspectRatio(aspectRatio);
-        _windowSize = {static_cast<float>(event.window.data1), static_cast<float>(event.window.data2)};
+
+        onEvent(WindowResizeEvent(event.window.data1, event.window.data2));
 
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -523,13 +518,18 @@ int ya::App::processEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_DESTROYED:
     case SDL_EVENT_WINDOW_HDR_STATE_CHANGED:
     case SDL_EVENT_KEY_DOWN:
-        break;
+    {
+        KeyPressedEvent ev;
+        ev._keyCode = (enum EKey::T)event.key.key;
+        ev._mod     = event.key.mod;
+        onEvent(ev);
+    } break;
     case SDL_EVENT_KEY_UP:
     {
-        if (event.key.key == SDLK_ESCAPE) {
-            bRunning = false;
-            return 1;
-        }
+        KeyReleasedEvent ev;
+        ev._keyCode = static_cast<enum EKey::T>(event.key.key);
+        ev._mod     = event.key.mod;
+        onEvent(ev);
     } break;
     case SDL_EVENT_TEXT_EDITING:
     case SDL_EVENT_TEXT_INPUT:
@@ -733,8 +733,11 @@ void App::onRender(float dt)
     vkRender->end(imageIndex, {curCmdBuf});
 }
 
-int App::onEvent(Event &event)
+int App::onEvent(const Event &event)
 {
+    EventDispatcher ed(event);
+    ed.dispatch<WindowResizeEvent>(this, &App::onWindowResized);
+    ed.dispatch<KeyReleasedEvent>(this, &App::onKeyReleased);
     return 0;
 }
 
@@ -802,6 +805,26 @@ void App::onSceneInit(Scene *scene)
         auto &bmc     = cube2.addComponent<BaseMaterialComponent>();
         bmc.colorType = 1;
     }
+}
+
+bool App::onWindowResized(const WindowResizeEvent &event)
+{
+    auto  w           = event.GetWidth();
+    auto  h           = event.GetHeight();
+    float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
+    YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", w, h, aspectRatio);
+    camera.setAspectRatio(aspectRatio);
+    _windowSize = {w, h};
+    return false;
+}
+
+bool App::onKeyReleased(const KeyReleasedEvent &event)
+{
+    if (event.getKeyCode() == EKey::Escape) {
+        YA_CORE_INFO("{}", event.toString());
+        requestQuit();
+    }
+    return true;
 }
 
 

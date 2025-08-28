@@ -140,7 +140,9 @@ std::string enum_name(T value)
             }                                                                                                                                           \
         };                                                                                                                                              \
         inline static Generator generator;                                                                                                              \
-    }
+    }                                                                                                                                                   \
+    inline const std::string &to_string(ENUM_TYPE_NAME v) { return ENUM_TYPE_NAME##2Strings .find(v)->second; }                                         \
+    inline const std::string &toString(ENUM_TYPE_NAME v) { return ENUM_TYPE_NAME##2Strings .find(v)->second; }
 
 #define GENERATED_ENUM_MISC(ENUM_TYPE_NAME) \
     GENERATED_ENUM_MISC_WITH_RANGE(ENUM_TYPE_NAME, ENUM_MAX)

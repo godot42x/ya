@@ -29,7 +29,7 @@ void InputManager::update()
     mouseDelta    = mousePosition - previousMousePosition;
 }
 
-EventProcessState InputManager::processEvent(const SDL_Event &event)
+ya::EventProcessState InputManager::processEvent(const SDL_Event &event)
 {
     switch (event.type)
     {
@@ -49,7 +49,7 @@ EventProcessState InputManager::processEvent(const SDL_Event &event)
         currentMouseStates[event.button.button] = KeyState::Released;
         break;
     }
-    return EventProcessState::Continue;
+    return ya::EventProcessState::Continue;
 }
 
 bool InputManager::isKeyPressed(SDL_Keycode keycode) const

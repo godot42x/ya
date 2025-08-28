@@ -1,7 +1,7 @@
 #include "Core/UI/DialogWindow.h"
 
 #ifdef _WIN32
-    #include "Platform/Windows/WindowsDialogWindow.h"
+    #include "Platform/Window/WindowsDialogWindow.h"
 #elif defined(__APPLE__)
 // Include macOS implementation when available
 #elif defined(__linux__)

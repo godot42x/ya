@@ -42,7 +42,7 @@ struct FreeCamera : public Camera
 
     // Camera control settings
     float moveSpeed     = 5.0f; // Units per second
-    float rotationSpeed = 45.f; // Degrees per second
+    float rotationSpeed = 0.5f; // Degrees per second
 
     // Movement keys (configurable)
     SDL_Keycode forwardKey = SDLK_W;
