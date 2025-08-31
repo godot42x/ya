@@ -35,7 +35,7 @@ struct FreeCamera : public Camera
     float _fov         = 45.0f;
     float _aspectRatio = 1.6f / 0.9f;
     float _nearClip    = 0.1f;
-    float _farClip     = 1000.0f;
+    float _farClip     = 100.0f;
 
     glm::vec3 _position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
     glm::vec3 _rotation = {0.0f, 0.0f, 0.0f}; // pitch, yaw, roll
@@ -113,7 +113,8 @@ struct FreeCamera : public Camera
         recalculateViewProjectionMatrix();
     }
 
-    void setPosition(const glm::vec3 &position_)
+    const glm::vec3 &getPosition() const { return _position; }
+    void             setPosition(const glm::vec3 &position_)
     {
         _position = position_;
         recalculateAll();

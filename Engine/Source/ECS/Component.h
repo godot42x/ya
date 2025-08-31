@@ -7,11 +7,20 @@
 #include <string>
 #include <utility>
 
+
 namespace ya
 {
 
+
+struct Entity;
 struct IComponent
 {
+    Entity *_owner = nullptr;
+
+    virtual ~IComponent() = default;
+
+    void                  setOwner(Entity *entity) { _owner = entity; }
+    [[nodiscard]] Entity *getOwner() const { return _owner; }
 };
 
 // Basic component for entity identification
@@ -46,24 +55,6 @@ struct SpriteRendererComponent : public IComponent
     SpriteRendererComponent(const glm::vec4 &color) : _color(color) {}
 };
 
-struct CameraComponent : public IComponent
-{
-    bool _primary          = true; // TODO: think about moving to Scene
-    bool _fixedAspectRatio = false;
-
-    float _fov         = 45.0f;
-    float _aspectRatio = 1.778f;
-    float _nearClip    = 0.1f;
-    float _farClip     = 1000.0f;
-
-    CameraComponent()                        = default;
-    CameraComponent(const CameraComponent &) = default;
-
-    glm::mat4 getProjection() const
-    {
-        return glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
-    }
-};
 
 // Mesh renderer component for 3D rendering
 struct MeshRendererComponent : public IComponent

@@ -57,3 +57,74 @@ struct Logger
     }
 
 #define YA_ENSURE(condition, ...) (!!(condition)) ? 1 : (YA_CORE_ERROR(__VA_ARGS__), PLATFORM_BREAK(), 0)
+
+
+
+struct YaFormatterV1
+{
+    std::string category;
+
+    bool operator()(const logcc::Config &config, std::string &output, logcc::LogLevel::T level, std::string_view msg, const std::source_location &location)
+    {
+        using namespace logcc;
+
+        std::string_view levelStr = logcc::LogLevel::toString(level);
+
+        auto fileDetail = std::format("{}:{}", std::filesystem::path(location.file_name()).filename().string().c_str(), location.line());
+
+        // clang-format off
+        output = std::format(
+            "[{}]\t{} "
+            " {:<28} "
+            "{}\n",
+            levelStr, category,
+            fileDetail,
+            msg);
+
+        // clang-format on
+
+        return true;
+    }
+};
+
+constexpr std::string_view getFileNameDetail(const std::string_view &absPath)
+{
+    // C:\Users\norm\1\craft\ya\Engine\Source\Core\Log.h
+    auto pos = absPath.find_last_of("/\\");
+    return absPath.substr(pos == std::string_view::npos ? 0 : pos + 1);
+}
+static_assert(getFileNameDetail(std::source_location::current().file_name()) == std::string_view("Log.h"));
+
+
+
+struct YaFormatterV2
+{
+    std::string category;
+
+    bool operator()(const logcc::Config & /*config*/, std::string &output, logcc::LogLevel::T level, std::string_view msg, const std::source_location &location)
+    {
+        using namespace logcc;
+
+        output.clear();
+        output.reserve(128 + msg.size() + category.size());
+
+        std::string_view levelStr   = logcc::LogLevel::toString(level);
+        auto             fileDetail = std::format("{}:{}",
+                                      getFileNameDetail(location.file_name()),
+                                      location.line());
+
+        auto outputIt = std::back_inserter(output);
+
+        std::format_to(outputIt,
+                       "[{}]\t{} "
+                       "{:<26}"
+                       "{}\n",
+                       levelStr,
+                       category,
+                       fileDetail,
+                       msg);
+
+
+        return true;
+    }
+};

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <entt/entt.hpp>
 
+#include "ECS/Component.h"
 #include "Scene/Scene.h"
 
 
@@ -27,10 +28,13 @@ class Entity
     ~Entity()                              = default;
 
     template <typename T, typename... Args>
-    constexpr T &addComponent(Args &&...args)
+        requires(!std::is_base_of_v<T, IComponent>)
+    T &addComponent(Args &&...args)
     {
         assert(!hasComponent<T>() && "Entity already has component!");
         T &component = _scene->_registry.emplace<T>(_entityHandle, std::forward<Args>(args)...);
+        static_cast<IComponent &>(component).setOwner(this);
+
         return component;
     }
 
@@ -51,6 +55,12 @@ class Entity
     }
     template <typename T>
     [[nodiscard]] bool hasComponent() const { return _scene->_registry.all_of<T>(_entityHandle); }
+
+    // template <typename T>
+    // T *tryGetComponent() const
+    // {
+    //     return _scene->_registry.try_get<T>(_entityHandle);
+    // }
 
     template <typename T>
     void removeComponent()

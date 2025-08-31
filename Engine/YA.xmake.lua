@@ -42,7 +42,11 @@ add_requires("vulkansdk", {
     }
 })
 add_requires("glad")
-add_requires("entt v3.15.0")
+add_requires("entt v3.15.0", {
+    configs = {
+        debug = is_mode("debug"), 
+    }
+})
 
 rule("testing")
 do

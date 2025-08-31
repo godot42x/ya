@@ -30,11 +30,13 @@ class InputManager
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 previousMousePosition{0.0f, 0.0f};
     glm::vec2 mouseDelta{0.0f, 0.0f};
+    glm::vec2 _mouseScrollDelta{0, 0};
 
   public:
     InputManager();
-    ~InputManager() = default;
+    ~InputManager();
 
+    void init();
     void                  update();
     ya::EventProcessState processEvent(const SDL_Event &event);
 
@@ -45,6 +47,8 @@ class InputManager
     bool isMouseButtonPressed(Uint8 button) const;
     bool wasMouseButtonPressed(Uint8 button) const;
     bool wasMouseButtonReleased(Uint8 button) const;
+
+    glm::vec2 getMouseScrollDelta() const;
 
     glm::vec2 getMousePosition() const { return mousePosition; }
     glm::vec2 getMouseDelta() const { return mouseDelta; }

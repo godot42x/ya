@@ -3,6 +3,7 @@
 
 
 
+#include "ECS/Entity.h"
 #include "ECS/System.h"
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 #include "Platform/Render/Vulkan/VulkanRenderPass.h"
@@ -33,6 +34,8 @@ struct RenderTarget
 
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
+    Entity _camera;
+
   public:
 
     // TODO : abstract API-independent class -> "IRenderPass"
@@ -46,13 +49,9 @@ struct RenderTarget
     void init();
     void recreate();
     void destroy();
-    void onUpdate(float deltaTime)
-    {
-        for (auto &system : _materialSystems) {
-            system->onUpdate(deltaTime);
-        }
-    }
+    void onUpdate(float deltaTime);
     void onRender(void *cmdBuf) { renderMaterialSystems(cmdBuf); }
+    void onRenderGUI();
 
     void begin(void *cmdBuf);
     void end(void *cmdBuf);
@@ -84,6 +83,9 @@ struct RenderTarget
             system->onRender(cmdBuf, this);
         }
     }
+
+    Entity *getCamera() { return &_camera; }
+    void    setCamera(Entity camera) { _camera = camera; }
 };
 
 }; // namespace ya

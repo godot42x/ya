@@ -272,15 +272,6 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     }
     // YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
 
-    YA_CORE_INFO("-- Create  swapchain success {}\n\told swapchain {}\n\tmin image count {}\n\tformat {}\n\tcolor space {}\n\tpresent mode {}\n\tsharing mode {}",
-                 (uintptr_t)m_swapChain,
-                 (uintptr_t)oldSwapchain,
-                 _minImageCount,
-                 std::to_string(_surfaceFormat),
-                 std::to_string(_surfaceColorSpace),
-                 std::to_string(_presentMode),
-                 std::to_string(sharingMode));
-
 
 
     // Get swap chain images
@@ -288,7 +279,15 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
-    YA_CORE_INFO("Swapchain finally created with {} images", m_images.size());
+
+    YA_CORE_INFO("Created swapchain success:{} with  [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
+                 (uintptr_t)m_swapChain,
+                 imageCount,
+                 std::to_string(_surfaceFormat),
+                 std::to_string(_surfaceColorSpace),
+                 std::to_string(_presentMode),
+                 vkSwapchainCI.imageExtent.width,
+                 vkSwapchainCI.imageExtent.height);
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,

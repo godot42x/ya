@@ -1,5 +1,5 @@
 CompileFlags:
-    Add: ["-Wno-c99-designator", "-std=c++23"]
+    Add: ["-Wno-c99-designator", "-std=c++23", "-D_HASCXX_20=1"]
 Diagnostics:
     ClangTidy:
         Add: [cppcoreguidelines-*, bugprone-*, misc-unused-*, modernize-*]

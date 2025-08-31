@@ -2,16 +2,15 @@
 // Created by nono on 10/14/23.
 //
 
-#ifndef HAZEL_INSTRUMENTOR_H
-    #define HAZEL_INSTRUMENTOR_H
+#pragma once
 
-    #include <chrono>
-    #include <fstream>
-    #include <string>
-    #include <thread>
+#include <chrono>
+#include <fstream>
+#include <string>
+#include <thread>
 
 
-    #include "Core/Base.h"
+#include "Core/Base.h"
 
 
 
@@ -65,6 +64,9 @@ class InstrumentationTimer
     bool                             bStop = false;
 
   public:
+    explicit InstrumentationTimer(const std::string &name, std::source_location loc = std::source_location::current())
+        : InstrumentationTimer(name.c_str(), std::move(loc)) {}
+
     explicit InstrumentationTimer(const char *name, std::source_location loc = std::source_location::current())
     {
         // TODO: optimize the name performance
@@ -84,13 +86,13 @@ class InstrumentationTimer
 
     void stop()
     {
-        auto dur = clock_t::now() - _startTime;
-        auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-
-
+        auto     dur      = clock_t::now() - _startTime;
+        auto     ns       = std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count();
+        float    ms       = (float)ns / 1000000.0f;
         uint32_t threadID = (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id());
+
         // Instrumentor::Get().WriteProfile({.Name = _name, .Start = start, .End = end, .ThreadID = threadID});
-        YA_CORE_DEBUG("Profile: [{0}] {1}ms,  on thread {2}", _name, ms, threadID);
+        YA_CORE_DEBUG("Profile: {0}: {1}ms ({2}ns) on thread {3}", _name, ms, ns, threadID);
 
         bStop = true;
     }
@@ -98,7 +100,6 @@ class InstrumentationTimer
 
 }; // namespace ya
 
-#endif
 
 
 // TODO: Stores data for drawing on overlay

@@ -18,6 +18,9 @@ struct BaseMaterialSystem : public IMaterialSystem
         uint32_t  colorType      = 0;
     } pc;
 
+    float maxViewDistance = 100.0f;
+    int   culledCount     = 0;
+    int   totalCount      = 0;
 
     std::shared_ptr<VulkanPipeline>       _pipeline;
     std::shared_ptr<VulkanPipelineLayout> _pipelineLayout;
@@ -27,5 +30,6 @@ struct BaseMaterialSystem : public IMaterialSystem
 
     void onUpdate(float deltaTime) override {}
     void onRender(void *cmdBuf, RenderTarget *rt) override;
+    void onRenderGUI() override;
 };
 } // namespace ya

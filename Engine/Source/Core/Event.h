@@ -94,14 +94,12 @@ enum T : uint32_t
 #define EVENT_CLASS_CATEGORY(category) \
     virtual uint32_t getCategory() const override { return category; }
 
-class EventDispatcher;
 
 class Event
 {
-    friend class EventDispatcher;
 
   public:
-    EEvent::T _type = EEvent::None;
+    bool _bHandled = false;
 
   public:
     virtual ~Event() = default;
@@ -117,48 +115,55 @@ class Event
     }
 };
 
-class EventDispatcher
-{
-    const Event &_event;
-    bool         bHandled = false;
+// class EventDispatcher
+// {
+//     const Event &_event;
+//     bool         bHandled = false;
 
-  public:
+//   public:
 
-    template <class T>
-    using event_func_t = std::function<bool(T &)>;
+//     template <class T>
+//     using event_func_t = std::function<bool(T &)>;
 
-  public:
+//   public:
 
-    EventDispatcher(const Event &ev) : _event(ev) {}
+//     EventDispatcher(const Event &ev) : _event(ev) {}
 
-    template <class T>
-    bool dispatch(event_func_t<T> func)
-    {
-        if (_event.getEventType() == T::getStaticType())
-        {
-            bHandled = func(std ::ref(*(T *)&_event));
-            return bHandled;
-        }
-        return false;
-    }
+//     template <class T>
+//     bool dispatch(event_func_t<T> func)
+//     {
+//         if (_event.getEventType() == T::getStaticType())
+//         {
+//             bHandled = func(std ::ref(*(T *)&_event));
+//             return bHandled;
+//         }
+//         return false;
+//     }
 
-    template <typename EventType, typename Owner, typename Fn>
-    bool dispatch(Owner *instance, Fn func)
-    {
-        if (_event.getEventType() == EventType::getStaticType())
-        {
-            bHandled = (instance->*func)(std::ref(*(EventType *)&_event));
-            return bHandled;
-        }
-        return false;
-    }
-};
+//     template <typename EventType, typename Owner, typename Fn>
+//     bool dispatch(Owner *instance, Fn func)
+//     {
+//         if (_event.getEventType() == EventType::getStaticType())
+//         {
+//             bHandled = (instance->*func)(std::ref(*(EventType *)&_event));
+//             return bHandled;
+//         }
+//         return false;
+//     }
+// };
 
 // MARK: ApplicationEvent
 
 
 struct ENGINE_API WindowEvent : public Event
 {
+    uint32_t _windowID;
+
+    WindowEvent(uint32_t windowID) : _windowID(windowID) {}
+
+    [[nodiscard]] uint32_t getWindowID() const { return _windowID; }
+    std::string            toString() const override { return std::format("WindowEvent: {}", _windowID); }
+
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
 };
@@ -166,16 +171,18 @@ struct ENGINE_API WindowEvent : public Event
 class ENGINE_API WindowResizeEvent : public WindowEvent
 {
   private:
-    uint32_t _h, _w;
+    int32_t _h, _w;
 
   public:
-    WindowResizeEvent(uint32_t w, uint32_t h) : _h(h), _w(w) {}
+    WindowResizeEvent(uint32_t windowID, int32_t w, int32_t h) : WindowEvent(windowID), _h(h), _w(w) {}
 
 
-    [[nodiscard]] uint32_t GetWidth() const { return _w; }
-    [[nodiscard]] uint32_t GetHeight() const { return _h; }
-
-    [[nodiscard]] std::string toString() const override { return std::format("WindowResizeEvent: {}, {}", _w, _h); }
+    [[nodiscard]] uint32_t    GetWidth() const { return _w; }
+    [[nodiscard]] uint32_t    GetHeight() const { return _h; }
+    [[nodiscard]] std::string toString() const override
+    {
+        return std::format("{} |WindowResizeEvent: {}, {}", WindowEvent::toString(), _w, _h);
+    }
 
 
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
@@ -186,7 +193,8 @@ class ENGINE_API WindowResizeEvent : public WindowEvent
 
 struct ENGINE_API WindowCloseEvent : public WindowEvent
 {
-    uint32_t _windowIndex;
+
+    WindowCloseEvent(uint32_t windowID) : WindowEvent(windowID) {}
 
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
@@ -195,7 +203,14 @@ struct ENGINE_API WindowCloseEvent : public WindowEvent
 
 struct WindowFocusEvent : public WindowEvent
 {
-    uint32_t _windowIndex;
+
+
+    WindowFocusEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    std::string toString() const override
+    {
+        return std::format("{} |WindowFocusEvent", WindowEvent::toString());
+    }
 
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
@@ -204,7 +219,13 @@ struct WindowFocusEvent : public WindowEvent
 
 struct WindowFocusLostEvent : public WindowEvent
 {
-    uint32_t _windowIndex;
+
+    WindowFocusLostEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    std::string toString() const override
+    {
+        return std::format("{} |WindowFocusLostEvent", WindowEvent::toString());
+    }
 
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
@@ -249,10 +270,16 @@ struct ENGINE_API KeyPressedEvent : public KeyEvent
     EVENT_CLASS_CATEGORY(EEventCategory::Keyboard | EEventCategory::Input);
     EVENT_CLASS_TYPE(KeyPressed)
 
-    enum EKey::T          _keyCode;
-    [[nodiscard]] EKey::T getKeyCode() const { return _keyCode; }
+    enum EKey::T _keyCode;
+    bool         bRepeat = false; // 标识是否为重复按键事件
 
-    [[nodiscard]] std::string toString() const override { return std::format("KeyPressedEvent: {} ", EKey::toString(_keyCode)); }
+    [[nodiscard]] EKey::T getKeyCode() const { return _keyCode; }
+    [[nodiscard]] bool    isRepeat() const { return bRepeat; }
+
+    [[nodiscard]] std::string toString() const override
+    {
+        return std::format("KeyPressedEvent: {} (repeat: {})", EKey::toString(_keyCode), bRepeat);
+    }
 };
 
 class ENGINE_API KeyReleasedEvent : public KeyEvent
@@ -274,6 +301,9 @@ class ENGINE_API KeyReleasedEvent : public KeyEvent
 
 class ENGINE_API MouseMoveEvent : public Event
 {
+  private:
+    float _mouseX, _mouseY;
+
   public:
     MouseMoveEvent(float x, float y) : _mouseX(x), _mouseY(y) {}
 
@@ -284,9 +314,6 @@ class ENGINE_API MouseMoveEvent : public Event
 
     EVENT_CLASS_TYPE(MouseMoved)
     EVENT_CLASS_CATEGORY(EEventCategory::Mouse | EEventCategory::Input);
-
-  private:
-    float _mouseX, _mouseY;
 };
 
 struct ENGINE_API MouseScrolledEvent : public Event

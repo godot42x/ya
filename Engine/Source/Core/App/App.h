@@ -122,13 +122,14 @@ struct App
     int  processEvent(SDL_Event &event);
     void requestQuit() { bRunning = false; }
 
-    virtual void onInit(AppCreateInfo ci) {}
+    virtual void onInit(AppCreateInfo ci);
     virtual void onQuit() {}
 
 
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
     virtual int  onEvent(const Event &event);
+    virtual void onRenderGUI();
 
 
 

@@ -5,6 +5,9 @@
 #include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/KeyCode.h"
+#include "Core/MessageBus.h"
+#include "ECS/Component/BaseMaterialComponent.h"
+#include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Math/Geometry.h"
@@ -13,6 +16,7 @@
 #include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+
 
 #include "Core/AssetManager.h"
 
@@ -391,6 +395,14 @@ void App::init(AppCreateInfo ci)
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 }
 
+void App::onInit(AppCreateInfo ci)
+{
+    auto &bus = MessageBus::get();
+    bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
+    bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
+}
+
+
 // MARK: QUIT
 void ya::App::quit()
 {
@@ -453,6 +465,7 @@ int ya::App::processEvent(SDL_Event &event)
     }
     inputManager.processEvent(event);
 
+    auto &bus = MessageBus::get();
 
 #pragma region Sdl Event
 
@@ -462,7 +475,7 @@ int ya::App::processEvent(SDL_Event &event)
         break;
     case SDL_EVENT_QUIT:
     {
-        bRunning = false;
+        requestQuit();
         return 1;
     } break;
     case SDL_EVENT_TERMINATING:
@@ -487,8 +500,7 @@ int ya::App::processEvent(SDL_Event &event)
         break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
-
-        onEvent(WindowResizeEvent(event.window.data1, event.window.data2));
+        bus.publish(WindowResizeEvent{event.window.windowID, event.window.data1, event.window.data2});
 
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
@@ -499,11 +511,16 @@ int ya::App::processEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_MOUSE_ENTER:
     case SDL_EVENT_WINDOW_MOUSE_LEAVE:
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
+    {
+        bus.publish(WindowFocusEvent(event.window.windowID));
+    } break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
-        break;
+    {
+        bus.publish(WindowFocusLostEvent(event.window.windowID));
+    } break;
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     {
-        bRunning = false;
+        requestQuit();
         return 1;
     } break;
     case SDL_EVENT_WINDOW_HIT_TEST:
@@ -521,14 +538,15 @@ int ya::App::processEvent(SDL_Event &event)
         KeyPressedEvent ev;
         ev._keyCode = (enum EKey::T)event.key.key;
         ev._mod     = event.key.mod;
-        onEvent(ev);
+        ev.bRepeat  = event.key.repeat; // SDL3中的repeat字段
+        bus.publish(ev);
     } break;
     case SDL_EVENT_KEY_UP:
     {
         KeyReleasedEvent ev;
-        ev._keyCode = static_cast<enum EKey::T>(event.key.key);
+        ev._keyCode = static_cast<EKey::T>(event.key.key);
         ev._mod     = event.key.mod;
-        onEvent(ev);
+        bus.publish(ev);
     } break;
     case SDL_EVENT_TEXT_EDITING:
     case SDL_EVENT_TEXT_INPUT:
@@ -537,13 +555,31 @@ int ya::App::processEvent(SDL_Event &event)
     case SDL_EVENT_KEYBOARD_REMOVED:
     case SDL_EVENT_TEXT_EDITING_CANDIDATES:
     case SDL_EVENT_MOUSE_MOTION:
+    {
+        MouseMoveEvent ev(event.motion.x, event.motion.y);
+        // TODO: relative to window and global's motion size?
+        // , event.motion.xrel, event.motion.yrel);
+        bus.publish(ev);
+    } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    {
+        MouseButtonPressedEvent ev(event.button.button);
+        bus.publish(ev);
+
+    } break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        break;
+    {
+        MouseButtonReleasedEvent ev(event.button.button);
+        bus.publish(ev);
+
+    } break;
     case SDL_EVENT_MOUSE_WHEEL:
     {
-        break;
-    }
+        MouseScrolledEvent ev;
+        ev._offsetX = event.wheel.x;
+        ev._offsetY = event.wheel.y;
+        bus.publish(ev);
+    } break;
     case SDL_EVENT_MOUSE_ADDED:
     case SDL_EVENT_MOUSE_REMOVED:
     case SDL_EVENT_JOYSTICK_AXIS_MOTION:
@@ -689,8 +725,7 @@ void App::onRender(float dt)
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
         float fps = 1.0f / dt;
-        ImGui::Text("DeltaTime: %.1f ms,\t FPS: %.1f", dt * 1000.0f, fps);
-        ImGui::Text("Frame: %d, SwapchainImage: %d, FameIndex: %d", _frameIndex, currentFrameIdx, currentFrameIdx);
+        ImGui::Text("Frame: %d, DeltaTime: %.1f ms,\t FPS: %.1f", _frameIndex, dt * 1000.0f, fps);
         static int count = 0;
         if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
             count++;
@@ -713,6 +748,8 @@ void App::onRender(float dt)
                 vkRender->getSwapChain()->setVsync(bVsync);
             });
         }
+        onRenderGUI();
+
 
         imcEditorCamera(camera);
         imcClearValues();
@@ -734,10 +771,12 @@ void App::onRender(float dt)
 
 int App::onEvent(const Event &event)
 {
-    EventDispatcher ed(event);
-    ed.dispatch<WindowResizeEvent>(this, &App::onWindowResized);
-    ed.dispatch<KeyReleasedEvent>(this, &App::onKeyReleased);
     return 0;
+}
+
+void App::onRenderGUI()
+{
+    renderTarget->onRenderGUI();
 }
 
 bool App::loadScene(const std::string &path)
@@ -754,12 +793,12 @@ bool App::loadScene(const std::string &path)
 
 bool App::unloadScene()
 {
-    cubeMesh.reset();
     if (_scene)
     {
         onSceneDestroy(_scene.get());
         _scene.reset();
     }
+    cubeMesh.reset();
     return true;
 }
 
@@ -780,30 +819,40 @@ void App::onSceneInit(Scene *scene)
         true);
     cubeMesh = std::make_shared<Mesh>(vertices, indices, "cube");
 
-    auto cube = scene->createEntity("cube1");
-    {
-        auto &tc = cube.addComponent<TransformComponent>();
-        tc.setRotation({45, 45, 0});
+    float offset   = 3.f;
+    float rotation = 10.f;
+    int   alpha    = std::round(std::pow(30000, 1.0 / 3.0));
+    YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
+    for (int i = 0; i < alpha; ++i) {
+        for (int j = 0; j < alpha; ++j) {
+            for (int k = 0; k < alpha; ++k) {
+                auto cube = scene->createEntity(std::format("Cube_{}_{}_{}", i, j, k));
+                {
+                    auto  v  = glm::vec3(i, j, k);
+                    auto &tc = cube.addComponent<TransformComponent>();
+                    tc.setPosition(offset * v);
+                    tc.setRotation(rotation * v);
+                    float alpha = std::sin(glm::radians(15.f * (float)(i + j + k)));
+                    tc.setScale(glm::vec3(alpha));
 
-        auto &mc = cube.addComponent<MeshComponent>();
-        mc.mesh  = cubeMesh.get();
+                    auto &mc = cube.addComponent<MeshComponent>();
+                    mc.mesh  = cubeMesh.get();
 
-        auto &bmc     = cube.addComponent<BaseMaterialComponent>();
-        bmc.colorType = 0;
+                    auto &bmc     = cube.addComponent<BaseMaterialComponent>();
+                    bmc.colorType = (i + j) % 2;
+                }
+            }
+        }
     }
 
-    auto cube2 = scene->createEntity("cube2");
-    {
-        auto &tc = cube2.addComponent<TransformComponent>();
-        tc.setPosition({2, 0, 0});
-        tc.setScale({0.5f, 0.5f, 0.5f});
+    auto cam = scene->createEntity("Camera");
+    cam.addComponent<TransformComponent>();
+    cam.addComponent<CameraComponent>();
+    cam.addComponent<BaseMaterialComponent>();
+    renderTarget->setCamera(cam);
 
-        auto &mc = cube2.addComponent<MeshComponent>();
-        mc.mesh  = cubeMesh.get();
-
-        auto &bmc     = cube2.addComponent<BaseMaterialComponent>();
-        bmc.colorType = 1;
-    }
+    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam.getHandle()), "WTH");
+    YA_CORE_ASSERT(cam.hasComponent<CameraComponent>(), "???");
 }
 
 bool App::onWindowResized(const WindowResizeEvent &event)

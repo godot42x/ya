@@ -1,5 +1,7 @@
 #include "RenderTarget.h"
 #include "Core/App/App.h"
+#include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/TransformComponent.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 namespace ya
@@ -128,6 +130,37 @@ void RenderTarget::destroy()
     _materialSystems.clear();
 }
 
+void RenderTarget::onUpdate(float deltaTime)
+{
+    if (getCamera() && getCamera()->hasComponent<CameraComponent>()) {
+        auto &cc = getCamera()->getComponent<CameraComponent>();
+        cc.setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
+        auto &inputManger = App::get()->inputManager;
+
+        if (inputManger.isMouseButtonPressed(EMouse::Right)) {
+            glm::vec2 mouseDelta = inputManger.getMouseDelta();
+            if (glm::length(mouseDelta) > 0.0f) {
+                auto &tc = getCamera()->getComponent<TransformComponent>();
+                tc.setPosition(tc._position + glm::vec3(mouseDelta, 0.0f));
+            }
+        }
+        glm::vec2 scrollDelta = inputManger.getMouseScrollDelta();
+        cc._distance -= scrollDelta.y * 0.1f;
+    }
+
+    for (auto &system : _materialSystems) {
+        system->onUpdate(deltaTime);
+    }
+}
+
+void RenderTarget::onRenderGUI()
+{
+    for (auto &system : _materialSystems) {
+        system->onRenderGUI();
+    }
+}
+
+
 
 void RenderTarget::begin(void *cmdBuf)
 {
@@ -138,6 +171,11 @@ void RenderTarget::begin(void *cmdBuf)
     {
         recreate();
         bDirty = false;
+    }
+
+    if (getCamera() && getCamera()->hasComponent<CameraComponent>()) {
+        auto &cc = getCamera()->getComponent<CameraComponent>();
+        cc.setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
     }
 
     if (bSwapChainTarget) {
@@ -181,7 +219,7 @@ void RenderTarget::setBufferCount(uint32_t count)
 
 void RenderTarget::setColorClearValue(VkClearValue clearValue)
 {
-    for (int i = 0; i < _clearValues.size(); i++)
+    for (uint32_t i = 0; i < _clearValues.size(); i++)
     {
         setColorClearValue(i, clearValue);
     }

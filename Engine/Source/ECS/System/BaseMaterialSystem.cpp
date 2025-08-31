@@ -3,6 +3,10 @@
 
 
 #include "Core/App/App.h"
+
+#include "ECS/Component.h"
+#include "ECS/Component/CameraComponent.h"
+
 #include "Math/Geometry.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/RenderTarget.h"
@@ -18,6 +22,8 @@
 
 #include "Core/TimeManager.h"
 
+
+#include "imgui.h"
 
 namespace ya
 {
@@ -193,6 +199,8 @@ void BaseMaterialSystem::onDestroy()
 
 void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 {
+    culledCount = 0;
+
     auto vkRender = App::get()->getRender<VulkanRender>();
     auto vkCmdBuf = (VkCommandBuffer)cmdBuf;
     auto scene    = App::get()->getScene();
@@ -200,6 +208,7 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         return;
     }
     const auto &view = scene->getRegistry().view<TransformComponent, MeshComponent, BaseMaterialComponent>();
+    totalCount       = std::distance(view.begin(), view.end());
     if (view.begin() == view.end()) {
         return;
     }
@@ -231,13 +240,45 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
 #pragma endregion
 
+    // glm::vec3 camPos;
+    // glm::vec3 camRot;
+    // float     fov;
     // HACK: remove this
-    pc.viewProjection = App::get()->camera.getViewProjectionMatrix();
+    if (auto cam = rt->getCamera()) {
+        if (cam->hasComponent<CameraComponent>())
+        {
+            auto &cc          = cam->getComponent<CameraComponent>();
+            pc.viewProjection = cc.getProjection() * cc.getView();
+            auto &tc          = cam->getComponent<TransformComponent>();
+            // camPos            = tc.getPosition();
+            // camRot            = tc._rotation;
+            // fov               = cc._fov;
+        }
+    }
+    else {
+        pc.viewProjection = App::get()->camera.getViewProjectionMatrix();
+        // camPos            = App::get()->camera.getPosition();
+        // camRot            = App::get()->camera._rotation;
+    }
+
 
     for (const auto entity : view) {
         // const auto &[tc, mc, bmc] = view.get<TransformComponent, MeshComponent, BaseMaterialComponent>(entity);
         const auto &[tc, mc, bmc] = view.get(entity);
         if (mc.mesh) {
+            // auto toEntity = tc.getPosition() - camPos;
+            // if (glm::length(toEntity) > maxViewDistance) {
+            //     // too far
+            //     ++culledCount;
+            //     continue;
+            // }
+            // float proj = glm::dot(toEntity, camRot);
+            // if (proj > 0.001f) {
+            //     // backface culling
+            //     ++culledCount;
+            //     continue;
+            // }
+
             pc.model     = tc.getTransform();
             pc.colorType = bmc.colorType;
 
@@ -266,5 +307,12 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
                              0);
         }
     }
+}
+
+void BaseMaterialSystem::onRenderGUI()
+{
+    ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
+    ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
 }
 } // namespace ya

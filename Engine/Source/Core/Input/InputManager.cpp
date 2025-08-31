@@ -6,6 +6,10 @@
 #include <SDL3/SDL_mouse.h>
 #include <math.h>
 
+#include "Core/Event.h"
+#include "Core/MessageBus.h"
+
+
 InputManager::InputManager()
 {
     // Initialize mouse position
@@ -13,6 +17,21 @@ InputManager::InputManager()
     SDL_GetMouseState(&x, &y);
     mousePosition         = {static_cast<float>(x), static_cast<float>(y)};
     previousMousePosition = mousePosition;
+}
+
+InputManager::~InputManager()
+{
+}
+
+void InputManager::init()
+{
+
+    ya::MessageBus::get().subscribe<ya::MouseScrolledEvent>(
+        this,
+        [this](const ya::MouseScrolledEvent &event) {
+            _mouseScrollDelta = {event._offsetX, event._offsetY};
+            return false;
+        });
 }
 
 void InputManager::update()
@@ -25,8 +44,9 @@ void InputManager::update()
     previousMousePosition = mousePosition;
     float x = 0, y = 0;
     SDL_GetMouseState(&x, &y);
-    mousePosition = {static_cast<float>(x), static_cast<float>(y)};
-    mouseDelta    = mousePosition - previousMousePosition;
+    mousePosition     = {static_cast<float>(x), static_cast<float>(y)};
+    mouseDelta        = mousePosition - previousMousePosition;
+    _mouseScrollDelta = glm::vec2(0.f);
 }
 
 ya::EventProcessState InputManager::processEvent(const SDL_Event &event)
@@ -98,4 +118,9 @@ bool InputManager::wasMouseButtonReleased(Uint8 button) const
 
     return (curr != currentMouseStates.end() && curr->second == KeyState::Released) &&
            (prev != previousMouseStates.end() && prev->second == KeyState::Pressed);
+}
+
+glm::vec2 InputManager::getMouseScrollDelta() const
+{
+    return _mouseScrollDelta;
 }

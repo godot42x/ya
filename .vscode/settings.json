@@ -20,6 +20,7 @@
         "logcc",
         "Lsizeiptr",
         "MSAA",
+        "Octree",
         "PRIMITIVETYPE",
         "projectdir",
         "Renderbuffer",

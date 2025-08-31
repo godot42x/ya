@@ -12,11 +12,20 @@ set_warnings("all", "extra")
 if is_plat("windows") then
     if is_mode("debug") then
         add_cxflags(
-            "/wd4251"    --  needs to have dll-interface to be used by clients of class
-            , "/wd4100"  --  unreferenced formal parameter
+            "/wd4251"   --  needs to have dll-interface to be used by clients of class
+            , "/wd4100" --  unreferenced formal parameter
             , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
         )
+        add_ldflags(
+            "/ignore:4099" -- PDB not found
+        )
     end
+end
+
+if is_mode("debug") then
+    add_defines("BUILD_DEBUG")
+else
+    add_defines("BUILD_NO_DEBUG")
 end
 
 
