@@ -1,7 +1,5 @@
 #include "Log.h"
 
-#include <filesystem>
-
 
 logcc::SyncLogger Logger::CoreLogger;
 logcc::SyncLogger Logger::AppLogger;

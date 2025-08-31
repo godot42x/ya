@@ -1,6 +1,5 @@
 #pragma once
 #include "Base.h"
-
 #include "log.cc/helper.h"
 #include "log.cc/log.h"
 

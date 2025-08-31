@@ -727,6 +727,15 @@ bool VulkanRender::createSampler(const std::string &name, const ya::SamplerCreat
     return true;
 }
 
+void VulkanRender::removeSampler(const std::string &name)
+{
+    if (_samplers.find(name) != _samplers.end())
+    {
+        vkDestroySampler(getLogicalDevice(), _samplers[name], getAllocator());
+        _samplers.erase(name);
+    }
+}
+
 
 // MARK: Being/End
 bool VulkanRender::begin(int32_t *outImageIndex)

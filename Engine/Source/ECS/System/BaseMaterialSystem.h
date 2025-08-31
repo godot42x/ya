@@ -1,15 +1,18 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "ECS/Component/BaseMaterialComponent.h"
+#include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/System.h"
 
 
 namespace ya
 {
 
+
 struct BaseMaterialSystem : public IMaterialSystem
 {
+
+
     alignas(sizeof(glm::vec4)) // push constant alignment requirement
         struct PushConstant
     {
@@ -19,9 +22,9 @@ struct BaseMaterialSystem : public IMaterialSystem
     } pc;
 
     float maxViewDistance = 100.0f;
-    int   culledCount     = 0;
-    int   totalCount      = 0;
-    bool  bEntityCamera   = true;
+    // int   culledCount     = 0;
+    // int   totalCount      = 0;
+    bool bEntityCamera = true;
 
     std::shared_ptr<VulkanPipeline>       _pipeline;
     std::shared_ptr<VulkanPipelineLayout> _pipelineLayout;

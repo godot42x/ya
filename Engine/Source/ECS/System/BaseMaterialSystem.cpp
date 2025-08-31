@@ -14,8 +14,7 @@
 #include "Render/Mesh.h"
 #include "vulkan/vulkan.h"
 
-#include "ECS/Component/BaseMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System.h"
@@ -203,8 +202,8 @@ void BaseMaterialSystem::onUpdate(float deltaTime)
 
 void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 {
-    culledCount = 0;
-    totalCount  = 0;
+    // culledCount = 0;
+    // totalCount  = 0;
 
     auto vkRender = App::get()->getRender<VulkanRender>();
     auto vkCmdBuf = (VkCommandBuffer)cmdBuf;
@@ -212,7 +211,7 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     if (!scene) {
         return;
     }
-    const auto &view = scene->getRegistry().view<TransformComponent, MeshComponent, BaseMaterialComponent>();
+    const auto &view = scene->getRegistry().view<TransformComponent, BaseMaterialComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -268,23 +267,28 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 
     for (const auto entity : view) {
         // const auto &[tc, mc, bmc] = view.get<TransformComponent, MeshComponent, BaseMaterialComponent>(entity);
-        const auto &[tc, mc, bmc] = view.get(entity);
-        if (mc.mesh) {
-            // auto toEntity = tc.getPosition() - camPos;
-            // if (glm::length(toEntity) > maxViewDistance) {
-            //     // too far
-            //     ++culledCount;
-            //     continue;
-            // }
-            // float proj = glm::dot(toEntity, camRot);
-            // if (proj > 0.001f) {
-            //     // backface culling
-            //     ++culledCount;
-            //     continue;
-            // }
+        const auto &[tc, bmc] = view.get(entity);
+        // auto toEntity = tc.getPosition() - camPos;
+        // if (glm::length(toEntity) > maxViewDistance) {
+        //     // too far
+        //     ++culledCount;
+        //     continue;
+        // }
+        // float proj = glm::dot(toEntity, camRot);
+        // if (proj > 0.001f) {
+        //     // backface culling
+        //     ++culledCount;
+        //     continue;
+        // }
+
+        const auto &material2MeshIds = bmc.getMaterial2MeshIds();
+        for (const auto &[material, meshIds] : material2MeshIds) {
+            if (!material && material->_index == entt::type_hash<BaseMaterialComponent>::value()) {
+                continue;
+            }
 
             pc.model     = tc.getTransform();
-            pc.colorType = bmc.colorType;
+            pc.colorType = material->colorType;
 
             // pc.colorType = sin(TimeManager::get()->now().time_since_epoch().count() * 0.001);
 
@@ -295,20 +299,28 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
                                sizeof(PushConstant),
                                &pc);
 
-            VkBuffer vertexBuffers[] = {mc.mesh->getVertexBuffer()->getHandle()};
-            // current no need to support subbuffer
-            VkDeviceSize offsets[] = {0};
-            vkCmdBindVertexBuffers(vkCmdBuf, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(vkCmdBuf,
-                                 mc.mesh->getIndexBuffer()->getHandle(),
-                                 0,
-                                 VK_INDEX_TYPE_UINT32);
-            vkCmdDrawIndexed(vkCmdBuf,
-                             mc.mesh->getIndexCount(), // index count
-                             1,                        // instance count: 9 cubes
-                             0,                        // first index
-                             0,                        // vertex offset, this for merge vertex buffer?
-                             0);
+            for (const auto &idx : meshIds) {
+                auto mesh = bmc.getMesh(idx);
+                if (!mesh || !mesh->getVertexBuffer() || !mesh->getIndexBuffer()) {
+                    continue;
+                }
+                // ++totalCount;
+
+                VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandle()};
+                // current no need to support subbuffer
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(vkCmdBuf, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(vkCmdBuf,
+                                     mesh->getIndexBuffer()->getHandle(),
+                                     0,
+                                     VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(vkCmdBuf,
+                                 mesh->getIndexCount(), // index count
+                                 1,                     // instance count: 9 cubes
+                                 0,                     // first index
+                                 0,                     // vertex offset, this for merge vertex buffer?
+                                 0);
+            }
         }
     }
 }
@@ -317,7 +329,7 @@ void BaseMaterialSystem::onRenderGUI()
 {
     ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
-    ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
+    // ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
     ImGui::Checkbox("Use Entity Camera", &bEntityCamera);
 }
 } // namespace ya

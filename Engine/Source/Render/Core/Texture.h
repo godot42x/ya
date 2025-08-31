@@ -22,6 +22,5 @@ struct Texture
 
     VkImage     getVkImage();
     VkImageView getVkImageView();
-
 };
 } // namespace ya

@@ -36,127 +36,6 @@ struct QueueFamilyIndices
     int32_t queueCount       = -1;
 };
 
-namespace ya
-{
-
-namespace EFilter
-{
-enum T
-{
-    Nearest,
-    Linear,
-    CubicExt,
-    CubicImg,
-};
-inline auto toVk(T filter) -> VkFilter
-{
-    switch (filter)
-    {
-    case Nearest:
-        return VkFilter::VK_FILTER_NEAREST;
-    case Linear:
-        return VkFilter::VK_FILTER_LINEAR;
-    case CubicExt:
-        return VkFilter::VK_FILTER_CUBIC_EXT;
-    case CubicImg:
-        return VkFilter::VK_FILTER_CUBIC_IMG;
-    default:
-        UNREACHABLE();
-    }
-    return {};
-}
-} // namespace EFilter
-
-namespace ESamplerMipmapMode
-{
-enum T
-{
-    Nearest,
-    Linear,
-};
-inline auto toVk(T mode) -> VkSamplerMipmapMode
-{
-    switch (mode)
-    {
-    case Nearest:
-        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
-    case Linear:
-        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    default:
-        UNREACHABLE();
-    }
-    return {};
-}
-} // namespace ESamplerMipmapMode
-
-namespace ESamplerAddressMode
-{
-enum T
-{
-    Repeat,
-    MirroredRepeat,
-    ClampToEdge,
-    ClampToBorder,
-};
-
-inline auto toVk(T mode) -> VkSamplerAddressMode
-{
-    switch (mode)
-    {
-    case Repeat:
-        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    case MirroredRepeat:
-        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-    case ClampToEdge:
-        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    case ClampToBorder:
-        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-    default:
-        UNREACHABLE();
-    }
-    return {};
-}
-} // namespace ESamplerAddressMode
-
-
-struct SamplerCreateInfo
-{
-    EFilter::T             minFilter               = EFilter::Linear;
-    EFilter::T             magFilter               = EFilter::Linear;
-    ESamplerMipmapMode::T  mipmapMode              = ESamplerMipmapMode::Linear;
-    ESamplerAddressMode::T addressModeU            = ESamplerAddressMode::Repeat;
-    ESamplerAddressMode::T addressModeV            = ESamplerAddressMode::Repeat;
-    ESamplerAddressMode::T addressModeW            = ESamplerAddressMode::Repeat;
-    float                  mipLodBias              = 0.0f;
-    bool                   anisotropyEnable        = false;
-    float                  maxAnisotropy           = 1.0f;
-    bool                   compareEnable           = false;
-    ECompareOp::T          compareOp               = ECompareOp::Always;
-    float                  minLod                  = 0.0f;
-    float                  maxLod                  = 1.0f;
-    bool                   unnormalizedCoordinates = false;
-
-    bool operator==(const SamplerCreateInfo &other) const
-    {
-        return minFilter == other.minFilter &&
-               magFilter == other.magFilter &&
-               mipmapMode == other.mipmapMode &&
-               addressModeU == other.addressModeU &&
-               addressModeV == other.addressModeV &&
-               addressModeW == other.addressModeW &&
-               mipLodBias == other.mipLodBias &&
-               anisotropyEnable == other.anisotropyEnable &&
-               maxAnisotropy == other.maxAnisotropy &&
-               compareEnable == other.compareEnable &&
-               compareOp == other.compareOp &&
-               minLod == other.minLod &&
-               maxLod == other.maxLod &&
-               unnormalizedCoordinates == other.unnormalizedCoordinates;
-    }
-};
-
-} // namespace ya
-
 struct VulkanRender : public ya::IRender
 {
     friend struct VulkanUtils;
@@ -407,6 +286,7 @@ struct VulkanRender : public ya::IRender
 
 
     bool      createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler);
+    void      removeSampler(const std::string &name);
     VkSampler getSampler(const std::string &name)
     {
         auto it = _samplers.find(name);

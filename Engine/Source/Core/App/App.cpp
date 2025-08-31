@@ -6,16 +6,19 @@
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
-#include "ECS/Component/BaseMaterialComponent.h"
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Render/Core/Material.h"
+
+
 #include "Math/Geometry.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+
 
 
 #include "Core/AssetManager.h"
@@ -193,6 +196,7 @@ void App::init(AppCreateInfo ci)
     FileSystem::init();
     NameRegistry::init(); // Initialize FName registry
     AssetManager::init();
+    MaterialFactory::init();
 
     onInit(ci);
 
@@ -393,6 +397,7 @@ void App::init(AppCreateInfo ci)
     loadScene(ci.defaultScenePath);
     // wait something done
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
+
 }
 
 void App::onInit(AppCreateInfo ci)
@@ -411,6 +416,7 @@ void ya::App::quit()
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
     unloadScene();
+    MaterialFactory::get()->destroy();
 
 
     imgui.shutdown();
@@ -813,6 +819,7 @@ void App::onRenderGUI()
     renderTarget->onRenderGUI();
 }
 
+// MARK: Scene
 bool App::loadScene(const std::string &path)
 {
     if (_scene)
@@ -853,6 +860,13 @@ void App::onSceneInit(Scene *scene)
         true);
     cubeMesh = std::make_shared<Mesh>(vertices, indices, "cube");
 
+    // TODO: should entt coupling with material?
+    // uint64_t typeID          = entt::type_hash<BaseMaterial>().value();
+    auto *baseMaterial0      = MaterialFactory::get()->createMaterial<BaseMaterial>(0);
+    auto *baseMaterial1      = MaterialFactory::get()->createMaterial<BaseMaterial>(1);
+    baseMaterial0->colorType = BaseMaterial::EColor::Normal;
+    baseMaterial1->colorType = BaseMaterial::EColor::Texcoord;
+
     float offset   = 3.f;
     float rotation = 10.f;
     int   count    = 3000;
@@ -870,11 +884,13 @@ void App::onSceneInit(Scene *scene)
                     float alpha = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc.setScale(glm::vec3(alpha));
 
-                    auto &mc = cube->addComponent<MeshComponent>();
-                    mc.mesh  = cubeMesh.get();
-
-                    auto &bmc     = cube->addComponent<BaseMaterialComponent>();
-                    bmc.colorType = (i + j) % 2;
+                    auto &bmc = cube->addComponent<BaseMaterialComponent>();
+                    if ((i + j + k) % 2 == 0) {
+                        bmc.addMesh(cubeMesh.get(), baseMaterial0);
+                    }
+                    else {
+                        bmc.addMesh(cubeMesh.get(), baseMaterial1);
+                    }
                 }
             }
         }

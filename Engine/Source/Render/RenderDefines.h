@@ -514,7 +514,7 @@ struct PushConstantRange
 
 struct PipelineLayout
 {
-    std::vector<PushConstantRange>        pushConstants;
+    std::vector<PushConstantRange>   pushConstants;
     std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
 
@@ -654,7 +654,84 @@ struct ImageCreateInfo
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
+
+
+
+namespace EFilter
+{
+enum T
+{
+    Nearest,
+    Linear,
+    CubicExt,
+    CubicImg,
+};
+} // namespace EFilter
+
+namespace ESamplerMipmapMode
+{
+enum T
+{
+    Nearest,
+    Linear,
+};
+} // namespace ESamplerMipmapMode
+
+namespace ESamplerAddressMode
+{
+enum T
+{
+    Repeat,
+    MirroredRepeat,
+    ClampToEdge,
+    ClampToBorder,
+};
+
+
+} // namespace ESamplerAddressMode
+
+
+struct SamplerCreateInfo
+{
+    std::string name; // (debug) name
+
+    EFilter::T             minFilter               = EFilter::Linear;
+    EFilter::T             magFilter               = EFilter::Linear;
+    ESamplerMipmapMode::T  mipmapMode              = ESamplerMipmapMode::Linear;
+    ESamplerAddressMode::T addressModeU            = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode::T addressModeV            = ESamplerAddressMode::Repeat;
+    ESamplerAddressMode::T addressModeW            = ESamplerAddressMode::Repeat;
+    float                  mipLodBias              = 0.0f;
+    bool                   anisotropyEnable        = false;
+    float                  maxAnisotropy           = 1.0f;
+    bool                   compareEnable           = false;
+    ECompareOp::T          compareOp               = ECompareOp::Always;
+    float                  minLod                  = 0.0f;
+    float                  maxLod                  = 1.0f;
+    bool                   unnormalizedCoordinates = false;
+
+    bool operator==(const SamplerCreateInfo &other) const
+    {
+        return minFilter == other.minFilter &&
+               magFilter == other.magFilter &&
+               mipmapMode == other.mipmapMode &&
+               addressModeU == other.addressModeU &&
+               addressModeV == other.addressModeV &&
+               addressModeW == other.addressModeW &&
+               mipLodBias == other.mipLodBias &&
+               anisotropyEnable == other.anisotropyEnable &&
+               maxAnisotropy == other.maxAnisotropy &&
+               compareEnable == other.compareEnable &&
+               compareOp == other.compareOp &&
+               minLod == other.minLod &&
+               maxLod == other.maxLod &&
+               unnormalizedCoordinates == other.unnormalizedCoordinates;
+    }
+};
+
 } // namespace ya
+
+
 
 struct RenderHelper
 {

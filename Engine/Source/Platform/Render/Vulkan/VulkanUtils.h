@@ -5,6 +5,8 @@
 #include <vulkan/vulkan.h>
 
 #include "Render/Render.h"
+#include "Render/RenderDefines.h"
+
 
 struct VulkanCommandPool;
 
@@ -572,7 +574,76 @@ inline auto toVk(T layout) -> VkImageLayout
 
 }; // namespace EImageLayout
 
+namespace ya
+{
+namespace EFilter
+{
+inline auto toVk(T filter) -> VkFilter
+{
+    switch (filter)
+    {
+    case Nearest:
+        return VkFilter::VK_FILTER_NEAREST;
+    case Linear:
+        return VkFilter::VK_FILTER_LINEAR;
+    case CubicExt:
+        return VkFilter::VK_FILTER_CUBIC_EXT;
+    case CubicImg:
+        return VkFilter::VK_FILTER_CUBIC_IMG;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace EFilter
 
+
+
+namespace ESamplerMipmapMode
+{
+inline auto toVk(T mode) -> VkSamplerMipmapMode
+{
+    switch (mode)
+    {
+    case Nearest:
+        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    case Linear:
+        return VkSamplerMipmapMode::VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ESamplerMipmapMode
+
+
+
+namespace ESamplerAddressMode
+{
+
+inline auto toVk(T mode) -> VkSamplerAddressMode
+{
+    switch (mode)
+    {
+    case Repeat:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    case MirroredRepeat:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    case ClampToEdge:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    case ClampToBorder:
+        return VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+} // namespace ESamplerAddressMode
+
+
+} // namespace ya
+
+// MARK: to string
 
 inline std::string std::to_string(VkResult result)
 {

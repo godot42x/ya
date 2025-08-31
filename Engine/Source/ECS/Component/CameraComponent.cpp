@@ -6,6 +6,12 @@
 namespace ya
 {
 
+// TODO: a camera should only define the effect:
+//  1. projection or orthographic
+//  2. other fov some camera effect
+// So we should not take the view form there, Should there
+// come a CameraController to do this work...
+
 glm::mat4 CameraComponent::getView() const
 {
     if (getOwner() && getOwner()->hasComponent<TransformComponent>()) {
