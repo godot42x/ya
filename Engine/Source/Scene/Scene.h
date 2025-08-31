@@ -12,6 +12,7 @@ class Entity;
 class Scene
 {
     friend class Entity;
+    using id_t = entt::entity;
 
     std::string    _name;
     entt::registry _registry;
@@ -33,10 +34,12 @@ class Scene
     Scene &operator=(Scene &&) = default;
 
     // Entity management
-    Entity createEntity(const std::string &name = "Entity");
-    Entity createEntityWithUUID(uint64_t uuid, const std::string &name = "Entity");
-    void   destroyEntity(Entity entity);
-    bool   isValidEntity(Entity entity) const;
+    Entity *createEntity(const std::string &name = "Entity");
+    Entity  createEntityWithUUID(uint64_t uuid, const std::string &name = "Entity");
+    void    destroyEntity(Entity entity);
+    bool    isValidEntity(Entity entity) const;
+
+    Entity *getEntityByID(id_t id);
 
     // Scene management
     void clear();

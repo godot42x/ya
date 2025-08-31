@@ -673,7 +673,6 @@ int ya::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     inputManager.update();
-    camera.update(inputManager, dt); // Camera expects dt in seconds
 
     // static auto time = 0.f;
     // time += dt;                       // dt is in milliseconds
@@ -693,6 +692,26 @@ void App::onUpdate(float dt)
     renderTarget->setColorClearValue(colorClearValue);
     renderTarget->setDepthStencilClearValue(depthClearValue);
     renderTarget->onUpdate(dt);
+
+    auto cam = renderTarget->getCamera();
+
+    camera.update(inputManager, dt); // Camera expects dt in seconds
+    if (cam && cam->hasComponent<CameraComponent>()) {
+        auto       &cc  = cam->getComponent<CameraComponent>();
+        const auto &ext = renderTarget->_extent;
+        cc.setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+        auto &inputManger = App::get()->inputManager;
+
+        if (inputManger.isMouseButtonPressed(EMouse::Right)) {
+            glm::vec2 mouseDelta = inputManger.getMouseDelta();
+            if (glm::length(mouseDelta) > 0.0f) {
+                auto &tc = cam->getComponent<TransformComponent>();
+                tc.setPosition(tc._position + glm::vec3(mouseDelta, 0.0f));
+            }
+        }
+        glm::vec2 scrollDelta = inputManger.getMouseScrollDelta();
+        cc._distance -= scrollDelta.y * 0.1f;
+    }
 }
 
 void App::onRender(float dt)
@@ -821,7 +840,8 @@ void App::onSceneInit(Scene *scene)
 
     float offset   = 3.f;
     float rotation = 10.f;
-    int   alpha    = std::round(std::pow(30000, 1.0 / 3.0));
+    int   count    = 3000;
+    int   alpha    = std::round(std::pow(count, 1.0 / 3.0));
     YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
@@ -829,16 +849,16 @@ void App::onSceneInit(Scene *scene)
                 auto cube = scene->createEntity(std::format("Cube_{}_{}_{}", i, j, k));
                 {
                     auto  v  = glm::vec3(i, j, k);
-                    auto &tc = cube.addComponent<TransformComponent>();
+                    auto &tc = cube->addComponent<TransformComponent>();
                     tc.setPosition(offset * v);
                     tc.setRotation(rotation * v);
                     float alpha = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc.setScale(glm::vec3(alpha));
 
-                    auto &mc = cube.addComponent<MeshComponent>();
+                    auto &mc = cube->addComponent<MeshComponent>();
                     mc.mesh  = cubeMesh.get();
 
-                    auto &bmc     = cube.addComponent<BaseMaterialComponent>();
+                    auto &bmc     = cube->addComponent<BaseMaterialComponent>();
                     bmc.colorType = (i + j) % 2;
                 }
             }
@@ -846,13 +866,17 @@ void App::onSceneInit(Scene *scene)
     }
 
     auto cam = scene->createEntity("Camera");
-    cam.addComponent<TransformComponent>();
-    cam.addComponent<CameraComponent>();
-    cam.addComponent<BaseMaterialComponent>();
+    cam->addComponent<TransformComponent>();
+    cam->addComponent<CameraComponent>();
+    cam->addComponent<BaseMaterialComponent>();
     renderTarget->setCamera(cam);
 
-    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam.getHandle()), "WTH");
-    YA_CORE_ASSERT(cam.hasComponent<CameraComponent>(), "???");
+    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "WTH");
+    YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "???");
+
+    auto &cc    = cam->getComponent<CameraComponent>();
+    auto  owner = cc.getOwner();
+    YA_CORE_ASSERT(owner == cam, "WTH");
 }
 
 bool App::onWindowResized(const WindowResizeEvent &event)

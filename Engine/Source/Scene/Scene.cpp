@@ -17,9 +17,10 @@ Scene::~Scene()
     clear();
 }
 
-Entity Scene::createEntity(const std::string &name)
+Entity *Scene::createEntity(const std::string &name)
 {
-    Entity entity = {_registry.create(), this};
+    auto   id     = _registry.create();
+    Entity entity = {id, this};
 
     // Add basic components
     auto &idComponent = entity.addComponent<IDComponent>();
@@ -30,7 +31,10 @@ Entity Scene::createEntity(const std::string &name)
 
     // auto &transformComponent = entity.addComponent<TransformComponent>();
 
-    return entity;
+    auto it = _entityMap.insert({id, std::move(entity)});
+    YA_CORE_ASSERT(it.second, "Entity ID collision!");
+
+    return &it.first->second;
 }
 
 Entity Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
@@ -62,9 +66,15 @@ bool Scene::isValidEntity(Entity entity) const
     return _registry.valid(entity.getHandle());
 }
 
+Entity *Scene::getEntityByID(id_t id)
+{
+    return &_entityMap.find(id)->second;
+}
+
 void Scene::clear()
 {
     _registry.clear();
+    _entityMap.clear();
     _entityCounter = 0;
 }
 

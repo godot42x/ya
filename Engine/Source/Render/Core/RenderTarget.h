@@ -34,7 +34,7 @@ struct RenderTarget
 
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
-    Entity _camera;
+    Entity *_camera;
 
   public:
 
@@ -84,8 +84,8 @@ struct RenderTarget
         }
     }
 
-    Entity *getCamera() { return &_camera; }
-    void    setCamera(Entity camera) { _camera = camera; }
+    Entity *getCamera() { return _camera; }
+    void    setCamera(Entity *camera) { _camera = camera; }
 };
 
 }; // namespace ya

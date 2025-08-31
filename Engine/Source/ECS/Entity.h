@@ -38,8 +38,8 @@ class Entity
         return component;
     }
 
-    template <typename T, typename... Args>
-    T &addOrReplaceComponent(Args &&...args) { return _scene->_registry.emplace_or_replace<T>(_entityHandle, std::forward<Args>(args)...); }
+    // template <typename T, typename... Args>
+    // T &addOrReplaceComponent(Args &&...args) { return _scene->_registry.emplace_or_replace<T>(_entityHandle, std::forward<Args>(args)...); }
 
     template <typename T>
     T &getComponent()

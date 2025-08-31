@@ -15,9 +15,7 @@ namespace ya
 struct Entity;
 struct IComponent
 {
-    Entity *_owner = nullptr;
-
-    virtual ~IComponent() = default;
+    Entity *_owner;
 
     void                  setOwner(Entity *entity) { _owner = entity; }
     [[nodiscard]] Entity *getOwner() const { return _owner; }
