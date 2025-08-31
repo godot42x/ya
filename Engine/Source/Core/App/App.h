@@ -154,6 +154,7 @@ struct App
 
     bool                           onWindowResized(const WindowResizeEvent &event);
     bool                           onKeyReleased(const KeyReleasedEvent &event);
+    bool                           onMouseScrolled(const MouseScrolledEvent &event);
     [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
 };
 

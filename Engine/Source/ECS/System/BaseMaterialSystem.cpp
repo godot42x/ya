@@ -197,9 +197,14 @@ void BaseMaterialSystem::onDestroy()
     _pipelineLayout.reset();
 }
 
+void BaseMaterialSystem::onUpdate(float deltaTime)
+{
+}
+
 void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 {
     culledCount = 0;
+    totalCount  = 0;
 
     auto vkRender = App::get()->getRender<VulkanRender>();
     auto vkCmdBuf = (VkCommandBuffer)cmdBuf;
@@ -208,7 +213,6 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         return;
     }
     const auto &view = scene->getRegistry().view<TransformComponent, MeshComponent, BaseMaterialComponent>();
-    totalCount       = std::distance(view.begin(), view.end());
     if (view.begin() == view.end()) {
         return;
     }
@@ -244,7 +248,7 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     // glm::vec3 camRot;
     // float     fov;
     // HACK: remove this
-    if (auto cam = rt->getCamera()) {
+    if (auto cam = rt->getCamera(); cam && bEntityCamera) {
         if (cam->hasComponent<CameraComponent>())
         {
             auto &cc          = cam->getComponent<CameraComponent>();
@@ -314,5 +318,6 @@ void BaseMaterialSystem::onRenderGUI()
     ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
     ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
+    ImGui::Checkbox("Use Entity Camera", &bEntityCamera);
 }
 } // namespace ya

@@ -21,6 +21,7 @@ struct BaseMaterialSystem : public IMaterialSystem
     float maxViewDistance = 100.0f;
     int   culledCount     = 0;
     int   totalCount      = 0;
+    bool  bEntityCamera   = true;
 
     std::shared_ptr<VulkanPipeline>       _pipeline;
     std::shared_ptr<VulkanPipelineLayout> _pipelineLayout;
@@ -28,7 +29,7 @@ struct BaseMaterialSystem : public IMaterialSystem
     void onInit(VulkanRenderPass *renderPass) override;
     void onDestroy() override;
 
-    void onUpdate(float deltaTime) override {}
+    void onUpdate(float deltaTime) override;
     void onRender(void *cmdBuf, RenderTarget *rt) override;
     void onRenderGUI() override;
 };

@@ -400,6 +400,7 @@ void App::onInit(AppCreateInfo ci)
     auto &bus = MessageBus::get();
     bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
     bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
+    bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
 }
 
 
@@ -696,6 +697,7 @@ void App::onUpdate(float dt)
     auto cam = renderTarget->getCamera();
 
     camera.update(inputManager, dt); // Camera expects dt in seconds
+    float sensitivity = 0.1f;
     if (cam && cam->hasComponent<CameraComponent>()) {
         auto       &cc  = cam->getComponent<CameraComponent>();
         const auto &ext = renderTarget->_extent;
@@ -706,7 +708,20 @@ void App::onUpdate(float dt)
             glm::vec2 mouseDelta = inputManger.getMouseDelta();
             if (glm::length(mouseDelta) > 0.0f) {
                 auto &tc = cam->getComponent<TransformComponent>();
-                tc.setPosition(tc._position + glm::vec3(mouseDelta, 0.0f));
+
+                float yaw   = tc._rotation.x;
+                float pitch = tc._rotation.y;
+                yaw -= mouseDelta.x * sensitivity;
+                pitch -= mouseDelta.y * sensitivity;
+                if (pitch > 89.f) {
+                    pitch = 89.f;
+                }
+                else if (pitch < -89.f) {
+                    pitch = -89.f;
+                }
+
+                tc._rotation.x = yaw;
+                tc._rotation.y = pitch;
             }
         }
         glm::vec2 scrollDelta = inputManger.getMouseScrollDelta();
@@ -897,6 +912,16 @@ bool App::onKeyReleased(const KeyReleasedEvent &event)
         requestQuit();
     }
     return true;
+}
+
+bool App::onMouseScrolled(const MouseScrolledEvent &event)
+{
+    float sensitivity = 0.5f;
+    auto  cam         = renderTarget->getCamera();
+    auto &cc          = cam->getComponent<CameraComponent>();
+    // up is +, and down is -, up is close so -=
+    cc._distance = cc._distance -= event._offsetY * sensitivity;
+    return false;
 }
 
 
