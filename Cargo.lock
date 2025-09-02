@@ -153,6 +153,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "assimp"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a003409c21e542939691938907c7dd12293e2c258386aa25abc6929ea79d87f"
+dependencies = [
+ "assimp-sys",
+]
+
+[[package]]
+name = "assimp-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dd0afdd38abb878acff2f7074e3846c8af2482db619a23c9c8448cf57d11875"
+dependencies = [
+ "bitflags 0.9.1",
+ "cmake",
+ "pkg-config",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -178,6 +198,12 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
+name = "bitflags"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4efd02e230a02e18f92fc2735f44597385ed02ad8f831e7c1c1156ee5e1ab3a5"
 
 [[package]]
 name = "bitflags"
@@ -295,6 +321,15 @@ name = "cfg_aliases"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+
+[[package]]
+name = "cmake"
+version = "0.1.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7caa3f9de89ddbe2c607f4101924c5abec803763ae9534e4f4d7d8f84aa81f0"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "codespan-reporting"
@@ -895,6 +930,8 @@ dependencies = [
 name = "neon-rs"
 version = "0.1.0"
 dependencies = [
+ "assimp",
+ "bytemuck",
  "env_logger",
  "log",
  "pollster",

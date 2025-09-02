@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use neon_rs::State;
+use neon_rs::state::State;
 use winit::event_loop;
 use winit::{application::ApplicationHandler, keyboard::NamedKey, window::WindowAttributes};
 
