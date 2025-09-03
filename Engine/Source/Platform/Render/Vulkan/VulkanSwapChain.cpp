@@ -140,7 +140,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .presentMode = _presentMode,
     };
 
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_SCOPE("Swapchain Recreate");
     static uint32_t version = 0;
     version++;
 
@@ -298,7 +298,10 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .extent      = _supportDetails.capabilities.currentExtent,
         .presentMode = _presentMode,
     };
-    onRecreate.broadcast(old, now);
+    {
+        YA_PROFILE_SCOPE("SwapChain recreate event");
+        onRecreate.broadcast(old, now);
+    }
     return true;
 }
 

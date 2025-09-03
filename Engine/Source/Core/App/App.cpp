@@ -471,6 +471,7 @@ int ya::App::run()
 
 int ya::App::processEvent(SDL_Event &event)
 {
+    // YA_CORE_TRACE("Event processed: {}", event.type);
     EventProcessState ret = imgui.processEvents(event);
     if (ret != EventProcessState::Continue) {
         return 0;
@@ -522,6 +523,7 @@ int ya::App::processEvent(SDL_Event &event)
     case SDL_EVENT_WINDOW_RESTORED:
     case SDL_EVENT_WINDOW_MOUSE_ENTER:
     case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+        break;
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
     {
         bus.publish(WindowFocusEvent(event.window.windowID));
@@ -769,7 +771,22 @@ void App::onRender(float dt)
     renderTarget->begin(curCmdBuf);
     renderTarget->onRender(curCmdBuf);
 
-#pragma region UI
+    // MARK: Render2D
+    Render2D::begin(curCmdBuf);
+    Render2D::makeSprite({0, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
+    Render2D::makeSprite({10, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
+    Render2D::makeSprite({20, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
+    int count = 10;
+    for (int i = 0; i < count; i++) {
+        Render2D::makeSprite(
+            glm::vec3(i * 100, i * 100, 0),
+            glm::vec2(100.0f, 100.0f),
+            glm::vec4(sin(i), cos(i), sin(float(i)), 1));
+    }
+    Render2D::end();
+
+
+#pragma region ImGui
 
     imgui.beginFrame();
     if (ImGui::Begin("Test")) {
@@ -803,10 +820,21 @@ void App::onRender(float dt)
         imcEditorCamera(camera);
         imcClearValues();
         // imcFpsControl(fpsCtrl);
-        static bool bDebugPicker = false;
-        if (ImGui::Checkbox("Debug Picker", &bDebugPicker)) {
-            ImGui::DebugStartItemPicker();
+        // static bool bItemPicker = false;
+        // ImGui::Checkbox("Debug Picker", &bItemPicker);
+        // if (bItemPicker) {
+        //     ImGui::DebugStartItemPicker();
+        // }
+        static bool bDarkMode = true;
+        if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
+            if (bDarkMode) {
+                ImGui::StyleColorsDark();
+            }
+            else {
+                ImGui::StyleColorsLight();
+            }
         }
+        Render2D::onImGui();
         ImGui::End();
     }
     imgui.endFrame();
@@ -814,15 +842,10 @@ void App::onRender(float dt)
     // imgui.submit(curCmdBuf, pipeline->getHandle());
     imgui.submit(curCmdBuf, nullptr); // leave nullptr to let imgui use its pipeline
 
-    // MARK: Render2D
-    Render2D::begin(curCmdBuf);
-    int count = 10;
-    for (int i = 0; i < count; i++) {
-        Render2D::makeSprite({i, i, i}, glm::vec2(1.0f, 1.0f), glm::vec4(1.0f));
-    }
-    Render2D::end();
 
 #pragma endregion
+
+
 
     // TODO: subpasses?
     renderTarget->end(curCmdBuf);

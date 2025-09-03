@@ -87,6 +87,21 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
     return true;
 }
 
+bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
+{
+    YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot flush!");
+
+    VkMappedMemoryRange range{
+        .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext  = nullptr,
+        .memory = _memory,
+        .offset = offset,
+        .size   = size == 0 ? VK_WHOLE_SIZE : size,
+    };
+    VK_CALL(vkFlushMappedMemoryRanges(_render->getLogicalDevice(), 1, &range));
+    return true;
+}
+
 
 void VulkanBuffer::mapInternal(void **ptr)
 {

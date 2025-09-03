@@ -1,6 +1,6 @@
 #pragma once
+#include "Core/Base.h"
 
-#include <cassert>
 #include <entt/entt.hpp>
 
 #include "ECS/Component.h"
@@ -31,7 +31,7 @@ class Entity
         requires(!std::is_base_of_v<T, IComponent>)
     T &addComponent(Args &&...args)
     {
-        assert(!hasComponent<T>() && "Entity already has component!");
+        YA_CORE_ASSERT(!hasComponent<T>(), "Entity already has component!");
         T &component = _scene->_registry.emplace<T>(_entityHandle, std::forward<Args>(args)...);
         static_cast<IComponent &>(component).setOwner(this);
 

@@ -135,9 +135,10 @@ struct ImguiState
 
     EventProcessState processEvents(const SDL_Event &event)
     {
-        ImGui_ImplSDL3_ProcessEvent(&event);
+        bool bHandled = ImGui_ImplSDL3_ProcessEvent(&event);
 
         // TODO: dkw the ImGui_ImplSDL3_ProcessEvent return value is always true
+        // return !bHandled ? EventProcessState::Handled : EventProcessState::Continue;
         return EventProcessState::Continue;
     }
 

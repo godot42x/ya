@@ -57,16 +57,15 @@ struct VulkanBuffer
     void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
 
     bool writeData(const void *data, uint32_t size, uint32_t offset = 0);
+    bool flush(uint32_t size = 0, uint32_t offset = 0);
 
     template <typename T>
     T *map()
     {
-
         void *data = nullptr;
         mapInternal(&data);
         return static_cast<T *>(data);
     }
-
     void unmap();
 
 

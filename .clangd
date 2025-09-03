@@ -22,6 +22,7 @@ Diagnostics:
                 cppcoreguidelines-pro-type-static-cast-downcast,
                 cppcoreguidelines-macro-usage,
                 cppcoreguidelines-pro-bounds-pointer-arithmetic,
+                cppcoreguidelines-pro-bounds-constant-array-index,
                 #
                 modernize-use-trailing-return-type,
                 modernize-avoid-c-arrays,

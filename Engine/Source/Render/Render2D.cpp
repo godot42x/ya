@@ -1,7 +1,10 @@
 #include "Render2D.h"
 
+#include "Core/MessageBus.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Render/Render.h"
+#include "imgui.h"
+
 
 
 namespace ya
@@ -20,7 +23,6 @@ struct FQuadData
         glm::vec3 pos;
         glm::vec4 color;
         glm::vec2 texCoord;
-        float     rotation;
     };
 
     struct InstanceData
@@ -30,10 +32,22 @@ struct FQuadData
 
     static constexpr const std::array<glm::vec4, 4> vertices = {
         {
-            {-0.5f, -0.5f, 0.0f, 1.f}, // LT
-            {0.5f, -0.5f, 0.0f, 1.f},  // RT
-            {0.5f, 0.5f, 0.0f, 1.f},   // RB
-            {-0.5f, 0.5f, 0.0f, 1.f},  // LB
+            {-1.0f, -1.0f, 0.0f, 1.f}, // LT
+            {1.0f, -1.0f, 0.0f, 1.f},  // RT
+            {-1.0f, 1.0f, 0.0f, 1.f},  // LB
+            {1.0f, 1.0f, 0.0f, 1.f},   // RB
+
+            // {0.0f, 0.0f, 0.0f, 1.f}, // LT
+            // {1.0f, 0.0f, 0.0f, 1.f}, // RT
+            // {0.0f, 1.0f, 0.0f, 1.f}, // LB
+            // {1.0f, 1.0f, 0.0f, 1.f}, // RB
+        }};
+    static constexpr const std::array<glm::vec2, 4> defaultTexcoord = {
+        {
+            {0, 0}, // LT
+            {1, 0}, // RT
+            {0, 1}, // LB
+            {1, 1}, // RB
         }};
 
     static constexpr size_t MaxVertexCount = 10000;
@@ -45,16 +59,50 @@ struct FQuadData
     std::shared_ptr<VulkanBuffer> vertexBuffer;
     std::shared_ptr<VulkanBuffer> indexBuffer;
 
-    std::shared_ptr<VulkanBuffer> vertexStagingBuffer;
-
     FQuadData::Vertex *vertexPtr     = nullptr;
     FQuadData::Vertex *vertexPtrHead = nullptr;
 
     uint32_t vertexCount = 0;
     uint32_t indexCount  = 0;
 
+
+    Viewport viewport{
+        .x        = 0,
+        .y        = 0,
+        .width    = 800,
+        .height   = 600,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    Scissor scissor{
+        .offsetX = 0,
+        .offsetY = 0,
+        .width   = 800,
+        .height  = 600,
+    };
+
+
     void init(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *layout)
     {
+
+        auto winW = render->getSwapChain()->getExtent().width;
+        auto winH = render->getSwapChain()->getExtent().height;
+        viewport  = Viewport{
+             .x        = 0,
+             .y        = 0,
+             .width    = static_cast<float>(winW),
+             .height   = static_cast<float>(winH),
+             .minDepth = 0.0f,
+             .maxDepth = 1.0f,
+        };
+        scissor = Scissor{
+            .offsetX = 0,
+            .offsetY = 0,
+            .width   = winW,
+            .height  = winH,
+        };
+
+
         logicalDevice = render->getLogicalDevice();
         pipeline      = new VulkanPipeline(render, renderPass, layout);
         pipeline->recreate(GraphicsPipelineCreateInfo{
@@ -64,8 +112,9 @@ struct FQuadData
                 .bDeriveFromShader = false,
                 .vertexBufferDescs = {
                     VertexBufferDescription{
-                        .slot  = 0,
-                        .pitch = static_cast<uint32_t>(T2Size(EVertexAttributeFormat::Float3)),
+                        .slot = 0,
+                        // ??? no copy pasted!!! errror
+                        .pitch = sizeof(FQuadData::Vertex),
                     },
                 },
                 .vertexAttributes = {
@@ -89,16 +138,10 @@ struct FQuadData
                         .format     = EVertexAttributeFormat::Float2,
                         .offset     = offsetof(Vertex, texCoord),
                     },
-                    VertexAttribute{
-                        .bufferSlot = 0,
-                        .location   = 3,
-                        .format     = EVertexAttributeFormat::Float,
-                        .offset     = offsetof(Vertex, rotation),
-                    },
                 },
             },
             // define what state need to dynamically modified in render pass execution
-            .dynamicFeatures    = {},
+            .dynamicFeatures    = EPipelineDynamicFeature::Viewport | EPipelineDynamicFeature::Scissor,
             .primitiveType      = EPrimitiveType::TriangleList,
             .rasterizationState = RasterizationState{
                 .polygonMode = EPolygonMode::Fill,
@@ -106,8 +149,8 @@ struct FQuadData
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
-                .bDepthTestEnable       = true,
-                .bDepthWriteEnable      = true,
+                .bDepthTestEnable       = false,
+                .bDepthWriteEnable      = false,
                 .depthCompareOp         = ECompareOp::Less,
                 .bDepthBoundsTestEnable = false,
                 .bStencilTestEnable     = false,
@@ -132,23 +175,8 @@ struct FQuadData
                 },
             },
             .viewportState = ViewportState{
-
-                .viewports = {
-                    {
-                        .x        = 0,
-                        .y        = 0,
-                        .width    = static_cast<float>(render->getSwapChain()->getWidth()),
-                        .height   = static_cast<float>(render->getSwapChain()->getHeight()),
-                        .minDepth = 0.0f,
-                        .maxDepth = 1.0f,
-                    },
-                },
-                .scissors = {Scissor{
-                    .offsetX = 0,
-                    .offsetY = 0,
-                    .width   = static_cast<uint32_t>(render->getSwapChain()->getWidth()),
-                    .height  = static_cast<uint32_t>(render->getSwapChain()->getHeight()),
-                }},
+                .viewports = {viewport},
+                .scissors  = {scissor},
             },
         });
 
@@ -157,33 +185,29 @@ struct FQuadData
             BufferCreateInfo{
                 .usage         = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
-                .memProperties = 0,
+                .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                 .debugName     = "Sprite2D_VertexBuffer",
             });
-        vertexStagingBuffer = VulkanBuffer::create(
-            render,
-            BufferCreateInfo{
-                .usage         = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
-                .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                .debugName     = "Sprite2D_VertexStagingBuffer",
-            });
 
-        vertexPtr     = vertexStagingBuffer->map<FQuadData::Vertex>();
+        vertexPtr     = vertexBuffer->map<FQuadData::Vertex>();
         vertexPtrHead = vertexPtr;
 
 
         std::vector<uint32_t> indices;
         indices.reserve(MaxIndexCount);
-        for (uint32_t i = 0; i < MaxVertexCount / 4; i++) {
-            // 0,4,2,0,2,1
-            indices.push_back(i * 4 + 0);
-            indices.push_back(i * 4 + 4);
-            indices.push_back(i * 4 + 2);
+        // constant indices?
+        for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
 
-            indices.push_back(i * 4 + 0);
-            indices.push_back(i * 4 + 2);
-            indices.push_back(i * 4 + 1);
+            uint32_t vertexIndex = (i / 6) * 4;
+
+            // quad-> 2 triangle-> counter-clockwise  0,3,1,0,3,2
+            indices[i + 0] = vertexIndex + 0;
+            indices[i + 1] = vertexIndex + 1; // 3;
+            indices[i + 2] = vertexIndex + 2; // 1;
+
+            indices[i + 3] = vertexIndex + 1; // 0;
+            indices[i + 4] = vertexIndex + 3; // 2;
+            indices[i + 5] = vertexIndex + 2; // 3;
         }
 
         // index: 0,2,
@@ -196,20 +220,47 @@ struct FQuadData
                 .memProperties = 0,
                 .debugName     = "Sprite2D_IndexBuffer",
             });
+
+
+        MessageBus::get().subscribe<WindowResizeEvent>([this, render](const WindowResizeEvent &e) {
+            auto winW = render->getSwapChain()->getExtent().width;
+            auto winH = render->getSwapChain()->getExtent().height;
+            viewport  = Viewport{
+                 .x        = 0,
+                 .y        = 0,
+                 .width    = static_cast<float>(winW),
+                 .height   = static_cast<float>(winH),
+                 .minDepth = 0.0f,
+                 .maxDepth = 1.0f,
+            };
+            scissor = Scissor{
+                .offsetX = 0,
+                .offsetY = 0,
+                .width   = winW,
+                .height  = winH,
+            };
+            return false;
+        });
     }
 
     void destroy()
     {
-
         vertexBuffer.reset();
         indexBuffer.reset();
-        vertexStagingBuffer.reset();
 
         delete pipeline;
     }
 
-    void bind(void *cmdBuf)
+
+    void onImGui()
     {
+        ImGui::CollapsingHeader("Render2D", ImGuiTreeNodeFlags_DefaultOpen);
+        // control viewports &scissors
+        ImGui::DragFloat2("Viewport Pos", &viewport.x);
+        ImGui::DragFloat2("Viewport Size", &viewport.width);
+
+        ImGui::DragInt2("Scissor Offset", (int *)&scissor.offsetX);
+        ImGui::DragInt2("Scissor Extent", (int *)&scissor.width);
     }
 
     bool shouldFlush()
@@ -217,33 +268,46 @@ struct FQuadData
         return vertexCount >= MaxVertexCount - 4;
     }
 
-    void copyPass(void *cmdBuf)
+    void flush(void *cmdBuf)
     {
-        std::size_t vertexCount = vertexPtr - vertexPtrHead;
+        auto curCmdBuf = (VkCommandBuffer)cmdBuf;
         if (vertexCount <= 0) {
             return;
         }
-        vertexPtr = vertexPtrHead;
 
-        // TODO: unmap?
-        VulkanBuffer::transfer((VkCommandBuffer)cmdBuf,
-                               vertexStagingBuffer->getHandle(),
-                               vertexBuffer->getHandle(),
-                               sizeof(Vertex) * vertexCount);
-    }
-
-    void flush(void *cmdBuf)
-    {
+        vertexBuffer->flush();
 
         VkBuffer     vertexBuffers[] = {vertexBuffer->getHandle()};
         VkDeviceSize offsets[]       = {0};
         pipeline->bind((VkCommandBuffer)cmdBuf);
-        vkCmdBindVertexBuffers((VkCommandBuffer)cmdBuf,
+
+        VkViewport vp{
+            .x        = viewport.x,
+            .y        = viewport.y,
+            .width    = viewport.width,
+            .height   = viewport.height,
+            .minDepth = viewport.minDepth,
+            .maxDepth = viewport.maxDepth,
+        };
+        vkCmdSetViewport(curCmdBuf, 0, 1, &vp);
+        VkRect2D vkScissor{
+            .offset = {
+                scissor.offsetX,
+                scissor.offsetY,
+            },
+            .extent = {
+                static_cast<uint32_t>(scissor.width),
+                static_cast<uint32_t>(scissor.height),
+            },
+        };
+        vkCmdSetScissor(curCmdBuf, 0, 1, &vkScissor);
+
+        vkCmdBindVertexBuffers(curCmdBuf,
                                0, // first binding
                                1, // binding count
                                vertexBuffers,
                                offsets);
-        vkCmdBindIndexBuffer((VkCommandBuffer)cmdBuf,
+        vkCmdBindIndexBuffer(curCmdBuf,
                              indexBuffer->getHandle(),
                              0,
                              VK_INDEX_TYPE_UINT32);
@@ -257,6 +321,8 @@ struct FQuadData
                          0,  // first index
                          0,  // vertex offset
                          0); // first instance
+
+        vertexPtr   = vertexPtrHead;
         vertexCount = 0;
         indexCount  = 0;
     }
@@ -338,12 +404,16 @@ void Render2D::destroy()
 
 void Render2D::onUpdate()
 {
-    quadData.copyPass(curCmdBuf);
 }
 
 void Render2D::begin(void *cmdBuf)
 {
     curCmdBuf = cmdBuf;
+}
+
+void Render2D::onImGui()
+{
+    quadData.onImGui();
 }
 
 void Render2D::end()
@@ -358,18 +428,30 @@ void Render2D::makeSprite(const glm::vec3 &position, const glm::vec2 &size, cons
         quadData.flush(curCmdBuf);
     }
 
-    for (int i = 0; i < 4; i++) {
-        quadData.vertexPtr->pos      = glm::vec3(FQuadData::vertices[i] *
-                                            glm::translate(glm::mat4(1.f), glm::vec3(position)) *
-                                            glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f)));
-        quadData.vertexPtr->texCoord = glm::vec2(i % 2, i / 2);
-        quadData.vertexPtr->color    = color;
-        quadData.vertexPtr->rotation = 0.0f;
+    // 投影矩阵：将屏幕坐标(0,0,800,600)映射到NDC(-1,-1,1,1)
+    glm::mat4 proj = glm::ortho(0.0f,
+                                quadData.viewport.width,
+                                quadData.viewport.height,
+                                0.0f,
+                                -1.0f,
+                                1.0f);
 
+
+    glm::mat4 mvp = proj *
+                    // model
+                    glm::translate(glm::mat4(1.f), glm::vec3(position)) *
+                    glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f)) *
+                    glm::rotate(glm::mat4(1.f), glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
+    for (int i = 0; i < 4; i++) {
+        quadData.vertexPtr->pos      = mvp * FQuadData::vertices[i];
+        quadData.vertexPtr->texCoord = FQuadData::defaultTexcoord[i];
+        quadData.vertexPtr->color    = color;
         ++quadData.vertexPtr;
-        quadData.vertexCount += 4;
-        quadData.indexCount += 6;
     }
+
+    quadData.vertexCount += 4;
+    quadData.indexCount += 6;
 }
 
 

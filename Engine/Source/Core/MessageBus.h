@@ -181,6 +181,18 @@ struct MessageBus
     }
 
 
+    template <typename EventType>
+        requires(std::is_base_of_v<Event, EventType>)
+    void subscribe(std::function<bool(const EventType &)> cb)
+    {
+        _eventSubscribers[EventType::getStaticType()].push_back(
+            EventSubscriber{
+                .cb = [cb](void *msg) {
+                    return cb(*static_cast<EventType *>(msg));
+                },
+                .context = {},
+            });
+    }
 
     template <typename EventType>
     void publish(const EventType &event)
