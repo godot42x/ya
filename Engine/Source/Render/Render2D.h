@@ -17,46 +17,26 @@ namespace ya
 
 struct Render2D
 {
-
-    IRender          *render     = nullptr;
-    VulkanRenderPass *renderpass = nullptr;
-    VulkanPipeline   *pipeline   = nullptr;
-
     Render2D()          = default;
     virtual ~Render2D() = default;
 
 
-    void init(IRender *render, VulkanPipelineLayout *layout, VulkanRenderPass *renderpass);
-
-
-    void destroy()
-    {
-    }
-
-    struct Vertex
-    {
-        glm::vec3 aPosition; // z is the layer id?
-        glm::vec2 aTexCoord;
-        glm::vec4 aColor;
-        float     aTextureId;
-        float     aRotation;
-    };
+    static void init(IRender *render, VulkanRenderPass *renderpass);
+    static void destroy();
     struct InstanceData
     {
         glm::mat4 modelMatrix;
     };
 
 
-    virtual void begin();
-    virtual void end(void *cmdBuf);
+    static void onUpdate();
+    static void begin(void *cmdBuf);
+    static void end();
 
     // 绘制矩形
-    void makeSprite(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color);
-    void makeRotatedSprite(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation);
+    static void makeSprite(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color);
 
-    // 绘制文本
-    virtual void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color) = 0;
-
-    void initBuffers();
+    void makeRotatedSprite(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation) {}
+    void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color) {}
 };
 }; // namespace ya

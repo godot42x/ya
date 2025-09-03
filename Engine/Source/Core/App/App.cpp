@@ -25,8 +25,11 @@
 
 
 #include "Render/Core/RenderTarget.h"
+#include "Render/Mesh.h"
 #include "Render/Render.h"
-#include "render/Mesh.h"
+#include "Render/Render2D.h"
+
+
 
 #include "ImGuiHelper.h"
 
@@ -211,6 +214,7 @@ void App::init(AppCreateInfo ci)
 
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
     _shaderStorage->load(currentShader);
+    _shaderStorage->load("Sprite2D.glsl");
 
 
     RenderCreateInfo renderCI{
@@ -398,6 +402,7 @@ void App::init(AppCreateInfo ci)
     // wait something done
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 
+    Render2D::init(_render, renderpass);
 }
 
 void App::onInit(AppCreateInfo ci)
@@ -733,6 +738,12 @@ void App::onUpdate(float dt)
         glm::vec2 scrollDelta = inputManger.getMouseScrollDelta();
         cc._distance -= scrollDelta.y * 0.1f;
     }
+
+    auto vkRender = static_cast<VulkanRender *>(_render);
+    auto cmdBuf   = vkRender->beginIsolateCommands();
+    Render2D::begin(cmdBuf);
+    Render2D::onUpdate();
+    vkRender->endIsolateCommands(cmdBuf);
 }
 
 void App::onRender(float dt)
@@ -800,6 +811,15 @@ void App::onRender(float dt)
     // imgui.submit(curCmdBuf, pipeline->getHandle());
     imgui.submit(curCmdBuf); // leave nullptr to let imgui use its pipeline
     imgui.endFrame();
+
+    // MARK: Render2D
+    Render2D::begin(curCmdBuf);
+    int count = 10;
+    for (int i = 0; i < count; i++) {
+        Render2D::makeSprite({i, i, i}, glm::vec2(1.0f, 1.0f), glm::vec4(1.0f));
+    }
+    Render2D::end();
+
 #pragma endregion
 
     // TODO: subpasses?

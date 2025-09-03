@@ -58,6 +58,17 @@ struct VulkanBuffer
 
     bool writeData(const void *data, uint32_t size, uint32_t offset = 0);
 
+    template <typename T>
+    T *map()
+    {
+
+        void *data = nullptr;
+        mapInternal(&data);
+        return static_cast<T *>(data);
+    }
+
+    void unmap();
+
 
     static bool allocate(VulkanRender *render, uint32_t size,
                          VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
@@ -69,4 +80,7 @@ struct VulkanBuffer
 
     [[nodiscard]] VkBuffer       getHandle() const { return _handle; }
     [[nodiscard]] VkDeviceMemory getMemory() const { return _memory; }
+
+  private:
+    void mapInternal(void **ptr);
 };

@@ -87,6 +87,23 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
     return true;
 }
 
+
+void VulkanBuffer::mapInternal(void **ptr)
+{
+    YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot map!");
+    VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+                        _memory,
+                        0,
+                        VK_WHOLE_SIZE,
+                        0,
+                        ptr));
+}
+
+void VulkanBuffer::unmap()
+{
+    vkUnmapMemory(_render->getLogicalDevice(), _memory);
+}
+
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
                             VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
                             VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)

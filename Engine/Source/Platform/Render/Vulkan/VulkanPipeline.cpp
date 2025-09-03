@@ -125,7 +125,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
-    name               = _ci.shaderCreateInfo.shaderName;
+    name = _ci.shaderCreateInfo.shaderName;
     YA_CORE_INFO("Creating pipeline for: {}", name);
     auto shaderStorage = ya::App::get()->getShaderStorage();
     auto stage2Spirv   = shaderStorage->getCache(_ci.shaderCreateInfo.shaderName);

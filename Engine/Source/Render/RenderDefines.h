@@ -43,7 +43,8 @@ namespace EVertexAttributeFormat
 {
 enum T
 {
-    Float2 = 0,
+    Float = 0,
+    Float2,
     Float3,
     Float4,
     ENUM_MAX,
@@ -536,9 +537,9 @@ struct GraphicsPipelineCreateInfo
     // different shader/pipeline can use same pipeline layout
     // PipelineLayout *pipelineLayout = nullptr;
 
+    uint32_t         subPassRef = 0;
     ShaderCreateInfo shaderCreateInfo;
 
-    uint32_t                   subPassRef      = 0;
     EPipelineDynamicFeature::T dynamicFeatures = {};
     EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;
     RasterizationState         rasterizationState;

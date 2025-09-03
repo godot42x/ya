@@ -92,6 +92,7 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
 
 
     GraphicsPipelineCreateInfo pipelineCI{
+        .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
             .shaderName        = "Test/BaseMaterial.glsl",
@@ -126,7 +127,6 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
                 },
             },
         },
-        .subPassRef = 0,
 
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature

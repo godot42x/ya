@@ -7,6 +7,8 @@ namespace EVertexAttributeFormat
 std::size_t T2Size(T type)
 {
     switch (type) {
+    case Float:
+        return sizeof(float);
     case Float2:
         return sizeof(float) * 2;
     case Float3:

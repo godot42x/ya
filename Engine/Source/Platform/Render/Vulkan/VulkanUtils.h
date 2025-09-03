@@ -73,6 +73,8 @@ namespace EVertexAttributeFormat
 inline auto toVk(T format) -> VkFormat
 {
     switch (format) {
+    case Float:
+        return VK_FORMAT_R32_SFLOAT;
     case Float2:
         return VK_FORMAT_R32G32_SFLOAT;
     case Float3:
