@@ -14,6 +14,7 @@ r:
 	xmake r $(t) $(r_args)
 
 cfg: 
+	xmake f -c 
 	xmake f -m debug -y
 	xmake project -k compile_commands
 

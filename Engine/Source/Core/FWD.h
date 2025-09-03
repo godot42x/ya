@@ -22,3 +22,5 @@
 
 #include "Log.h"
 #include "Trait.h"
+
+#include <glm/fwd.hpp>

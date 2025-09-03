@@ -1,8 +1,6 @@
 #pragma once
 #include <functional>
 
-#include "Render/Render.h"
-#include "Render/Shader.h"
 
 #include <glm/glm.hpp>
 

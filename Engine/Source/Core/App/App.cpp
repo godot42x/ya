@@ -423,7 +423,7 @@ void ya::App::quit()
     unloadScene();
     MaterialFactory::get()->destroy();
 
-
+    Render2D::destroy();
     imgui.shutdown();
 
     // pipeline->cleanup();
@@ -741,8 +741,6 @@ void App::onUpdate(float dt)
 
     auto vkRender = static_cast<VulkanRender *>(_render);
     auto cmdBuf   = vkRender->beginIsolateCommands();
-    Render2D::begin(cmdBuf);
-    Render2D::onUpdate();
     vkRender->endIsolateCommands(cmdBuf);
 }
 
@@ -805,12 +803,16 @@ void App::onRender(float dt)
         imcEditorCamera(camera);
         imcClearValues();
         // imcFpsControl(fpsCtrl);
+        static bool bDebugPicker = false;
+        if (ImGui::Checkbox("Debug Picker", &bDebugPicker)) {
+            ImGui::DebugStartItemPicker();
+        }
         ImGui::End();
     }
+    imgui.endFrame();
     imgui.render();
     // imgui.submit(curCmdBuf, pipeline->getHandle());
-    imgui.submit(curCmdBuf); // leave nullptr to let imgui use its pipeline
-    imgui.endFrame();
+    imgui.submit(curCmdBuf, nullptr); // leave nullptr to let imgui use its pipeline
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf);

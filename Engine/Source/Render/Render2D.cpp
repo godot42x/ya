@@ -28,7 +28,7 @@ struct FQuadData
         glm::mat4 modelMatrix;
     };
 
-    static constexpr std::array<glm::vec4, 4> vertices = {
+    static constexpr const std::array<glm::vec4, 4> vertices = {
         {
             {-0.5f, -0.5f, 0.0f, 1.f}, // LT
             {0.5f, -0.5f, 0.0f, 1.f},  // RT
@@ -105,25 +105,51 @@ struct FQuadData
                 .frontFace   = EFrontFaceType::CounterClockWise, // GL
             },
             .multisampleState  = MultisampleState{},
-            .depthStencilState = DepthStencilState{},
-            .colorBlendState   = ColorBlendState{
-                  .bLogicOpEnable = false,
-                  .attachments    = {
+            .depthStencilState = DepthStencilState{
+                .bDepthTestEnable       = true,
+                .bDepthWriteEnable      = true,
+                .depthCompareOp         = ECompareOp::Less,
+                .bDepthBoundsTestEnable = false,
+                .bStencilTestEnable     = false,
+                .minDepthBounds         = 0.0f,
+                .maxDepthBounds         = 1.0f,
+            },
+            .colorBlendState = ColorBlendState{
+                .bLogicOpEnable = false,
+                .attachments    = {
                     ColorBlendAttachmentState{
-                             .index               = 0,
-                             .bBlendEnable        = false,
-                             .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                             .colorBlendOp        = EBlendOp::Add,
-                             .srcAlphaBlendFactor = EBlendFactor::One,
-                             .dstAlphaBlendFactor = EBlendFactor::Zero,
-                             .alphaBlendOp        = EBlendOp::Add,
-                             .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                           .index               = 0,
+                           .bBlendEnable        = false,
+                           .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                           .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                           .colorBlendOp        = EBlendOp::Add,
+                           .srcAlphaBlendFactor = EBlendFactor::One,
+                           .dstAlphaBlendFactor = EBlendFactor::Zero,
+                           .alphaBlendOp        = EBlendOp::Add,
+                           .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                     },
 
                 },
             },
-            .viewportState = ViewportState{},
+            .viewportState = ViewportState{
+
+                .viewports = {
+                    {
+                        .x        = 0,
+                        .y        = 0,
+                        .width    = static_cast<float>(render->getSwapChain()->getWidth()),
+                        .height   = static_cast<float>(render->getSwapChain()->getHeight()),
+                        .minDepth = 0.0f,
+                        .maxDepth = 1.0f,
+                    },
+                },
+                .scissors = {Scissor{
+                    .offsetX = 0,
+                    .offsetY = 0,
+                    .width   = static_cast<uint32_t>(render->getSwapChain()->getWidth()),
+                    .height  = static_cast<uint32_t>(render->getSwapChain()->getHeight()),
+                }},
+            },
         });
 
         vertexBuffer = VulkanBuffer::create(
@@ -247,11 +273,11 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
 
     PipelineLayout pipelineLayout{
         .pushConstants = {
-            // PushConstantRange{
-            //     .offset     = 0,
-            //     .size       = sizeof(PushConstant),
-            //     .stageFlags = EShaderStage::Vertex,
-            // },
+            PushConstantRange{
+                .offset     = 0,
+                .size       = sizeof(float),
+                .stageFlags = EShaderStage::Vertex,
+            },
         },
         .descriptorSetLayouts = {
             // DescriptorSetLayout{
@@ -306,6 +332,7 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
 
 void Render2D::destroy()
 {
+    quadData.destroy();
     delete layout;
 }
 

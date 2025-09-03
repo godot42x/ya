@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "build-target",
+            "type": "command",
+            "command": "extension.commandvariable.promptStringRemember", // install this 
+            "args": {
+                "key": "build-target",
+                "description": "Enter build target ",
+            }
+        },
+        {
+            "id": "rememberPath",
+            "type": "command",
+            "command": "extension.commandvariable.remember",
+            "args": {
+                "key": "build-target"
+            }
+        }
+    ],
+    "tasks": [
+        {
+            "label": "xmake build",
+            "type": "shell",
+            "command": "xmake",
+            "args": [
+                "b",
+                "${input:build-target}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

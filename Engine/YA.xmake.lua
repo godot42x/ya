@@ -4,13 +4,17 @@ includes("./Test/xmake.lua")
 
 add_requires(
     "spdlog",
-    "libsdl3",
     "libsdl3_image",
     "glm",
     "spirv-cross",
     "stb",
     "cxxopts"
 )
+add_requires("libsdl3", {
+    configs = {
+        debug = is_mode("debug"),
+    }
+})
 add_requires("assimp", {
     configs = {
         shared = false,
@@ -24,7 +28,7 @@ add_requires("imgui", {
         sdl3 = true,
         sdl3_gpu = true,
         vulkan = true,
-        debug = is_mode("debug")
+        debug = is_mode("debug"),
     }
 })
 add_requires("shaderc", {
@@ -44,7 +48,7 @@ add_requires("vulkansdk", {
 add_requires("glad")
 add_requires("entt v3.15.0", {
     configs = {
-        debug = is_mode("debug"), 
+        debug = is_mode("debug"),
     }
 })
 
@@ -58,10 +62,15 @@ end
 target("ya") --"Yet Another (Game) Engine"
 do
     set_kind("binary")
+    add_rules("c++.unity_build", { batchsize = 2 })
+    -- add_files("./Source/Core/**.cpp", { unity_group = "Core" })
+    -- add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
+    -- add_files("./Source/Renderer/**.cpp", { unity_group = "Renderer" })
+    -- add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
     add_files("./Source/**.cpp")
+
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source/Core/FWD.h")
-    add_rules("c++.unity_build", {batchsize = 2})
 
     add_rules("testing")
     add_includedirs("./Source", { public = true })
