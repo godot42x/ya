@@ -1,30 +1,17 @@
-use core::slice;
-use std::{
-    ffi::c_float,
-    io::{self, Read},
-    mem,
-    ops::Range,
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use assimp::import::Importer;
-use log::info;
-use wgpu::{naga::proc::index, util::DeviceExt, Device};
+use bytemuck::{Pod, Zeroable};
+use wgpu::util::DeviceExt;
 
+#[derive(Clone, Copy, Zeroable, Pod)]
+// POD(Plain Old Data) types can be safely converted to and from byte slices.
+#[repr(C)] // memory layout as C-style and must be C-compatible, could send to c safely
 pub struct Vertex {
     pub position: [f32; 3],
+    pub color: [f32; 4],
     pub normal: [f32; 3],
     pub uv: [f32; 2],
-}
-
-impl Vertex {
-    pub fn new(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Self {
-        Self {
-            position,
-            normal,
-            uv,
-        }
-    }
 }
 
 pub struct Mesh {
@@ -65,11 +52,12 @@ pub fn load_asset(device: &wgpu::Device, queue: &wgpu::Queue, path: &PathBuf) {
         let mut vertrices: Vec<_> = mesh
             .vertex_iter()
             .map(|v| {
-                Vertex::new(
-                    [v.x, v.y, v.z],
-                    [0.0, 0.0, 0.0], // Placeholder normal
-                    [0.0, 0.0],      // Placeholder UV
-                )
+                Vertex {
+                    position: [v.x, v.y, v.z],
+                    color: [1.0, 1.0, 1.0, 1.0], // Default white color
+                    normal: [0.0, 0.0, 0.0],     // Placeholder normal
+                    uv: [0.0, 0.0],              // Placeholder UV
+                }
             })
             .collect();
 

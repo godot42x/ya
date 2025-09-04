@@ -1,6 +1,8 @@
-#[macro_use]
+use crate::app::RenderData;
 use crate::*;
+use std::mem::size_of;
 use std::{ops::Range, sync::Arc};
+use wgpu::wgc::device::queue;
 use wgpu::{include_wgsl, util::RenderEncoder, PipelineCompilationOptions};
 use winit::window::Window;
 
@@ -13,6 +15,7 @@ pub struct State {
     surface_format: wgpu::TextureFormat,
 
     pipeline: Option<wgpu::RenderPipeline>,
+    vertex_buffer: Option<wgpu::Buffer>,
 }
 
 impl State {
@@ -67,7 +70,17 @@ impl State {
             surface_format,
             size,
             pipeline: None,
+            vertex_buffer: None,
         };
+
+        let vertex_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Vertex Buffer"),
+            size: (std::mem::size_of::<Vertex>() * 1024) as u64, // Space for 3 vertices
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        state.vertex_buffer = Some(vertex_buffer);
 
         state.configure_surface();
         state.create_pipeline(src);
@@ -97,7 +110,13 @@ impl State {
         }
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, data: &RenderData) {
+        self.queue.write_buffer(
+            self.vertex_buffer.as_ref().unwrap(),
+            0,
+            bytemuck::cast_slice(data.vertices.as_slice()),
+        );
+
         let surface_texture = self
             .surface
             .get_current_texture()
@@ -111,7 +130,7 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("default"),
             });
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("default"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
@@ -132,11 +151,35 @@ impl State {
             occlusion_query_set: None,
         });
 
-        render_pass.set_pipeline(self.pipeline.as_ref().unwrap());
+        rp.set_pipeline(self.pipeline.as_ref().unwrap());
+        let vertex_count = data.vertices.len();
+        rp.set_viewport(
+            0.0,
+            0.0,
+            self.size.width as f32,
+            self.size.height as f32,
+            0.0,
+            1.0,
+        );
+        if vertex_count > 0 {
+            rp.set_vertex_buffer(
+                0,
+                self.vertex_buffer.as_ref().unwrap().slice(Range {
+                    start: 0,
+                    end: (size_of::<Vertex>() * vertex_count) as u64,
+                }),
+            );
 
-        render_pass.draw(Range { start: 0, end: 3 }, Range { start: 0, end: 1 });
+            rp.draw(
+                Range {
+                    start: 0,
+                    end: vertex_count as u32,
+                },
+                Range { start: 0, end: 1 },
+            );
+        }
 
-        drop(render_pass);
+        drop(rp);
         self.queue.submit(std::iter::once(encoder.finish()));
         self.window.pre_present_notify();
         surface_texture.present();
@@ -164,24 +207,33 @@ impl State {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[
-                    //     wgpu::VertexBufferLayout {
-                    //     array_stride: 8 * 4,
-                    //     step_mode: wgpu::VertexStepMode::Vertex,
-                    //     attributes: &[
-                    //         wgpu::VertexAttribute {
-                    //             offset: 0,
-                    //             shader_location: 0,
-                    //             format: wgpu::VertexFormat::Float32x4,
-                    //         },
-                    //         wgpu::VertexAttribute {
-                    //             offset: 4 * 4,
-                    //             shader_location: 1,
-                    //             format: wgpu::VertexFormat::Float32x4,
-                    //         },
-                    //     ],
-                    // }
-                    ],
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: size_of::<Vertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                offset: std::mem::offset_of!(Vertex, position)
+                                    as wgpu::BufferAddress,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x3,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::offset_of!(Vertex, color) as wgpu::BufferAddress,
+                                shader_location: 1,
+                                format: wgpu::VertexFormat::Float32x4,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::offset_of!(Vertex, normal) as wgpu::BufferAddress,
+                                shader_location: 2,
+                                format: wgpu::VertexFormat::Float32x3,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::offset_of!(Vertex, uv) as wgpu::BufferAddress,
+                                shader_location: 3,
+                                format: wgpu::VertexFormat::Float32x2,
+                            },
+                        ],
+                    }],
                     compilation_options: PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -195,10 +247,10 @@ impl State {
                     compilation_options: PipelineCompilationOptions::default(),
                 }),
                 primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    topology: wgpu::PrimitiveTopology::TriangleStrip,
                     strip_index_format: None,
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: None, //Some(wgpu::Face::Back),
                     unclipped_depth: false,
                     polygon_mode: wgpu::PolygonMode::Fill,
                     conservative: false,
