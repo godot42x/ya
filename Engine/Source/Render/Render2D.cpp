@@ -15,6 +15,12 @@ namespace ya
 static void                 *curCmdBuf = nullptr;
 static VulkanPipelineLayout *layout    = nullptr;
 
+struct FRender2dData
+{
+    uint32_t windowWidth  = 800;
+    uint32_t windowHeight = 600;
+} render2dData;
+
 struct FQuadData
 {
 
@@ -32,15 +38,15 @@ struct FQuadData
 
     static constexpr const std::array<glm::vec4, 4> vertices = {
         {
-            {-1.0f, -1.0f, 0.0f, 1.f}, // LT
-            {1.0f, -1.0f, 0.0f, 1.f},  // RT
-            {-1.0f, 1.0f, 0.0f, 1.f},  // LB
-            {1.0f, 1.0f, 0.0f, 1.f},   // RB
+            // {-1.0f, -1.0f, 0.0f, 1.f}, // LT
+            // {1.0f, -1.0f, 0.0f, 1.f},  // RT
+            // {-1.0f, 1.0f, 0.0f, 1.f},  // LB
+            // {1.0f, 1.0f, 0.0f, 1.f},   // RB
 
-            // {0.0f, 0.0f, 0.0f, 1.f}, // LT
-            // {1.0f, 0.0f, 0.0f, 1.f}, // RT
-            // {0.0f, 1.0f, 0.0f, 1.f}, // LB
-            // {1.0f, 1.0f, 0.0f, 1.f}, // RB
+            {0.0f, 0.0f, 0.0f, 1.f}, // LT
+            {1.0f, 0.0f, 0.0f, 1.f}, // RT
+            {0.0f, 1.0f, 0.0f, 1.f}, // LB
+            {1.0f, 1.0f, 0.0f, 1.f}, // RB
         }};
     static constexpr const std::array<glm::vec2, 4> defaultTexcoord = {
         {
@@ -80,26 +86,41 @@ struct FQuadData
         .width   = 800,
         .height  = 600,
     };
+    Rect2D cameraRect{
+        .pos    = {0, 0},
+        .extent = {800, 600},
+    };
+
 
 
     void init(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *layout)
     {
 
-        auto winW = render->getSwapChain()->getExtent().width;
-        auto winH = render->getSwapChain()->getExtent().height;
-        viewport  = Viewport{
-             .x        = 0,
-             .y        = 0,
-             .width    = static_cast<float>(winW),
-             .height   = static_cast<float>(winH),
-             .minDepth = 0.0f,
-             .maxDepth = 1.0f,
+        auto winW                 = render->getSwapChain()->getExtent().width;
+        auto winH                 = render->getSwapChain()->getExtent().height;
+        render2dData.windowWidth  = winW;
+        render2dData.windowHeight = winH;
+
+        viewport = Viewport{
+            .x        = 0,
+            .y        = 0,
+            .width    = static_cast<float>(winW),
+            .height   = static_cast<float>(winH),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
         };
         scissor = Scissor{
             .offsetX = 0,
             .offsetY = 0,
             .width   = winW,
             .height  = winH,
+        };
+        cameraRect = Rect2D{
+            .pos    = {0, 0},
+            .extent = {
+                static_cast<float>(winW),
+                static_cast<float>(winH),
+            },
         };
 
 
@@ -145,7 +166,8 @@ struct FQuadData
             .primitiveType      = EPrimitiveType::TriangleList,
             .rasterizationState = RasterizationState{
                 .polygonMode = EPolygonMode::Fill,
-                .frontFace   = EFrontFaceType::CounterClockWise, // GL
+                .cullMode    = ECullMode::None,
+                .frontFace   = EFrontFaceType::CounterClockWise,
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
@@ -194,7 +216,7 @@ struct FQuadData
 
 
         std::vector<uint32_t> indices;
-        indices.reserve(MaxIndexCount);
+        indices.resize(MaxIndexCount);
         // constant indices?
         for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
 
@@ -222,29 +244,18 @@ struct FQuadData
             });
 
 
-        MessageBus::get().subscribe<WindowResizeEvent>([this, render](const WindowResizeEvent &e) {
-            auto winW = render->getSwapChain()->getExtent().width;
-            auto winH = render->getSwapChain()->getExtent().height;
-            viewport  = Viewport{
-                 .x        = 0,
-                 .y        = 0,
-                 .width    = static_cast<float>(winW),
-                 .height   = static_cast<float>(winH),
-                 .minDepth = 0.0f,
-                 .maxDepth = 1.0f,
-            };
-            scissor = Scissor{
-                .offsetX = 0,
-                .offsetY = 0,
-                .width   = winW,
-                .height  = winH,
-            };
+        MessageBus::get().subscribe<WindowResizeEvent>([render](const WindowResizeEvent &) {
+            auto winW                 = render->getSwapChain()->getExtent().width;
+            auto winH                 = render->getSwapChain()->getExtent().height;
+            render2dData.windowWidth  = winW;
+            render2dData.windowHeight = winH;
             return false;
         });
     }
 
     void destroy()
     {
+        // MessageBus::get().d
         vertexBuffer.reset();
         indexBuffer.reset();
 
@@ -261,6 +272,8 @@ struct FQuadData
 
         ImGui::DragInt2("Scissor Offset", (int *)&scissor.offsetX);
         ImGui::DragInt2("Scissor Extent", (int *)&scissor.width);
+
+        ImGui::DragFloat4("Camera Rect", &cameraRect.pos.x, 1.0f);
     }
 
     bool shouldFlush()
@@ -345,48 +358,7 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
                 .stageFlags = EShaderStage::Vertex,
             },
         },
-        .descriptorSetLayouts = {
-            // DescriptorSetLayout{
-            //     .set      = 0,
-            //     .bindings = {
-            //         // uGBuffer
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 0,
-            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Vertex,
-            //         },
-            //         // uInstanceBuffer
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 1,
-            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Vertex,
-            //         },
-            //         // uTexture0
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 2,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            //         // uTexture1
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 3,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            //         // uTextures
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 4,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 16,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            // },
-            // },
-        },
+        .descriptorSetLayouts = {},
     };
 
     layout = new VulkanPipelineLayout(vkRender);
@@ -428,20 +400,35 @@ void Render2D::makeSprite(const glm::vec3 &position, const glm::vec2 &size, cons
         quadData.flush(curCmdBuf);
     }
 
-    // 投影矩阵：将屏幕坐标(0,0,800,600)映射到NDC(-1,-1,1,1)
-    glm::mat4 proj = glm::ortho(0.0f,
-                                quadData.viewport.width,
-                                quadData.viewport.height,
+    float w      = (float)render2dData.windowWidth;
+    float h      = (float)render2dData.windowHeight;
+    float aspect = w / h;
+    if (w > h) {
+        h = w / aspect;
+    }
+    else {
+        w = h * aspect;
+    }
+
+    // left -> -1, right -> 1
+    // bottom -> -1 top-> 1
+    glm::mat4 proj = glm::ortho(0.0f, w,
+
+                                // because glm use bottom-left as origin, we need to flip the y axis
                                 0.0f,
+                                h,
+
                                 -1.0f,
                                 1.0f);
-
+    // glm::lookAt()
 
     glm::mat4 mvp = proj *
+                    // glm::inverse(view) *
                     // model
-                    glm::translate(glm::mat4(1.f), glm::vec3(position)) *
-                    glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f)) *
-                    glm::rotate(glm::mat4(1.f), glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+                    glm::translate(glm::mat4(1.f), position) *
+                    glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+    // glm::rotate(glm::mat4(1.f), glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
 
     for (int i = 0; i < 4; i++) {
         quadData.vertexPtr->pos      = mvp * FQuadData::vertices[i];

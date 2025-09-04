@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "glm/glm.hpp"
 #include "reflect.cc/enum"
 
 
@@ -445,6 +446,12 @@ struct Scissor
     int32_t  offsetY = 0;
     uint32_t width   = 0;
     uint32_t height  = 0;
+};
+
+struct Rect2D
+{
+    glm::vec2 pos;
+    glm::vec2 extent;
 };
 
 struct ViewportState

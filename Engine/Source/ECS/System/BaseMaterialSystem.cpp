@@ -327,8 +327,8 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 
 void BaseMaterialSystem::onRenderGUI()
 {
-    ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
+    // ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
+    // ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
     // ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
     ImGui::Checkbox("Use Entity Camera", &bEntityCamera);
 }

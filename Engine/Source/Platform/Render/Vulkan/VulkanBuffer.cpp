@@ -42,10 +42,6 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMem
     VK_DESTROY(Buffer, _render->getLogicalDevice(), stageBuffer);
     VK_FREE(Memory, _render->getLogicalDevice(), stageBufferMemory);
 
-    if (!name.empty()) {
-        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
-        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
-    }
     YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
@@ -57,10 +53,7 @@ void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags me
                            _usageFlags,
                            _handle,
                            _memory);
-    if (!name.empty()) {
-        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
-        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
-    }
+
     YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
@@ -112,6 +105,14 @@ void VulkanBuffer::mapInternal(void **ptr)
                         VK_WHOLE_SIZE,
                         0,
                         ptr));
+}
+
+void VulkanBuffer::setupDebugName(const std::string &name)
+{
+    if (!name.empty()) {
+        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
+    }
 }
 
 void VulkanBuffer::unmap()

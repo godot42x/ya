@@ -17,6 +17,7 @@ namespace ya
 
 struct Render2D
 {
+
     Render2D()          = default;
     virtual ~Render2D() = default;
 

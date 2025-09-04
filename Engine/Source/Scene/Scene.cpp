@@ -147,4 +147,5 @@ std::vector<Entity> Scene::findEntitiesByTag(const std::string &tag)
     return entities;
 }
 
+
 } // namespace ya

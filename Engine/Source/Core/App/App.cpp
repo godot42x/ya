@@ -69,7 +69,6 @@ int             fps             = 60;
 
 
 std::shared_ptr<Mesh> cubeMesh;
-bool                  bRotating = true;
 
 const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
 const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
@@ -190,18 +189,24 @@ void imcClearValues()
 
 void App::init(AppCreateInfo ci)
 {
+    YA_PROFILE_FUNCTION();
     _ci = ci;
     YA_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
     _instance = this;
 
-    YA_PROFILE_FUNCTION();
-    Logger::init();
-    FileSystem::init();
-    NameRegistry::init(); // Initialize FName registry
-    AssetManager::init();
-    MaterialFactory::init();
+    {
+        YA_PROFILE_SCOPE("App Init Subsystems");
+        Logger::init();
+        FileSystem::init();
+        NameRegistry::init(); // Initialize FName registry
+        AssetManager::init();
+        MaterialFactory::init();
+    }
 
-    onInit(ci);
+    {
+        YA_PROFILE_SCOPE("Inheritance Init");
+        onInit(ci);
+    }
 
     currentRenderAPI          = ERenderAPI::Vulkan;
     std::string currentShader = "Test/BaseMaterial.glsl";
@@ -456,7 +461,7 @@ int ya::App::run()
 
         time_point_t now        = clock_t::now();
         auto         dtMicroSec = std::chrono::duration_cast<std::chrono::microseconds>(now - _lastTime).count();
-        float        dtSec      = (double)dtMicroSec / 1000000.0;
+        float        dtSec      = (float)((double)dtMicroSec / 1000000.0);
         dtSec                   = std::max(dtSec, 0.0001f);
         _lastTime               = now;
 
@@ -771,25 +776,38 @@ void App::onRender(float dt)
     renderTarget->begin(curCmdBuf);
     renderTarget->onRender(curCmdBuf);
 
+    static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
+    static glm::vec3 pos2 = glm::vec3(100.f, 100.f, 0.f);
+    static glm::vec3 pos3 = glm::vec3(500.f, 500.f, 0.f);
+    static glm::vec3 pos4 = glm::vec3(-500.f, -500.f, 0.f);
+
     // MARK: Render2D
     Render2D::begin(curCmdBuf);
-    Render2D::makeSprite({0, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
-    Render2D::makeSprite({10, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
-    Render2D::makeSprite({20, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
-    int count = 10;
-    for (int i = 0; i < count; i++) {
-        Render2D::makeSprite(
-            glm::vec3(i * 100, i * 100, 0),
-            glm::vec2(100.0f, 100.0f),
-            glm::vec4(sin(i), cos(i), sin(float(i)), 1));
-    }
+    Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
+    Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
+    Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
+    Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
+    // Render2D::makeSprite({10, 0, 0}, glm::
+    // Render2D::makeSprite({20, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
+    // int count = 10;
+    // for (int i = 0; i < count; i++) {
+    //     Render2D::makeSprite(
+    //         glm::vec3(i * 100, i * 100, 0),
+    //         glm::vec2(100.0f, 100.0f),
+    //         glm::vec4(sin(i), cos(i), sin(float(i)), 1));
+    // }
     Render2D::end();
 
 
 #pragma region ImGui
-
     imgui.beginFrame();
-    if (ImGui::Begin("Test")) {
+    {
+        ImGui::DragFloat3("pos1", glm::value_ptr(pos1), 0.1f);
+        ImGui::DragFloat3("pos2", glm::value_ptr(pos2), 1.f);
+        ImGui::DragFloat3("pos3", glm::value_ptr(pos3), 1.f);
+        ImGui::DragFloat3("pos4", glm::value_ptr(pos4), 1.f);
+        Render2D::onImGui();
+
         float fps = 1.0f / dt;
         ImGui::Text("Frame: %d, DeltaTime: %.1f ms,\t FPS: %.1f", _frameIndex, dt * 1000.0f, fps);
         static int count = 0;
@@ -799,16 +817,9 @@ void App::onRender(float dt)
         }
 
         // ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
-        ImGui::Checkbox("Is Rotating", &bRotating);
 
         bool bVsync = vkRender->getSwapChain()->bVsync;
         if (ImGui::Checkbox("VSync", &bVsync)) {
-            // vkRender->getSwapChain()->recreate();
-            // recreate renderpass and pipeline
-            // renderpass->recreate();
-            // pipeline->recreate();
-            // rebind frame buffer
-            // renderTarget->recreate();
             taskManager.registerFrameTask([vkRender, bVsync]() {
                 // TODO :bind dirty link
                 vkRender->getSwapChain()->setVsync(bVsync);
@@ -834,8 +845,16 @@ void App::onRender(float dt)
                 ImGui::StyleColorsLight();
             }
         }
-        Render2D::onImGui();
-        ImGui::End();
+        if (auto *firstCube = _scene->getEntityByID(1)) {
+            auto &tc = firstCube->getComponent<TransformComponent>();
+
+            ImGui::CollapsingHeader("First Cube Transform", ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::DragFloat3("Position", glm::value_ptr(tc._position), 0.1f);
+            ImGui::DragFloat3("Rotation", glm::value_ptr(tc._rotation), 1.f);
+            ImGui::DragFloat3("Scale", glm::value_ptr(tc._scale), 0.1f, 0.1f);
+
+            tc.bDirty = true;
+        }
     }
     imgui.endFrame();
     imgui.render();
@@ -914,7 +933,7 @@ void App::onSceneInit(Scene *scene)
 
     float offset   = 3.f;
     float rotation = 10.f;
-    int   count    = 3000;
+    int   count    = 100;
     int   alpha    = std::round(std::pow(count, 1.0 / 3.0));
     YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
     for (int i = 0; i < alpha; ++i) {

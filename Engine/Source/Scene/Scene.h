@@ -40,6 +40,7 @@ class Scene
     bool    isValidEntity(Entity entity) const;
 
     Entity *getEntityByID(id_t id);
+    Entity *getEntityByID(uint32_t id) { return getEntityByID(static_cast<id_t>(id)); }
 
     // Scene management
     void clear();

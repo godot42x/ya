@@ -49,12 +49,11 @@ struct VulkanBuffer
         else {
             ret->createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
         }
+        ret->setupDebugName(ret->name);
 
         return ret;
     }
 
-    void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
-    void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
 
     bool writeData(const void *data, uint32_t size, uint32_t offset = 0);
     bool flush(uint32_t size = 0, uint32_t offset = 0);
@@ -68,7 +67,6 @@ struct VulkanBuffer
     }
     void unmap();
 
-
     static bool allocate(VulkanRender *render, uint32_t size,
                          VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
                          VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
@@ -81,5 +79,9 @@ struct VulkanBuffer
     [[nodiscard]] VkDeviceMemory getMemory() const { return _memory; }
 
   private:
+    void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
+    void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
+
     void mapInternal(void **ptr);
+    void setupDebugName(const std::string &name);
 };
