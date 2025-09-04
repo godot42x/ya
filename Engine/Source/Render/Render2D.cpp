@@ -166,8 +166,8 @@ struct FQuadData
             .primitiveType      = EPrimitiveType::TriangleList,
             .rasterizationState = RasterizationState{
                 .polygonMode = EPolygonMode::Fill,
-                .cullMode    = ECullMode::None,
-                .frontFace   = EFrontFaceType::CounterClockWise,
+                .cullMode    = ECullMode::Back,
+                .frontFace   = EFrontFaceType::ClockWise,
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
@@ -412,7 +412,8 @@ void Render2D::makeSprite(const glm::vec3 &position, const glm::vec2 &size, cons
 
     // left -> -1, right -> 1
     // bottom -> -1 top-> 1
-    glm::mat4 proj = glm::ortho(0.0f, w,
+    glm::mat4 proj = glm::ortho(0.0f,
+                                w,
 
                                 // because glm use bottom-left as origin, we need to flip the y axis
                                 0.0f,
