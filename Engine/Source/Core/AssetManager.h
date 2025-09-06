@@ -24,6 +24,7 @@ class AssetManager
     // Cache for loaded models
     std::unordered_map<std::string, std::shared_ptr<Model>>   modelCache;
     std::unordered_map<std::string, std::shared_ptr<Texture>> _textures;
+    std::unordered_map<std::string, std::string>              _name2path;
     // Assimp importer
     Assimp::Importer importer;
 
@@ -48,7 +49,10 @@ class AssetManager
     bool                   isModelLoaded(const std::string &filepath) const;
 
     std::shared_ptr<Texture> loadTexture(const std::string &filepath);
-    std::shared_ptr<Texture> getTexture(const std::string &filepath) const { return isTextureLoaded(filepath) ? _textures.find(filepath)->second : nullptr; }
+    std::shared_ptr<Texture> getTextureByPath(const std::string &filepath) const { return isTextureLoaded(filepath) ? _textures.find(filepath)->second : nullptr; }
+    std::shared_ptr<Texture> loadTexture(const std::string &name, const std::string &filepath);
+    std::shared_ptr<Texture> getTextureByName(const std::string &name) const { return isTextureLoaded(name) ? _textures.find(name)->second : nullptr; }
     bool                     isTextureLoaded(const std::string &filepath) const { return _textures.find(filepath) != _textures.end(); }
 };
+
 } // namespace ya

@@ -29,29 +29,29 @@ class Entity
 
     template <typename T, typename... Args>
         requires(!std::is_base_of_v<T, IComponent>)
-    T &addComponent(Args &&...args)
+    T *addComponent(Args &&...args)
     {
         YA_CORE_ASSERT(!hasComponent<T>(), "Entity already has component!");
         T &component = _scene->_registry.emplace<T>(_entityHandle, std::forward<Args>(args)...);
         static_cast<IComponent &>(component).setOwner(this);
 
-        return component;
+        return &component;
     }
 
     // template <typename T, typename... Args>
     // T &addOrReplaceComponent(Args &&...args) { return _scene->_registry.emplace_or_replace<T>(_entityHandle, std::forward<Args>(args)...); }
 
     template <typename T>
-    T &getComponent()
+    T *getComponent()
     {
         assert(hasComponent<T>() && "Entity does not have component!");
-        return _scene->_registry.get<T>(_entityHandle);
+        return &_scene->_registry.get<T>(_entityHandle);
     }
     template <typename T>
-    const T &getComponent() const
+    const T *getComponent() const
     {
         assert(hasComponent<T>() && "Entity does not have component!");
-        return _scene->_registry.get<T>(_entityHandle);
+        return &_scene->_registry.get<T>(_entityHandle);
     }
     template <typename T>
     [[nodiscard]] bool hasComponent() const { return _scene->_registry.all_of<T>(_entityHandle); }

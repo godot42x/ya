@@ -30,8 +30,9 @@ struct MaterialComponent : public IComponent
         }
     }
 
-    auto     getMaterial2MeshIds() { return _material2meshes; }
-    uint32_t getMaterialCount() const { return _material2meshes.count(); }
+    // map: material -> mesh index sequence(index array)
+    auto     getMaterial2MeshIDs() { return _material2meshes; }
+    uint32_t getMaterialCount() const { return static_cast<uint32_t>(_material2meshes.size()); }
     Mesh    *getMesh(uint32_t index)
     {
         if (index >= _meshes.size()) {

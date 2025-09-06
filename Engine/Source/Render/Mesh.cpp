@@ -35,5 +35,15 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
         });
 }
 
+void Mesh::draw(void *cmdBuf) const
+{
+    VkCommandBuffer vkCmdBuf        = static_cast<VkCommandBuffer>(cmdBuf);
+    VkBuffer        vertexBuffers[] = {_vertexBuffer->getHandle()};
+    VkDeviceSize    offsets[]       = {0};
+    vkCmdBindVertexBuffers(vkCmdBuf, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(vkCmdBuf, _indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(vkCmdBuf, _indexCount, 1, 0, 0, 0);
+}
+
 
 } // namespace ya

@@ -69,12 +69,24 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
     }
     YA_CORE_ASSERT(offset + size <= _size, "Write data out of range!");
     void *mappedData = nullptr;
-    VK_CALL(vkMapMemory(_render->getLogicalDevice(),
-                        _memory,
-                        offset,
-                        VK_WHOLE_SIZE, // map the whole memory
-                        0,
-                        &mappedData));
+    if (size == 0) {
+        YA_CORE_ASSERT(offset == 0, "If size is 0, offset must be 0");
+        VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+                            _memory,
+                            0,
+                            VK_WHOLE_SIZE,
+                            0,
+                            &mappedData));
+    }
+    else {
+
+        VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+                            _memory,
+                            offset,
+                            size, // map the whole memory
+                            0,
+                            &mappedData));
+    }
     std::memcpy(mappedData, data, size);
     vkUnmapMemory(_render->getLogicalDevice(), _memory);
     return true;
@@ -120,9 +132,7 @@ void VulkanBuffer::unmap()
     vkUnmapMemory(_render->getLogicalDevice(), _memory);
 }
 
-bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size,
-                            VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
-                            VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
+bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage, VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
 {
     VkBufferCreateInfo vkBufferCI{
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,

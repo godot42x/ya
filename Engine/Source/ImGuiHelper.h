@@ -135,10 +135,37 @@ struct ImguiState
 
     EventProcessState processEvents(const SDL_Event &event)
     {
-        bool bHandled = ImGui_ImplSDL3_ProcessEvent(&event);
+        // Poll and handle events (inputs, window resize, etc.)
+        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
+        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
+        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+        // [If using SDL_MAIN_USE_CALLBACKS: call ImGui_ImplSDL3_ProcessEvent() from your SDL_AppEvent() function]
+        ImGui_ImplSDL3_ProcessEvent(&event);
 
-        // TODO: dkw the ImGui_ImplSDL3_ProcessEvent return value is always true
-        // return !bHandled ? EventProcessState::Handled : EventProcessState::Continue;
+        auto io = &ImGui::GetIO();
+
+        // 检查鼠标事件
+        bool isMouseEvent = (event.type == SDL_EVENT_MOUSE_MOTION ||
+                             event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                             event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+                             event.type == SDL_EVENT_MOUSE_WHEEL);
+
+        // 检查键盘事件
+        // bool isKeyEvent = (event.type == SDL_EVENT_KEY_DOWN ||
+        //                    event.type == SDL_EVENT_KEY_UP);
+
+        // 检查文本输入事件
+        // bool isTextEvent = (event.type == SDL_EVENT_TEXT_EDITING ||
+        //                     event.type == SDL_EVENT_TEXT_INPUT);
+
+        if ((io->WantCaptureMouse && isMouseEvent)
+            // (io->WantCaptureKeyboard && isKeyEvent) ||
+            // (io->WantTextInput && isTextEvent)
+        ) {
+            return EventProcessState::Handled;
+        }
+
         return EventProcessState::Continue;
     }
 

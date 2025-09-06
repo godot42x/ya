@@ -26,6 +26,7 @@ struct CameraComponent : public IComponent
         return glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
     }
     glm::mat4 getView() const;
+    glm::mat4 getViewProjection() const { return getProjection() * getView(); }
 
   public:
 

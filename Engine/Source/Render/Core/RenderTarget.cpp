@@ -3,6 +3,7 @@
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "imgui.h"
 
 namespace ya
 {
@@ -140,8 +141,15 @@ void RenderTarget::onUpdate(float deltaTime)
 
 void RenderTarget::onRenderGUI()
 {
+    ImGui::CollapsingHeader("RenderTarget", ImGuiTreeNodeFlags_DefaultOpen);
+    if (ImGui::Checkbox("Use Entity Camera", &bEntityCamera)) {
+        if (bEntityCamera) {
+            // copy transform from app camera to entity camera
+        }
+    }
     for (auto &system : _materialSystems) {
         system->onRenderGUI();
+        system->onEndRenderGUI();
     }
 }
 
@@ -159,8 +167,8 @@ void RenderTarget::begin(void *cmdBuf)
     }
 
     if (getCamera() && getCamera()->hasComponent<CameraComponent>()) {
-        auto &cc = getCamera()->getComponent<CameraComponent>();
-        cc.setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
+        auto cc = getCameraMut()->getComponent<CameraComponent>();
+        cc->setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
     }
 
     if (bSwapChainTarget) {
@@ -255,5 +263,57 @@ void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearV
         }
     }
 };
+
+const glm::mat4 RenderTarget::getProjectionMatrix() const
+{
+    glm::mat4 ret(1.0);
+    if (isUseEntityCamera()) {
+        if (const Entity *cam = getCamera()) {
+            if (cam->hasComponent<CameraComponent>()) {
+                ret = cam->getComponent<CameraComponent>()->getProjection();
+            }
+        }
+    }
+    else {
+        // use app camera
+        return App::get()->camera.getProjectionMatrix();
+    }
+    return ret;
+}
+
+const glm::mat4 RenderTarget::getViewMatrix() const
+{
+    glm::mat4 ret;
+    if (isUseEntityCamera()) {
+        if (auto *cam = getCamera()) {
+            if (cam->hasComponent<CameraComponent>()) {
+                ret = cam->getComponent<CameraComponent>()->getView();
+            }
+        }
+    }
+    else {
+        ret = App::get()->camera.getViewMatrix();
+    }
+    return ret;
+}
+
+void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
+{
+    view = proj = glm::mat4(1.0f);
+    if (isUseEntityCamera()) {
+        if (auto *cam = getCamera()) {
+            if (cam->hasComponent<CameraComponent>()) {
+                auto cc = cam->getComponent<CameraComponent>();
+                proj    = cc->getProjection();
+                view    = cc->getView();
+                return;
+            }
+        }
+    }
+
+    // use app camera
+    proj = App::get()->camera.getProjectionMatrix();
+    view = App::get()->camera.getViewMatrix();
+}
 
 } // namespace ya

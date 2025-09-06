@@ -38,24 +38,20 @@ using namespace std::literals;
     #define FUNCTION_SIG
 #endif
 
-template <typename T>
-using Ref = std::shared_ptr<T>;
-template <typename T>
-using Owned = std::unique_ptr<T>;
-template <typename T>
-using WeakRef = std::weak_ptr<T>;
 template <typename T, typename... Args>
-
-Ref<T> MakeRef(Args &&...args)
+std::shared_ptr<T> makeShared(Args &&...args)
+    // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
+    requires std::is_constructible_v<T, Args...>
 {
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
+
 template <typename T, typename... Args>
-Owned<T> MakeOwned(Args &&...args)
+std::unique_ptr<T> makeUnique(Args &&...args)
+    requires std::is_constructible_v<T, Args...>
 {
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
-
 
 
 #define USE_VULKAN 1
@@ -85,3 +81,22 @@ static DefaultAllocator defaultAllocator;
 #define CASE_ENUM_TO_STR(x) \
     case x:                 \
         return #x;
+
+
+
+#include "entt/entt.hpp"
+namespace ya
+{
+template <typename T>
+struct TypeIndex
+{
+    constexpr static uint32_t value()
+    {
+        return entt::type_index<T>::value();
+    }
+};
+
+template <typename T>
+static inline const auto type_index_v = TypeIndex<T>::value();
+
+} // namespace ya

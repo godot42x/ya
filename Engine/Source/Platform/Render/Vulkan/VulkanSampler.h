@@ -11,13 +11,13 @@ struct VulkanRender;
 struct VulkanSampler
 {
     VulkanRender *_render;
-    std::string   _name;
+    std::string   _label;
     VkSampler     _handle;
 
     // VkFilter             _filter;
     // VkSamplerAddressMode _addressModeU;
 
-    VulkanSampler(VulkanRender *render, const ya::SamplerCreateInfo &ci);
+    VulkanSampler(const ya::SamplerCreateInfo &ci);
     virtual ~VulkanSampler();
 
     VkSampler getHandle() const { return _handle; }

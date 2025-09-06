@@ -31,3 +31,8 @@ make r
 
 
 # TBD
+
+
+# TODO
+
+- [ ] A shader toolchain to compile to different platform and reflection. (WGSL? SLang?)

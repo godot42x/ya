@@ -178,4 +178,20 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
     return texture;
 }
 
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, const std::string &filepath)
+{
+    if (isTextureLoaded(name)) {
+        return _textures.find(name)->second;
+    }
+
+    auto texture = std::make_shared<Texture>(filepath);
+    if (!texture) {
+        YA_CORE_WARN("Failed to create texture: {}", filepath);
+    }
+    else {
+        _textures[name] = texture;
+    }
+    return texture;
+}
+
 } // namespace ya

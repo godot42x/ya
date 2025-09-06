@@ -1,3 +1,5 @@
+// OneLineFormatOffRegex: ^(// NOLINT)
+
 #pragma once
 #include "Core/Base.h"
 
@@ -30,32 +32,35 @@ struct VulkanBuffer
 
 
 
+    // clang-format off
+  private: inline static constexpr struct { } _dummy; public: // make it can only be created on heap // NOLINT
+    // clang-format on
+
+    VulkanBuffer(decltype(_dummy), VulkanRender *render, const BufferCreateInfo &ci)
+    {
+        _render      = render;
+        _usageFlags  = ci.usage;
+        name         = ci.debugName;
+        bHostVisible = ci.memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        _size        = ci.size;
+
+        if (ci.data.has_value()) {
+            createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), ci.memProperties);
+        }
+        else {
+            createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
+        }
+        setupDebugName(name);
+    }
     virtual ~VulkanBuffer();
-
-
 
     static auto create(VulkanRender *render, const BufferCreateInfo &ci)
     {
-        auto ret          = std::make_shared<VulkanBuffer>();
-        ret->_render      = render;
-        ret->_usageFlags  = ci.usage;
-        ret->name         = ci.debugName;
-        ret->bHostVisible = ci.memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        ret->_size        = ci.size;
-
-        if (ci.data.has_value()) {
-            ret->createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), ci.memProperties);
-        }
-        else {
-            ret->createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
-        }
-        ret->setupDebugName(ret->name);
-
-        return ret;
+        return makeShared<VulkanBuffer>(_dummy, render, ci);
     }
 
 
-    bool writeData(const void *data, uint32_t size, uint32_t offset = 0);
+    bool writeData(const void *data, uint32_t size = 0, uint32_t offset = 0);
     bool flush(uint32_t size = 0, uint32_t offset = 0);
 
     template <typename T>
@@ -78,6 +83,7 @@ struct VulkanBuffer
     [[nodiscard]] VkBuffer       getHandle() const { return _handle; }
     [[nodiscard]] VkDeviceMemory getMemory() const { return _memory; }
 
+  protected:
   private:
     void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
     void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);

@@ -675,14 +675,13 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
 
 
 
-bool VulkanRender::createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler)
+VkSampler VulkanRender::createSampler(const ya::SamplerCreateInfo &ci)
 {
-    auto it = _samplers.find(name);
+    auto it = _samplers.find(ci.label);
     if (it != _samplers.end())
     {
-        outSampler = it->second;
-        YA_CORE_INFO("Reusing existing created sampler {}: {}", name, (uintptr_t)outSampler);
-        return true;
+        YA_CORE_WARN("Reusing existing created sampler {}: {}, remove it...", ci.label, (uintptr_t)it->second);
+        removeSampler(ci.label);
     }
 
     VkSamplerCreateInfo samplerCI{
@@ -718,21 +717,22 @@ bool VulkanRender::createSampler(const std::string &name, const ya::SamplerCreat
         }
     }
 
+    VkSampler outSampler = VK_NULL_HANDLE;
     VK_CALL_RET(vkCreateSampler(getLogicalDevice(), &samplerCI, getAllocator(), &outSampler));
-    setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, name.c_str());
-    YA_CORE_TRACE("Created sampler {}: {}", name, (uintptr_t)outSampler);
+    setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, ci.label.c_str());
+    YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)outSampler);
 
-    _samplers[name] = outSampler;
+    _samplers[ci.label] = outSampler;
 
-    return true;
+    return outSampler;
 }
 
-void VulkanRender::removeSampler(const std::string &name)
+void VulkanRender::removeSampler(const std::string &label)
 {
-    if (_samplers.find(name) != _samplers.end())
+    if (_samplers.find(label) != _samplers.end())
     {
-        vkDestroySampler(getLogicalDevice(), _samplers[name], getAllocator());
-        _samplers.erase(name);
+        vkDestroySampler(getLogicalDevice(), _samplers[label], getAllocator());
+        _samplers.erase(label);
     }
 }
 

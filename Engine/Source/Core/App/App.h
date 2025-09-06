@@ -2,6 +2,9 @@
 #include "Core/Base.h"
 
 #include "Core/Camera.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "Platform/Render/Vulkan/VulkanSampler.h"
+#include "Render/Core/Texture.h"
 #include "Render/Shader.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_timer.h"
@@ -97,8 +100,9 @@ struct App
     using time_point_t = clock_t::time_point;
     time_point_t _lastTime;
     time_point_t _startTime;
-    uint32_t     _frameIndex = 0;
-    bool         _bPause     = false;
+
+    uint32_t _frameIndex = 0;
+    bool     _bPause     = false;
 
     AppCreateInfo _ci;
     glm::vec2     _windowSize = {0, 0};
@@ -109,6 +113,15 @@ struct App
 
 
     std::unique_ptr<Scene> _scene = nullptr;
+
+    std::shared_ptr<Texture>       _whiteTexture      = nullptr;
+    std::shared_ptr<Texture>       _blackTexture      = nullptr;
+    std::shared_ptr<Texture>       _multiPixelTexture = nullptr;
+    std::shared_ptr<VulkanSampler> _defaultSampler    = nullptr;
+    std::shared_ptr<VulkanSampler> _linearSampler     = nullptr;
+    std::shared_ptr<VulkanSampler> _nearestSampler    = nullptr;
+
+    std::vector<Material *> _materials;
 
 
   public:
@@ -128,7 +141,6 @@ struct App
 
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
-    virtual int  onEvent(const Event &event);
     virtual void onRenderGUI();
 
 
@@ -143,6 +155,13 @@ struct App
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
     [[nodiscard]] Scene *getScene() const { return _scene.get(); }
+
+    [[nodiscard]] uint32_t getFrameIndex() const { return _frameIndex; }
+    // time count from app started
+    [[nodiscard]] uint64_t getElapsedTimeMS() const
+    {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
+    }
 
   private:
 

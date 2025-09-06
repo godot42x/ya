@@ -3,23 +3,22 @@
 
 
 #include "Core/App/App.h"
+#include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "ECS/Component.h"
 #include "ECS/Component/CameraComponent.h"
 
 #include "Math/Geometry.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/RenderTarget.h"
 
 #include "Render/Mesh.h"
+
 #include "vulkan/vulkan.h"
 
 #include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System.h"
 
-#include "Core/TimeManager.h"
 
 
 #include "imgui.h"
@@ -30,63 +29,26 @@ namespace ya
 
 void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
 {
-    auto vkRender = App::get()->getRender<VulkanRender>();
+    _label                 = "BaseMaterialSystem";
+    VulkanRender *vkRender = getVulkanRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
+    constexpr auto size = sizeof(BaseMaterialSystem::PushConstant);
+    YA_CORE_DEBUG("BaseMaterialSystem PushConstant size: {}", size);
     PipelineLayout pipelineLayout{
+        .label         = "BaseMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
-                .size       = sizeof(PushConstant),
+                .size       = size,
                 .stageFlags = EShaderStage::Vertex,
             },
         },
-        .descriptorSetLayouts = {
-            // DescriptorSetLayout{
-            //     .set      = 0,
-            //     .bindings = {
-            //         // uGBuffer
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 0,
-            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Vertex,
-            //         },
-            //         // uInstanceBuffer
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 1,
-            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Vertex,
-            //         },
-            //         // uTexture0
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 2,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            //         // uTexture1
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 3,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            //         // uTextures
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 4,
-            //             .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-            //             .descriptorCount = 16,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            // },
-            // },
-        },
+        .descriptorSetLayouts = {},
     };
 
-    _pipelineLayout = std::make_shared<VulkanPipelineLayout>(vkRender);
+    _pipelineLayout = std::make_shared<VulkanPipelineLayout>(vkRender, pipelineLayout.label);
     // _pipelineLayout->create(pipelineLayout.pushConstants, { pipelineLayout.descriptorSetLayouts[0], });
     _pipelineLayout->create(pipelineLayout.pushConstants, {});
 
@@ -185,9 +147,6 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
     };
     _pipeline = std::make_shared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
     _pipeline->recreate(pipelineCI);
-
-
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, _pipelineLayout->getHandle(), "BaseMaterialSystem_PipelineLayout");
 }
 
 void BaseMaterialSystem::onDestroy()
@@ -202,12 +161,10 @@ void BaseMaterialSystem::onUpdate(float deltaTime)
 
 void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 {
-    // culledCount = 0;
-    // totalCount  = 0;
 
-    auto vkRender = App::get()->getRender<VulkanRender>();
+    auto vkRender = getVulkanRender();
     auto vkCmdBuf = (VkCommandBuffer)cmdBuf;
-    auto scene    = App::get()->getScene();
+    auto scene    = getScene();
     if (!scene) {
         return;
     }
@@ -215,7 +172,6 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     if (view.begin() == view.end()) {
         return;
     }
-
 
     _pipeline->bind(vkCmdBuf);
     auto curFrameBuffer = rt->getFrameBuffer();
@@ -234,8 +190,6 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     };
     vkCmdSetViewport(vkCmdBuf, 0, 1, &viewport);
 
-
-    // Set scissor (required by imgui , and cause I must call this here)
     VkRect2D scissor{
         .offset = {0, 0},
         .extent = vkRender->getSwapChain()->getExtent(),
@@ -243,47 +197,17 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
 #pragma endregion
 
-    // glm::vec3 camPos;
-    // glm::vec3 camRot;
-    // float     fov;
-    // HACK: remove this
-    if (auto cam = rt->getCamera(); cam && bEntityCamera) {
-        if (cam->hasComponent<CameraComponent>())
-        {
-            auto &cc          = cam->getComponent<CameraComponent>();
-            pc.viewProjection = cc.getProjection() * cc.getView();
-            auto &tc          = cam->getComponent<TransformComponent>();
-            // camPos            = tc.getPosition();
-            // camRot            = tc._rotation;
-            // fov               = cc._fov;
-        }
-    }
-    else {
-        pc.viewProjection = App::get()->camera.getViewProjectionMatrix();
-        // camPos            = App::get()->camera.getPosition();
-        // camRot            = App::get()->camera._rotation;
-    }
+    // FIXME: this is just a test material, we should move the projection and view to frame data UBO, not push constant
 
+    rt->getViewAndProjMatrix(pc.view, pc.projection);
 
     for (const auto entity : view) {
-        // const auto &[tc, mc, bmc] = view.get<TransformComponent, MeshComponent, BaseMaterialComponent>(entity);
         const auto &[tc, bmc] = view.get(entity);
-        // auto toEntity = tc.getPosition() - camPos;
-        // if (glm::length(toEntity) > maxViewDistance) {
-        //     // too far
-        //     ++culledCount;
-        //     continue;
-        // }
-        // float proj = glm::dot(toEntity, camRot);
-        // if (proj > 0.001f) {
-        //     // backface culling
-        //     ++culledCount;
-        //     continue;
-        // }
+        // TODO: culling works
 
-        const auto &material2MeshIds = bmc.getMaterial2MeshIds();
+        const auto &material2MeshIds = bmc.getMaterial2MeshIDs();
         for (const auto &[material, meshIds] : material2MeshIds) {
-            if (!material && material->_index == entt::type_hash<BaseMaterialComponent>::value()) {
+            if (!material) {
                 continue;
             }
 
@@ -325,11 +249,4 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
     }
 }
 
-void BaseMaterialSystem::onRenderGUI()
-{
-    // ImGui::CollapsingHeader("BaseMaterialSystem Settings", ImGuiTreeNodeFlags_DefaultOpen);
-    // ImGui::DragFloat("Max View Distance", &maxViewDistance, 0.1f, 1.f, 1000.0f);
-    // ImGui::Text("Culled Count: %d/%d", culledCount, totalCount);
-    ImGui::Checkbox("Use Entity Camera", &bEntityCamera);
-}
 } // namespace ya

@@ -71,7 +71,6 @@ enum T
     Fragment = 0x02,
     Geometry = 0x04,
     Compute  = 0x08,
-
 };
 
 inline T fromString(std::string_view str)
@@ -88,6 +87,7 @@ inline T fromString(std::string_view str)
     UNREACHABLE();
     return {};
 }
+
 
 GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
@@ -508,7 +508,8 @@ struct DescriptorSetLayoutBinding
 
 struct DescriptorSetLayout
 {
-    int32_t                                 set = -1;
+    std::string                             label = "None";
+    int32_t                                 set   = -1;
     std::vector<DescriptorSetLayoutBinding> bindings;
 };
 
@@ -522,6 +523,7 @@ struct PushConstantRange
 
 struct PipelineLayout
 {
+    std::string                      label = "None";
     std::vector<PushConstantRange>   pushConstants;
     std::vector<DescriptorSetLayout> descriptorSetLayouts;
 };
@@ -530,6 +532,12 @@ struct DescriptorPoolSize
 {
     EPipelineDescriptorType::T type;
     uint32_t                   descriptorCount;
+};
+
+struct DescriptorPoolCreateInfo
+{
+    uint32_t                        maxSets = 0;
+    std::vector<DescriptorPoolSize> poolSizes;
 };
 
 
@@ -701,7 +709,7 @@ enum T
 
 struct SamplerCreateInfo
 {
-    std::string name; // (debug) name
+    std::string label; // (debug) name
 
     EFilter::T             minFilter               = EFilter::Linear;
     EFilter::T             magFilter               = EFilter::Linear;

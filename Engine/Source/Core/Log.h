@@ -116,7 +116,7 @@ struct YaFormatterV2
 
         std::format_to(outputIt,
                        "[{}]\t{} "
-                       "{:<26}"
+                       "{:<26} "
                        "{}\n",
                        levelStr,
                        category,

@@ -1,17 +1,19 @@
 #include "VulkanSampler.h"
 #include "VulkanRender.h"
+#include "core/App/App.h"
 
 
-VulkanSampler::VulkanSampler(VulkanRender *render, const ya::SamplerCreateInfo &ci)
+VulkanSampler::VulkanSampler(const ya::SamplerCreateInfo &ci)
 {
-    _render = render;
+    _render = static_cast<VulkanRender *>(ya::App::get()->getRender());
     using namespace ya;
-    _name = ci.name;
+    _label = ci.label;
 
-    render->createSampler(_name, ci, _handle);
+    _handle = _render->createSampler(ci);
+    YA_CORE_ASSERT(_handle != VK_NULL_HANDLE, "Failed to create sampler");
 }
 
 VulkanSampler::~VulkanSampler()
 {
-    _render->removeSampler(_name);
+    _render->removeSampler(_label);
 }

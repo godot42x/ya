@@ -35,7 +35,7 @@
             },
             "cwd": "${workspaceRoot}",
             "console": "integratedTerminal",
-            "visualizerFile": "${workspaceFolder}/imgui.natvis",
+            "visualizerFile": "${workspaceFolder}/all.natvis",
             // "preLaunchTask": "xmake build",
         },
     ]

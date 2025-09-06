@@ -1,7 +1,7 @@
 
 #pragma once
 #include "Core/Base.h"
-#include "Render/Render.h"
+#include "Render/RenderDefines.h"
 
 #include "vulkan/vulkan.h"
 
@@ -26,10 +26,114 @@ struct VulkanDescriptorPool
     VkDescriptorPool _handle = VK_NULL_HANDLE;
 
 
-    VulkanDescriptorPool(VulkanRender *render, uint32_t maxSets, const std::vector<VkDescriptorPoolSize> &poolSizes);
+    VulkanDescriptorPool(VulkanRender *render, const ya::DescriptorPoolCreateInfo &ci);
     virtual ~VulkanDescriptorPool();
 
-    bool allocateDescriptorSets(const std::vector<std::shared_ptr<VulkanDescriptorSetLayout>> &layouts, std::vector<VkDescriptorSet> &sets);
+    // allocate n same set from 1 set layout
+    bool allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout, uint32_t count, std::vector<VkDescriptorSet> &set);
 
     void setDebugName(const char *name);
+};
+
+
+struct VulkanDescriptor
+{
+
+    static void updateSets(
+        VkDevice                                 device,
+        const std::vector<VkWriteDescriptorSet> &descriptorWrites,
+        const std::vector<VkCopyDescriptorSet>  &descriptorCopies)
+    {
+        vkUpdateDescriptorSets(
+            device,
+            static_cast<uint32_t>(descriptorWrites.size()),
+            descriptorWrites.data(),
+            static_cast<uint32_t>(descriptorCopies.size()),
+            descriptorCopies.data());
+    }
+
+
+
+    static VkWriteDescriptorSet genBufferWrite(
+        VkDescriptorSet               dstSet,
+        uint32_t                      dstBinding,
+        uint32_t                      dstArrayElement,
+        VkDescriptorType              descriptorType,
+        const VkDescriptorBufferInfo *pBufferInfo,
+        uint32_t                      descriptorCount = 1)
+    {
+        return genWriteDescriptorSet(
+            dstSet,
+            dstBinding,
+            dstArrayElement,
+            descriptorType,
+            descriptorCount,
+            pBufferInfo,
+            nullptr,
+            nullptr);
+    }
+
+    static VkWriteDescriptorSet genImageWrite(
+        VkDescriptorSet              dstSet,
+        uint32_t                     dstBinding,
+        uint32_t                     dstArrayElement,
+        VkDescriptorType             descriptorType,
+        const VkDescriptorImageInfo *pImageInfo,
+        uint32_t                     descriptorCount = 1)
+    {
+        return genWriteDescriptorSet(
+            dstSet,
+            dstBinding,
+            dstArrayElement,
+            descriptorType,
+            descriptorCount,
+            nullptr,
+            pImageInfo,
+            nullptr);
+    }
+
+    static VkWriteDescriptorSet genWriteTexelBuffer(
+        VkDescriptorSet     dstSet,
+        uint32_t            dstBinding,
+        uint32_t            dstArrayElement,
+        VkDescriptorType    descriptorType,
+        const VkBufferView *pTexelBufferView,
+        uint32_t            descriptorCount = 1)
+    {
+        return genWriteDescriptorSet(
+            dstSet,
+            dstBinding,
+            dstArrayElement,
+            descriptorType,
+            descriptorCount,
+            nullptr,
+            nullptr,
+            pTexelBufferView);
+    }
+
+
+    static VkWriteDescriptorSet genWriteDescriptorSet(
+        VkDescriptorSet               dstSet,
+        uint32_t                      dstBinding,
+        uint32_t                      dstArrayElement,
+        VkDescriptorType              descriptorType,
+        uint32_t                      descriptorCount,
+        const VkDescriptorBufferInfo *pBufferInfo,
+        const VkDescriptorImageInfo  *pImageInfo,
+        const VkBufferView           *pTexelBufferView)
+    {
+        VkWriteDescriptorSet write{
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = dstSet,
+            .dstBinding       = dstBinding,
+            .dstArrayElement  = dstArrayElement,
+            .descriptorCount  = descriptorCount,
+            .descriptorType   = descriptorType,
+            .pImageInfo       = pImageInfo,
+            .pBufferInfo      = pBufferInfo,
+            .pTexelBufferView = pTexelBufferView,
+        };
+        return write;
+    }
 };

@@ -7,7 +7,8 @@ layout(location = 2) in vec3 aNormal;
 
 
 layout(push_constant) uniform PushConstants {
-    mat4 viewProjection;  // VP矩阵，不包含Model
+    mat4 projection;  
+    mat4 view;  
     mat4 model;          // 基础Model矩阵（用于旋转等）
     uint colorType;
 } pc;
@@ -21,7 +22,7 @@ void main()
     vec4 worldPos = instanceModel * vec4(aPos, 1.0);
     // vec3 normal = normalize(aNormal.xyz);
 
-    gl_Position = pc.viewProjection * worldPos;
+    gl_Position = pc.projection * pc.view * worldPos;
     vColor = pc.colorType == 0? vec4(aNormal * 0.5 + 0.5, 1.0): vec4(aTexCoord, 0.0, 1.0);
 }
 

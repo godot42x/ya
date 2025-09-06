@@ -18,12 +18,14 @@ add_requires("libsdl3", {
 add_requires("assimp", {
     configs = {
         shared = false,
-        runtimes = "MT",
+        -- runtimes = "MT",
+        cxxflags = "-std=c++20",
     }
 })
 
 -- just for temp debug in runtime
 add_requires("imgui", {
+    debug= true,
     configs = {
         sdl3 = true,
         sdl3_gpu = true,
@@ -34,9 +36,19 @@ add_requires("imgui", {
 add_requires("shaderc", {
     configs = {
         shared = false,
-        runtimes = "MT",
+        -- runtimes = "MT",
     }
 })
+if is_plat("windows") then
+    add_requireconfs("shaderc",
+        {
+            configs = {
+                shared = false,
+                -- runtimes = "MT",
+            },
+        })
+end
+
 add_requires("vulkansdk", {
     configs = {
         utils = {

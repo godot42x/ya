@@ -31,6 +31,8 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::D
                                         &ci,
                                         _render->getAllocator(),
                                         &_handle));
+
+    _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, _handle, setLayout.label);
 }
 
 VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
@@ -38,17 +40,26 @@ VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
     VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), _handle);
 }
 
-VulkanDescriptorPool::VulkanDescriptorPool(VulkanRender *render, uint32_t maxSets, const std::vector<VkDescriptorPoolSize> &poolSizes)
+
+
+VulkanDescriptorPool::VulkanDescriptorPool(VulkanRender *render, const ya::DescriptorPoolCreateInfo &ci)
 {
     _render = render;
+    std::vector<VkDescriptorPoolSize> vkPoolSizes;
+    for (const auto &size : ci.poolSizes) {
+        vkPoolSizes.push_back(VkDescriptorPoolSize{
+            .type            = toVk(size.type),
+            .descriptorCount = size.descriptorCount,
+        });
+    }
 
     VkDescriptorPoolCreateInfo dspCI{
         .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext         = nullptr,
         .flags         = 0,
-        .maxSets       = maxSets,
-        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-        .pPoolSizes    = poolSizes.data(),
+        .maxSets       = ci.maxSets,
+        .poolSizeCount = static_cast<uint32_t>(vkPoolSizes.size()),
+        .pPoolSizes    = vkPoolSizes.data(),
     };
     VK_CALL(vkCreateDescriptorPool(_render->getLogicalDevice(), &dspCI, _render->getAllocator(), &_handle));
 }
@@ -59,31 +70,30 @@ VulkanDescriptorPool::~VulkanDescriptorPool()
 }
 
 
+
 void VulkanDescriptorPool::setDebugName(const char *name)
 {
     _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_POOL, _handle, name);
 }
 
-
-bool VulkanDescriptorPool::allocateDescriptorSets(const std::vector<std::shared_ptr<VulkanDescriptorSetLayout>> &layouts,
-                                                  std::vector<VkDescriptorSet>                                  &outSets)
+bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout, uint32_t count, std::vector<VkDescriptorSet> &set)
 {
-    std::vector<VkDescriptorSetLayout> vkLayouts;
-    for (const auto &layout : layouts) {
-        vkLayouts.push_back(layout->_handle);
+    if (set.size() < count) {
+        set.resize(count);
     }
+    std::vector<VkDescriptorSetLayout> sameLayouts(set.size(), layout->_handle);
+
+    // 基于同一种layout，allocate n 个 set
     VkDescriptorSetAllocateInfo dsAI{
         .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext              = nullptr,
         .descriptorPool     = _handle,
-        .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-        .pSetLayouts        = vkLayouts.data(),
+        .descriptorSetCount = static_cast<uint32_t>(set.size()),
+        .pSetLayouts        = sameLayouts.data(),
     };
-
-    outSets.resize(layouts.size());
 
     VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(),
                                      &dsAI,
-                                     outSets.data()));
+                                     set.data()));
     return true;
 }

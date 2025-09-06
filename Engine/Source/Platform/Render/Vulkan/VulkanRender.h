@@ -284,8 +284,8 @@ struct VulkanRender : public ya::IRender
     const VkAllocationCallbacks                *getAllocator();
 
 
-    bool      createSampler(const std::string &name, const ya::SamplerCreateInfo &ci, VkSampler &outSampler);
-    void      removeSampler(const std::string &name);
+    VkSampler createSampler(const ya::SamplerCreateInfo &ci);
+    void      removeSampler(const std::string &label);
     VkSampler getSampler(const std::string &name)
     {
         auto it = _samplers.find(name);

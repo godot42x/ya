@@ -265,15 +265,16 @@ struct FQuadData
 
     void onImGui()
     {
-        ImGui::CollapsingHeader("Render2D", ImGuiTreeNodeFlags_DefaultOpen);
-        // control viewports &scissors
-        ImGui::DragFloat2("Viewport Pos", &viewport.x);
-        ImGui::DragFloat2("Viewport Size", &viewport.width);
+        if (ImGui::CollapsingHeader("Render2D", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // control viewports &scissors
+            ImGui::DragFloat2("Viewport Pos", &viewport.x);
+            ImGui::DragFloat2("Viewport Size", &viewport.width);
 
-        ImGui::DragInt2("Scissor Offset", (int *)&scissor.offsetX);
-        ImGui::DragInt2("Scissor Extent", (int *)&scissor.width);
+            ImGui::DragInt2("Scissor Offset", (int *)&scissor.offsetX);
+            ImGui::DragInt2("Scissor Extent", (int *)&scissor.width);
 
-        ImGui::DragFloat4("Camera Rect", &cameraRect.pos.x, 1.0f);
+            ImGui::DragFloat4("Camera Rect", &cameraRect.pos.x, 1.0f);
+        }
     }
 
     bool shouldFlush()

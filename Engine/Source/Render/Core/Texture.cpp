@@ -1,7 +1,10 @@
 #include "Texture.h"
+
 #include "Core/App/App.h"
 #include "Core/FileSystem/FileSystem.h"
 #include "stb/stb_image.h"
+#include <cstddef>
+
 
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
@@ -17,24 +20,36 @@ namespace ya
 Texture::Texture(const std::string &filepath)
 {
 
-    auto vkRender = ya::App::get()->getRender<VulkanRender>();
-
     int   texWidth = -1, texHeight = -1, texChannels = -1;
     void *pixels = nullptr;
 
     // FileSystem::get()->getPluginRoots()
-
-#if USE_SDL_IMG
-    // SDL implementation
-#else
     pixels = stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     if (!pixels) {
         YA_CORE_ERROR("failed to load texture image! {}", filepath.data());
         return;
     }
-#endif
 
+    createImage(pixels, (uint32_t)texWidth, (uint32_t)texHeight);
+    stbi_image_free(pixels);
+}
 
+Texture::Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data)
+{
+    YA_CORE_ASSERT((uint32_t)data.size() == width * height, "pixel data size does not match width * height");
+    createImage(data.data(), width, height);
+}
+
+VkImage     Texture::getVkImage() { return image->_handle; }
+VkImageView Texture::getVkImageView() { return imageView->_handle; }
+VkFormat    Texture::getVkFormat() const { return toVk(_format); }
+
+void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHeight)
+{
+    _width  = texWidth;
+    _height = texHeight;
+
+    auto         vkRender  = ya::App::get()->getRender<VulkanRender>();
     VkDeviceSize imageSize = sizeof(uint8_t) * texWidth * texHeight * 4;
 
     image = VulkanImage::create(
@@ -42,8 +57,8 @@ Texture::Texture(const std::string &filepath)
         ya::ImageCreateInfo{
             .format = EFormat::R8G8B8A8_UNORM,
             .extent = {
-                .width  = static_cast<uint32_t>(texWidth),
-                .height = static_cast<uint32_t>(texHeight),
+                .width  = texWidth,
+                .height = texHeight,
                 .depth  = 1,
             },
             .mipLevels     = 1,
@@ -62,16 +77,8 @@ Texture::Texture(const std::string &filepath)
             .data          = (void *)pixels,
             .size          = static_cast<uint32_t>(imageSize),
             .memProperties = 0,
-            .debugName     = std::format("StagingBuffer_Texture_{}", filepath),
+            .debugName     = std::format("StagingBuffer_Texture_{}", _filepath),
         });
-
-#if USE_SDL_IMG
-    // SDL cleanup
-#else
-    stbi_image_free(pixels);
-#endif
-
-
 
     auto cmdBuf = vkRender->beginIsolateCommands();
     // Do layout transition image: UNDEFINED -> TRANSFER_DST, copy, TRANSFER_DST -> SHADER_READ_ONLY
@@ -80,8 +87,5 @@ Texture::Texture(const std::string &filepath)
     VulkanImage::transitionLayout(cmdBuf, image.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkRender->endIsolateCommands(cmdBuf);
 }
-
-VkImage     Texture::getVkImage() { return image->_handle; }
-VkImageView Texture::getVkImageView() { return imageView->_handle; }
 
 } // namespace ya

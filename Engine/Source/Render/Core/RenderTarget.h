@@ -5,6 +5,7 @@
 
 #include "ECS/Entity.h"
 #include "ECS/System.h"
+#include "ECS/System/IMaterialSystem.h"
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 #include "Platform/Render/Vulkan/VulkanRenderPass.h"
 
@@ -35,6 +36,8 @@ struct RenderTarget
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
     Entity *_camera;
+    bool    bEntityCamera = true; // Whether to use the camera from the entity
+
 
   public:
 
@@ -72,7 +75,7 @@ struct RenderTarget
     void addMaterialSystem(Args &&...args)
     {
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
-        auto system = std::make_shared<T>(std::forward<Args>(args)...);
+        auto system = makeShared<T>(std::forward<Args>(args)...);
         system->onInit(_renderPass);
         _materialSystems.push_back(system);
     }
@@ -84,8 +87,14 @@ struct RenderTarget
         }
     }
 
-    Entity *getCamera() { return _camera; }
-    void    setCamera(Entity *camera) { _camera = camera; }
+    Entity            *getCameraMut() { return _camera; }
+    const Entity      *getCamera() const { return _camera; }
+    void               setCamera(Entity *camera) { _camera = camera; }
+    [[nodiscard]] bool isUseEntityCamera() const { return bEntityCamera; }
+
+    const glm::mat4 getProjectionMatrix() const;
+    const glm::mat4 getViewMatrix() const;
+    void            getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const;
 };
 
 }; // namespace ya

@@ -23,11 +23,11 @@ Entity *Scene::createEntity(const std::string &name)
     Entity entity = {id, this};
 
     // Add basic components
-    auto &idComponent = entity.addComponent<IDComponent>();
-    idComponent._id   = _entityCounter++;
+    auto *idComponent = entity.addComponent<IDComponent>();
+    idComponent->_id  = _entityCounter++;
 
-    auto &tagComponent = entity.addComponent<TagComponent>();
-    tagComponent._tag  = name.empty() ? "Entity" : name;
+    auto *tagComponent = entity.addComponent<TagComponent>();
+    tagComponent->_tag = name.empty() ? "Entity" : name;
 
     // auto &transformComponent = entity.addComponent<TransformComponent>();
 
@@ -42,11 +42,11 @@ Entity Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
     Entity entity = {_registry.create(), this};
 
     // Add basic components with specific UUID
-    auto &idComponent = entity.addComponent<IDComponent>();
-    idComponent._id   = static_cast<uint32_t>(uuid);
+    auto idComponent = entity.addComponent<IDComponent>();
+    idComponent->_id = static_cast<uint32_t>(uuid);
 
-    auto &tagComponent = entity.addComponent<TagComponent>();
-    tagComponent._tag  = name.empty() ? "Entity" : name;
+    auto tagComponent  = entity.addComponent<TagComponent>();
+    tagComponent->_tag = name.empty() ? "Entity" : name;
 
     // auto &transformComponent = entity.addComponent<TransformComponent>();
 

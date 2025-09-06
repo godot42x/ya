@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -19,14 +20,15 @@ struct VulkanRender;
 struct VulkanRenderPass;
 struct VulkanPipelineLayout
 {
+    std ::string     label;
     VulkanRender    *_render         = nullptr;
     VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
     // std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
     // ya::PipelineLayout _ci;
 
-    VulkanPipelineLayout(VulkanRender *render)
-        : _render(render) {}
+    VulkanPipelineLayout(VulkanRender *render, std::string label = std::string("None"))
+        : label(std::move(label)), _render(render) {}
 
     ~VulkanPipelineLayout() { cleanup(); }
 

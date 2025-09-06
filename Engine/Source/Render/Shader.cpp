@@ -471,7 +471,7 @@ bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view con
 
     if (result.GetCompilationStatus() != shaderc_compilation_status_success)
     {
-        YA_CORE_ERROR("\n{}", result.GetErrorMessage());
+        YA_CORE_ERROR("{}:\n{}", EShaderStage::toString(stage), result.GetErrorMessage());
         // YA_CORE_ASSERT(false, "Shader compilation failed!");
         return false;
     }

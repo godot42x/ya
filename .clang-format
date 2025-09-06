@@ -6,8 +6,16 @@ IndentWidth: 4
 BreakBeforeBraces: Custom
 TabWidth: 4
 
-AllowShortFunctionsOnASingleLine: All
 AlwaysBreakTemplateDeclarations: MultiLine
+
+AllowShortFunctionsOnASingleLine: All
+AllowShortBlocksOnASingleLine: Always
+AllowShortIfStatementsOnASingleLine: OnlyFirstIf
+AllowShortCompoundRequirementOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+
+AllowAllConstructorInitializersOnNextLine: true
+
 BinPackArguments: false
 AlignOperands: AlignAfterOperator
 # ternary 三元
@@ -21,37 +29,21 @@ IndentPPDirectives: BeforeHash
 
 # 大括号换行，只有当 BreakBeforeBraces 设置为Custom时才有效
 BraceWrapping:
-  # case 语句后面
   AfterCaseLabel: true
-  # class定义后面
   AfterClass: true
-  # 控制语句后面
   AfterControlStatement: MultiLine
-  # enum定义后面
   AfterEnum: true
-  # 函数定义后面
   AfterFunction: true
-  # 命名空间定义后面
   AfterNamespace: true
-  # ObjC定义后面
   AfterObjCDeclaration: false
-  # struct定义后面
   AfterStruct: true
-  # union定义后面
   AfterUnion: true
-  # extern 导出块后面
   AfterExternBlock: false
-  # catch之前
   BeforeCatch: true
-  # else之前
   BeforeElse: true
-  # 缩进大括号(整个大括号框起来的部分都缩进)
   IndentBraces: false
-  # 空函数的大括号是否可以在一行
-  SplitEmptyFunction: true
-  # 空记录体(struct/class/union)的大括号是否可以在一行
+  SplitEmptyFunction: false
   SplitEmptyRecord: false
-  # 空名字空间的大括号是否可以在一行
   SplitEmptyNamespace: false
 
 # 连续赋值时，对齐所有等号
@@ -70,7 +62,7 @@ MaxEmptyLinesToKeep: 3
 EmptyLineAfterAccessModifier: Leave
 
 # 在一个注释中引入换行的penalty
-PenaltyBreakComment: 300
+PenaltyBreakComment: 150
 AllowShortLambdasOnASingleLine: All
 LambdaBodyIndentation: Signature
 

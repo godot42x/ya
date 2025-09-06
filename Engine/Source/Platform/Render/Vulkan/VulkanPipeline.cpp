@@ -85,13 +85,15 @@ void VulkanPipelineLayout::create(
         .pPushConstantRanges    = vkPSs.data(),
     };
 
-    VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, nullptr, &_pipelineLayout);
+    VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, _render->getAllocator(), &_pipelineLayout);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Failed to create Vulkan pipeline layout: {}", result);
         return; // false
     }
 
     YA_CORE_INFO("Vulkan pipeline layout created successfully: {}", (uintptr_t)_pipelineLayout);
+
+    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, _pipelineLayout, label);
 }
 
 void VulkanPipelineLayout::cleanup()
@@ -378,7 +380,7 @@ void VulkanPipeline::createPipelineInternal()
     vkDestroyShaderModule(_render->getLogicalDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(_render->getLogicalDevice(), vertShaderModule, nullptr);
 
-    YA_CORE_INFO("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
+    YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getHandle(), std::format("Pipeline_{}", name).c_str());
 }

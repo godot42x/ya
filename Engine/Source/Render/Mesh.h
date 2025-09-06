@@ -30,6 +30,8 @@ struct Mesh
 
     [[nodiscard]] const VulkanBuffer *getVertexBuffer() const { return _vertexBuffer.get(); }
     [[nodiscard]] const VulkanBuffer *getIndexBuffer() const { return _indexBuffer.get(); }
+
+    void draw(void* cmdBuf) const;
 };
 
 } // namespace ya
