@@ -999,6 +999,10 @@ bool App::unloadScene()
         _scene.reset();
     }
     cubeMesh.reset();
+
+    _whiteTexture.reset();
+    _blackTexture.reset();
+    _multiPixelTexture.reset();
     return true;
 }
 

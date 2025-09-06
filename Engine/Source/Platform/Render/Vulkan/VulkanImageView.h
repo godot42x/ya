@@ -18,4 +18,6 @@ struct VulkanImageView
 
     VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags);
     virtual ~VulkanImageView();
+
+    VkImageView getHandle() const { return _handle; }
 };

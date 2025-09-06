@@ -86,6 +86,9 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
     VulkanImage::transfer(cmdBuf, stagingBuffer.get(), image.get());
     VulkanImage::transitionLayout(cmdBuf, image.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkRender->endIsolateCommands(cmdBuf);
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, image->getHandle(), std::format("Texture_Image_{}", _filepath));
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, image->_imageMemory, std::format("Texture_ImageMemory_{}", _filepath));
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, imageView->getHandle(), std::format("Texture_ImageView_{}", _filepath));
 }
 
 } // namespace ya
