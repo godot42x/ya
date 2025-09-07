@@ -340,6 +340,9 @@ void VulkanPipeline::createPipelineInternal()
     if (_ci.dynamicFeatures & EPipelineDynamicFeature::Scissor) {
         dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
     }
+    if (_ci.dynamicFeatures & EPipelineDynamicFeature::CullMode) {
+        dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
+    }
 
     VkPipelineDynamicStateCreateInfo dynamicStateCI{
         .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,

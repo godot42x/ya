@@ -492,6 +492,7 @@ enum T
     AlphaBlend = 0x02,
     Viewport   = 0x04,
     Scissor    = 0x08,
+    CullMode   = 0x10,
 };
 }
 

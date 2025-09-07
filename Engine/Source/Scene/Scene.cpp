@@ -68,7 +68,12 @@ bool Scene::isValidEntity(Entity entity) const
 
 Entity *Scene::getEntityByID(id_t id)
 {
-    return &_entityMap.find(id)->second;
+    auto it = _entityMap.find(id);
+    if (it != _entityMap.end())
+    {
+        return &it->second;
+    }
+    return nullptr;
 }
 
 void Scene::clear()
