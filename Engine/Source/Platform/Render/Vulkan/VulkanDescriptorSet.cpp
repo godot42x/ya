@@ -27,7 +27,7 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::D
         .pBindings    = bindings.data(),
     };
 
-    VK_CALL(vkCreateDescriptorSetLayout(_render->getLogicalDevice(),
+    VK_CALL(vkCreateDescriptorSetLayout(_render->getDevice(),
                                         &ci,
                                         _render->getAllocator(),
                                         &_handle));
@@ -37,7 +37,7 @@ VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::D
 
 VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
 {
-    VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), _handle);
+    VK_DESTROY(DescriptorSetLayout, _render->getDevice(), _handle);
 }
 
 
@@ -61,12 +61,12 @@ VulkanDescriptorPool::VulkanDescriptorPool(VulkanRender *render, const ya::Descr
         .poolSizeCount = static_cast<uint32_t>(vkPoolSizes.size()),
         .pPoolSizes    = vkPoolSizes.data(),
     };
-    VK_CALL(vkCreateDescriptorPool(_render->getLogicalDevice(), &dspCI, _render->getAllocator(), &_handle));
+    VK_CALL(vkCreateDescriptorPool(_render->getDevice(), &dspCI, _render->getAllocator(), &_handle));
 }
 
 VulkanDescriptorPool::~VulkanDescriptorPool()
 {
-    VK_DESTROY(DescriptorPool, _render->getLogicalDevice(), _handle);
+    VK_DESTROY(DescriptorPool, _render->getDevice(), _handle);
 }
 
 
@@ -92,7 +92,7 @@ bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDe
         .pSetLayouts        = sameLayouts.data(),
     };
 
-    VK_CALL(vkAllocateDescriptorSets(_render->getLogicalDevice(),
+    VK_CALL(vkAllocateDescriptorSets(_render->getDevice(),
                                      &dsAI,
                                      set.data()));
     return true;

@@ -23,7 +23,7 @@ void VulkanRenderPass::cleanup()
 
     if (m_renderPass != VK_NULL_HANDLE)
     {
-        vkDestroyRenderPass(_render->getLogicalDevice(), m_renderPass, nullptr);
+        vkDestroyRenderPass(_render->getDevice(), m_renderPass, nullptr);
         m_renderPass = VK_NULL_HANDLE;
     }
 }
@@ -103,7 +103,7 @@ bool VulkanRenderPass::createDefaultRenderPass()
         .dependencyCount = 0,                                         // No dependencies for now
     };
 
-    vkCreateRenderPass(_render->getLogicalDevice(), &createInfo, nullptr, &m_renderPass);
+    vkCreateRenderPass(_render->getDevice(), &createInfo, nullptr, &m_renderPass);
     if (m_renderPass == VK_NULL_HANDLE) {
         YA_CORE_ERROR("Failed to create default render pass!");
         return false;
@@ -250,7 +250,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
         .pDependencies   = vkDependencies.data(),
     };
 
-    VkResult result = vkCreateRenderPass(_render->getLogicalDevice(), &createInfo, nullptr, &m_renderPass);
+    VkResult result = vkCreateRenderPass(_render->getDevice(), &createInfo, nullptr, &m_renderPass);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Failed to create Vulkan render pass: {}", result);
         return false;

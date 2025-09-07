@@ -48,7 +48,7 @@ void VulkanPipelineLayout::create(
     //         .pBindings    = bindings.data(),
     //     };
 
-    //     vkCreateDescriptorSetLayout(_render->getLogicalDevice(),
+    //     vkCreateDescriptorSetLayout(_render->getDevice(),
     //                                 &dslCI,
     //                                 _render->getAllocator(),
     //                                 &_descriptorSetLayouts[i]);
@@ -85,7 +85,7 @@ void VulkanPipelineLayout::create(
         .pPushConstantRanges    = vkPSs.data(),
     };
 
-    VkResult result = vkCreatePipelineLayout(_render->getLogicalDevice(), &layoutCI, _render->getAllocator(), &_pipelineLayout);
+    VkResult result = vkCreatePipelineLayout(_render->getDevice(), &layoutCI, _render->getAllocator(), &_pipelineLayout);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Failed to create Vulkan pipeline layout: {}", result);
         return; // false
@@ -98,16 +98,16 @@ void VulkanPipelineLayout::create(
 
 void VulkanPipelineLayout::cleanup()
 {
-    VK_DESTROY(PipelineLayout, _render->getLogicalDevice(), _pipelineLayout);
+    VK_DESTROY(PipelineLayout, _render->getDevice(), _pipelineLayout);
     // for (auto layout : _descriptorSetLayouts) {
-    //     VK_DESTROY(DescriptorSetLayout, _render->getLogicalDevice(), layout);
+    //     VK_DESTROY(DescriptorSetLayout, _render->getDevice(), layout);
     // }
 }
 
 
 void VulkanPipeline::cleanup()
 {
-    VK_DESTROY(Pipeline, _render->getLogicalDevice(), _pipeline);
+    VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
 }
 
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
@@ -371,7 +371,7 @@ void VulkanPipeline::createPipelineInternal()
         .basePipelineHandle  = VK_NULL_HANDLE,
     };
 
-    VkResult result = vkCreateGraphicsPipelines(_render->getLogicalDevice(),
+    VkResult result = vkCreateGraphicsPipelines(_render->getDevice(),
                                                 _render->getPipelineCache(),
                                                 1,
                                                 &pipelineCreateInfo,
@@ -380,8 +380,8 @@ void VulkanPipeline::createPipelineInternal()
     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
 
     // Cleanup shader modules
-    vkDestroyShaderModule(_render->getLogicalDevice(), fragShaderModule, nullptr);
-    vkDestroyShaderModule(_render->getLogicalDevice(), vertShaderModule, nullptr);
+    vkDestroyShaderModule(_render->getDevice(), fragShaderModule, nullptr);
+    vkDestroyShaderModule(_render->getDevice(), vertShaderModule, nullptr);
 
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
 
@@ -425,7 +425,7 @@ VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t> &s
     };
 
     VkShaderModule shaderModule = nullptr;
-    VK_CALL(vkCreateShaderModule(_render->getLogicalDevice(), &createInfo, nullptr, &shaderModule));
+    VK_CALL(vkCreateShaderModule(_render->getDevice(), &createInfo, nullptr, &shaderModule));
     return shaderModule;
 }
 

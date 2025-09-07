@@ -8,8 +8,8 @@
 
 VulkanBuffer::~VulkanBuffer()
 {
-    VK_FREE(Memory, _render->getLogicalDevice(), _memory);
-    VK_DESTROY(Buffer, _render->getLogicalDevice(), _handle);
+    VK_FREE(Memory, _render->getDevice(), _memory);
+    VK_DESTROY(Buffer, _render->getDevice(), _handle);
 }
 
 void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties)
@@ -26,9 +26,9 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMem
                            stageBufferMemory);
 
     void *mappedData = nullptr;
-    VK_CALL(vkMapMemory(_render->getLogicalDevice(), stageBufferMemory, 0, size, 0, &mappedData));
+    VK_CALL(vkMapMemory(_render->getDevice(), stageBufferMemory, 0, size, 0, &mappedData));
     std::memcpy(mappedData, data, size);
-    vkUnmapMemory(_render->getLogicalDevice(), stageBufferMemory);
+    vkUnmapMemory(_render->getDevice(), stageBufferMemory);
 
     VulkanBuffer::allocate(_render,
                            static_cast<uint32_t>(size),
@@ -39,8 +39,8 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMem
 
     VulkanBuffer::transfer(_render, stageBuffer, _handle, size);
 
-    VK_DESTROY(Buffer, _render->getLogicalDevice(), stageBuffer);
-    VK_FREE(Memory, _render->getLogicalDevice(), stageBufferMemory);
+    VK_DESTROY(Buffer, _render->getDevice(), stageBuffer);
+    VK_FREE(Memory, _render->getDevice(), stageBufferMemory);
 
     YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
@@ -71,7 +71,7 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
     void *mappedData = nullptr;
     if (size == 0) {
         YA_CORE_ASSERT(offset == 0, "If size is 0, offset must be 0");
-        VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+        VK_CALL(vkMapMemory(_render->getDevice(),
                             _memory,
                             0,
                             VK_WHOLE_SIZE,
@@ -80,7 +80,7 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
     }
     else {
 
-        VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+        VK_CALL(vkMapMemory(_render->getDevice(),
                             _memory,
                             offset,
                             size, // map the whole memory
@@ -88,7 +88,7 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
                             &mappedData));
     }
     std::memcpy(mappedData, data, size);
-    vkUnmapMemory(_render->getLogicalDevice(), _memory);
+    vkUnmapMemory(_render->getDevice(), _memory);
     return true;
 }
 
@@ -103,7 +103,7 @@ bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
         .offset = offset,
         .size   = size == 0 ? VK_WHOLE_SIZE : size,
     };
-    VK_CALL(vkFlushMappedMemoryRanges(_render->getLogicalDevice(), 1, &range));
+    VK_CALL(vkFlushMappedMemoryRanges(_render->getDevice(), 1, &range));
     return true;
 }
 
@@ -111,7 +111,7 @@ bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
 void VulkanBuffer::mapInternal(void **ptr)
 {
     YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot map!");
-    VK_CALL(vkMapMemory(_render->getLogicalDevice(),
+    VK_CALL(vkMapMemory(_render->getDevice(),
                         _memory,
                         0,
                         VK_WHOLE_SIZE,
@@ -129,7 +129,7 @@ void VulkanBuffer::setupDebugName(const std::string &name)
 
 void VulkanBuffer::unmap()
 {
-    vkUnmapMemory(_render->getLogicalDevice(), _memory);
+    vkUnmapMemory(_render->getDevice(), _memory);
 }
 
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage, VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)
@@ -147,11 +147,11 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropert
         .pQueueFamilyIndices   = nullptr,
     };
 
-    VK_CALL(vkCreateBuffer(render->getLogicalDevice(), &vkBufferCI, nullptr, &outBuffer));
+    VK_CALL(vkCreateBuffer(render->getDevice(), &vkBufferCI, nullptr, &outBuffer));
 
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(render->getLogicalDevice(), outBuffer, &memRequirements);
+    vkGetBufferMemoryRequirements(render->getDevice(), outBuffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{
         .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -160,8 +160,8 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropert
         .memoryTypeIndex = static_cast<uint32_t>(render->getMemoryIndex(memProperties, memRequirements.memoryTypeBits)),
     };
 
-    VK_CALL(vkAllocateMemory(render->getLogicalDevice(), &allocInfo, nullptr, &outBufferMemory));
-    VK_CALL(vkBindBufferMemory(render->getLogicalDevice(), outBuffer, outBufferMemory, 0));
+    VK_CALL(vkAllocateMemory(render->getDevice(), &allocInfo, nullptr, &outBufferMemory));
+    VK_CALL(vkBindBufferMemory(render->getDevice(), outBuffer, outBufferMemory, 0));
 
     return true;
 }
@@ -177,7 +177,7 @@ void VulkanBuffer::transfer(VkCommandBuffer cmdBuf, VkBuffer srcBuffer, VkBuffer
 {
 
     // VulkanUtils::transitionImageLayout(
-    //     render->getLogicalDevice(),
+    //     render->getDevice(),
     //     render->getGraphicsCommandPool(),
     //     srcBuffer,
     //     VK_IMAGE_LAYOUT_UNDEFINED,

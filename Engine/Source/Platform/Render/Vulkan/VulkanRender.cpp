@@ -472,7 +472,7 @@ void VulkanRender::createPipelineCache()
 
     };
 
-    vkCreatePipelineCache(getLogicalDevice(), &ci, nullptr, &_pipelineCache);
+    vkCreatePipelineCache(getDevice(), &ci, nullptr, &_pipelineCache);
 }
 
 void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)
@@ -605,7 +605,7 @@ void VulkanRender::createSyncResources(int32_t swapchainImageSize)
     // ✅ 循环创建每个飞行帧的同步对象
     for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
         // 创建渲染完成信号量：当GPU完成渲染命令时发出信号
-        ret = vkCreateSemaphore(this->getLogicalDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
+        ret = vkCreateSemaphore(this->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
 
 
@@ -617,7 +617,7 @@ void VulkanRender::createSyncResources(int32_t swapchainImageSize)
 
     for (uint32_t i = 0; i < flightFrameSize; i++) {
         // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
-        ret = vkCreateSemaphore(this->getLogicalDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
+        ret = vkCreateSemaphore(this->getDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
         // 创建帧fence：用于CPU等待GPU完成整个帧的处理
         // ⚠️ 重要：初始状态设为已信号(SIGNALED)，这样第一帧不会被阻塞
@@ -627,7 +627,7 @@ void VulkanRender::createSyncResources(int32_t swapchainImageSize)
             .flags = VK_FENCE_CREATE_SIGNALED_BIT // 开始时就处于已信号状态
         };
 
-        ret = vkCreateFence(this->getLogicalDevice(), &fenceInfo, nullptr, &frameFences[i]);
+        ret = vkCreateFence(this->getDevice(), &fenceInfo, nullptr, &frameFences[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create fence!");
         this->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
                                  frameFences[i],
@@ -641,11 +641,11 @@ void VulkanRender::createSyncResources(int32_t swapchainImageSize)
 void VulkanRender::releaseSyncResources()
 {
     for (uint32_t i = 0; i < flightFrameSize; i++) {
-        vkDestroySemaphore(this->getLogicalDevice(), frameImageAvailableSemaphores[i], this->getAllocator());
-        vkDestroyFence(this->getLogicalDevice(), frameFences[i], this->getAllocator());
+        vkDestroySemaphore(this->getDevice(), frameImageAvailableSemaphores[i], this->getAllocator());
+        vkDestroyFence(this->getDevice(), frameFences[i], this->getAllocator());
     }
     for (uint32_t i = 0; i < imageSubmittedSignalSemaphores.size(); i++) {
-        vkDestroySemaphore(this->getLogicalDevice(), imageSubmittedSignalSemaphores[i], this->getAllocator());
+        vkDestroySemaphore(this->getDevice(), imageSubmittedSignalSemaphores[i], this->getAllocator());
     }
 }
 
@@ -718,7 +718,7 @@ VkSampler VulkanRender::createSampler(const ya::SamplerCreateInfo &ci)
     }
 
     VkSampler outSampler = VK_NULL_HANDLE;
-    VK_CALL_RET(vkCreateSampler(getLogicalDevice(), &samplerCI, getAllocator(), &outSampler));
+    VK_CALL_RET(vkCreateSampler(getDevice(), &samplerCI, getAllocator(), &outSampler));
     setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, ci.label.c_str());
     YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)outSampler);
 
@@ -731,7 +731,7 @@ void VulkanRender::removeSampler(const std::string &label)
 {
     if (_samplers.find(label) != _samplers.end())
     {
-        vkDestroySampler(getLogicalDevice(), _samplers[label], getAllocator());
+        vkDestroySampler(getDevice(), _samplers[label], getAllocator());
         _samplers.erase(label);
     }
 }
@@ -743,14 +743,14 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
     // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
-    VK_CALL(vkWaitForFences(this->getLogicalDevice(),
+    VK_CALL(vkWaitForFences(this->getDevice(),
                             1,
                             &frameFences[currentFrameIdx],
                             VK_TRUE,
                             UINT64_MAX));
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
-    VK_CALL(vkResetFences(this->getLogicalDevice(), 1, &frameFences[currentFrameIdx]));
+    VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
 
     auto swapchain = this->getSwapChain();
 
@@ -763,7 +763,7 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
     // Do a sync recreation here, Can it be async?(just return and register a frame task)
     if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
-        vkDeviceWaitIdle(this->getLogicalDevice());
+        vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci
         bool ok = swapchain->recreate(this->getSwapChain()->getCreateInfo());
@@ -816,7 +816,7 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
 
     if (result == VK_SUBOPTIMAL_KHR) {
         // recreate swapchain
-        VK_CALL(vkDeviceWaitIdle(this->getLogicalDevice()));
+        VK_CALL(vkDeviceWaitIdle(this->getDevice()));
         bool ok = getSwapChain()->recreate(this->getSwapChain()->getCreateInfo());
         if (ok) {
         }

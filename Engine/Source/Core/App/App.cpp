@@ -407,7 +407,7 @@ void App::init(AppDesc ci)
         .ApiVersion     = vkRender->getApiVersion(),
         .Instance       = vkRender->getInstance(),
         .PhysicalDevice = vkRender->getPhysicalDevice(),
-        .Device         = vkRender->getLogicalDevice(),
+        .Device         = vkRender->getDevice(),
         .QueueFamily    = queue->getFamilyIndex(),
         .Queue          = queue->getHandle(),
         .DescriptorPool = nullptr,
@@ -450,7 +450,7 @@ void App::init(AppDesc ci)
 
     loadScene(ci.defaultScenePath);
     // wait something done
-    vkDeviceWaitIdle(vkRender->getLogicalDevice());
+    vkDeviceWaitIdle(vkRender->getDevice());
 }
 
 void App::onInit(AppDesc ci)
@@ -483,7 +483,7 @@ void App::onEvent(Event &event)
 void ya::App::quit()
 {
     auto *vkRender = static_cast<VulkanRender *>(_render);
-    vkDeviceWaitIdle(vkRender->getLogicalDevice());
+    vkDeviceWaitIdle(vkRender->getDevice());
 
     unloadScene();
     MaterialFactory::get()->destroy();
@@ -823,7 +823,7 @@ void App::onUpdate(float dt)
 void App::onRender(float dt)
 {
     auto vkRender = static_cast<VulkanRender *>(_render);
-    // vkDeviceWaitIdle(vkRender->getLogicalDevice());
+    // vkDeviceWaitIdle(vkRender->getDevice());
     // SDL_Delay(1000 / 30); // Simulate frame time, remove in production
 
     if (_windowSize.x <= 0 || _windowSize.y <= 0) {

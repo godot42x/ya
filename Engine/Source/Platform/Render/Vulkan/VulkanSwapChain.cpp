@@ -121,7 +121,7 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
 void VulkanSwapChain::cleanup()
 {
     if (m_swapChain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(_render->getLogicalDevice(), m_swapChain, nullptr);
+        vkDestroySwapchainKHR(_render->getDevice(), m_swapChain, nullptr);
         m_swapChain = VK_NULL_HANDLE;
     }
 }
@@ -265,7 +265,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
 
 
-    VkResult result = vkCreateSwapchainKHR(_render->getLogicalDevice(), &vkSwapchainCI, nullptr, &m_swapChain);
+    VkResult result = vkCreateSwapchainKHR(_render->getDevice(), &vkSwapchainCI, nullptr, &m_swapChain);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Swap chain creation failed {}", result);
         return false;
@@ -276,9 +276,9 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
     // Get swap chain images
     uint32_t imageCount = -1;
-    vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, nullptr);
+    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, nullptr);
     m_images.resize(imageCount);
-    vkGetSwapchainImagesKHR(_render->getLogicalDevice(), m_swapChain, &imageCount, m_images.data());
+    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, m_images.data());
 
     YA_CORE_INFO("Created swapchain success:{} with  [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
                  (uintptr_t)m_swapChain,
@@ -307,7 +307,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
 VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence, uint32_t &outImageIdx)
 {
-    auto     device = _render->getLogicalDevice();
+    auto     device = _render->getDevice();
     VkResult result = vkAcquireNextImageKHR(device,
                                             m_swapChain,
                                             UINT64_MAX,

@@ -256,7 +256,7 @@ struct VulkanRender : public ya::IRender
     [[nodiscard]] IWindowProvider *getWindowProvider() const { return _windowProvider; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
-    [[nodiscard]] VkDevice         getLogicalDevice() const { return m_LogicalDevice; }
+    [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
     [[nodiscard]] VulkanSwapChain *getSwapChain() const { return _swapChain; }
 

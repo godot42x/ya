@@ -441,7 +441,7 @@ void UnlitMaterialSystem::updateFrameDS(RenderTarget *rt)
     };
 
     VulkanDescriptor::updateSets(
-        render->getLogicalDevice(),
+        render->getDevice(),
         {
             VulkanDescriptor::genBufferWrite(
                 _frameDS,
@@ -482,7 +482,7 @@ void UnlitMaterialSystem::updateMaterialParamDS(VkDescriptorSet ds, UnlitMateria
     };
 
     VulkanDescriptor::updateSets(
-        render->getLogicalDevice(),
+        render->getDevice(),
         {
             VulkanDescriptor::genBufferWrite(
                 ds,
@@ -523,7 +523,7 @@ void UnlitMaterialSystem::updateMaterialResourceDS(VkDescriptorSet ds, UnlitMate
 
 
     VulkanDescriptor::updateSets(
-        render->getLogicalDevice(),
+        render->getDevice(),
         {
             VulkanDescriptor::genImageWrite(ds, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo0, 1),
             VulkanDescriptor::genImageWrite(ds, 1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo1, 1),

@@ -153,6 +153,6 @@ void VulkanDebugUtils::setObjectName(VkObjectType objectType, uint64_t objectHan
     };
 
     if (pfnSetDebugUtilsObjectNameEXT) {
-        VK_CALL(pfnSetDebugUtilsObjectNameEXT(_renderer->getLogicalDevice(), &nameInfo));
+        VK_CALL(pfnSetDebugUtilsObjectNameEXT(_renderer->getDevice(), &nameInfo));
     }
 }

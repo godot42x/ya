@@ -6,8 +6,8 @@
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
-        VK_FREE(Memory, _render->getLogicalDevice(), _imageMemory);
-        VK_DESTROY(Image, _render->getLogicalDevice(), _handle);
+        VK_FREE(Memory, _render->getDevice(), _imageMemory);
+        VK_DESTROY(Image, _render->getDevice(), _handle);
     }
 }
 
@@ -214,12 +214,12 @@ bool VulkanImage::allocate()
         .initialLayout         = toVk(_ci.initialLayout),
     };
 
-    VK_CALL(vkCreateImage(_render->getLogicalDevice(), &imageCreateInfo, nullptr, &_handle));
+    VK_CALL(vkCreateImage(_render->getDevice(), &imageCreateInfo, nullptr, &_handle));
 
 
     // allocate memory
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(_render->getLogicalDevice(), _handle, &memRequirements);
+    vkGetImageMemoryRequirements(_render->getDevice(), _handle, &memRequirements);
     VkMemoryAllocateInfo allocInfo{
         .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext           = nullptr,
@@ -227,8 +227,8 @@ bool VulkanImage::allocate()
         .memoryTypeIndex = static_cast<uint32_t>(_render->getMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits)),
     };
 
-    VK_CALL(vkAllocateMemory(_render->getLogicalDevice(), &allocInfo, nullptr, &_imageMemory));
-    VK_CALL(vkBindImageMemory(_render->getLogicalDevice(), _handle, _imageMemory, 0));
+    VK_CALL(vkAllocateMemory(_render->getDevice(), &allocInfo, nullptr, &_imageMemory));
+    VK_CALL(vkBindImageMemory(_render->getDevice(), _handle, _imageMemory, 0));
 
     bOwned = true;
     return true;

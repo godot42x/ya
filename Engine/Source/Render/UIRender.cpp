@@ -239,7 +239,7 @@ bool F2DRender::initialize(uint32_t maxVertices, uint32_t maxIndices)
     s_data.textureSlots.resize(s_data.maxTextureSlots);
 
     // Create buffers
-    VkDevice         device         = _render->getLogicalDevice();
+    VkDevice         device         = _render->getDevice();
     VkPhysicalDevice physicalDevice = _render->getPhysicalDevice();
 
     // Vertex buffer
@@ -296,7 +296,7 @@ void F2DRender::shutdown()
         return;
     }
 
-    VkDevice device = _render->getLogicalDevice();
+    VkDevice device = _render->getDevice();
     vkDeviceWaitIdle(device);
     // Cleanup buffers
     if (s_data.vertexBufferMapped) {

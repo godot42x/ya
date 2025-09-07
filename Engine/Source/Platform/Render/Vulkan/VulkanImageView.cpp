@@ -25,11 +25,11 @@ VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image,
         },
     };
 
-    VK_CALL(vkCreateImageView(_render->getLogicalDevice(), &ci, _render->getAllocator(), &_handle));
+    VK_CALL(vkCreateImageView(_render->getDevice(), &ci, _render->getAllocator(), &_handle));
 }
 
 VulkanImageView::~VulkanImageView()
 {
     // Note: image view is destroyed along with the image
-    VK_DESTROY(ImageView, _render->getLogicalDevice(), _handle);
+    VK_DESTROY(ImageView, _render->getDevice(), _handle);
 }

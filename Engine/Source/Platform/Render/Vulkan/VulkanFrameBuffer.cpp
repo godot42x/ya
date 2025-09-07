@@ -15,7 +15,7 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
     {
         bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getFormat());
         _imageViews[i] = VulkanUtils::createImageView(
-            render->getLogicalDevice(),
+            render->getDevice(),
             _images[i]->getHandle(),
             _images[i]->getFormat(),
             bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
@@ -31,7 +31,7 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
         .layers          = 1,
 
     };
-    VkResult result = vkCreateFramebuffer(render->getLogicalDevice(), &createInfo, nullptr, &_framebuffer);
+    VkResult result = vkCreateFramebuffer(render->getDevice(), &createInfo, nullptr, &_framebuffer);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Failed to create framebuffer: {}", result);
         return false;
@@ -43,10 +43,10 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
 
 void VulkanFrameBuffer::clean()
 {
-    VK_DESTROY(Framebuffer, render->getLogicalDevice(), _framebuffer);
+    VK_DESTROY(Framebuffer, render->getDevice(), _framebuffer);
     for (auto &imageView : _imageViews)
     {
-        VK_DESTROY(ImageView, render->getLogicalDevice(), imageView);
+        VK_DESTROY(ImageView, render->getDevice(), imageView);
     }
     for (auto &image : _images)
     {

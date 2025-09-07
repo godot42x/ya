@@ -128,7 +128,7 @@ struct FQuadData
         };
 
 
-        logicalDevice = render->getLogicalDevice();
+        logicalDevice = render->getDevice();
         pipeline      = new VulkanPipeline(render, renderPass, layout);
         pipeline->recreate(GraphicsPipelineCreateInfo{
             .subPassRef       = 0,
