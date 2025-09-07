@@ -101,10 +101,17 @@ struct Material
 
     const TextureView *getTextureView(uint32_t type) const;
     void               setTextureView(uint32_t type, Texture *texture, VulkanSampler *sampler);
-    void               setTextureViewEnable(uint32_t type, bool benable);
-    void               setTextureViewUVTranslation(uint32_t type, const glm::vec2 &uvTranslation);
-    void               setTextureViewUVScale(uint32_t type, const glm::vec2 &uvScale);
-    void               setTextureViewUVRotation(uint32_t type, float uvRotation);
+    void               setTextureViewSampler(uint32_t type, VulkanSampler *sampler)
+    {
+        if (hasTexture(type)) {
+            _textures[type].sampler = sampler;
+            setResourceDirty();
+        }
+    }
+    void setTextureViewEnable(uint32_t type, bool benable);
+    void setTextureViewUVTranslation(uint32_t type, const glm::vec2 &uvTranslation);
+    void setTextureViewUVScale(uint32_t type, const glm::vec2 &uvScale);
+    void setTextureViewUVRotation(uint32_t type, float uvRotation);
 
 
     std::string getLabel() const { return _label; }
@@ -187,6 +194,13 @@ struct MaterialFactoryInternal
         auto *mat = createMaterial<T>();
         static_cast<Material *>(mat)->setLabel(label);
         return mat;
+    }
+
+    template <typename T>
+        requires std::is_base_of<Material, T>::value
+    const std::vector<std::shared_ptr<Material>> &getMaterials() const
+    {
+        return _materials.at(getTypeID<T>());
     }
 
 

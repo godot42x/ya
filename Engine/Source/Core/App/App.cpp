@@ -138,7 +138,7 @@ static FPSControl fpsCtrl;
 
 void imcFpsControl(FPSControl &fpsCtrl)
 {
-    if (ImGui::CollapsingHeader("FPS Control", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("FPS Control", 0)) {
 
         ImGui::Text("FPS Limit: %.1f", fpsCtrl.fpsLimit);
 
@@ -164,7 +164,7 @@ bool imcEditorCamera(FreeCamera &camera)
     bool bChanged = false;
 
     // Add camera control settings to UI
-    if (ImGui::CollapsingHeader("Camera Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Camera Controls", 0)) {
         if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
             bChanged = true;
         }
@@ -186,7 +186,7 @@ bool imcEditorCamera(FreeCamera &camera)
 
 void imcClearValues()
 {
-    if (ImGui::CollapsingHeader("Clear Values", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Clear Values", 0)) {
         ImGui::ColorEdit4("Color Clear Value", colorClearValue.color.float32);
         ImGui::DragFloat("Depth Clear Value", &depthClearValue.depthStencil.depth, 0.01f, 0.0f, 1.0f);
     }
@@ -848,7 +848,7 @@ void App::onRender(float dt)
 #pragma region ImGui
     imgui.beginFrame();
     {
-        if (ImGui::CollapsingHeader("Render 2D Debug", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader("Render 2D Debug", 0)) {
             ImGui::DragFloat3("pos1", glm::value_ptr(pos1), 0.1f);
             ImGui::DragFloat3("pos2", glm::value_ptr(pos2), 1.f);
             ImGui::DragFloat3("pos3", glm::value_ptr(pos3), 1.f);
@@ -899,7 +899,7 @@ void App::onRender(float dt)
         if (auto *firstCube = _scene->getEntityByID(1)) {
             auto tc = firstCube->getComponent<TransformComponent>();
 
-            if (ImGui::CollapsingHeader("First Cube Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("First Cube Transform", 0)) {
                 ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
                 ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 1.f);
                 ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f, 0.1f);
@@ -908,10 +908,7 @@ void App::onRender(float dt)
             tc->bDirty = true;
         }
 
-        static int sampler = 0;
-        if (ImGui::Combo("Default Sampler", &sampler, "linear\0nearest\0\0")) {
-            _defaultSampler = (sampler == 0) ? _linearSampler : _nearestSampler;
-        }
+
 
         if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (uint32_t i = 0; i < _materials.size(); i++) {
@@ -928,13 +925,27 @@ void App::onRender(float dt)
                         bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
                         bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
                         for (uint32_t i = 0; i < mat->_textures.size(); i++) {
-                            if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                                bDirty |= ImGui::Checkbox(std::format("Texture{}  Enable", i).c_str(), &mat->_textures[i].bEnable);
-                                bDirty |= ImGui::DragFloat2(std::format("Texture{} Offset", i).c_str(), glm::value_ptr(mat->_textures[i].uvTranslation), 0.01f);
-                                bDirty |= ImGui::DragFloat(std::format("Texture{} Scale", i).c_str(), glm::value_ptr(mat->_textures[i].uvScale), 0.01f, 0.01f, 10.0f);
-                                static constexpr const auto pi = glm::pi<float>();
-                                bDirty |= ImGui::DragFloat(std::format("Texture{} Rotation", i).c_str(), &mat->_textures[i].uvRotation, pi / 3600, -pi, pi);
+                            // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                            auto &tv    = mat->_textures[i];
+                            auto  label = tv.texture->getLabel();
+                            if (label.empty()) {
+                                label = tv.texture->getFilepath();
                             }
+                            ImGui::Text("Texture %d: %s", i, label.c_str());
+                            bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+                            bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+                            bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+                            static constexpr const auto pi = glm::pi<float>();
+                            bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+
+
+                            int sampler = tv.sampler == _linearSampler.get() ? 0 : 1;
+                            if (ImGui::Combo(std::format("Sampler##{}", i).c_str(), &sampler, "linear\0nearest\0\0")) {
+                                // YA_CORE_INFO("Change default sampler to {}", (sampler == 0) ? "linear" : "nearest");
+                                tv.sampler = (sampler == 0) ? _linearSampler.get() : _nearestSampler.get();
+                                bDirty     = true;
+                            }
+                            // }
                         }
                         if (bDirty) {
                             unlitMat->setParamDirty(true);
@@ -944,7 +955,7 @@ void App::onRender(float dt)
                 else if (mat->getTypeID() == base)
                 {
                     auto *baseMat = static_cast<BaseMaterial *>(mat);
-                    if (ImGui::CollapsingHeader(std::format("Material{} ({})", i, baseMat->getLabel()).c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                    if (ImGui::CollapsingHeader(std::format("Material{} ({})", i, baseMat->getLabel()).c_str()))
                     {
                         // use push constant to change color type, no need to mark dirty
                         int colorType = static_cast<int>(baseMat->colorType);
@@ -1047,14 +1058,17 @@ void App::onSceneInit(Scene *scene)
     color_t red{.r = 255, .g = 0, .b = 0, .a = 255};
     color_t green{.r = 0, .g = 255, .b = 0, .a = 255};
     color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
-    _whiteTexture      = makeShared<ya::Texture>(1, 1, std::vector<color_t>{white});
-    _blackTexture      = makeShared<ya::Texture>(1, 1, std::vector<color_t>{black});
+    _whiteTexture = makeShared<ya::Texture>(1, 1, std::vector<color_t>{white});
+    _whiteTexture->setLabel("white");
+    _blackTexture = makeShared<ya::Texture>(1, 1, std::vector<color_t>{black});
+    _blackTexture->setLabel("black");
     _multiPixelTexture = makeShared<ya::Texture>(2, 2, std::vector<color_t>{
                                                            white,
-                                                           black,
+                                                           blue,
+                                                           blue,
                                                            white,
-                                                           black,
                                                        }); // 2x2 texture with 4 different colors
+    _multiPixelTexture->setLabel("multi-pixel");
     AssetManager::get()->loadTexture("face", faceTexturePath);
     AssetManager::get()->loadTexture("uv1", uv1TexturePath);
 
@@ -1092,7 +1106,7 @@ void App::onSceneInit(Scene *scene)
 
     auto *unlitMaterial2 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit2");
     unlitMaterial2->setTextureView(UnlitMaterial::BaseColor0, AssetManager::get()->getTextureByName("uv1").get(), _defaultSampler.get());
-    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor1, _blackTexture.get(), _defaultSampler.get());
+    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor1, _whiteTexture.get(), _defaultSampler.get());
     unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
     unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
     unlitMaterial2->setMixValue(0.5);
@@ -1103,6 +1117,26 @@ void App::onSceneInit(Scene *scene)
     _materials.push_back(unlitMaterial2);
 
 
+
+    {
+        auto *unlitMaterial3 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit3");
+        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor0, _whiteTexture.get(), _defaultSampler.get());
+        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor1, AssetManager::get()->getTextureByName("uv1").get(), _defaultSampler.get());
+        unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
+        unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
+        unlitMaterial3->setMixValue(0.5);
+        unlitMaterial3->setTextureViewUVScale(UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
+        _materials.push_back(unlitMaterial3);
+
+        auto plane = scene->createEntity("Plane");
+        auto tc    = plane->addComponent<TransformComponent>();
+        tc->setScale(glm::vec3(1000.f, 0.1f, 1000.f));
+        tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
+        auto umc = plane->addComponent<UnlitMaterialComponent>();
+        umc->addMesh(cubeMesh.get(), unlitMaterial3);
+    }
+
+
     float offset   = 3.f;
     float rotation = 10.f;
     int   count    = 100;
@@ -1110,7 +1144,7 @@ void App::onSceneInit(Scene *scene)
     YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
 
     int index            = 0;
-    int maxMaterialIndex = _materials.size();
+    int maxMaterialIndex = _materials.size() - 1;
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
             for (int k = 0; k < alpha; ++k) {

@@ -26,10 +26,12 @@ struct ColorRGBA
 
 struct Texture
 {
-    EFormat::T  _format;
-    uint32_t    _width    = 0;
-    uint32_t    _height   = 0;
-    std::string _filepath = "None";
+    EFormat::T _format;
+    uint32_t   _width  = 0;
+    uint32_t   _height = 0;
+
+    std::string _label;
+    std::string _filepath;
 
     std::shared_ptr<VulkanImage>     image;
     std::shared_ptr<VulkanImageView> imageView;
@@ -45,6 +47,10 @@ struct Texture
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }
     EFormat::T getFormat() const { return _format; }
+
+    void               setLabel(const std::string &label) { _label = label; }
+    const std::string &getLabel() const { return _label; }
+    const std::string &getFilepath() const { return _filepath; }
 
   private:
 

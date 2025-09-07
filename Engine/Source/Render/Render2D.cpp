@@ -167,7 +167,7 @@ struct FQuadData
             .rasterizationState = RasterizationState{
                 .polygonMode = EPolygonMode::Fill,
                 .cullMode    = ECullMode::Back,
-                .frontFace   = EFrontFaceType::ClockWise,
+                .frontFace   = EFrontFaceType::CounterClockWise,
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
@@ -411,20 +411,26 @@ void Render2D::makeSprite(const glm::vec3 &position, const glm::vec2 &size, cons
         w = h * aspect;
     }
 
-    // left -> -1, right -> 1
-    // bottom -> -1 top-> 1
-    glm::mat4 proj = glm::ortho(0.0f,
-                                w,
+    /**
+    LH: left-handed coordinate system
+    RH: right-handed coordinate system
+    NO: (-1,1) depth range (OpenGL style)
+    ZO: (0,1) depth range (DirectX style)
+     */
 
-                                // because glm use bottom-left as origin, we need to flip the y axis
-                                0.0f,
-                                h,
+    // from LT (0,0) to RB (w,h)
+    glm::mat4 proj = glm::orthoLH_NO(0.0f,
+                                     w,
 
-                                -1.0f,
-                                1.0f);
+                                     // because glm use bottom-left as origin, we need to flip the y axis
+                                     h,
+                                     0.0f,
+
+                                     -1.0f,
+                                     1.0f);
     // glm::lookAt()
 
-    glm::mat4 mvp = proj *
+    glm::mat4 mvp = glm::inverse(proj) *
                     // glm::inverse(view) *
                     // model
                     glm::translate(glm::mat4(1.f), position) *
