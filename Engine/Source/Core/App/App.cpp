@@ -50,7 +50,7 @@
 #include "ECS/System/BaseMaterialSystem.h"
 
 
-#define ONLY_2D
+#define ONLY_2D 0
 
 
 namespace ya
@@ -390,7 +390,7 @@ void App::init(AppCreateInfo ci)
 
     // use the RT instead of framebuffers directly
     rt = new RenderTarget(renderpass);
-#ifndef ONLY_2D
+#if !ONLY_2D
     rt->addMaterialSystem<BaseMaterialSystem>();
     rt->addMaterialSystem<UnlitMaterialSystem>();
 #endif
@@ -833,19 +833,10 @@ void App::onRender(float dt)
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf);
-    Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
-    Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
-    Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
-    Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
-    // Render2D::makeSprite({10, 0, 0}, glm::
-    // Render2D::makeSprite({20, 0, 0}, glm::vec2(10, 10), glm::vec4(1.0f));
-    // int count = 10;
-    // for (int i = 0; i < count; i++) {
-    //     Render2D::makeSprite(
-    //         glm::vec3(i * 100, i * 100, 0),
-    //         glm::vec2(100.0f, 100.0f),
-    //         glm::vec4(sin(i), cos(i), sin(float(i)), 1));
-    // }
+    // Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
+    // Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
+    // Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
+    // Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
     Render2D::end();
 
 
@@ -900,10 +891,10 @@ void App::onRender(float dt)
                 ImGui::StyleColorsLight();
             }
         }
-        if (auto *firstCube = _scene->getEntityByID(1); firstCube && firstCube->hasComponent<TransformComponent>()) {
-            auto tc = firstCube->getComponent<TransformComponent>();
+        if (auto *random = _scene->getEntityByID(10); random && random->hasComponent<TransformComponent>()) {
+            auto tc = random->getComponent<TransformComponent>();
 
-            if (ImGui::CollapsingHeader("First Cube Transform", 0)) {
+            if (ImGui::CollapsingHeader("Random Cube Transform", 0)) {
                 ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
                 ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 1.f);
                 ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f, 0.1f);
@@ -1085,7 +1076,7 @@ void App::onSceneInit(Scene *scene)
     camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 
 
-#ifndef ONLY_2D
+#if !ONLY_2D
     auto *baseMaterial0      = MaterialFactory::get()->createMaterial<BaseMaterial>("base0");
     auto *baseMaterial1      = MaterialFactory::get()->createMaterial<BaseMaterial>("base1");
     baseMaterial0->colorType = BaseMaterial::EColor::Normal;
@@ -1135,7 +1126,7 @@ void App::onSceneInit(Scene *scene)
 
         auto plane = scene->createEntity("Plane");
         auto tc    = plane->addComponent<TransformComponent>();
-        tc->setScale(glm::vec3(1000.f, 0.1f, 1000.f));
+        tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
         auto umc = plane->addComponent<UnlitMaterialComponent>();
         umc->addMesh(cubeMesh.get(), unlitMaterial3);

@@ -86,10 +86,10 @@ void GeometryUtils::makeCube(
 
     if (bGenTexcoords) {
         for (int i = 0; i < outVertices.size(); i += 4) {
-            outVertices[i + 0].texCoord0 = {0.0f, 1.0f};
-            outVertices[i + 1].texCoord0 = {1.0f, 1.0f};
-            outVertices[i + 2].texCoord0 = {1.0f, 0.0f};
-            outVertices[i + 3].texCoord0 = {0.0f, 0.0f};
+            outVertices[i + 0].texCoord0 = {0.0f, 0.0f}; // LB
+            outVertices[i + 1].texCoord0 = {1.0f, 0.0f}; // RB
+            outVertices[i + 2].texCoord0 = {1.0f, 1.0f}; // RT
+            outVertices[i + 3].texCoord0 = {0.0f, 1.0f}; // LT
         }
     }
 

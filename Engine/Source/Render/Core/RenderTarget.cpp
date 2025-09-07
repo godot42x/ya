@@ -278,6 +278,7 @@ const glm::mat4 RenderTarget::getProjectionMatrix() const
         // use app camera
         return App::get()->camera.getProjectionMatrix();
     }
+    ret[1][1] *= -1;
     return ret;
 }
 
@@ -305,7 +306,8 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
             if (cam->hasComponent<CameraComponent>()) {
                 auto cc = cam->getComponent<CameraComponent>();
                 proj    = cc->getProjection();
-                view    = cc->getView();
+                proj[1][1] *= -1;
+                view = cc->getView();
                 return;
             }
         }
@@ -313,6 +315,7 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
 
     // use app camera
     proj = App::get()->camera.getProjectionMatrix();
+    proj[1][1] *= -1;
     view = App::get()->camera.getViewMatrix();
 }
 
