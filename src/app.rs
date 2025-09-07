@@ -1,38 +1,71 @@
-use std::sync::Arc;
+use std::{path::PathBuf, rc::Rc, sync::Arc};
 
+use gltf::camera;
 pub(crate) use log::{error, info, warn};
 use winit::{
-    application::ApplicationHandler, event_loop, keyboard::NamedKey, window::WindowAttributes,
+    application::ApplicationHandler, dpi::PhysicalSize, event_loop, keyboard::NamedKey,
+    window::WindowAttributes,
 };
 
-use crate::{asset::Vertex, state::State};
+use crate::{
+    asset::{Model, Vertex},
+    camera::Camera,
+    state::State,
+};
 
 pub(crate) enum CustomEvent {
     None,
 }
 
-pub(crate) struct RenderData {
+pub(crate) struct RenderContext {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u16>,
     pub mouse_pos: (f32, f32),
+    pub models: Vec<Model>,
+    pub(crate) camera: Box<dyn Camera>,
 }
 
 pub struct App {
     state: Option<State>,
-    render_data: RenderData,
+    #[allow(dead_code)]
+    missed_size: Arc<PhysicalSize<u32>>,
+
     size: (u32, u32),
+
+    pub render_ctx: RenderContext,
+    last_frame_time: std::time::Instant,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             state: None,
-            render_data: RenderData {
+            missed_size: Arc::new(PhysicalSize::new(800, 600)),
+            render_ctx: RenderContext {
                 vertices: vec![],
                 indices: vec![],
                 mouse_pos: (0.0, 0.0),
+                models: vec![],
+                camera: Box::new(crate::camera::FreeCamera::new(
+                    glam::Vec3::new(0.0, 0.0, 5.0),
+                    glam::Vec3::new(0.0, 0.0, 0.0),
+                    45.0,
+                    1.6 / 0.9,
+                    0.1,
+                    100.0,
+                )),
+                // camera: Box::new(crate::camera::LookCamera::new(
+                //     glam::Vec3::new(0.0, 0.0, 5.0),
+                //     glam::Vec3::new(0.0, 0.0, 0.0),
+                //     glam::Vec3::new(0.0, 1.0, 0.0),
+                //     45.0f32.to_radians(),
+                //     800.0 / 600.0,
+                //     0.1,
+                //     100.0,
+                // )),
             },
             size: (800, 600),
+            last_frame_time: std::time::Instant::now(),
         }
     }
 }
@@ -40,36 +73,47 @@ impl Default for App {
 impl ApplicationHandler<CustomEvent> for App {
     fn resumed(&mut self, event_loop: &event_loop::ActiveEventLoop) {
         info!("App resumed - creating window"); // 添加调试
-        let window = Arc::new(
-            event_loop
-                .create_window(WindowAttributes::default())
-                .unwrap(),
-        );
+        let attr = WindowAttributes::default()
+            .with_title("Neon-RS Application")
+            .with_inner_size(winit::dpi::PhysicalSize::new(800, 600));
+        let window = Arc::new(event_loop.create_window(attr).unwrap());
 
-        let state = pollster::block_on(State::new(window.clone()));
-        self.state = Some(state);
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {
+                wasm_bindgen_futures::spawn_local(async move{
+                    let window_cloned = window.clone();
+                    let stete = State::new(window.clone()).await;
+                    self.state = Some(state);
+                    let missed_size = self.missed_size.clone();
+                    if let Some(resize) = self.state.missed_size {
+                        window.set_inner_size(resize);
+                    }
+                });
+            }else{
+                let state = pollster::block_on(State::new(window.clone()));
+                self.state = Some(state);
+            }
+        }
+
+        let current_dir = std::env::current_dir().unwrap();
+        info!("Current working directory: {}", current_dir.display());
+
+        let model = Model::load(
+            &self.state.as_ref().unwrap().device,
+            &self.state.as_ref().unwrap().queue,
+            &PathBuf::from("res/model/suzanne.glb"),
+        )
+        .unwrap();
+        self.render_ctx.models.push(model);
+
         window.request_redraw();
         info!("Window created and state initialized"); // 添加调试
-    }
-
-    fn device_event(
-        &mut self,
-        event_loop: &event_loop::ActiveEventLoop,
-        device_id: winit::event::DeviceId,
-        event: winit::event::DeviceEvent,
-    ) {
-        match event {
-            winit::event::DeviceEvent::MouseMotion { delta } => {
-                // println!("mouse move: {:?}", delta);
-            }
-            _ => {}
-        }
     }
 
     fn window_event(
         &mut self,
         event_loop: &event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
         // println!(
@@ -78,34 +122,42 @@ impl ApplicationHandler<CustomEvent> for App {
         // ); // 添加调试
 
         use winit::event::WindowEvent;
-        let rd_state = self.state.as_mut().unwrap();
-        match event {
+        let s = self.state.as_mut().unwrap();
+        match &event {
             WindowEvent::CloseRequested => {
                 println!("Close requested");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
                 // println!("Redraw requested");
-                rd_state.render(&self.render_data);
-                rd_state.window.request_redraw();
+                let now = std::time::Instant::now();
+                let dt = now.duration_since(self.last_frame_time).as_secs_f32();
+                self.last_frame_time = now;
+
+                self.render_ctx.camera.update(dt);
+                s.render(&self.render_ctx);
+                s.window.request_redraw();
             }
             WindowEvent::Resized(size) => {
                 info!("Window resized: {:?}", size);
-                self.size = (size.width, size.height);
-                rd_state.resize(size);
+                if size.width == 0 || size.height == 0 {
+                    // Minimized
+                } else {
+                    self.size = (size.width, size.height);
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // println!("Cursor moved to: {:?}", position);
-                self.render_data.mouse_pos = (position.x as f32, position.y as f32);
+                self.render_ctx.mouse_pos = (position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 // info!("Mouse Input: {:?} {:?}", button, state);
-                if button == winit::event::MouseButton::Left
-                    && state == winit::event::ElementState::Released
+                if *button == winit::event::MouseButton::Left
+                    && *state == winit::event::ElementState::Released
                 {
                     info!(
                         "Mouse Left Click at position: {:?}",
-                        self.render_data.mouse_pos
+                        self.render_ctx.mouse_pos
                     );
 
                     let orthographic = glam::Mat4::orthographic_lh(
@@ -118,41 +170,55 @@ impl ApplicationHandler<CustomEvent> for App {
                     );
                     let pos = orthographic
                         * glam::Vec4::new(
-                            self.render_data.mouse_pos.0,
-                            self.render_data.mouse_pos.1,
+                            self.render_ctx.mouse_pos.0,
+                            self.render_ctx.mouse_pos.1,
                             0.0,
                             1.0,
                         );
 
-                    self.render_data.vertices.push(Vertex {
+                    self.render_ctx.vertices.push(Vertex {
                         position: [pos.x, pos.y, 0.0],
                         color: [1.0, 0.0, 0.0, 1.0],
                         normal: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                     });
-                    info!("Total vertices: {}", self.render_data.vertices.len());
+                    info!("Total vertices: {}", self.render_ctx.vertices.len());
                 }
             }
-            WindowEvent::KeyboardInput { event, .. } => {
-                info!("Keyboard Input: {:?}", event);
-                match event.logical_key {
-                    winit::keyboard::Key::Named(key) => match key {
-                        NamedKey::Escape => {
-                            info!("Escape pressed, exiting.");
-                            event_loop.exit();
-                        }
-                        _ => {
-                            info!("Other named key: {:?}", key);
-                        }
-                    },
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
+                // info!("Keyboard Input: {:?}", &key_event);
+                match &key_event.logical_key {
+                    winit::keyboard::Key::Named(NamedKey::Escape) => {
+                        info!("Escape pressed, exiting.");
+                        event_loop.exit();
+                    }
                     _ => {
-                        info!("Non-named key pressed");
+                        info!("Other key: {:?}", &key_event.logical_key);
                     }
                 }
             }
             _ => {
                 // println!("Other window event: {:?}", std::mem::discriminant(&event));
             }
+        }
+
+        self.render_ctx.camera.on_window_event(&event);
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        self.render_ctx.camera.on_device_event(&event);
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta: _ } => {
+                // println!("mouse move: {:?}", delta);
+            }
+            _ => {}
         }
     }
 }

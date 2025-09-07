@@ -1,12 +1,13 @@
 mod app;
 mod asset;
+mod camera;
 mod ecs;
 mod scene;
 mod state;
 
 use std::sync::Arc;
 
-pub(crate) use log::{error, info, warn};
+pub(crate) use log::{info, warn};
 use winit::{
     application::ApplicationHandler, event_loop, keyboard::NamedKey, window::WindowAttributes,
 };
@@ -49,6 +50,46 @@ pub fn init_logger() {
                 .filter_module("wgpu_core", log::LevelFilter::Info)
                 .filter_module("wgpu_hal", log::LevelFilter::Error)
                 .filter_module("naga", log::LevelFilter::Error)
+                // .format(|buf, record| {
+                //     use std::io::Write;
+
+                //     // 获取当前时间
+                //     let now = std::time::SystemTime::now()
+                //         .duration_since(std::time::UNIX_EPOCH)
+                //         .unwrap();
+                //     let timestamp = format!("{:02}:{:02}:{:02}.{:03}",
+                //         (now.as_secs() % 86400) / 3600,  // 小时
+                //         (now.as_secs() % 3600) / 60,     // 分钟
+                //         now.as_secs() % 60,              // 秒
+                //         now.subsec_millis()              // 毫秒
+                //     );
+
+                //     // 获取文件名（不包含路径）
+                //     let file = record.file()
+                //         .and_then(|f| std::path::Path::new(f).file_name())
+                //         .and_then(|f| f.to_str())
+                //         .unwrap_or("unknown");
+
+                //     // 使用 ANSI 颜色代码
+                //     let (level_color, level_text) = match record.level() {
+                //         log::Level::Error => ("\x1b[31m", "ERROR"),  // 红色
+                //         log::Level::Warn =>  ("\x1b[33m", "WARN"),   // 黄色
+                //         log::Level::Info =>  ("\x1b[32m", "INFO"),   // 绿色
+                //         log::Level::Debug => ("\x1b[34m", "DEBUG"),  // 蓝色
+                //         log::Level::Trace => ("\x1b[35m", "TRACE"),  // 洋红色
+                //     };
+
+                //     writeln!(
+                //         buf,
+                //         "\x1b[36m[{}]\x1b[0m \x1b[90m[{}:{}]\x1b[0m {}{}\x1b[0m: {}",
+                //         timestamp,                        // 青色时间戳
+                //         file,
+                //         record.line().unwrap_or(0),     // 暗灰色文件位置
+                //         level_color,                     // 级别颜色
+                //         level_text,                      // 级别文本
+                //         record.args()                    // 重置 + 消息
+                //     )
+                // })
                 .parse_default_env()
                 .init();
         }

@@ -1,6 +1,8 @@
-use crate::app::RenderData;
+/*  */
+use crate::app::RenderContext;
 use crate::*;
 use std::mem::size_of;
+use std::rc::Rc;
 use std::{ops::Range, sync::Arc};
 use wgpu::wgc::device::queue;
 use wgpu::{include_wgsl, util::RenderEncoder, PipelineCompilationOptions};
@@ -9,13 +11,24 @@ use winit::window::Window;
 pub struct State {
     pub window: Arc<Window>,
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
-    surface_format: wgpu::TextureFormat,
+    config: wgpu::SurfaceConfiguration,
 
     pipeline: Option<wgpu::RenderPipeline>,
+    depth_texture: Option<wgpu::Texture>,
     vertex_buffer: Option<wgpu::Buffer>,
+}
+
+#[repr(C, align(16))]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct PushConstant {
+    model: glam::Mat4,
+    view: glam::Mat4,
+    proj: glam::Mat4,
+    enable: i32,
+    pad: [i32; 3],
 }
 
 impl State {
@@ -41,7 +54,14 @@ impl State {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::PUSH_CONSTANTS,
-                required_limits: wgpu::Limits::default(),
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits {
+                        max_push_constant_size: (size_of::<char>() * 64) as u32, // 64 bytes
+                        ..wgpu::Limits::default()
+                    }
+                },
                 label: None,
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
@@ -62,14 +82,27 @@ impl State {
             });
         let size = window.inner_size();
 
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            // Request compatibility with the sRGB-format texture view we‘re going to create later.
+            view_formats: vec![surface_format.add_srgb_suffix()],
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            width: size.width,
+            height: size.height,
+            desired_maximum_frame_latency: 2,
+            present_mode: wgpu::PresentMode::AutoVsync,
+        };
+
         let mut state = State {
             window,
             surface,
             device,
             queue,
-            surface_format,
+            config: surface_config,
             size,
             pipeline: None,
+            depth_texture: None,
             vertex_buffer: None,
         };
 
@@ -83,23 +116,13 @@ impl State {
         state.vertex_buffer = Some(vertex_buffer);
 
         state.configure_surface();
+        state.create_depth_texture();
         state.create_pipeline(src);
         state
     }
 
     fn configure_surface(&mut self) {
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: self.surface_format,
-            // Request compatibility with the sRGB-format texture view we‘re going to create later.
-            view_formats: vec![self.surface_format.add_srgb_suffix()],
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.size.width,
-            height: self.size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
-        };
-        self.surface.configure(&self.device, &surface_config);
+        self.surface.configure(&self.device, &self.config);
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -110,13 +133,12 @@ impl State {
         }
     }
 
-    pub fn render(&mut self, data: &RenderData) {
+    pub fn render(&mut self, ctx: &RenderContext) {
         self.queue.write_buffer(
             self.vertex_buffer.as_ref().unwrap(),
             0,
-            bytemuck::cast_slice(data.vertices.as_slice()),
+            bytemuck::cast_slice(ctx.vertices.as_slice()),
         );
-
         let surface_texture = self
             .surface
             .get_current_texture()
@@ -130,56 +152,95 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("default"),
             });
-        let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("default"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
+
+        {
+            let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("default"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self
+                        .depth_texture
+                        .as_ref()
+                        .unwrap()
+                        .create_view(&wgpu::TextureViewDescriptor::default()),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
                     }),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
-        rp.set_pipeline(self.pipeline.as_ref().unwrap());
-        let vertex_count = data.vertices.len();
-        rp.set_viewport(
-            0.0,
-            0.0,
-            self.size.width as f32,
-            self.size.height as f32,
-            0.0,
-            1.0,
-        );
-        if vertex_count > 0 {
-            rp.set_vertex_buffer(
-                0,
-                self.vertex_buffer.as_ref().unwrap().slice(Range {
-                    start: 0,
-                    end: (size_of::<Vertex>() * vertex_count) as u64,
+                    stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            rp.set_pipeline(self.pipeline.as_ref().unwrap());
+            rp.set_viewport(
+                0.0,
+                0.0,
+                self.size.width as f32,
+                self.size.height as f32,
+                0.0,
+                1.0,
             );
+            let vertex_count = ctx.vertices.len();
+            if vertex_count > 0 {
+                rp.set_vertex_buffer(
+                    0,
+                    self.vertex_buffer.as_ref().unwrap().slice(Range {
+                        start: 0,
+                        end: (size_of::<Vertex>() * vertex_count) as u64,
+                    }),
+                );
 
-            rp.draw(
-                Range {
-                    start: 0,
-                    end: vertex_count as u32,
-                },
-                Range { start: 0, end: 1 },
-            );
+                let ps = PushConstant {
+                    model: glam::Mat4::IDENTITY,
+                    view: ctx.camera.get_view().inverse(),
+                    proj: ctx.camera.get_projection(),
+                    enable: 0,
+                    pad: [0; 3],
+                };
+
+                rp.set_push_constants(wgpu::ShaderStages::all(), 0, bytemuck::bytes_of(&ps));
+
+                rp.draw(
+                    Range {
+                        start: 0,
+                        end: vertex_count as u32 - (vertex_count % 3) as u32,
+                    },
+                    Range { start: 0, end: 1 },
+                );
+            }
+
+            for model in ctx.models.iter() {
+                for mesh in model.meshes.iter() {
+                    rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    rp.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    let ps = PushConstant {
+                        model: glam::Mat4::IDENTITY,
+                        view: ctx.camera.get_view().inverse(),
+                        proj: ctx.camera.get_projection(),
+                        enable: 1,
+                        pad: [0; 3],
+                    };
+                    rp.set_push_constants(wgpu::ShaderStages::all(), 0, bytemuck::bytes_of(&ps));
+                    // rp.draw(0..mesh.vertex_buffer.size() as u32, 0..1);
+                    rp.draw_indexed(0..mesh.index_count, 0, 0..1);
+                }
+            }
         }
-
-        drop(rp);
+        // drop(rp); // wrap in {} or expilict drop reference of encoder
         self.queue.submit(std::iter::once(encoder.finish()));
         self.window.pre_present_notify();
         surface_texture.present();
@@ -188,22 +249,22 @@ impl State {
     fn create_pipeline(&mut self, src: wgpu::ShaderModuleDescriptor) {
         let shader = self.device.create_shader_module(src);
 
-        // let pipeline_layout = self
-        //     .device
-        //     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        //         label: Some("Pipeline Layout"),
-        //         bind_group_layouts: &[],
-        //         push_constant_ranges: &[wgpu::PushConstantRange {
-        //             stages: wgpu::ShaderStages::VERTEX,
-        //             range: 0..64,
-        //         }],
-        //     });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Pipeline Layout"),
+                bind_group_layouts: &[],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::all(),
+                    range: 0..std::mem::size_of::<PushConstant>() as u32,
+                }],
+            });
 
         let pl = self
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Render Pipeline"),
-                layout: None,
+                layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
@@ -240,22 +301,34 @@ impl State {
                     module: &shader,
                     entry_point: Some("fs_main"),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: self.surface_format,
+                        format: self
+                            .surface
+                            .get_current_texture()
+                            .expect("Failed to acquire next swap chain texture")
+                            .texture
+                            .format(),
                         blend: Some(wgpu::BlendState::REPLACE),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: PipelineCompilationOptions::default(),
                 }),
                 primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleStrip,
+                    topology: wgpu::PrimitiveTopology::TriangleList,
                     strip_index_format: None,
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: None, //Some(wgpu::Face::Back),
+                    // cull_mode: None,
+                    cull_mode: Some(wgpu::Face::Back),
                     unclipped_depth: false,
                     polygon_mode: wgpu::PolygonMode::Fill,
                     conservative: false,
                 },
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState {
                     count: 1,
                     mask: !0,
@@ -265,5 +338,23 @@ impl State {
                 cache: None,
             });
         self.pipeline = Some(pl);
+    }
+
+    fn create_depth_texture(&mut self) {
+        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Texture"),
+            size: wgpu::Extent3d {
+                width: self.size.width,
+                height: self.size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[wgpu::TextureFormat::Depth24PlusStencil8],
+        });
+        self.depth_texture = Some(depth_texture);
     }
 }
