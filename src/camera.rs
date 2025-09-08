@@ -95,9 +95,9 @@ impl LookCamera {
 impl Camera for FreeCamera {
     fn get_view(&self) -> glam::Mat4 {
         let rotation = glam::Mat4::from_euler(
-            glam::EulerRot::YXZ,
-            self.rotation.y,
+            glam::EulerRot::XYZ,
             self.rotation.x,
+            self.rotation.y,
             self.rotation.z,
         );
         let translation = glam::Mat4::from_translation(-self.pos);
@@ -105,7 +105,7 @@ impl Camera for FreeCamera {
     }
 
     fn get_projection(&self) -> glam::Mat4 {
-        glam::Mat4::perspective_lh(self.fov_y, self.aspect, self.z_near, self.z_far)
+        glam::Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
     }
 
     fn get_view_projection(&self) -> glam::Mat4 {
@@ -114,13 +114,7 @@ impl Camera for FreeCamera {
 
     fn update(&mut self, dt: f32) {
         // Calculate forward direction from rotation
-        let forward = glam::Vec3::new(
-            self.rotation.y.cos() * self.rotation.x.cos(),
-            self.rotation.x.sin(),
-            self.rotation.y.sin() * self.rotation.x.cos(),
-        )
-        .normalize();
-
+        let forward = self.rotation.normalize();
         let right = forward.cross(glam::Vec3::Y).normalize();
         let up = right.cross(forward).normalize();
 
@@ -201,11 +195,11 @@ impl Camera for FreeCamera {
 
 impl Camera for LookCamera {
     fn get_view(&self) -> glam::Mat4 {
-        glam::Mat4::look_at_lh(self.eye, self.dir, self.up)
+        glam::Mat4::look_at_rh(self.eye, self.dir, self.up)
     }
 
     fn get_projection(&self) -> glam::Mat4 {
-        glam::Mat4::perspective_lh(self.fov_y, self.aspect, self.z_near, self.z_far)
+        glam::Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
     }
 
     fn get_view_projection(&self) -> glam::Mat4 {

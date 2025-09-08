@@ -1,26 +1,25 @@
 // A simple WGSL shader to render a triangle
 
 struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) color : vec4<f32>,
-};
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+}
 
 struct VertexInput {
-    @location(0) position : vec3<f32>,
-    @location(1) color : vec4<f32>,
-    @location(2) normal : vec3<f32>,
-    @location(3) uv : vec2<f32>,
-};
+    @location(0) position: vec3<f32>,
+    @location(1) color: vec4<f32>,
+    @location(2) normal: vec3<f32>,
+    @location(3) uv: vec2<f32>,
+}
 
 struct PushConstant {
     model: mat4x4<f32>,
     view: mat4x4<f32>,
     proj: mat4x4<f32>,
-    opt: i32,
-};
+    color: vec4<f32>,
+}
 
 var<push_constant> pc: PushConstant;
-
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, vi: VertexInput) -> VertexOutput {
@@ -37,21 +36,16 @@ fn vs_main(@builtin(vertex_index) index: u32, vi: VertexInput) -> VertexOutput {
     // );
 
     var output: VertexOutput;
-    if pc.opt == 1 {
-        output.position =  pc.proj * pc.view * pc.model * vec4<f32>(vi.position, 1.0);
-        // output.color = vi.color;
-        // blend normal with vertex color
-        let n = normalize(vi.normal);
-        output.color = vec4<f32>(abs(n), 1.0);
-    }else{
-        output.position = vec4<f32>(vi.position, 1.0);
-        output.color = vi.color;
-    }
+    output.position = pc.proj * pc.view * pc.model * vec4<f32>(vi.position, 1.0);
+    // var n = normalize((pc.model * vec4<f32>(vi.normal, 1.0)));
+    var n = vec4(vi.normal, 1.0) * 0.5 + 0.5;
+    output.color = n * vi.color;
+    output.color = n * pc.color;
 
     return output;
 }
 
 @fragment
-fn fs_main( input: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     return input.color;
 }

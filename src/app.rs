@@ -1,24 +1,19 @@
-use std::{path::PathBuf, rc::Rc, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use gltf::camera;
-pub(crate) use log::{error, info, warn};
+pub(crate) use log::info;
 use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event_loop, keyboard::NamedKey,
     window::WindowAttributes,
 };
 
-use crate::{
-    asset::{Model, Vertex},
-    camera::Camera,
-    state::State,
-};
+use crate::{asset::Model, camera::Camera, pipeline::Vertex2D, state::State};
 
 pub(crate) enum CustomEvent {
     None,
 }
 
 pub(crate) struct RenderContext {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex2D>,
     pub indices: Vec<u16>,
     pub mouse_pos: (f32, f32),
     pub models: Vec<Model>,
@@ -47,12 +42,12 @@ impl Default for App {
                 mouse_pos: (0.0, 0.0),
                 models: vec![],
                 camera: Box::new(crate::camera::FreeCamera::new(
-                    glam::Vec3::new(0.0, 0.0, 5.0),
+                    glam::Vec3::new(0.0, 0.0, -5.0),
                     glam::Vec3::new(0.0, 0.0, 0.0),
                     45.0,
                     1.6 / 0.9,
                     0.1,
-                    100.0,
+                    1000.0,
                 )),
                 // camera: Box::new(crate::camera::LookCamera::new(
                 //     glam::Vec3::new(0.0, 0.0, 5.0),
@@ -145,6 +140,8 @@ impl ApplicationHandler<CustomEvent> for App {
                 } else {
                     self.size = (size.width, size.height);
                 }
+
+                s.resize(*size);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // println!("Cursor moved to: {:?}", position);
@@ -176,10 +173,9 @@ impl ApplicationHandler<CustomEvent> for App {
                             1.0,
                         );
 
-                    self.render_ctx.vertices.push(Vertex {
+                    self.render_ctx.vertices.push(Vertex2D {
                         position: [pos.x, pos.y, 0.0],
                         color: [1.0, 0.0, 0.0, 1.0],
-                        normal: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                     });
                     info!("Total vertices: {}", self.render_ctx.vertices.len());

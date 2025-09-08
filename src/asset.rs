@@ -1,9 +1,11 @@
-use std::{collections::HashMap, panic::PanicHookInfo, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use assimp::import::Importer;
 use bytemuck::{Pod, Zeroable};
 use log::{error, info, warn};
 use wgpu::util::DeviceExt;
+
+use crate::pipeline::Vertex;
 
 pub struct AssetManager {
     models: HashMap<String, Model>,
@@ -16,14 +18,14 @@ pub struct Model {
     pub meshes: Vec<Mesh>,
 }
 
-#[derive(Clone, Copy, Zeroable, Pod)]
-// POD(Plain Old Data) types can be safely converted to and from byte slices.
-#[repr(C)] // memory layout as C-style and must be C-compatible, could send to c safely
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub color: [f32; 4],
-    pub normal: [f32; 3],
-    pub uv: [f32; 2],
+pub trait CommonVertex {
+    fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a>;
+}
+
+pub trait CommonPushConstant: bytemuck::Pod {
+    fn to_bytes(&self) -> &[u8] {
+        bytemuck::bytes_of(self)
+    }
 }
 
 pub struct Mesh {
@@ -331,5 +333,17 @@ impl Mesh {
             vertex_count: vertices.len() as u32,
         };
         Ok(mesh)
+    }
+}
+
+impl Model {
+    pub fn draw<T: CommonPushConstant>(&self, rp: &mut wgpu::RenderPass<'_>, pc: &T) {
+        for mesh in &self.meshes {
+            let transf = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, -10.0));
+            rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            rp.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            rp.set_push_constants(wgpu::ShaderStages::all(), 0, pc.to_bytes());
+            rp.draw_indexed(0..mesh.index_count, 0, 0..1);
+        }
     }
 }

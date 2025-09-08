@@ -1,21 +1,16 @@
 mod app;
 mod asset;
 mod camera;
-mod ecs;
-mod scene;
 mod state;
-
-use std::sync::Arc;
+// mod ecs;
+// mod scene;
+mod pipeline;
 
 pub(crate) use log::{info, warn};
-use winit::{
-    application::ApplicationHandler, event_loop, keyboard::NamedKey, window::WindowAttributes,
-};
+use winit::event_loop;
 
 use crate::{
     app::{App, CustomEvent},
-    asset::Vertex,
-    state::State,
 };
 
 #[cfg(target_arch = "wasm32")]
