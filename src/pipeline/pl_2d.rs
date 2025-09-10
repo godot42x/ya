@@ -92,7 +92,7 @@ impl Pipeline for Pipeline2D {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                // cull_mode: None,
+                // cull_mode: None, // 2D 渲染禁用面剔除
                 cull_mode: Some(wgpu::Face::Back),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -101,7 +101,7 @@ impl Pipeline for Pipeline2D {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: textures.depth.as_ref().unwrap().format(),
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_compare: wgpu::CompareFunction::Less, // 总是通过深度测试
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

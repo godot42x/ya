@@ -6,7 +6,12 @@ use winit::{
     window::WindowAttributes,
 };
 
-use crate::{asset::Model, camera::Camera, pipeline::Vertex2D, state::State};
+use crate::{
+    asset::Model,
+    camera::{Camera, OrthorCamera},
+    pipeline::{Pipeline, Vertex2D},
+    state::State,
+};
 
 pub(crate) enum CustomEvent {
     None,
@@ -18,6 +23,7 @@ pub(crate) struct RenderContext {
     pub mouse_pos: (f32, f32),
     pub models: Vec<Model>,
     pub(crate) camera: Box<dyn Camera>,
+    pub(crate) ortho_camera: OrthorCamera,
 }
 
 pub struct App {
@@ -58,6 +64,7 @@ impl Default for App {
                 //     0.1,
                 //     100.0,
                 // )),
+                ortho_camera: crate::camera::OrthorCamera::new(0.0, 800.0, 0.0, 600.0, 0.0, 1.0),
             },
             size: (800, 600),
             last_frame_time: std::time::Instant::now(),
@@ -142,6 +149,7 @@ impl ApplicationHandler<CustomEvent> for App {
                 }
 
                 s.resize(*size);
+                self.render_ctx.ortho_camera.resize(size.width, size.height);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // println!("Cursor moved to: {:?}", position);
@@ -152,32 +160,20 @@ impl ApplicationHandler<CustomEvent> for App {
                 if *button == winit::event::MouseButton::Left
                     && *state == winit::event::ElementState::Released
                 {
-                    info!(
-                        "Mouse Left Click at position: {:?}",
-                        self.render_ctx.mouse_pos
-                    );
-
-                    let orthographic = glam::Mat4::orthographic_lh(
-                        0.0,
-                        self.size.0 as f32,
-                        self.size.1 as f32,
-                        0.0,
-                        -1.0,
-                        1.0,
-                    );
-                    let pos = orthographic
-                        * glam::Vec4::new(
-                            self.render_ctx.mouse_pos.0,
-                            self.render_ctx.mouse_pos.1,
-                            0.0,
-                            1.0,
-                        );
+                    let cur_pos = self.render_ctx.mouse_pos;
+                    info!("Mouse Left Click at position: {:?}", cur_pos);
 
                     self.render_ctx.vertices.push(Vertex2D {
-                        position: [pos.x, pos.y, 0.0],
+                        position: [cur_pos.0, cur_pos.1, 0.0],
                         color: [1.0, 0.0, 0.0, 1.0],
                         uv: [0.0, 0.0],
                     });
+                    let state = self.state.as_mut().unwrap();
+                    state.queue.write_buffer(
+                        &state.pipeline_2d.as_mut().unwrap().vertex_buffer,
+                        0,
+                        bytemuck::cast_slice(&self.render_ctx.vertices),
+                    );
                     info!("Total vertices: {}", self.render_ctx.vertices.len());
                 }
             }

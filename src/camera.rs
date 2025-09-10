@@ -7,7 +7,7 @@ pub trait Camera {
     fn is_dirty(&self) -> bool {
         false
     }
-    fn update(&mut self, dt: f32);
+    fn update(&mut self, dt: f32) {}
 
     fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool {
         let _ = event;
@@ -43,6 +43,15 @@ pub struct LookCamera {
     z_near: f32,
     z_far: f32,
     is_rotating: bool,
+}
+
+pub struct OrthorCamera {
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+    z_near: f32,
+    z_far: f32,
 }
 
 impl FreeCamera {
@@ -89,6 +98,24 @@ impl LookCamera {
             z_far,
             is_rotating: false,
         }
+    }
+}
+
+impl OrthorCamera {
+    pub fn new(left: f32, right: f32, bottom: f32, top: f32, z_near: f32, z_far: f32) -> Self {
+        Self {
+            left,
+            right,
+            bottom,
+            top,
+            z_near,
+            z_far,
+        }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.right = width as f32;
+        self.top = height as f32;
     }
 }
 
@@ -239,6 +266,43 @@ impl Camera for LookCamera {
             }
             _ => {}
         }
+        false
+    }
+}
+
+impl Camera for OrthorCamera {
+    fn get_view(&self) -> glam::Mat4 {
+        glam::Mat4::IDENTITY
+    }
+
+    fn get_projection(&self) -> glam::Mat4 {
+        glam::Mat4::orthographic_rh(
+            self.left,
+            self.right,
+            self.bottom,
+            self.top,
+            self.z_near,
+            self.z_far,
+        )
+    }
+
+    fn get_view_projection(&self) -> glam::Mat4 {
+        self.get_projection() * self.get_view()
+    }
+
+    fn is_dirty(&self) -> bool {
+        false
+    }
+
+    fn update(&mut self, dt: f32) {}
+
+    fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool {
+        let _ = event;
+        false
+    }
+
+    fn on_device_event(&mut self, event: &winit::event::DeviceEvent) -> bool {
+        let _ = event;
         false
     }
 }

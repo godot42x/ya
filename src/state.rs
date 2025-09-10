@@ -1,5 +1,6 @@
 /*  */
 use crate::app::RenderContext;
+use crate::camera::Camera;
 use crate::pipeline::{Pipeline, Pipeline2D, Pipeline3D, PushConstant, PushConstant2D, Vertex};
 use crate::*;
 use gltf::scene::Transform;
@@ -15,8 +16,8 @@ pub struct State {
     pub queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    pipeline_3d: Option<Pipeline3D>,
-    pipeline_2d: Option<Pipeline2D>,
+    pub pipeline_3d: Option<Pipeline3D>,
+    pub pipeline_2d: Option<Pipeline2D>,
     depth_texture: Option<wgpu::Texture>,
 }
 
@@ -128,13 +129,6 @@ impl State {
     }
 
     pub fn render(&mut self, ctx: &RenderContext) {
-        // copy pass before render pass
-        self.queue.write_buffer(
-            &self.pipeline_2d.as_ref().unwrap().vertex_buffer,
-            0,
-            bytemuck::cast_slice(ctx.vertices.as_slice()),
-        );
-
         let surface_texture = self
             .surface
             .get_current_texture()
@@ -193,27 +187,26 @@ impl State {
                     0.0,
                     1.0,
                 );
+                let mut orthor = glam::Mat4::orthographic_lh(
+                    0.0,
+                    self.config.width as f32,
+                    self.config.height as f32,
+                    0.0,
+                    0.0,
+                    1.0,
+                );
+                // orthor.y_axis.y *= -1.0; // flip y axis to make top-left as origin
                 rp.set_push_constants(
                     wgpu::ShaderStages::all(),
                     0,
-                    bytemuck::bytes_of(&PushConstant2D {
-                        proj: ctx.camera.get_projection(),
-                    }),
+                    bytemuck::bytes_of(&PushConstant2D { proj: orthor }),
                 );
                 let vertex_count = ctx.vertices.len();
                 if vertex_count > 0 {
                     rp.set_vertex_buffer(
                         0,
-                        self.pipeline_2d
-                            .as_ref()
-                            .unwrap()
-                            .vertex_buffer
-                            .slice(Range {
-                                start: 0,
-                                end: (size_of::<Vertex>() * vertex_count) as u64,
-                            }),
+                        self.pipeline_2d.as_ref().unwrap().vertex_buffer.slice(..),
                     );
-
                     rp.draw(
                         Range {
                             start: 0,
@@ -282,5 +275,44 @@ impl State {
             view_formats: &[wgpu::TextureFormat::Depth24PlusStencil8],
         });
         self.depth_texture = Some(depth_texture);
+    }
+}
+
+#[cfg(test)]
+mod test_proj {
+    use std::vec;
+
+    #[test]
+    fn print_clip_pos_after_project() {
+        //  in windows NDC
+        let positions = vec![
+            glam::Vec3::new(100.0, 100.0, 0.0),
+            glam::Vec3::new(200.0, 100.0, 0.0),
+            glam::Vec3::new(200.0, 200.0, 0.0),
+        ];
+
+        let print_ater_proj = |positions: &Vec<glam::Vec3>, proj: &glam::Mat4| {
+            for pos in positions.iter() {
+                let clip_pos = *proj * pos.extend(1.0);
+                println!("pos: {:?} => clip_pos: {:?}", pos, clip_pos);
+            }
+            println!("{}", "-".repeat(20));
+        };
+
+        print!("LH, bottom=0, near=0\n");
+        let lh_orthor_bot_0_near_0 = glam::Mat4::orthographic_lh(0.0, 800.0, 0.0, 600.0, 0.0, 1.0);
+        print_ater_proj(&positions, &lh_orthor_bot_0_near_0);
+
+        print!("LH, top=0, near=0\n");
+        let lh_orthor_top_0_near_0 = glam::Mat4::orthographic_lh(0.0, 800.0, 600.0, 0.0, 0.0, 1.0);
+        print_ater_proj(&positions, &lh_orthor_top_0_near_0);
+
+        print!("RH, bot=0, near=0\n");
+        let rh_orthor_bot_0_near_0 = glam::Mat4::orthographic_rh(0.0, 800.0, 0.0, 600.0, 0.0, 1.0);
+        print_ater_proj(&positions, &rh_orthor_bot_0_near_0);
+
+        print!("RH, top=0, near=0\n");
+        let rh_orthor_top_0_near_0 = glam::Mat4::orthographic_rh(0.0, 800.0, 600.0, 0.0, 0.0, 1.0);
+        print_ater_proj(&positions, &rh_orthor_top_0_near_0);
     }
 }
