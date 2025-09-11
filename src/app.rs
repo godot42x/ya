@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, rc::Rc, sync::Arc};
 
 pub(crate) use log::info;
 use winit::{
@@ -7,7 +7,7 @@ use winit::{
 };
 
 use crate::{
-    asset::Model,
+    asset::{AssetManager, Model},
     camera::{Camera, OrthorCamera},
     pipeline::{Pipeline, Vertex2D},
     state::State,
@@ -21,7 +21,7 @@ pub(crate) struct RenderContext {
     pub vertices: Vec<Vertex2D>,
     pub indices: Vec<u16>,
     pub mouse_pos: (f32, f32),
-    pub models: Vec<Model>,
+    pub models: Vec<Rc<Model>>,
     pub(crate) camera: Box<dyn Camera>,
     pub(crate) ortho_camera: OrthorCamera,
 }
@@ -32,9 +32,10 @@ pub struct App {
     missed_size: Arc<PhysicalSize<u32>>,
 
     size: (u32, u32),
+    last_frame_time: std::time::Instant,
 
     pub render_ctx: RenderContext,
-    last_frame_time: std::time::Instant,
+    pub asset_manager: Option<AssetManager>,
 }
 
 impl Default for App {
@@ -42,6 +43,8 @@ impl Default for App {
         Self {
             state: None,
             missed_size: Arc::new(PhysicalSize::new(800, 600)),
+            size: (800, 600),
+            last_frame_time: std::time::Instant::now(),
             render_ctx: RenderContext {
                 vertices: vec![],
                 indices: vec![],
@@ -66,8 +69,7 @@ impl Default for App {
                 // )),
                 ortho_camera: crate::camera::OrthorCamera::new(0.0, 800.0, 0.0, 600.0, 0.0, 1.0),
             },
-            size: (800, 600),
-            last_frame_time: std::time::Instant::now(),
+            asset_manager: None,
         }
     }
 }
@@ -97,15 +99,19 @@ impl ApplicationHandler<CustomEvent> for App {
             }
         }
 
-        let current_dir = std::env::current_dir().unwrap();
-        info!("Current working directory: {}", current_dir.display());
+        let asset_manager = AssetManager::new(
+            self.state.as_ref().unwrap().device.clone(),
+            self.state.as_ref().unwrap().queue.clone(),
+        );
+        self.asset_manager = Some(asset_manager);
 
-        let model = Model::load(
-            &self.state.as_ref().unwrap().device,
-            &self.state.as_ref().unwrap().queue,
-            &PathBuf::from("res/model/suzanne.glb"),
-        )
-        .unwrap();
+        let model = self
+            .asset_manager
+            .as_mut()
+            .unwrap()
+            .load_model("suzanne", &PathBuf::from("res/model/suzanne.glb"))
+            .unwrap();
+
         self.render_ctx.models.push(model);
 
         window.request_redraw();

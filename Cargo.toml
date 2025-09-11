@@ -16,6 +16,12 @@ gltf = "1.4"                                         # 专门的 glTF 库
 bytemuck = "1.12.1"
 glam = { version = "0.29", features = ["bytemuck"] }
 cfg-if = "1.0.3"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dependencies.image]
+version = "0.24.6"
+default-features = false
+features = ["jpeg", "png"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # 需要避免在 wasm 中添加 pollster 依赖，否则会导致 wasm 加载时报错：

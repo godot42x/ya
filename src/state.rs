@@ -1,5 +1,5 @@
 /*  */
-use crate::app::RenderContext;
+use crate::app::{App, RenderContext};
 use crate::camera::Camera;
 use crate::pipeline::{Pipeline, Pipeline2D, Pipeline3D, PushConstant, PushConstant2D, Vertex};
 use crate::*;

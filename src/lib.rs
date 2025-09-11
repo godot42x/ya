@@ -9,12 +9,54 @@ mod pipeline;
 pub(crate) use log::{info, warn};
 use winit::event_loop;
 
-use crate::{
-    app::{App, CustomEvent},
-};
+use crate::app::{App, CustomEvent};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+enum EColor {
+    Rest,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White,
+    Black,
+    BrightRed,
+    BrightGreen,
+    BrightYellow,
+    BrightBlue,
+    BrightMagenta,
+    BrightCyan,
+    BrightWhite,
+    BrightBlack,
+}
+
+impl EColor {
+    fn to_ansi_code(&self) -> &'static str {
+        match self {
+            EColor::Rest => "\x1b[0m",
+            EColor::Black => "\x1b[30m",
+            EColor::Red => "\x1b[31m",
+            EColor::Green => "\x1b[32m",
+            EColor::Yellow => "\x1b[33m",
+            EColor::Blue => "\x1b[34m",
+            EColor::Magenta => "\x1b[35m",
+            EColor::Cyan => "\x1b[36m",
+            EColor::White => "\x1b[37m",
+            EColor::BrightBlack => "\x1b[90m",
+            EColor::BrightRed => "\x1b[91m",
+            EColor::BrightGreen => "\x1b[92m",
+            EColor::BrightYellow => "\x1b[93m",
+            EColor::BrightBlue => "\x1b[94m",
+            EColor::BrightMagenta => "\x1b[95m",
+            EColor::BrightCyan => "\x1b[96m",
+            EColor::BrightWhite => "\x1b[97m",
+        }
+    }
+}
 
 pub fn init_logger() {
     cfg_if::cfg_if! {
@@ -45,46 +87,47 @@ pub fn init_logger() {
                 .filter_module("wgpu_core", log::LevelFilter::Info)
                 .filter_module("wgpu_hal", log::LevelFilter::Error)
                 .filter_module("naga", log::LevelFilter::Error)
-                // .format(|buf, record| {
-                //     use std::io::Write;
+                .format(|buf, record| {
+                    use std::io::Write;
 
-                //     // 获取当前时间
-                //     let now = std::time::SystemTime::now()
-                //         .duration_since(std::time::UNIX_EPOCH)
-                //         .unwrap();
-                //     let timestamp = format!("{:02}:{:02}:{:02}.{:03}",
-                //         (now.as_secs() % 86400) / 3600,  // 小时
-                //         (now.as_secs() % 3600) / 60,     // 分钟
-                //         now.as_secs() % 60,              // 秒
-                //         now.subsec_millis()              // 毫秒
-                //     );
+                    // 获取当前时间
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("failed to get system time");
 
-                //     // 获取文件名（不包含路径）
-                //     let file = record.file()
-                //         .and_then(|f| std::path::Path::new(f).file_name())
-                //         .and_then(|f| f.to_str())
-                //         .unwrap_or("unknown");
+                    let timestamp = chrono::DateTime::from_timestamp(
+                        now.as_secs() as i64,
+                        now.subsec_nanos(),
+                    )
+                    .expect("Invalid system time")
+                    .format("%Y-%m-%d_%H:%M:%S%.3f")
+                    .to_string();
 
-                //     // 使用 ANSI 颜色代码
-                //     let (level_color, level_text) = match record.level() {
-                //         log::Level::Error => ("\x1b[31m", "ERROR"),  // 红色
-                //         log::Level::Warn =>  ("\x1b[33m", "WARN"),   // 黄色
-                //         log::Level::Info =>  ("\x1b[32m", "INFO"),   // 绿色
-                //         log::Level::Debug => ("\x1b[34m", "DEBUG"),  // 蓝色
-                //         log::Level::Trace => ("\x1b[35m", "TRACE"),  // 洋红色
-                //     };
+                    // 使用 ANSI 颜色代码
+                    let (level_color, level_text) = match record.level() {
+                        log::Level::Error => (EColor::Red.to_ansi_code(), "ERROR"),
+                        log::Level::Warn =>  (EColor::Yellow.to_ansi_code(),"WARN"),
+                        log::Level::Info =>  (EColor::Green.to_ansi_code(), "INFO"),
+                        log::Level::Debug => (EColor::Blue.to_ansi_code(), "DEBUG"),
+                        log::Level::Trace => (EColor::Magenta.to_ansi_code(), "TRACE"),
+                    };
 
-                //     writeln!(
-                //         buf,
-                //         "\x1b[36m[{}]\x1b[0m \x1b[90m[{}:{}]\x1b[0m {}{}\x1b[0m: {}",
-                //         timestamp,                        // 青色时间戳
-                //         file,
-                //         record.line().unwrap_or(0),     // 暗灰色文件位置
-                //         level_color,                     // 级别颜色
-                //         level_text,                      // 级别文本
-                //         record.args()                    // 重置 + 消息
-                //     )
-                // })
+                    let filename = record
+                        .file_static()
+                        .and_then(|f| std::path::Path::new(f).file_name())
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("unknown");
+
+
+                    writeln!(
+                        buf,
+                        "[{} {}{}{} {}:{}] {}",
+                        timestamp,
+                        level_color, level_text, EColor::Rest.to_ansi_code(), //
+                        filename, record.line().unwrap_or(0), //
+                        record.args()
+                    )
+                })
                 .parse_default_env()
                 .init();
         }

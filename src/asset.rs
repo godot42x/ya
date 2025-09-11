@@ -1,17 +1,21 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fs::File, path::PathBuf, rc::Rc};
 
 use assimp::import::Importer;
 use bytemuck::{Pod, Zeroable};
+use gltf::json::path;
 use log::{error, info, warn};
 use wgpu::util::DeviceExt;
 
 use crate::pipeline::Vertex;
 
 pub struct AssetManager {
-    models: HashMap<String, Model>,
-    textures: HashMap<String, wgpu::Texture>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+
+    pub models: HashMap<String, Rc<Model>>,
+    pub textures: HashMap<String, Rc<wgpu::Texture>>,
     // leave here for future use: reflection, custom shaders, etc.
-    shader_sources: HashMap<String, String>,
+    pub shader_sources: HashMap<String, String>,
 }
 
 pub struct Model {
@@ -345,5 +349,103 @@ impl Model {
             rp.set_push_constants(wgpu::ShaderStages::all(), 0, pc.to_bytes());
             rp.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
+    }
+}
+
+impl AssetManager {
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+        Self {
+            device,
+            queue,
+            models: HashMap::new(),
+            textures: HashMap::new(),
+            shader_sources: HashMap::new(),
+        }
+    }
+
+    pub fn load_model(&mut self, name: &str, path: &PathBuf) -> Option<Rc<Model>> {
+        match Model::load(&self.device, &self.queue, path) {
+            Ok(model) => {
+                self.models.insert(name.to_string(), Rc::new(model));
+                info!(
+                    "Model '{}' loaded successfully from {}",
+                    name,
+                    path.display()
+                );
+                self.models.get(name).cloned()
+            }
+            Err(e) => {
+                error!("Failed to load model '{}': {}", name, e);
+                None
+            }
+        }
+    }
+
+    pub fn load_texture(&mut self, name: &str, path: &PathBuf) {
+        let f = File::open(path);
+        if f.is_err() {
+            error!("Failed to open texture file: {}", path.display());
+            return;
+        }
+        let br = std::io::BufReader::new(f.unwrap());
+
+        // use extension to decide image format
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let img = image::load(br, image::ImageFormat::from_extension(&extension).unwrap());
+        if img.is_err() {
+            error!("Failed to load image: {}", path.display());
+            return;
+        }
+
+        let img = img.unwrap().to_rgba8();
+        let dimensions = img.dimensions();
+
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(&format!("Texture {}", name)),
+            size: wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb, // TODO: handle format and handle extension by file content
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &img,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
+            },
+            wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let t = Rc::new(texture);
+
+        self.textures.insert(name.to_string(), t);
+        info!(
+            "Texture '{}' loaded successfully from {}",
+            name,
+            path.display()
+        );
     }
 }
