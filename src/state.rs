@@ -1,12 +1,15 @@
-/*  */
-use crate::app::{App, RenderContext};
+use crate::app::AppContext;
+use crate::app::RenderContext;
 use crate::camera::Camera;
-use crate::pipeline::{Pipeline, Pipeline2D, Pipeline3D, PushConstant, PushConstant2D, Vertex};
+use crate::pipeline::pl_2d;
+use crate::pipeline::pl_3d;
+use crate::pipeline::CommonPipeline;
 use crate::*;
-use gltf::scene::Transform;
 use pipeline;
-use std::mem::size_of;
 use std::{ops::Range, sync::Arc};
+use wgpu::util::DeviceExt;
+use wgpu::util::RenderEncoder;
+use wgpu::BindGroup;
 use winit::window::Window;
 
 pub struct State {
@@ -16,9 +19,10 @@ pub struct State {
     pub queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    pub pipeline_3d: Option<Pipeline3D>,
-    pub pipeline_2d: Option<Pipeline2D>,
+    pub pipeline_2d: Option<pl_2d::Pipeline>,
+    pub pipeline_3d: Option<pl_3d::Pipeline>,
     depth_texture: Option<wgpu::Texture>,
+    diffuse_sampler: Option<wgpu::Sampler>,
 }
 
 impl State {
@@ -41,12 +45,16 @@ impl State {
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::PUSH_CONSTANTS,
+                required_features: wgpu::Features::PUSH_CONSTANTS
+                    | wgpu::Features::TEXTURE_BINDING_ARRAY
+                    | wgpu::Features::BUFFER_BINDING_ARRAY,
                 required_limits: if cfg!(target_arch = "wasm32") {
                     wgpu::Limits::downlevel_webgl2_defaults()
                 } else {
                     wgpu::Limits {
                         max_push_constant_size: 256, // 足够容纳 3个Mat4 (3*64=192字节)
+                        max_binding_array_elements_per_shader_stage: 4,
+                        max_binding_array_sampler_elements_per_shader_stage: 4,
                         ..wgpu::Limits::default()
                     }
                 },
@@ -91,27 +99,44 @@ impl State {
             pipeline_3d: None,
             pipeline_2d: None,
             depth_texture: None,
+            diffuse_sampler: None,
         };
 
-        state.configure_surface();
-        state.create_depth_texture();
+        state.init();
+
+        state
+    }
+
+    fn init(&mut self) {
+        self.configure_surface();
+        self.create_depth_texture();
 
         // avoid the get_current_texture destruct
-        let tx = state
+        let tx = self
             .surface
             .get_current_texture()
             .expect("Failed to acquire next swap chain texture");
 
         let textures = pipeline::TextureSet::default()
             .with_color(&tx.texture)
-            .with_depth(&state.depth_texture.as_ref().unwrap());
+            .with_depth(&self.depth_texture.as_ref().unwrap());
 
-        let pl2d = pipeline::Pipeline2D::create(&state.device, &textures);
-        let pl3d = pipeline::Pipeline3D::create(&state.device, &textures);
-        state.pipeline_2d = Some(pl2d);
-        state.pipeline_3d = Some(pl3d);
+        let pl2d = pl_2d::Pipeline::create(&self.device, &textures);
+        let pl3d = pl_3d::Pipeline::create(&self.device, &textures);
+        self.pipeline_2d = Some(pl2d);
+        self.pipeline_3d = Some(pl3d);
 
-        state
+        let diffuse_sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("diffuse_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        self.diffuse_sampler = Some(diffuse_sampler);
     }
 
     fn configure_surface(&mut self) {
@@ -128,7 +153,8 @@ impl State {
         }
     }
 
-    pub fn render(&mut self, ctx: &RenderContext) {
+    // MARK: Render
+    pub fn render(&mut self, app_ctx: &AppContext, render_ctx: &RenderContext) {
         let surface_texture = self
             .surface
             .get_current_texture()
@@ -187,21 +213,14 @@ impl State {
                     0.0,
                     1.0,
                 );
-                let mut orthor = glam::Mat4::orthographic_lh(
-                    0.0,
-                    self.config.width as f32,
-                    self.config.height as f32,
-                    0.0,
-                    0.0,
-                    1.0,
-                );
-                // orthor.y_axis.y *= -1.0; // flip y axis to make top-left as origin
                 rp.set_push_constants(
                     wgpu::ShaderStages::all(),
                     0,
-                    bytemuck::bytes_of(&PushConstant2D { proj: orthor }),
+                    bytemuck::bytes_of(&pl_2d::PushConstant {
+                        proj: render_ctx.ortho_camera.get_projection(),
+                    }),
                 );
-                let vertex_count = ctx.vertices.len();
+                let vertex_count = render_ctx.vertices.len();
                 if vertex_count > 0 {
                     rp.set_vertex_buffer(
                         0,
@@ -218,7 +237,77 @@ impl State {
             }
 
             {
+                // update uniforms before render
+                if self.pipeline_3d.as_ref().unwrap().ds_0.is_none() {
+                    let uniform_buffer =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("pipeline3d UB 0"),
+                                contents: bytemuck::bytes_of(&pl_3d::UniformsPerFrame {
+                                    view: render_ctx.camera.get_view(),
+                                    proj: render_ctx.camera.get_projection(),
+                                }),
+                                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                            });
+                    self.pipeline_3d
+                        .as_mut()
+                        .unwrap()
+                        .update_perframe(&self.device, &uniform_buffer);
+                }
+
+                if self.pipeline_3d.as_ref().unwrap().ds_1.is_none() {
+                    let uniform_buffer =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("pipeline3d UB 1"),
+                                contents: bytemuck::bytes_of(&pl_3d::UniformsPerObject {
+                                    model: glam::Mat4::IDENTITY,
+                                }),
+                                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                            });
+                    self.pipeline_3d
+                        .as_mut()
+                        .unwrap()
+                        .update_perobject(&self.device, &uniform_buffer);
+                }
+
+                if self.pipeline_3d.as_ref().unwrap().ds_2.is_none() {
+                    self.pipeline_3d.as_mut().unwrap().update_resources(
+                        &self.device,
+                        &self.diffuse_sampler.as_ref().unwrap(),
+                        &app_ctx
+                            .asset_manager
+                            .as_ref()
+                            .unwrap()
+                            .textures
+                            .get("tree")
+                            .unwrap()
+                            .create_view(&wgpu::wgt::TextureViewDescriptor {
+                                label: Some("tree texture view"),
+                                ..Default::default()
+                            }),
+                    );
+                }
+
                 rp.set_pipeline(self.pipeline_3d.as_ref().unwrap().get());
+                {
+                    rp.set_bind_group(
+                        0,
+                        Some(self.pipeline_3d.as_ref().unwrap().ds_0.as_ref().unwrap()),
+                        &[],
+                    );
+                    rp.set_bind_group(
+                        1,
+                        Some(self.pipeline_3d.as_ref().unwrap().ds_1.as_ref().unwrap()),
+                        &[],
+                    );
+                    rp.set_bind_group(
+                        2,
+                        Some(self.pipeline_3d.as_ref().unwrap().ds_2.as_ref().unwrap()),
+                        &[],
+                    );
+                }
+
                 rp.set_viewport(
                     0.0,
                     0.0,
@@ -228,28 +317,41 @@ impl State {
                     1.0,
                 );
 
-                for model in ctx.models.iter() {
-                    let pc = PushConstant {
+                // rp.set_bind_group(0, set_2, 0);
+
+                for model in render_ctx.models.iter() {
+                    let pc = pl_3d::PushConstant {
                         model: glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, 10.0)),
-                        view: ctx.camera.get_view().inverse(),
-                        proj: ctx.camera.get_projection(),
+                        view: render_ctx.camera.get_view().inverse(),
+                        proj: render_ctx.camera.get_projection(),
                         color: glam::Vec4::new(1.0, 0.0, 0.0, 1.0),
                     };
                     model.draw(&mut rp, &pc);
-                    let pc = PushConstant {
+                    let pc = pl_3d::PushConstant {
                         model: glam::Mat4::from_translation(glam::Vec3::new(10.0, 0.0, -10.0)),
-                        view: ctx.camera.get_view().inverse(),
-                        proj: ctx.camera.get_projection(),
+                        view: render_ctx.camera.get_view().inverse(),
+                        proj: render_ctx.camera.get_projection(),
                         color: glam::Vec4::new(0.0, 1.0, 0.0, 1.0),
                     };
                     model.draw(&mut rp, &pc);
-                    let pc = PushConstant {
+                    let pc = pl_3d::PushConstant {
                         model: glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, -10.0)),
-                        view: ctx.camera.get_view().inverse(),
-                        proj: ctx.camera.get_projection(),
+                        view: render_ctx.camera.get_view().inverse(),
+                        proj: render_ctx.camera.get_projection(),
                         color: glam::Vec4::new(0.0, 0.0, 10.0, 1.0),
                     };
                     model.draw(&mut rp, &pc);
+                }
+
+                if let Some(cube) = app_ctx.asset_manager.as_ref().unwrap().models.get("cube") {
+                    let pc = pl_3d::PushConstant {
+                        model: glam::Mat4::from_translation(glam::Vec3::new(-10.0, 0.0, -10.0)),
+                        // * glam::Mat4::from_scale(glam::Vec3::new(-5.0, -5.0, -5.0)),
+                        view: render_ctx.camera.get_view().inverse(),
+                        proj: render_ctx.camera.get_projection(),
+                        color: glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+                    };
+                    cube.draw(&mut rp, &pc);
                 }
             }
         }
@@ -278,6 +380,7 @@ impl State {
     }
 }
 
+// MARK: Test
 #[cfg(test)]
 mod test_proj {
     use std::vec;

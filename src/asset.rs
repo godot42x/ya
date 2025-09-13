@@ -4,9 +4,9 @@ use assimp::import::Importer;
 use bytemuck::{Pod, Zeroable};
 use gltf::json::path;
 use log::{error, info, warn};
-use wgpu::util::DeviceExt;
+use wgpu::{naga, util::DeviceExt};
 
-use crate::pipeline::Vertex;
+use crate::pipeline::pl_3d;
 
 pub struct AssetManager {
     device: wgpu::Device,
@@ -39,11 +39,106 @@ pub struct Mesh {
     pub index_count: u32,
 }
 
-impl Model {
-    pub fn new(meshes: Vec<Mesh>) -> Self {
-        Self { meshes }
+impl AssetManager {
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+        Self {
+            device,
+            queue,
+            models: HashMap::new(),
+            textures: HashMap::new(),
+            shader_sources: HashMap::new(),
+        }
     }
 
+    pub fn load_model(&mut self, name: &str, path: &PathBuf) -> Option<Rc<Model>> {
+        match Model::load(&self.device, &self.queue, path) {
+            Ok(model) => {
+                self.models.insert(name.to_string(), Rc::new(model));
+                info!(
+                    "Model '{}' loaded successfully from {}",
+                    name,
+                    path.display()
+                );
+                self.models.get(name).cloned()
+            }
+            Err(e) => {
+                error!("Failed to load model '{}': {}", name, e);
+                None
+            }
+        }
+    }
+
+    pub fn load_texture(&mut self, name: &str, path: &PathBuf) -> Option<Rc<wgpu::Texture>> {
+        let f = File::open(path);
+        if f.is_err() {
+            error!("Failed to open texture file: {}", path.display());
+            return None;
+        }
+        let br = std::io::BufReader::new(f.unwrap());
+
+        // use extension to decide image format
+        let extension = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let img = image::load(br, image::ImageFormat::from_extension(&extension).unwrap());
+        if img.is_err() {
+            error!("Failed to load image: {}", path.display());
+            return None;
+        }
+
+        let img = img.unwrap().to_rgba8();
+        let dimensions = img.dimensions();
+
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(&format!("Texture {}", name)),
+            size: wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb, // TODO: handle format and handle extension by file content
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &img,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
+            },
+            wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let tex = Rc::new(texture);
+
+        self.textures.insert(name.to_string(), tex);
+        info!(
+            "Texture '{}' loaded successfully from {}",
+            name,
+            path.display()
+        );
+        Some(self.textures.get(name).cloned().unwrap())
+    }
+}
+
+impl Model {
     /// 从文件路径加载模型（支持多种格式）
     pub fn load(
         device: &wgpu::Device,
@@ -190,12 +285,12 @@ impl Model {
             .unwrap_or_else(|| vec![[0.0, 0.0]; positions.len()]);
 
         // 创建顶点数组
-        let vertices: Vec<Vertex> = positions
+        let vertices: Vec<pl_3d::Vertex> = positions
             .into_iter()
             .zip(colors.into_iter())
             .zip(normals.into_iter())
             .zip(tex_coords.into_iter())
-            .map(|(((pos, color), normal), uv)| Vertex {
+            .map(|(((pos, color), normal), uv)| pl_3d::Vertex {
                 position: pos,
                 color: color,
                 normal,
@@ -251,25 +346,13 @@ impl Mesh {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Result<Self, String> {
-        // let mut vertrices: Vec<_> = mesh
-        //     .vertex_iter()
-        //     .map(|v| {
-        //         Vertex {
-        //             position: [v.x, v.y, v.z],
-        //             color: [1.0, 1.0, 1.0, 1.0], // Default white color
-        //             normal: [0.0, 0.0, 0.0],     // Placeholder normal
-        //             uv: [0.0, 0.0],              // Placeholder UV
-        //         }
-        //     })
-        //     .collect();
-
-        let mut vertices: Vec<Vertex> = mesh
+        let vertices: Vec<pl_3d::Vertex> = mesh
             .vertex_iter()
             .into_iter()
             .zip(mesh.normal_iter().into_iter())
             .zip(mesh.texture_coords_iter(0).into_iter())
             .map(|((v, n), tex)| {
-                return Vertex {
+                return pl_3d::Vertex {
                     position: [v.x, v.y, v.z],
                     color: [1.0, 1.0, 1.0, 1.0], // Default white color
                     normal: [n.x, n.y, n.z],
@@ -278,7 +361,7 @@ impl Mesh {
             })
             .collect();
 
-        let size = mesh.num_vertices as usize * std::mem::size_of::<Vertex>();
+        let size = mesh.num_vertices as usize * std::mem::size_of::<pl_3d::Vertex>();
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mesh Buffer"),
@@ -325,7 +408,7 @@ impl Mesh {
             0,
             &vertex_buffer,
             0,
-            (vertices.len() * std::mem::size_of::<Vertex>()) as u64,
+            (vertices.len() * std::mem::size_of::<pl_3d::Vertex>()) as u64,
         );
         encoder.copy_buffer_to_buffer(&stage_buffer, 0, &index_buffer, 0, size as u64);
 
@@ -343,109 +426,10 @@ impl Mesh {
 impl Model {
     pub fn draw<T: CommonPushConstant>(&self, rp: &mut wgpu::RenderPass<'_>, pc: &T) {
         for mesh in &self.meshes {
-            let transf = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.0, -10.0));
             rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             rp.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             rp.set_push_constants(wgpu::ShaderStages::all(), 0, pc.to_bytes());
             rp.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
-    }
-}
-
-impl AssetManager {
-    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        Self {
-            device,
-            queue,
-            models: HashMap::new(),
-            textures: HashMap::new(),
-            shader_sources: HashMap::new(),
-        }
-    }
-
-    pub fn load_model(&mut self, name: &str, path: &PathBuf) -> Option<Rc<Model>> {
-        match Model::load(&self.device, &self.queue, path) {
-            Ok(model) => {
-                self.models.insert(name.to_string(), Rc::new(model));
-                info!(
-                    "Model '{}' loaded successfully from {}",
-                    name,
-                    path.display()
-                );
-                self.models.get(name).cloned()
-            }
-            Err(e) => {
-                error!("Failed to load model '{}': {}", name, e);
-                None
-            }
-        }
-    }
-
-    pub fn load_texture(&mut self, name: &str, path: &PathBuf) {
-        let f = File::open(path);
-        if f.is_err() {
-            error!("Failed to open texture file: {}", path.display());
-            return;
-        }
-        let br = std::io::BufReader::new(f.unwrap());
-
-        // use extension to decide image format
-        let extension = path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        let img = image::load(br, image::ImageFormat::from_extension(&extension).unwrap());
-        if img.is_err() {
-            error!("Failed to load image: {}", path.display());
-            return;
-        }
-
-        let img = img.unwrap().to_rgba8();
-        let dimensions = img.dimensions();
-
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(&format!("Texture {}", name)),
-            size: wgpu::Extent3d {
-                width: dimensions.0,
-                height: dimensions.1,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb, // TODO: handle format and handle extension by file content
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &img,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
-            },
-            wgpu::Extent3d {
-                width: dimensions.0,
-                height: dimensions.1,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        let t = Rc::new(texture);
-
-        self.textures.insert(name.to_string(), t);
-        info!(
-            "Texture '{}' loaded successfully from {}",
-            name,
-            path.display()
-        );
     }
 }

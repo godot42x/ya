@@ -5,12 +5,12 @@ use wgpu::{include_wgsl, PipelineCompilationOptions, PushConstantRange};
 
 use crate::{
     asset::CommonVertex,
-    pipeline::{Pipeline, TextureSet},
+    pipeline::{CommonPipeline, TextureSet},
 };
 
 #[derive(Clone, Copy, Zeroable, Pod)]
 #[repr(C)]
-pub struct Vertex2D {
+pub struct Vertex {
     pub position: [f32; 3],
     pub color: [f32; 4],
     pub uv: [f32; 2],
@@ -18,33 +18,33 @@ pub struct Vertex2D {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct PushConstant2D {
+pub struct PushConstant {
     pub proj: glam::Mat4,
 }
-pub struct Pipeline2D {
+pub struct Pipeline {
     pl: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,
 }
 
-impl CommonVertex for Vertex2D {
+impl CommonVertex for Vertex {
     fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex2D>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x3,
-                    offset: offset_of!(Vertex2D, position) as wgpu::BufferAddress,
+                    offset: offset_of!(Vertex, position) as wgpu::BufferAddress,
                     shader_location: 0,
                 },
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x4,
-                    offset: offset_of!(Vertex2D, color) as wgpu::BufferAddress,
+                    offset: offset_of!(Vertex, color) as wgpu::BufferAddress,
                     shader_location: 1,
                 },
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x2,
-                    offset: offset_of!(Vertex2D, uv) as wgpu::BufferAddress,
+                    offset: offset_of!(Vertex, uv) as wgpu::BufferAddress,
                     shader_location: 2,
                 },
             ],
@@ -52,7 +52,7 @@ impl CommonVertex for Vertex2D {
     }
 }
 
-impl Pipeline for Pipeline2D {
+impl CommonPipeline for Pipeline {
     fn get(&self) -> &wgpu::RenderPipeline {
         &self.pl
     }
@@ -65,7 +65,7 @@ impl Pipeline for Pipeline2D {
             bind_group_layouts: &[],
             push_constant_ranges: &[PushConstantRange {
                 stages: wgpu::ShaderStages::all(),
-                range: 0..std::mem::size_of::<PushConstant2D>() as u32,
+                range: 0..std::mem::size_of::<PushConstant>() as u32,
             }],
         });
 
@@ -75,7 +75,7 @@ impl Pipeline for Pipeline2D {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex2D::buffer_layout()],
+                buffers: &[Vertex::buffer_layout()],
                 compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -116,7 +116,7 @@ impl Pipeline for Pipeline2D {
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer"),
-            size: (std::mem::size_of::<Vertex2D>() * 1024) as u64, // Space for 3 vertices
+            size: (std::mem::size_of::<Vertex>() * 1024) as u64, // Space for 3 vertices
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

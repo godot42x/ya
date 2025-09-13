@@ -17,6 +17,8 @@ pub trait Camera {
         let _ = event;
         false
     }
+
+    fn resize(&mut self, _width: u32, _height: u32);
 }
 
 pub struct FreeCamera {
@@ -46,12 +48,12 @@ pub struct LookCamera {
 }
 
 pub struct OrthorCamera {
-    left: f32,
-    right: f32,
-    bottom: f32,
-    top: f32,
-    z_near: f32,
-    z_far: f32,
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub z_near: f32,
+    pub z_far: f32,
 }
 
 impl FreeCamera {
@@ -102,17 +104,6 @@ impl LookCamera {
 }
 
 impl OrthorCamera {
-    pub fn new(left: f32, right: f32, bottom: f32, top: f32, z_near: f32, z_far: f32) -> Self {
-        Self {
-            left,
-            right,
-            bottom,
-            top,
-            z_near,
-            z_far,
-        }
-    }
-
     pub fn resize(&mut self, width: u32, height: u32) {
         self.right = width as f32;
         self.top = height as f32;
@@ -121,14 +112,16 @@ impl OrthorCamera {
 
 impl Camera for FreeCamera {
     fn get_view(&self) -> glam::Mat4 {
+        // Create rotation matrix from Euler angles
         let rotation = glam::Mat4::from_euler(
-            glam::EulerRot::XYZ,
-            self.rotation.x,
-            self.rotation.y,
-            self.rotation.z,
+            glam::EulerRot::YXZ, // Changed order to YXZ (yaw-pitch-roll)
+            self.rotation.y,     // yaw (Y rotation)
+            self.rotation.x,     // pitch (X rotation)
+            self.rotation.z,     // roll (Z rotation)
         );
-        let translation = glam::Mat4::from_translation(-self.pos);
-        rotation * translation
+
+        // View matrix = inverse(rotation * translation) = translation^-1 * rotation^-1
+        (rotation * glam::Mat4::from_translation(self.pos)).inverse()
     }
 
     fn get_projection(&self) -> glam::Mat4 {
@@ -140,9 +133,25 @@ impl Camera for FreeCamera {
     }
 
     fn update(&mut self, dt: f32) {
-        // Calculate forward direction from rotation
-        let forward = self.rotation.normalize();
+        // Calculate forward direction from rotation angles
+        let yaw = self.rotation.y;
+        let pitch = self.rotation.x;
+
+        // In a right-handed coordinate system with Y-up:
+        // - Forward direction should point towards -Z when yaw=0, pitch=0
+        // - Yaw rotates around Y axis (left/right)
+        // - Pitch rotates around X axis (up/down)
+        let forward = glam::Vec3::new(
+            yaw.sin(),    // X component: sin(yaw) for right when yaw > 0
+            -pitch.sin(), // Y component: -sin(pitch) for up when pitch > 0
+            -yaw.cos(),   // Z component: -cos(yaw) for forward towards -Z
+        )
+        .normalize();
+
+        // Calculate right vector (cross product of forward and world up)
         let right = forward.cross(glam::Vec3::Y).normalize();
+
+        // Calculate local up vector
         let up = right.cross(forward).normalize();
 
         let speed = self.move_speed * dt;
@@ -151,16 +160,16 @@ impl Camera for FreeCamera {
         for key in &self.keys_pressed {
             match key {
                 winit::keyboard::KeyCode::KeyW => {
-                    self.pos += forward * speed;
+                    self.pos += forward * speed; // W键：向前移动
                 }
                 winit::keyboard::KeyCode::KeyS => {
-                    self.pos -= forward * speed;
+                    self.pos -= forward * speed; // S键：向后移动
                 }
                 winit::keyboard::KeyCode::KeyA => {
-                    self.pos -= right * speed;
+                    self.pos -= right * speed; // A键：向左移动
                 }
                 winit::keyboard::KeyCode::KeyD => {
-                    self.pos += right * speed;
+                    self.pos += right * speed; // D键：向右移动
                 }
                 winit::keyboard::KeyCode::KeyQ => {
                     self.pos -= up * speed;
@@ -171,6 +180,10 @@ impl Camera for FreeCamera {
                 _ => {}
             }
         }
+    }
+
+    fn resize(&mut self, _width: u32, _height: u32) {
+        self.aspect = _width as f32 / _height as f32;
     }
 
     fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool {
@@ -235,6 +248,10 @@ impl Camera for LookCamera {
 
     fn update(&mut self, _dt: f32) {
         // LookCamera doesn't need continuous updates for now
+    }
+
+    fn resize(&mut self, _width: u32, _height: u32) {
+        self.aspect = _width as f32 / _height as f32;
     }
 
     fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool {
@@ -305,4 +322,6 @@ impl Camera for OrthorCamera {
         let _ = event;
         false
     }
+
+    fn resize(&mut self, _width: u32, _height: u32) {}
 }

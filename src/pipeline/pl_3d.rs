@@ -1,16 +1,18 @@
-use std::mem::{offset_of, size_of};
+use std::{
+    mem::{offset_of, size_of},
+    num::NonZeroU32,
+};
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::{include_wgsl, PipelineCompilationOptions, PushConstantRange};
+use wgpu::{
+    include_wgsl, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, PipelineCompilationOptions, PushConstantRange,
+};
 
 use crate::{
     asset::{CommonPushConstant, CommonVertex},
-    pipeline::{Pipeline, TextureSet},
+    pipeline::{pl_2d, CommonPipeline, TextureSet},
 };
-
-pub struct Pipeline3D {
-    pl: wgpu::RenderPipeline,
-}
 
 #[derive(Clone, Copy, Zeroable, Pod)]
 // POD(Plain Old Data) types can be safely converted to and from byte slices.
@@ -31,7 +33,30 @@ pub struct PushConstant {
     pub color: glam::Vec4,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct UniformsPerFrame {
+    pub proj: glam::Mat4,
+    pub view: glam::Mat4,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct UniformsPerObject {
+    pub model: glam::Mat4,
+}
+
 impl CommonPushConstant for PushConstant {}
+
+pub struct Pipeline {
+    pl: wgpu::RenderPipeline,
+    pub dsl_0: wgpu::BindGroupLayout,
+    pub ds_0: Option<wgpu::BindGroup>,
+    pub dsl_1: wgpu::BindGroupLayout,
+    pub ds_1: Option<wgpu::BindGroup>,
+    pub dsl_2: wgpu::BindGroupLayout,
+    pub ds_2: Option<wgpu::BindGroup>,
+}
 
 impl CommonVertex for Vertex {
     fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -65,7 +90,7 @@ impl CommonVertex for Vertex {
     }
 }
 
-impl Pipeline for Pipeline3D {
+impl CommonPipeline for Pipeline {
     fn get(&self) -> &wgpu::RenderPipeline {
         &self.pl
     }
@@ -73,9 +98,62 @@ impl Pipeline for Pipeline3D {
     fn create(device: &wgpu::Device, textures: &TextureSet) -> Self {
         let shader = device.create_shader_module(include_wgsl!("../../res/shader/test.wgsl"));
 
+        //  contains camera's view and projection matrix
+        let dsl_0_perframe = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("pipeline3d DSL 0"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: NonZeroU32::new(1),
+            }],
+        });
+
+        // contains model matrix
+        let dsl_1_perobject = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("pipeline3d DSL 1"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: NonZeroU32::new(1),
+            }],
+        });
+
+        // contains texture and sampler
+        let dsl_2_per_resouce = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("pipeline3d DSL 2"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: NonZeroU32::new(1),
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: NonZeroU32::new(1),
+                },
+            ],
+        });
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&dsl_0_perframe, &dsl_1_perobject, &dsl_2_per_resouce],
             push_constant_ranges: &[PushConstantRange {
                 stages: wgpu::ShaderStages::all(),
                 range: 0..std::mem::size_of::<PushConstant>() as u32,
@@ -125,6 +203,64 @@ impl Pipeline for Pipeline3D {
             multiview: None,
             cache: None,
         });
-        Self { pl }
+
+        Self {
+            pl,
+            dsl_0: dsl_0_perframe,
+            ds_0: None,
+            dsl_1: dsl_1_perobject,
+            ds_1: None,
+            dsl_2: dsl_2_per_resouce,
+            ds_2: None,
+        }
+    }
+}
+
+impl Pipeline {
+    pub fn update_perframe(&mut self, device: &wgpu::Device, buffer: &wgpu::Buffer) {
+        let bind_set = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("pipeline3d DS 0"),
+            layout: &self.dsl_0,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        self.ds_0 = Some(bind_set);
+    }
+
+    pub fn update_perobject(&mut self, device: &wgpu::Device, buffer: &wgpu::Buffer) {
+        let bind_set = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("pipeline3d DS 1"),
+            layout: &self.dsl_1,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+        self.ds_1 = Some(bind_set);
+    }
+
+    pub fn update_resources(
+        &mut self,
+        device: &wgpu::Device,
+        sampler: &wgpu::Sampler,
+        texture_view: &wgpu::TextureView,
+    ) {
+        let bind_set = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("pipeline3d DS 2"),
+            layout: &self.dsl_2,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(texture_view),
+                },
+            ],
+        });
+        self.ds_2 = Some(bind_set);
     }
 }

@@ -1,6 +1,7 @@
 mod app;
 mod asset;
 mod camera;
+mod geo;
 mod state;
 // mod ecs;
 // mod scene;
@@ -9,7 +10,7 @@ mod pipeline;
 pub(crate) use log::{info, warn};
 use winit::event_loop;
 
-use crate::app::{App, CustomEvent};
+use crate::app::{App, AppSettings, CustomEvent};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -139,7 +140,8 @@ pub fn run() {
         .build()
         .unwrap();
     event_loop.set_control_flow(event_loop::ControlFlow::Poll); // for game loop poll, not wait in other app
-    let mut app = App::default();
+                                                                // event_loop.create_proxy();
+    let mut app = App::new(AppSettings::default());
     event_loop.run_app(&mut app).unwrap();
     info!("Exited event loop");
 }

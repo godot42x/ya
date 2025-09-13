@@ -1,9 +1,5 @@
-mod pl_2d;
-mod pl_3d;
-
-// Re-export types from submodules
-pub use pl_2d::{Pipeline2D, PushConstant2D, Vertex2D};
-pub use pl_3d::{Pipeline3D, PushConstant, Vertex};
+pub mod pl_2d;
+pub mod pl_3d;
 
 #[derive(Default)]
 pub struct TextureSet<'a> {
@@ -34,7 +30,7 @@ impl<'a> TextureSet<'a> {
     }
 }
 
-pub trait Pipeline {
+pub trait CommonPipeline {
     fn get(&self) -> &wgpu::RenderPipeline;
     fn create(device: &wgpu::Device, textures: &TextureSet) -> Self;
 }
