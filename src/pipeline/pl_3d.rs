@@ -28,8 +28,6 @@ pub struct Vertex {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct PushConstant {
     pub model: glam::Mat4,
-    pub view: glam::Mat4,
-    pub proj: glam::Mat4,
     pub color: glam::Vec4,
 }
 
@@ -48,14 +46,23 @@ pub struct UniformsPerObject {
 
 impl CommonPushConstant for PushConstant {}
 
+pub struct Material {
+    pub tex_view: Option<wgpu::TextureView>,
+    pub sampler: Option<wgpu::Sampler>,
+    pub is_dirty: bool,
+}
+
 pub struct Pipeline {
     pl: wgpu::RenderPipeline,
     pub dsl_0: wgpu::BindGroupLayout,
-    pub ds_0: Option<wgpu::BindGroup>,
+    pub ds_0: wgpu::BindGroup,
     pub dsl_1: wgpu::BindGroupLayout,
     pub ds_1: Option<wgpu::BindGroup>,
     pub dsl_2: wgpu::BindGroupLayout,
     pub ds_2: Option<wgpu::BindGroup>,
+
+    pub material: Material,
+    frame_ubo: wgpu::Buffer,
 }
 
 impl CommonVertex for Vertex {
@@ -136,7 +143,7 @@ impl CommonPipeline for Pipeline {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: NonZeroU32::new(1),
+                    count: None,
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
@@ -146,7 +153,7 @@ impl CommonPipeline for Pipeline {
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
-                    count: NonZeroU32::new(1),
+                    count: None,
                 },
             ],
         });
@@ -204,32 +211,60 @@ impl CommonPipeline for Pipeline {
             cache: None,
         });
 
+        let frame_ubo = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pipeline3d frame ubo"),
+            size: size_of::<UniformsPerFrame>() as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let ds_0 = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("pipeline3d DS 0"),
+            layout: &dsl_0_perframe,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: frame_ubo.as_entire_binding(),
+            }],
+        });
+
         Self {
             pl,
             dsl_0: dsl_0_perframe,
-            ds_0: None,
+            ds_0,
             dsl_1: dsl_1_perobject,
             ds_1: None,
             dsl_2: dsl_2_per_resouce,
             ds_2: None,
+            frame_ubo: frame_ubo,
+            // defaults dirty to true to ensure resources are created at least once
+            material: Material {
+                tex_view: None,
+                sampler: None,
+                is_dirty: false,
+            },
         }
     }
 }
 
 impl Pipeline {
-    pub fn update_perframe(&mut self, device: &wgpu::Device, buffer: &wgpu::Buffer) {
-        let bind_set = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("pipeline3d DS 0"),
-            layout: &self.dsl_0,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        });
-        self.ds_0 = Some(bind_set);
+    pub fn bind_set(&mut self, rp: &mut wgpu::RenderPass) {
+        rp.set_bind_group(0, &self.ds_0, &[]);
+        if let Some(ds) = &self.ds_1 {
+            rp.set_bind_group(1, ds, &[]);
+        }
+        if let Some(ds) = &self.ds_2 {
+            rp.set_bind_group(2, ds, &[]);
+        }
+    }
+
+    pub fn update_perframe(&mut self, queue: &wgpu::Queue, data: &UniformsPerFrame) {
+        queue.write_buffer(&self.frame_ubo, 0, bytemuck::bytes_of(data));
     }
 
     pub fn update_perobject(&mut self, device: &wgpu::Device, buffer: &wgpu::Buffer) {
+        // if self.is_object_dirty == false {
+        //     return;
+        // }
         let bind_set = device.create_bind_group(&BindGroupDescriptor {
             label: Some("pipeline3d DS 1"),
             layout: &self.dsl_1,
@@ -239,28 +274,47 @@ impl Pipeline {
             }],
         });
         self.ds_1 = Some(bind_set);
+        // self.is_object_dirty = false;
     }
 
-    pub fn update_resources(
-        &mut self,
-        device: &wgpu::Device,
-        sampler: &wgpu::Sampler,
-        texture_view: &wgpu::TextureView,
-    ) {
-        let bind_set = device.create_bind_group(&BindGroupDescriptor {
+    pub fn update_ds_2_resources(&mut self, device: &wgpu::Device) {
+        if !self.material.is_dirty || !self.material.is_valid() {
+            return;
+        }
+        self.ds_2 = Some(device.create_bind_group(&BindGroupDescriptor {
             label: Some("pipeline3d DS 2"),
             layout: &self.dsl_2,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Sampler(sampler),
+                    resource: wgpu::BindingResource::Sampler(
+                        self.material.sampler.as_ref().unwrap(),
+                    ),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(texture_view),
+                    resource: wgpu::BindingResource::TextureView(
+                        self.material.tex_view.as_ref().unwrap(),
+                    ),
                 },
             ],
-        });
-        self.ds_2 = Some(bind_set);
+        }));
+        self.material.is_dirty = false;
+    }
+}
+
+impl Material {
+    pub fn set_texture_view(&mut self, tex_view: Option<wgpu::TextureView>) {
+        self.tex_view = tex_view;
+        self.is_dirty = true;
+    }
+
+    pub fn set_sampler(&mut self, sampler: Option<wgpu::Sampler>) {
+        self.sampler = sampler;
+        self.is_dirty = true;
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.tex_view.is_some() && self.sampler.is_some()
     }
 }

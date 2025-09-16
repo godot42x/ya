@@ -15,14 +15,12 @@ struct VertexInput {
 
 struct PushConstant {
     model: mat4x4<f32>,
-    view: mat4x4<f32>,
-    proj: mat4x4<f32>,
     color: vec4<f32>,
 }
 
 struct FrameUBO {
-    view: mat4x4<f32>,
     proj: mat4x4<f32>,
+    view: mat4x4<f32>,
 }
 
 struct ObjectUBO {
@@ -46,7 +44,7 @@ var<push_constant> pc: PushConstant;
 fn vs_main(@builtin(vertex_index) index: u32, vi: VertexInput) -> VertexOutput {
 
     var output: VertexOutput;
-    output.position = pc.proj * pc.view * pc.model * vec4<f32>(vi.position, 1.0);
+    output.position = frame_ubo.proj * frame_ubo.view * pc.model * vec4<f32>(vi.position, 1.0);
     var n = vec4(vi.normal, 1.0) * 0.5 + 0.5;
     // output.color = n * vi.color;
     output.color = n * pc.color;

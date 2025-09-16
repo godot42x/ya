@@ -9,42 +9,41 @@ pub trait Camera {
     }
     fn update(&mut self, dt: f32) {}
 
-    fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool {
-        let _ = event;
-        false
-    }
-    fn on_device_event(&mut self, event: &winit::event::DeviceEvent) -> bool {
-        let _ = event;
-        false
-    }
+    fn on_window_event(&mut self, event: &winit::event::WindowEvent) -> bool;
+    fn on_device_event(&mut self, event: &winit::event::DeviceEvent) -> bool;
 
     fn resize(&mut self, _width: u32, _height: u32);
 }
 
 pub struct FreeCamera {
-    pos: glam::Vec3,
-    rotation: glam::Vec3,
-    fov_y: f32,
-    aspect: f32,
-    z_near: f32,
-    z_far: f32,
-    is_rotating: bool,
+    pub pos: glam::Vec3,
+    pub rotation: glam::Vec3,
+    pub fov_y: f32,
+    pub aspect: f32,
+    pub z_near: f32,
+    pub z_far: f32,
+    pub is_rotating: bool,
 
     // Movement tracking
-    keys_pressed: std::collections::HashSet<winit::keyboard::KeyCode>,
-    move_speed: f32,
-    mouse_sensitivity: f32,
+    pub keys_pressed: std::collections::HashSet<winit::keyboard::KeyCode>,
+    pub move_speed: f32,
+    pub mouse_sensitivity: f32,
 }
 
 pub struct LookCamera {
-    eye: glam::Vec3,
-    dir: glam::Vec3,
-    up: glam::Vec3,
-    fov_y: f32,
-    aspect: f32,
-    z_near: f32,
-    z_far: f32,
-    is_rotating: bool,
+    pub eye: glam::Vec3,
+    pub target: glam::Vec3,
+    pub world_up: glam::Vec3,
+    pub fov_y: f32,
+    pub aspect: f32,
+    pub z_near: f32,
+    pub z_far: f32,
+    pub is_rotating: bool,
+
+    // Movement tracking
+    pub keys_pressed: std::collections::HashSet<winit::keyboard::KeyCode>,
+    pub move_speed: f32,
+    pub mouse_sensitivity: f32,
 }
 
 pub struct OrthorCamera {
@@ -56,49 +55,37 @@ pub struct OrthorCamera {
     pub z_far: f32,
 }
 
-impl FreeCamera {
-    pub fn new(
-        pos: glam::Vec3,
-        rotation: glam::Vec3,
-        fov_y: f32,
-        aspect: f32,
-        z_near: f32,
-        z_far: f32,
-    ) -> Self {
+impl Default for FreeCamera {
+    fn default() -> Self {
         Self {
-            pos,
-            rotation,
-            fov_y,
-            aspect,
-            z_near,
-            z_far,
+            pos: glam::Vec3::new(0.0, 0.0, 5.0),
+            rotation: glam::Vec3::ZERO,
+            fov_y: 45.0,
+            aspect: 16.0 / 9.0,
+            z_near: 0.1,
+            z_far: 100.0,
             is_rotating: false,
             keys_pressed: std::collections::HashSet::new(),
-            move_speed: 5.0,
-            mouse_sensitivity: 0.005,
+            move_speed: 5.0,          // units per second
+            mouse_sensitivity: 0.002, // radians per pixel
         }
     }
 }
 
-impl LookCamera {
-    pub fn new(
-        pos: glam::Vec3,
-        target: glam::Vec3,
-        up: glam::Vec3,
-        fov_y: f32,
-        aspect: f32,
-        z_near: f32,
-        z_far: f32,
-    ) -> Self {
+impl Default for LookCamera {
+    fn default() -> Self {
         Self {
-            eye: pos,
-            dir: target,
-            up,
-            fov_y,
-            aspect,
-            z_near,
-            z_far,
+            eye: glam::Vec3::new(0.0, 0.0, 5.0),
+            target: glam::Vec3::new(0.0, 0.0, -1.0),
+            world_up: glam::Vec3::Y,
+            fov_y: 45.0,
+            aspect: 16.0 / 9.0,
+            z_near: 0.1,
+            z_far: 100.0,
             is_rotating: false,
+            keys_pressed: std::collections::HashSet::new(),
+            move_speed: 5.0,          // units per second
+            mouse_sensitivity: 0.002, // radians per pixel
         }
     }
 }
@@ -121,11 +108,21 @@ impl Camera for FreeCamera {
         );
 
         // View matrix = inverse(rotation * translation) = translation^-1 * rotation^-1
-        (rotation * glam::Mat4::from_translation(self.pos)).inverse()
+        // (rotation * glam::Mat4::from_translation(self.pos)).inverse()
+        glam::Mat4::look_at_rh(
+            self.pos,
+            self.pos + rotation.transform_vector3(glam::Vec3::Z),
+            glam::Vec3::Y,
+        )
     }
 
     fn get_projection(&self) -> glam::Mat4 {
-        glam::Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
+        glam::Mat4::perspective_rh(
+            self.fov_y.to_radians(),
+            self.aspect,
+            self.z_near,
+            self.z_far,
+        )
     }
 
     fn get_view_projection(&self) -> glam::Mat4 {
@@ -235,11 +232,16 @@ impl Camera for FreeCamera {
 
 impl Camera for LookCamera {
     fn get_view(&self) -> glam::Mat4 {
-        glam::Mat4::look_at_rh(self.eye, self.dir, self.up)
+        glam::Mat4::look_at_rh(self.eye, self.target, self.world_up)
     }
 
     fn get_projection(&self) -> glam::Mat4 {
-        glam::Mat4::perspective_rh(self.fov_y, self.aspect, self.z_near, self.z_far)
+        glam::Mat4::perspective_rh(
+            self.fov_y.to_radians(),
+            self.aspect,
+            self.z_near,
+            self.z_far,
+        )
     }
 
     fn get_view_projection(&self) -> glam::Mat4 {
@@ -271,13 +273,18 @@ impl Camera for LookCamera {
         match event {
             winit::event::DeviceEvent::MouseMotion { delta: (dx, dy) } => {
                 if self.is_rotating {
-                    let sensitivity = 0.005;
-                    let right = self.dir.cross(self.up).normalize();
+                    let sensitivity = 0.000005;
+                    let dir = (self.target - self.eye).normalize();
+                    let rot = dir;
+                    let right = rot.cross(self.world_up).normalize();
+                    let up = right.cross(dir).normalize();
                     let rotation_y =
-                        glam::Mat4::from_axis_angle(self.up, -*dx as f32 * sensitivity);
+                        glam::Mat4::from_axis_angle(self.world_up, -*dx as f32 * sensitivity);
                     let rotation_x = glam::Mat4::from_axis_angle(right, -*dy as f32 * sensitivity);
-                    let new_dir = (rotation_y * rotation_x).transform_vector3(self.dir);
-                    self.dir = new_dir;
+                    let new_dir = (rotation_y * rotation_x).transform_vector3(dir);
+                    let new_eye = self.eye + new_dir;
+                    self.eye = new_eye;
+
                     return true;
                 }
             }

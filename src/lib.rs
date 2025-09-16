@@ -2,6 +2,7 @@ mod app;
 mod asset;
 mod camera;
 mod geo;
+mod render_2d;
 mod state;
 // mod ecs;
 // mod scene;

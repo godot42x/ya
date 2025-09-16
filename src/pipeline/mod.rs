@@ -33,4 +33,7 @@ impl<'a> TextureSet<'a> {
 pub trait CommonPipeline {
     fn get(&self) -> &wgpu::RenderPipeline;
     fn create(device: &wgpu::Device, textures: &TextureSet) -> Self;
+    fn init(&mut self, init_func: impl Fn(&mut Self)) {
+        init_func(self);
+    }
 }

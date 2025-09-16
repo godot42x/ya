@@ -8,7 +8,10 @@ use wgpu::{
     Color,
 };
 use winit::{
-    application::ApplicationHandler, event_loop, keyboard::NamedKey, window::WindowAttributes,
+    application::ApplicationHandler,
+    event_loop,
+    keyboard::{Key, NamedKey},
+    window::WindowAttributes,
 };
 
 use crate::{
@@ -52,6 +55,7 @@ pub struct App {
     // #[allow(dead_code)]
     // missed_size: Arc<PhysicalSize<u32>>,
     last_frame_time: std::time::Instant,
+    space_count: u32,
 }
 
 impl App {
@@ -71,23 +75,25 @@ impl App {
                 indices: vec![],
                 mouse_pos: (0.0, 0.0),
                 models: vec![],
-                camera: Box::new(crate::camera::FreeCamera::new(
-                    glam::Vec3::new(0.0, 0.0, -5.0),
-                    glam::Vec3::new(0.0, 0.0, 0.0),
-                    45.0,
-                    1.6 / 0.9,
-                    0.1,
-                    1000.0,
-                )),
-                // camera: Box::new(crate::camera::LookCamera::new(
-                //     glam::Vec3::new(0.0, 0.0, 5.0),
-                //     glam::Vec3::new(0.0, 0.0, 0.0),
-                //     glam::Vec3::new(0.0, 1.0, 0.0),
-                //     45.0f32.to_radians(),
-                //     800.0 / 600.0,
-                //     0.1,
-                //     100.0,
-                // )),
+                camera: Box::new(crate::camera::FreeCamera {
+                    pos: glam::Vec3::new(0.0, 0.0, -5.0),
+                    rotation: glam::Vec3::new(0.0, 0.0, 0.0),
+                    fov_y: 45.0,
+                    aspect: 1.6 / 0.9,
+                    z_near: 0.1,
+                    z_far: 1000.0,
+                    ..Default::default()
+                }),
+                // camera: Box::new(crate::camera::LookCamera {
+                //     eye: glam::Vec3::new(0.0, 0.0, -5.0),
+                //     target: glam::Vec3::ZERO,
+                //     world_up: glam::Vec3::Y,
+                //     fov_y: 45.0,
+                //     aspect: settings.width as f32 / settings.height as f32,
+                //     z_near: 0.1,
+                //     z_far: 1000.0,
+                //     ..Default::default()
+                // }),
                 ortho_camera: crate::camera::OrthorCamera {
                     left: 0.0,
                     right: settings.width as f32,
@@ -98,6 +104,7 @@ impl App {
                 },
             },
             settings: settings,
+            space_count: 0,
         }
     }
 
@@ -152,6 +159,9 @@ impl ApplicationHandler<CustomEvent> for App {
 
         self.get_asset_manager()
             .load_texture("tree", &PathBuf::from("res/texture/happy-tree.png"))
+            .expect("failed to load texture ");
+        self.get_asset_manager()
+            .load_texture("arch", &PathBuf::from("res/texture/arch.png"))
             .expect("failed to load texture ");
 
         self.render_ctx.models.push(model);
@@ -211,6 +221,11 @@ impl ApplicationHandler<CustomEvent> for App {
                 );
             }
         }
+
+        self.render_state
+            .as_mut()
+            .unwrap()
+            .post_init(&mut self.app_ctx);
 
         window.request_redraw();
         info!("Window created and state initialized"); // 添加调试
@@ -291,6 +306,33 @@ impl ApplicationHandler<CustomEvent> for App {
                     winit::keyboard::Key::Named(NamedKey::Escape) => {
                         info!("Escape pressed, exiting.");
                         event_loop.exit();
+                    }
+                    Key::Named(NamedKey::Space) => {
+                        // change the texture
+                        if key_event.state.is_pressed() {
+                            return;
+                        }
+                        self.space_count += 1;
+                        info!("Space released, changing texture. {}", self.space_count);
+
+                        if let Some(state) = &mut self.render_state {
+                            if let Some(pl_3d) = &mut state.pipeline_3d {
+                                let tex = self
+                                    .app_ctx
+                                    .asset_manager
+                                    .as_ref()
+                                    .unwrap()
+                                    .textures
+                                    .get(if self.space_count % 2 == 0 {
+                                        "tree"
+                                    } else {
+                                        "arch"
+                                    })
+                                    .unwrap();
+                                let tv = tex.create_view(&wgpu::TextureViewDescriptor::default());
+                                pl_3d.material.set_texture_view(Some(tv));
+                            }
+                        }
                     }
                     _ => {
                         info!("Other key: {:?}", &key_event.logical_key);
