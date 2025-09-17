@@ -17,7 +17,8 @@ struct Scene;
 
 struct IMaterialSystem : public ISystem
 {
-    std::string _label = "IMaterialSystem";
+    std::string _label            = "IMaterialSystem";
+    bool        bReverseViewportY = true;
 
     // No material and base material?
     // std::shared_ptr<Material> _baseMaterial;

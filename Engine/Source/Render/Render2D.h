@@ -40,6 +40,8 @@ struct Command
             glm::vec4   color;
         } drawText;
     };
+
+    ~Command() {}
 };
 
 struct CmdList
@@ -71,7 +73,7 @@ struct Render2D
     // 绘制矩形
     static void makeSprite(const glm::vec3 &position, const glm::vec2 &size, const glm::vec4 &color);
 
-    static CmdList& getCmdList() { return Render2D::cmdList; }
+    static CmdList &getCmdList() { return Render2D::cmdList; }
 
     // void makeRotatedSprite(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation) {}
     // void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color) {}

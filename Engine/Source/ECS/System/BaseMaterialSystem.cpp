@@ -96,7 +96,8 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            // .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            .frontFace = EFrontFaceType::ClockWise, // VK
         },
         .multisampleState = MultisampleState{
             .sampleCount          = _sampleCount,
@@ -188,6 +189,10 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
+    if (bReverseViewportY) {
+        viewport.y      = static_cast<float>(curFrameBuffer->getHeight());
+        viewport.height = -static_cast<float>(curFrameBuffer->getHeight());
+    }
     vkCmdSetViewport(vkCmdBuf, 0, 1, &viewport);
 
     VkRect2D scissor{

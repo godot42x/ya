@@ -107,7 +107,7 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
         });
 
 
-    GraphicsPipelineCreateInfo pipelineCI{
+    _pipelineDesc = {
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
         .shaderCreateInfo = ShaderCreateInfo{
@@ -149,7 +149,8 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            // .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            .frontFace   = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .multisampleState = MultisampleState{
             .sampleCount          = _sampleCount,
@@ -200,7 +201,7 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
         },
     };
     _pipeline = std::make_shared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
-    _pipeline->recreate(pipelineCI);
+    _pipeline->recreate(_pipelineDesc);
 
 
     DescriptorPoolCreateInfo poolCI{
@@ -254,6 +255,11 @@ void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
+    if (bReverseViewportY) {
+        viewport.y      = (float)height;
+        viewport.height = -(float)height;
+    }
+
     vkCmdSetViewport(curCmdBuf, 0, 1, &viewport);
     VkRect2D scissor{
         .offset = {0, 0},

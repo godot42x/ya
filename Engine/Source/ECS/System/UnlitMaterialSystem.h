@@ -3,6 +3,7 @@
 
 #include "ECS/System.h"
 #include "ECS/System/IMaterialSystem.h"
+#include "Render/RenderDefines.h"
 #include "vulkan/vulkan_core.h"
 
 
@@ -25,6 +26,7 @@ static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
 struct UnlitMaterialSystem : public IMaterialSystem
 {
+    GraphicsPipelineCreateInfo            _pipelineDesc;
     std::shared_ptr<VulkanPipeline>       _pipeline;
     std::shared_ptr<VulkanPipelineLayout> _pipelineLayout;
 
@@ -53,7 +55,7 @@ struct UnlitMaterialSystem : public IMaterialSystem
     void onRender(void *cmdBuf, RenderTarget *rt) override;
     void onRenderGUI() override
     {
-        // IMaterialSystem::onRenderGUI();
+        IMaterialSystem::onRenderGUI();
     }
 
 

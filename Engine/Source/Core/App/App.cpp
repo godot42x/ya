@@ -1173,7 +1173,7 @@ void App::onSceneInit(Scene *scene)
                     auto v  = glm::vec3(i, j, k);
                     auto tc = cube->addComponent<TransformComponent>();
                     tc->setPosition(offset * v);
-                    tc->setRotation(rotation * v);
+                    // tc->setRotation(rotation * v);
                     float alpha = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc->setScale(glm::vec3(alpha));
 

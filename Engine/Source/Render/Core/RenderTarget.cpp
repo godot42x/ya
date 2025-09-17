@@ -306,7 +306,9 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
             if (cam->hasComponent<CameraComponent>()) {
                 auto cc = cam->getComponent<CameraComponent>();
                 proj    = cc->getProjection();
-                proj[1][1] *= -1;
+#if USE_VULKAN
+                // proj[1][1] *= -1;
+#endif
                 view = cc->getView();
                 return;
             }
@@ -315,7 +317,9 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
 
     // use app camera
     proj = App::get()->camera.getProjectionMatrix();
-    proj[1][1] *= -1;
+#if USE_VULKAN
+    // proj[1][1] *= -1; // Invert Y for Vulkan
+#endif
     view = App::get()->camera.getViewMatrix();
 }
 

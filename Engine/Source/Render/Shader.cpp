@@ -451,6 +451,7 @@ auto getOption(bool bOptimized)
     if (optimize) {
         options.SetOptimizationLevel(shaderc_optimization_level_performance);
     }
+    options.AddMacroDefinition("YA_PLATFORM_VULKAN=1");
     return options;
 }
 

@@ -39,6 +39,9 @@ layout(location = 1) out vec2 vTexcoord;
 
 void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pc.modelMat * vec4(aPos, 1.0);
+// #if YA_PLATFORM_VULKAN
+//     gl_Position.y = -gl_Position.y; // flip y for vulkan
+// #endif
     // vOut.texcoord = aTexcoord; // 
     vTexcoord = aTexcoord;
 }

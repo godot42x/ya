@@ -33,7 +33,7 @@ struct BaseMaterialSystem : public IMaterialSystem
     void onDestroy() override;
     void onRenderGUI() override
     {
-        // IMaterialSystem::onRenderGUI();
+        IMaterialSystem::onRenderGUI();
     }
 
     void onUpdate(float deltaTime) override;

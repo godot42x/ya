@@ -85,11 +85,13 @@ void GeometryUtils::makeCube(
 
 
     if (bGenTexcoords) {
-        for (int i = 0; i < outVertices.size(); i += 4) {
-            outVertices[i + 0].texCoord0 = {0.0f, 0.0f}; // LB
-            outVertices[i + 1].texCoord0 = {1.0f, 0.0f}; // RB
-            outVertices[i + 2].texCoord0 = {1.0f, 1.0f}; // RT
-            outVertices[i + 3].texCoord0 = {0.0f, 1.0f}; // LT
+        // uv lt = (0,0), lb = (0,1), rt = (1,0), rb = (1,1)
+        // follow the vulkan but not opengl convention
+        for (uint32_t i = 0; i < outVertices.size(); i += 4) {
+            outVertices[i + 0].texCoord0 = {0.0f, 1.0f}; // LB
+            outVertices[i + 1].texCoord0 = {1.0f, 1.0f}; // RB
+            outVertices[i + 2].texCoord0 = {1.0f, 0.0f}; // RT
+            outVertices[i + 3].texCoord0 = {0.0f, 0.0f}; // LT
         }
     }
 
@@ -99,12 +101,12 @@ void GeometryUtils::makeCube(
 
         // Face normals in local space
         std::vector<glm::vec3> faceNormals = {
-            glm::vec3(0.0f, 0.0f, -1.0f), // Front face
+            glm::vec3(0.0f, 0.0f, 1.0f),  // Front face
             glm::vec3(1.0f, 0.0f, 0.0f),  // Right face
             glm::vec3(0.0f, 1.0f, 0.0f),  // Top face
             glm::vec3(-1.0f, 0.0f, 0.0f), // Left face
             glm::vec3(0.0f, -1.0f, 0.0f), // Bottom face
-            glm::vec3(0.0f, 0.0f, 1.0f)   // Back face
+            glm::vec3(0.0f, 0.0f, -1.0f)  // Back face
         };
 
         // Apply normal matrix to transform normals and assign to vertices
