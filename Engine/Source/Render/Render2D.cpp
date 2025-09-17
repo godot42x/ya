@@ -6,11 +6,13 @@
 #include "imgui.h"
 
 
+
 #define DYN_CULL 1
 
 namespace ya
 {
 
+CmdList Render2D::cmdList;
 
 
 static void                 *curCmdBuf = nullptr;
@@ -468,6 +470,8 @@ void Render2D::makeSprite(const glm::vec3 &position, const glm::vec2 &size, cons
                                      h,
                                      -1.0f,
                                      1.0f);
+    // flip y axis
+    // proj[1][1] *= -1;
 
     glm::mat4 mvp = proj *
                     glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *

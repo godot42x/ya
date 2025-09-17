@@ -32,8 +32,14 @@ namespace ya
 {
 
 
+enum AppMode
+{
+    Control,
+    Drawing,
+};
 
-struct AppCreateInfo
+
+struct AppDesc
 {
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 
@@ -104,8 +110,8 @@ struct App
     uint32_t _frameIndex = 0;
     bool     _bPause     = false;
 
-    AppCreateInfo _ci;
-    glm::vec2     _windowSize = {0, 0};
+    AppDesc   _ci;
+    glm::vec2 _windowSize = {0, 0};
 
     InputManager inputManager;
     TaskManager  taskManager;
@@ -123,22 +129,25 @@ struct App
 
     std::vector<Material *> _materials;
 
+    AppMode   _appMode = AppMode::Control;
+    glm::vec2 _lastMousePos;
 
   public:
     App()          = default;
     virtual ~App() = default;
 
-    void init(AppCreateInfo ci);
+    void init(AppDesc ci);
     int  run();
     int  iterate(float dt);
     void quit();
     int  processEvent(SDL_Event &event);
     void requestQuit() { bRunning = false; }
 
-    virtual void onInit(AppCreateInfo ci);
+    virtual void onInit(AppDesc ci);
     virtual void onQuit() {}
 
 
+    virtual void onEvent(Event &event);
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
     virtual void onRenderGUI();
@@ -151,7 +160,7 @@ struct App
     [[nodiscard]] T       *getRender() { return static_cast<T *>(_render); }
     [[nodiscard]] IRender *getRender() { return _render; }
 
-    [[nodiscard]] const AppCreateInfo           &getCI() const { return _ci; }
+    [[nodiscard]] const AppDesc                 &getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
     [[nodiscard]] Scene *getScene() const { return _scene.get(); }
@@ -173,6 +182,8 @@ struct App
 
     bool                           onWindowResized(const WindowResizeEvent &event);
     bool                           onKeyReleased(const KeyReleasedEvent &event);
+    bool                           onMouseMoved(const MouseMoveEvent &event);
+    bool                           onMouseButtonReleased(const MouseButtonReleasedEvent &event);
     bool                           onMouseScrolled(const MouseScrolledEvent &event);
     [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
 };

@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 {
     try {
 
-        ya::AppCreateInfo ci;
+        ya::AppDesc ci;
         ci.init(argc, argv);
         auto *app = new ya::App();
         app->init(ci);

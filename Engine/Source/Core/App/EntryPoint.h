@@ -4,14 +4,14 @@
 
 #include "Core/App/App.h"
 
-extern ya::App *createApp(ya::AppCreateInfo ci);
+extern ya::App *createApp(ya::AppDesc ci);
 
 #if defined YA_ENTRY_POINT
 
 int main(int argc, char **argv)
 {
     try {
-        ya::AppCreateInfo ci;
+        ya::AppDesc ci;
         ci.init(argc, argv);
         auto *app = createApp();
         app->init(ci);

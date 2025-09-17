@@ -5,7 +5,7 @@
 
 struct HelloTexture : public ya::App
 {
-    void onInit(ya::AppCreateInfo ci) override;
+    void onInit(ya::AppDesc ci) override;
     void onQuit() override;
 
     void onUpdate(float dt) override;

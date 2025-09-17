@@ -196,7 +196,7 @@ void imcClearValues()
 
 #pragma endregion
 
-void App::init(AppCreateInfo ci)
+void App::init(AppDesc ci)
 {
     YA_PROFILE_FUNCTION();
     _ci = ci;
@@ -453,12 +453,29 @@ void App::init(AppCreateInfo ci)
     vkDeviceWaitIdle(vkRender->getLogicalDevice());
 }
 
-void App::onInit(AppCreateInfo ci)
+void App::onInit(AppDesc ci)
 {
     auto &bus = MessageBus::get();
     bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
     bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
     bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
+}
+
+void App::onEvent(Event &event)
+{
+    switch (event.getEventType()) {
+    case EEvent::MouseMoved:
+    {
+        onMouseMoved(static_cast<MouseMoveEvent &>(event));
+
+    } break;
+    case EEvent::MouseButtonReleased:
+    {
+        onMouseButtonReleased(static_cast<MouseButtonReleasedEvent &>(event));
+    } break;
+    default:
+        break;
+    }
 }
 
 
@@ -534,7 +551,6 @@ int ya::App::processEvent(SDL_Event &event)
     inputManager.processEvent(event);
 
     auto &bus = MessageBus::get();
-
 #pragma region Sdl Event
 
     switch (SDL_EventType(event.type))
@@ -626,19 +642,22 @@ int ya::App::processEvent(SDL_Event &event)
     case SDL_EVENT_MOUSE_MOTION:
     {
         MouseMoveEvent ev(event.motion.x, event.motion.y);
-        // TODO: relative to window and global's motion size?
-        // , event.motion.xrel, event.motion.yrel);
+        // Global size from the window top-left
+        // YA_CORE_INFO("Mouse Move: {}, {}", event.motion.x, event.motion.y);
+        onEvent(ev);
         bus.publish(ev);
     } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     {
         MouseButtonPressedEvent ev(event.button.button);
+        onEvent(ev);
         bus.publish(ev);
 
     } break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
         MouseButtonReleasedEvent ev(event.button.button);
+        onMouseButtonReleased(ev);
         bus.publish(ev);
 
     } break;
@@ -833,10 +852,10 @@ void App::onRender(float dt)
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf);
-    // Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
-    // Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
-    // Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
-    // Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
+    Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
+    Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
+    Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
+    Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
     Render2D::end();
 
 
@@ -869,6 +888,11 @@ void App::onRender(float dt)
                     // TODO :bind dirty link
                     vkRender->getSwapChain()->setVsync(bVsync);
                 });
+            }
+
+            AppMode mode = _appMode;
+            if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing")) {
+                _appMode = mode;
             }
         }
         onRenderGUI();
@@ -1207,6 +1231,28 @@ bool App::onKeyReleased(const KeyReleasedEvent &event)
         requestQuit();
     }
     return true;
+}
+
+bool App::onMouseMoved(const MouseMoveEvent &event)
+{
+    _lastMousePos = glm::vec2(event.getX(), event.getY());
+    return false;
+}
+
+bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
+{
+    // YA_CORE_INFO("Mouse Button Released: {}", event.toString());
+    switch (_appMode) {
+    case Control:
+        break;
+    case Drawing:
+    {
+        // TODO: make a cmdList to async render and draw before Render2D::begin or after Render2D::end
+        // Render2D::makeSprite(glm::vec3(_lastMousePos, 1.0), {100, 100}, glm::vec4(1.0f));
+    } break;
+    }
+
+    return false;
 }
 
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
