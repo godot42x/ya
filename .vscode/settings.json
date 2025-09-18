@@ -20,6 +20,7 @@
         "libsdl",
         "logcc",
         "Lsizeiptr",
+        "makeShared",
         "MSAA",
         "Octree",
         "PRIMITIVETYPE",

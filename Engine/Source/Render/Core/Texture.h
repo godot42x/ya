@@ -2,6 +2,7 @@
 
 
 #include "Core/Base.h"
+#include "Platform/Render/Vulkan/VulkanSampler.h"
 #include "Render/RenderDefines.h"
 #include "vulkan/vulkan_core.h"
 
@@ -59,4 +60,7 @@ struct Texture
 
   private:
 };
+
+
+
 } // namespace ya

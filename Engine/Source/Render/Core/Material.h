@@ -46,10 +46,13 @@ struct TextureView
     float     uvRotation = 0.f;
 
 
-    bool isValid() const
+    [[nodiscard]] bool isValid() const
     {
         return texture && sampler;
     }
+
+    Texture       *getTexture() const { return texture; }
+    VulkanSampler *getSampler() const { return sampler; }
 };
 
 //  MARK: Material

@@ -135,7 +135,10 @@ void RenderTarget::onUpdate(float deltaTime)
 {
 
     for (auto &system : _materialSystems) {
-        system->onUpdate(deltaTime);
+        if (system->bEnabled) {
+
+            system->onUpdate(deltaTime);
+        }
     }
 }
 
@@ -263,6 +266,13 @@ void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearV
         }
     }
 };
+
+void RenderTarget::renderMaterialSystems(void *cmdBuf)
+{
+    for (auto &system : _materialSystems) {
+        if (system->bEnabled) system->onRender(cmdBuf, this);
+    }
+}
 
 const glm::mat4 RenderTarget::getProjectionMatrix() const
 {

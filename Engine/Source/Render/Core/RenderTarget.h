@@ -80,12 +80,7 @@ struct RenderTarget
         _materialSystems.push_back(system);
     }
 
-    void renderMaterialSystems(void *cmdBuf)
-    {
-        for (auto &system : _materialSystems) {
-            system->onRender(cmdBuf, this);
-        }
-    }
+    void renderMaterialSystems(void *cmdBuf);
 
     Entity            *getCameraMut() { return _camera; }
     const Entity      *getCamera() const { return _camera; }

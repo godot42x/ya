@@ -35,7 +35,7 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
 
     auto _sampleCount = ESampleCount::Sample_1;
 
-    PipelineLayout pipelineLayout{
+    PipelineDesc pipelineLayout{
         .label         = "UnlitMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
@@ -150,7 +150,7 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
             // .frontFace   = EFrontFaceType::CounterClockWise, // GL
-            .frontFace   = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+            .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .multisampleState = MultisampleState{
             .sampleCount          = _sampleCount,

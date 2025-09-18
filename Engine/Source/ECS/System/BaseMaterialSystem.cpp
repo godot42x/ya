@@ -36,7 +36,7 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
 
     constexpr auto size = sizeof(BaseMaterialSystem::PushConstant);
     YA_CORE_DEBUG("BaseMaterialSystem PushConstant size: {}", size);
-    PipelineLayout pipelineLayout{
+    PipelineDesc pipelineLayout{
         .label         = "BaseMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{

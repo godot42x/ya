@@ -25,7 +25,7 @@ struct VulkanPipelineLayout
     VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
     // std::vector<VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
-    // ya::PipelineLayout _ci;
+    // ya::PipelineDesc _ci;
 
     VulkanPipelineLayout(VulkanRender *render, std::string label = std::string("None"))
         : label(std::move(label)), _render(render) {}
@@ -38,7 +38,7 @@ struct VulkanPipelineLayout
     auto getHandle() { return _pipelineLayout; }
     void cleanup();
 
-    // ya::PipelineLayout getCI() const { return _ci; }
+    // ya::PipelineDesc getCI() const { return _ci; }
 };
 
 

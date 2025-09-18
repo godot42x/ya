@@ -14,6 +14,7 @@ void IMaterialSystem::onRenderGUI()
     ImGui::CollapsingHeader(_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
     ImGui::PushID(_label.c_str());
     ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
+    ImGui::Checkbox("Enabled", &bEnabled);
     ImGui::PopID();
 }
 

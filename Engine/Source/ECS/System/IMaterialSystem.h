@@ -19,6 +19,7 @@ struct IMaterialSystem : public ISystem
 {
     std::string _label            = "IMaterialSystem";
     bool        bReverseViewportY = true;
+    bool        bEnabled          = true;
 
     // No material and base material?
     // std::shared_ptr<Material> _baseMaterial;

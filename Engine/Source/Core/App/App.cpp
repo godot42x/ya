@@ -1,5 +1,6 @@
 #include "App.h"
 
+#include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
 #include "Core/FName.h"
@@ -10,7 +11,7 @@
 #include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/UnlitMaterialSystem.h"
-#include "Render/Core/Material.h"
+
 
 
 #include "Math/Geometry.h"
@@ -21,16 +22,15 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 
-
-#include "Core/AssetManager.h"
-
-
+#include "Render/Core/Material.h"
 #include "Render/Core/RenderTarget.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
 #include "Render/Render2D.h"
 
+#include <ranges>
 
+#include "utility.cc/ranges.h"
 
 #include "ImGuiHelper.h"
 
@@ -49,6 +49,7 @@
 #include "ECS/Entity.h"
 #include "ECS/System/BaseMaterialSystem.h"
 
+std::vector<glm::vec2> clicked;
 
 #define ONLY_2D 0
 
@@ -97,7 +98,8 @@ VkClearValue colorClearValue = {
 VkClearValue depthClearValue = {
     .depthStencil = {
         .depth   = 1,
-        .stencil = 0},
+        .stencil = 0,
+    },
 };
 
 #pragma region misc
@@ -444,11 +446,11 @@ void App::init(AppDesc ci)
 #pragma endregion
 
 
-    Render2D::init(_render, renderpass);
-
-
 
     loadScene(ci.defaultScenePath);
+
+    // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
+    Render2D::init(_render, renderpass);
     // wait something done
     vkDeviceWaitIdle(vkRender->getDevice());
 }
@@ -852,10 +854,26 @@ void App::onRender(float dt)
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf);
-    Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
-    Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
-    Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
-    Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
+    // Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
+    // Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
+    // Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
+    // Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
+    // int32_t
+    // std::views::eumerate()
+    for (const auto &&[idx, p] : ut::enumerate(clicked)) {
+
+        auto tex = idx % 2 == 0
+                     ? AssetManager::get()->getTextureByName("uv1")
+                     : AssetManager::get()->getTextureByName("face");
+        YA_CORE_ASSERT(tex, "Texture not found");
+
+        Render2D::makeSprite({p.x, p.y, 0},
+                             {50, 50},
+                             glm::vec4(1.0f, 1.0f, 0, 1),
+                             {1, 1},
+                             0,
+                             tex);
+    }
     Render2D::end();
 
 
@@ -891,7 +909,7 @@ void App::onRender(float dt)
             }
 
             AppMode mode = _appMode;
-            if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing")) {
+            if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
                 _appMode = mode;
             }
         }
@@ -1137,7 +1155,6 @@ void App::onSceneInit(Scene *scene)
     _materials.push_back(unlitMaterial2);
 
 
-
     {
         auto *unlitMaterial3 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit3");
         unlitMaterial3->setTextureView(UnlitMaterial::BaseColor0, _whiteTexture.get(), _defaultSampler.get());
@@ -1248,7 +1265,9 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
     case Drawing:
     {
         // TODO: make a cmdList to async render and draw before Render2D::begin or after Render2D::end
-        // Render2D::makeSprite(glm::vec3(_lastMousePos, 1.0), {100, 100}, glm::vec4(1.0f));
+        if (event.GetMouseButton() == EMouse::Left) {
+            clicked.push_back(_lastMousePos);
+        }
     } break;
     }
 

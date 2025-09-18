@@ -44,7 +44,8 @@ namespace EVertexAttributeFormat
 {
 enum T
 {
-    Float = 0,
+    Uint = 0,
+    Float,
     Float2,
     Float3,
     Float4,
@@ -522,7 +523,7 @@ struct PushConstantRange
     EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
 };
 
-struct PipelineLayout
+struct PipelineDesc
 {
     std::string                      label = "None";
     std::vector<PushConstantRange>   pushConstants;
@@ -551,7 +552,7 @@ struct GraphicsPipelineCreateInfo
 
 
     // different shader/pipeline can use same pipeline layout
-    // PipelineLayout *pipelineLayout = nullptr;
+    // PipelineDesc *pipelineLayout = nullptr;
 
     uint32_t         subPassRef = 0;
     ShaderCreateInfo shaderCreateInfo;
