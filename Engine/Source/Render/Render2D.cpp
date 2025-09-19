@@ -41,6 +41,7 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
 void Render2D::destroy()
 {
     quadData.destroy();
+    quadData.~FQuadData(); // manually call destructor for static instance
 }
 
 void Render2D::onUpdate()
@@ -373,7 +374,10 @@ void FQuadData::destroy()
     _vertexBuffer.reset();
     _indexBuffer.reset();
 
+    _frameUBOBuffer.reset();
+    _frameUboDSL.reset();
 
+    _descriptorPool.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
 }
