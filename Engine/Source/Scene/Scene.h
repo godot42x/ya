@@ -7,11 +7,11 @@
 
 namespace ya
 {
-class Entity;
+struct Entity;
 
 class Scene
 {
-    friend class Entity;
+    friend struct Entity;
     using id_t = entt::entity;
 
     std::string    _name;

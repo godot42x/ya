@@ -154,11 +154,12 @@ struct IShaderProcessor
 
   protected:
     // ShaderScriptProcessor() {}
+    virtual ~IShaderProcessor() = default;
 
   public:
 
 
-    virtual std::optional<stage2spirv_t>                    process(std::string_view fileName)                                 = 0;
+    virtual std::optional<stage2spirv_t>                    process(const ShaderDesc &ci)                                      = 0;
     [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) = 0;
 };
 
@@ -179,10 +180,10 @@ struct GLSLProcessor : public IShaderProcessor
 
   public:
 
-    std::optional<stage2spirv_t>      process(std::string_view fileName) override;
+    std::optional<stage2spirv_t>      process(const ShaderDesc &ci) override;
     ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) override;
 
-    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, std::vector<ir_t> &outSpv) -> bool;
+    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string> &defines, std::vector<ir_t> &outSpv) -> bool;
 
 
 
@@ -192,7 +193,7 @@ struct GLSLProcessor : public IShaderProcessor
     std::filesystem::path GetCacheMetaPath();
 
 
-    bool                                             processCombinedSource(const stdpath &filepath, stage2spirv_t &outSpvMap);
+    bool                                             processCombinedSource(const stdpath &filepath, const std::vector<std::string> &defines, stage2spirv_t &outSpvMap);
     std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath &filepath);
 
     bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap);
@@ -220,19 +221,26 @@ struct ShaderStorage
         return &it->second;
     }
 
-    const IShaderProcessor::stage2spirv_t *load(const std::string &shaderName)
+    const IShaderProcessor::stage2spirv_t *load(const ShaderDesc &ci)
     {
-        if (_shaderCache.find(shaderName) != _shaderCache.end()) {
-            YA_CORE_INFO("Shader already in cache: {}", shaderName);
+        // TODO: cache it
+        // auto it = _shaderCache.find(ci.shaderName);
+        // if (it != _shaderCache.end()) {
+        //     YA_CORE_INFO("Shader already in cache: {}", ci.shaderName);
+        //     if (!ci.bDirty) {
+        //         return &it->second;
+        //     }
+        //     YA_CORE_INFO("Shader is dirty, reloading: {}", ci.shaderName);
+        //     _shaderCache.erase(it);
+        // }
+
+        YA_PROFILE_SCOPE(std::format("ShaderStorage::load {}", ci.shaderName).c_str());
+        auto opt = getProcessor()->process(ci);
+        if (!opt.has_value()) {
+            throw std::runtime_error(std::format("Failed to process shader: {}", ci.shaderName));
         }
-        YA_PROFILE_SCOPE(std::format("ShaderStorage::load {}", shaderName).c_str());
-        if (auto opt = getProcessor()->process(shaderName)) {
-            _shaderCache[shaderName.data()] = std::move(*opt);
-        }
-        else {
-            throw std::runtime_error(std::format("Failed to process shader: {}", shaderName));
-        }
-        return &_shaderCache.at(shaderName);
+        _shaderCache[ci.shaderName.data()] = std::move(*opt);
+        return &_shaderCache.at(ci.shaderName);
     }
 };
 

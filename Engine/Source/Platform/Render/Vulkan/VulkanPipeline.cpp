@@ -127,14 +127,14 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
-    name = _ci.shaderCreateInfo.shaderName;
+    name = _ci.shaderDesc.shaderName;
     YA_CORE_INFO("Creating pipeline for: {}", name);
     auto shaderStorage = ya::App::get()->getShaderStorage();
-    auto stage2Spirv   = shaderStorage->getCache(_ci.shaderCreateInfo.shaderName);
+    auto stage2Spirv   = shaderStorage->getCache(_ci.shaderDesc.shaderName);
     if (!stage2Spirv) {
-        stage2Spirv = shaderStorage->load(_ci.shaderCreateInfo.shaderName);
+        stage2Spirv = shaderStorage->load(_ci.shaderDesc);
     }
-    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderCreateInfo.shaderName);
+    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderDesc.shaderName);
 
     // Create shader modules
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
@@ -163,9 +163,9 @@ void VulkanPipeline::createPipelineInternal()
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
     std::vector<VkVertexInputBindingDescription>   vertexBindingDescriptions;
 
-    const auto &config = _ci.shaderCreateInfo;
+    const auto &config = _ci.shaderDesc;
 
-    if (_ci.shaderCreateInfo.bDeriveFromShader) {
+    if (_ci.shaderDesc.bDeriveFromShader) {
         // Get vertex input info from shader reflection
         auto vertexReflectInfo = shaderStorage->getProcessor()->reflect(EShaderStage::Vertex, stage2Spirv->at(EShaderStage::Vertex));
 
@@ -383,7 +383,7 @@ void VulkanPipeline::createPipelineInternal()
     vkDestroyShaderModule(_render->getDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(_render->getDevice(), vertShaderModule, nullptr);
 
-    YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderCreateInfo.shaderName);
+    YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getHandle(), std::format("Pipeline_{}", name).c_str());
 }

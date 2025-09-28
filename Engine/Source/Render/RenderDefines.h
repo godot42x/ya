@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "glm/glm.hpp"
 #include "reflect.cc/enum"
+#include "utility.cc/hash.h"
 
 
 
@@ -98,13 +99,13 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 
 
-struct ShaderCreateInfo
+struct ShaderDesc
 {
-
     std::string                          shaderName;               // we use single glsl now
     bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
-    std::vector<VertexBufferDescription> vertexBufferDescs;
-    std::vector<VertexAttribute>         vertexAttributes;
+    std::vector<VertexBufferDescription> vertexBufferDescs{};
+    std::vector<VertexAttribute>         vertexAttributes{};
+    std::vector<std::string>             defines{}; // #define in shader
 };
 
 namespace EFrontFaceType
@@ -554,8 +555,8 @@ struct GraphicsPipelineCreateInfo
     // different shader/pipeline can use same pipeline layout
     // PipelineDesc *pipelineLayout = nullptr;
 
-    uint32_t         subPassRef = 0;
-    ShaderCreateInfo shaderCreateInfo;
+    uint32_t   subPassRef = 0;
+    ShaderDesc shaderDesc;
 
     EPipelineDynamicFeature::T dynamicFeatures = {};
     EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;

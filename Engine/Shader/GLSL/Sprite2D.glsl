@@ -32,8 +32,12 @@ layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec2 vTexcoord;
 layout(location = 2) in flat uint vTextureIdx;
 
+#ifndef TEXTURE_SET_SIZE
+#define TEXTURE_SET_SIZE 32
+#endif
+
 // 0 is a white texture
-layout(set = 1, binding = 0) uniform sampler2D uTextures[32];
+layout(set = 1, binding = 0) uniform sampler2D uTextures[TEXTURE_SET_SIZE];
 
 layout(location = 0) out vec4 fColor;
 

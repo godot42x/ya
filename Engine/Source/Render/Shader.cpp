@@ -457,10 +457,14 @@ auto getOption(bool bOptimized)
 
 
 
-bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, std::vector<ir_t> &outSpv)
+bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string> &defines, std::vector<ir_t> &outSpv)
 {
     shaderc::Compiler compiler;
     auto              options = getOption(false);
+    for (const auto &def : defines)
+    {
+        options.AddMacroDefinition(def);
+    }
 
     // recompile
     shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
@@ -578,7 +582,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
 
 
-bool GLSLProcessor::processCombinedSource(const stdpath &filepath, stage2spirv_t &outSpvMap)
+bool GLSLProcessor::processCombinedSource(const stdpath &filepath, const std::vector<std::string> &defines, stage2spirv_t &outSpvMap)
 {
     std::unordered_map<EShaderStage::T, std::string> shaderSources = preprocessCombinedSource(filepath);
 
@@ -593,7 +597,7 @@ bool GLSLProcessor::processCombinedSource(const stdpath &filepath, stage2spirv_t
     for (auto &&[stage, source] : shaderSources)
     {
         std::vector<ir_t> spv;
-        if (!compileToSpv(filepath.string(), source, stage, spv))
+        if (!compileToSpv(filepath.string(), source, stage, defines, spv))
         {
             YA_CORE_ERROR("Failed to compile shader: {}", filepath.string());
             return false;
@@ -607,13 +611,13 @@ bool GLSLProcessor::processCombinedSource(const stdpath &filepath, stage2spirv_t
 }
 
 
-std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(std::string_view filename)
+std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc &ci)
 {
 
-    curFilePath = stdpath(shaderStoragePath) / filename;
-    YA_CORE_ASSERT(filename.ends_with(".glsl"), "Shader filename must end with .glsl, got: {}", filename);
-    curFileName = ut::str::replace(filename, ".glsl", "");
+    YA_CORE_ASSERT(ci.shaderName.ends_with(".glsl"), "Shader filename must end with .glsl, got: {}", ci.shaderName);
+    curFileName = ut::str::replace(ci.shaderName, ".glsl", "");
 
+    curFilePath = stdpath(shaderStoragePath) / ci.shaderName;
     stage2spirv_t ret;
 
     // 1. detect file changed unimplemented for now
@@ -634,11 +638,11 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(std::string_v
 
     ret.clear();
     // 3. load it from sources
-    if (processCombinedSource(curFilePath.string(), ret)) {
-        YA_CORE_INFO("Preprocessed shader source for {}: {} stages found", filename, ret.size());
+    if (processCombinedSource(curFilePath, ci.defines, ret)) {
+        YA_CORE_INFO("Preprocessed shader source for {}: {} stages found", ci.shaderName, ret.size());
     }
     else {
-        YA_CORE_ERROR("Failed to preprocess shader source: {}", filename);
+        YA_CORE_ERROR("Failed to preprocess shader source: {}", ci.shaderName);
         return {};
     }
 

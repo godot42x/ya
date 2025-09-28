@@ -110,7 +110,7 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
     _pipelineDesc = {
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
-        .shaderCreateInfo = ShaderCreateInfo{
+        .shaderDesc = ShaderDesc{
             .shaderName        = "Test/Unlit.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {

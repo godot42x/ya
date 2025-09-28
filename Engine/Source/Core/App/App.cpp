@@ -272,8 +272,7 @@ void App::init(AppDesc ci)
         onInit(ci);
     }
 
-    currentRenderAPI          = ERenderAPI::Vulkan;
-    std::string currentShader = "Test/BaseMaterial.glsl";
+    currentRenderAPI = ERenderAPI::Vulkan;
 
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
@@ -282,9 +281,15 @@ void App::init(AppDesc ci)
                                .FactoryNew<GLSLProcessor>();
 
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-    _shaderStorage->load("Test/Unlit.glsl");
-    _shaderStorage->load(currentShader);
-    _shaderStorage->load("Sprite2D.glsl");
+    _shaderStorage->load(ShaderDesc{
+        .shaderName = "Test/Unlit.glsl",
+    });
+    _shaderStorage->load(ShaderDesc{
+        .shaderName = "Test/BaseMaterial.glsl",
+    });
+    _shaderStorage->load(ShaderDesc{
+        .shaderName = "Sprite2D.glsl",
+    });
 
 
     RenderCreateInfo renderCI{
@@ -912,6 +917,11 @@ void App::onRender(float dt)
             if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
                 _appMode = mode;
             }
+            std::string clickedPoints;
+            for (const auto &p : clicked) {
+                clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
+            }
+            ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
         }
         onRenderGUI();
 

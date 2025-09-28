@@ -56,7 +56,7 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
     GraphicsPipelineCreateInfo pipelineCI{
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
-        .shaderCreateInfo = ShaderCreateInfo{
+        .shaderDesc = ShaderDesc{
             .shaderName        = "Test/BaseMaterial.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {

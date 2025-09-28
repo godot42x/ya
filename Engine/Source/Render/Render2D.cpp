@@ -105,15 +105,29 @@ void Render2D::makeSprite(const glm::vec3         &position,
 
     uint32_t textureIdx = 0; // white texture
     if (texture) {
-        // TODO: use map to cache same texture view
-        quadData._textureViews.push_back(TextureView{
-            .texture = texture.get(),
-            .sampler = app->_linearSampler.get(),
-        });
-        textureIdx = static_cast<uint32_t>(quadData._textureViews.size() - 1);
+        auto it = quadData._textureLabel2Idx.find(texture->getLabel());
+        if (it != quadData._textureLabel2Idx.end())
+        {
+            textureIdx = it->second;
+        }
+        else {
+            // TODO: use map to cache same texture view
+            quadData._textureViews.push_back(TextureView{
+                .texture = texture.get(),
+                .sampler = app->_linearSampler.get(),
+            });
+            auto idx                                        = static_cast<uint32_t>(quadData._textureViews.size() - 1);
+            quadData._textureLabel2Idx[texture->getLabel()] = idx;
+            textureIdx                                      = idx;
+        }
     }
 
     for (int i = 0; i < 4; i++) {
+
+        // glm::vec2 uv = FQuadData::defaultTexcoord[i] *
+        //                glm::rotate(glm::mat4(1.0f), glm::radians(uvRotation), glm::vec3(0.0f, 0.0f, 1.0f)) *
+        //                uvScale;
+
         *quadData.vertexPtr = FQuadData::Vertex{
             .pos   = model * FQuadData::vertices[i],
             .color = color,
@@ -121,9 +135,6 @@ void Render2D::makeSprite(const glm::vec3         &position,
             //  1. pass the uv params to shader by vertex attributes or instance attributes or unifroms?
             //  2. push constants not good for large data batch draw call
             //  3. or compute them at CPU side?
-            // glm::vec2 uv = FQuadData::defaultTexcoord[i] *
-            //                glm::rotate(glm::mat4(1.0f), glm::radians(uvRotation), glm::vec3(0.0f, 0.0f, 1.0f)) *
-            //              *glm::vec4(uvScale);
             .texCoord   = FQuadData::defaultTexcoord[i],
             .textureIdx = textureIdx,
         };
@@ -162,7 +173,7 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
                     DescriptorSetLayoutBinding{
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 32, // TODO: max 32 textures
+                        .descriptorCount = TEXTURE_SET_SIZE,
                         .stageFlags      = EShaderStage::Fragment,
                     },
                 },
@@ -198,11 +209,13 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             .debugName     = "Sprite2D_FrameUBO",
         });
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _frameUboDS, "Sprite2D_FrameUBO_DS");
 
     _resourceDSL = makeShared<VulkanDescriptorSetLayout>(vkRender, _pipelineDesc.descriptorSetLayouts[1]);
     descriptorSets.clear();
     _descriptorPool->allocateDescriptorSetN(_resourceDSL, 1, descriptorSets);
     _resourceDS = descriptorSets[0];
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _resourceDS, "Sprite2D_ResourceDS");
 
 
     _pipelineLayout = makeShared<VulkanPipelineLayout>(vkRender);
@@ -213,22 +226,22 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             _resourceDSL->getHandle(),
         });
 
-    {
-        // update all texture descriptors to white texture
-        auto app = App::get();
-        for (uint32_t i = 0; i < TEXTURE_SET_SIZE; i++) {
-            _textureViews.push_back(TextureView{
-                .texture = app->_whiteTexture.get(),
-                .sampler = app->_linearSampler.get(),
-            });
-        }
-        updateResources(vkRender->getDevice());
-    }
+    // {
+    //     // update all texture descriptors to white texture
+    //     auto app = App::get();
+    //     for (uint32_t i = 0; i < TEXTURE_SET_SIZE; i++) {
+    //         _textureViews.push_back(TextureView{
+    //             .texture = app->_whiteTexture.get(),
+    //             .sampler = app->_linearSampler.get(),
+    //         });
+    //     }
+    //     updateResources(vkRender->getDevice());
+    // }
 
     _pipeline = makeShared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
     _pipeline->recreate(GraphicsPipelineCreateInfo{
-        .subPassRef       = 0,
-        .shaderCreateInfo = ShaderCreateInfo{
+        .subPassRef = 0,
+        .shaderDesc = ShaderDesc{
             .shaderName        = "Sprite2D.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
@@ -268,6 +281,9 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
                     .format     = EVertexAttributeFormat::Uint,
                     .offset     = offsetof(Vertex, textureIdx),
                 },
+            },
+            .defines = {
+                "TEXTURE_SET_SIZE " + std::to_string(TEXTURE_SET_SIZE),
             },
         },
         // define what state need to dynamically modified in render pass execution
@@ -386,12 +402,12 @@ void FQuadData::begin()
 {
     auto app = App::get();
     _textureViews.clear();
+    _textureLabel2Idx.clear();
     _textureViews.push_back(
         TextureView{
             .texture = app->_whiteTexture.get(),
             .sampler = app->_linearSampler.get(),
         });
-
 
 
     float w      = (float)render2dData.windowWidth;
@@ -453,13 +469,12 @@ void FQuadData::flush(void *cmdBuf)
         return;
     }
     updateResources(logicalDevice);
-    _textureViews.resize(1); // remove other textures, only white texture
 
     _vertexBuffer->flush();
 
     VkBuffer     vertexBuffers[] = {_vertexBuffer->getHandle()};
     VkDeviceSize offsets[]       = {0};
-    _pipeline->bind((VkCommandBuffer)cmdBuf);
+    _pipeline->bind(curCmdBuf);
 
     VkViewport vp{
         .x        = 0,
@@ -554,6 +569,16 @@ void FQuadData::updateFrameUBO(glm::mat4 viewProj)
 void FQuadData::updateResources(VkDevice device)
 {
     // TODO: 0 always white texture, don't need to update every frame
+    if (_textureViews.size() < TEXTURE_SET_SIZE) {
+        auto app = App::get();
+        for (uint32_t i = _textureViews.size(); i < TEXTURE_SET_SIZE; i++) {
+            _textureViews.push_back(TextureView{
+                .texture = app->_whiteTexture.get(),
+                .sampler = app->_linearSampler.get(),
+            });
+        }
+    }
+
     std::vector<VkDescriptorImageInfo> imageInfos;
     for (TextureView &texView : _textureViews) {
         auto *tv = &texView;

@@ -70,7 +70,6 @@ struct Render2D
 
 struct FQuadData
 {
-
     struct Vertex
     {
         glm::vec3 pos;
@@ -127,7 +126,8 @@ struct FQuadData
     std::shared_ptr<VulkanDescriptorSetLayout> _resourceDSL = nullptr;
     VkDescriptorSet                            _resourceDS;
     std::vector<TextureView>                   _textureViews;
-    static constexpr size_t                    TEXTURE_SET_SIZE = 32;
+    std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
+    static constexpr size_t                    TEXTURE_SET_SIZE = 4;
 
     void init(VulkanRender *vkRender, VulkanRenderPass *renderPass);
     void destroy();
