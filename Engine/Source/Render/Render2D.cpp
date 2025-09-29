@@ -89,15 +89,13 @@ void Render2D::end()
 
 void Render2D::makeSprite(const glm::vec3         &position,
                           const glm::vec2         &size,
-                          const glm::vec4         &color,
-                          const glm::vec2         &uvScale,
-                          float                    uvRotation,
-                          std::shared_ptr<Texture> texture)
+                          std::shared_ptr<Texture> texture,
+                          const glm::vec4         &tint,
+                          const glm::vec2         &uvScale)
 {
     if (quadData.shouldFlush()) {
         quadData.flush(curCmdBuf);
     }
-    auto app = App::get();
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
@@ -113,8 +111,8 @@ void Render2D::makeSprite(const glm::vec3         &position,
         else {
             // TODO: use map to cache same texture view
             quadData._textureViews.push_back(TextureView{
-                .texture = texture.get(),
-                .sampler = app->_linearSampler.get(),
+                .texture = texture,
+                .sampler = quadData._defaultSampler,
             });
             auto idx                                        = static_cast<uint32_t>(quadData._textureViews.size() - 1);
             quadData._textureLabel2Idx[texture->getLabel()] = idx;
@@ -123,19 +121,11 @@ void Render2D::makeSprite(const glm::vec3         &position,
     }
 
     for (int i = 0; i < 4; i++) {
-
-        // glm::vec2 uv = FQuadData::defaultTexcoord[i] *
-        //                glm::rotate(glm::mat4(1.0f), glm::radians(uvRotation), glm::vec3(0.0f, 0.0f, 1.0f)) *
-        //                uvScale;
-
+        // rotation -> scale -> offset
         *quadData.vertexPtr = FQuadData::Vertex{
-            .pos   = model * FQuadData::vertices[i],
-            .color = color,
-            // TODO:
-            //  1. pass the uv params to shader by vertex attributes or instance attributes or unifroms?
-            //  2. push constants not good for large data batch draw call
-            //  3. or compute them at CPU side?
-            .texCoord   = FQuadData::defaultTexcoord[i],
+            .pos        = model * FQuadData::vertices[i],
+            .color      = tint,
+            .texCoord   = FQuadData::defaultTexcoord[i] * uvScale,
             .textureIdx = textureIdx,
         };
         ++quadData.vertexPtr;
@@ -207,7 +197,7 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .size          = sizeof(FrameUBO),
             .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            .debugName     = "Sprite2D_FrameUBO",
+            .label         = "Sprite2D_FrameUBO",
         });
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _frameUboDS, "Sprite2D_FrameUBO_DS");
 
@@ -226,17 +216,6 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             _resourceDSL->getHandle(),
         });
 
-    // {
-    //     // update all texture descriptors to white texture
-    //     auto app = App::get();
-    //     for (uint32_t i = 0; i < TEXTURE_SET_SIZE; i++) {
-    //         _textureViews.push_back(TextureView{
-    //             .texture = app->_whiteTexture.get(),
-    //             .sampler = app->_linearSampler.get(),
-    //         });
-    //     }
-    //     updateResources(vkRender->getDevice());
-    // }
 
     _pipeline = makeShared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
     _pipeline->recreate(GraphicsPipelineCreateInfo{
@@ -349,7 +328,7 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             .usage         = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
             .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-            .debugName     = "Sprite2D_VertexBuffer",
+            .label         = "Sprite2D_VertexBuffer",
         });
 
     vertexPtr     = _vertexBuffer->map<FQuadData::Vertex>();
@@ -380,8 +359,14 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             .data          = indices.data(),
             .size          = sizeof(uint32_t) * MaxIndexCount,
             .memProperties = 0,
-            .debugName     = "Sprite2D_IndexBuffer",
+            .label         = "Sprite2D_IndexBuffer",
         });
+
+
+
+    ColorRGBA<uint8_t> white{.r = 255, .g = 255, .b = 255, .a = 255};
+    _whiteTexture   = makeShared<ya::Texture>(1, 1, std::vector<ColorRGBA<uint8_t>>{white});
+    _defaultSampler = Sampler::create(SamplerDesc{});
 }
 
 
@@ -400,13 +385,12 @@ void FQuadData::destroy()
 
 void FQuadData::begin()
 {
-    auto app = App::get();
     _textureViews.clear();
     _textureLabel2Idx.clear();
     _textureViews.push_back(
         TextureView{
-            .texture = app->_whiteTexture.get(),
-            .sampler = app->_linearSampler.get(),
+            .texture = _whiteTexture,
+            .sampler = _defaultSampler,
         });
 
 
@@ -568,25 +552,27 @@ void FQuadData::updateFrameUBO(glm::mat4 viewProj)
 
 void FQuadData::updateResources(VkDevice device)
 {
-    // TODO: 0 always white texture, don't need to update every frame
-    if (_textureViews.size() < TEXTURE_SET_SIZE) {
-        auto app = App::get();
-        for (uint32_t i = _textureViews.size(); i < TEXTURE_SET_SIZE; i++) {
-            _textureViews.push_back(TextureView{
-                .texture = app->_whiteTexture.get(),
-                .sampler = app->_linearSampler.get(),
-            });
-        }
-    }
+
 
     std::vector<VkDescriptorImageInfo> imageInfos;
-    for (TextureView &texView : _textureViews) {
-        auto *tv = &texView;
-        imageInfos.push_back(VkDescriptorImageInfo{
-            .sampler     = tv->getSampler()->getHandle(),
-            .imageView   = tv->getTexture()->getVkImageView(),
-            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        });
+    // make empty slot to be updated
+    for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
+
+        if (i < _textureViews.size()) {
+            auto *tv = &_textureViews[i];
+            imageInfos.push_back(VkDescriptorImageInfo{
+                .sampler     = tv->getSampler()->as<VulkanSampler>()->getHandle(),
+                .imageView   = tv->getTexture()->getVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+        }
+        else {
+            imageInfos.push_back(VkDescriptorImageInfo{
+                .sampler     = _defaultSampler->as<VulkanSampler>()->getHandle(),
+                .imageView   = _whiteTexture->getVkImageView(),
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            });
+        }
     }
 
     VulkanDescriptor::updateSets(

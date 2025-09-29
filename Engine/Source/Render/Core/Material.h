@@ -34,26 +34,6 @@ struct ModelPushConstant
 } // namespace material
 
 
-struct TextureView
-{
-
-    Texture       *texture = nullptr;
-    VulkanSampler *sampler = nullptr;
-
-    bool      bEnable = true;
-    glm::vec2 uvTranslation{0.f};
-    glm::vec2 uvScale{1.0f};
-    float     uvRotation = 0.f;
-
-
-    [[nodiscard]] bool isValid() const
-    {
-        return texture && sampler;
-    }
-
-    Texture       *getTexture() const { return texture; }
-    VulkanSampler *getSampler() const { return sampler; }
-};
 
 //  MARK: Material
 
@@ -103,14 +83,8 @@ struct Material
     }
 
     const TextureView *getTextureView(uint32_t type) const;
-    void               setTextureView(uint32_t type, Texture *texture, VulkanSampler *sampler);
-    void               setTextureViewSampler(uint32_t type, VulkanSampler *sampler)
-    {
-        if (hasTexture(type)) {
-            _textures[type].sampler = sampler;
-            setResourceDirty();
-        }
-    }
+    void               setTextureView(uint32_t type, TextureView textureView);
+    // void               setTextureViewSampler(uint32_t type, stdptr<Sampler> sampler);
     void setTextureViewEnable(uint32_t type, bool benable);
     void setTextureViewUVTranslation(uint32_t type, const glm::vec2 &uvTranslation);
     void setTextureViewUVScale(uint32_t type, const glm::vec2 &uvScale);

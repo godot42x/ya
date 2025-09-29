@@ -675,66 +675,66 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
 
 
 
-VkSampler VulkanRender::createSampler(const ya::SamplerCreateInfo &ci)
-{
-    auto it = _samplers.find(ci.label);
-    if (it != _samplers.end())
-    {
-        YA_CORE_WARN("Reusing existing created sampler {}: {}, remove it...", ci.label, (uintptr_t)it->second);
-        removeSampler(ci.label);
-    }
+// VkSampler VulkanRender::createSampler(const ya::SamplerDesc &ci)
+// {
+//     // auto it = _samplers.find(ci.label);
+//     // if (it != _samplers.end())
+//     // {
+//     //     YA_CORE_WARN("Reusing existing created sampler {}: {}, remove it...", ci.label, (uintptr_t)it->second);
+//     //     removeSampler(ci.label);
+//     // }
 
-    VkSamplerCreateInfo samplerCI{
-        .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .pNext                   = nullptr,
-        .flags                   = 0,
-        .magFilter               = VkFilter::VK_FILTER_LINEAR,
-        .minFilter               = toVk(ci.minFilter),
-        .mipmapMode              = toVk(ci.mipmapMode),
-        .addressModeU            = toVk(ci.addressModeU),
-        .addressModeV            = toVk(ci.addressModeV),
-        .addressModeW            = toVk(ci.addressModeW),
-        .mipLodBias              = ci.mipLodBias,
-        .anisotropyEnable        = ci.anisotropyEnable ? VK_TRUE : VK_FALSE,
-        .maxAnisotropy           = ci.maxAnisotropy,
-        .compareEnable           = ci.compareEnable ? VK_TRUE : VK_FALSE,
-        .compareOp               = toVk(ci.compareOp),
-        .minLod                  = ci.minLod,
-        .maxLod                  = ci.maxLod,
-        .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-        .unnormalizedCoordinates = ci.unnormalizedCoordinates ? VK_TRUE : VK_FALSE,
-    };
+//     VkSamplerCreateInfo samplerCI{
+//         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+//         .pNext                   = nullptr,
+//         .flags                   = 0,
+//         .magFilter               = VkFilter::VK_FILTER_LINEAR,
+//         .minFilter               = toVk(ci.minFilter),
+//         .mipmapMode              = toVk(ci.mipmapMode),
+//         .addressModeU            = toVk(ci.addressModeU),
+//         .addressModeV            = toVk(ci.addressModeV),
+//         .addressModeW            = toVk(ci.addressModeW),
+//         .mipLodBias              = ci.mipLodBias,
+//         .anisotropyEnable        = ci.anisotropyEnable ? VK_TRUE : VK_FALSE,
+//         .maxAnisotropy           = ci.maxAnisotropy,
+//         .compareEnable           = ci.compareEnable ? VK_TRUE : VK_FALSE,
+//         .compareOp               = toVk(ci.compareOp),
+//         .minLod                  = ci.minLod,
+//         .maxLod                  = ci.maxLod,
+//         .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+//         .unnormalizedCoordinates = ci.unnormalizedCoordinates ? VK_TRUE : VK_FALSE,
+//     };
 
-    if (samplerCI.anisotropyEnable == VK_TRUE)
-    {
-        VkPhysicalDeviceFeatures deviceFeatures;
-        vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &deviceFeatures);
-        if (deviceFeatures.samplerAnisotropy != VK_TRUE)
-        {
-            YA_CORE_WARN("Anisotropic filtering is not supported by the physical device, disabling it.");
-            samplerCI.anisotropyEnable = VK_FALSE;
-            samplerCI.maxAnisotropy    = 1.0f;
-        }
-    }
+//     if (samplerCI.anisotropyEnable == VK_TRUE)
+//     {
+//         VkPhysicalDeviceFeatures deviceFeatures;
+//         vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &deviceFeatures);
+//         if (deviceFeatures.samplerAnisotropy != VK_TRUE)
+//         {
+//             YA_CORE_WARN("Anisotropic filtering is not supported by the physical device, disabling it.");
+//             samplerCI.anisotropyEnable = VK_FALSE;
+//             samplerCI.maxAnisotropy    = 1.0f;
+//         }
+//     }
 
-    VkSampler outSampler = VK_NULL_HANDLE;
-    VK_CALL_RET(vkCreateSampler(getDevice(), &samplerCI, getAllocator(), &outSampler));
-    setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, ci.label.c_str());
-    YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)outSampler);
+//     VkSampler outSampler = VK_NULL_HANDLE;
+//     VK_CALL_RET(vkCreateSampler(getDevice(), &samplerCI, getAllocator(), &outSampler));
+//     setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, ci.label.c_str());
+//     YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)outSampler);
 
-    _samplers[ci.label] = outSampler;
+//     // _samplers[ci.label] = outSampler;
 
-    return outSampler;
-}
+//     return outSampler;
+// }
 
-void VulkanRender::removeSampler(const std::string &label)
-{
-    if (_samplers.find(label) != _samplers.end())
-    {
-        vkDestroySampler(getDevice(), _samplers[label], getAllocator());
-        _samplers.erase(label);
-    }
-}
+// void VulkanRender::removeSampler(const std::string &label)
+// {
+//     if (_samplers.find(label) != _samplers.end())
+//     {
+//         vkDestroySampler(getDevice(), _samplers[label], getAllocator());
+//         _samplers.erase(label);
+//     }
+// }
 
 
 // MARK: Being/End

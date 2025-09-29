@@ -95,7 +95,7 @@ struct VulkanRender : public ya::IRender
     std::unique_ptr<VulkanDebugUtils> _debugUtils = nullptr;
 
 
-    std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
+    // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
 
     void *nativeWindow = nullptr;
 
@@ -217,9 +217,9 @@ struct VulkanRender : public ya::IRender
         if (_presentCommandPool) {
             _presentCommandPool->cleanup();
         }
-        for (auto &[name, sampler] : _samplers) {
-            VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
-        }
+        // for (auto &[name, sampler] : _samplers) {
+        //     VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
+        // }
 
         // MARK: destroy device
 
@@ -284,17 +284,17 @@ struct VulkanRender : public ya::IRender
     const VkAllocationCallbacks                *getAllocator();
 
 
-    VkSampler createSampler(const ya::SamplerCreateInfo &ci);
-    void      removeSampler(const std::string &label);
-    VkSampler getSampler(const std::string &name)
-    {
-        auto it = _samplers.find(name);
-        if (it != _samplers.end()) {
-            return it->second;
-        }
-        YA_CORE_WARN("Sampler not found: {}", name);
-        return VK_NULL_HANDLE;
-    }
+    // VkSampler createSampler(const ya::SamplerDesc &ci);
+    // void      removeSampler(const std::string &label);
+    // VkSampler getSampler(const std::string &name)
+    // {
+    //     auto it = _samplers.find(name);
+    //     if (it != _samplers.end()) {
+    //         return it->second;
+    //     }
+    //     YA_CORE_WARN("Sampler not found: {}", name);
+    //     return VK_NULL_HANDLE;
+    // }
 
   public:
     VkCommandBuffer beginIsolateCommands()

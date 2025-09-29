@@ -38,6 +38,9 @@ using namespace std::literals;
     #define FUNCTION_SIG
 #endif
 
+template <typename T>
+using stdptr = std::shared_ptr<T>;
+
 template <typename T, typename... Args>
 std::shared_ptr<T> makeShared(Args &&...args)
     // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }

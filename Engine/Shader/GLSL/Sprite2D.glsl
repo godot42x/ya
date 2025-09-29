@@ -43,10 +43,13 @@ layout(location = 0) out vec4 fColor;
 
 void main() 
 {
-    fColor = vColor;
     int textureIndex = int(vTextureIdx);
-    
     vec4 texColor = texture(uTextures[textureIndex], vTexcoord);
+    // png eg. has transparent areas
+    if(texColor.a < 0.01){
+        discard;
+    }
+
     fColor = texColor * vColor;
 }
 

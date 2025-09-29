@@ -41,8 +41,6 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, VkMem
 
     VK_DESTROY(Buffer, _render->getDevice(), stageBuffer);
     VK_FREE(Memory, _render->getDevice(), stageBufferMemory);
-
-    YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
 void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties)
@@ -54,7 +52,6 @@ void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags me
                            _handle,
                            _memory);
 
-    YA_CORE_TRACE("Created VulkanBuffer {}: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
 }
 
 bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)

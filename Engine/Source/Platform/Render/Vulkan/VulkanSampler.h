@@ -2,22 +2,18 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/Core/Sampler.h"
 #include "Render/RenderDefines.h"
 #include "vulkan/vulkan.h"
 
 
-struct VulkanRender;
 
-struct VulkanSampler
+struct VulkanSampler : public ya::Sampler
 {
-    VulkanRender *_render;
-    std::string   _label;
-    VkSampler     _handle;
+    std::string _label;
+    VkSampler   _handle;
 
-    // VkFilter             _filter;
-    // VkSamplerAddressMode _addressModeU;
-
-    VulkanSampler(const ya::SamplerCreateInfo &ci);
+    VulkanSampler(const ya::SamplerDesc &ci);
     virtual ~VulkanSampler();
 
     VkSampler getHandle() const { return _handle; }

@@ -226,7 +226,8 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
             .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             .size          = sizeof(ya::FrameUBO),
             .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            .debugName     = "Unlit_Frame_UBO",
+            .label         = "Unlit_Frame_UBO",
+
         });
 }
 
@@ -409,7 +410,7 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
                 .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 .size          = sizeof(ya::UnlitMaterialUBO),
                 .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                .debugName     = "MaterialParam_UBO",
+                .label         = "MaterialParam_UBO",
             });
         _materialParamsUBOs.push_back(buffer);
     }
@@ -517,12 +518,12 @@ void UnlitMaterialSystem::updateMaterialResourceDS(VkDescriptorSet ds, UnlitMate
     resourceUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
 
     VkDescriptorImageInfo imageInfo0 = {
-        .sampler     = tv0->sampler->getHandle(),
+        .sampler     = tv0->sampler->as<VulkanSampler>()->getHandle(),
         .imageView   = tv0->texture->getVkImageView(),
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
     VkDescriptorImageInfo imageInfo1 = {
-        .sampler     = tv1->sampler->getHandle(),
+        .sampler     = tv1->sampler->as<VulkanSampler>()->getHandle(),
         .imageView   = tv1->texture->getVkImageView(),
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };

@@ -32,24 +32,25 @@ const TextureView *Material::getTextureView(uint32_t type) const
     return nullptr;
 }
 
-void Material::setTextureView(uint32_t type, Texture *texture, VulkanSampler *sampler)
+void Material::setTextureView(uint32_t type, TextureView textureView)
 {
     if (hasTexture(type))
     {
-        _textures[type].texture = texture;
-        _textures[type].sampler = sampler;
+        _textures[type] = textureView;
     }
     else {
-        _textures.insert({
-            type,
-            TextureView{
-                .texture = texture,
-                .sampler = sampler,
-            },
-        });
+        _textures.insert({type, textureView});
     }
     setResourceDirty();
 }
+
+// void Material::setTextureViewSampler(uint32_t type, stdptr<Sampler> sampler)
+// {
+//     if (hasTexture(type)) {
+//         _textures[type].sampler = sampler;
+//         setResourceDirty();
+//     }
+// }
 
 void Material::setTextureViewEnable(uint32_t type, bool benable)
 {

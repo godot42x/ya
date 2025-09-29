@@ -41,6 +41,8 @@ struct Texture
     Texture(const std::string &filepath);
     Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data);
 
+    virtual ~Texture() = default;
+
     VkImage     getVkImage();
     VkImageView getVkImageView();
     VkFormat    getVkFormat() const;
@@ -61,6 +63,34 @@ struct Texture
   private:
 };
 
+
+struct TextureView
+{
+    stdptr<Texture> texture = nullptr;
+    stdptr<Sampler> sampler = nullptr;
+
+    bool      bEnable = true;
+    glm::vec2 uvTranslation{0.f};
+    glm::vec2 uvScale{1.0f};
+    float     uvRotation = 0.f;
+
+
+    static TextureView create(stdptr<Texture> texture, stdptr<Sampler> sampler)
+    {
+        return TextureView{
+            .texture = texture,
+            .sampler = sampler,
+        };
+    }
+
+    [[nodiscard]] bool isValid() const
+    {
+        return texture && sampler;
+    }
+
+    Texture *getTexture() const { return texture.get(); }
+    Sampler *getSampler() const { return sampler.get(); }
+};
 
 
 } // namespace ya

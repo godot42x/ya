@@ -16,14 +16,14 @@ struct BufferCreateInfo
     std::optional<void *> data = std::nullopt;
     uint32_t              size;
     VkMemoryPropertyFlags memProperties;
-    std::string           debugName;
+    std::string           label;
 };
 
 struct VulkanBuffer
 {
     VulkanRender *_render = nullptr;
 
-    std::string        name;
+    std::string        name         = "None";
     VkBuffer           _handle      = VK_NULL_HANDLE;
     VkDeviceMemory     _memory      = VK_NULL_HANDLE;
     VkBufferUsageFlags _usageFlags  = 0;
@@ -40,7 +40,7 @@ struct VulkanBuffer
     {
         _render      = render;
         _usageFlags  = ci.usage;
-        name         = ci.debugName;
+        name         = ci.label;
         bHostVisible = ci.memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         _size        = ci.size;
 
@@ -50,6 +50,8 @@ struct VulkanBuffer
         else {
             createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
         }
+
+        YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
         setupDebugName(name);
     }
     virtual ~VulkanBuffer();

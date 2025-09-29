@@ -492,6 +492,7 @@ void ya::App::quit()
     auto *vkRender = static_cast<VulkanRender *>(_render);
     vkDeviceWaitIdle(vkRender->getDevice());
 
+
     unloadScene();
     MaterialFactory::get()->destroy();
 
@@ -509,6 +510,11 @@ void ya::App::quit()
 
     delete rt;
     delete renderpass;
+
+    // TODO: move to AssetManager/DeviceResourceManager
+    _defaultSampler.reset();
+    _linearSampler.reset();
+    _nearestSampler.reset();
 
     AssetManager::get()->cleanup();
     _render->destroy();
@@ -859,25 +865,14 @@ void App::onRender(float dt)
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf);
-    // Render2D::makeSprite(pos1, glm::vec2(100, 100), glm::vec4(1.0f));
-    // Render2D::makeSprite(pos2, {100, 100}, glm::vec4(1, 0, 0, 1));
-    // Render2D::makeSprite(pos3, {100, 100}, glm::vec4(0, 1, 0, 1));
-    // Render2D::makeSprite(pos4, {100, 100}, glm::vec4(0, 0, 1, 1));
-    // int32_t
-    // std::views::eumerate()
-    for (const auto &&[idx, p] : ut::enumerate(clicked)) {
-
+    for (const auto &&[idx, p] : ut::enumerate(clicked))
+    {
         auto tex = idx % 2 == 0
                      ? AssetManager::get()->getTextureByName("uv1")
                      : AssetManager::get()->getTextureByName("face");
         YA_CORE_ASSERT(tex, "Texture not found");
 
-        Render2D::makeSprite({p.x, p.y, 0},
-                             {50, 50},
-                             glm::vec4(1.0f, 1.0f, 0, 1),
-                             {1, 1},
-                             0,
-                             tex);
+        Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
     }
     Render2D::end();
 
@@ -896,7 +891,7 @@ void App::onRender(float dt)
 
         if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
             float fps = 1.0f / dt;
-            ImGui::Text("Frame: %d, DeltaTime: %.1f ms,\t FPS: %.1f", _frameIndex, dt * 1000.0f, fps);
+            ImGui::Text("%s", std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f}", _frameIndex, dt * 1000.0f, fps).data());
             static int count = 0;
             if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
                 count++;
@@ -986,10 +981,10 @@ void App::onRender(float dt)
                             bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
 
 
-                            int sampler = tv.sampler == _linearSampler.get() ? 0 : 1;
+                            int sampler = tv.sampler == _linearSampler ? 0 : 1;
                             if (ImGui::Combo(std::format("Sampler##{}", i).c_str(), &sampler, "linear\0nearest\0\0")) {
                                 // YA_CORE_INFO("Change default sampler to {}", (sampler == 0) ? "linear" : "nearest");
-                                tv.sampler = (sampler == 0) ? _linearSampler.get() : _nearestSampler.get();
+                                tv.sampler = (sampler == 0) ? _linearSampler : _nearestSampler;
                                 bDirty     = true;
                             }
                             // }
@@ -1074,7 +1069,7 @@ void App::onSceneInit(Scene *scene)
 
 
     _linearSampler = std::make_shared<VulkanSampler>(
-        SamplerCreateInfo{
+        SamplerDesc{
             .label         = "default",
             .minFilter     = EFilter::Linear,
             .magFilter     = EFilter::Linear,
@@ -1086,7 +1081,7 @@ void App::onSceneInit(Scene *scene)
             .maxAnisotropy = 1.0f,
         });
     _nearestSampler = std::make_shared<VulkanSampler>(
-        SamplerCreateInfo{
+        SamplerDesc{
             .label         = "nearest",
             .minFilter     = EFilter::Nearest,
             .magFilter     = EFilter::Nearest,
@@ -1139,22 +1134,44 @@ void App::onSceneInit(Scene *scene)
 
 
     auto *unlitMaterial0 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit0");
-    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor0, _whiteTexture.get(), _defaultSampler.get());
-    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor1, _multiPixelTexture.get(), _defaultSampler.get());
+    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor0, TextureView{
+                                                                  .texture = _whiteTexture,
+                                                                  .sampler = _defaultSampler,
+                                                              });
+    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor1, TextureView{
+                                                                  .texture = _multiPixelTexture,
+                                                                  .sampler = _defaultSampler,
+                                                              });
     unlitMaterial0->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
     unlitMaterial0->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
     unlitMaterial0->setMixValue(0.5);
 
     auto *unlitMaterial1 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit1");
-    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor0, _blackTexture.get(), _defaultSampler.get());
+    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor0,
+                                   TextureView{
+                                       .texture = _blackTexture,
+                                       .sampler = _defaultSampler,
+                                   });
     unlitMaterial1->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
-    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor1, AssetManager::get()->getTextureByName("face").get(), _defaultSampler.get());
+    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor1,
+                                   TextureView{
+                                       .texture = AssetManager::get()->getTextureByName("face"),
+                                       .sampler = _defaultSampler,
+                                   });
     unlitMaterial1->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
     unlitMaterial1->setMixValue(0.5);
 
     auto *unlitMaterial2 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit2");
-    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor0, AssetManager::get()->getTextureByName("uv1").get(), _defaultSampler.get());
-    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor1, _whiteTexture.get(), _defaultSampler.get());
+    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor0,
+                                   TextureView{
+                                       .texture = AssetManager::get()->getTextureByName("uv1"),
+                                       .sampler = _defaultSampler,
+                                   });
+    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor1,
+                                   TextureView{
+                                       .texture = _whiteTexture,
+                                       .sampler = _defaultSampler,
+                                   });
     unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
     unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
     unlitMaterial2->setMixValue(0.5);
@@ -1167,8 +1184,16 @@ void App::onSceneInit(Scene *scene)
 
     {
         auto *unlitMaterial3 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit3");
-        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor0, _whiteTexture.get(), _defaultSampler.get());
-        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor1, AssetManager::get()->getTextureByName("uv1").get(), _defaultSampler.get());
+        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor0,
+                                       TextureView{
+                                           .texture = _whiteTexture,
+                                           .sampler = _defaultSampler,
+                                       });
+        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor1,
+                                       TextureView{
+                                           .texture = AssetManager::get()->getTextureByName("uv1"),
+                                           .sampler = _defaultSampler,
+                                       });
         unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
         unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
         unlitMaterial3->setMixValue(0.5);
@@ -1190,8 +1215,8 @@ void App::onSceneInit(Scene *scene)
     int   alpha    = (int)std::round(std::pow(count, 1.0 / 3.0));
     YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
 
-    int index            = 0;
-    int maxMaterialIndex = _materials.size() - 1;
+    int      index            = 0;
+    uint32_t maxMaterialIndex = _materials.size() - 1;
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
             for (int k = 0; k < alpha; ++k) {

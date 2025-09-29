@@ -710,7 +710,7 @@ enum T
 } // namespace ESamplerAddressMode
 
 
-struct SamplerCreateInfo
+struct SamplerDesc
 {
     std::string label; // (debug) name
 
@@ -729,7 +729,7 @@ struct SamplerCreateInfo
     float                  maxLod                  = 1.0f;
     bool                   unnormalizedCoordinates = false;
 
-    bool operator==(const SamplerCreateInfo &other) const
+    bool operator==(const SamplerDesc &other) const
     {
         return minFilter == other.minFilter &&
                magFilter == other.magFilter &&

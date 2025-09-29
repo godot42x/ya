@@ -12,6 +12,7 @@ namespace ya
 struct IRender
 {
     RenderCreateInfo _ci;
+    ERenderAPI::T    _renderAPI = ERenderAPI::None;
 
     IRender() = default;
     virtual ~IRender() { YA_CORE_TRACE("IRender::~IRender()"); }
@@ -28,6 +29,8 @@ struct IRender
 
     virtual bool begin(int32_t *imageIndex)                                  = 0;
     virtual bool end(int32_t imageIndex, std::vector<void *> CommandBuffers) = 0;
+
+    [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
 };
 
 } // namespace ya

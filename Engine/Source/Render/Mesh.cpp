@@ -21,7 +21,7 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
             .data          = (void *)vertices.data(),
             .size          = static_cast<uint32_t>(sizeof(vertices[0]) * vertices.size()),
             .memProperties = 0,
-            .debugName     = name.empty() ? name : std::format("{}_VertexBuffer", name),
+            .label     = name.empty() ? name : std::format("{}_VertexBuffer", name),
         });
 
     _indexBuffer = VulkanBuffer::create(
@@ -31,7 +31,7 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
             .data          = (void *)indices.data(),
             .size          = static_cast<uint32_t>(sizeof(indices[0]) * indices.size()),
             .memProperties = 0,
-            .debugName     = name.empty() ? name : std::format("{}_IndexBuffer", name),
+            .label     = name.empty() ? name : std::format("{}_IndexBuffer", name),
         });
 }
 

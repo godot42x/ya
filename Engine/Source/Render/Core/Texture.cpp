@@ -32,12 +32,14 @@ Texture::Texture(const std::string &filepath)
 
     createImage(pixels, (uint32_t)texWidth, (uint32_t)texHeight);
     stbi_image_free(pixels);
+    YA_CORE_TRACE("Crate texture from file: {} ({}x{}, {} channels)", filepath.data(), texWidth, texHeight, texChannels);
 }
 
 Texture::Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data)
 {
     YA_CORE_ASSERT((uint32_t)data.size() == width * height, "pixel data size does not match width * height");
     createImage(data.data(), width, height);
+    YA_CORE_TRACE("Created texture from data({}x{})", width, height);
 }
 
 VkImage     Texture::getVkImage() { return image->_handle; }
@@ -77,7 +79,7 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
             .data          = (void *)pixels,
             .size          = static_cast<uint32_t>(imageSize),
             .memProperties = 0,
-            .debugName     = std::format("StagingBuffer_Texture_{}", _filepath),
+            .label         = std::format("StagingBuffer_Texture_{}", _filepath),
         });
 
     auto cmdBuf = vkRender->beginIsolateCommands();
@@ -86,8 +88,9 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
     VulkanImage::transfer(cmdBuf, stagingBuffer.get(), image.get());
     VulkanImage::transitionLayout(cmdBuf, image.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     vkRender->endIsolateCommands(cmdBuf);
+
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, image->getHandle(), std::format("Texture_Image_{}", _filepath));
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, image->_imageMemory, std::format("Texture_ImageMemory_{}", _filepath));
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, image->_imageMemory, std::format("Texture_ImageMemory_{}", _filepath));
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, imageView->getHandle(), std::format("Texture_ImageView_{}", _filepath));
 }
 

@@ -7,11 +7,12 @@ namespace ya
 
 IRender *IRender::create(const RenderCreateInfo &ci)
 {
+
+    IRender *render = nullptr;
     switch (ci.renderAPI) {
     case ERenderAPI::Vulkan:
     {
-        IRender *render = new VulkanRender();
-        return render;
+        render = new VulkanRender();
     } break;
     case ERenderAPI::None:
     case ERenderAPI::OpenGL:
@@ -21,7 +22,8 @@ IRender *IRender::create(const RenderCreateInfo &ci)
         UNREACHABLE();
         break;
     }
-    return nullptr;
+    render->_renderAPI = ci.renderAPI;
+    return render;
 }
 
 } // namespace ya
