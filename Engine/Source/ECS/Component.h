@@ -141,15 +141,4 @@ struct AudioSourceComponent : public IComponent
     AudioSourceComponent(uint32_t clipId) : _audioClipID(clipId) {}
 };
 
-// Script component for custom behavior
-struct ScriptComponent : public IComponent
-{
-    std::string _scriptName;
-    // Additional script-related data would go here
-
-    ScriptComponent()                        = default;
-    ScriptComponent(const ScriptComponent &) = default;
-    ScriptComponent(const std::string &scriptName) : _scriptName(scriptName) {}
-};
-
 } // namespace ya

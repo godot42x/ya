@@ -8,7 +8,8 @@ add_requires(
     "glm",
     "spirv-cross",
     "stb",
-    "cxxopts"
+    "cxxopts",
+    "lua"
 )
 add_requires("libsdl3", {
     configs = {
@@ -25,7 +26,7 @@ add_requires("assimp", {
 
 -- just for temp debug in runtime
 add_requires("imgui", {
-    debug= true,
+    debug = true,
     configs = {
         sdl3 = true,
         sdl3_gpu = true,
@@ -119,6 +120,7 @@ do
     add_packages("glad")
     add_packages("cxxopts", { public = true })
     add_packages("entt")
+    add_packages("lua", { public = true })
 
     -- add_deps("shader")
 
