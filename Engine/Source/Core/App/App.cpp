@@ -49,6 +49,12 @@
 #include "ECS/Entity.h"
 #include "ECS/System/BaseMaterialSystem.h"
 
+#include "Core/UI/UIButton.h"
+#include "Core/UI/UIManager.h"
+#include "Core/UI/UIPanel.h"
+
+
+
 std::vector<glm::vec2> clicked;
 
 #define ONLY_2D 0
@@ -466,6 +472,16 @@ void App::onInit(AppDesc ci)
     bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
     bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
     bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
+
+
+    auto mgr       = UIManager::get();
+    auto panel     = makeShared<UIPanel>();
+    panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
+    auto btn       = makeShared<UIButton>();
+    btn->_position = {50.0f, 50.0f};
+    btn->_size     = {200.0f, 100.0f};
+    panel->addChild(btn);
+    mgr->_rootElement.addChild(panel);
 }
 
 void App::onEvent(Event &event)
@@ -483,6 +499,13 @@ void App::onEvent(Event &event)
     default:
         break;
     }
+
+
+    UIAppCtx ctx{
+        .lastMousePos = _lastMousePos,
+    };
+
+    UIManager::get()->onEvent(event, ctx);
 }
 
 
@@ -671,6 +694,7 @@ int ya::App::processEvent(SDL_Event &event)
     {
         MouseButtonReleasedEvent ev(event.button.button);
         onMouseButtonReleased(ev);
+        onEvent(ev);
         bus.publish(ev);
 
     } break;
@@ -874,6 +898,7 @@ void App::onRender(float dt)
 
         Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
     }
+    UIManager::get()->render();
     Render2D::end();
 
 

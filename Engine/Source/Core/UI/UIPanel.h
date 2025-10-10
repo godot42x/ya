@@ -1,32 +1,43 @@
+#pragma once
 
+#include "Render/Render2D.h"
 #include "UElement.h"
+
+
+namespace ya
+{
+
+
 
 struct UIPanel : public UIElement
 {
-    std::string title;
+    using Super = UIElement;
+
+    FUIColor  _color    = {0.8f, 0.8f, 0.8f, 1.0f};
+    glm::vec2 _position = {0.0f, 0.0f};
+    glm::vec2 _size     = {100.0f, 100.0f};
+
 
   public:
-    UIPanel(const std::string &title) : title(title) {}
 
-    void render() override
+    void render(UIRenderContext &ctx) override
     {
+        Render2D::makeSprite(glm::vec3(_position, (float)ctx.layerId / 100.f), _size, nullptr, _color.asVec4());
+        ctx.layerId += 1;
+        Super::render(ctx);
     }
 
     void update(float dt) override
     {
-        for (const auto &child : _children) {
-            child->update(dt);
-        }
+        Super::update(dt);
     }
 
-    EventProcessState handleEvent(const Event &event) override
+    int handleEvent(const Event &event, UIAppCtx &ctx) override
     {
-        for (const auto &child : _children) {
-            auto state = child->handleEvent(event);
-            if (state == EventProcessState::Handled) {
-                return state;
-            }
-        }
-        return EventProcessState(EventProcessState::Continue);
+        Super::handleEvent(event, ctx);
+
+        return 0;
     }
 };
+
+} // namespace ya
