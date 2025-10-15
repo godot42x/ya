@@ -1,17 +1,17 @@
-#pragma once
+// #pragma once
 
-#include "Core/UI/DialogWindow.h"
+// #include "Core/Base.h"
 
-namespace yaEngine
-{
+// namespace yaEngine
+// {
 
-class WindowsDialogWindow : public DialogWindow
-{
-  public:
-    std::optional<std::string> showDialog(
-        DialogType                                              type,
-        const std::string                                      &title,
-        const std::vector<std::pair<std::string, std::string>> &filters = {}) override;
-};
+// class WindowsDialogWindow : public DialogWindow
+// {
+//   public:
+//     std::optional<std::string> showDialog(
+//         DialogType                                              type,
+//         const std::string                                      &title,
+//         const std::vector<std::pair<std::string, std::string>> &filters = {}) override;
+// };
 
-} // namespace yaEngine
+// } // namespace yaEngine

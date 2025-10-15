@@ -87,19 +87,22 @@ static DefaultAllocator defaultAllocator;
 
 
 
-#include "entt/entt.hpp"
 namespace ya
 {
+
 template <typename T>
 struct TypeIndex
 {
-    constexpr static uint32_t value()
+    inline static uint32_t counter = 0;
+
+    static uint32_t value()
     {
-        return entt::type_index<T>::value();
+        static uint32_t index = counter++;
+        return index;
     }
 };
 
 template <typename T>
-static inline const auto type_index_v = TypeIndex<T>::value();
+inline static const auto type_index_v = TypeIndex<T>::value();
 
 } // namespace ya

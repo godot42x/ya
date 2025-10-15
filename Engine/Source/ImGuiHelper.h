@@ -103,9 +103,6 @@ struct ImguiState
         // in sdlGPU, should be upload data?
         ImGui_ImplSDLGPU3_PrepareDrawData(drawData,
                                           (SDL_GPUCommandBuffer *)cmdBuffer);
-
-        // we could control the time for upload textures?
-        // ImGui_ImplVulkan_AddTexture()
     }
 
     // sdlGPU

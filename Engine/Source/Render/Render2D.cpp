@@ -16,7 +16,7 @@ namespace ya
 
 static FRender2dData render2dData;
 static void         *curCmdBuf = nullptr;
-static FQuadData     quadData;
+static FQuadData    *quadData  = nullptr;
 
 
 void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
@@ -35,13 +35,14 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
         return false;
     });
 
-    quadData.init(vkRender, renderpass);
+    quadData = new FQuadData();
+    quadData->init(vkRender, renderpass);
 }
 
 void Render2D::destroy()
 {
-    quadData.destroy();
-    quadData.~FQuadData(); // manually call destructor for static instance
+    quadData->destroy();
+    delete quadData;
 }
 
 void Render2D::onUpdate()
@@ -51,7 +52,7 @@ void Render2D::onUpdate()
 void Render2D::begin(void *cmdBuf)
 {
     curCmdBuf = cmdBuf;
-    quadData.begin();
+    quadData->begin();
 }
 
 void Render2D::onImGui()
@@ -78,12 +79,12 @@ void Render2D::onImGui()
         }
     }
 #endif
-    quadData.onImGui();
+    quadData->onImGui();
 }
 
 void Render2D::end()
 {
-    quadData.end();
+    quadData->end();
     curCmdBuf = nullptr;
 }
 
@@ -93,8 +94,8 @@ void Render2D::makeSprite(const glm::vec3         &position,
                           const glm::vec4         &tint,
                           const glm::vec2         &uvScale)
 {
-    if (quadData.shouldFlush()) {
-        quadData.flush(curCmdBuf);
+    if (quadData->shouldFlush()) {
+        quadData->flush(curCmdBuf);
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -103,36 +104,36 @@ void Render2D::makeSprite(const glm::vec3         &position,
 
     uint32_t textureIdx = 0; // white texture
     if (texture) {
-        auto it = quadData._textureLabel2Idx.find(texture->getLabel());
-        if (it != quadData._textureLabel2Idx.end())
+        auto it = quadData->_textureLabel2Idx.find(texture->getLabel());
+        if (it != quadData->_textureLabel2Idx.end())
         {
             textureIdx = it->second;
         }
         else {
             // TODO: use map to cache same texture view
-            quadData._textureViews.push_back(TextureView{
+            quadData->_textureViews.push_back(TextureView{
                 .texture = texture,
-                .sampler = quadData._defaultSampler,
+                .sampler = quadData->_defaultSampler,
             });
-            auto idx                                        = static_cast<uint32_t>(quadData._textureViews.size() - 1);
-            quadData._textureLabel2Idx[texture->getLabel()] = idx;
-            textureIdx                                      = idx;
+            auto idx                                         = static_cast<uint32_t>(quadData->_textureViews.size() - 1);
+            quadData->_textureLabel2Idx[texture->getLabel()] = idx;
+            textureIdx                                       = idx;
         }
     }
 
     for (int i = 0; i < 4; i++) {
         // rotation -> scale -> offset
-        *quadData.vertexPtr = FQuadData::Vertex{
+        *quadData->vertexPtr = FQuadData::Vertex{
             .pos        = model * FQuadData::vertices[i],
             .color      = tint,
             .texCoord   = FQuadData::defaultTexcoord[i] * uvScale,
             .textureIdx = textureIdx,
         };
-        ++quadData.vertexPtr;
+        ++quadData->vertexPtr;
     }
 
-    quadData.vertexCount += 4;
-    quadData.indexCount += 6;
+    quadData->vertexCount += 4;
+    quadData->indexCount += 6;
 }
 
 // MARK: quad init
@@ -157,7 +158,7 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
                 },
             },
             DescriptorSetLayout{
-                .label    = "Texture_SAMPLER",
+                .label    = "CombinedImageSampler",
                 .set      = 0,
                 .bindings = {
                     DescriptorSetLayoutBinding{
@@ -372,6 +373,9 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
 
 void FQuadData::destroy()
 {
+    _whiteTexture.reset();
+    _defaultSampler.reset();
+
     _vertexBuffer.reset();
     _indexBuffer.reset();
 
@@ -442,7 +446,7 @@ void FQuadData::begin()
 
 void FQuadData::end()
 {
-    quadData.flush(curCmdBuf);
+    quadData->flush(curCmdBuf);
 }
 
 // MARK: quad flush

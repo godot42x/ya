@@ -83,6 +83,7 @@ class SDLWindowProvider : public IWindowProvider
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "failed to initialize SDL: %s", SDL_GetError());
             return false;
         }
+        return true;
     }
     bool recreate(const WindowCreateInfo &ci) override
     {
