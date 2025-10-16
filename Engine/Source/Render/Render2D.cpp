@@ -26,7 +26,7 @@ void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
     render2dData.windowWidth  = vkRender->getSwapChain()->getExtent().width;
     render2dData.windowHeight = vkRender->getSwapChain()->getExtent().height;
 
-    MessageBus::get().subscribe<WindowResizeEvent>([vkRender](const WindowResizeEvent &ev) {
+    MessageBus::get()->subscribe<WindowResizeEvent>([vkRender](const WindowResizeEvent &ev) {
         auto winW = vkRender->getSwapChain()->getExtent().width;
         auto winH = vkRender->getSwapChain()->getExtent().height;
         YA_CORE_INFO("Window resized, swapchain extend: {}x{}, event: {}x{}", winW, winH, ev.GetWidth(), ev.GetHeight());

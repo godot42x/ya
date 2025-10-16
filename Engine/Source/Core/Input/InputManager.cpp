@@ -25,8 +25,7 @@ InputManager::~InputManager()
 
 void InputManager::init()
 {
-
-    ya::MessageBus::get().subscribe<ya::MouseScrolledEvent>(
+    ya::MessageBus::get()->subscribe<ya::MouseScrolledEvent>(
         this,
         [this](const ya::MouseScrolledEvent &event) {
             _mouseScrollDelta = {event._offsetX, event._offsetY};

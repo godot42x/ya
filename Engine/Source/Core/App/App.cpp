@@ -1,5 +1,6 @@
 #include "App.h"
 
+#include "Core/App/FPSCtrl.h"
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
@@ -7,11 +8,13 @@
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
+
+
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/Material/BaseMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/UnlitMaterialSystem.h"
-
 
 
 #include "Math/Geometry.h"
@@ -28,7 +31,6 @@
 #include "Render/Render.h"
 #include "Render/Render2D.h"
 
-#include <ranges>
 
 #include "utility.cc/ranges.h"
 
@@ -41,9 +43,6 @@
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
-#include <csignal>
-
-#include "glm/glm.hpp"
 
 
 #include "ECS/Entity.h"
@@ -76,11 +75,6 @@ std::vector<VkCommandBuffer> commandBuffers;
 // std::vector<std::shared_ptr<VulkanImage>> depthImages;
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
-// 手动设置多层cpu缓冲，让 cpu 在多个帧之间轮转, cpu and gpu can work in parallel
-// but frame count should be limited and considered  with performance
-static uint32_t currentFrameIdx = 0;
-int             fps             = 60;
-
 
 
 std::shared_ptr<Mesh> cubeMesh;
@@ -110,41 +104,6 @@ VkClearValue depthClearValue = {
 
 #pragma region misc
 
-struct FPSControl
-{
-    float fps     = 0.0f;
-    bool  bEnable = false;
-
-    static constexpr float defaultFps = 60.f;
-
-    float fpsLimit = defaultFps;
-    float wantedDT = 1.f / defaultFps;
-
-    float update(float &dt)
-    {
-        if (!bEnable) {
-            return 0;
-        }
-
-        if (dt < wantedDT)
-        {
-            float delayTimeSec = wantedDT - dt;
-            // YA_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
-            SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
-            return delayTimeSec;
-        }
-
-        return 0;
-    }
-
-    void setFPSLimit(float limit)
-    {
-        fpsLimit = limit;
-        wantedDT = 1.f / fpsLimit;
-    }
-};
-
-static FPSControl fpsCtrl;
 
 void imcFpsControl(FPSControl &fpsCtrl)
 {
@@ -160,7 +119,6 @@ void imcFpsControl(FPSControl &fpsCtrl)
         ImGui::SameLine();
         if (ImGui::Button("Confirm")) {
             fpsCtrl.setFPSLimit(newFpsLimit);
-            fps = (int)newFpsLimit;
         }
 
         ImGui::Checkbox("Enable FPS Control", &fpsCtrl.bEnable);
@@ -273,11 +231,11 @@ void App::init(AppDesc ci)
         MaterialFactory::init();
     }
 
+
     {
         YA_PROFILE_SCOPE("Inheritance Init");
         onInit(ci);
     }
-
     currentRenderAPI = ERenderAPI::Vulkan;
 
     auto shaderProcessor = ShaderProcessorFactory()
@@ -468,7 +426,7 @@ void App::init(AppDesc ci)
 
 void App::onInit(AppDesc ci)
 {
-    auto &bus = MessageBus::get();
+    auto &bus = *MessageBus::get();
     bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
     bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
     bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
@@ -484,17 +442,17 @@ void App::onInit(AppDesc ci)
     mgr->_rootElement.addChild(panel);
 }
 
-void App::onEvent(Event &event)
+int App::onEvent(const Event &event)
 {
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
     {
-        onMouseMoved(static_cast<MouseMoveEvent &>(event));
+        onMouseMoved(static_cast<const MouseMoveEvent &>(event));
 
     } break;
     case EEvent::MouseButtonReleased:
     {
-        onMouseButtonReleased(static_cast<MouseButtonReleasedEvent &>(event));
+        onMouseButtonReleased(static_cast<const MouseButtonReleasedEvent &>(event));
     } break;
     default:
         break;
@@ -504,8 +462,8 @@ void App::onEvent(Event &event)
     UIAppCtx ctx{
         .lastMousePos = _lastMousePos,
     };
-
     UIManager::get()->onEvent(event, ctx);
+    return 0;
 }
 
 
@@ -586,7 +544,6 @@ int ya::App::processEvent(SDL_Event &event)
     }
     inputManager.processEvent(event);
 
-    auto &bus = MessageBus::get();
 #pragma region Sdl Event
 
     switch (SDL_EventType(event.type))
@@ -620,8 +577,7 @@ int ya::App::processEvent(SDL_Event &event)
         break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
-        bus.publish(WindowResizeEvent{event.window.windowID, event.window.data1, event.window.data2});
-
+        dispatchEvent(WindowResizeEvent(event.window.windowID, event.window.data1, event.window.data2));
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
     case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
@@ -633,11 +589,11 @@ int ya::App::processEvent(SDL_Event &event)
         break;
     case SDL_EVENT_WINDOW_FOCUS_GAINED:
     {
-        bus.publish(WindowFocusEvent(event.window.windowID));
+        dispatchEvent(WindowFocusEvent(event.window.windowID));
     } break;
     case SDL_EVENT_WINDOW_FOCUS_LOST:
     {
-        bus.publish(WindowFocusLostEvent(event.window.windowID));
+        dispatchEvent(WindowFocusLostEvent(event.window.windowID));
     } break;
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     {
@@ -660,14 +616,14 @@ int ya::App::processEvent(SDL_Event &event)
         ev._keyCode = (enum EKey::T)event.key.key;
         ev._mod     = event.key.mod;
         ev.bRepeat  = event.key.repeat; // SDL3中的repeat字段
-        bus.publish(ev);
+        dispatchEvent(ev);
     } break;
     case SDL_EVENT_KEY_UP:
     {
         KeyReleasedEvent ev;
         ev._keyCode = static_cast<EKey::T>(event.key.key);
         ev._mod     = event.key.mod;
-        bus.publish(ev);
+        dispatchEvent(ev);
     } break;
     case SDL_EVENT_TEXT_EDITING:
     case SDL_EVENT_TEXT_INPUT:
@@ -680,22 +636,18 @@ int ya::App::processEvent(SDL_Event &event)
         MouseMoveEvent ev(event.motion.x, event.motion.y);
         // Global size from the window top-left
         // YA_CORE_INFO("Mouse Move: {}, {}", event.motion.x, event.motion.y);
-        onEvent(ev);
-        bus.publish(ev);
+        dispatchEvent(ev);
     } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     {
         MouseButtonPressedEvent ev(event.button.button);
-        onEvent(ev);
-        bus.publish(ev);
+        dispatchEvent(ev);
 
     } break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
         MouseButtonReleasedEvent ev(event.button.button);
-        onMouseButtonReleased(ev);
-        onEvent(ev);
-        bus.publish(ev);
+        dispatchEvent(ev);
 
     } break;
     case SDL_EVENT_MOUSE_WHEEL:
@@ -703,7 +655,7 @@ int ya::App::processEvent(SDL_Event &event)
         MouseScrolledEvent ev;
         ev._offsetX = event.wheel.x;
         ev._offsetY = event.wheel.y;
-        bus.publish(ev);
+        dispatchEvent(ev);
     } break;
     case SDL_EVENT_MOUSE_ADDED:
     case SDL_EVENT_MOUSE_REMOVED:
@@ -783,7 +735,7 @@ int ya::App::iterate(float dt)
         return 1;
     }
 
-    dt += fpsCtrl.update(dt);
+    dt += FPSControl::get()->update(dt);
 
     if (!_bPause) {
         onUpdate(dt);
@@ -798,21 +750,6 @@ int ya::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     inputManager.update();
-
-    // static auto time = 0.f;
-    // time += dt;                       // dt is in milliseconds
-    // float speed = glm::radians(45.f); // 45 degrees per second
-    // float alpha = speed * time;       // Convert time from ms to seconds
-
-    // glm::quat rotX = glm::angleAxis(alpha, glm::vec3(1, 0, 0));
-    // glm::quat rotY = glm::angleAxis(alpha, glm::vec3(0, 1, 0));
-    // glm::quat rotZ = glm::angleAxis(alpha, glm::vec3(0, 0, 1));
-
-    // // xyz rotation
-    // glm::quat combinedRot = rotZ * rotY * rotX;
-
-    // // auto rotation by up-down and left-right
-    // glm::mat4 rot = glm::mat4_cast(combinedRot);
 
     rt->setColorClearValue(colorClearValue);
     rt->setDepthStencilClearValue(depthClearValue);

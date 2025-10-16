@@ -1,0 +1,1 @@
+includes("HelloMaterial/xmake.lua")

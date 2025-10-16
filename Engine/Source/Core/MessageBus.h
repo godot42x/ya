@@ -38,13 +38,9 @@ struct MessageBus
     std::unordered_map<EEvent::T, std::vector<EventSubscriber>> _eventSubscribers;
     // TODO: merge normal subscriptions and event subscriptions int  one map
     // for: every subscription has a unique id, can be used to unsubscribe
-    std::unordered_map<uint64_t, std::vector<EventSubscriber>>  _allEventSubscribers;
+    std::unordered_map<uint64_t, std::vector<EventSubscriber>> _allEventSubscribers;
 
-    static MessageBus &get()
-    {
-        static MessageBus Instance;
-        return Instance;
-    }
+    static MessageBus *get();
 
     void unsubscribe(void *context)
     {

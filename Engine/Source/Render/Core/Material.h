@@ -4,11 +4,6 @@
 
 #include "Render/Core/Texture.h"
 
-#include "Platform/Render/Vulkan/VulkanSampler.h"
-#include "glm/glm.hpp"
-
-#include "entt/entt.hpp"
-#include <functional>
 
 
 namespace ya

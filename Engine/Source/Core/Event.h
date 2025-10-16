@@ -97,10 +97,6 @@ enum T : uint32_t
 
 class Event
 {
-
-  public:
-    bool _bHandled = false;
-
   public:
     virtual ~Event() = default;
 

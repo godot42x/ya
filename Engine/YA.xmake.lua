@@ -6,11 +6,16 @@ add_requires(
     "spdlog",
     "libsdl3_image",
     "glm",
-    "spirv-cross",
     "stb",
     "cxxopts",
     "lua"
 )
+add_requires("spirv-cross", {
+    configs = {
+        shared = true,
+    }
+})
+
 add_requires("libsdl3", {
     configs = {
         debug = is_mode("debug"),
@@ -19,7 +24,8 @@ add_requires("libsdl3", {
 add_requires("assimp", {
     configs = {
         shared = false,
-        -- runtimes = "MT",
+        -- runtimes = is_mode("debug") and "MTd" or "MT",
+        runtimes = "MT",
         cxxflags = "-std=c++20",
     }
 })
@@ -74,7 +80,7 @@ end
 
 target("ya") --"Yet Another (Game) Engine"
 do
-    set_kind("binary")
+    set_kind("static")
     add_rules("c++.unity_build", { batchsize = 2 })
     -- add_files("./Source/Core/**.cpp", { unity_group = "Core" })
     -- add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
@@ -114,12 +120,11 @@ do
         -- because vulkansdk's linkdir contains those libs like ["shaderc.lib", "spirv-cross.lib"]
         add_packages("shaderc")
         add_packages("spirv-cross", { public = true })
-
-        add_packages("vulkansdk")
+        add_packages("vulkansdk", { public = true })
     end
     add_packages("glad")
     add_packages("cxxopts", { public = true })
-    add_packages("entt")
+    add_packages("entt", { public = true })
     add_packages("lua", { public = true })
 
     -- add_deps("shader")

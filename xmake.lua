@@ -17,7 +17,7 @@ if is_plat("windows") then
             , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
         )
         add_ldflags(
-            -- "/ignore:4099" -- PDB not found
+        -- "/ignore:4099" -- PDB not found
         )
     end
 end
@@ -41,3 +41,6 @@ set_rundir(os.scriptdir())
 
 
 add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
+
+includes("./Example/Sandbox/xmake.lua")
+includes("./Example/xmake.lua")

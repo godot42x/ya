@@ -1,13 +1,12 @@
 #pragma once
 #include "Core/Base.h"
-
 #include "Core/Camera.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "Core/MessageBus.h"
+
 #include "Platform/Render/Vulkan/VulkanSampler.h"
+#include "Render/Core/Material.h"
 #include "Render/Core/Texture.h"
 #include "Render/Shader.h"
-#include "SDL3/SDL.h"
-#include "SDL3/SDL_timer.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -16,10 +15,9 @@
 
 
 #include "Render/Render.h"
-#include "Scene/Scene.h"
-#include "WindowProvider.h"
 
 #include "ClLIParams.h"
+#include "Scene/Scene.h"
 
 
 // #include "utility.cc/stack_deleter.h"
@@ -30,7 +28,6 @@ struct VulkanPipelineLayout;
 
 namespace ya
 {
-
 
 enum AppMode
 {
@@ -141,13 +138,22 @@ struct App
     int  iterate(float dt);
     void quit();
     int  processEvent(SDL_Event &event);
+    template <typename T>
+    int dispatchEvent(const T &event)
+    {
+        if (0 == onEvent(event)) {
+            MessageBus::get()->publish(event);
+        }
+        return 0;
+    }
+
     void requestQuit() { bRunning = false; }
 
     virtual void onInit(AppDesc ci);
     virtual void onQuit() {}
 
 
-    virtual void onEvent(Event &event);
+    virtual int  onEvent(const Event &event);
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
     virtual void onRenderGUI();

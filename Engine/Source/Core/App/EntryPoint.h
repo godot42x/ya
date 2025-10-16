@@ -4,7 +4,7 @@
 
 #include "Core/App/App.h"
 
-extern ya::App *createApp(ya::AppDesc ci);
+extern ya::App *createApp();
 
 #if defined YA_ENTRY_POINT
 

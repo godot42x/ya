@@ -27,7 +27,7 @@ struct UIManager
         _rootElement.render(ctx);
     }
 
-    void onEvent(Event &event, UIAppCtx &ctx)
+    void onEvent(const Event &event, UIAppCtx &ctx)
     {
         _rootElement.handleEvent(event, ctx);
     }

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
 #include "glm/glm.hpp"
 
