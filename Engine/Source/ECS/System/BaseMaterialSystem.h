@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 
 #include "ECS/System/IMaterialSystem.h"
-#include "Platform/Render/Vulkan/VulkanPipeline.h"
+#include "Render/Core/Pipeline.h"
 
 
 namespace ya
@@ -26,10 +26,11 @@ struct BaseMaterialSystem : public IMaterialSystem
     // int   culledCount     = 0;
     // int   totalCount      = 0;
 
-    std::shared_ptr<VulkanPipeline>       _pipeline;
-    std::shared_ptr<VulkanPipelineLayout> _pipelineLayout;
+    std::shared_ptr<IPipelineLayout> _pipelineLayoutOwner;
+    stdptr<IGraphicsPipeline>        _pipeline       = nullptr;
+    stdptr<IPipelineLayout>          _pipelineLayout = nullptr;
 
-    void onInit(VulkanRenderPass *renderPass) override;
+    void onInit(IRenderPass *renderPass) override;
     void onDestroy() override;
     void onRenderGUI() override
     {
@@ -37,6 +38,6 @@ struct BaseMaterialSystem : public IMaterialSystem
     }
 
     void onUpdate(float deltaTime) override;
-    void onRender(void *cmdBuf, RenderTarget *rt) override;
+    void onRender(ICommandBuffer *cmdBuf, RenderTarget *rt) override;
 };
 } // namespace ya

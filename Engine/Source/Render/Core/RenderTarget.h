@@ -1,29 +1,29 @@
 
 #pragma once
 
-
-
 #include "ECS/Entity.h"
 #include "ECS/System.h"
 #include "ECS/System/IMaterialSystem.h"
-#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
-#include "Platform/Render/Vulkan/VulkanRenderPass.h"
-
-
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/FrameBuffer.h"
+#include "Render/Core/RenderPass.h"
+#include "Render/RenderDefines.h"
 
 namespace ya
 {
 
+struct VulkanRenderPass;
+
 struct RenderTarget
 {
 
-    VulkanRenderPass *_renderPass       = nullptr;
-    int               subpassRef        = -1; // TODO: a RT should related to a subpass
-    uint32_t          _frameBufferCount = 0;
-    VkExtent2D        _extent           = {0, 0};
+    IRenderPass *_renderPass       = nullptr;
+    int          subpassRef        = -1; // TODO: a RT should related to a subpass
+    uint32_t     _frameBufferCount = 0;
+    Extent2D     _extent           = {0, 0};
 
-    std::vector<std::shared_ptr<VulkanFrameBuffer>> _frameBuffers;
-    std::vector<VkClearValue>                       _clearValues;
+    std::vector<std::shared_ptr<IFrameBuffer>> _frameBuffers;
+    std::vector<ClearValue>                    _clearValues;
 
     uint32_t _currentFrameIndex = 0; // Current frame index for this render target
 
@@ -42,8 +42,8 @@ struct RenderTarget
   public:
 
     // TODO : abstract API-independent class -> "IRenderPass"
-    RenderTarget(VulkanRenderPass *renderPass);
-    RenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
+    RenderTarget(IRenderPass *renderPass);
+    RenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
     virtual ~RenderTarget()
     {
         destroy();
@@ -53,34 +53,35 @@ struct RenderTarget
     void recreate();
     void destroy();
     void onUpdate(float deltaTime);
-    void onRender(void *cmdBuf) { renderMaterialSystems(cmdBuf); }
+    void onRender(ICommandBuffer *cmdBuf) { renderMaterialSystems(cmdBuf); }
     void onRenderGUI();
 
-    void begin(void *cmdBuf);
-    void end(void *cmdBuf);
+    void begin(CommandBufferHandle cmdBuf);
+    void end(CommandBufferHandle cmdBuf);
 
   public:
-    void setExtent(VkExtent2D extent);
+    void setExtent(Extent2D extent);
     void setBufferCount(uint32_t count);
-    void setColorClearValue(VkClearValue clearValue);
-    void setColorClearValue(uint32_t attachmentIdx, VkClearValue clearValue);
+    void setColorClearValue(ClearValue clearValue);
+    void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue);
 
-    void setDepthStencilClearValue(VkClearValue clearValue);
-    void setDepthStencilClearValue(uint32_t attachmentIdx, VkClearValue clearValue);
+    void setDepthStencilClearValue(ClearValue clearValue);
+    void setDepthStencilClearValue(uint32_t attachmentIdx, ClearValue clearValue);
 
-    [[nodiscard]] VulkanRenderPass  *getRenderPass() const { return _renderPass; }
-    [[nodiscard]] VulkanFrameBuffer *getFrameBuffer() const { return _frameBuffers[_currentFrameIndex].get(); }
+    [[nodiscard]] IRenderPass  *getRenderPass() const { return _renderPass; }
+    [[nodiscard]] IFrameBuffer *getFrameBuffer() const { return _frameBuffers[_currentFrameIndex].get(); }
 
     template <typename T, typename... Args>
     void addMaterialSystem(Args &&...args)
     {
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
         auto system = makeShared<T>(std::forward<Args>(args)...);
-        system->onInit(_renderPass);
+        // TODO: abstract render API - change onInit to accept IRenderPass*
+        system->onInit(getRenderPass());
         _materialSystems.push_back(system);
     }
 
-    void renderMaterialSystems(void *cmdBuf);
+    void renderMaterialSystems(ICommandBuffer *cmdBuf);
 
     Entity            *getCameraMut() { return _camera; }
     const Entity      *getCamera() const { return _camera; }

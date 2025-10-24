@@ -1,6 +1,7 @@
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 
-
+namespace ya
+{
 
 bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height)
 {
@@ -16,14 +17,14 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
         bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getFormat());
         _imageViews[i] = VulkanUtils::createImageView(
             render->getDevice(),
-            _images[i]->getHandle(),
+            _images[i]->getHandle().as<VkImage>(),
             _images[i]->getFormat(),
             bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass      = renderPass->getHandle(),
+        .renderPass      = renderPass->getVkHandle(),
         .attachmentCount = static_cast<uint32_t>(_imageViews.size()),
         .pAttachments    = _imageViews.data(),
         .width           = width,
@@ -53,3 +54,5 @@ void VulkanFrameBuffer::clean()
         image.reset(); // Reset shared pointers to release resources
     }
 }
+
+} // namespace ya

@@ -1,18 +1,16 @@
 
 #pragma once
 
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
-#include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
+#include "Render/Core/Buffer.h"
+#include "Render/Core/DescriptorSet.h"
+#include "Render/Core/Pipeline.h"
+#include "Render/Core/Texture.h"
 #include "glm/glm.hpp"
 
 #include "Core/App/App.h"
 #include "Core/Base.h"
-#include "Platform/Render/Vulkan/VulkanPipeline.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Platform/Render/Vulkan/VulkanRenderPass.h"
-
-
 #include "Render/Render.h"
+#include "Render/RenderDefines.h"
 
 namespace ya
 {
@@ -21,9 +19,9 @@ namespace ya
 
 struct FRender2dData
 {
-    uint32_t        windowWidth  = 800;
-    uint32_t        windowHeight = 600;
-    VkCullModeFlags cullMode     = VK_CULL_MODE_BACK_BIT;
+    uint32_t     windowWidth  = 800;
+    uint32_t     windowHeight = 600;
+    ECullMode::T cullMode     = ECullMode::Back;
 };
 
 
@@ -35,11 +33,11 @@ struct Render2D
     virtual ~Render2D() = default;
 
 
-    static void init(IRender *render, VulkanRenderPass *renderpass);
+    static void init(IRender *render, IRenderPass *renderpass);
     static void destroy();
 
     static void onUpdate();
-    static void begin(void *cmdBuf);
+    static void begin(ICommandBuffer *cmdBuf);
     static void onImGui();
     static void end();
 
@@ -86,10 +84,10 @@ struct FQuadData
         glm::mat4 matViewProj = glm::mat4(1.0f);
     };
 
-    VkDevice logicalDevice = nullptr;
+    IRender *_render = nullptr;
 
-    std::shared_ptr<VulkanBuffer> _vertexBuffer;
-    std::shared_ptr<VulkanBuffer> _indexBuffer;
+    std::shared_ptr<IBuffer> _vertexBuffer;
+    std::shared_ptr<IBuffer> _indexBuffer;
 
     FQuadData::Vertex *vertexPtr     = nullptr;
     FQuadData::Vertex *vertexPtrHead = nullptr;
@@ -98,28 +96,27 @@ struct FQuadData
     uint32_t indexCount  = 0;
 
 
-    PipelineDesc                          _pipelineDesc;
-    std::shared_ptr<VulkanPipelineLayout> _pipelineLayout = nullptr;
-    std::shared_ptr<VulkanPipeline>       _pipeline       = nullptr;
+    PipelineDesc                       _pipelineDesc;
+    std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
+    std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr;
 
     // descriptor set layout & pool
-    std::shared_ptr<VulkanDescriptorPool> _descriptorPool = nullptr;
+    std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
-    std::shared_ptr<VulkanDescriptorSetLayout> _frameUboDSL = nullptr;
-    VkDescriptorSet                            _frameUboDS;
-    std::shared_ptr<VulkanBuffer>              _frameUBOBuffer = nullptr;
+    std::shared_ptr<IDescriptorSetLayout> _frameUboDSL    = nullptr;
+    DescriptorSetHandle                   _frameUboDS     = {};
+    std::shared_ptr<IBuffer>              _frameUBOBuffer = nullptr;
 
-    std::shared_ptr<VulkanDescriptorSetLayout> _resourceDSL = nullptr;
-    VkDescriptorSet                            _resourceDS;
-    std::vector<TextureView>                   _textureViews;
-    std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
-    static constexpr size_t                    TEXTURE_SET_SIZE     = 32;
-    int                                        _lastPushTextureSlot = -1;
+    std::shared_ptr<IDescriptorSetLayout>     _resourceDSL = nullptr;
+    DescriptorSetHandle                       _resourceDS  = {};
+    std::vector<TextureView>                  _textureViews;
+    std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
+    static constexpr size_t                   TEXTURE_SET_SIZE     = 32;
+    int                                       _lastPushTextureSlot = -1;
 
-    stdptr<Texture> _whiteTexture   = nullptr;
-    stdptr<Sampler> _defaultSampler = nullptr;
+    // Note: White texture and default sampler are now provided by TextureLibrary
 
-    void init(VulkanRender *vkRender, VulkanRenderPass *renderPass);
+    void init(IRender *render, IRenderPass *renderPass);
     void destroy();
 
     void onImGui()
@@ -130,9 +127,9 @@ struct FQuadData
     void begin();
     void end();
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
-    void flush(void *cmdBuf);
+    void flush(ICommandBuffer *cmdBuf);
 
     void updateFrameUBO(glm::mat4 viewProj);
-    void updateResources(VkDevice device);
+    void updateResources();
 };
 }; // namespace ya

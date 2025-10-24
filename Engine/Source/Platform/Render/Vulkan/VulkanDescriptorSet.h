@@ -1,14 +1,18 @@
 
 #pragma once
 #include "Core/Base.h"
+#include "Render/Core/DescriptorSet.h"
 #include "Render/RenderDefines.h"
+
 
 #include "vulkan/vulkan.h"
 
 
+namespace ya
+{
 struct VulkanRender;
 
-struct VulkanDescriptorSetLayout
+struct VulkanDescriptorSetLayout : public ya::IDescriptorSetLayout
 {
     VulkanRender           *_render = nullptr;
     VkDescriptorSetLayout   _handle = VK_NULL_HANDLE;
@@ -17,10 +21,15 @@ struct VulkanDescriptorSetLayout
     VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayout setLayout);
     virtual ~VulkanDescriptorSetLayout();
 
-    VkDescriptorSetLayout getHandle() const { return _handle; }
+    // IDescriptorSetLayout interface
+    const ya::DescriptorSetLayout &getLayoutInfo() const override { return _setLayoutInfo; }
+    void                          *getHandle() const override { return (void *)(uintptr_t)_handle; }
+
+    // Vulkan-specific accessor
+    VkDescriptorSetLayout getVkHandle() const { return _handle; }
 };
 
-struct VulkanDescriptorPool
+struct VulkanDescriptorPool : public ya::IDescriptorPool
 {
     VulkanRender    *_render = nullptr;
     VkDescriptorPool _handle = VK_NULL_HANDLE;
@@ -29,16 +38,37 @@ struct VulkanDescriptorPool
     VulkanDescriptorPool(VulkanRender *render, const ya::DescriptorPoolCreateInfo &ci);
     virtual ~VulkanDescriptorPool();
 
-    // allocate n same set from 1 set layout
+    // IDescriptorPool interface
+    bool allocateDescriptorSets(
+        const std::shared_ptr<ya::IDescriptorSetLayout> &layout,
+        uint32_t                                         count,
+        std::vector<ya::DescriptorSetHandle>            &outSets) override;
+
+    void  reset() override;
+    void  setDebugName(const char *name) override;
+    void *getHandle() const override { return (void *)(uintptr_t)_handle; }
+
+    // Vulkan-specific methods (kept for backward compatibility)
     bool allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout, uint32_t count, std::vector<VkDescriptorSet> &set);
 
-    void setDebugName(const char *name);
+    // Vulkan-specific accessor
+    VkDescriptorPool getVkHandle() const { return _handle; }
 };
 
 
-struct VulkanDescriptor
+struct VulkanDescriptor : public ya::IDescriptorSetHelper
 {
+    VulkanRender *_render = nullptr;
 
+    explicit VulkanDescriptor(VulkanRender *render) : _render(render) {}
+    virtual ~VulkanDescriptor() = default;
+
+    // IDescriptorSetHelper interface
+    void updateDescriptorSets(
+        const std::vector<ya::WriteDescriptorSet> &writes,
+        const std::vector<ya::CopyDescriptorSet>  &copies = {}) override;
+
+    // Static Vulkan-specific helpers (kept for backward compatibility)
     static void updateSets(
         VkDevice                                 device,
         const std::vector<VkWriteDescriptorSet> &descriptorWrites,
@@ -137,3 +167,4 @@ struct VulkanDescriptor
         return write;
     }
 };
+} // namespace ya

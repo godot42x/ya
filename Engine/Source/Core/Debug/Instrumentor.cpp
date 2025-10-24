@@ -3,6 +3,9 @@
 //
 
 #include "Instrumentor.h"
+#include <algorithm>
+#include <filesystem>
+#include "Core/Log.h"
 
 namespace ya
 {

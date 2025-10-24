@@ -8,6 +8,9 @@
 #include <unordered_map>
 #include <vulkan/vulkan.h>
 
+namespace ya
+{
+
 
 struct VulkanRender;
 
@@ -41,3 +44,5 @@ struct VulkanDebugUtils
 
     void setObjectName(VkObjectType objectType, uint64_t objectHandle, const char *name);
 };
+
+} // namespace ya

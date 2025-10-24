@@ -7,6 +7,9 @@
 
 
 
+namespace ya
+{
+
 // enum bit flags support
 template <typename T>
 concept enum_t = std::is_enum_v<T>;
@@ -33,6 +36,42 @@ enum T
     ENUM_MAX,
 };
 }; // namespace ERenderAPI
+
+
+// Generic render types
+struct Extent2D
+{
+    uint32_t width{0};
+    uint32_t height{0};
+};
+
+struct ClearColorValue
+{
+    float r{0.0f};
+    float g{0.0f};
+    float b{0.0f};
+    float a{1.0f};
+};
+
+struct ClearDepthStencilValue
+{
+    float    depth{1.0f};
+    uint32_t stencil{0};
+};
+
+struct ClearValue
+{
+    bool isDepthStencil{false};
+    union
+    {
+        ClearColorValue        color;
+        ClearDepthStencilValue depthStencil;
+    };
+
+    ClearValue() : color{} {}
+    explicit ClearValue(float r, float g, float b, float a) : isDepthStencil(false), color{r, g, b, a} {}
+    explicit ClearValue(float depth, uint32_t stencil = 0) : isDepthStencil(true), depthStencil{depth, stencil} {}
+};
 
 
 struct VertexBufferDescription
@@ -353,6 +392,7 @@ enum T
 };
 
 
+
 struct AttachmentDescription
 {
     uint32_t              index          = 0;
@@ -394,7 +434,7 @@ struct ColorBlendAttachmentState
     EBlendFactor::T    srcAlphaBlendFactor = EBlendFactor::One;
     EBlendFactor::T    dstAlphaBlendFactor = EBlendFactor::Zero;
     EBlendOp::T        alphaBlendOp        = EBlendOp::Add;
-    EColorComponent::T colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A;
+    EColorComponent::T colorWriteMask      = (EColorComponent::T)(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A);
 };
 
 struct ColorBlendState
@@ -498,9 +538,6 @@ enum T
 };
 }
 
-namespace ya
-{
-
 struct DescriptorSetLayoutBinding
 {
     uint32_t                   binding         = 0;
@@ -521,7 +558,7 @@ struct PushConstantRange
 {
     uint32_t        offset     = 0;
     uint32_t        size       = 0;
-    EShaderStage::T stageFlags = EShaderStage::Vertex | EShaderStage::Fragment; // Default to vertex and fragment stages
+    EShaderStage::T stageFlags = static_cast<EShaderStage::T>(EShaderStage::Vertex | EShaderStage::Fragment); // Default to vertex and fragment stages
 };
 
 struct PipelineDesc
@@ -542,9 +579,6 @@ struct DescriptorPoolCreateInfo
     uint32_t                        maxSets = 0;
     std::vector<DescriptorPoolSize> poolSizes;
 };
-
-
-} // namespace ya
 
 
 struct GraphicsPipelineCreateInfo
@@ -652,8 +686,13 @@ struct RenderCreateInfo
     SwapchainCreateInfo swapchainCI;
 };
 
-namespace ya
+struct FrameBufferCreateInfo
 {
+    uint32_t width  = 0;
+    uint32_t height = 0;
+    std::vector<void*> imageViews; // API-specific image views (e.g., VkImageView)
+};
+
 struct ImageCreateInfo
 {
     EFormat::T format = EFormat::Undefined;
@@ -665,7 +704,7 @@ struct ImageCreateInfo
     } extent;
     uint32_t        mipLevels             = 1;
     ESampleCount::T samples               = ESampleCount::Sample_1;
-    EImageUsage::T  usage                 = EImageUsage::Sampled | EImageUsage::TransferDst;
+    EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
     ESharingMode::T sharingMode           = {};
     uint32_t        queueFamilyIndexCount = 0;
     const uint32_t *pQueueFamilyIndices   = nullptr;
@@ -748,8 +787,6 @@ struct SamplerDesc
     }
 };
 
-} // namespace ya
-
 
 
 struct RenderHelper
@@ -757,3 +794,4 @@ struct RenderHelper
     static bool isDepthOnlyFormat(EFormat::T format) { return format == EFormat::D32_SFLOAT || format == EFormat::D24_UNORM_S8_UINT; }
     static bool isDepthStencilFormat(EFormat::T format) { return format == EFormat::D24_UNORM_S8_UINT || format == EFormat::D32_SFLOAT_S8_UINT; }
 };
+} // namespace ya

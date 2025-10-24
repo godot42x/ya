@@ -2,22 +2,18 @@
 #include "ECS/Component/CameraComponent.h"
 #include "Math/Geometry.h"
 
-
-#include <vulkan/vulkan.hpp>
-
 #include "Core/App/App.h"
 
+#include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
+#include "Render/Core/Buffer.h"
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Material.h"
+#include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderTarget.h"
+#include "Render/Core/Swapchain.h"
+#include "Render/Render.h"
 #include "Render/RenderDefines.h"
-
-
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
-#include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
-#include "Platform/Render/Vulkan/VulkanPipeline.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
-
-
 
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -29,9 +25,9 @@ namespace ya
 
 {
 
-void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
+void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
 {
-    VulkanRender *vkRender = getVulkanRender();
+    IRender *render = getRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
@@ -91,23 +87,18 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
         },
     };
 
-    _materialFrameUboDSL = makeShared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[0]);
-    _materialParamDSL    = makeShared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[1]);
-    _materialResourceDSL = makeShared<VulkanDescriptorSetLayout>(vkRender, pipelineLayout.descriptorSetLayouts[2]);
+    _materialFrameUboDSL = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts[0]);
+    _materialParamDSL    = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts[1]);
+    _materialResourceDSL = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts[2]);
 
 
 
-    _pipelineLayout = makeShared<VulkanPipelineLayout>(vkRender, pipelineLayout.label);
-    _pipelineLayout->create(
-        pipelineLayout.pushConstants,
-        {
-            _materialFrameUboDSL->getHandle(),
-            _materialParamDSL->getHandle(),
-            _materialResourceDSL->getHandle(),
-        });
+    // Use factory method to create pipeline layout
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_materialFrameUboDSL, _materialParamDSL, _materialResourceDSL};
+    _pipelineLayout                                           = IPipelineLayout::create(render, pipelineLayout.label, pipelineLayout.pushConstants, dslVec);
 
 
-    _pipelineDesc = {
+    _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
         .shaderDesc = ShaderDesc{
@@ -186,8 +177,8 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
                 {
                     .x        = 0,
                     .y        = 0,
-                    .width    = static_cast<float>(vkRender->getSwapChain()->getWidth()),
-                    .height   = static_cast<float>(vkRender->getSwapChain()->getHeight()),
+                    .width    = static_cast<float>(render->getSwapchain()->getExtent().width),
+                    .height   = static_cast<float>(render->getSwapchain()->getExtent().height),
                     .minDepth = 0.0f,
                     .maxDepth = 1.0f,
                 },
@@ -195,12 +186,14 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
             .scissors = {Scissor{
                 .offsetX = 0,
                 .offsetY = 0,
-                .width   = static_cast<uint32_t>(vkRender->getSwapChain()->getWidth()),
-                .height  = static_cast<uint32_t>(vkRender->getSwapChain()->getHeight()),
+                .width   = render->getSwapchain()->getExtent().width,
+                .height  = render->getSwapchain()->getExtent().height,
             }},
         },
     };
-    _pipeline = std::make_shared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
+    // Use factory method to create graphics pipeline
+    _pipelineOwner = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    _pipeline      = _pipelineOwner.get();
     _pipeline->recreate(_pipelineDesc);
 
 
@@ -213,25 +206,25 @@ void UnlitMaterialSystem::onInit(VulkanRenderPass *renderPass)
             },
         },
     };
-    _frameDSP = makeShared<VulkanDescriptorPool>(vkRender, poolCI);
-    std::vector<VkDescriptorSet> sets(1);
-    _frameDSP->allocateDescriptorSetN(_materialFrameUboDSL, 1, sets);
+    _frameDSP = IDescriptorPool::create(render, poolCI);
+    std::vector<ya::DescriptorSetHandle> sets;
+    _frameDSP->allocateDescriptorSets(_materialFrameUboDSL, 1, sets);
     _frameDS = sets[0];
 
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
-    _frameUBO = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    _frameUBO = ya::IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .usage         = ya::EBufferUsage::UniformBuffer,
             .size          = sizeof(ya::FrameUBO),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             .label         = "Unlit_Frame_UBO",
 
         });
 }
 
-void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
+void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, RenderTarget *rt)
 {
     Scene *scene = getScene();
     if (!scene) {
@@ -242,31 +235,21 @@ void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         return;
     }
 
-    VkCommandBuffer curCmdBuf = static_cast<VkCommandBuffer>(cmdBuf);
-    _pipeline->bind(curCmdBuf);
+    // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
+    _pipeline->bind(cmdBuf->getHandle());
 
     uint32_t width  = rt->getFrameBuffer()->getWidth();
     uint32_t height = rt->getFrameBuffer()->getHeight();
 
-    VkViewport viewport{
-        .x        = 0,
-        .y        = 0,
-        .width    = (float)width,
-        .height   = (float)height,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
+    float viewportY      = 0.0f;
+    float viewportHeight = static_cast<float>(height);
     if (bReverseViewportY) {
-        viewport.y      = (float)height;
-        viewport.height = -(float)height;
+        viewportY      = static_cast<float>(height);
+        viewportHeight = -static_cast<float>(height);
     }
 
-    vkCmdSetViewport(curCmdBuf, 0, 1, &viewport);
-    VkRect2D scissor{
-        .offset = {0, 0},
-        .extent = {width, height},
-    };
-    vkCmdSetScissor(curCmdBuf, 0, 1, &scissor);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
+    cmdBuf->setScissor(0, 0, width, height);
 
     updateFrameDS(rt);
 
@@ -292,9 +275,9 @@ void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
             }
 
             // update each material instance's descriptor set if dirty
-            uint32_t        materialID = material->getIndex();
-            VkDescriptorSet paramDS    = _materialParamDSs[materialID];
-            VkDescriptorSet resourceDS = _materialResourceDSs[materialID];
+            uint32_t            materialID = material->getIndex();
+            DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
+            DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
 
             // update the resource set when:
             // 1. this has updated, multiple entity using the same material(not material instance?)
@@ -315,38 +298,29 @@ void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
             }
 
             // bind descriptor set
-            std::array<VkDescriptorSet, 3> descSets{
+            std::vector<DescriptorSetHandle> descSets{
                 _frameDS,
                 _materialParamDSs[materialID],
                 _materialResourceDSs[materialID],
             };
-            vkCmdBindDescriptorSets(
-                curCmdBuf,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                _pipelineLayout->getHandle(),
-                0,
-                static_cast<uint32_t>(descSets.size()),
-                descSets.data(),
-                0,
-                nullptr);
+            cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
 
             // update push constant
             material::ModelPushConstant pushConst{
                 .modelMatrix = tc.getTransform(),
             };
-            vkCmdPushConstants(curCmdBuf,
-                               _pipelineLayout->getHandle(),
-                               VK_SHADER_STAGE_VERTEX_BIT,
-                               0,
-                               sizeof(material::ModelPushConstant),
-                               &pushConst);
+            cmdBuf->pushConstants(_pipelineLayout->getHandle(),
+                                  EShaderStage::Vertex,
+                                  0,
+                                  sizeof(material::ModelPushConstant),
+                                  &pushConst);
 
             // draw each mesh
             for (const auto &meshIndex : meshIDs)
             {
                 auto mesh = umc.getMesh(meshIndex);
                 if (mesh) {
-                    mesh->draw(curCmdBuf);
+                    mesh->draw(cmdBuf);
                 }
             }
         }
@@ -355,8 +329,8 @@ void UnlitMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 
 void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 {
-    auto vkRender = getVulkanRender();
-    YA_CORE_ASSERT(vkRender != nullptr, "VulkanRender is null");
+    auto *render = getRender();
+    YA_CORE_ASSERT(render != nullptr, "Render is null");
     // 1. calculate how many set needed
     uint32_t newDescriptorSetCount = std::max<uint32_t>(1, _lastMaterialDSCount);
     if (_lastMaterialDSCount == 0) {
@@ -394,22 +368,32 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
         },
     };
 
-    _materialDSP = makeShared<VulkanDescriptorPool>(vkRender, poolCI);
+    _materialDSP = IDescriptorPool::create(render, poolCI);
 
     // 4. allocate new sets
     // 为每一个单独的材质分配描述符集
-    _materialDSP->allocateDescriptorSetN(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
-    _materialDSP->allocateDescriptorSetN(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
+    std::vector<ya::DescriptorSetHandle> tempParamSets;
+    std::vector<ya::DescriptorSetHandle> tempResourceSets;
+    _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, tempParamSets);
+    _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, tempResourceSets);
+
+    // Store DescriptorSetHandle directly
+    _materialParamDSs.resize(newDescriptorSetCount);
+    _materialResourceDSs.resize(newDescriptorSetCount);
+    for (uint32_t i = 0; i < newDescriptorSetCount; i++) {
+        _materialParamDSs[i]    = tempParamSets[i];
+        _materialResourceDSs[i] = tempResourceSets[i];
+    }
 
     // 5. create UBOs
     uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
     for (uint32_t i = 0; i < diffCount; i++) {
-        auto buffer = VulkanBuffer::create(
-            vkRender,
-            BufferCreateInfo{
-                .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        auto buffer = ya::IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .usage         = ya::EBufferUsage::UniformBuffer,
                 .size          = sizeof(ya::UnlitMaterialUBO),
-                .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
                 .label         = "MaterialParam_UBO",
             });
         _materialParamsUBOs.push_back(buffer);
@@ -422,7 +406,7 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 void UnlitMaterialSystem::updateFrameDS(RenderTarget *rt)
 {
     auto app    = getApp();
-    auto render = getVulkanRender();
+    auto render = getRender();
 
     glm::mat4 proj;
     glm::mat4 view;
@@ -441,31 +425,27 @@ void UnlitMaterialSystem::updateFrameDS(RenderTarget *rt)
 
     _frameUBO->writeData(&ubo, sizeof(ubo), 0);
 
-    VkDescriptorBufferInfo bufferInfo{
-        .buffer = _frameUBO->getHandle(),
-        .offset = 0,
-        .range  = sizeof(ya::FrameUBO),
-    };
+    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::FrameUBO)));
 
-    VulkanDescriptor::updateSets(
-        render->getDevice(),
+    auto *descriptorHelper = render->getDescriptorHelper();
+    descriptorHelper->updateDescriptorSets(
         {
-            VulkanDescriptor::genBufferWrite(
+            IDescriptorSetHelper::genBufferWrite(
                 _frameDS,
                 0,
                 0,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                EPipelineDescriptorType::UniformBuffer,
                 &bufferInfo,
                 1),
         },
         {});
 }
 
-void UnlitMaterialSystem::updateMaterialParamDS(VkDescriptorSet ds, UnlitMaterial *material)
+void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial *material)
 {
-    auto render = getVulkanRender();
+    auto render = getRender();
 
-    YA_CORE_ASSERT(ds != VK_NULL_HANDLE, "descriptor set is null: {}", _ctxEntityDebugStr);
+    YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
 
     auto &params = material->uMaterial;
@@ -482,32 +462,28 @@ void UnlitMaterialSystem::updateMaterialParamDS(VkDescriptorSet ds, UnlitMateria
     auto paramUBO = _materialParamsUBOs[material->getIndex()].get();
     paramUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
 
-    VkDescriptorBufferInfo bufferInfo{
-        .buffer = paramUBO->getHandle(),
-        .offset = 0,
-        .range  = sizeof(ya::UnlitMaterialUBO),
-    };
+    DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::UnlitMaterialUBO)));
 
-    VulkanDescriptor::updateSets(
-        render->getDevice(),
+    auto *descriptorHelper = render->getDescriptorHelper();
+    descriptorHelper->updateDescriptorSets(
         {
-            VulkanDescriptor::genBufferWrite(
+            IDescriptorSetHelper::genBufferWrite(
                 ds,
                 0,
                 0,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                EPipelineDescriptorType::UniformBuffer,
                 &bufferInfo,
                 1),
         },
         {});
 }
 
-void UnlitMaterialSystem::updateMaterialResourceDS(VkDescriptorSet ds, UnlitMaterial *material)
+void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial *material)
 {
-    auto render = getVulkanRender();
+    auto render = getRender();
 
 
-    YA_CORE_ASSERT(ds != VK_NULL_HANDLE, "descriptor set is null: {}", _ctxEntityDebugStr);
+    YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
     auto &params = material->uMaterial;
     // TODO: not texture and default texture?
     // update param from texture
@@ -517,23 +493,21 @@ void UnlitMaterialSystem::updateMaterialResourceDS(VkDescriptorSet ds, UnlitMate
     auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
     resourceUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
 
-    VkDescriptorImageInfo imageInfo0 = {
-        .sampler     = tv0->sampler->as<VulkanSampler>()->getHandle(),
-        .imageView   = tv0->texture->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-    VkDescriptorImageInfo imageInfo1 = {
-        .sampler     = tv1->sampler->as<VulkanSampler>()->getHandle(),
-        .imageView   = tv1->texture->getVkImageView(),
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+    DescriptorImageInfo imageInfo0(
+        SamplerHandle(tv0->sampler->getHandle()),
+        ImageViewHandle(tv0->texture->getImageView()),
+        EImageLayout::ShaderReadOnlyOptimal);
+    DescriptorImageInfo imageInfo1(
+        SamplerHandle(tv1->sampler->getHandle()),
+        ImageViewHandle(tv1->texture->getImageView()),
+        EImageLayout::ShaderReadOnlyOptimal);
 
 
-    VulkanDescriptor::updateSets(
-        render->getDevice(),
+    auto *descriptorHelper = render->getDescriptorHelper();
+    descriptorHelper->updateDescriptorSets(
         {
-            VulkanDescriptor::genImageWrite(ds, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo0, 1),
-            VulkanDescriptor::genImageWrite(ds, 1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &imageInfo1, 1),
+            IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
+            IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
         },
         {});
 }

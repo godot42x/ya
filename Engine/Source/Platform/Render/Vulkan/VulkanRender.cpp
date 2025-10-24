@@ -1,5 +1,6 @@
 #include "VulkanRender.h"
-
+#include "VulkanCommandBuffer.h"
+#include "VulkanDescriptorSet.h"
 
 #include <Core/Base.h>
 #include <Core/Log.h>
@@ -18,6 +19,17 @@
 
 #define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
 
+namespace ya
+{
+
+// Destructor needs to be defined in .cpp where VulkanDescriptor is complete
+VulkanRender::~VulkanRender()
+{
+    if (_descriptorHelper) {
+        delete _descriptorHelper;
+        _descriptorHelper = nullptr;
+    }
+}
 
 
 void VulkanRender::createInstance()
@@ -53,6 +65,7 @@ void VulkanRender::createInstance()
         .pApplicationName   = "ya Engine",
         .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
         .pEngineName        = "No Engine",
+        .engineVersion      = VK_MAKE_VERSION(1, 0, 0),
         .apiVersion         = apiVersion,
     };
 
@@ -392,12 +405,11 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return false;
     }
 
-    VkPhysicalDeviceFeatures physicalDeviceFeatures = {
-        .samplerAnisotropy = VK_TRUE, // Enable anisotropic filtering
-        // .geometryShader    = VK_TRUE, // Enable geometry shader support
-        // .shaderClipDistance = VK_TRUE, // Enable clip distance support
-        // .shaderCullDistance = VK_TRUE, // Enable cull distance support
-    };
+    VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
+    physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE; // Enable anisotropic filtering
+    // physicalDeviceFeatures.geometryShader    = VK_TRUE; // Enable geometry shader support
+    // physicalDeviceFeatures.shaderClipDistance = VK_TRUE; // Enable clip distance support
+    // physicalDeviceFeatures.shaderCullDistance = VK_TRUE; // Enable cull distance support
 
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -473,6 +485,14 @@ void VulkanRender::createPipelineCache()
     };
 
     vkCreatePipelineCache(getDevice(), &ci, nullptr, &_pipelineCache);
+
+    // Initialize descriptor helper (using new since we use raw pointer)
+    _descriptorHelper = new VulkanDescriptor(this);
+}
+
+IDescriptorSetHelper *VulkanRender::getDescriptorHelper()
+{
+    return _descriptorHelper;
 }
 
 void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)
@@ -487,7 +507,18 @@ void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBu
     }
 }
 
+// IRender interface implementation
+void VulkanRender::allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers)
+{
+    std::vector<VkCommandBuffer> vkCommandBuffers;
+    allocateCommandBuffers(count, vkCommandBuffers);
 
+    outBuffers.clear();
+    outBuffers.reserve(count);
+    for (auto vkCmdBuf : vkCommandBuffers) {
+        outBuffers.push_back(std::make_shared<VulkanCommandBuffer>(this, vkCmdBuf));
+    }
+}
 
 bool VulkanRender::isFeatureSupported(
     std::string_view                          contextStr,
@@ -675,68 +706,6 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
 
 
 
-// VkSampler VulkanRender::createSampler(const ya::SamplerDesc &ci)
-// {
-//     // auto it = _samplers.find(ci.label);
-//     // if (it != _samplers.end())
-//     // {
-//     //     YA_CORE_WARN("Reusing existing created sampler {}: {}, remove it...", ci.label, (uintptr_t)it->second);
-//     //     removeSampler(ci.label);
-//     // }
-
-//     VkSamplerCreateInfo samplerCI{
-//         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-//         .pNext                   = nullptr,
-//         .flags                   = 0,
-//         .magFilter               = VkFilter::VK_FILTER_LINEAR,
-//         .minFilter               = toVk(ci.minFilter),
-//         .mipmapMode              = toVk(ci.mipmapMode),
-//         .addressModeU            = toVk(ci.addressModeU),
-//         .addressModeV            = toVk(ci.addressModeV),
-//         .addressModeW            = toVk(ci.addressModeW),
-//         .mipLodBias              = ci.mipLodBias,
-//         .anisotropyEnable        = ci.anisotropyEnable ? VK_TRUE : VK_FALSE,
-//         .maxAnisotropy           = ci.maxAnisotropy,
-//         .compareEnable           = ci.compareEnable ? VK_TRUE : VK_FALSE,
-//         .compareOp               = toVk(ci.compareOp),
-//         .minLod                  = ci.minLod,
-//         .maxLod                  = ci.maxLod,
-//         .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-//         .unnormalizedCoordinates = ci.unnormalizedCoordinates ? VK_TRUE : VK_FALSE,
-//     };
-
-//     if (samplerCI.anisotropyEnable == VK_TRUE)
-//     {
-//         VkPhysicalDeviceFeatures deviceFeatures;
-//         vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &deviceFeatures);
-//         if (deviceFeatures.samplerAnisotropy != VK_TRUE)
-//         {
-//             YA_CORE_WARN("Anisotropic filtering is not supported by the physical device, disabling it.");
-//             samplerCI.anisotropyEnable = VK_FALSE;
-//             samplerCI.maxAnisotropy    = 1.0f;
-//         }
-//     }
-
-//     VkSampler outSampler = VK_NULL_HANDLE;
-//     VK_CALL_RET(vkCreateSampler(getDevice(), &samplerCI, getAllocator(), &outSampler));
-//     setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, outSampler, ci.label.c_str());
-//     YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)outSampler);
-
-//     // _samplers[ci.label] = outSampler;
-
-//     return outSampler;
-// }
-
-// void VulkanRender::removeSampler(const std::string &label)
-// {
-//     if (_samplers.find(label) != _samplers.end())
-//     {
-//         vkDestroySampler(getDevice(), _samplers[label], getAllocator());
-//         _samplers.erase(label);
-//     }
-// }
-
-
 // MARK: Being/End
 bool VulkanRender::begin(int32_t *outImageIndex)
 {
@@ -752,11 +721,11 @@ bool VulkanRender::begin(int32_t *outImageIndex)
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
     VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
 
-    auto swapchain = this->getSwapChain();
+    auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 
 
     uint32_t imageIndex = 0;
-    VkResult ret        = swapchain->acquireNextImage(
+    VkResult ret        = vkSwapChain->acquireNextImage(
         frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
         frameFences[currentFrameIdx],                   // 等待上一present完成
         imageIndex);
@@ -766,11 +735,11 @@ bool VulkanRender::begin(int32_t *outImageIndex)
         vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci
-        bool ok = swapchain->recreate(this->getSwapChain()->getCreateInfo());
+        bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
         if (ok) {
-            ret = getSwapChain()->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
-                                                   frameFences[currentFrameIdx],
-                                                   imageIndex);
+            ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
+                                                frameFences[currentFrameIdx],
+                                                imageIndex);
 
             if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
                 YA_CORE_ERROR("Failed to acquire next image: {}", ret);
@@ -781,10 +750,10 @@ bool VulkanRender::begin(int32_t *outImageIndex)
             YA_CORE_ERROR("Failed to recreate swapchain, exiting application.");
             return false;
         }
-        YA_CORE_ASSERT(imageIndex >= 0 && imageIndex < getSwapChain()->getImageSize(),
+        YA_CORE_ASSERT(imageIndex >= 0 && imageIndex < vkSwapChain->getImageSize(),
                        "Invalid image index: {}. Swapchain image size: {}",
                        imageIndex,
-                       getSwapChain()->getImageSize());
+                       vkSwapChain->getImageSize());
     }
     *outImageIndex = static_cast<int32_t>(imageIndex);
     return true;
@@ -805,10 +774,11 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
         },
         frameFences[currentFrameIdx] // GPU完成所有(submit)工作后会发送此fence信号;
     );
+    auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 
 
     // submit and present are asynchronous operations,
-    VkResult result = getSwapChain()->presentImage(
+    VkResult result = vkSwapChain->presentImage(
         imageIndex,
         {
             imageSubmittedSignalSemaphores[imageIndex], // ⚠️ the wait sema of the Present operation  should be the IMAGE_INDEX!!!
@@ -817,7 +787,7 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
     if (result == VK_SUBOPTIMAL_KHR) {
         // recreate swapchain
         VK_CALL(vkDeviceWaitIdle(this->getDevice()));
-        bool ok = getSwapChain()->recreate(this->getSwapChain()->getCreateInfo());
+        bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
         if (ok) {
         }
         else {
@@ -884,3 +854,4 @@ void VulkanRender::initWindow(const RenderCreateInfo &ci)
     });
 #endif
 }
+} // namespace ya

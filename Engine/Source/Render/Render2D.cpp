@@ -1,8 +1,15 @@
 #include "Render2D.h"
 
 #include "Core/MessageBus.h"
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
+#include "Render/Core/Buffer.h"
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/DescriptorSet.h"
+#include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderPass.h"
+#include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
+#include "Render/RenderDefines.h"
+#include "Render/TextureLibrary.h"
 #include "imgui.h"
 
 #include "Core/AssetManager.h"
@@ -14,29 +21,30 @@
 namespace ya
 {
 
-static FRender2dData render2dData;
-static void         *curCmdBuf = nullptr;
-static FQuadData    *quadData  = nullptr;
+static FRender2dData   render2dData;
+static ICommandBuffer *curCmdBuf = nullptr;
+static FQuadData      *quadData  = nullptr;
 
 
-void Render2D::init(IRender *render, VulkanRenderPass *renderpass)
+void Render2D::init(IRender *render, IRenderPass *renderpass)
 {
-    auto *vkRender = dynamic_cast<VulkanRender *>(render);
+    auto *swapchain = render->getSwapchain();
+    auto  extent    = swapchain->getExtent();
 
-    render2dData.windowWidth  = vkRender->getSwapChain()->getExtent().width;
-    render2dData.windowHeight = vkRender->getSwapChain()->getExtent().height;
+    render2dData.windowWidth  = extent.width;
+    render2dData.windowHeight = extent.height;
 
-    MessageBus::get()->subscribe<WindowResizeEvent>([vkRender](const WindowResizeEvent &ev) {
-        auto winW = vkRender->getSwapChain()->getExtent().width;
-        auto winH = vkRender->getSwapChain()->getExtent().height;
-        YA_CORE_INFO("Window resized, swapchain extend: {}x{}, event: {}x{}", winW, winH, ev.GetWidth(), ev.GetHeight());
-        render2dData.windowWidth  = winW;
-        render2dData.windowHeight = winH;
+    MessageBus::get()->subscribe<WindowResizeEvent>([render](const WindowResizeEvent &ev) {
+        auto *swapchain = render->getSwapchain();
+        auto  extent    = swapchain->getExtent();
+        YA_CORE_INFO("Window resized, swapchain extend: {}x{}, event: {}x{}", extent.width, extent.height, ev.GetWidth(), ev.GetHeight());
+        render2dData.windowWidth  = extent.width;
+        render2dData.windowHeight = extent.height;
         return false;
     });
 
     quadData = new FQuadData();
-    quadData->init(vkRender, renderpass);
+    quadData->init(render, renderpass);
 }
 
 void Render2D::destroy()
@@ -49,7 +57,7 @@ void Render2D::onUpdate()
 {
 }
 
-void Render2D::begin(void *cmdBuf)
+void Render2D::begin(ICommandBuffer *cmdBuf)
 {
     curCmdBuf = cmdBuf;
     quadData->begin();
@@ -113,7 +121,7 @@ void Render2D::makeSprite(const glm::vec3         &position,
             // TODO: use map to cache same texture view
             quadData->_textureViews.push_back(TextureView{
                 .texture = texture,
-                .sampler = quadData->_defaultSampler,
+                .sampler = TextureLibrary::getDefaultSampler(),
             });
             auto idx                                         = static_cast<uint32_t>(quadData->_textureViews.size() - 1);
             quadData->_textureLabel2Idx[texture->getLabel()] = idx;
@@ -138,9 +146,9 @@ void Render2D::makeSprite(const glm::vec3         &position,
 
 // MARK: quad init
 
-void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
+void FQuadData::init(IRender *render, IRenderPass *renderPass)
 {
-    logicalDevice = vkRender->getDevice();
+    _render = render;
 
     _pipelineDesc = PipelineDesc{
         .pushConstants        = {},
@@ -172,8 +180,8 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
         },
     };
 
-    _descriptorPool = makeShared<VulkanDescriptorPool>(
-        vkRender,
+    _descriptorPool = IDescriptorPool::create(
+        render,
         DescriptorPoolCreateInfo{
             .maxSets   = 2,
             .poolSizes = {
@@ -188,37 +196,31 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             },
         });
 
-    _frameUboDSL = makeShared<VulkanDescriptorSetLayout>(vkRender, _pipelineDesc.descriptorSetLayouts[0]);
-    std::vector<VkDescriptorSet> descriptorSets;
-    _descriptorPool->allocateDescriptorSetN(_frameUboDSL, 1, descriptorSets);
+    _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
+    std::vector<ya::DescriptorSetHandle> descriptorSets;
+    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
     _frameUboDS     = descriptorSets[0];
-    _frameUBOBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    _frameUBOBuffer = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
             .label         = "Sprite2D_FrameUBO",
         });
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _frameUboDS, "Sprite2D_FrameUBO_DS");
 
-    _resourceDSL = makeShared<VulkanDescriptorSetLayout>(vkRender, _pipelineDesc.descriptorSetLayouts[1]);
+    _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
     descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSetN(_resourceDSL, 1, descriptorSets);
+    _descriptorPool->allocateDescriptorSets(_resourceDSL, 1, descriptorSets);
     _resourceDS = descriptorSets[0];
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _resourceDS, "Sprite2D_ResourceDS");
 
 
-    _pipelineLayout = makeShared<VulkanPipelineLayout>(vkRender);
-    _pipelineLayout->create(
-        _pipelineDesc.pushConstants,
-        {
-            _frameUboDSL->getHandle(),
-            _resourceDSL->getHandle(),
-        });
+    // Use factory method to create pipeline layout
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
+    _pipelineLayout                                           = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-
-    _pipeline = makeShared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
+    // Use factory method to create graphics pipeline
+    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
     _pipeline->recreate(GraphicsPipelineCreateInfo{
         .subPassRef = 0,
         .shaderDesc = ShaderDesc{
@@ -267,11 +269,11 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = EPipelineDynamicFeature::Viewport | EPipelineDynamicFeature::Scissor
+        .dynamicFeatures = static_cast<EPipelineDynamicFeature::T>(EPipelineDynamicFeature::Viewport | EPipelineDynamicFeature::Scissor
 #if DYN_CULL
-                         | EPipelineDynamicFeature::CullMode
+                                                                   | EPipelineDynamicFeature::CullMode
 #endif
-        ,
+                                                                   ),
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -300,7 +302,7 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
                        .srcAlphaBlendFactor = EBlendFactor::One,
                        .dstAlphaBlendFactor = EBlendFactor::Zero,
                        .alphaBlendOp        = EBlendOp::Add,
-                       .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                       .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
                 },
 
             },
@@ -323,12 +325,12 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
         },
     });
 
-    _vertexBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    _vertexBuffer = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
             .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
-            .memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+            .memProperties = EMemoryProperty::HostVisible,
             .label         = "Sprite2D_VertexBuffer",
         });
 
@@ -353,28 +355,25 @@ void FQuadData::init(VulkanRender *vkRender, VulkanRenderPass *renderPass)
         indices[i + 5] = vertexIndex + 3; // 3;
     }
 
-    _indexBuffer = VulkanBuffer::create(
-        vkRender,
-        BufferCreateInfo{
-            .usage         = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    _indexBuffer = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .usage         = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
             .data          = indices.data(),
             .size          = sizeof(uint32_t) * MaxIndexCount,
-            .memProperties = 0,
+            .memProperties = EMemoryProperty::DeviceLocal,
             .label         = "Sprite2D_IndexBuffer",
         });
 
 
 
-    ColorRGBA<uint8_t> white{.r = 255, .g = 255, .b = 255, .a = 255};
-    _whiteTexture   = makeShared<ya::Texture>(1, 1, std::vector<ColorRGBA<uint8_t>>{white});
-    _defaultSampler = Sampler::create(SamplerDesc{});
+    // Note: White texture and default sampler are now managed by TextureLibrary
 }
 
 
 void FQuadData::destroy()
 {
-    _whiteTexture.reset();
-    _defaultSampler.reset();
+    // Note: White texture and default sampler are now managed by TextureLibrary
 
     _vertexBuffer.reset();
     _indexBuffer.reset();
@@ -393,8 +392,8 @@ void FQuadData::begin()
     _textureLabel2Idx.clear();
     _textureViews.push_back(
         TextureView{
-            .texture = _whiteTexture,
-            .sampler = _defaultSampler,
+            .texture = TextureLibrary::getWhiteTexture(),
+            .sampler = TextureLibrary::getDefaultSampler(),
         });
 
 
@@ -450,77 +449,35 @@ void FQuadData::end()
 }
 
 // MARK: quad flush
-void FQuadData::flush(void *cmdBuf)
+void FQuadData::flush(ICommandBuffer *cmdBuf)
 {
-    auto curCmdBuf = (VkCommandBuffer)cmdBuf;
     if (vertexCount <= 0) {
         return;
     }
-    updateResources(logicalDevice);
+    updateResources();
 
     _vertexBuffer->flush();
 
-    VkBuffer     vertexBuffers[] = {_vertexBuffer->getHandle()};
-    VkDeviceSize offsets[]       = {0};
-    _pipeline->bind(curCmdBuf);
+    // Pipeline bind using abstract command buffer interface
+    _pipeline->bind(cmdBuf->getHandle());
 
-    VkViewport vp{
-        .x        = 0,
-        .y        = 0,
-        .width    = static_cast<float>(render2dData.windowWidth),
-        .height   = static_cast<float>(render2dData.windowHeight),
-        .minDepth = 0,
-        .maxDepth = 1,
-    };
-    vkCmdSetViewport(curCmdBuf, 0, 1, &vp);
-    VkRect2D vkScissor{
-        .offset = {
-            0,
-            0,
-        },
-        .extent = {
-            render2dData.windowWidth,
-            render2dData.windowHeight,
-        },
-    };
-    vkCmdSetScissor(curCmdBuf, 0, 1, &vkScissor);
+    // Set viewport, scissor and cull mode using abstract interface
+    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(render2dData.windowWidth), static_cast<float>(render2dData.windowHeight), 0.0f, 1.0f);
+    cmdBuf->setScissor(0, 0, render2dData.windowWidth, render2dData.windowHeight);
 #if DYN_CULL
-    vkCmdSetCullMode(curCmdBuf, render2dData.cullMode);
+    cmdBuf->setCullMode(render2dData.cullMode);
 #endif
 
+    // Bind descriptor sets using abstract interface
+    std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};
+    cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descriptorSets);
 
-    std::vector<VkDescriptorSet> descriptorSets = {
-        _frameUboDS,
-        _resourceDS,
-    };
+    // Bind vertex and index buffers using abstract interface
+    cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
+    cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
 
-    vkCmdBindDescriptorSets(curCmdBuf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            _pipelineLayout->getHandle(),
-                            0, // first set
-                            static_cast<uint32_t>(descriptorSets.size()),
-                            descriptorSets.data(),
-                            0,
-                            nullptr);
-    vkCmdBindVertexBuffers(curCmdBuf,
-                           0, // first binding
-                           1, // binding count
-                           vertexBuffers,
-                           offsets);
-    vkCmdBindIndexBuffer(curCmdBuf,
-                         _indexBuffer->getHandle(),
-                         0,
-                         VK_INDEX_TYPE_UINT32);
-
-    // TODO: turn vertex data into instance data instead?
-    // vertexBuffer contains the constant data: rawPos, texCoord
-    // do the model matrix  multiply the pos in GPU or CPU?
-    vkCmdDrawIndexed((VkCommandBuffer)cmdBuf,
-                     static_cast<uint32_t>(indexCount),
-                     1,  // instance count
-                     0,  // first index
-                     0,  // vertex offset
-                     0); // first instance
+    // Draw indexed
+    cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, 0, 0);
 
     vertexPtr   = vertexPtrHead;
     vertexCount = 0;
@@ -534,59 +491,51 @@ void FQuadData::updateFrameUBO(glm::mat4 viewProj)
     };
     _frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
 
-    VkDescriptorBufferInfo bufferInfo{
-        .buffer = _frameUBOBuffer->getHandle(),
-        .offset = 0,
-        .range  = sizeof(FrameUBO),
-    };
+    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
 
-    VulkanDescriptor::updateSets(
-        logicalDevice,
+    auto *descriptorHelper = _render->getDescriptorHelper();
+    descriptorHelper->updateDescriptorSets(
         {
-            VulkanDescriptor::genBufferWrite(
+            IDescriptorSetHelper::genBufferWrite(
                 _frameUboDS,
                 0,
                 0,
-                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                EPipelineDescriptorType::UniformBuffer,
                 &bufferInfo,
                 1),
         },
         {});
 }
 
-void FQuadData::updateResources(VkDevice device)
+void FQuadData::updateResources()
 {
-
-
-    std::vector<VkDescriptorImageInfo> imageInfos;
+    std::vector<DescriptorImageInfo> imageInfos;
     // make empty slot to be updated
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
 
         if (i < _textureViews.size()) {
             auto *tv = &_textureViews[i];
-            imageInfos.push_back(VkDescriptorImageInfo{
-                .sampler     = tv->getSampler()->as<VulkanSampler>()->getHandle(),
-                .imageView   = tv->getTexture()->getVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            });
+            imageInfos.push_back(DescriptorImageInfo(
+                tv->getSampler()->getHandle(),
+                tv->getTexture()->getImageView(),
+                EImageLayout::ShaderReadOnlyOptimal));
         }
         else {
-            imageInfos.push_back(VkDescriptorImageInfo{
-                .sampler     = _defaultSampler->as<VulkanSampler>()->getHandle(),
-                .imageView   = _whiteTexture->getVkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            });
+            imageInfos.push_back(DescriptorImageInfo(
+                TextureLibrary::getDefaultSampler()->getHandle(),
+                TextureLibrary::getWhiteTexture()->getImageView(),
+                EImageLayout::ShaderReadOnlyOptimal));
         }
     }
 
-    VulkanDescriptor::updateSets(
-        device,
+    auto *descriptorHelper = _render->getDescriptorHelper();
+    descriptorHelper->updateDescriptorSets(
         {
-            VulkanDescriptor::genImageWrite(
+            IDescriptorSetHelper::genImageWrite(
                 _resourceDS,
                 0,
                 0,
-                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                EPipelineDescriptorType::CombinedImageSampler,
                 imageInfos.data(),
                 static_cast<uint32_t>(imageInfos.size())),
         },

@@ -18,6 +18,8 @@
 
 
 #define DEBUG_GL_STATE 1
+namespace ya
+{
 
 
 class OpenGLState
@@ -32,7 +34,7 @@ class OpenGLState
     std::string m_VendorString;
 
     // Swapchain configuration
-    SwapchainCreateInfo m_SwapchainCI;
+    ya::SwapchainCreateInfo m_SwapchainCI;
 
     IWindowProvider *_window = nullptr;
 
@@ -53,9 +55,9 @@ class OpenGLState
     bool initialize();
     void destroy();
 
-    void init(const RenderCreateInfo &renderCI);
-    void recreateSwapchain(const SwapchainCreateInfo &swapchainCI);
-    void recreateRenderPass(const RenderPassCreateInfo &renderPassCI) {};
+    void init(const ya::RenderCreateInfo &renderCI);
+    void recreateSwapchain(const ya::SwapchainCreateInfo &swapchainCI);
+    void recreateRenderPass(const ya::RenderPassCreateInfo &renderPassCI) {};
 
 
     struct FrameBufferCreateInfo
@@ -63,7 +65,7 @@ class OpenGLState
     };
 
     void recreateFramebuffer(const FrameBufferCreateInfo &framebufferCI) {};
-    void recreatePipeline(const GraphicsPipelineCreateInfo &pipelineCI) {};
+    void recreatePipeline(const ya::GraphicsPipelineCreateInfo &pipelineCI) {};
 
     // Context management
     bool createContext();
@@ -74,7 +76,7 @@ class OpenGLState
     // Triple buffering support
     void enableTripleBuffering();
     bool isTripleBufferingSupported();
-    void configureBuffering(const SwapchainCreateInfo &swapchainCI);
+    void configureBuffering(const ya::SwapchainCreateInfo &swapchainCI);
 
 
     // Buffer management
@@ -171,3 +173,5 @@ class OpenGLState
     void        queryGLInfo();
     std::string readShaderSource(const std::string &filepath);
 };
+
+} // namespace ya

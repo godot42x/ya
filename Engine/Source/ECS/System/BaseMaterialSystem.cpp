@@ -3,7 +3,6 @@
 
 
 #include "Core/App/App.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
 
 #include "ECS/Component.h"
 #include "ECS/Component/CameraComponent.h"
@@ -11,7 +10,9 @@
 #include "Math/Geometry.h"
 #include "Render/Core/RenderTarget.h"
 
+#include "Render/Core/Swapchain.h"
 #include "Render/Mesh.h"
+
 
 #include "vulkan/vulkan.h"
 
@@ -27,16 +28,16 @@ namespace ya
 {
 
 
-void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
+void BaseMaterialSystem::onInit(IRenderPass *renderPass)
 {
-    _label                 = "BaseMaterialSystem";
-    VulkanRender *vkRender = getVulkanRender();
+    _label       = "BaseMaterialSystem";
+    auto *render = getRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
     constexpr auto size = sizeof(BaseMaterialSystem::PushConstant);
     YA_CORE_DEBUG("BaseMaterialSystem PushConstant size: {}", size);
-    PipelineDesc pipelineLayout{
+    PipelineDesc pipDesc{
         .label         = "BaseMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
@@ -48,9 +49,8 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
         .descriptorSetLayouts = {},
     };
 
-    _pipelineLayout = std::make_shared<VulkanPipelineLayout>(vkRender, pipelineLayout.label);
-    // _pipelineLayout->create(pipelineLayout.pushConstants, { pipelineLayout.descriptorSetLayouts[0], });
-    _pipelineLayout->create(pipelineLayout.pushConstants, {});
+    // Use factory method to create pipeline layout
+    _pipelineLayout = IPipelineLayout::create(render, pipDesc.label, pipDesc.pushConstants, {});
 
 
     GraphicsPipelineCreateInfo pipelineCI{
@@ -91,8 +91,8 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
         },
 
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
-                           EPipelineDynamicFeature::Viewport,
+        .dynamicFeatures    = static_cast<EPipelineDynamicFeature::T>(EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
+                                                                   EPipelineDynamicFeature::Viewport),
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -123,7 +123,7 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
                     .srcAlphaBlendFactor = EBlendFactor::One,
                     .dstAlphaBlendFactor = EBlendFactor::Zero,
                     .alphaBlendOp        = EBlendOp::Add,
-                    .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
                 },
             },
         },
@@ -132,8 +132,8 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
                 {
                     .x        = 0,
                     .y        = 0,
-                    .width    = static_cast<float>(vkRender->getSwapChain()->getWidth()),
-                    .height   = static_cast<float>(vkRender->getSwapChain()->getHeight()),
+                    .width    = static_cast<float>(render->getSwapchain()->getExtent().width),
+                    .height   = static_cast<float>(render->getSwapchain()->getExtent().height),
                     .minDepth = 0.0f,
                     .maxDepth = 1.0f,
                 },
@@ -141,31 +141,32 @@ void BaseMaterialSystem::onInit(VulkanRenderPass *renderPass)
             .scissors = {Scissor{
                 .offsetX = 0,
                 .offsetY = 0,
-                .width   = static_cast<uint32_t>(vkRender->getSwapChain()->getWidth()),
-                .height  = static_cast<uint32_t>(vkRender->getSwapChain()->getHeight()),
+                .width   = render->getSwapchain()->getExtent().width,
+                .height  = render->getSwapchain()->getExtent().height,
             }},
         },
     };
-    _pipeline = std::make_shared<VulkanPipeline>(vkRender, renderPass, _pipelineLayout.get());
+    // Use factory method to create graphics pipeline
+    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
     _pipeline->recreate(pipelineCI);
 }
 
 void BaseMaterialSystem::onDestroy()
 {
+    _pipelineLayoutOwner.reset();
     _pipeline.reset();
-    _pipelineLayout.reset();
+    _pipelineLayout = nullptr;
 }
 
 void BaseMaterialSystem::onUpdate(float deltaTime)
 {
 }
 
-void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
+void BaseMaterialSystem::onRender(ICommandBuffer *cmdBuf, RenderTarget *rt)
 {
 
-    auto vkRender = getVulkanRender();
-    auto vkCmdBuf = (VkCommandBuffer)cmdBuf;
-    auto scene    = getScene();
+    auto render = getRender();
+    auto scene  = getScene();
     if (!scene) {
         return;
     }
@@ -174,32 +175,37 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
         return;
     }
 
-    _pipeline->bind(vkCmdBuf);
+    // Wrap void* in VulkanCommandBuffer for generic bind call
+    _pipeline->bind(cmdBuf->getHandle());
     auto curFrameBuffer = rt->getFrameBuffer();
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo
     // or those properties should be modified in the pipeline recreation if needed.
     // but sometimes that we want to enable depth or color-blend state dynamically
-    VkViewport viewport{
+    auto         fbExtent = curFrameBuffer->getExtent();
+    ::VkViewport viewport{
         .x        = 0,
         .y        = 0,
-        .width    = static_cast<float>(curFrameBuffer->getWidth()),
-        .height   = static_cast<float>(curFrameBuffer->getHeight()),
+        .width    = static_cast<float>(fbExtent.width),
+        .height   = static_cast<float>(fbExtent.height),
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
     if (bReverseViewportY) {
-        viewport.y      = static_cast<float>(curFrameBuffer->getHeight());
-        viewport.height = -static_cast<float>(curFrameBuffer->getHeight());
+        viewport.y      = static_cast<float>(fbExtent.height);
+        viewport.height = -static_cast<float>(fbExtent.height);
     }
-    vkCmdSetViewport(vkCmdBuf, 0, 1, &viewport);
+    cmdBuf->setViewport(viewport.x, viewport.y, viewport.width, viewport.height, viewport.minDepth, viewport.maxDepth);
 
+    auto     extent = render->getSwapchain()->getExtent();
     VkRect2D scissor{
         .offset = {0, 0},
-        .extent = vkRender->getSwapChain()->getExtent(),
+        .extent = {extent.width, extent.height},
     };
-    vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
+    // TODO: scissor count and nth scissor?
+    cmdBuf->setScissor(scissor.offset.x, scissor.offset.y, scissor.extent.width, scissor.extent.height);
+    // vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
 #pragma endregion
 
     // FIXME: this is just a test material, we should move the projection and view to frame data UBO, not push constant
@@ -221,12 +227,12 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
 
             // pc.colorType = sin(TimeManager::get()->now().time_since_epoch().count() * 0.001);
 
-            vkCmdPushConstants(vkCmdBuf,
-                               _pipelineLayout->getHandle(),
-                               VK_SHADER_STAGE_VERTEX_BIT,
-                               0,
-                               sizeof(PushConstant),
-                               &pc);
+            cmdBuf->pushConstants(
+                _pipelineLayout->getHandle(),
+                EShaderStage::Vertex,
+                0,
+                sizeof(PushConstant),
+                &pc);
 
             for (const auto &idx : meshIds) {
                 auto mesh = bmc.getMesh(idx);
@@ -235,20 +241,13 @@ void BaseMaterialSystem::onRender(void *cmdBuf, RenderTarget *rt)
                 }
                 // ++totalCount;
 
-                VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandle()};
+                VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandleAs<::VkBuffer>()};
                 // current no need to support subbuffer
                 VkDeviceSize offsets[] = {0};
-                vkCmdBindVertexBuffers(vkCmdBuf, 0, 1, vertexBuffers, offsets);
-                vkCmdBindIndexBuffer(vkCmdBuf,
-                                     mesh->getIndexBuffer()->getHandle(),
-                                     0,
-                                     VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexed(vkCmdBuf,
-                                 mesh->getIndexCount(), // index count
-                                 1,                     // instance count: 9 cubes
-                                 0,                     // first index
-                                 0,                     // vertex offset, this for merge vertex buffer?
-                                 0);
+
+                cmdBuf->bindVertexBuffer(0, mesh->getVertexBufferMut(), 0);
+                cmdBuf->bindIndexBuffer(mesh->getIndexBufferMut(), 0, false);
+                cmdBuf->drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
             }
         }
     }

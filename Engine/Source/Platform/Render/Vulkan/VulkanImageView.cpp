@@ -1,13 +1,15 @@
 #include "VulkanImageView.h"
 #include "VulkanImage.h"
 #include "VulkanRender.h"
+namespace ya
+{
 
 VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags)
 {
     _render = render;
     VkImageViewCreateInfo ci{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image      = image->getHandle(),
+        .image      = image->getVkImage(),
         .viewType   = VK_IMAGE_VIEW_TYPE_2D,
         .format     = image->getFormat(),
         .components = {
@@ -33,3 +35,5 @@ VulkanImageView::~VulkanImageView()
     // Note: image view is destroyed along with the image
     VK_DESTROY(ImageView, _render->getDevice(), _handle);
 }
+
+} // namespace ya

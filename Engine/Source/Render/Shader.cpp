@@ -34,7 +34,8 @@ static const char *eolFlag =
     "\n";
 #endif
 
-
+namespace ya
+{
 namespace EShaderStage
 {
 
@@ -528,7 +529,7 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
 
         std::string codes = std::string(source.substr(nextLinePos, pos - count));
 
-        auto [_, Ok] = shaderSources.insert({shader_type, codes});
+        auto [_, Ok] = shaderSources.insert(std::make_pair(shader_type, codes));
 
         YA_CORE_ASSERT(Ok, "Failed to insert this shader source");
     }
@@ -658,3 +659,5 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 
     return {std::move(ret)};
 }
+
+} // namespace ya

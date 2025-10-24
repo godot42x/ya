@@ -3,6 +3,10 @@
 
 #include "assimp/Importer.hpp"
 #include "assimp/ObjMaterial.h"
+#include "assimp/mesh.h"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
+
 
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
@@ -12,11 +16,25 @@ namespace ya
 
 
 
-AssetManager *AssetManager::instance = nullptr;
-
-void AssetManager::init()
+AssetManager *AssetManager::get()
 {
-    instance = new AssetManager();
+    static AssetManager instance;
+    return &instance;
+}
+
+void AssetManager::cleanup()
+{
+    modelCache.clear();
+    _textures.clear();
+    if (_importer) {
+        delete _importer;
+        _importer = nullptr;
+    }
+}
+
+AssetManager::AssetManager()
+{
+    _importer = new Assimp::Importer();
 }
 
 std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer)
@@ -51,10 +69,7 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
     const aiScene *scene = importer.ReadFileFromMemory(
         fileContent.data(),
         fileContent.size(),
-        aiProcess_Triangulate |
-            aiProcess_GenSmoothNormals |
-            aiProcess_FlipUVs |
-            aiProcess_CalcTangentSpace);
+        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
 
 
     // Check for errors

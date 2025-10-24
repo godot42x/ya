@@ -17,6 +17,7 @@ int main(int argc, char **argv)
         app->init(ci);
         app->run();
         app->quit();
+        delete app;
     }
     catch (const std::exception &e) {
         YA_CORE_ERROR("Exception caught in main: {}", e.what());

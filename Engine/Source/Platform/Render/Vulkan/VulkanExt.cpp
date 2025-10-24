@@ -1,6 +1,9 @@
 #include "VulkanExt.h"
 #include "VulkanRender.h"
 
+namespace ya
+{
+
 #define GET_VK_FUNC(value, name) \
     value = (PFN_##name)vkGetInstanceProcAddr(_renderer->getInstance(), #name);
 
@@ -156,3 +159,5 @@ void VulkanDebugUtils::setObjectName(VkObjectType objectType, uint64_t objectHan
         VK_CALL(pfnSetDebugUtilsObjectNameEXT(_renderer->getDevice(), &nameInfo));
     }
 }
+
+} // namespace ya

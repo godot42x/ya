@@ -27,18 +27,19 @@ class NameRegistry
 
         // Make Elem movable but not copyable
         Elem() = default;
-        Elem(index_t idx, uint32_t count, std::string str) 
+        Elem(index_t idx, uint32_t count, std::string str)
             : index(idx), refCount(count), data(std::move(str)) {}
-        
+
         ~Elem() = default;
-        
-        Elem(const Elem&) = delete;
-        Elem& operator=(const Elem&) = delete;
-        
-        Elem(Elem&& other) noexcept 
+
+        Elem(const Elem &)            = delete;
+        Elem &operator=(const Elem &) = delete;
+
+        Elem(Elem &&other) noexcept
             : index(other.index), refCount(other.refCount.load()), data(std::move(other.data)) {}
-        
-        Elem& operator=(Elem&& other) noexcept {
+
+        Elem &operator=(Elem &&other) noexcept
+        {
             if (this != &other) {
                 index = other.index;
                 refCount.store(other.refCount.load());
@@ -55,8 +56,8 @@ class NameRegistry
 
   public:
 
-    static void          init();
-    static NameRegistry &get() { return *_instance; }
+    static NameRegistry &get();
+    static NameRegistry *getP() { return &get(); }
 
 
     const Elem *indexing(const std::string &name)
@@ -71,8 +72,8 @@ class NameRegistry
         index_t index = ++_nextIndex;
 
         auto it = _str2Elem.emplace(std::piecewise_construct,
-                                   std::forward_as_tuple(name),
-                                   std::forward_as_tuple(index, 1, name));
+                                    std::forward_as_tuple(name),
+                                    std::forward_as_tuple(index, 1, name));
 
         _index2Elem[index] = &it.first->second;
         return &it.first->second;
@@ -116,32 +117,32 @@ struct FName
     {
         // Reset the moved-from object
         other._index = 0;
-        other._data = "";
+        other._data  = "";
     }
-    
-    FName& operator=(const FName& other)
+
+    FName &operator=(const FName &other)
     {
         if (this != &other) {
             clear();
             assert(nullptr != NameRegistry::get().indexing(other._index)); // add ref
             _index = other._index;
-            _data = other._data;
+            _data  = other._data;
         }
         return *this;
     }
-    
-    FName& operator=(FName&& other) noexcept
+
+    FName &operator=(FName &&other) noexcept
     {
         if (this != &other) {
             clear();
-            _index = other._index;
-            _data = other._data;
+            _index       = other._index;
+            _data        = other._data;
             other._index = 0;
-            other._data = "";
+            other._data  = "";
         }
         return *this;
     }
-    
+
     ~FName()
     {
         clear();

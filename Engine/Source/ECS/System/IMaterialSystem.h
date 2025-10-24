@@ -3,14 +3,16 @@
 #include "Core/FWD.h"
 #include "ECS/System.h"
 
+#include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
 
 
-struct VulkanRenderPass;
-struct VulkanRender;
-
 namespace ya
 {
+
+struct IRender;
+struct IRenderPass;
+struct VulkanRender;
 struct App;
 struct RenderTarget;
 struct Scene;
@@ -25,8 +27,8 @@ struct IMaterialSystem : public ISystem
     // std::shared_ptr<Material> _baseMaterial;
 
     // TODO: abstract render api
-    virtual void onInit(VulkanRenderPass *renderPass)     = 0;
-    virtual void onRender(void *cmdBuf, RenderTarget *rt) = 0;
+    virtual void onInit(IRenderPass *renderPass)                    = 0;
+    virtual void onRender(ICommandBuffer *cmdBuf, RenderTarget *rt) = 0;
     void         onUpdate(float deltaTime) override {}
     virtual void onDestroy() = 0;
     virtual void onRenderGUI();
@@ -35,6 +37,7 @@ struct IMaterialSystem : public ISystem
 
     App          *getApp() const;
     Scene        *getScene() const;
-    VulkanRender *getVulkanRender() const;
+    IRender      *getRender() const;
+    VulkanRender *getVulkanRender() const; // Deprecated: use getRender() instead
 };
 } // namespace ya

@@ -4,6 +4,8 @@
 
 #include "VulkanRender.h"
 
+namespace ya
+{
 
 
 VulkanBuffer::~VulkanBuffer()
@@ -51,7 +53,6 @@ void VulkanBuffer::createDefaultInternal(uint32_t size, VkMemoryPropertyFlags me
                            _usageFlags,
                            _handle,
                            _memory);
-
 }
 
 bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
@@ -165,8 +166,9 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropert
 
 void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
 {
-    VkCommandBuffer cmdBuf = render->beginIsolateCommands();
-    transfer(cmdBuf, srcBuffer, dstBuffer, size);
+    auto *cmdBuf = render->beginIsolateCommands();
+    VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
+    transfer(vkCmdBuf, srcBuffer, dstBuffer, size);
     render->endIsolateCommands(cmdBuf);
 }
 
@@ -187,3 +189,5 @@ void VulkanBuffer::transfer(VkCommandBuffer cmdBuf, VkBuffer srcBuffer, VkBuffer
     };
     vkCmdCopyBuffer(cmdBuf, srcBuffer, dstBuffer, 1, &copyRegion);
 }
+
+} // namespace ya

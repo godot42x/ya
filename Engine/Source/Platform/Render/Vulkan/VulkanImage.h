@@ -5,14 +5,17 @@
 #include <vulkan/vulkan.h>
 
 #include "Core/Base.h"
+#include "Render/Core/Image.h"
 #include "Render/Render.h"
 
 
+namespace ya
+{
 struct VulkanRender;
 struct VulkanImage;
 struct VulkanBuffer;
 
-struct VulkanImage
+struct VulkanImage : public IImage
 {
 
     VulkanRender     *_render      = nullptr;
@@ -51,7 +54,13 @@ struct VulkanImage
         return ret;
     }
 
-    [[nodiscard]] VkImage  getHandle() const { return _handle; }
+    // IImage interface
+    [[nodiscard]] ImageHandle getHandle() const override { return ImageHandle{_handle}; }
+    [[nodiscard]] uint32_t    getWidth() const override { return static_cast<uint32_t>(_ci.extent.width); }
+    [[nodiscard]] uint32_t    getHeight() const override { return static_cast<uint32_t>(_ci.extent.height); }
+
+    // Vulkan-specific accessors
+    [[nodiscard]] VkImage  getVkImage() const { return _handle; }
     [[nodiscard]] VkFormat getFormat() const { return _format; }
 
 
@@ -60,10 +69,7 @@ struct VulkanImage
     static bool transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
                                  VkImageLayout oldLayout, VkImageLayout newLayout);
 
-  public:
-    [[nodiscard]] uint32_t getWidth() const { return static_cast<int>(_ci.extent.width); }
-    [[nodiscard]] uint32_t getHeight() const { return static_cast<int>(_ci.extent.height); }
-
   protected:
     bool allocate();
 };
+} // namespace ya

@@ -1,5 +1,7 @@
 #include "RenderDefines.h"
 
+namespace ya
+{
 
 namespace EVertexAttributeFormat
 {
@@ -23,3 +25,4 @@ std::size_t T2Size(T type)
     }
 }
 }; // namespace EVertexAttributeFormat
+} // namespace ya

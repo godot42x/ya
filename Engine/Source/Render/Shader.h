@@ -37,6 +37,8 @@ struct formatter<spirv_cross::SPIRType> : formatter<std::string>
 } // namespace std
 
 
+namespace ya
+{
 
 namespace ShaderReflection
 {
@@ -299,3 +301,5 @@ class ShaderProcessorFactory
         return processor;
     }
 };
+
+} // namespace ya

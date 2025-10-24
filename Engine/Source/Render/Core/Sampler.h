@@ -1,18 +1,28 @@
 
 #pragma once
+#include "Handle.h"
+#include "PlatBase.h"
 #include "Render/RenderDefines.h"
+
 namespace ya
 {
 
+struct SamplerHandleTag
+{};
+using SamplerHandle = Handle<SamplerHandleTag>;
 
-struct Sampler
+
+
+struct Sampler : public plat_base<Sampler>
 {
-    void       *_impl = nullptr;
     SamplerDesc _desc;
 
     static stdptr<Sampler> create(const SamplerDesc &desc);
 
-    template <typename T>
-    T *as() { return static_cast<T *>(this); }
+    /**
+     * @brief Get the platform-specific handle for this sampler
+     * @return void* Platform handle (e.g., VkSampler for Vulkan)
+     */
+    virtual SamplerHandle getHandle() const = 0;
 };
 } // namespace ya

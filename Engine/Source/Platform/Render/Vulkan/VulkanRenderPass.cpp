@@ -6,11 +6,13 @@
 #include <ranges>
 
 #include "VulkanRender.h"
+namespace ya
+{
 
 VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
 {
     _render    = render;
-    _swapChain = _render->getSwapChain();
+    _swapChain = _render->getSwapchain<VulkanSwapChain>();
 
     // _swapChain->onRecreate.addLambda([this]() {
     // this->recreate(this->getCI());
@@ -29,13 +31,13 @@ void VulkanRenderPass::cleanup()
 }
 
 
-void VulkanRenderPass::begin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues)
+void VulkanRenderPass::beginVk(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues)
 {
 
     VkRenderPassBeginInfo renderPassBI{
         .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext       = nullptr,
-        .renderPass  = getHandle(),
+        .renderPass  = getVkHandle(),
         .framebuffer = framebuffer,
         .renderArea  = {
              .offset = {0, 0},
@@ -48,9 +50,71 @@ void VulkanRenderPass::begin(VkCommandBuffer commandBuffer, VkFramebuffer frameb
     vkCmdBeginRenderPass(commandBuffer, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE); // ? contents
 }
 
-void VulkanRenderPass::end(VkCommandBuffer commandBuffer)
+void VulkanRenderPass::endVk(VkCommandBuffer commandBuffer)
 {
     vkCmdEndRenderPass(commandBuffer);
+}
+
+// IRenderPass interface implementation
+void VulkanRenderPass::begin(
+    ya::ICommandBuffer            *commandBuffer,
+    void                          *framebuffer,
+    const Extent2D                &extent,
+    const std::vector<ClearValue> &clearValues)
+{
+    if (!commandBuffer) return;
+
+    // Convert generic types to Vulkan types
+    VkExtent2D                vkExtent{extent.width, extent.height};
+    std::vector<VkClearValue> vkClearValues;
+    vkClearValues.reserve(clearValues.size());
+
+    for (const auto &cv : clearValues)
+    {
+        VkClearValue vkCV{};
+        if (cv.isDepthStencil)
+        {
+            vkCV.depthStencil.depth   = cv.depthStencil.depth;
+            vkCV.depthStencil.stencil = cv.depthStencil.stencil;
+        }
+        else
+        {
+            vkCV.color.float32[0] = cv.color.r;
+            vkCV.color.float32[1] = cv.color.g;
+            vkCV.color.float32[2] = cv.color.b;
+            vkCV.color.float32[3] = cv.color.a;
+        }
+        vkClearValues.push_back(vkCV);
+    }
+
+    beginVk(
+        commandBuffer->getHandleAs<VkCommandBuffer>(),
+        static_cast<VkFramebuffer>(framebuffer),
+        vkExtent,
+        vkClearValues);
+}
+
+void VulkanRenderPass::end(ya::ICommandBuffer *commandBuffer)
+{
+    if (!commandBuffer) return;
+    endVk(commandBuffer->getHandleAs<VkCommandBuffer>());
+}
+
+EFormat::T VulkanRenderPass::getDepthFormat() const
+{
+    // Convert VkFormat to EFormat::T
+    // This is a simplified implementation - you may need a full conversion table
+    switch (m_depthFormat)
+    {
+    case VK_FORMAT_D32_SFLOAT:
+        return EFormat::D32_SFLOAT;
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+        return EFormat::D24_UNORM_S8_UINT;
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return EFormat::D32_SFLOAT_S8_UINT;
+    default:
+        return EFormat::Undefined;
+    }
 }
 
 
@@ -63,7 +127,8 @@ bool VulkanRenderPass::createDefaultRenderPass()
     // default color attachment
     VkAttachmentDescription defaultColorAttachment({
         .flags   = 0,
-        .format  = _render->getSwapChain()->_surfaceFormat,
+        .format  = _render->getSwapchain<VulkanSwapChain>()->_surfaceFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         // ignore depth/stencil for now
@@ -92,15 +157,20 @@ bool VulkanRenderPass::createDefaultRenderPass()
         .pColorAttachments       = &defaultColorAttachmentRef,
         .pResolveAttachments     = nullptr, // No resolve for now
         .pDepthStencilAttachment = nullptr, // No depth/stencil for now
+        .preserveAttachmentCount = 0,
+        .pPreserveAttachments    = nullptr,
     });
 
     VkRenderPassCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext           = nullptr,
+        .flags           = 0,
         .attachmentCount = static_cast<uint32_t>(vkAttachments.size()),
         .pAttachments    = vkAttachments.data(),
         .subpassCount    = static_cast<uint32_t>(vkSubpasses.size()), // Update subpass count
         .pSubpasses      = vkSubpasses.data(),                        // Use the created subpasses
         .dependencyCount = 0,                                         // No dependencies for now
+        .pDependencies   = nullptr,
     };
 
     vkCreateRenderPass(_render->getDevice(), &createInfo, nullptr, &m_renderPass);
@@ -126,7 +196,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     // Convert abstract configuration to Vulkan-specific values
     std::vector<VkAttachmentDescription> attachmentDescs;
 
-    VkFormat surfaceFormat = _render->getSwapChain()->getSurfaceFormat();
+    VkFormat surfaceFormat = _render->getSwapchain<VulkanSwapChain>()->getSurfaceFormat();
     // Convert attachments from config
     for (const AttachmentDescription &attachmentDesc : _ci.attachments) {
         VkAttachmentDescription vkAttachmentDesc{
@@ -226,14 +296,15 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     YA_CORE_ASSERT(!_ci.dependencies.empty(), "Render pass must have at least one subpass dependency defined!");
     for (const auto &dependency : _ci.dependencies) {
         VkSubpassDependency vkDependency{
-            .srcSubpass   = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
-            .dstSubpass   = dependency.dstSubpass,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass      = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
+            .dstSubpass      = dependency.dstSubpass,
+            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             // for next subpass to do a fragment shading?
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             // from write to read?
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+            .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+            .dependencyFlags = 0,
         };
 
         vkDependencies.push_back(vkDependency);
@@ -242,6 +313,8 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     // Create the render pass
     VkRenderPassCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext           = nullptr,
+        .flags           = 0,
         .attachmentCount = static_cast<uint32_t>(attachmentDescs.size()),
         .pAttachments    = attachmentDescs.data(),
         .subpassCount    = static_cast<uint32_t>(vkSubpassDescs.size()),
@@ -261,3 +334,5 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 
     return true;
 }
+
+} // namespace ya

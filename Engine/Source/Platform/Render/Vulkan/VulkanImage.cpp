@@ -3,6 +3,9 @@
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
 
+namespace ya
+{
+
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
@@ -32,8 +35,8 @@ void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, Vulk
         },
     };
     vkCmdCopyBufferToImage(cmdBuf,
-                           srcBuffer->getHandle(),
-                           dstImage->getHandle(),
+                           srcBuffer->getHandleAs<VkBuffer>(),
+                           dstImage->getVkImage(),
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            1,
                            &copyRegion);
@@ -60,7 +63,7 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *im
         .newLayout           = newLayout,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = image->getHandle(),
+        .image               = image->getVkImage(),
         .subresourceRange    = {
                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
                .baseMipLevel   = 0,
@@ -233,3 +236,5 @@ bool VulkanImage::allocate()
     bOwned = true;
     return true;
 }
+
+} // namespace ya

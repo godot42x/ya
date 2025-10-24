@@ -5,6 +5,14 @@
 #include "Render/Render.h"
 #include "SDL3/SDL.h"
 
+#if USE_VULKAN
+// Forward declarations for Vulkan types (avoid including vulkan headers in this public interface)
+typedef struct VkInstance_T   *VkInstance;
+typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
+#endif
+
+namespace ya
+{
 
 
 struct WindowCreateInfo
@@ -57,9 +65,6 @@ class IWindowProvider
 };
 
 
-#if USE_VULKAN
-    #include "SDL3/SDL_vulkan.h"
-#endif
 
 class SDLWindowProvider : public IWindowProvider
 {
@@ -143,36 +148,11 @@ class SDLWindowProvider : public IWindowProvider
     }
 
 #if USE_VULKAN
-    bool onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface)
-    {
-        if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window *>(nativeWindowHandle),
-                                      instance,
-                                      nullptr, // if needed
-                                      surface))
-        {
-            YA_CORE_ERROR("Failed to create Vulkan surface: {}", SDL_GetError());
-            return false;
-        }
-        YA_CORE_INFO("Vulkan surface created successfully.");
-        return true;
-    }
+    bool onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface);
 
-    void onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
-    {
-        SDL_Vulkan_DestroySurface(instance, *surface, nullptr); // if needed
-        YA_CORE_INFO("Vulkan surface destroyed successfully.");
-    }
+    void onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface);
 
-    std::vector<const char *> onGetVkInstanceExtensions()
-    {
-        Uint32 count = 0;
-        // VK_KHR_win32_surface
-        const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&count);
-        if (!extensions) {
-            YA_CORE_ERROR("Failed to get Vulkan instance extensions: {}", SDL_GetError());
-            return {};
-        }
-        return std::vector<const char *>(extensions, extensions + count);
-    }
+    std::vector<const char *> onGetVkInstanceExtensions();
 #endif
 };
+} // namespace ya

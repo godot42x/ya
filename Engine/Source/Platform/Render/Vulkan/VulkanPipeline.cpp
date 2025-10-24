@@ -7,16 +7,17 @@
 #include "VulkanUtils.h"
 
 
+namespace ya
+{
 
-void VulkanPipelineLayout::create(
-    const std::vector<ya::PushConstantRange>  pushConstants,
-    const std::vector<VkDescriptorSetLayout> &layouts)
+void VulkanPipelineLayout::create(const std::vector<PushConstantRange>             pushConstants,
+                                  const std::vector<stdptr<IDescriptorSetLayout>> &layouts)
 {
     // _ci = ci;
 
-    std::vector<VkPushConstantRange> vkPSs;
+    std::vector<::VkPushConstantRange> vkPSs;
     for (const auto &pushConstant : pushConstants) {
-        vkPSs.push_back(VkPushConstantRange{
+        vkPSs.push_back(::VkPushConstantRange{
             .stageFlags = toVk(pushConstant.stageFlags),
             .offset     = pushConstant.offset,
             .size       = pushConstant.size,
@@ -73,14 +74,21 @@ void VulkanPipelineLayout::create(
     //     float specularPower;
     // } uLight;
 
+    std::vector<VkDescriptorSetLayout> vkLayouts;
+    for (const auto &layout : layouts) {
+        vkLayouts.push_back(layout->getHandleAs<VkDescriptorSetLayout>());
+    }
+
+
+
     VkPipelineLayoutCreateInfo layoutCI{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
         // .setLayoutCount         = static_cast<uint32_t>(_descriptorSetLayouts.size()),
         // .pSetLayouts            = _descriptorSetLayouts.data(),
-        .setLayoutCount         = static_cast<uint32_t>(layouts.size()),
-        .pSetLayouts            = layouts.data(),
+        .setLayoutCount         = static_cast<uint32_t>(vkLayouts.size()),
+        .pSetLayouts            = vkLayouts.data(),
         .pushConstantRangeCount = static_cast<uint32_t>(vkPSs.size()),
         .pPushConstantRanges    = vkPSs.data(),
     };
@@ -93,7 +101,7 @@ void VulkanPipelineLayout::create(
 
     YA_CORE_INFO("Vulkan pipeline layout created successfully: {}", (uintptr_t)_pipelineLayout);
 
-    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, _pipelineLayout, label);
+    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, _pipelineLayout, _label.c_str());
 }
 
 void VulkanPipelineLayout::cleanup()
@@ -127,8 +135,8 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 void VulkanPipeline::createPipelineInternal()
 {
     // Process shader
-    name = _ci.shaderDesc.shaderName;
-    YA_CORE_INFO("Creating pipeline for: {}", name);
+    _name = _ci.shaderDesc.shaderName;
+    YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
     auto shaderStorage = ya::App::get()->getShaderStorage();
     auto stage2Spirv   = shaderStorage->getCache(_ci.shaderDesc.shaderName);
     if (!stage2Spirv) {
@@ -140,11 +148,11 @@ void VulkanPipeline::createPipelineInternal()
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
     auto fragShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Fragment));
 
-    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", name).c_str());
-    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", name).c_str());
+    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", _name.toString()).c_str());
+    _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", _name.toString()).c_str());
 
-    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
-        VkPipelineShaderStageCreateInfo{
+    std::array<::VkPipelineShaderStageCreateInfo, 2> shaderStages = {
+        ::VkPipelineShaderStageCreateInfo{
             .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .stage  = VK_SHADER_STAGE_VERTEX_BIT,
             .module = vertShaderModule,
@@ -365,18 +373,18 @@ void VulkanPipeline::createPipelineInternal()
         .pDepthStencilState  = &depthStencilStateCI,
         .pColorBlendState    = &colorBlendingStateCI,
         .pDynamicState       = &dynamicStateCI,
-        .layout              = _pipelineLayout->getHandle(),
-        .renderPass          = _renderPass->getHandle(),
+        .layout              = _pipelineLayout->getVkHandle(),
+        .renderPass          = _renderPass->getVkHandle(),
         .subpass             = _ci.subPassRef,
         .basePipelineHandle  = VK_NULL_HANDLE,
     };
 
-    VkResult result = vkCreateGraphicsPipelines(_render->getDevice(),
-                                                _render->getPipelineCache(),
-                                                1,
-                                                &pipelineCreateInfo,
-                                                nullptr,
-                                                &_pipeline);
+    ::VkResult result = vkCreateGraphicsPipelines(_render->getDevice(),
+                                                  _render->getPipelineCache(),
+                                                  1,
+                                                  &pipelineCreateInfo,
+                                                  nullptr,
+                                                  &_pipeline);
     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
 
     // Cleanup shader modules
@@ -385,7 +393,7 @@ void VulkanPipeline::createPipelineInternal()
 
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
 
-    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getHandle(), std::format("Pipeline_{}", name).c_str());
+    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getVkHandle(), std::format("Pipeline_{}", _name.toString()).c_str());
 }
 
 
@@ -431,7 +439,9 @@ VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t> &s
 
 void VulkanPipeline::queryPhysicalDeviceLimits()
 {
-    VkPhysicalDeviceProperties properties;
+    ::VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(_render->getPhysicalDevice(), &properties);
     // m_maxTextureSlots = properties.limits.maxPerStageDescriptorSamplers;
 }
+
+} // namespace ya

@@ -7,6 +7,8 @@
 #include "vulkan/vulkan.h"
 
 
+namespace ya
+{
 
 struct VulkanSampler : public ya::Sampler
 {
@@ -16,5 +18,11 @@ struct VulkanSampler : public ya::Sampler
     VulkanSampler(const ya::SamplerDesc &ci);
     virtual ~VulkanSampler();
 
-    VkSampler getHandle() const { return _handle; }
+    // Override base class interface - returns void* for platform abstraction
+    SamplerHandle getHandle() const override { return SamplerHandle(_handle); }
+
+    // Vulkan-specific typed accessor
+    VkSampler getVkHandle() const { return _handle; }
 };
+
+} // namespace ya

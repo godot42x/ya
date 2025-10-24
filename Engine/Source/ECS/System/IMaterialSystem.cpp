@@ -2,7 +2,10 @@
 
 #include "Core/App/App.h"
 #include "ECS/Component/CameraComponent.h"
+#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Render.h"
 #include "Render/Core/RenderTarget.h"
+
 
 #include "imgui.h"
 
@@ -31,6 +34,14 @@ Scene *IMaterialSystem::getScene() const
 {
     if (getApp()) {
         return getApp()->getScene();
+    }
+    return nullptr;
+}
+
+IRender *IMaterialSystem::getRender() const
+{
+    if (getApp()) {
+        return getApp()->getRender();
     }
     return nullptr;
 }

@@ -5,6 +5,8 @@
 #include <sstream>
 
 
+namespace ya
+{
 
 OpenGLState::~OpenGLState()
 {
@@ -35,7 +37,7 @@ bool OpenGLState::initialize()
     return true;
 }
 
-void OpenGLState::init(const RenderCreateInfo &renderCI)
+void OpenGLState::init(const ya::RenderCreateInfo &renderCI)
 {
     _window = new SDLWindowProvider();
     _window->init();
@@ -72,7 +74,7 @@ void OpenGLState::init(const RenderCreateInfo &renderCI)
     SDL_GL_CreateContext(m_Window);
 }
 
-void OpenGLState::recreateSwapchain(const SwapchainCreateInfo &swapchainCI)
+void OpenGLState::recreateSwapchain(const ya::SwapchainCreateInfo &swapchainCI)
 {
     // Store swapchain configuration
     m_SwapchainCI = swapchainCI;
@@ -247,7 +249,7 @@ bool OpenGLState::isTripleBufferingSupported()
     return false; // Conservative fallback
 }
 
-void OpenGLState::configureBuffering(const SwapchainCreateInfo &swapchainCI)
+void OpenGLState::configureBuffering(const ya::SwapchainCreateInfo &swapchainCI)
 {
     // Configure buffering based on swapchain requirements
     if (swapchainCI.minImageCount >= 3) {
@@ -790,3 +792,5 @@ std::string OpenGLState::readShaderSource(const std::string &filepath)
     buffer << file.rdbuf();
     return buffer.str();
 }
+
+} // namespace ya

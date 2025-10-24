@@ -5,6 +5,8 @@
 #include "VulkanUtils.h"
 
 #include <vulkan/vulkan.h>
+namespace ya
+{
 
 struct VulkanQueue
 {
@@ -62,3 +64,5 @@ struct VulkanQueue
     [[nodiscard]] VkQueue  getHandle() const { return _handle; }
     [[nodiscard]] uint32_t getFamilyIndex() const { return _familyIndex; }
 };
+
+} // namespace ya

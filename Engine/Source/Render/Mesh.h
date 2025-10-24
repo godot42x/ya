@@ -3,7 +3,8 @@
 
 #include "Core/Base.h"
 #include "Math/Geometry.h"
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
+#include "Render/Core/Buffer.h"
+#include "Render/Core/CommandBuffer.h"
 
 namespace ya
 {
@@ -13,8 +14,8 @@ struct Mesh
 
     std::string _name;
 
-    std::shared_ptr<VulkanBuffer> _vertexBuffer;
-    std::shared_ptr<VulkanBuffer> _indexBuffer;
+    std::shared_ptr<IBuffer> _vertexBuffer;
+    std::shared_ptr<IBuffer> _indexBuffer;
 
     uint32_t _indexCount  = 0;
     uint32_t _vertexCount = 0;
@@ -28,10 +29,12 @@ struct Mesh
     [[nodiscard]] uint32_t getVertexCount() const { return _vertexCount; }
 
 
-    [[nodiscard]] const VulkanBuffer *getVertexBuffer() const { return _vertexBuffer.get(); }
-    [[nodiscard]] const VulkanBuffer *getIndexBuffer() const { return _indexBuffer.get(); }
+    [[nodiscard]] const IBuffer *getVertexBuffer() const { return _vertexBuffer.get(); }
+    [[nodiscard]] IBuffer       *getVertexBufferMut() const { return _vertexBuffer.get(); }
+    [[nodiscard]] const IBuffer *getIndexBuffer() const { return _indexBuffer.get(); }
+    [[nodiscard]] IBuffer       *getIndexBufferMut() const { return _indexBuffer.get(); }
 
-    void draw(void* cmdBuf) const;
+    void draw(ICommandBuffer *cmdBuf) const;
 };
 
 } // namespace ya

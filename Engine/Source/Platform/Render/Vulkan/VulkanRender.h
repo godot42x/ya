@@ -11,6 +11,7 @@
 
 
 
+#include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanExt.h"
@@ -29,29 +30,36 @@
 
 #define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
 
+
+namespace ya
+{
+
+// Forward declarations
+struct VulkanDescriptor;
+
 struct QueueFamilyIndices
 {
     int32_t queueFamilyIndex = -1; // Graphics queue family index
     int32_t queueCount       = -1;
 };
 
-struct VulkanRender : public ya::IRender
+struct VulkanRender : public IRender
 {
     friend struct VulkanUtils;
     friend class VulkanRenderPass;
 
-    const std::vector<DeviceFeature> _instanceLayers           = {};
-    const std::vector<DeviceFeature> _instanceValidationLayers = {
+    const std::vector<ya::DeviceFeature> _instanceLayers           = {};
+    const std::vector<ya::DeviceFeature> _instanceValidationLayers = {
         {.name = "VK_LAYER_KHRONOS_validation", .bRequired = true}, // "VK_LAYER_KHRONOS_validation"
     };
-    const std::vector<DeviceFeature> _instanceExtensions = {
+    const std::vector<ya::DeviceFeature> _instanceExtensions = {
         {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_surface"
     };
 
-    const std::vector<DeviceFeature> _deviceLayers = {
+    const std::vector<ya::DeviceFeature> _deviceLayers = {
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
-    const std::vector<DeviceFeature> _deviceExtensions = {
+    const std::vector<ya::DeviceFeature> _deviceExtensions = {
         {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_swapchain"
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
@@ -78,7 +86,7 @@ struct VulkanRender : public ya::IRender
 
 
 
-    VulkanSwapChain         *_swapChain;
+    ISwapchain              *_swapChain;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
 
@@ -93,6 +101,7 @@ struct VulkanRender : public ya::IRender
     VkFence     m_inFlightFence;
 
     std::unique_ptr<VulkanDebugUtils> _debugUtils = nullptr;
+    VulkanDescriptor *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
 
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
@@ -101,23 +110,24 @@ struct VulkanRender : public ya::IRender
 
 
     // used for GPU-CPU(fame), GPU internal(image) sync
-    static constexpr uint32_t flightFrameSize = 1;
-    uint32_t                  currentFrameIdx = 0;
-    std::vector<VkSemaphore>  frameImageAvailableSemaphores;
-    std::vector<VkFence>      frameFences;
-    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
+    static constexpr uint32_t  flightFrameSize = 1;
+    uint32_t                   currentFrameIdx = 0;
+    std::vector<::VkSemaphore> frameImageAvailableSemaphores;
+    std::vector<::VkFence>     frameFences;
+    std::vector<::VkSemaphore> imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
 
 
   public:
     IWindowProvider *_windowProvider = nullptr;
 
-    Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
-    Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
-    Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
+    Delegate<bool(::VkInstance, ::VkSurfaceKHR *inSurface)> onCreateSurface;
+    Delegate<void(::VkInstance, ::VkSurfaceKHR *inSurface)> onReleaseSurface;
+    Delegate<std::vector<ya::DeviceFeature>()>              onGetRequiredInstanceExtensions;
 
   public:
 
     VulkanRender() = default;
+    ~VulkanRender(); // Need definition in .cpp to properly destroy unique_ptr<VulkanDescriptor>
 
     template <typename T>
     T *getNativeWindow()
@@ -125,9 +135,9 @@ struct VulkanRender : public ya::IRender
         return static_cast<T *>(nativeWindow);
     }
 
-    bool init(const RenderCreateInfo &ci) override
+    bool init(const ya::RenderCreateInfo &ci) override
     {
-        ya::IRender::init(ci);
+        IRender::init(ci);
         YA_PROFILE_FUNCTION();
 
         bool success = initInternal(ci);
@@ -143,7 +153,43 @@ struct VulkanRender : public ya::IRender
     bool begin(int32_t *imageIndex) override;
     bool end(int32_t imageIndex, std::vector<void *> CommandBuffers) override;
 
+    // IRender interface implementations
+    void getWindowSize(int &width, int &height) const override
+    {
+        if (_windowProvider) {
+            _windowProvider->getWindowSize(width, height);
+        }
+    }
 
+    void setVsync(bool enabled) override
+    {
+        if (_swapChain) {
+            // Cast to VulkanSwapChain for Vulkan-specific functionality
+            auto *vkSwapchain = static_cast<VulkanSwapChain *>(_swapChain);
+            vkSwapchain->setVsync(enabled);
+        }
+    }
+
+    uint32_t getSwapchainWidth() const override
+    {
+        if (!_swapChain) return 0;
+        auto extent = _swapChain->getExtent();
+        return extent.width;
+    }
+
+    uint32_t getSwapchainHeight() const override
+    {
+        if (!_swapChain) return 0;
+        auto extent = _swapChain->getExtent();
+        return extent.height;
+    }
+
+    uint32_t getSwapchainImageCount() const override
+    {
+        return _swapChain ? _swapChain->getImageCount() : 0;
+    }
+
+    void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers) override;
 
   private:
     void terminate()
@@ -183,13 +229,15 @@ struct VulkanRender : public ya::IRender
 
 
         _swapChain = new VulkanSwapChain(this);
-        _swapChain->recreate(ci.swapchainCI);
+        // Cast to VulkanSwapChain for Vulkan-specific recreate
+        auto *vkSwapchain = static_cast<VulkanSwapChain *>(_swapChain);
+        vkSwapchain->recreate(ci.swapchainCI);
 
         if (!createCommandPool()) {
             terminate();
         }
         createPipelineCache();
-        createSyncResources(_swapChain->getImages().size());
+        createSyncResources(static_cast<int32_t>(_swapChain->getImageCount()));
         return true;
     }
 
@@ -208,7 +256,9 @@ struct VulkanRender : public ya::IRender
         if (_swapChain)
         {
             // Cleanup swap chain resources
-            _swapChain->cleanup();
+            // Cast to VulkanSwapChain for Vulkan-specific cleanup
+            auto *vkSwapchain = static_cast<VulkanSwapChain *>(_swapChain);
+            vkSwapchain->cleanup();
             delete _swapChain;
         }
         // m_renderPass.cleanup();
@@ -258,9 +308,11 @@ struct VulkanRender : public ya::IRender
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
-    [[nodiscard]] VulkanSwapChain *getSwapChain() const { return _swapChain; }
+    [[nodiscard]] ISwapchain      *getSwapchain() const { return _swapChain; }
+    template <typename T>
+    [[nodiscard]] T *getSwapchain() const { return static_cast<T *>(_swapChain); }
 
-    [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
+    [[nodiscard]] ::VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
     [[nodiscard]] bool                      isGraphicsPresentSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
     [[nodiscard]] const QueueFamilyIndices &getGraphicsQueueFamilyInfo() const { return _graphicsQueueFamily; }
@@ -281,7 +333,7 @@ struct VulkanRender : public ya::IRender
     [[nodiscard]] int32_t getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const;
 
     std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
-    const VkAllocationCallbacks                *getAllocator();
+    const ::VkAllocationCallbacks              *getAllocator();
 
 
     // VkSampler createSampler(const ya::SamplerDesc &ci);
@@ -296,24 +348,49 @@ struct VulkanRender : public ya::IRender
     //     return VK_NULL_HANDLE;
     // }
 
-  public:
-    VkCommandBuffer beginIsolateCommands()
+    void waitIdle() override { VK_CALL(vkDeviceWaitIdle(m_LogicalDevice)); }
+
+    // IRender interface: isolated commands
+    ICommandBuffer *beginIsolateCommands() override
     {
-        VkCommandBuffer ret = VK_NULL_HANDLE;
-        _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, ret);
-        VulkanCommandPool::begin(ret, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        return ret;
+        ::VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
+        _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
+        VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        
+        // Create a temporary VulkanCommandBuffer wrapper
+        // Note: This is managed manually and will be deleted in endIsolateCommands
+        return new VulkanCommandBuffer(this, vkCmdBuf);
     }
-    void endIsolateCommands(VkCommandBuffer commandBuffer)
+
+    void endIsolateCommands(ICommandBuffer *commandBuffer) override
     {
-        VulkanCommandPool::end(commandBuffer);
-        getGraphicsQueues()[0].submit({commandBuffer});
+        auto *vkCmdBufWrapper = static_cast<VulkanCommandBuffer *>(commandBuffer);
+        auto vkCmdBuf = vkCmdBufWrapper->getHandleAs<::VkCommandBuffer>();
+        
+        VulkanCommandPool::end(vkCmdBuf);
+        getGraphicsQueues()[0].submit({vkCmdBuf});
         getGraphicsQueues()[0].waitIdle();
-        vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &commandBuffer);
+        vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &vkCmdBuf);
+        
+        // Delete the wrapper
+        delete vkCmdBufWrapper;
     }
 
-    void allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers);
+    // IRender interface: get swapchain
+    ISwapchain *getSwapchain() override { return _swapChain; }
 
+    // IRender interface: get descriptor helper
+    IDescriptorSetHelper *getDescriptorHelper() override;
+
+  protected:
+    // IRender interface: get native window handle
+    void *getNativeWindowHandle() const override
+    {
+        return nativeWindow;
+    }
+
+  public:
+    void allocateCommandBuffers(uint32_t size, std::vector<::VkCommandBuffer> &outCommandBuffers);
 
 
   private:
@@ -331,22 +408,22 @@ struct VulkanRender : public ya::IRender
     void createPipelineCache();
     // void createDepthResources();
 
-    bool isDeviceSuitable(const std::set<DeviceFeature> &extensions,
-                          const std::set<DeviceFeature> &layers,
-                          std::vector<const char *>     &extensionNames,
-                          std::vector<const char *>     &layerNames);
-    bool isInstanceSuitable(const std::set<DeviceFeature> &extensions,
-                            const std::set<DeviceFeature> &layers,
-                            std::vector<const char *>     &extensionNames,
-                            std::vector<const char *>     &layerNames);
+    bool isDeviceSuitable(const std::set<ya::DeviceFeature> &extensions,
+                          const std::set<ya::DeviceFeature> &layers,
+                          std::vector<const char *>         &extensionNames,
+                          std::vector<const char *>         &layerNames);
+    bool isInstanceSuitable(const std::set<ya::DeviceFeature> &extensions,
+                            const std::set<ya::DeviceFeature> &layers,
+                            std::vector<const char *>         &extensionNames,
+                            std::vector<const char *>         &layerNames);
 
 
     bool isFeatureSupported(
         std::string_view                          contextStr,
         const std::vector<VkExtensionProperties> &availableExtensions,
         const std::vector<VkLayerProperties>     &availableLayers,
-        const std::vector<DeviceFeature>         &requestExtensions,
-        const std::vector<DeviceFeature>         &requestLayers,
+        const std::vector<ya::DeviceFeature>     &requestExtensions,
+        const std::vector<ya::DeviceFeature>     &requestLayers,
         std::vector<const char *>                &outExtensionNames,
         std::vector<const char *>                &outLayerNames,
         bool                                      bDebug = false);
@@ -356,5 +433,6 @@ struct VulkanRender : public ya::IRender
 };
 
 
+} // namespace ya
 
 #undef panic

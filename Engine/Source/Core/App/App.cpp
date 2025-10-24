@@ -1,5 +1,7 @@
 #include "App.h"
 
+
+// Core
 #include "Core/App/FPSCtrl.h"
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
@@ -9,48 +11,55 @@
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 
+// Managers
+#include "Core/Render/RenderContext.h"
+#include "ImGuiHelper.h"
+#include "Render/TextureLibrary.h"
+#include "Scene/SceneManager.h"
 
+
+// ECS
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/Material/BaseMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
+#include "ECS/System/BaseMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
 
 
+// Render
 #include "Math/Geometry.h"
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
-#include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
-#include "Platform/Render/Vulkan/VulkanImage.h"
-#include "Platform/Render/Vulkan/VulkanPipeline.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
-
-
 #include "Render/Core/Material.h"
 #include "Render/Core/RenderTarget.h"
+#include "Render/Core/Swapchain.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
 #include "Render/Render2D.h"
 
+// UI
+#include "Core/UI/UIButton.h"
+#include "Core/UI/UIManager.h"
+#include "Core/UI/UIPanel.h"
 
+// Utility
 #include "utility.cc/ranges.h"
 
-#include "ImGuiHelper.h"
+// GLM
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
+// SDL
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_events.h>
 
+// Windows
 #if defined(_WIN32)
     #include <windows.h>
 #endif
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_events.h>
-
-
-#include "ECS/Entity.h"
-#include "ECS/System/BaseMaterialSystem.h"
-
-#include "Core/UI/UIButton.h"
-#include "Core/UI/UIManager.h"
-#include "Core/UI/UIPanel.h"
+// Scene
+#include "Scene/Scene.h"
 
 
 
@@ -65,42 +74,34 @@ namespace ya
 // Define the static member variable
 App *App::_instance = nullptr;
 
+// Implementation of getter methods
+IRender *App::getRender() const
+{
+    return _renderContext ? _renderContext->getRender() : nullptr;
+}
 
-VulkanRenderPass *renderpass;
-// std::vector<VulkanFrameBuffer> frameBuffers;
-RenderTarget *rt = nullptr;
+Scene *App::getScene() const
+{
+    return _sceneManager ? _sceneManager->getCurrentScene() : nullptr;
+}
 
-std::vector<VkCommandBuffer> commandBuffers;
+// ===== TODO: These global variables should be moved to appropriate managers =====
+std::shared_ptr<IRenderPass> renderpass;
 
-// std::vector<std::shared_ptr<VulkanImage>> depthImages;
+std::vector<std::shared_ptr<ICommandBuffer>> commandBuffers;
+
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
 
 
 std::shared_ptr<Mesh> cubeMesh;
 
-const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
-const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
 
 ImguiState imgui;
 
-VkClearValue colorClearValue = {
-    .color = {
-        .float32 = {
-            0,
-            0,
-            0,
-            1,
-        },
-    },
-};
-VkClearValue depthClearValue = {
-    .depthStencil = {
-        .depth   = 1,
-        .stencil = 0,
-    },
-};
+ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
+ClearValue depthClearValue = ClearValue(1.0f, 0);
 
 #pragma region misc
 
@@ -155,8 +156,14 @@ bool imcEditorCamera(FreeCamera &camera)
 void imcClearValues()
 {
     if (ImGui::CollapsingHeader("Clear Values", 0)) {
-        ImGui::ColorEdit4("Color Clear Value", colorClearValue.color.float32);
-        ImGui::DragFloat("Depth Clear Value", &depthClearValue.depthStencil.depth, 0.01f, 0.0f, 1.0f);
+        float color[4] = {colorClearValue.color.r, colorClearValue.color.g, colorClearValue.color.b, colorClearValue.color.a};
+        if (ImGui::ColorEdit4("Color Clear Value", color)) {
+            colorClearValue = ClearValue(color[0], color[1], color[2], color[3]);
+        }
+        float depth = depthClearValue.depthStencil.depth;
+        if (ImGui::DragFloat("Depth Clear Value", &depth, 0.01f, 0.0f, 1.0f)) {
+            depthClearValue = ClearValue(depth, depthClearValue.depthStencil.stencil);
+        }
     }
 }
 
@@ -226,8 +233,6 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE("App Init Subsystems");
         Logger::init();
         FileSystem::init();
-        NameRegistry::init(); // Initialize FName registry
-        AssetManager::init();
         MaterialFactory::init();
     }
 
@@ -256,6 +261,7 @@ void App::init(AppDesc ci)
     });
 
 
+    // ===== Initialize RenderContext =====
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
@@ -267,26 +273,18 @@ void App::init(AppDesc ci)
             .height        = static_cast<uint32_t>(_ci.height),
         },
     };
-    _render        = IRender::create(renderCI);
-    auto *vkRender = dynamic_cast<VulkanRender *>(_render);
 
+    _renderContext = new RenderContext();
+    _renderContext->init(renderCI);
 
-    /**
-      In vulkan:
-      1. Create instance
-      2. Create surface
-      3. Find physical device
-      4. Create logical device
-      5. Create swap chain
-      6. Other device resources: command pool{command buffers}, fences, semaphores, etc.
-     */
-    vkRender->init(renderCI);
+    // Get window size from RenderContext
+    int winW = 0, winH = 0;
+    _renderContext->getWindowSize(winW, winH);
+    _windowSize.x = static_cast<float>(winW);
+    _windowSize.y = static_cast<float>(winH);
 
-    vkRender->getWindowProvider()->getWindowSize(_windowSize.x, _windowSize.y);
-
-
-    // WHY: my ARC 730M must need to recreate with FIFO again to enable vsync
-    vkRender->getSwapChain()->setVsync(renderCI.swapchainCI.bVsync);
+    // Get command buffers from RenderContext
+    commandBuffers = _renderContext->getCommandBuffers();
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
     // MARK: RenderPass
@@ -298,7 +296,7 @@ void App::init(AppDesc ci)
         input/color/depth/resolved attachment ref from all attachments
         and each subpasses dependencies (source -> next)
      */
-    renderpass = new VulkanRenderPass(vkRender);
+    renderpass = IRenderPass::create(_renderContext->getRender());
     renderpass->recreate(RenderPassCreateInfo{
         .attachments = {
             // color to present
@@ -354,74 +352,43 @@ void App::init(AppDesc ci)
         },
     });
 
-    VulkanSwapChain *vkSwapChain = vkRender->getSwapChain();
-
-    const std::vector<VkImage> &images = vkSwapChain->getImages();
-    vkRender->allocateCommandBuffers(images.size(), commandBuffers);
-
-    // use the RT instead of framebuffers directly
-    rt = new RenderTarget(renderpass);
+    // Create main render target using RenderContext
+    _rt = _renderContext->createSwapchainRenderTarget(renderpass.get());
 #if !ONLY_2D
-    rt->addMaterialSystem<BaseMaterialSystem>();
-    rt->addMaterialSystem<UnlitMaterialSystem>();
+    _rt->addMaterialSystem<BaseMaterialSystem>();
+    _rt->addMaterialSystem<UnlitMaterialSystem>();
+    // rt->addMaterialSystem<LitMaterialSystem>();
 #endif
-
-    _firstGraphicsQueue = &vkRender->getGraphicsQueues()[0];
-    _firstPresentQueue  = &vkRender->getPresentQueues()[0];
-
-
 
 #pragma region ImGui Init
-    // imgui init
-    auto                      queue = _firstGraphicsQueue;
-    ImGui_ImplVulkan_InitInfo initInfo{
-        .ApiVersion     = vkRender->getApiVersion(),
-        .Instance       = vkRender->getInstance(),
-        .PhysicalDevice = vkRender->getPhysicalDevice(),
-        .Device         = vkRender->getDevice(),
-        .QueueFamily    = queue->getFamilyIndex(),
-        .Queue          = queue->getHandle(),
-        .DescriptorPool = nullptr,
-        .RenderPass     = renderpass->getHandle(),
-        .MinImageCount  = 2,
-        .ImageCount     = static_cast<uint32_t>(vkRender->getSwapChain()->getImages().size()),
-        .MSAASamples    = VK_SAMPLE_COUNT_1_BIT,
-
-        // (Optional)
-        .PipelineCache = nullptr,
-        .Subpass       = 0,
-
-        // (Optional) Set to create internal descriptor pool instead of using DescriptorPool
-        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE, // let imgui create it by itself internal
-
-        // (Optional) Dynamic Rendering
-        // Need to explicitly enable VK_KHR_dynamic_rendering extension to use this, even for Vulkan 1.3.
-        .UseDynamicRendering = false,
-#ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-        .PipelineRenderingCreateInfo = VkPipelineRenderingCreateInfoKHR{},
-#endif
-
-        // (Optional) Allocation, Debugging
-        .Allocator       = vkRender->getAllocator(),
-        .CheckVkResultFn = [](VkResult err) {
-            if (err != VK_SUCCESS) {
-                YA_CORE_ERROR("Vulkan error: {}", err);
-            }
-        },
-        // Minimum allocation size. Set to 1024*1024 to satisfy zealous best practices validation layer and waste a little memory.
-        .MinAllocationSize = static_cast<VkDeviceSize>(1024 * 1024),
-    };
-    imgui.init(vkRender->getNativeWindow<SDL_Window>(), initInfo);
+    // Initialize ImGui Manager
+    _imguiManager = new ImGuiManager();
+    _imguiManager->init(
+        _renderContext->getRender(),
+        renderpass.get());
+    imgui = *_imguiManager; // Legacy compatibility
 #pragma endregion
 
 
 
+    // ===== Initialize TextureLibrary =====
+    TextureLibrary::init();
+
+    // ===== Initialize SceneManager =====
+    _sceneManager = new SceneManager();
+    _sceneManager->setSceneInitCallback([this](Scene *scene) {
+        this->onSceneInit(scene);
+    });
+    _sceneManager->setSceneCleanupCallback([this](Scene *scene) {
+        this->onSceneDestroy(scene);
+    });
+
     loadScene(ci.defaultScenePath);
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    Render2D::init(_render, renderpass);
+    Render2D::init(_renderContext->getRender(), renderpass.get());
     // wait something done
-    vkDeviceWaitIdle(vkRender->getDevice());
+    _renderContext->getRender()->waitIdle();
 }
 
 void App::onInit(AppDesc ci)
@@ -470,37 +437,43 @@ int App::onEvent(const Event &event)
 // MARK: QUIT
 void ya::App::quit()
 {
-    auto *vkRender = static_cast<VulkanRender *>(_render);
-    vkDeviceWaitIdle(vkRender->getDevice());
-
+    if (_renderContext) {
+        if (auto render = _renderContext->getRender()) {
+            render->waitIdle();
+        }
+    }
+    {
+        YA_PROFILE_SCOPE("Inheritance Quit");
+        onQuit();
+    }
 
     unloadScene();
     MaterialFactory::get()->destroy();
 
     Render2D::destroy();
-    imgui.shutdown();
 
-    // pipeline->cleanup();
-    // delete pipeline;
+    // Cleanup managers
+    if (_imguiManager) {
+        _imguiManager->shutdown();
+        delete _imguiManager;
+        _imguiManager = nullptr;
+    }
 
-    // defaultPipelineLayout->cleanup();
-    // delete defaultPipelineLayout;
-    // descriptorSetLayout0.reset();
-    // descriptorPool.reset();
+    renderpass.reset(); // shared_ptr, use reset() instead of delete
 
-
-    delete rt;
-    delete renderpass;
-
-    // TODO: move to AssetManager/DeviceResourceManager
-    _defaultSampler.reset();
-    _linearSampler.reset();
-    _nearestSampler.reset();
-
+    TextureLibrary::destroy();
     AssetManager::get()->cleanup();
-    _render->destroy();
 
-    delete _render;
+    if (_renderContext) {
+        _renderContext->destroy();
+        delete _renderContext;
+        _renderContext = nullptr;
+    }
+
+    if (_sceneManager) {
+        delete _sceneManager;
+        _sceneManager = nullptr;
+    }
 }
 
 
@@ -751,17 +724,17 @@ void App::onUpdate(float dt)
 {
     inputManager.update();
 
-    rt->setColorClearValue(colorClearValue);
-    rt->setDepthStencilClearValue(depthClearValue);
-    rt->onUpdate(dt);
+    _rt->setColorClearValue(colorClearValue);
+    _rt->setDepthStencilClearValue(depthClearValue);
+    _rt->onUpdate(dt);
 
-    auto cam = rt->getCameraMut();
+    auto cam = _rt->getCameraMut();
 
     camera.update(inputManager, dt); // Camera expects dt in seconds
     float sensitivity = 0.1f;
     if (cam && cam->hasComponent<CameraComponent>()) {
         auto        cc  = cam->getComponent<CameraComponent>();
-        const auto &ext = rt->_extent;
+        const auto &ext = _rt->_extent;
         cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
         auto &inputManger = App::get()->inputManager;
 
@@ -789,16 +762,14 @@ void App::onUpdate(float dt)
         cc->_distance -= scrollDelta.y * 0.1f;
     }
 
-    auto vkRender = static_cast<VulkanRender *>(_render);
-    auto cmdBuf   = vkRender->beginIsolateCommands();
-    vkRender->endIsolateCommands(cmdBuf);
+    auto render = getRender();
+    auto cmdBuf = render->beginIsolateCommands();
+    render->endIsolateCommands(cmdBuf);
 }
 
 void App::onRender(float dt)
 {
-    auto vkRender = static_cast<VulkanRender *>(_render);
-    // vkDeviceWaitIdle(vkRender->getDevice());
-    // SDL_Delay(1000 / 30); // Simulate frame time, remove in production
+    auto render = getRender();
 
     if (_windowSize.x <= 0 || _windowSize.y <= 0) {
         YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
@@ -806,18 +777,22 @@ void App::onRender(float dt)
     }
 
     int32_t imageIndex = -1;
-    vkRender->begin(&imageIndex);
+    if (!render->begin(&imageIndex)) {
+        return;
+    }
 
     // 2. begin command buffer
-    VkCommandBuffer curCmdBuf = commandBuffers[imageIndex];
-    vkResetCommandBuffer(curCmdBuf, 0); // Reset command buffer before recording
-    VulkanCommandPool::begin(curCmdBuf);
+    auto curCmdBuf = commandBuffers[imageIndex];
+    curCmdBuf->reset();
+    curCmdBuf->begin();
 
+    // Get native command buffer handle for render operations
+    CommandBufferHandle cmdBufHandle = curCmdBuf->getHandle();
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    rt->begin(curCmdBuf);
-    rt->onRender(curCmdBuf);
+    _rt->begin(cmdBufHandle);
+    _rt->onRender(curCmdBuf.get());
 
     static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
     static glm::vec3 pos2 = glm::vec3(100.f, 100.f, 0.f);
@@ -825,7 +800,7 @@ void App::onRender(float dt)
     static glm::vec3 pos4 = glm::vec3(-500.f, -500.f, 0.f);
 
     // MARK: Render2D
-    Render2D::begin(curCmdBuf);
+    Render2D::begin(curCmdBuf.get());
     for (const auto &&[idx, p] : ut::enumerate(clicked))
     {
         auto tex = idx % 2 == 0
@@ -862,11 +837,12 @@ void App::onRender(float dt)
 
             // ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
 
-            bool bVsync = vkRender->getSwapChain()->bVsync;
+            auto *swapchain = render->getSwapchain();
+            bool  bVsync    = swapchain->getVsync();
             if (ImGui::Checkbox("VSync", &bVsync)) {
-                taskManager.registerFrameTask([vkRender, bVsync]() {
+                taskManager.registerFrameTask([swapchain, bVsync]() {
                     // TODO :bind dirty link
-                    vkRender->getSwapChain()->setVsync(bVsync);
+                    swapchain->setVsync(bVsync);
                 });
             }
 
@@ -900,16 +876,24 @@ void App::onRender(float dt)
                 ImGui::StyleColorsLight();
             }
         }
-        if (auto *random = _scene->getEntityByID(10); random && random->hasComponent<TransformComponent>()) {
-            auto tc = random->getComponent<TransformComponent>();
+        auto *scene = getScene();
+        if (scene) {
+            if (auto *random = scene->getEntityByID(10); random && random->hasComponent<TransformComponent>()) {
+                auto tc = random->getComponent<TransformComponent>();
 
-            if (ImGui::CollapsingHeader("Random Cube Transform", 0)) {
-                ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
-                ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 1.f);
-                ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f, 0.1f);
+                if (ImGui::CollapsingHeader("Random Cube Transform", 0)) {
+                    ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
+                    ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 1.f);
+                    // TODO: Fix this - glm::value_ptr issue
+                    // ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f, 0.1f);
+                    float scale[3] = {tc->_scale.x, tc->_scale.y, tc->_scale.z};
+                    if (ImGui::DragFloat3("Scale", scale, 0.1f, 0.1f)) {
+                        tc->setScale(glm::vec3(scale[0], scale[1], scale[2]));
+                    }
+                }
+
+                tc->bDirty = true;
             }
-
-            tc->bDirty = true;
         }
 
 
@@ -943,10 +927,10 @@ void App::onRender(float dt)
                             bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
 
 
-                            int sampler = tv.sampler == _linearSampler ? 0 : 1;
+                            int sampler = tv.sampler == TextureLibrary::getLinearSampler() ? 0 : 1;
                             if (ImGui::Combo(std::format("Sampler##{}", i).c_str(), &sampler, "linear\0nearest\0\0")) {
                                 // YA_CORE_INFO("Change default sampler to {}", (sampler == 0) ? "linear" : "nearest");
-                                tv.sampler = (sampler == 0) ? _linearSampler : _nearestSampler;
+                                tv.sampler = (sampler == 0) ? TextureLibrary::getLinearSampler() : TextureLibrary::getNearestSampler();
                                 bDirty     = true;
                             }
                             // }
@@ -974,257 +958,67 @@ void App::onRender(float dt)
     }
     imgui.endFrame();
     imgui.render();
-    // imgui.submit(curCmdBuf, pipeline->getHandle());
-    imgui.submit(curCmdBuf, nullptr); // leave nullptr to let imgui use its pipeline
+    // TODO: Abstract ImGui submission for multi-backend support
+    if (render->getAPI() == ERenderAPI::Vulkan) {
+        imgui.submitVulkan(curCmdBuf->getHandleAs<VkCommandBuffer>());
+    }
 
 
 #pragma endregion
 
     // TODO: subpasses?
-    rt->end(curCmdBuf);
-    VulkanCommandPool::end(curCmdBuf);
+    _rt->end(cmdBufHandle);
+    curCmdBuf->end();
 
-    vkRender->end(imageIndex, {curCmdBuf});
+    render->end(imageIndex, {cmdBufHandle});
 }
 
 
 void App::onRenderGUI()
 {
-    rt->onRenderGUI();
+    _rt->onRenderGUI();
 }
 
 // MARK: Scene
 bool App::loadScene(const std::string &path)
 {
-    if (_scene)
-    {
-        unloadScene();
+    if (_sceneManager) {
+        return _sceneManager->loadScene(path);
     }
-
-    _scene = std::make_unique<Scene>();
-    onSceneInit(_scene.get());
-    return true;
+    return false;
 }
 
 bool App::unloadScene()
 {
-    if (_scene)
-    {
-        onSceneDestroy(_scene.get());
-        _scene.reset();
+    if (_sceneManager) {
+        return _sceneManager->unloadScene();
     }
-    cubeMesh.reset();
-
-    _whiteTexture.reset();
-    _blackTexture.reset();
-    _multiPixelTexture.reset();
-    return true;
+    return false;
 }
 
 void App::onSceneInit(Scene *scene)
 {
-    std::vector<ya::Vertex> vertices;
-    std::vector<uint32_t>   indices;
-    ya::GeometryUtils::makeCube(-0.5, 0.5, -0.5, 0.5, -0.5, 0.5, vertices, indices, true, true);
-    cubeMesh = std::make_shared<Mesh>(vertices, indices, "cube");
+    // Engine core initialization - basic scene setup
+    // Application-specific logic should be in derived classes (e.g., HelloMaterial)
 
-
-
-    _linearSampler = std::make_shared<VulkanSampler>(
-        SamplerDesc{
-            .label         = "default",
-            .minFilter     = EFilter::Linear,
-            .magFilter     = EFilter::Linear,
-            .mipmapMode    = ESamplerMipmapMode::Linear,
-            .addressModeU  = ESamplerAddressMode::Repeat,
-            .addressModeV  = ESamplerAddressMode::Repeat,
-            .addressModeW  = ESamplerAddressMode::Repeat,
-            .mipLodBias    = 0.0f,
-            .maxAnisotropy = 1.0f,
-        });
-    _nearestSampler = std::make_shared<VulkanSampler>(
-        SamplerDesc{
-            .label         = "nearest",
-            .minFilter     = EFilter::Nearest,
-            .magFilter     = EFilter::Nearest,
-            .mipmapMode    = ESamplerMipmapMode::Nearest,
-            .addressModeU  = ESamplerAddressMode::Repeat,
-            .addressModeV  = ESamplerAddressMode::Repeat,
-            .addressModeW  = ESamplerAddressMode::Repeat,
-            .mipLodBias    = 0.0f,
-            .maxAnisotropy = 1.0f,
-        });
-    _defaultSampler = _linearSampler;
-
-    using color_t = ColorRGBA<uint8_t>;
-    color_t white{.r = 255, .g = 255, .b = 255, .a = 255};
-    color_t black{.r = 0, .g = 0, .b = 0, .a = 255};
-    color_t red{.r = 255, .g = 0, .b = 0, .a = 255};
-    color_t green{.r = 0, .g = 255, .b = 0, .a = 255};
-    color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
-    _whiteTexture = makeShared<ya::Texture>(1, 1, std::vector<color_t>{white});
-    _whiteTexture->setLabel("white");
-    _blackTexture = makeShared<ya::Texture>(1, 1, std::vector<color_t>{black});
-    _blackTexture->setLabel("black");
-    _multiPixelTexture = makeShared<ya::Texture>(2, 2, std::vector<color_t>{
-                                                           white,
-                                                           blue,
-                                                           blue,
-                                                           white,
-                                                       }); // 2x2 texture with 4 different colors
-    _multiPixelTexture->setLabel("multi-pixel");
-    AssetManager::get()->loadTexture("face", faceTexturePath);
-    AssetManager::get()->loadTexture("uv1", uv1TexturePath);
-
-    _materials.clear();
-
-
-    // we span at z = 3 and look at the origin ( right hand? and the cubes all place on xy plane )
+    // Set up default camera
     camera.setPosition(glm::vec3(0.0f, 0.0f, 3.0f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
     camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 
-
-#if !ONLY_2D
-    auto *baseMaterial0      = MaterialFactory::get()->createMaterial<BaseMaterial>("base0");
-    auto *baseMaterial1      = MaterialFactory::get()->createMaterial<BaseMaterial>("base1");
-    baseMaterial0->colorType = BaseMaterial::EColor::Normal;
-    baseMaterial1->colorType = BaseMaterial::EColor::Texcoord;
-    _materials.push_back(baseMaterial0);
-    _materials.push_back(baseMaterial1);
-    int baseMaterialCount = _materials.size();
-
-
-    auto *unlitMaterial0 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit0");
-    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor0, TextureView{
-                                                                  .texture = _whiteTexture,
-                                                                  .sampler = _defaultSampler,
-                                                              });
-    unlitMaterial0->setTextureView(UnlitMaterial::BaseColor1, TextureView{
-                                                                  .texture = _multiPixelTexture,
-                                                                  .sampler = _defaultSampler,
-                                                              });
-    unlitMaterial0->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
-    unlitMaterial0->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
-    unlitMaterial0->setMixValue(0.5);
-
-    auto *unlitMaterial1 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit1");
-    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor0,
-                                   TextureView{
-                                       .texture = _blackTexture,
-                                       .sampler = _defaultSampler,
-                                   });
-    unlitMaterial1->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
-    unlitMaterial1->setTextureView(UnlitMaterial::BaseColor1,
-                                   TextureView{
-                                       .texture = AssetManager::get()->getTextureByName("face"),
-                                       .sampler = _defaultSampler,
-                                   });
-    unlitMaterial1->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
-    unlitMaterial1->setMixValue(0.5);
-
-    auto *unlitMaterial2 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit2");
-    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor0,
-                                   TextureView{
-                                       .texture = AssetManager::get()->getTextureByName("uv1"),
-                                       .sampler = _defaultSampler,
-                                   });
-    unlitMaterial2->setTextureView(UnlitMaterial::BaseColor1,
-                                   TextureView{
-                                       .texture = _whiteTexture,
-                                       .sampler = _defaultSampler,
-                                   });
-    unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
-    unlitMaterial2->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
-    unlitMaterial2->setMixValue(0.5);
-
-
-    _materials.push_back(unlitMaterial0);
-    _materials.push_back(unlitMaterial1);
-    _materials.push_back(unlitMaterial2);
-
-
-    {
-        auto *unlitMaterial3 = MaterialFactory::get()->createMaterial<UnlitMaterial>("unlit3");
-        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor0,
-                                       TextureView{
-                                           .texture = _whiteTexture,
-                                           .sampler = _defaultSampler,
-                                       });
-        unlitMaterial3->setTextureView(UnlitMaterial::BaseColor1,
-                                       TextureView{
-                                           .texture = AssetManager::get()->getTextureByName("uv1"),
-                                           .sampler = _defaultSampler,
-                                       });
-        unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor0, true);
-        unlitMaterial3->setTextureViewEnable(UnlitMaterial::BaseColor1, true);
-        unlitMaterial3->setMixValue(0.5);
-        unlitMaterial3->setTextureViewUVScale(UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
-        _materials.push_back(unlitMaterial3);
-
-        auto plane = scene->createEntity("Plane");
-        auto tc    = plane->addComponent<TransformComponent>();
-        tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
-        tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
-        auto umc = plane->addComponent<UnlitMaterialComponent>();
-        umc->addMesh(cubeMesh.get(), unlitMaterial3);
-    }
-
-
-    float offset   = 3.f;
-    float rotation = 10.f;
-    int   count    = 100;
-    int   alpha    = (int)std::round(std::pow(count, 1.0 / 3.0));
-    YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
-
-    int      index            = 0;
-    uint32_t maxMaterialIndex = _materials.size() - 1;
-    for (int i = 0; i < alpha; ++i) {
-        for (int j = 0; j < alpha; ++j) {
-            for (int k = 0; k < alpha; ++k) {
-                auto cube = scene->createEntity(std::format("Cube_{}_{}_{}", i, j, k));
-                {
-                    auto v  = glm::vec3(i, j, k);
-                    auto tc = cube->addComponent<TransformComponent>();
-                    tc->setPosition(offset * v);
-                    // tc->setRotation(rotation * v);
-                    float alpha = std::sin(glm::radians(15.f * (float)(i + j + k)));
-                    tc->setScale(glm::vec3(alpha));
-
-                    int materialIndex = index % maxMaterialIndex;
-                    ++index;
-                    if (materialIndex < baseMaterialCount) {
-                        // use base material
-                        auto bmc = cube->addComponent<BaseMaterialComponent>();
-                        auto mat = static_cast<BaseMaterial *>(_materials[materialIndex]);
-                        YA_CORE_ASSERT(mat, "WTH");
-                        bmc->addMesh(cubeMesh.get(), mat);
-                    }
-                    else {
-                        // use unlit material
-                        auto umc = cube->addComponent<UnlitMaterialComponent>();
-                        auto mat = static_cast<UnlitMaterial *>(_materials[materialIndex]);
-                        YA_CORE_ASSERT(mat, "WTH");
-                        umc->addMesh(cubeMesh.get(), mat);
-                    }
-                }
-            }
-        }
-    }
-#endif
-
+    // Create camera entity
     auto cam = scene->createEntity("Camera");
     cam->addComponent<TransformComponent>();
     cam->addComponent<CameraComponent>();
     cam->addComponent<BaseMaterialComponent>();
-    rt->setCamera(cam);
+    _rt->setCamera(cam);
 
-    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "WTH");
-    YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "???");
+    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
+    YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
 
     auto cc    = cam->getComponent<CameraComponent>();
     auto owner = cc->getOwner();
-    YA_CORE_ASSERT(owner == cam, "WTH");
+    YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
 }
 
 bool App::onWindowResized(const WindowResizeEvent &event)
@@ -1274,7 +1068,7 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
 {
     float sensitivity = 0.5f;
-    auto  cam         = rt->getCameraMut();
+    auto  cam         = _rt->getCameraMut();
     auto  cc          = cam->getComponent<CameraComponent>();
     // up is +, and down is -, up is close so -=
     cc->_distance = cc->_distance -= event._offsetY * sensitivity;

@@ -5,13 +5,14 @@
 
 #include <vulkan/vulkan.h>
 
-#include "Render/Render.h"
+#include "Render/Core/Image.h"
 
+namespace ya {
 struct VulkanRender;
 struct VulkanImage;
 
 
-struct VulkanImageView
+struct VulkanImageView : public IImageView
 {
     VulkanRender *_render = nullptr;
     VkImageView   _handle = VK_NULL_HANDLE;
@@ -19,5 +20,10 @@ struct VulkanImageView
     VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags);
     virtual ~VulkanImageView();
 
-    VkImageView getHandle() const { return _handle; }
+    // IImageView interface
+    ImageViewHandle getHandle() const override { return ImageViewHandle{_handle}; }
+
+    // Vulkan-specific accessor
+    VkImageView getVkImageView() const { return _handle; }
 };
+}

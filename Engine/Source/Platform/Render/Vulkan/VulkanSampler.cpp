@@ -2,18 +2,19 @@
 #include "VulkanRender.h"
 #include "core/App/App.h"
 
+namespace ya
+{
 
 VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
 {
-    using namespace ya;
     auto vkRender = ya::App::get()->getRender<VulkanRender>();
     vkRender      = static_cast<VulkanRender *>(ya::App::get()->getRender());
 
-    VkSamplerCreateInfo vkCI{
+    ::VkSamplerCreateInfo vkCI{
         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .pNext                   = nullptr,
         .flags                   = 0,
-        .magFilter               = VkFilter::VK_FILTER_LINEAR,
+        .magFilter               = ::VkFilter::VK_FILTER_LINEAR,
         .minFilter               = toVk(ci.minFilter),
         .mipmapMode              = toVk(ci.mipmapMode),
         .addressModeU            = toVk(ci.addressModeU),
@@ -32,7 +33,7 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
 
     if (vkCI.anisotropyEnable == VK_TRUE)
     {
-        VkPhysicalDeviceFeatures deviceFeatures;
+        ::VkPhysicalDeviceFeatures deviceFeatures;
         vkGetPhysicalDeviceFeatures(vkRender->getPhysicalDevice(), &deviceFeatures);
         if (deviceFeatures.samplerAnisotropy != VK_TRUE)
         {
@@ -53,3 +54,6 @@ VulkanSampler::~VulkanSampler()
 {
     VK_DESTROY(Sampler, ya::App::get()->getRender<VulkanRender>()->getDevice(), _handle);
 }
+
+// namespace ya
+} // namespace ya

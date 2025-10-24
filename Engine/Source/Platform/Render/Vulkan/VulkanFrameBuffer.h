@@ -2,11 +2,14 @@
 #pragma once
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/FrameBuffer.h"
 #include "VulkanImage.h"
 #include <vulkan/vulkan.h>
 
+namespace ya
+{
 
-struct VulkanFrameBuffer 
+struct VulkanFrameBuffer : public IFrameBuffer
 {
     // TODO: replace render with logicalDevice if without other sub access
     VulkanRender     *render{};
@@ -37,7 +40,12 @@ struct VulkanFrameBuffer
 
     void clean();
 
-    [[nodiscard]] VkFramebuffer getHandle() const { return _framebuffer; }
-    [[nodiscard]] uint32_t      getWidth() const { return width; }
-    [[nodiscard]] uint32_t      getHeight() const { return height; }
+    // IFrameBuffer interface
+    [[nodiscard]] void    *getHandle() const override { return static_cast<void *>(_framebuffer); }
+    [[nodiscard]] Extent2D getExtent() const override { return {width, height}; }
+
+    // Vulkan-specific accessor
+    [[nodiscard]] VkFramebuffer getVkHandle() const { return _framebuffer; }
 };
+
+} // namespace ya

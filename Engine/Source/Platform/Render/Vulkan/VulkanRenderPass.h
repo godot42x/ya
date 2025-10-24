@@ -1,13 +1,17 @@
 #pragma once
 
-
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderPass.h"
 #include "Render/RenderManager.h"
 #include <vector>
 #include <vulkan/vulkan.h>
 
+
+namespace ya
+{
 struct VulkanRender;
 struct VulkanSwapChain;
 
@@ -16,7 +20,7 @@ struct VulkanSwapChain;
 Render Pass主导资源声明
 Pipeline 需要兼容/依赖 Render Pass 的资源声明
 */
-class VulkanRenderPass
+struct VulkanRenderPass : public ya::IRenderPass
 {
   private:
     VulkanRender *_render      = nullptr;
@@ -26,36 +30,42 @@ class VulkanRenderPass
     VkFormat         m_depthFormat          = VK_FORMAT_UNDEFINED;
     VulkanSwapChain *_swapChain             = nullptr;
 
-    RenderPassCreateInfo _ci;
+    ya::RenderPassCreateInfo _ci;
 
   public:
     VulkanRenderPass(VulkanRender *render);
-    ~VulkanRenderPass() { cleanup(); }
+    ~VulkanRenderPass() override { cleanup(); }
+
+    VulkanRenderPass(const VulkanRenderPass &)            = delete;
+    VulkanRenderPass &operator=(const VulkanRenderPass &) = delete;
+    VulkanRenderPass(VulkanRenderPass &&)                 = default;
+    VulkanRenderPass &operator=(VulkanRenderPass &&)      = default;
 
     // Initialize the render pass with device and format information
-
-    bool recreate(const RenderPassCreateInfo &ci);
+    bool recreate(const ya::RenderPassCreateInfo &ci) override;
     void cleanup();
 
+    // IRenderPass interface
+    void begin(
+        ya::ICommandBuffer            *commandBuffer,
+        void                          *framebuffer,
+        const Extent2D                &extent,
+        const std::vector<ClearValue> &clearValues) override;
+    void                                          end(ya::ICommandBuffer *commandBuffer) override;
+    void                                         *getHandle() const override { return (void *)(uintptr_t)m_renderPass; }
+    EFormat::T                                    getDepthFormat() const override;
+    uint32_t                                      getAttachmentCount() const override { return static_cast<uint32_t>(_ci.attachments.size()); }
+    const std::vector<ya::AttachmentDescription> &getAttachments() const override { return _ci.attachments; }
+    const ya::RenderPassCreateInfo               &getCreateInfo() const override { return _ci; }
 
-    // Getters
-    [[nodiscard]] VkRenderPass getHandle() const { return m_renderPass; }
-    [[nodiscard]] VkFormat     getDepthFormat() const { return m_depthFormat; }
+    // Vulkan-specific methods
+    [[nodiscard]] VkRenderPass getVkHandle() const { return m_renderPass; }
+    [[nodiscard]] VkFormat     getVkDepthFormat() const { return m_depthFormat; }
 
-
-    void begin(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues);
-    void end(VkCommandBuffer commandBuffer);
-
-    [[nodiscard]] RenderPassCreateInfo getCI() const { return _ci; }
-    [[nodiscard]] auto                 getAttachmentCount() const { return _ci.attachments.size(); }
-
-    // span is 16 bytes, but can aware of the copy if use not const auto& = getxxx()
-    // but performance?
-    [[nodiscard]] const std::vector<AttachmentDescription> &getAttachments() const { return _ci.attachments; }
-
+    void beginVk(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues);
+    void endVk(VkCommandBuffer commandBuffer);
 
   private:
-
     // Find supported format from candidates
     VkFormat findSupportedImageFormat(const std::vector<VkFormat> &candidates,
                                       VkImageTiling                tiling,
@@ -63,3 +73,4 @@ class VulkanRenderPass
 
     bool createDefaultRenderPass();
 };
+} // namespace ya

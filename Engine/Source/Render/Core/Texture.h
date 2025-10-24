@@ -2,18 +2,12 @@
 
 
 #include "Core/Base.h"
-#include "Platform/Render/Vulkan/VulkanSampler.h"
+#include "Image.h"
+#include "Sampler.h"
 #include "Render/RenderDefines.h"
-#include "vulkan/vulkan_core.h"
-
-
-
-struct VulkanImage;
-struct VulkanImageView;
 
 namespace ya
 {
-
 
 template <typename ComponentType>
 struct ColorRGBA
@@ -34,8 +28,8 @@ struct Texture
     std::string _label;
     std::string _filepath;
 
-    std::shared_ptr<VulkanImage>     image;
-    std::shared_ptr<VulkanImageView> imageView;
+    std::shared_ptr<IImage>     image;
+    std::shared_ptr<IImageView> imageView;
 
 
     Texture(const std::string &filepath);
@@ -43,9 +37,10 @@ struct Texture
 
     virtual ~Texture() = default;
 
-    VkImage     getVkImage();
-    VkImageView getVkImageView();
-    VkFormat    getVkFormat() const;
+    // Platform-independent accessors (preferred)
+    ImageHandle     getImage() const { return image ? image->getHandle() : ImageHandle{}; }
+    ImageViewHandle getImageView() const { return imageView ? imageView->getHandle() : ImageViewHandle{}; }
+    FormatHandle    getFormatHandle() const;
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

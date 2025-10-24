@@ -2,24 +2,18 @@
 
 #pragma once
 #include "Core/Base.h"
+#include "Render/Core/Buffer.h"
+#include "Platform/Render/Vulkan/VulkanUtils.h"
 
 #include <vulkan/vulkan.h>
 
 
+namespace ya
+{
 
 struct VulkanRender;
 
-struct BufferCreateInfo
-{
-    VkBufferUsageFlags usage;
-    // do not set nullptr, if you want empty buffer, set data to std::nullopt
-    std::optional<void *> data = std::nullopt;
-    uint32_t              size;
-    VkMemoryPropertyFlags memProperties;
-    std::string           label;
-};
-
-struct VulkanBuffer
+struct VulkanBuffer : public ya::IBuffer
 {
     VulkanRender *_render = nullptr;
 
@@ -39,16 +33,17 @@ struct VulkanBuffer
     VulkanBuffer(decltype(_dummy), VulkanRender *render, const BufferCreateInfo &ci)
     {
         _render      = render;
-        _usageFlags  = ci.usage;
+        _usageFlags  = toVk(ci.usage);
         name         = ci.label;
-        bHostVisible = ci.memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        auto vkMemProps = toVk(ci.memProperties);
+        bHostVisible = vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         _size        = ci.size;
 
         if (ci.data.has_value()) {
-            createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), ci.memProperties);
+            createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), vkMemProps);
         }
         else {
-            createDefaultInternal(static_cast<uint32_t>(ci.size), ci.memProperties);
+            createDefaultInternal(static_cast<uint32_t>(ci.size), vkMemProps);
         }
 
         YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
@@ -58,21 +53,22 @@ struct VulkanBuffer
 
     static auto create(VulkanRender *render, const BufferCreateInfo &ci)
     {
-        return makeShared<VulkanBuffer>(_dummy, render, ci);
+        return std::shared_ptr<VulkanBuffer>(new VulkanBuffer(_dummy, render, ci));
     }
 
 
-    bool writeData(const void *data, uint32_t size = 0, uint32_t offset = 0);
-    bool flush(uint32_t size = 0, uint32_t offset = 0);
+    // IBuffer interface implementation
+    bool               writeData(const void *data, uint32_t size = 0, uint32_t offset = 0) override;
+    bool               flush(uint32_t size = 0, uint32_t offset = 0) override;
+    void               unmap() override;
+    void              *getHandle() const override { return (void *)(uintptr_t)_handle; }
+    uint32_t           getSize() const override { return static_cast<uint32_t>(_size); }
+    bool               isHostVisible() const override { return bHostVisible; }
+    const std::string &getName() const override { return name; }
 
-    template <typename T>
-    T *map()
-    {
-        void *data = nullptr;
-        mapInternal(&data);
-        return static_cast<T *>(data);
-    }
-    void unmap();
+    // Vulkan-specific methods
+    [[nodiscard]] VkBuffer       getVkBuffer() const { return _handle; }
+    [[nodiscard]] VkDeviceMemory getVkMemory() const { return _memory; }
 
     static bool allocate(VulkanRender *render, uint32_t size,
                          VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
@@ -82,14 +78,13 @@ struct VulkanBuffer
     static void transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
     static void transfer(VkCommandBuffer cmdBuf, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
 
-    [[nodiscard]] VkBuffer       getHandle() const { return _handle; }
-    [[nodiscard]] VkDeviceMemory getMemory() const { return _memory; }
-
   protected:
+    void mapInternal(void **ptr) override;
+
   private:
     void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
     void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
-
-    void mapInternal(void **ptr);
     void setupDebugName(const std::string &name);
 };
+
+} // namespace ya

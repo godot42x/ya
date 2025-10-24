@@ -1,30 +1,28 @@
 #pragma once
 #include "Core/Base.h"
 #include "Core/Camera.h"
+#include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
-
-#include "Platform/Render/Vulkan/VulkanSampler.h"
-#include "Render/Core/Material.h"
-#include "Render/Core/Texture.h"
+#include "Render/Core/RenderTarget.h"
+#include "Render/Render.h"
 #include "Render/Shader.h"
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include "Core/Input/InputManager.h"
-#include "Platform/Render/Vulkan/VulkanQueue.h"
 
 
-#include "Render/Render.h"
 
 #include "ClLIParams.h"
-#include "Scene/Scene.h"
 
+// Forward declarations
+namespace ya
+{
+class RenderContext;
+class SceneManager;
+class ImGuiManager;
+class Scene;
+struct Material;
+struct RenderTarget;
+} // namespace ya
 
-// #include "utility.cc/stack_deleter.h"
-
-struct LogicalDevice;
-struct VulkanRenderPass;
-struct VulkanPipelineLayout;
 
 namespace ya
 {
@@ -87,17 +85,16 @@ struct App
 {
     static App *_instance;
 
-    // StackDeleter    deleteStack;
-    IRender *_render = nullptr;
-    // VulkanRenderPass *m_triangleRenderPass = nullptr;
-    // VulkanRenderPass *m_2DRenderPass       = nullptr;
+    // Core subsystems
+    RenderContext *_renderContext = nullptr;
+    SceneManager  *_sceneManager  = nullptr;
+    ImGuiManager  *_imguiManager  = nullptr;
+
     std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
 
-
-    bool          bRunning            = true;
-    ERenderAPI::T currentRenderAPI    = ERenderAPI::None;
-    VulkanQueue  *_firstGraphicsQueue = nullptr;
-    VulkanQueue  *_firstPresentQueue  = nullptr;
+    // Runtime state
+    bool          bRunning         = true;
+    ERenderAPI::T currentRenderAPI = ERenderAPI::None;
 
     using clock_t      = std::chrono::steady_clock;
     using time_point_t = clock_t::time_point;
@@ -110,24 +107,19 @@ struct App
     AppDesc   _ci;
     glm::vec2 _windowSize = {0, 0};
 
+    // Input and Camera
     InputManager inputManager;
     TaskManager  taskManager;
     FreeCamera   camera;
 
+    // Application state
+    AppMode   _appMode      = AppMode::Control;
+    glm::vec2 _lastMousePos = {0, 0};
 
-    std::unique_ptr<Scene> _scene = nullptr;
-
-    std::shared_ptr<Texture>       _whiteTexture      = nullptr;
-    std::shared_ptr<Texture>       _blackTexture      = nullptr;
-    std::shared_ptr<Texture>       _multiPixelTexture = nullptr;
-    std::shared_ptr<VulkanSampler> _defaultSampler    = nullptr;
-    std::shared_ptr<VulkanSampler> _linearSampler     = nullptr;
-    std::shared_ptr<VulkanSampler> _nearestSampler    = nullptr;
-
+    // Materials (TODO: move to MaterialLibrary later)
     std::vector<Material *> _materials;
 
-    AppMode   _appMode = AppMode::Control;
-    glm::vec2 _lastMousePos;
+    RenderTarget *_rt = nullptr;
 
   public:
     App()          = default;
@@ -162,14 +154,19 @@ struct App
 
     static App *get() { return _instance; }
 
+    // Getters for subsystems
+    [[nodiscard]] RenderContext *getRenderContext() const { return _renderContext; }
+    [[nodiscard]] SceneManager  *getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] ImGuiManager  *getImGuiManager() const { return _imguiManager; }
+
+    [[nodiscard]] IRender *getRender() const;
     template <typename T>
-    [[nodiscard]] T       *getRender() { return static_cast<T *>(_render); }
-    [[nodiscard]] IRender *getRender() { return _render; }
+    [[nodiscard]] T *getRender() { return static_cast<T *>(getRender()); }
 
     [[nodiscard]] const AppDesc                 &getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
-    [[nodiscard]] Scene *getScene() const { return _scene.get(); }
+    [[nodiscard]] Scene *getScene() const;
 
     [[nodiscard]] uint32_t getFrameIndex() const { return _frameIndex; }
     // time count from app started
@@ -178,13 +175,16 @@ struct App
         return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
     }
 
-  private:
-
-    bool         loadScene(const std::string &path);
-    bool         unloadScene();
-    bool         saveScene(const std::string &path) {}
+  protected:
+    // Protected for derived classes to override
     virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene) {}
+
+  private:
+
+    bool loadScene(const std::string &path);
+    bool unloadScene();
+    bool saveScene(const std::string &path) { return false; } // TODO: implement
 
     bool                           onWindowResized(const WindowResizeEvent &event);
     bool                           onKeyReleased(const KeyReleasedEvent &event);

@@ -2,41 +2,50 @@
 #include "Core/App/App.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
+#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
+#include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "imgui.h"
+
 
 namespace ya
 {
 
-RenderTarget::RenderTarget(VulkanRenderPass *renderPass)
+RenderTarget::RenderTarget(IRenderPass *renderPass) : _camera(nullptr)
 {
     _renderPass = renderPass;
 
-    auto vkRender     = static_cast<VulkanRender *>(App::get()->getRender());
-    auto swapChain    = vkRender->getSwapChain();
-    auto ext          = vkRender->getSwapChain()->getExtent();
-    _extent           = {.width = ext.width, .height = ext.height};
-    _frameBufferCount = vkRender->getSwapChain()->getImages().size();
+    auto r  = App::get()->getRender();
+    _extent = {
+        .width  = r->getSwapchainWidth(),
+        .height = r->getSwapchainHeight(),
+    };
+    _frameBufferCount = r->getSwapchainImageCount();
     bSwapChainTarget  = true;
 
-
-
-    swapChain->onRecreate.addLambda(
-        this,
-        [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
-            if (now.extent.width != old.extent.width ||
-                now.extent.height != old.extent.height ||
-                old.presentMode != now.presentMode)
-            {
-                this->setExtent(now.extent);
-            }
-        });
+    // Get swapchain and register recreate callback
+    auto *vkRender    = static_cast<VulkanRender *>(r);
+    auto *vkSwapChain = vkRender->getSwapchain<VulkanSwapChain>();
+    if (vkSwapChain) {
+        vkSwapChain->onRecreate.addLambda(
+            this,
+            [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
+                if (now.extent.width != old.extent.width ||
+                    now.extent.height != old.extent.height ||
+                    old.presentMode != now.presentMode)
+                {
+                    Extent2D newExtent{now.extent.width, now.extent.height};
+                    this->setExtent(newExtent);
+                }
+            });
+    }
 
     init();
     recreate();
 }
 
-RenderTarget::RenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
+RenderTarget::RenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent) : _camera(nullptr)
 {
     _renderPass       = renderPass;
     _frameBufferCount = frameBufferCount;
@@ -49,8 +58,8 @@ RenderTarget::RenderTarget(VulkanRenderPass *renderPass, uint32_t frameBufferCou
 void RenderTarget::init()
 {
     _clearValues.resize(_renderPass->getAttachmentCount());
-    setColorClearValue(VkClearValue{.color = {{0.0f, 0.0f, 0.0f, 1.0f}}});
-    setDepthStencilClearValue(VkClearValue{.depthStencil = {1.0f, 0}});
+    setColorClearValue(ClearValue(0.0f, 0.0f, 0.0f, 1.0f));
+    setDepthStencilClearValue(ClearValue(1.0f, 0));
 }
 
 
@@ -65,7 +74,7 @@ void RenderTarget::recreate()
     _frameBuffers.resize(_frameBufferCount);
 
     auto vkRender    = App::get()->getRender<VulkanRender>();
-    auto swapChain   = vkRender->getSwapChain();
+    auto vkSwapChain = vkRender->getSwapchain<VulkanSwapChain>();
     auto attachments = _renderPass->getAttachments();
     if (attachments.empty()) {
         return;
@@ -73,7 +82,7 @@ void RenderTarget::recreate()
 
     for (size_t i = 0; i < _frameBufferCount; i++)
     {
-        auto fb          = std::make_shared<VulkanFrameBuffer>(vkRender, _renderPass, _extent.width, _extent.height);
+        auto fb          = std::make_shared<VulkanFrameBuffer>(vkRender, static_cast<VulkanRenderPass *>(_renderPass), _extent.width, _extent.height);
         _frameBuffers[i] = fb;
 
         std::vector<std::shared_ptr<VulkanImage>> fbAttachments;
@@ -86,9 +95,9 @@ void RenderTarget::recreate()
                 attachment.finalLayout == EImageLayout::PresentSrcKHR &&
                 attachment.samples == ESampleCount::Sample_1)
             {
-
+                // Use Vulkan-specific swapchain to get VkImage handles
                 auto ptr = VulkanImage::from(vkRender,
-                                             swapChain->getImages()[i],
+                                             vkSwapChain->getVkImages()[i],
                                              toVk(attachment.format),
                                              toVk(attachment.usage));
                 fbAttachments.push_back(ptr);
@@ -119,10 +128,10 @@ void RenderTarget::recreate()
             ++j;
         }
 
-        _frameBuffers[i]->recreate(fbAttachments, _extent.width, _extent.height);
+        // Cast to VulkanFrameBuffer to call recreate (Vulkan-specific method)
+        static_cast<VulkanFrameBuffer *>(_frameBuffers[i].get())->recreate(fbAttachments, _extent.width, _extent.height);
 
-
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandle(), std::format("RT_FrameBuffer_{}", i));
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}", i));
     }
 }
 
@@ -158,11 +167,11 @@ void RenderTarget::onRenderGUI()
 
 
 
-void RenderTarget::begin(void *cmdBuf)
+void RenderTarget::begin(CommandBufferHandle cmdBuf)
 {
     YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
-    VkCommandBuffer vkCmdBuf = static_cast<VkCommandBuffer>(cmdBuf);
+    auto vkCmdBuf = cmdBuf.as<VkCommandBuffer>();
     if (bDirty)
     {
         recreate();
@@ -176,32 +185,42 @@ void RenderTarget::begin(void *cmdBuf)
 
     if (bSwapChainTarget) {
         auto render        = App::get()->getRender<VulkanRender>();
-        _currentFrameIndex = render->getSwapChain()->getCurImageIndex();
+        auto vkSwapChain   = render->getSwapchain();
+        _currentFrameIndex = vkSwapChain->getCurImageIndex();
     }
     else {
         _currentFrameIndex = (_currentFrameIndex + 1) % _frameBufferCount; // For custom render targets, always use the first frame buffer
     }
 
-    _renderPass->begin(vkCmdBuf,
+    // Wrap VkCommandBuffer in ICommandBuffer interface
+    auto                vkRender = static_cast<VulkanRender *>(App::get()->getRender());
+    VulkanCommandBuffer cmdBufWrapper(vkRender, vkCmdBuf);
+
+    _renderPass->begin(&cmdBufWrapper,
                        getFrameBuffer()->getHandle(),
                        {
-                           static_cast<uint32_t>(_extent.width),
-                           static_cast<uint32_t>(_extent.height),
+                           .width  = static_cast<uint32_t>(_extent.width),
+                           .height = static_cast<uint32_t>(_extent.height),
                        },
                        _clearValues);
     bBeginTarget = true;
 }
 
-void RenderTarget::end(void *cmdBuf)
+void RenderTarget::end(CommandBufferHandle cmdBuf)
 {
 
     // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
-    auto vkCmdBuf = static_cast<VkCommandBuffer>(cmdBuf);
-    _renderPass->end(vkCmdBuf);
+    auto vkCmdBuf = cmdBuf.as<VkCommandBuffer>();
+
+    // Wrap VkCommandBuffer in ICommandBuffer interface
+    auto                vkRender = static_cast<VulkanRender *>(App::get()->getRender());
+    VulkanCommandBuffer cmdBufWrapper(vkRender, vkCmdBuf);
+
+    _renderPass->end(&cmdBufWrapper);
     bBeginTarget = false;
 }
 
-void RenderTarget::setExtent(VkExtent2D extent)
+void RenderTarget::setExtent(Extent2D extent)
 {
     _extent = extent;
     bDirty  = true;
@@ -213,7 +232,7 @@ void RenderTarget::setBufferCount(uint32_t count)
     bDirty            = true;
 }
 
-void RenderTarget::setColorClearValue(VkClearValue clearValue)
+void RenderTarget::setColorClearValue(ClearValue clearValue)
 {
     for (uint32_t i = 0; i < _clearValues.size(); i++)
     {
@@ -221,7 +240,7 @@ void RenderTarget::setColorClearValue(VkClearValue clearValue)
     }
 }
 
-void RenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
+void RenderTarget::setColorClearValue(uint32_t index, ClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size()) {
@@ -231,7 +250,8 @@ void RenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
             if (!RenderHelper::isDepthStencilFormat(rpAttachments[index].format) &&
                 rpAttachments[index].loadOp == EAttachmentLoadOp::Clear)
             {
-                _clearValues[index].color = clearValue.color;
+                _clearValues[index]                = clearValue;
+                _clearValues[index].isDepthStencil = false;
             }
             else {
                 YA_CORE_WARN("Attempting to set color clear value on non-color attachment, {}", index);
@@ -240,15 +260,15 @@ void RenderTarget::setColorClearValue(uint32_t index, VkClearValue clearValue)
     }
 }
 
-void RenderTarget::setDepthStencilClearValue(VkClearValue clearValue)
+void RenderTarget::setDepthStencilClearValue(ClearValue clearValue)
 {
-    for (int i = 0; i < _clearValues.size(); i++)
+    for (uint32_t i = 0; i < _clearValues.size(); i++)
     {
         setDepthStencilClearValue(i, clearValue);
     }
 }
 
-void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearValue)
+void RenderTarget::setDepthStencilClearValue(uint32_t index, ClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size())
@@ -258,7 +278,8 @@ void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearV
             if (RenderHelper::isDepthStencilFormat(rpAttachments[index].format) &&
                 rpAttachments[index].loadOp == EAttachmentLoadOp::Clear)
             {
-                _clearValues[index].depthStencil = clearValue.depthStencil;
+                _clearValues[index]                = clearValue;
+                _clearValues[index].isDepthStencil = true;
             }
             else {
                 YA_CORE_WARN("Attempting to set depth stencil clear value on non-depth attachment, {}", index);
@@ -267,10 +288,12 @@ void RenderTarget::setDepthStencilClearValue(uint32_t index, VkClearValue clearV
     }
 };
 
-void RenderTarget::renderMaterialSystems(void *cmdBuf)
+void RenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
 {
     for (auto &system : _materialSystems) {
-        if (system->bEnabled) system->onRender(cmdBuf, this);
+        if (system->bEnabled) {
+            system->onRender(cmdBuf, this);
+        }
     }
 }
 

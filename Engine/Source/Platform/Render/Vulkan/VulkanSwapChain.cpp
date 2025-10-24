@@ -1,13 +1,19 @@
 #include "VulkanSwapChain.h"
+
 #include "Core/Log.h"
+
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
+
 #include <algorithm>
 #include <limits>
 
+namespace ya
+{
 
 
-VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(VkSurfaceFormatKHR preferredSurfaceFormat)
+
+VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(::VkSurfaceFormatKHR preferredSurfaceFormat)
 {
 
     for (const auto &format : formats)
@@ -25,7 +31,7 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(VkSurf
     return formats[0];
 }
 
-VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(VkPresentModeKHR preferredMode)
+VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(::VkPresentModeKHR preferredMode)
 {
     // First try to find the preferred mode
     for (const auto &modes : presentModes)
@@ -70,7 +76,7 @@ VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(IWindowProvider *prov
 
     VkExtent2D actualExtent;
     if (preferredHeight == 0 && preferredWidth == 0) {
-        int width, height;
+        int width = 0, height = 0;
         provider->getWindowSize(width, height);
         actualExtent.width  = static_cast<uint32_t>(width);
         actualExtent.height = static_cast<uint32_t>(height);
@@ -94,6 +100,7 @@ VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(IWindowProvider *prov
 VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
     VulkanSwapChainSupportDetails details;
+
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
 
@@ -157,7 +164,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 
     // TODO: extend
     // Choose present mode based on config and V-Sync setting
-    // VkPresentModeKHR presentMode = VK_NULL_HANDLE;
+    // ::VkPresentModeKHR presentMode = VK_NULL_HANDLE;
     // if (ci.bVsync) {
     //     presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync enabled
     // }
@@ -293,6 +300,9 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
                                 m_swapChain,
                                 std::format("SwapChain_{}", version).c_str());
 
+    // Update cached image handles for ISwapchain interface
+    updateImageHandles();
+
     _ci = ci;
     DiffInfo now{
         .extent      = _supportDetails.capabilities.currentExtent,
@@ -360,3 +370,19 @@ VkResult VulkanSwapChain::presentImage(uint32_t idx, std::vector<VkSemaphore> wa
     }
     return ret;
 }
+
+// ISwapchain interface implementation
+EFormat::T VulkanSwapChain::getFormat() const
+{
+    // Convert VkFormat to EFormat::T
+    switch (_surfaceFormat) {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+        return EFormat::R8G8B8A8_UNORM;
+    case VK_FORMAT_B8G8R8A8_UNORM:
+        return EFormat::B8G8R8A8_UNORM;
+    default:
+        return EFormat::Undefined;
+    }
+}
+
+} // namespace ya

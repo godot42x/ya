@@ -6,6 +6,7 @@
 
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
+#include "Render/Core/Buffer.h"
 
 
 struct VulkanCommandPool;
@@ -51,6 +52,8 @@ struct VulkanUtils
 };
 
 
+namespace ya
+{
 
 namespace EPrimitiveType
 {
@@ -269,6 +272,48 @@ inline auto toVk(T usage) -> VkImageUsageFlags
     return vkUsage;
 }
 } // namespace EImageUsage
+
+// Buffer usage conversion
+inline VkBufferUsageFlags toVk(EBufferUsage usage)
+{
+    VkBufferUsageFlags vkUsage = 0;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::TransferSrc)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::TransferDst)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::UniformTexelBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::StorageTexelBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::UniformBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::StorageBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::IndexBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::VertexBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    if ((static_cast<uint32_t>(usage) & static_cast<uint32_t>(EBufferUsage::IndirectBuffer)) != 0)
+        vkUsage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    return vkUsage;
+}
+
+// Memory property conversion
+inline VkMemoryPropertyFlags toVk(EMemoryProperty props)
+{
+    VkMemoryPropertyFlags vkProps = 0;
+    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::DeviceLocal)) != 0)
+        vkProps |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostVisible)) != 0)
+        vkProps |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostCoherent)) != 0)
+        vkProps |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostCached)) != 0)
+        vkProps |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::LazilyAllocated)) != 0)
+        vkProps |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+    return vkProps;
+}
 
 namespace EBlendOp
 {
@@ -493,24 +538,7 @@ inline auto toVk(T stage) -> VkShaderStageFlags
 }
 }; // namespace EShaderStage
 
-namespace std
-{
-std::string to_string(VkResult v);
-std::string to_string(VkFormat v);
-std::string to_string(VkColorSpaceKHR v);
-std::string to_string(VkPresentModeKHR v);
-std::string to_string(VkSharingMode v);
-std::string to_string(VkObjectType v);
-} // namespace std
-
-template <>
-struct std::formatter<VkResult> : std::formatter<std::string>
-{
-    auto format(const VkResult &type, std::format_context &ctx) const
-    {
-        return std::format_to(ctx.out(), "{}({})", std::to_string(type), static_cast<int32_t>(type));
-    }
-};
+} // namespace ya
 
 
 
@@ -552,6 +580,8 @@ struct std::formatter<VkResult> : std::formatter<std::string>
     }
 
 
+namespace ya
+{
 namespace EImageLayout
 {
 inline auto toVk(T layout) -> VkImageLayout
@@ -578,8 +608,6 @@ inline auto toVk(T layout) -> VkImageLayout
 
 }; // namespace EImageLayout
 
-namespace ya
-{
 namespace EFilter
 {
 inline auto toVk(T filter) -> VkFilter
@@ -648,6 +676,26 @@ inline auto toVk(T mode) -> VkSamplerAddressMode
 } // namespace ya
 
 // MARK: to string
+
+
+namespace std
+{
+
+std::string to_string(VkResult v);
+std::string to_string(VkFormat v);
+std::string to_string(VkColorSpaceKHR v);
+std::string to_string(VkPresentModeKHR v);
+std::string to_string(VkSharingMode v);
+std::string to_string(VkObjectType v);
+
+template <>
+struct std::formatter<VkResult> : formatter<std::string>
+{
+    auto format(const VkResult &type, std::format_context &ctx) const
+    {
+        return std::format_to(ctx.out(), "{}({})", std::to_string(type), static_cast<int32_t>(type));
+    }
+};
 
 inline std::string std::to_string(VkResult result)
 {
@@ -1084,3 +1132,5 @@ inline std::string std::to_string(VkObjectType v)
     }
     return "";
 }
+
+} // namespace std
