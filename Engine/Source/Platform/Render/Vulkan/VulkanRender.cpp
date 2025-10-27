@@ -736,18 +736,24 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
         // current ignore the size in ci
         bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
-        if (ok) {
-            ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
-                                                frameFences[currentFrameIdx],
-                                                imageIndex);
-
-            if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-                YA_CORE_ERROR("Failed to acquire next image: {}", ret);
-                return false;
-            }
+        if (!ok) {
+            YA_CORE_ERROR("Failed to recreate swapchain");
+            return false;
         }
-        else {
-            YA_CORE_ERROR("Failed to recreate swapchain, exiting application.");
+        
+        // If swapchain recreation was skipped (e.g., window minimized), return and retry next frame
+        if (vkSwapChain->getImageSize() == 0) {
+            YA_CORE_WARN("Swapchain has no images (window minimized), skipping frame");
+            *outImageIndex = -1;
+            return true;
+        }
+        
+        ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
+                                            frameFences[currentFrameIdx],
+                                            imageIndex);
+
+        if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
+            YA_CORE_ERROR("Failed to acquire next image: {}", ret);
             return false;
         }
         YA_CORE_ASSERT(imageIndex >= 0 && imageIndex < vkSwapChain->getImageSize(),

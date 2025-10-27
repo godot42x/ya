@@ -142,17 +142,27 @@ VulkanSwapChain::~VulkanSwapChain()
 
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
 {
+    YA_PROFILE_SCOPE("Swapchain Recreate");
+    static uint32_t version = 0;
+    version++;
+
+    // Check if window is minimized BEFORE cleanup
+    _supportDetails = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
+    const auto &curExtent = _supportDetails.capabilities.currentExtent;
+    
+    // Window is minimized (extent is 0x0), skip swapchain recreation
+    if (curExtent.width == 0 || curExtent.height == 0) {
+        YA_CORE_WARN("Window is minimized (extent 0x0), skipping swapchain recreation");
+        // Don't cleanup the old swapchain, keep it valid for next frame
+        return true; // Return success, will retry when window is restored
+    }
+
     DiffInfo old{
         .extent      = _supportDetails.capabilities.currentExtent,
         .presentMode = _presentMode,
     };
 
-    YA_PROFILE_SCOPE("Swapchain Recreate");
-    static uint32_t version = 0;
-    version++;
-
     cleanup();
-    _supportDetails = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
 
     // Use config parameters instead of defaults
     VkSurfaceFormatKHR preferred{
@@ -185,8 +195,10 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     //                   std::to_string(presentMode),
     //                   std::to_string(_presentMode));
     // }
-    const auto &curExtent = _supportDetails.capabilities.currentExtent;
+    
+    // curExtent already defined at the beginning of function
     YA_CORE_INFO("Current extent is: {}x{}", curExtent.width, curExtent.height);
+    
     if (curExtent.width <= 0 || curExtent.height <= 0) {
         YA_CORE_ERROR("Current extent is invalid!");
         return false;

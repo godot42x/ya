@@ -554,9 +554,18 @@ int ya::App::processEvent(SDL_Event &event)
     } break;
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
     case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
+        break;
     case SDL_EVENT_WINDOW_MINIMIZED:
+    {
+        YA_CORE_INFO("Window minimized");
+        _bMinimized = true;
+    } break;
     case SDL_EVENT_WINDOW_MAXIMIZED:
     case SDL_EVENT_WINDOW_RESTORED:
+    {
+        YA_CORE_INFO("Window restored/maximized");
+        _bMinimized = false;
+    } break;
     case SDL_EVENT_WINDOW_MOUSE_ENTER:
     case SDL_EVENT_WINDOW_MOUSE_LEAVE:
         break;
@@ -710,6 +719,14 @@ int ya::App::iterate(float dt)
 
     dt += FPSControl::get()->update(dt);
 
+    // Skip rendering when minimized to avoid swapchain recreation with invalid extent
+    // TODO: only skip render, but still update logic
+    if (_bMinimized) {
+        SDL_Delay(500); // Small delay to reduce CPU usage when minimized
+        YA_CORE_INFO("Application minimized, skipping frame");
+        return 0;
+    }
+
     if (!_bPause) {
         onUpdate(dt);
     }
@@ -778,6 +795,12 @@ void App::onRender(float dt)
 
     int32_t imageIndex = -1;
     if (!render->begin(&imageIndex)) {
+        return;
+    }
+
+    // Skip rendering if imageIndex is invalid (e.g., window minimized during swapchain recreation)
+    if (imageIndex < 0) {
+        YA_CORE_WARN("Invalid image index ({}), skipping frame render", imageIndex);
         return;
     }
 

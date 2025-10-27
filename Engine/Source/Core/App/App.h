@@ -101,8 +101,9 @@ struct App
     time_point_t _lastTime;
     time_point_t _startTime;
 
-    uint32_t _frameIndex = 0;
-    bool     _bPause     = false;
+    uint32_t _frameIndex   = 0;
+    bool     _bPause       = false;
+    bool     _bMinimized   = false; // Track window minimized state
 
     AppDesc   _ci;
     glm::vec2 _windowSize = {0, 0};
