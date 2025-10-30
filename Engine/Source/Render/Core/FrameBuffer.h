@@ -45,6 +45,8 @@ struct IFrameBuffer
      * @brief Create a framebuffer for the given API
      */
     static stdptr<IFrameBuffer> create(IRender *render, IRenderPass *renderPass, const FrameBufferCreateInfo &createInfo);
+
+    virtual bool recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height) = 0;
 };
 
 } // namespace ya

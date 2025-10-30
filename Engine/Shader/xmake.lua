@@ -125,13 +125,13 @@ do
     end)
 end
 
-target("shader")
-do
-    set_kind("object")
-    add_rules("glslc.combined")
-    set_group("shader")
-    add_files("./**.glsl")
-end
+-- target("shader")
+-- do
+--     set_kind("object")
+--     add_rules("glslc.combined")
+--     set_group("shader")
+--     add_files("./**.glsl")
+-- end
 
 
 -- task("glslc-combined-to-spv")

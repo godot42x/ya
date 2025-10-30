@@ -37,22 +37,16 @@ struct VulkanSwapChain : public ISwapchain
 
     std::vector<VkImage> m_images;
 
-    VkFormat         _surfaceFormat = VK_FORMAT_UNDEFINED;
+    VkFormat         _surfaceFormat     = VK_FORMAT_UNDEFINED;
     VkColorSpaceKHR  _surfaceColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-    uint32_t         _minImageCount = 0; // Minimum image count based on surface capabilities
-    VkPresentModeKHR _presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    bool             bVsync = true;
+    uint32_t         _minImageCount     = 0; // Minimum image count based on surface capabilities
+    VkPresentModeKHR _presentMode       = VK_PRESENT_MODE_FIFO_KHR;
+    bool             bVsync             = true;
 
     SwapchainCreateInfo _ci;
 
     uint32_t _curImageIndex = 0;
 
-    struct DiffInfo
-    {
-        VkExtent2D       extent;
-        VkPresentModeKHR presentMode;
-    };
-    MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now)> onRecreate;
 
   public:
     VulkanSwapChain(VulkanRender *render)
@@ -63,28 +57,43 @@ struct VulkanSwapChain : public ISwapchain
     ~VulkanSwapChain();
 
     // Delete copy operations (this is a resource-owning class)
-    VulkanSwapChain(const VulkanSwapChain &) = delete;
+    VulkanSwapChain(const VulkanSwapChain &)            = delete;
     VulkanSwapChain &operator=(const VulkanSwapChain &) = delete;
 
     // Default move operations
-    VulkanSwapChain(VulkanSwapChain &&) = default;
+    VulkanSwapChain(VulkanSwapChain &&)            = default;
     VulkanSwapChain &operator=(VulkanSwapChain &&) = default;
 
     void cleanup();
 
     // Swap chain operations
-    ::VkResult acquireNextImage(::VkSemaphore semaphore, ::VkFence fence, uint32_t &outImageIndex);
-    ::VkResult presentImage(uint32_t imageIndex, std::vector<::VkSemaphore> semaphores);
+    VkResult acquireNextImage(::VkSemaphore semaphore, ::VkFence fence, uint32_t &outImageIndex);
+    VkResult presentImage(uint32_t imageIndex, std::vector<::VkSemaphore> semaphores);
+
+  private:
+    // Helper functions for swapchain recreation
+    bool                        validateExtent(const VkExtent2D &extent) const;
+    void                        selectSurfaceFormat(const SwapchainCreateInfo &ci);
+    void                        selectPresentMode(const SwapchainCreateInfo &ci);
+    void                        calculateImageCount(const SwapchainCreateInfo &ci);
+    VkCompositeAlphaFlagBitsKHR selectCompositeAlpha() const;
+
+    void setupQueueFamilySharing(VkSharingMode &sharingMode, uint32_t &queueFamilyCount, uint32_t queueFamilyIndices[2]) const;
+    bool createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI);
+    void updateMemberVariables(const SwapchainCreateInfo &ci);
+    void handleCIChanged(SwapchainCreateInfo const &ci);
+
+  public:
 
     [[nodiscard]] const ya::SwapchainCreateInfo &getCreateInfo() const { return _ci; }
 
     // Getters (Vulkan-specific, kept for backward compatibility)
-    [[nodiscard]] ::VkSwapchainKHR   getSwapchain() const { return m_swapChain; }
-    [[nodiscard]] uint32_t           getImageSize() const { return static_cast<uint32_t>(m_images.size()); }
-    [[nodiscard]] ::VkFormat         getSurfaceFormat() const { return _surfaceFormat; }
-    [[nodiscard]] ::VkPresentModeKHR getPresentMode() const { return _presentMode; }
-    [[nodiscard]] uint32_t           getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
-    [[nodiscard]] uint32_t           getHeight() const { return _supportDetails.capabilities.currentExtent.height; }
+    [[nodiscard]] VkSwapchainKHR   getSwapchain() const { return m_swapChain; }
+    [[nodiscard]] uint32_t         getImageSize() const { return static_cast<uint32_t>(m_images.size()); }
+    [[nodiscard]] VkFormat         getSurfaceFormat() const { return _surfaceFormat; }
+    [[nodiscard]] VkPresentModeKHR getPresentMode() const { return _presentMode; }
+    [[nodiscard]] uint32_t         getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
+    [[nodiscard]] uint32_t         getHeight() const { return _supportDetails.capabilities.currentExtent.height; }
 
     [[nodiscard]] uint32_t getCurImageIndex() const override { return _curImageIndex; }
 
@@ -108,7 +117,7 @@ struct VulkanSwapChain : public ISwapchain
 
     // ISwapchain interface: VSync control
     bool getVsync() const override { return bVsync; }
-    
+
     void setVsync(bool vsync) override
     {
         bVsync         = vsync;
@@ -123,26 +132,14 @@ struct VulkanSwapChain : public ISwapchain
     bool present(uint32_t imageIndex);
 
     // Vulkan-specific getters (for backward compatibility)
-    ::VkSwapchainKHR              getVkHandle() const { return m_swapChain; }
-    const std::vector<::VkImage> &getVkImages() const { return m_images; }
-    ::VkExtent2D                  getVkExtent() const
+    VkSwapchainKHR              getVkHandle() const { return m_swapChain; }
+    const std::vector<VkImage> &getVkImages() const { return m_images; }
+    VkExtent2D                  getVkExtent() const
     {
         return {
             _supportDetails.capabilities.currentExtent.width,
             _supportDetails.capabilities.currentExtent.height,
         };
-    }
-
-  private:
-    // Cached void* handles for ISwapchain interface
-    mutable std::vector<void *> _imageHandles;
-
-    void updateImageHandles()
-    {
-        _imageHandles.clear();
-        for (auto img : m_images) {
-            _imageHandles.push_back(static_cast<void *>(img));
-        }
     }
 };
 

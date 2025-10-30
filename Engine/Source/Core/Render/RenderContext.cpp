@@ -1,6 +1,7 @@
 #include "RenderContext.h"
 #include "Core/Log.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderTarget.h"
 
 
@@ -48,7 +49,7 @@ void RenderContext::destroy()
     YA_CORE_INFO("RenderContext destroyed");
 }
 
-RenderTarget *RenderContext::createSwapchainRenderTarget(IRenderPass *renderPass)
+IRenderTarget *RenderContext::createSwapchainRenderTarget(IRenderPass *renderPass)
 {
     YA_CORE_ASSERT(_render, "RenderContext not initialized");
     YA_CORE_ASSERT(renderPass, "RenderPass is null");
@@ -60,7 +61,7 @@ RenderTarget *RenderContext::createSwapchainRenderTarget(IRenderPass *renderPass
     return rt;
 }
 
-RenderTarget *RenderContext::createRenderTarget(IRenderPass *renderPass, uint32_t width, uint32_t height, uint32_t bufferCount)
+IRenderTarget *RenderContext::createRenderTarget(IRenderPass *renderPass, uint32_t width, uint32_t height, uint32_t bufferCount)
 {
     YA_CORE_ASSERT(_render, "RenderContext not initialized");
     YA_CORE_ASSERT(renderPass, "RenderPass is null");
@@ -72,18 +73,18 @@ RenderTarget *RenderContext::createRenderTarget(IRenderPass *renderPass, uint32_
     return rt;
 }
 
-void RenderContext::registerRenderTarget(RenderTarget *target)
+void RenderContext::registerRenderTarget(IRenderTarget *target)
 {
     if (target && std::find(_renderTargets.begin(), _renderTargets.end(), target) == _renderTargets.end()) {
         _renderTargets.push_back(target);
     }
 }
 
-void RenderContext::destroyRenderTarget(RenderTarget *target)
+void RenderContext::destroyRenderTarget(IRenderTarget *target)
 {
     auto it = std::find(_renderTargets.begin(), _renderTargets.end(), target);
     if (it != _renderTargets.end()) {
-        delete *it;
+        delete it._Ptr;
         _renderTargets.erase(it);
         YA_CORE_INFO("RenderTarget destroyed");
     }

@@ -86,9 +86,6 @@ Scene *App::getScene() const
 }
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
-std::shared_ptr<IRenderPass> renderpass;
-
-std::vector<std::shared_ptr<ICommandBuffer>> commandBuffers;
 
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
@@ -284,7 +281,7 @@ void App::init(AppDesc ci)
     _windowSize.y = static_cast<float>(winH);
 
     // Get command buffers from RenderContext
-    commandBuffers = _renderContext->getCommandBuffers();
+    _commandBuffers = _renderContext->getCommandBuffers();
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
     // MARK: RenderPass
@@ -296,8 +293,8 @@ void App::init(AppDesc ci)
         input/color/depth/resolved attachment ref from all attachments
         and each subpasses dependencies (source -> next)
      */
-    renderpass = IRenderPass::create(_renderContext->getRender());
-    renderpass->recreate(RenderPassCreateInfo{
+    _renderpass = IRenderPass::create(_renderContext->getRender());
+    _renderpass->recreate(RenderPassCreateInfo{
         .attachments = {
             // color to present
             AttachmentDescription{
@@ -353,7 +350,7 @@ void App::init(AppDesc ci)
     });
 
     // Create main render target using RenderContext
-    _rt = _renderContext->createSwapchainRenderTarget(renderpass.get());
+    _rt = _renderContext->createSwapchainRenderTarget(_renderpass.get());
 #if !ONLY_2D
     _rt->addMaterialSystem<BaseMaterialSystem>();
     _rt->addMaterialSystem<UnlitMaterialSystem>();
@@ -365,7 +362,7 @@ void App::init(AppDesc ci)
     _imguiManager = new ImGuiManager();
     _imguiManager->init(
         _renderContext->getRender(),
-        renderpass.get());
+        _renderpass.get());
     imgui = *_imguiManager; // Legacy compatibility
 #pragma endregion
 
@@ -386,7 +383,7 @@ void App::init(AppDesc ci)
     loadScene(ci.defaultScenePath);
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    Render2D::init(_renderContext->getRender(), renderpass.get());
+    Render2D::init(_renderContext->getRender(), _renderpass.get());
     // wait something done
     _renderContext->getRender()->waitIdle();
 }
@@ -459,7 +456,7 @@ void ya::App::quit()
         _imguiManager = nullptr;
     }
 
-    renderpass.reset(); // shared_ptr, use reset() instead of delete
+    _renderpass.reset(); // shared_ptr, use reset() instead of delete
 
     TextureLibrary::destroy();
     AssetManager::get()->cleanup();
@@ -722,7 +719,7 @@ int ya::App::iterate(float dt)
     // Skip rendering when minimized to avoid swapchain recreation with invalid extent
     // TODO: only skip render, but still update logic
     if (_bMinimized) {
-        SDL_Delay(500); // Small delay to reduce CPU usage when minimized
+        SDL_Delay(200); // Small delay to reduce CPU usage when minimized
         YA_CORE_INFO("Application minimized, skipping frame");
         return 0;
     }
@@ -750,8 +747,8 @@ void App::onUpdate(float dt)
     camera.update(inputManager, dt); // Camera expects dt in seconds
     float sensitivity = 0.1f;
     if (cam && cam->hasComponent<CameraComponent>()) {
-        auto        cc  = cam->getComponent<CameraComponent>();
-        const auto &ext = _rt->_extent;
+        auto            cc  = cam->getComponent<CameraComponent>();
+        const Extent2D &ext = _rt->getExtent();
         cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
         auto &inputManger = App::get()->inputManager;
 
@@ -779,11 +776,12 @@ void App::onUpdate(float dt)
         cc->_distance -= scrollDelta.y * 0.1f;
     }
 
-    auto render = getRender();
-    auto cmdBuf = render->beginIsolateCommands();
-    render->endIsolateCommands(cmdBuf);
+    // auto render = getRender();
+    // auto cmdBuf = render->beginIsolateCommands();
+    // render->endIsolateCommands(cmdBuf);
 }
 
+// MARK: Render
 void App::onRender(float dt)
 {
     auto render = getRender();
@@ -805,7 +803,7 @@ void App::onRender(float dt)
     }
 
     // 2. begin command buffer
-    auto curCmdBuf = commandBuffers[imageIndex];
+    auto curCmdBuf = _commandBuffers[imageIndex];
     curCmdBuf->reset();
     curCmdBuf->begin();
 
@@ -814,7 +812,7 @@ void App::onRender(float dt)
 
     // 3 begin render pass && bind frame buffer
     // TODO: subpasses?
-    _rt->begin(cmdBufHandle);
+    _rt->begin(curCmdBuf.get());
     _rt->onRender(curCmdBuf.get());
 
     static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
@@ -990,7 +988,7 @@ void App::onRender(float dt)
 #pragma endregion
 
     // TODO: subpasses?
-    _rt->end(cmdBufHandle);
+    _rt->end(curCmdBuf.get());
     curCmdBuf->end();
 
     render->end(imageIndex, {cmdBufHandle});

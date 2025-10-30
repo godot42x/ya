@@ -3,7 +3,7 @@
 #include "Core/Camera.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
-#include "Render/Core/RenderTarget.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include <glm/glm.hpp>
@@ -20,7 +20,7 @@ class SceneManager;
 class ImGuiManager;
 class Scene;
 struct Material;
-struct RenderTarget;
+struct IRenderPass;
 } // namespace ya
 
 
@@ -90,6 +90,9 @@ struct App
     SceneManager  *_sceneManager  = nullptr;
     ImGuiManager  *_imguiManager  = nullptr;
 
+    std::shared_ptr<IRenderPass>                 _renderpass;
+    std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
+
     std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
 
     // Runtime state
@@ -101,9 +104,9 @@ struct App
     time_point_t _lastTime;
     time_point_t _startTime;
 
-    uint32_t _frameIndex   = 0;
-    bool     _bPause       = false;
-    bool     _bMinimized   = false; // Track window minimized state
+    uint32_t _frameIndex = 0;
+    bool     _bPause     = false;
+    bool     _bMinimized = false; // Track window minimized state
 
     AppDesc   _ci;
     glm::vec2 _windowSize = {0, 0};
@@ -120,7 +123,7 @@ struct App
     // Materials (TODO: move to MaterialLibrary later)
     std::vector<Material *> _materials;
 
-    RenderTarget *_rt = nullptr;
+    IRenderTarget *_rt = nullptr;
 
   public:
     App()          = default;

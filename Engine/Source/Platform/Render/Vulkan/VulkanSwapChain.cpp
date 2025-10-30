@@ -128,16 +128,157 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
 void VulkanSwapChain::cleanup()
 {
     if (m_swapChain != VK_NULL_HANDLE) {
-        vkDestroySwapchainKHR(_render->getDevice(), m_swapChain, nullptr);
+        vkDestroySwapchainKHR(_render->getDevice(), m_swapChain, _render->getAllocator());
         m_swapChain = VK_NULL_HANDLE;
     }
 }
 
-
-
 VulkanSwapChain::~VulkanSwapChain()
 {
     cleanup();
+}
+
+// Helper: Validate if extent is valid (not minimized)
+bool VulkanSwapChain::validateExtent(const VkExtent2D &extent) const
+{
+    if (extent.width == 0 || extent.height == 0) {
+        YA_CORE_WARN("Window is minimized (extent 0x0), skipping swapchain recreation");
+        return false;
+    }
+    if (extent.width <= 0 || extent.height <= 0) {
+        YA_CORE_ERROR("Current extent is invalid!");
+        return false;
+    }
+    return true;
+}
+
+// Helper: Select surface format based on config
+void VulkanSwapChain::selectSurfaceFormat(const SwapchainCreateInfo &ci)
+{
+    VkSurfaceFormatKHR preferred{
+        .format     = toVk(ci.imageFormat),
+        .colorSpace = toVk(ci.colorSpace),
+    };
+
+    preferred = _supportDetails.ChooseSwapSurfaceFormat(preferred);
+
+    _surfaceFormat     = preferred.format;
+    _surfaceColorSpace = preferred.colorSpace;
+
+    YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
+                 std::to_string(_surfaceFormat),
+                 std::to_string(_surfaceColorSpace));
+}
+
+// Helper: Select present mode
+void VulkanSwapChain::selectPresentMode(const SwapchainCreateInfo &ci)
+{
+    _presentMode = toVk(ci.presentMode);
+    // TODO: Add compatibility fallback if needed:
+    // _presentMode = _supportDetails.ChooseSwapPresentMode(_presentMode);
+}
+
+// Helper: Calculate image count based on capabilities
+void VulkanSwapChain::calculateImageCount(const SwapchainCreateInfo &ci)
+{
+    _minImageCount = std::max(ci.minImageCount, _supportDetails.capabilities.minImageCount);
+    if (_supportDetails.capabilities.maxImageCount > 0 && _minImageCount > _supportDetails.capabilities.maxImageCount)
+    {
+        _minImageCount = _supportDetails.capabilities.maxImageCount;
+    }
+}
+
+// Helper: Select composite alpha mode
+VkCompositeAlphaFlagBitsKHR VulkanSwapChain::selectCompositeAlpha() const
+{
+    if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
+        return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) {
+        return VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
+        return VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    }
+    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) {
+        return VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+    }
+    return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+}
+
+// Helper: Setup queue family sharing mode
+void VulkanSwapChain::setupQueueFamilySharing(VkSharingMode &sharingMode, uint32_t &queueFamilyCount, uint32_t queueFamilyIndices[2]) const
+{
+    if (_render->isGraphicsPresentSameQueueFamily())
+    {
+        sharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+        queueFamilyCount = 0;
+    }
+    else {
+        sharingMode           = VK_SHARING_MODE_CONCURRENT;
+        queueFamilyIndices[0] = _render->getGraphicsQueueFamilyInfo().queueFamilyIndex;
+        queueFamilyIndices[1] = _render->getPresentQueueFamilyInfo().queueFamilyIndex;
+        queueFamilyCount      = 2;
+    }
+}
+
+
+// Helper: Create swapchain and retrieve images
+bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI)
+{
+    VkResult result = vkCreateSwapchainKHR(_render->getDevice(), &vkCI, nullptr, &m_swapChain);
+    if (result != VK_SUCCESS) {
+        YA_CORE_ERROR("Swap chain creation failed {}", result);
+        return false;
+    }
+
+    // Get swap chain images
+    uint32_t imageCount = 0;
+    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, nullptr);
+    m_images.resize(imageCount);
+    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, m_images.data());
+
+    YA_CORE_INFO("Created swapchain success:{} with [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
+                 (uintptr_t)m_swapChain,
+                 imageCount,
+                 std::to_string(_surfaceFormat),
+                 std::to_string(_surfaceColorSpace),
+                 std::to_string(_presentMode),
+                 vkCI.imageExtent.width,
+                 vkCI.imageExtent.height);
+
+    return true;
+}
+
+
+
+// Helper: Broadcast recreate event
+void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &ci)
+{
+
+    YA_PROFILE_SCOPE("SwapChain recreate event");
+    DiffInfo old{
+        .extent = Extent2D{
+            .width  = ci.width,
+            .height = ci.height,
+        },
+        .presentMode = ci.presentMode,
+    };
+
+    // update
+    _ci             = ci;
+    _ci.width       = _supportDetails.capabilities.currentExtent.width;
+    _ci.height      = _supportDetails.capabilities.currentExtent.height;
+    _ci.presentMode = EPresentMode::fromVk(_presentMode);
+
+    DiffInfo now{
+        .extent = Extent2D{
+            .width  = _ci.width,
+            .height = _ci.height,
+        },
+        .presentMode = EPresentMode::fromVk(_presentMode),
+    };
+    onRecreate.broadcast(old, now);
 }
 
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
@@ -146,121 +287,38 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     static uint32_t version = 0;
     version++;
 
-    // Check if window is minimized BEFORE cleanup
-    _supportDetails = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
-    const auto &curExtent = _supportDetails.capabilities.currentExtent;
-    
-    // Window is minimized (extent is 0x0), skip swapchain recreation
-    if (curExtent.width == 0 || curExtent.height == 0) {
-        YA_CORE_WARN("Window is minimized (extent 0x0), skipping swapchain recreation");
-        // Don't cleanup the old swapchain, keep it valid for next frame
-        return true; // Return success, will retry when window is restored
+    // Query surface capabilities
+    _supportDetails       = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
+    const auto &newExtent = _supportDetails.capabilities.currentExtent;
+
+    // Validate extent (check for minimized window)
+    if (!validateExtent(newExtent)) {
+        return true; // Will retry when window is restored
     }
 
-    DiffInfo old{
-        .extent      = _supportDetails.capabilities.currentExtent,
-        .presentMode = _presentMode,
-    };
-
-    cleanup();
-
-    // Use config parameters instead of defaults
-    VkSurfaceFormatKHR preferred{
-        .format     = toVk(ci.imageFormat),
-        .colorSpace = toVk(ci.colorSpace),
-    };
-
-    preferred = _supportDetails.ChooseSwapSurfaceFormat(preferred);
-
-    // TODO: extend
-    // Choose present mode based on config and V-Sync setting
-    // ::VkPresentModeKHR presentMode = VK_NULL_HANDLE;
-    // if (ci.bVsync) {
-    //     presentMode = VK_PRESENT_MODE_FIFO_KHR; // V-Sync enabled
-    // }
-    // else {
-    //     presentMode = toVk(ci.presentMode);
-    // }
-    // _presentMode = presentMode;
-    _presentMode = toVk(ci.presentMode);
-
-    // TODO: we not use compat present mode for now, let it crash if not support
-    // _presentMode = _supportDetails.ChooseSwapPresentMode(presentMode);
-
-    YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
-                 std::to_string(preferred.format),
-                 std::to_string(preferred.colorSpace));
-    // if (presentMode != _presentMode) {
-    //     YA_CORE_ERROR("Requested present mode: {}, Actually using: {}",
-    //                   std::to_string(presentMode),
-    //                   std::to_string(_presentMode));
-    // }
-    
-    // curExtent already defined at the beginning of function
-    YA_CORE_INFO("Current extent is: {}x{}", curExtent.width, curExtent.height);
-    
-    if (curExtent.width <= 0 || curExtent.height <= 0) {
-        YA_CORE_ERROR("Current extent is invalid!");
+    // Wait for GPU to finish before destroying old swapchain
+    VkDevice device     = _render->getDevice();
+    VkResult waitResult = vkDeviceWaitIdle(device);
+    if (waitResult != VK_SUCCESS) {
+        YA_CORE_ERROR("Failed to wait for device idle before swapchain recreation: {}", (int)waitResult);
         return false;
     }
 
-    // Use configured dimensions or fall back to window size
-    // if (_ci.width > 0 && _ci.height > 0) {
-    //     m_extent.width  = _ci.width;
-    //     m_extent.height = _ci.height;
+    VkSwapchainKHR oldSwapchain = m_swapChain;
+    cleanup();
 
-    //     // Clamp to surface capabilities
-    //     m_extent.width = std::max(
-    //         _supportDetails.capabilities.minImageExtent.width,
-    //         std::min(_supportDetails.capabilities.maxImageExtent.width, m_extent.width));
-    //     m_extent.height = std::max(
-    //         _supportDetails.capabilities.minImageExtent.height,
-    //         std::min(_supportDetails.capabilities.maxImageExtent.height, m_extent.height));
-    // }
-    // else {
-    //     m_extent = _supportDetails.ChooseSwapExtent(_render->_windowProvider);
-    // }
+    // Select swapchain parameters
+    selectSurfaceFormat(ci);
+    selectPresentMode(ci);
+    calculateImageCount(ci);
 
-    _surfaceFormat     = preferred.format;
-    _surfaceColorSpace = preferred.colorSpace;
-
-    _minImageCount = std::max(ci.minImageCount, _supportDetails.capabilities.minImageCount);
-    if (_supportDetails.capabilities.maxImageCount > 0 && _minImageCount > _supportDetails.capabilities.maxImageCount)
-    {
-        _minImageCount = _supportDetails.capabilities.maxImageCount;
-    }
-
+    // Setup queue family sharing
     VkSharingMode sharingMode           = {};
     uint32_t      queueFamilyCount      = 0;
     uint32_t      queueFamilyIndices[2] = {0, 0};
-    if (_render->isGraphicsPresentSameQueueFamily())
-    {
-        sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    }
-    else {
-        sharingMode           = VK_SHARING_MODE_CONCURRENT;
-        queueFamilyIndices[0] = _render->getGraphicsQueueFamilyInfo().queueFamilyIndex;
-        queueFamilyIndices[1] = _render->getPresentQueueFamilyInfo().queueFamilyIndex;
-        queueFamilyCount      = 2;
-    }
+    setupQueueFamilySharing(sharingMode, queueFamilyCount, queueFamilyIndices);
 
-    VkSwapchainKHR oldSwapchain = m_swapChain;
-
-    VkCompositeAlphaFlagBitsKHR compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-    if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
-        compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    }
-    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) {
-        compositeAlpha = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
-    }
-    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
-        compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-    }
-    else if (_supportDetails.capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) {
-        compositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
-    }
-
-
+    // Build create info
     VkSwapchainCreateInfoKHR vkSwapchainCI{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .pNext                 = nullptr,
@@ -269,61 +327,31 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .minImageCount         = _minImageCount,
         .imageFormat           = _surfaceFormat,
         .imageColorSpace       = _surfaceColorSpace,
-        .imageExtent           = _supportDetails.capabilities.currentExtent, // reuse current extent
+        .imageExtent           = _supportDetails.capabilities.currentExtent,
         .imageArrayLayers      = ci.imageArrayLayers,
-        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // Convert from config if needed
-        .imageSharingMode      = sharingMode,                         // Exclusive mode for now
+        .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode      = sharingMode,
         .queueFamilyIndexCount = queueFamilyCount,
         .pQueueFamilyIndices   = queueFamilyIndices,
         .preTransform          = _supportDetails.capabilities.currentTransform,
-        .compositeAlpha        = compositeAlpha,
+        .compositeAlpha        = selectCompositeAlpha(),
         .presentMode           = _presentMode,
         .clipped               = ci.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain          = oldSwapchain,
     };
 
-
-
-    VkResult result = vkCreateSwapchainKHR(_render->getDevice(), &vkSwapchainCI, nullptr, &m_swapChain);
-    if (result != VK_SUCCESS) {
-        YA_CORE_ERROR("Swap chain creation failed {}", result);
+    // Create swapchain and retrieve images
+    if (!createSwapchainAndImages(vkSwapchainCI)) {
         return false;
     }
-    // YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create swap chain!");
 
-
-
-    // Get swap chain images
-    uint32_t imageCount = -1;
-    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, nullptr);
-    m_images.resize(imageCount);
-    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, m_images.data());
-
-    YA_CORE_INFO("Created swapchain success:{} with  [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
-                 (uintptr_t)m_swapChain,
-                 imageCount,
-                 std::to_string(_surfaceFormat),
-                 std::to_string(_surfaceColorSpace),
-                 std::to_string(_presentMode),
-                 vkSwapchainCI.imageExtent.width,
-                 vkSwapchainCI.imageExtent.height);
-
+    // Set debug name
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,
                                 std::format("SwapChain_{}", version).c_str());
 
-    // Update cached image handles for ISwapchain interface
-    updateImageHandles();
+    handleCIChanged(ci);
 
-    _ci = ci;
-    DiffInfo now{
-        .extent      = _supportDetails.capabilities.currentExtent,
-        .presentMode = _presentMode,
-    };
-    {
-        YA_PROFILE_SCOPE("SwapChain recreate event");
-        onRecreate.broadcast(old, now);
-    }
     return true;
 }
 

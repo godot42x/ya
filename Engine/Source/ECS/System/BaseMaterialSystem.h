@@ -38,6 +38,6 @@ struct BaseMaterialSystem : public IMaterialSystem
     }
 
     void onUpdate(float deltaTime) override;
-    void onRender(ICommandBuffer *cmdBuf, RenderTarget *rt) override;
+    void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
 };
 } // namespace ya

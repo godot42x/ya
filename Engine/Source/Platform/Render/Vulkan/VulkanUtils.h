@@ -4,9 +4,10 @@
 
 #include <vulkan/vulkan.h>
 
+#include "Render/Core/Buffer.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Render/Core/Buffer.h"
+
 
 
 struct VulkanCommandPool;
@@ -459,6 +460,22 @@ inline auto toVk(T presentMode) -> VkPresentModeKHR
     }
     return VK_PRESENT_MODE_FIFO_KHR;
 }
+inline T fromVk(VkPresentModeKHR presentMode)
+{
+    switch (presentMode) {
+    case VK_PRESENT_MODE_IMMEDIATE_KHR:
+        return Immediate;
+    case VK_PRESENT_MODE_MAILBOX_KHR:
+        return Mailbox;
+    case VK_PRESENT_MODE_FIFO_KHR:
+        return FIFO;
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
+        return FIFO_Relaxed;
+    default:
+        UNREACHABLE();
+    }
+    return FIFO;
+} 
 } // namespace EPresentMode
 
 namespace EColorSpace

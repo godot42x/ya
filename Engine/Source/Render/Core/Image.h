@@ -2,7 +2,6 @@
 
 #include "Handle.h"
 #include "PlatBase.h"
-#include "Render/RenderDefines.h"
 
 namespace ya
 {

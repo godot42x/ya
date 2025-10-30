@@ -36,7 +36,8 @@ struct VulkanFrameBuffer : public IFrameBuffer
         clean();
     }
 
-    bool recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height);
+    bool recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height) override;
+    bool recreateImpl(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height);
 
     void clean();
 

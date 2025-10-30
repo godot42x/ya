@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/Core/Image.h"
 #include "glm/glm.hpp"
 #include "reflect.cc/enum"
 #include "utility.cc/hash.h"
@@ -688,9 +689,9 @@ struct RenderCreateInfo
 
 struct FrameBufferCreateInfo
 {
-    uint32_t width  = 0;
-    uint32_t height = 0;
-    std::vector<void*> imageViews; // API-specific image views (e.g., VkImageView)
+    uint32_t                    width  = 0;
+    uint32_t                    height = 0;
+    std::vector<stdptr<IImage>> images; // API-specific image views (e.g., VkImageView)
 };
 
 struct ImageCreateInfo

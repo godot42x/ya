@@ -188,7 +188,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     YA_CORE_INFO("Recreating render pass...");
     _ci = ci;
 
-    // YA_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");
+    YA_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");
     if (_ci.attachments.empty() && _ci.subpasses.empty()) {
         return createDefaultRenderPass();
     }
@@ -296,11 +296,11 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     YA_CORE_ASSERT(!_ci.dependencies.empty(), "Render pass must have at least one subpass dependency defined!");
     for (const auto &dependency : _ci.dependencies) {
         VkSubpassDependency vkDependency{
-            .srcSubpass      = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
-            .dstSubpass      = dependency.dstSubpass,
-            .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass   = dependency.bSrcExternal ? VK_SUBPASS_EXTERNAL : dependency.srcSubpass,
+            .dstSubpass   = dependency.dstSubpass,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             // for next subpass to do a fragment shading?
-            .dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             // from write to read?
             .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,

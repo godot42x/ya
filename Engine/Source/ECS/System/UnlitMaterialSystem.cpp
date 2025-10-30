@@ -224,7 +224,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         });
 }
 
-void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, RenderTarget *rt)
+void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
     Scene *scene = getScene();
     if (!scene) {
@@ -403,7 +403,7 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     _lastMaterialDSCount = newDescriptorSetCount;
 }
 
-void UnlitMaterialSystem::updateFrameDS(RenderTarget *rt)
+void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 {
     auto app    = getApp();
     auto render = getRender();

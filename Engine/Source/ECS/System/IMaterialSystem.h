@@ -14,7 +14,7 @@ struct IRender;
 struct IRenderPass;
 struct VulkanRender;
 struct App;
-struct RenderTarget;
+struct IRenderTarget;
 struct Scene;
 
 struct IMaterialSystem : public ISystem
@@ -27,8 +27,8 @@ struct IMaterialSystem : public ISystem
     // std::shared_ptr<Material> _baseMaterial;
 
     // TODO: abstract render api
-    virtual void onInit(IRenderPass *renderPass)                    = 0;
-    virtual void onRender(ICommandBuffer *cmdBuf, RenderTarget *rt) = 0;
+    virtual void onInit(IRenderPass *renderPass)                       = 0;
+    virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) = 0;
     void         onUpdate(float deltaTime) override {}
     virtual void onDestroy() = 0;
     virtual void onRenderGUI();

@@ -1,12 +1,21 @@
 #include "RenderTarget.h"
 #include "Core/App/App.h"
+#include "Core/Event.h"
+#include "Core/MessageBus.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/TransformComponent.h"
-#include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
-#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
-#include "Platform/Render/Vulkan/VulkanImage.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "ECS/System/IMaterialSystem.h"
+#include "Render/Core/Image.h"
 #include "imgui.h"
+
+
+// Platform-specific includes
+#if USE_VULKAN
+    #include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
+    #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
+    #include "Platform/Render/Vulkan/VulkanImage.h"
+    #include "Platform/Render/Vulkan/VulkanRender.h"
+#endif
 
 
 namespace ya
@@ -24,22 +33,20 @@ RenderTarget::RenderTarget(IRenderPass *renderPass) : _camera(nullptr)
     _frameBufferCount = r->getSwapchainImageCount();
     bSwapChainTarget  = true;
 
-    // Get swapchain and register recreate callback
-    auto *vkRender    = static_cast<VulkanRender *>(r);
-    auto *vkSwapChain = vkRender->getSwapchain<VulkanSwapChain>();
-    if (vkSwapChain) {
-        vkSwapChain->onRecreate.addLambda(
-            this,
-            [this](VulkanSwapChain::DiffInfo old, VulkanSwapChain::DiffInfo now) {
-                if (now.extent.width != old.extent.width ||
-                    now.extent.height != old.extent.height ||
-                    old.presentMode != now.presentMode)
-                {
-                    Extent2D newExtent{now.extent.width, now.extent.height};
-                    this->setExtent(newExtent);
-                }
-            });
-    }
+    r->getSwapchain()->onRecreate.addLambda(
+        this,
+        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now) {
+            if (now.extent.width != old.extent.width ||
+                now.extent.height != old.extent.height ||
+                old.presentMode != now.presentMode)
+            {
+                Extent2D newExtent{
+                    .width  = now.extent.width,
+                    .height = now.extent.height,
+                };
+                this->setExtent(newExtent);
+            }
+        });
 
     init();
     recreate();
@@ -73,66 +80,77 @@ void RenderTarget::recreate()
     _frameBuffers.clear();
     _frameBuffers.resize(_frameBufferCount);
 
-    auto vkRender    = App::get()->getRender<VulkanRender>();
-    auto vkSwapChain = vkRender->getSwapchain<VulkanSwapChain>();
+    auto render      = App::get()->getRender();
+    auto swapchain   = render->getSwapchain();
     auto attachments = _renderPass->getAttachments();
     if (attachments.empty()) {
         return;
     }
 
+#if USE_VULKAN
+    auto vkRender    = static_cast<VulkanRender *>(render);
+    auto vkSwapChain = static_cast<VulkanSwapChain *>(swapchain);
+
     for (size_t i = 0; i < _frameBufferCount; i++)
     {
-        auto fb          = std::make_shared<VulkanFrameBuffer>(vkRender, static_cast<VulkanRenderPass *>(_renderPass), _extent.width, _extent.height);
-        _frameBuffers[i] = fb;
 
-        std::vector<std::shared_ptr<VulkanImage>> fbAttachments;
-
-        int j = 0;
+        std::vector<std::shared_ptr<IImage>> fbAttachments;
+        int                                  j = 0;
         for (const AttachmentDescription &attachment : attachments)
         {
-            // created by swapchain
-            if (bSwapChainTarget &&
-                attachment.finalLayout == EImageLayout::PresentSrcKHR &&
-                attachment.samples == ESampleCount::Sample_1)
             {
-                // Use Vulkan-specific swapchain to get VkImage handles
-                auto ptr = VulkanImage::from(vkRender,
-                                             vkSwapChain->getVkImages()[i],
-                                             toVk(attachment.format),
-                                             toVk(attachment.usage));
-                fbAttachments.push_back(ptr);
+                // created by swapchain
+                if (bSwapChainTarget &&
+                    attachment.finalLayout == EImageLayout::PresentSrcKHR &&
+                    attachment.samples == ESampleCount::Sample_1)
+                {
+                    // Use Vulkan-specific swapchain to get VkImage handles
+                    auto ptr = VulkanImage::from(vkRender,
+                                                 vkSwapChain->getVkImages()[i],
+                                                 toVk(attachment.format),
+                                                 toVk(attachment.usage));
+                    fbAttachments.push_back(ptr);
+                }
+                else {
+                    auto ptr = VulkanImage::create(
+                        vkRender,
+                        ImageCreateInfo{
+                            .format = attachment.format,
+                            .extent = {
+                                .width  = static_cast<uint32_t>(_extent.width),
+                                .height = static_cast<uint32_t>(_extent.height),
+                                .depth  = 1,
+                            },
+                            .mipLevels     = 1,
+                            .samples       = attachment.samples,
+                            .usage         = attachment.usage,
+                            .sharingMode   = ESharingMode::Exclusive,
+                            .initialLayout = EImageLayout::Undefined,
+                        });
+                    fbAttachments.push_back(ptr);
+                }
+                vkRender->setDebugObjectName(
+                    VK_OBJECT_TYPE_IMAGE,
+                    (fbAttachments.back())->getHandle(),
+                    std::format("RT_FrameBuffer_{}_Attachment_{}", i, j).c_str());
+                ++j;
             }
-            else {
-                auto ptr = VulkanImage::create(
-                    vkRender,
-                    ImageCreateInfo{
-                        .format = attachment.format,
-                        .extent = {
-                            .width  = static_cast<uint32_t>(_extent.width),
-                            .height = static_cast<uint32_t>(_extent.height),
-                            .depth  = 1,
-                        },
-                        .mipLevels     = 1,
-                        .samples       = attachment.samples,
-                        .usage         = attachment.usage,
-                        .sharingMode   = ESharingMode::Exclusive,
-                        .initialLayout = EImageLayout::Undefined,
-                        // .finalLayout    = attachment.finalLayout,
-                    });
-                fbAttachments.push_back(ptr);
-            }
-            vkRender->setDebugObjectName(
-                VK_OBJECT_TYPE_IMAGE,
-                (fbAttachments.back())->getHandle(),
-                std::format("RT_FrameBuffer_{}_Attachment_{}", i, j).c_str());
-            ++j;
         }
 
-        // Cast to VulkanFrameBuffer to call recreate (Vulkan-specific method)
-        static_cast<VulkanFrameBuffer *>(_frameBuffers[i].get())->recreate(fbAttachments, _extent.width, _extent.height);
-
+        auto fb = IFrameBuffer::create(render,
+                                       _renderPass,
+                                       FrameBufferCreateInfo{
+                                           .width  = _extent.width,
+                                           .height = _extent.height,
+                                           .images = fbAttachments,
+                                       });
+        fb->recreate(fbAttachments, _extent.width, _extent.height);
+        _frameBuffers[i] = fb;
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}", i));
     }
+#else
+    #error "Platform not supported"
+#endif
 }
 
 void RenderTarget::destroy()
@@ -167,11 +185,10 @@ void RenderTarget::onRenderGUI()
 
 
 
-void RenderTarget::begin(CommandBufferHandle cmdBuf)
+void RenderTarget::begin(ICommandBuffer *cmdBuf)
 {
     YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
-    auto vkCmdBuf = cmdBuf.as<VkCommandBuffer>();
     if (bDirty)
     {
         recreate();
@@ -184,19 +201,15 @@ void RenderTarget::begin(CommandBufferHandle cmdBuf)
     }
 
     if (bSwapChainTarget) {
-        auto render        = App::get()->getRender<VulkanRender>();
-        auto vkSwapChain   = render->getSwapchain();
-        _currentFrameIndex = vkSwapChain->getCurImageIndex();
+        auto render        = App::get()->getRender();
+        auto swapchain     = render->getSwapchain();
+        _currentFrameIndex = swapchain->getCurImageIndex();
     }
     else {
-        _currentFrameIndex = (_currentFrameIndex + 1) % _frameBufferCount; // For custom render targets, always use the first frame buffer
+        _currentFrameIndex = (_currentFrameIndex + 1) % _frameBufferCount;
     }
 
-    // Wrap VkCommandBuffer in ICommandBuffer interface
-    auto                vkRender = static_cast<VulkanRender *>(App::get()->getRender());
-    VulkanCommandBuffer cmdBufWrapper(vkRender, vkCmdBuf);
-
-    _renderPass->begin(&cmdBufWrapper,
+    _renderPass->begin(cmdBuf,
                        getFrameBuffer()->getHandle(),
                        {
                            .width  = static_cast<uint32_t>(_extent.width),
@@ -206,25 +219,13 @@ void RenderTarget::begin(CommandBufferHandle cmdBuf)
     bBeginTarget = true;
 }
 
-void RenderTarget::end(CommandBufferHandle cmdBuf)
+void RenderTarget::end(ICommandBuffer *cmdBuf)
 {
-
     // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
-    auto vkCmdBuf = cmdBuf.as<VkCommandBuffer>();
-
-    // Wrap VkCommandBuffer in ICommandBuffer interface
-    auto                vkRender = static_cast<VulkanRender *>(App::get()->getRender());
-    VulkanCommandBuffer cmdBufWrapper(vkRender, vkCmdBuf);
-
-    _renderPass->end(&cmdBufWrapper);
+    _renderPass->end(cmdBuf);
     bBeginTarget = false;
 }
 
-void RenderTarget::setExtent(Extent2D extent)
-{
-    _extent = extent;
-    bDirty  = true;
-}
 
 void RenderTarget::setBufferCount(uint32_t count)
 {
@@ -354,6 +355,22 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
     // proj[1][1] *= -1; // Invert Y for Vulkan
 #endif
     view = App::get()->camera.getViewMatrix();
+}
+
+void RenderTarget::addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system)
+{
+    _materialSystems.push_back(system);
+}
+
+// Factory functions
+std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass)
+{
+    return std::make_shared<RenderTarget>(renderPass);
+}
+
+std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
+{
+    return std::make_shared<RenderTarget>(renderPass, frameBufferCount, extent);
 }
 
 } // namespace ya

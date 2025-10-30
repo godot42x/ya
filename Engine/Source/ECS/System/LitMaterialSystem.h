@@ -50,7 +50,7 @@ struct LitMaterialSystem : public IMaterialSystem
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override {}
     void onUpdate(float deltaTime) override {}
-    void onRender(ICommandBuffer *cmdBuf, RenderTarget *rt) override;
+    void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
     void onRenderGUI() override
     {
         IMaterialSystem::onRenderGUI();
@@ -60,7 +60,7 @@ struct LitMaterialSystem : public IMaterialSystem
   private:
     void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(RenderTarget *rt);
+    void updateFrameDS(IRenderTarget *rt);
     void updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material);
 };

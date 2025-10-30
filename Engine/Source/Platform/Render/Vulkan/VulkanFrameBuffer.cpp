@@ -3,7 +3,17 @@
 namespace ya
 {
 
-bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height)
+
+bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height)
+{
+    std::vector<std::shared_ptr<VulkanImage>> vkImages;
+    for (auto &img : images)
+    {
+        vkImages.push_back(std::dynamic_pointer_cast<VulkanImage>(img));
+    }
+    return recreateImpl(vkImages, width, height);
+}
+bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height)
 {
     clean();
     this->width  = width;
@@ -24,6 +34,7 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .pNext           = nullptr,
         .renderPass      = renderPass->getVkHandle(),
         .attachmentCount = static_cast<uint32_t>(_imageViews.size()),
         .pAttachments    = _imageViews.data(),
@@ -41,6 +52,7 @@ bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<VulkanImage>> image
 
     return true;
 }
+
 
 void VulkanFrameBuffer::clean()
 {

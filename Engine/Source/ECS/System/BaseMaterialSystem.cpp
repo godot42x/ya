@@ -162,7 +162,7 @@ void BaseMaterialSystem::onUpdate(float deltaTime)
 {
 }
 
-void BaseMaterialSystem::onRender(ICommandBuffer *cmdBuf, RenderTarget *rt)
+void BaseMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
 
     auto render = getRender();

@@ -100,8 +100,8 @@ struct VulkanRender : public IRender
     VkSemaphore m_renderFinishedSemaphore;
     VkFence     m_inFlightFence;
 
-    std::unique_ptr<VulkanDebugUtils> _debugUtils = nullptr;
-    VulkanDescriptor *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
+    std::unique_ptr<VulkanDebugUtils> _debugUtils       = nullptr;
+    VulkanDescriptor                 *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
 
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
@@ -229,9 +229,7 @@ struct VulkanRender : public IRender
 
 
         _swapChain = new VulkanSwapChain(this);
-        // Cast to VulkanSwapChain for Vulkan-specific recreate
-        auto *vkSwapchain = static_cast<VulkanSwapChain *>(_swapChain);
-        vkSwapchain->recreate(ci.swapchainCI);
+        _swapChain->as<VulkanSwapChain>()->recreate(ci.swapchainCI);
 
         if (!createCommandPool()) {
             terminate();
@@ -356,7 +354,7 @@ struct VulkanRender : public IRender
         ::VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
         VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-        
+
         // Create a temporary VulkanCommandBuffer wrapper
         // Note: This is managed manually and will be deleted in endIsolateCommands
         return new VulkanCommandBuffer(this, vkCmdBuf);
@@ -365,13 +363,13 @@ struct VulkanRender : public IRender
     void endIsolateCommands(ICommandBuffer *commandBuffer) override
     {
         auto *vkCmdBufWrapper = static_cast<VulkanCommandBuffer *>(commandBuffer);
-        auto vkCmdBuf = vkCmdBufWrapper->getHandleAs<::VkCommandBuffer>();
-        
+        auto  vkCmdBuf        = vkCmdBufWrapper->getHandleAs<::VkCommandBuffer>();
+
         VulkanCommandPool::end(vkCmdBuf);
         getGraphicsQueues()[0].submit({vkCmdBuf});
         getGraphicsQueues()[0].waitIdle();
         vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &vkCmdBuf);
-        
+
         // Delete the wrapper
         delete vkCmdBufWrapper;
     }

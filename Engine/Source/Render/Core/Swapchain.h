@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Delegate.h"
 #include "Render/Core/PlatBase.h"
 #include "Render/RenderDefines.h"
 
@@ -24,15 +25,15 @@ struct IRender;
  */
 struct ISwapchain : public ya::plat_base<ISwapchain>
 {
-    ISwapchain() = default;
+    ISwapchain()          = default;
     virtual ~ISwapchain() = default;
 
     // Delete copy operations (interface should not be copied)
-    ISwapchain(const ISwapchain &) = delete;
+    ISwapchain(const ISwapchain &)            = delete;
     ISwapchain &operator=(const ISwapchain &) = delete;
 
     // Default move operations
-    ISwapchain(ISwapchain &&) = default;
+    ISwapchain(ISwapchain &&)            = default;
     ISwapchain &operator=(ISwapchain &&) = default;
 
     /**
@@ -70,7 +71,7 @@ struct ISwapchain : public ya::plat_base<ISwapchain>
 
     // virtual bool acquireNextImage(uint32_t *imageIndex) = 0;
     // virtual bool present(uint32_t imageIndex) = 0;
-    virtual bool recreate(const ya::SwapchainCreateInfo &ci) = 0;
+    virtual bool recreate(const SwapchainCreateInfo &ci) = 0;
 
     /**
      * @brief Get VSync enabled status
@@ -86,6 +87,14 @@ struct ISwapchain : public ya::plat_base<ISwapchain>
      * @brief Create a swapchain for the given API
      */
     static stdptr<ISwapchain> create(IRender *render, const SwapchainCreateInfo &createInfo);
+
+
+    struct DiffInfo
+    {
+        Extent2D        extent;
+        EPresentMode::T presentMode;
+    };
+    MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now)> onRecreate;
 };
 
 } // namespace ya
