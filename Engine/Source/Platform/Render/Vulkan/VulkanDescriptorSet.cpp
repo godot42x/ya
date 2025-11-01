@@ -49,6 +49,17 @@ VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout()
 VulkanDescriptorPool::VulkanDescriptorPool(VulkanRender *render, const ya::DescriptorPoolCreateInfo &ci)
 {
     _render = render;
+    createInternal(ci);
+}
+
+VulkanDescriptorPool::~VulkanDescriptorPool()
+{
+    resetPool();
+    VK_DESTROY(DescriptorPool, _render->getDevice(), _handle);
+}
+
+void VulkanDescriptorPool::createInternal(DescriptorPoolCreateInfo const &ci)
+{
     std::vector<VkDescriptorPoolSize> vkPoolSizes;
     for (const auto &size : ci.poolSizes) {
         vkPoolSizes.push_back(VkDescriptorPoolSize{
@@ -65,19 +76,19 @@ VulkanDescriptorPool::VulkanDescriptorPool(VulkanRender *render, const ya::Descr
         .poolSizeCount = static_cast<uint32_t>(vkPoolSizes.size()),
         .pPoolSizes    = vkPoolSizes.data(),
     };
-    VK_CALL(vkCreateDescriptorPool(_render->getDevice(), &dspCI, _render->getAllocator(), &_handle));
+    VK_CALL(vkCreateDescriptorPool(_render->getDevice(),
+                                   &dspCI,
+                                   _render->getAllocator(),
+                                   &_handle));
 }
 
-VulkanDescriptorPool::~VulkanDescriptorPool()
+
+
+void VulkanDescriptorPool::resetPool()
 {
-    VK_DESTROY(DescriptorPool, _render->getDevice(), _handle);
-}
-
-
-
-void VulkanDescriptorPool::reset()
-{
-    vkResetDescriptorPool(_render->getDevice(), _handle, 0);
+    if (_handle) {
+        vkResetDescriptorPool(_render->getDevice(), _handle, 0);
+    }
 }
 
 void VulkanDescriptorPool::setDebugName(const char *name)
@@ -118,7 +129,9 @@ bool VulkanDescriptorPool::allocateDescriptorSets(
     return true;
 }
 
-bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout, uint32_t count, std::vector<VkDescriptorSet> &set)
+bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout,
+                                                  uint32_t                                          count,
+                                                  std::vector<VkDescriptorSet>                     &set)
 {
     if (set.size() < count) {
         set.resize(count);
@@ -140,7 +153,11 @@ bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDe
     return true;
 }
 
-void VulkanDescriptor::updateDescriptorSets(
+void VulkanDescriptorPool::cleanup()
+{
+}
+
+void VulkanDescriptorHelper::updateDescriptorSets(
     const std::vector<ya::WriteDescriptorSet> &writes,
     const std::vector<ya::CopyDescriptorSet>  &copies)
 {

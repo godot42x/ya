@@ -19,8 +19,8 @@ Scene::~Scene()
 
 Entity *Scene::createEntity(const std::string &name)
 {
-    auto   id     = _registry.create();
-    Entity entity = {id, this};
+    auto   id = _registry.create();
+    Entity entity{id, this};
 
     // Add basic components
     auto *idComponent = entity.addComponent<IDComponent>();

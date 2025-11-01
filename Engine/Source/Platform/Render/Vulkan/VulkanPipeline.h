@@ -98,10 +98,10 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     bool recreate(const GraphicsPipelineCreateInfo &ci) override;
     void bind(CommandBufferHandle commandBuffer) override
     {
-        if (commandBuffer)
-            vkCmdBindPipeline(commandBuffer.as<VkCommandBuffer>(),
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              _pipeline);
+        YA_CORE_ASSERT(commandBuffer, "Invalid command buffer handle");
+        vkCmdBindPipeline(commandBuffer.as<VkCommandBuffer>(),
+                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          _pipeline);
     }
     void              *getHandle() const override { return (void *)(uintptr_t)_pipeline; }
     const std::string &getName() const override

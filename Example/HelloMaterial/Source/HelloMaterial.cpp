@@ -119,17 +119,18 @@ void HelloMaterial::createMaterials()
 
 void HelloMaterial::createEntities(ya::Scene *scene)
 {
-#if !ONLY_2D
     int baseMaterialCount = 2; // baseMaterial0 and baseMaterial1
 
     // Create ground plane
-    auto *unlitMaterial3 = materials.back();
-    auto  plane          = scene->createEntity("Plane");
-    auto  tc             = plane->addComponent<ya::TransformComponent>();
-    tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
-    tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
-    auto umc = plane->addComponent<ya::UnlitMaterialComponent>();
-    umc->addMesh(cubeMesh.get(), static_cast<ya::UnlitMaterial *>(unlitMaterial3));
+    if (auto plane = scene->createEntity("Plane")) {
+        auto tc = plane->addComponent<ya::TransformComponent>();
+        tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
+        tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
+
+        auto  umc            = plane->addComponent<ya::UnlitMaterialComponent>();
+        auto *unlitMaterial3 = materials.back();
+        umc->addMesh(cubeMesh.get(), static_cast<ya::UnlitMaterial *>(unlitMaterial3));
+    }
 
     // Create cube grid
     float offset = 3.f;
@@ -170,5 +171,4 @@ void HelloMaterial::createEntities(ya::Scene *scene)
             }
         }
     }
-#endif
 }

@@ -52,6 +52,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     bool end() override;
     void reset() override;
 
+    void bindPipeline(IGraphicsPipeline *pipeline) override;
     void bindVertexBuffer(uint32_t binding, IBuffer *buffer, uint64_t offset = 0) override;
     void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false) override;
 

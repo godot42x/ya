@@ -487,7 +487,7 @@ void VulkanRender::createPipelineCache()
     vkCreatePipelineCache(getDevice(), &ci, nullptr, &_pipelineCache);
 
     // Initialize descriptor helper (using new since we use raw pointer)
-    _descriptorHelper = new VulkanDescriptor(this);
+    _descriptorHelper = new VulkanDescriptorHelper(this);
 }
 
 IDescriptorSetHelper *VulkanRender::getDescriptorHelper()
@@ -740,14 +740,14 @@ bool VulkanRender::begin(int32_t *outImageIndex)
             YA_CORE_ERROR("Failed to recreate swapchain");
             return false;
         }
-        
+
         // If swapchain recreation was skipped (e.g., window minimized), return and retry next frame
         if (vkSwapChain->getImageSize() == 0) {
             YA_CORE_WARN("Swapchain has no images (window minimized), skipping frame");
             *outImageIndex = -1;
             return true;
         }
-        
+
         ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
                                             frameFences[currentFrameIdx],
                                             imageIndex);

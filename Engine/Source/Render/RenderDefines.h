@@ -596,7 +596,7 @@ struct GraphicsPipelineCreateInfo
     EPipelineDynamicFeature::T dynamicFeatures = {};
     EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;
     RasterizationState         rasterizationState;
-    MultisampleState           multisampleState;
+    MultisampleState           multisampleState{};
     DepthStencilState          depthStencilState;
     ColorBlendState            colorBlendState;
     ViewportState              viewportState;

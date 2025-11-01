@@ -76,6 +76,11 @@ void VulkanCommandBuffer::reset()
     _isRecording = false;
 }
 
+void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline *pipeline)
+{
+    pipeline->bind(getHandle());
+}
+
 void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, IBuffer *buffer, uint64_t offset)
 {
     if (!buffer) return;

@@ -100,13 +100,6 @@ struct Material
 namespace detail
 {
 
-// template <typename T>
-// auto hash() -> uint32_t;
-
-// template <typename T>
-// using hash_t = decltype(hash<T>);
-
-// template <hash_t HashFunc>
 template <template <typename> typename HashFunctor>
 struct MaterialFactoryInternal
 {

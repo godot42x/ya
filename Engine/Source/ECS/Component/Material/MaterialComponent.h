@@ -8,14 +8,16 @@
 namespace ya
 {
 
-template <typename MaterialType>
+template <typename Material>
 struct MaterialComponent : public IComponent
 {
-    std::vector<Mesh *>                                       _meshes;
-    std::unordered_map<MaterialType *, std::vector<uint32_t>> _material2meshes;
+    std::vector<Mesh *>                                   _meshes;
+    std::unordered_map<Material *, std::vector<uint32_t>> _material2meshes;
 
   public:
-    void addMesh(Mesh *mesh, MaterialType *material = nullptr)
+    MaterialComponent() : IComponent() {}
+
+    void addMesh(Mesh *mesh, Material *material = nullptr)
     {
         if (!mesh) {
             return;
