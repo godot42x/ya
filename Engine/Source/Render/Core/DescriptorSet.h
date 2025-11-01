@@ -103,6 +103,8 @@ class IDescriptorSetLayout
      */
     static std::shared_ptr<IDescriptorSetLayout> create(IRender *render, const DescriptorSetLayout &layout);
 
+    static std::vector<stdptr<IDescriptorSetLayout>> create(IRender *render, std::vector<DescriptorSetLayout> descriptorSetLayouts);
+
     /**
      * @brief Get the layout information
      */
@@ -166,7 +168,7 @@ class IDescriptorPool
     /**
      * @brief Reset the descriptor pool
      */
-    virtual void reset() = 0;
+    virtual void resetPool() = 0;
 
     /**
      * @brief Set debug name for the pool

@@ -29,7 +29,7 @@ struct VulkanDescriptorSetLayout : public ya::IDescriptorSetLayout
     VkDescriptorSetLayout getVkHandle() const { return _handle; }
 };
 
-struct VulkanDescriptorPool : public ya::IDescriptorPool
+struct VulkanDescriptorPool : public IDescriptorPool
 {
     VulkanRender    *_render = nullptr;
     VkDescriptorPool _handle = VK_NULL_HANDLE;
@@ -38,13 +38,17 @@ struct VulkanDescriptorPool : public ya::IDescriptorPool
     VulkanDescriptorPool(VulkanRender *render, const ya::DescriptorPoolCreateInfo &ci);
     virtual ~VulkanDescriptorPool();
 
+
+    void resetPool() override;
+
+    void createInternal(DescriptorPoolCreateInfo const &ci);
+
     // IDescriptorPool interface
     bool allocateDescriptorSets(
         const std::shared_ptr<ya::IDescriptorSetLayout> &layout,
         uint32_t                                         count,
         std::vector<ya::DescriptorSetHandle>            &outSets) override;
 
-    void  reset() override;
     void  setDebugName(const char *name) override;
     void *getHandle() const override { return (void *)(uintptr_t)_handle; }
 
@@ -53,15 +57,18 @@ struct VulkanDescriptorPool : public ya::IDescriptorPool
 
     // Vulkan-specific accessor
     VkDescriptorPool getVkHandle() const { return _handle; }
+
+  private:
+    void cleanup();
 };
 
 
-struct VulkanDescriptor : public ya::IDescriptorSetHelper
+struct VulkanDescriptorHelper : public ya::IDescriptorSetHelper
 {
     VulkanRender *_render = nullptr;
 
-    explicit VulkanDescriptor(VulkanRender *render) : _render(render) {}
-    virtual ~VulkanDescriptor() = default;
+    explicit VulkanDescriptorHelper(VulkanRender *render) : _render(render) {}
+    virtual ~VulkanDescriptorHelper() = default;
 
     // IDescriptorSetHelper interface
     void updateDescriptorSets(

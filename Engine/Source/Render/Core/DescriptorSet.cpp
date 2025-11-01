@@ -1,7 +1,8 @@
 #include "DescriptorSet.h"
-#include "Render/Render.h"
 #include "Platform/Render/Vulkan/VulkanDescriptorSet.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Render.h"
+
 
 namespace ya
 {
@@ -17,6 +18,26 @@ std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *rend
         YA_CORE_ERROR("Unsupported render API for descriptor set layout creation");
         return nullptr;
     }
+}
+
+std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender *render, std::vector<DescriptorSetLayout> descriptorSetLayouts)
+{
+    switch (render->getAPI()) {
+    case ERenderAPI::Vulkan:
+    {
+        std::vector<stdptr<IDescriptorSetLayout>> vkLayouts;
+        for (const auto &layout : descriptorSetLayouts) {
+            vkLayouts.push_back(makeShared<VulkanDescriptorSetLayout>(render->as<VulkanRender>(), layout));
+        }
+        return vkLayouts;
+
+    } break;
+    case ERenderAPI::None:
+    default:
+        YA_CORE_ERROR("Unsupported render API for descriptor set layout creation");
+        return {};
+    }
+    return {};
 }
 
 // Factory method to create descriptor pool based on render backend

@@ -19,7 +19,10 @@ layout(push_constant) uniform PushConstants{
 
 
 void main (){
-    gl_Position = uFrame.projMat * uFrame.viewMat * pc.modelMat * vec4(aPos, 1.0);
+    gl_Position = uFrame.projMat * 
+        uFrame.viewMat *
+        pc.modelMat * 
+        vec4(aPos, 1.0);
 }
 
 

@@ -197,6 +197,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     _pipeline->recreate(_pipelineDesc);
 
 
+    // frames descriptor set pool
     DescriptorPoolCreateInfo poolCI{
         .maxSets   = 1,
         .poolSizes = {
@@ -211,6 +212,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     _frameDSP->allocateDescriptorSets(_materialFrameUboDSL, 1, sets);
     _frameDS = sets[0];
 
+    // recreate use material's descriptor set pool
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
     _frameUBO = ya::IBuffer::create(
@@ -348,12 +350,11 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     // 2. destroy old
     _materialParamDSs.clear();
     _materialResourceDSs.clear();
-    if (_materialDSP) {
-        _materialDSP.reset();
-    }
 
     // 3. recreate pool
-
+    if (_materialDSP) {
+        _materialDSP->resetPool();
+    }
     DescriptorPoolCreateInfo poolCI{
         .maxSets   = newDescriptorSetCount * 2, // max(param , resource)
         .poolSizes = {
@@ -367,23 +368,13 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
             },
         },
     };
-
     _materialDSP = IDescriptorPool::create(render, poolCI);
+
 
     // 4. allocate new sets
     // 为每一个单独的材质分配描述符集
-    std::vector<ya::DescriptorSetHandle> tempParamSets;
-    std::vector<ya::DescriptorSetHandle> tempResourceSets;
-    _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, tempParamSets);
-    _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, tempResourceSets);
-
-    // Store DescriptorSetHandle directly
-    _materialParamDSs.resize(newDescriptorSetCount);
-    _materialResourceDSs.resize(newDescriptorSetCount);
-    for (uint32_t i = 0; i < newDescriptorSetCount; i++) {
-        _materialParamDSs[i]    = tempParamSets[i];
-        _materialResourceDSs[i] = tempResourceSets[i];
-    }
+    _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
+    _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
 
     // 5. create UBOs
     uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
@@ -503,13 +494,14 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
         EImageLayout::ShaderReadOnlyOptimal);
 
 
-    auto *descriptorHelper = render->getDescriptorHelper();
-    descriptorHelper->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
-            IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
-        },
-        {});
+    render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
+                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
+            },
+            {});
 }
 
 } // namespace ya

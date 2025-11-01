@@ -14,6 +14,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "VulkanCommandBuffer.h"
+#include "VulkanDescriptorSet.h"
 #include "VulkanExt.h"
 #include "VulkanPipeline.h"
 #include "VulkanQueue.h"
@@ -35,7 +36,6 @@ namespace ya
 {
 
 // Forward declarations
-struct VulkanDescriptor;
 
 struct QueueFamilyIndices
 {
@@ -101,7 +101,7 @@ struct VulkanRender : public IRender
     VkFence     m_inFlightFence;
 
     std::unique_ptr<VulkanDebugUtils> _debugUtils       = nullptr;
-    VulkanDescriptor                 *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
+    VulkanDescriptorHelper           *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
 
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
