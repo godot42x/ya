@@ -10,11 +10,12 @@ namespace ya
 {
 
 
+using layer_idx_t = uint32_t;
+
 struct UIElement;
 
 struct UIRenderContext
 {
-    int layerId = 0; // for layering...
 };
 
 struct FUIColor

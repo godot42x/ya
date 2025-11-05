@@ -21,10 +21,8 @@ struct UIManager
 
     void render()
     {
-        UIRenderContext ctx{
-            .layerId = 0,
-        };
-        _rootElement.render(ctx);
+        UIRenderContext ctx{};
+        _rootElement.render(ctx, 0);
     }
 
     void onEvent(const Event &event, UIAppCtx &ctx)

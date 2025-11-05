@@ -1,9 +1,13 @@
 #include "LitMaterialSystem.h"
-#include "ECS/Component.h"
+#include "Core/App/App.h"
+#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Buffer.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Scene/Scene.h"
+
 
 
 namespace ya
@@ -213,105 +217,145 @@ void LitMaterialSystem::onDestroy()
 
 void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
-    // Scene *scene = getScene();
-    // if (!scene) {
-    //     return;
-    // }
-    // auto view = scene->getRegistry().view<TagComponent, UnlitMaterialComponent, TransformComponent>();
-    // if (view.begin() == view.end()) {
-    //     return;
-    // }
+    Scene *scene = getScene();
+    if (!scene) {
+        return;
+    }
+    auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, TransformComponent>();
+    if (view.begin() == view.end()) {
+        return;
+    }
 
-    // // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
-    // _pipeline->bind(cmdBuf->getHandle());
+    // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
+    _pipeline->bind(cmdBuf->getHandle());
 
-    // uint32_t width  = rt->getFrameBuffer()->getWidth();
-    // uint32_t height = rt->getFrameBuffer()->getHeight();
+    uint32_t width  = rt->getFrameBuffer()->getWidth();
+    uint32_t height = rt->getFrameBuffer()->getHeight();
 
-    // float viewportY      = 0.0f;
-    // float viewportHeight = static_cast<float>(height);
-    // if (bReverseViewportY) {
-    //     viewportY      = static_cast<float>(height);
-    //     viewportHeight = -static_cast<float>(height);
-    // }
+    float viewportY      = 0.0f;
+    float viewportHeight = static_cast<float>(height);
+    if (bReverseViewportY) {
+        viewportY      = static_cast<float>(height);
+        viewportHeight = -static_cast<float>(height);
+    }
 
-    // cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
-    // cmdBuf->setScissor(0, 0, width, height);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
+    cmdBuf->setScissor(0, 0, width, height);
 
-    // updateFrameDS(rt);
+    updateFrameDS(rt);
 
-    // //
-    // bool     bShouldForceUpdateMaterial = false;
-    // uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
-    // if (materialCount > _lastMaterialDSCount) {
-    //     recreateMaterialDescPool(materialCount);
-    //     bShouldForceUpdateMaterial = true;
-    // }
+    //
+    bool     bShouldForceUpdateMaterial = false;
+    uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<LitMaterial>();
+    if (materialCount > _lastMaterialDSCount) {
+        // recreateMaterialDescPool(materialCount);
+        bShouldForceUpdateMaterial = true;
+    }
 
-    // std::vector<bool> updatedMaterial(materialCount);
+    std::vector<bool> updatedMaterial(materialCount);
 
-    // for (entt::entity entity : view)
-    // {
-    //     // const auto &[tag, umc, tc] = view.get(entity);
-    //     // for (const auto &[material, meshIDs] : umc.getMaterial2MeshIDs()) {
+    for (entt::entity entity : view)
+    {
+        // const auto &[tag, umc, tc] = view.get(entity);
+        // for (const auto &[material, meshIDs] : umc.getMaterial2MeshIDs()) {
 
-    //     //     _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
-    //     //     if (!material || material->getIndex() < 0) {
-    //     //         YA_CORE_WARN("default material for none or error material");
-    //     //         continue;
-    //     //     }
+        //     _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
+        //     if (!material || material->getIndex() < 0) {
+        //         YA_CORE_WARN("default material for none or error material");
+        //         continue;
+        //     }
 
-    //     //     // update each material instance's descriptor set if dirty
-    //     //     uint32_t            materialID = material->getIndex();
-    //     //     DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
-    //     //     DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
+        //     // update each material instance's descriptor set if dirty
+        //     uint32_t            materialID = material->getIndex();
+        //     DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
+        //     DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
 
-    //     //     // update the resource set when:
-    //     //     // 1. this has updated, multiple entity using the same material(not material instance?)
-    //     //     // 2. material count changed
-    //     //     // 3. this material's resources(such as texture) changed(dirty)
-    //     //     if (!updatedMaterial[materialID]) {
-    //     //         if (bShouldForceUpdateMaterial || material->isParamDirty())
-    //     //         {
-    //     //             updateMaterialParamDS(paramDS, material);
-    //     //             material->setParamDirty(false);
-    //     //         }
-    //     //         if (bShouldForceUpdateMaterial || material->isResourceDirty())
-    //     //         {
-    //     //             updateMaterialResourceDS(resourceDS, material);
-    //     //             material->setResourceDirty(false);
-    //     //         }
-    //     //         updatedMaterial[materialID] = true;
-    //     //     }
+        //     // update the resource set when:
+        //     // 1. this has updated, multiple entity using the same material(not material instance?)
+        //     // 2. material count changed
+        //     // 3. this material's resources(such as texture) changed(dirty)
+        //     if (!updatedMaterial[materialID]) {
+        //         if (bShouldForceUpdateMaterial || material->isParamDirty())
+        //         {
+        //             updateMaterialParamDS(paramDS, material);
+        //             material->setParamDirty(false);
+        //         }
+        //         if (bShouldForceUpdateMaterial || material->isResourceDirty())
+        //         {
+        //             updateMaterialResourceDS(resourceDS, material);
+        //             material->setResourceDirty(false);
+        //         }
+        //         updatedMaterial[materialID] = true;
+        //     }
 
-    //     //     // bind descriptor set
-    //     //     std::vector<DescriptorSetHandle> descSets{
-    //     //         _frameDS,
-    //     //         _materialParamDSs[materialID],
-    //     //         _materialResourceDSs[materialID],
-    //     //     };
-    //     //     cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
+        //     // bind descriptor set
+        //     std::vector<DescriptorSetHandle> descSets{
+        //         _frameDS,
+        //         _materialParamDSs[materialID],
+        //         _materialResourceDSs[materialID],
+        //     };
+        //     cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
 
-    //     //     // update push constant
-    //     //     material::ModelPushConstant pushConst{
-    //     //         .modelMatrix = tc.getTransform(),
-    //     //     };
-    //     //     cmdBuf->pushConstants(_pipelineLayout->getHandle(),
-    //     //                           EShaderStage::Vertex,
-    //     //                           0,
-    //     //                           sizeof(material::ModelPushConstant),
-    //     //                           &pushConst);
+        //     // update push constant
+        //     material::ModelPushConstant pushConst{
+        //         .modelMatrix = tc.getTransform(),
+        //     };
+        //     cmdBuf->pushConstants(_pipelineLayout->getHandle(),
+        //                           EShaderStage::Vertex,
+        //                           0,
+        //                           sizeof(material::ModelPushConstant),
+        //                           &pushConst);
 
-    //     //     // draw each mesh
-    //     //     for (const auto &meshIndex : meshIDs)
-    //     //     {
-    //     //         auto mesh = umc.getMesh(meshIndex);
-    //     //         if (mesh) {
-    //     //             mesh->draw(cmdBuf);
-    //     //         }
-    //     //     }
-    //     // }
-    //     // }
+        //     // draw each mesh
+        //     for (const auto &meshIndex : meshIDs)
+        //     {
+        //         auto mesh = umc.getMesh(meshIndex);
+        //         if (mesh) {
+        //             mesh->draw(cmdBuf);
+        //         }
+        //     }
+        // }
+    }
+}
+
+
+// TODO: descriptor set can be shared if they use same layout and data
+void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
+{
+    auto app    = getApp();
+    auto render = getRender();
+
+    glm::mat4 proj;
+    glm::mat4 view;
+    rt->getViewAndProjMatrix(view, proj);
+
+    FrameUBO ubo{
+        .projection = proj,
+        .view       = view,
+        .resolution = {
+            rt->getFrameBuffer()->getWidth(),
+            rt->getFrameBuffer()->getHeight(),
+        },
+        .frameIndex = app->getFrameIndex(),
+        .time       = (float)app->getElapsedTimeMS() / 1000.0f,
+    };
+
+    _frameUBO->writeData(&ubo, sizeof(ubo), 0);
+
+    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(LitMaterialSystem::FrameUBO)));
+
+    render->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genBufferWrite(
+                    _frameDS,
+                    0,
+                    0,
+                    EPipelineDescriptorType::UniformBuffer,
+                    &bufferInfo,
+                    1),
+            },
+            {});
 }
 
 } // namespace ya

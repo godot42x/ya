@@ -6,7 +6,6 @@
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
-#include "Core/FName.h"
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
@@ -20,22 +19,20 @@
 
 // ECS
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/Material/BaseMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/BaseMaterialSystem.h"
+#include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
 
 
 // Render
-#include "Math/Geometry.h"
-#include "Render/Core/Material.h"
-#include "Render/Core/RenderTarget.h"
+#include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
-#include "Render/Render2D.h"
+
 
 // UI
 #include "Core/UI/UIButton.h"
@@ -251,7 +248,7 @@ void App::init(AppDesc ci)
         .shaderName = "Test/Unlit.glsl",
     });
     _shaderStorage->load(ShaderDesc{
-        .shaderName = "Test/BaseMaterial.glsl",
+        .shaderName = "Test/SimpleMaterial.glsl",
     });
     _shaderStorage->load(ShaderDesc{
         .shaderName = "Sprite2D.glsl",
@@ -352,7 +349,7 @@ void App::init(AppDesc ci)
     // Create main render target using RenderContext
     _rt = _renderContext->createSwapchainRenderTarget(_renderpass.get());
 #if !ONLY_2D
-    _rt->addMaterialSystem<BaseMaterialSystem>();
+    _rt->addMaterialSystem<SimpleMaterialSystem>();
     _rt->addMaterialSystem<UnlitMaterialSystem>();
     // rt->addMaterialSystem<LitMaterialSystem>();
 #endif
@@ -922,7 +919,7 @@ void App::onRender(float dt)
         if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
             for (uint32_t i = 0; i < _materials.size(); i++) {
                 auto mat   = _materials[i];
-                auto base  = ya::type_index_v<BaseMaterial>;
+                auto base  = ya::type_index_v<SimpleMaterial>;
                 auto unlit = ya::type_index_v<UnlitMaterial>;
 
                 ImGui::PushID(std::format("Material{}", i).c_str());
@@ -963,13 +960,13 @@ void App::onRender(float dt)
                 }
                 else if (mat->getTypeID() == base)
                 {
-                    auto *baseMat = static_cast<BaseMaterial *>(mat);
+                    auto *baseMat = static_cast<SimpleMaterial *>(mat);
                     if (ImGui::CollapsingHeader(std::format("Material{} ({})", i, baseMat->getLabel()).c_str()))
                     {
                         // use push constant to change color type, no need to mark dirty
                         int colorType = static_cast<int>(baseMat->colorType);
                         if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
-                            baseMat->colorType = static_cast<BaseMaterial::EColor>(colorType);
+                            baseMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
                         }
                     }
                 }
@@ -1031,7 +1028,7 @@ void App::onSceneInit(Scene *scene)
     auto cam = scene->createEntity("Camera");
     cam->addComponent<TransformComponent>();
     cam->addComponent<CameraComponent>();
-    cam->addComponent<BaseMaterialComponent>();
+    cam->addComponent<SimpleMaterialComponent>();
     _rt->setCamera(cam);
 
     YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");

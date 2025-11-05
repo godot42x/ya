@@ -2,6 +2,7 @@
 
 #include "Handle.h"
 #include "PlatBase.h"
+#include "Render/RenderDefines.h"
 
 namespace ya
 {
@@ -29,8 +30,14 @@ struct IImage : public plat_base<IImage>
      */
     virtual ImageHandle getHandle() const = 0;
 
-    virtual uint32_t getWidth() const  = 0;
-    virtual uint32_t getHeight() const = 0;
+    virtual uint32_t   getWidth() const  = 0;
+    virtual uint32_t   getHeight() const = 0;
+    virtual EFormat::T getFormat() const = 0;
+    
+    /**
+     * @brief Get image usage flags
+     */
+    virtual EImageUsage::T getUsage() const = 0;
 };
 
 struct IImageView : public plat_base<IImageView>
@@ -40,6 +47,11 @@ struct IImageView : public plat_base<IImageView>
      * @return ImageViewHandle Platform handle (e.g., VkImageView for Vulkan)
      */
     virtual ImageViewHandle getHandle() const = 0;
+    
+    /**
+     * @brief Get the underlying image
+     */
+    virtual const IImage* getImage() const = 0;
 };
 
 } // namespace ya

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render/Render2D.h"
+#include "Render/2D/Render2D.h"
 #include "UElement.h"
 
 
@@ -27,7 +27,7 @@ struct UIButton : public UIElement
     } _state;
 
 
-    void render(UIRenderContext &ctx) override
+    void render(UIRenderContext &ctx, layer_idx_t layerId) override
     {
         FUIColor *color = nullptr;
         switch (_state)
@@ -45,12 +45,12 @@ struct UIButton : public UIElement
             color = &_normalColor;
             break;
         }
-        Render2D::makeSprite(glm::vec3(_position, (float)ctx.layerId / 100.f),
+        Render2D::makeSprite(glm::vec3(_position, (float)layerId / 100.f),
                              _size,
                              nullptr,
                              color->asVec4());
-        ctx.layerId += 1;
-        Super::render(ctx);
+        layerId += 1;
+        Super::render(ctx, layerId);
     }
 
     int handleEvent(const Event &event, UIAppCtx &ctx) override

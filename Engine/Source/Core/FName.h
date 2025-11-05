@@ -152,13 +152,14 @@ struct FName
     {
         NameRegistry::get().onRemove(*this);
     }
-    std::string toString() { return std::string(_data); }
+    std::string toString() const { return std::string(_data); }
 
     operator index_t() const { return _index; }
     operator std::string_view() const { return _data; }
     operator const char *() const { return _data.data(); }
 
     bool operator==(const FName &other) const { return _index == other._index; }
+    bool operator<(const FName &other) const { return _index < other._index; }
 };
 
 namespace std

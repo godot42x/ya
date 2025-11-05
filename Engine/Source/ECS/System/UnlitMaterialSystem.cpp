@@ -4,16 +4,15 @@
 
 #include "Core/App/App.h"
 
-#include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
-#include "Render/Core/Material.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/RenderTarget.h"
 #include "Render/Core/Swapchain.h"
+#include "Render/Material/UnlitMaterial.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
+
 
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -488,11 +487,11 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
 
     DescriptorImageInfo imageInfo0(
         SamplerHandle(tv0->sampler->getHandle()),
-        ImageViewHandle(tv0->texture->getImageView()),
+        tv0->texture->getImageViewHandle(),
         EImageLayout::ShaderReadOnlyOptimal);
     DescriptorImageInfo imageInfo1(
         SamplerHandle(tv1->sampler->getHandle()),
-        ImageViewHandle(tv1->texture->getImageView()),
+        tv1->texture->getImageViewHandle(),
         EImageLayout::ShaderReadOnlyOptimal);
 
 

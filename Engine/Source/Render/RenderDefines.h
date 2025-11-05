@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Render/Core/Image.h"
 #include "glm/glm.hpp"
 #include "reflect.cc/enum"
 #include "utility.cc/hash.h"
@@ -436,6 +435,21 @@ struct ColorBlendAttachmentState
     EBlendFactor::T    dstAlphaBlendFactor = EBlendFactor::Zero;
     EBlendOp::T        alphaBlendOp        = EBlendOp::Add;
     EColorComponent::T colorWriteMask      = (EColorComponent::T)(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A);
+
+    static ColorBlendAttachmentState defaultEnable(int index)
+    {
+        return ColorBlendAttachmentState{
+            .index               = index,
+            .bBlendEnable        = true,
+            .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+            .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+            .colorBlendOp        = EBlendOp::Add,
+            .srcAlphaBlendFactor = EBlendFactor::One,
+            .dstAlphaBlendFactor = EBlendFactor::Zero,
+            .alphaBlendOp        = EBlendOp::Add,
+            .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+        };
+    }
 };
 
 struct ColorBlendState
@@ -687,12 +701,7 @@ struct RenderCreateInfo
     SwapchainCreateInfo swapchainCI;
 };
 
-struct FrameBufferCreateInfo
-{
-    uint32_t                    width  = 0;
-    uint32_t                    height = 0;
-    std::vector<stdptr<IImage>> images; // API-specific image views (e.g., VkImageView)
-};
+
 
 struct ImageCreateInfo
 {

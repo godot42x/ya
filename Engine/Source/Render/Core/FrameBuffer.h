@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/Core/Image.h"
 #include "Render/RenderDefines.h"
 
 namespace ya
@@ -10,6 +11,13 @@ namespace ya
 // Forward declarations
 struct IRender;
 struct IRenderPass;
+
+struct FrameBufferCreateInfo
+{
+    uint32_t                    width  = 0;
+    uint32_t                    height = 0;
+    std::vector<stdptr<IImage>> images; // API-specific image views (e.g., VkImageView)
+};
 
 /**
  * @brief Abstract interface for frame buffers

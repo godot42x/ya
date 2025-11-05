@@ -8,7 +8,8 @@ add_requires(
     "glm",
     "stb",
     "cxxopts",
-    "lua"
+    "lua",
+    "freetype"
 )
 add_requires("spirv-cross", {
     configs = {
@@ -126,6 +127,7 @@ do
     add_packages("cxxopts", { public = true })
     add_packages("entt", { public = true })
     add_packages("lua", { public = true })
+    add_packages("freetype")
 
     -- add_deps("shader")
 

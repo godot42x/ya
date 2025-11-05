@@ -1,5 +1,5 @@
 #pragma once
-#include "BaseMaterialSystem.h"
+#include "SimpleMaterialSystem.h"
 
 
 #include "Core/App/App.h"
@@ -16,7 +16,7 @@
 
 #include "vulkan/vulkan.h"
 
-#include "ECS/Component/Material/BaseMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 
@@ -28,17 +28,17 @@ namespace ya
 {
 
 
-void BaseMaterialSystem::onInit(IRenderPass *renderPass)
+void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
 {
-    _label       = "BaseMaterialSystem";
+    _label       = "SimpleMaterialSystem";
     auto *render = getRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
-    constexpr auto size = sizeof(BaseMaterialSystem::PushConstant);
-    YA_CORE_DEBUG("BaseMaterialSystem PushConstant size: {}", size);
+    constexpr auto size = sizeof(SimpleMaterialSystem::PushConstant);
+    YA_CORE_DEBUG("SimpleMaterialSystem PushConstant size: {}", size);
     PipelineDesc pipDesc{
-        .label         = "BaseMaterialSystem_PipelineLayout",
+        .label         = "SimpleMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
@@ -57,7 +57,7 @@ void BaseMaterialSystem::onInit(IRenderPass *renderPass)
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Test/BaseMaterial.glsl",
+            .shaderName        = "Test/SimpleMaterial.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -151,18 +151,18 @@ void BaseMaterialSystem::onInit(IRenderPass *renderPass)
     _pipeline->recreate(pipelineCI);
 }
 
-void BaseMaterialSystem::onDestroy()
+void SimpleMaterialSystem::onDestroy()
 {
     _pipelineLayoutOwner.reset();
     _pipeline.reset();
     _pipelineLayout = nullptr;
 }
 
-void BaseMaterialSystem::onUpdate(float deltaTime)
+void SimpleMaterialSystem::onUpdate(float deltaTime)
 {
 }
 
-void BaseMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
 
     auto render = getRender();
@@ -170,7 +170,7 @@ void BaseMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    const auto &view = scene->getRegistry().view<TransformComponent, BaseMaterialComponent>();
+    const auto &view = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent>();
     if (view.begin() == view.end()) {
         return;
     }

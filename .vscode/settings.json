@@ -10,6 +10,7 @@
         "cxxopts",
         "DXIL",
         "entt",
+        "freetype",
         "fshader",
         "glsl",
         "glslc",

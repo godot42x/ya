@@ -209,7 +209,7 @@ class IDescriptorSetHelper
      * @brief Helper to generate a buffer write descriptor
      */
     static WriteDescriptorSet genBufferWrite(
-        void                       *dstSet,
+        DescriptorSetHandle         dstSet,
         uint32_t                    dstBinding,
         uint32_t                    dstArrayElement,
         EPipelineDescriptorType::T  descriptorType,
@@ -232,7 +232,7 @@ class IDescriptorSetHelper
      * @brief Helper to generate an image write descriptor
      */
     static WriteDescriptorSet genImageWrite(
-        void                      *dstSet,
+        DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
         uint32_t                   dstArrayElement,
         EPipelineDescriptorType::T descriptorType,
@@ -255,7 +255,7 @@ class IDescriptorSetHelper
      * @brief Helper to generate a texel buffer write descriptor
      */
     static WriteDescriptorSet genTexelBufferWrite(
-        void                      *dstSet,
+        DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
         uint32_t                   dstArrayElement,
         EPipelineDescriptorType::T descriptorType,

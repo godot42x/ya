@@ -55,13 +55,15 @@ struct VulkanImage : public IImage
     }
 
     // IImage interface
-    [[nodiscard]] ImageHandle getHandle() const override { return ImageHandle{_handle}; }
-    [[nodiscard]] uint32_t    getWidth() const override { return static_cast<uint32_t>(_ci.extent.width); }
-    [[nodiscard]] uint32_t    getHeight() const override { return static_cast<uint32_t>(_ci.extent.height); }
+    [[nodiscard]] ImageHandle    getHandle() const override { return ImageHandle{_handle}; }
+    [[nodiscard]] uint32_t       getWidth() const override { return static_cast<uint32_t>(_ci.extent.width); }
+    [[nodiscard]] uint32_t       getHeight() const override { return static_cast<uint32_t>(_ci.extent.height); }
+    [[nodiscard]] EFormat::T     getFormat() const override { return _ci.format; }
+    [[nodiscard]] EImageUsage::T getUsage() const override { return _ci.usage; }
 
     // Vulkan-specific accessors
     [[nodiscard]] VkImage  getVkImage() const { return _handle; }
-    [[nodiscard]] VkFormat getFormat() const { return _format; }
+    [[nodiscard]] VkFormat getVkFormat() const { return _format; }
 
 
   public:

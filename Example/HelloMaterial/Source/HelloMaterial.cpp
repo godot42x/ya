@@ -1,16 +1,15 @@
 #include "HelloMaterial.h"
 #include "Core/AssetManager.h"
 
-#include "ECS/Component/Material/BaseMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/BaseMaterialSystem.h"
+#include "ECS/System/SimpleMaterialSystem.h"
 
 
 #include "Math/Geometry.h"
 
-#include "Render/Core/Material.h"
 #include "Render/Mesh.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/Scene.h"
@@ -42,10 +41,10 @@ void HelloMaterial::createMaterials()
 
 #if !ONLY_2D
     // Create base materials
-    auto *baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::BaseMaterial>("base0");
-    auto *baseMaterial1      = ya::MaterialFactory::get()->createMaterial<ya::BaseMaterial>("base1");
-    baseMaterial0->colorType = ya::BaseMaterial::EColor::Normal;
-    baseMaterial1->colorType = ya::BaseMaterial::EColor::Texcoord;
+    auto *baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base0");
+    auto *baseMaterial1      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base1");
+    baseMaterial0->colorType = ya::SimpleMaterial::EColor::Normal;
+    baseMaterial1->colorType = ya::SimpleMaterial::EColor::Texcoord;
     materials.push_back(baseMaterial0);
     materials.push_back(baseMaterial1);
 
@@ -155,8 +154,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                     ++index;
                     if (materialIndex < baseMaterialCount) {
                         // use base material
-                        auto bmc = cube->addComponent<ya::BaseMaterialComponent>();
-                        auto mat = static_cast<ya::BaseMaterial *>(materials[materialIndex]);
+                        auto bmc = cube->addComponent<ya::SimpleMaterialComponent>();
+                        auto mat = static_cast<ya::SimpleMaterial *>(materials[materialIndex]);
                         YA_CORE_ASSERT(mat, "Material is null");
                         bmc->addMesh(cubeMesh.get(), mat);
                     }

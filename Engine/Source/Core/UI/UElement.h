@@ -27,11 +27,11 @@ struct UIElement
 
     virtual ~UIElement() = default;
 
-    virtual void render(UIRenderContext &ctx)
+    virtual void render(UIRenderContext &ctx, layer_idx_t layerId)
     {
         for (auto &child : _children)
         {
-            child->render(ctx);
+            child->render(ctx, layerId);
         }
     }
     virtual void update(float dt)

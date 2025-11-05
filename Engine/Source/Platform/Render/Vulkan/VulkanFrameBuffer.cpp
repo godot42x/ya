@@ -24,11 +24,11 @@ bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> i
     _imageViews.resize(images.size());
     for (int i = 0; i < images.size(); i++)
     {
-        bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getFormat());
+        bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getVkFormat());
         _imageViews[i] = VulkanUtils::createImageView(
             render->getDevice(),
             _images[i]->getHandle().as<VkImage>(),
-            _images[i]->getFormat(),
+            _images[i]->getVkFormat(),
             bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
     }
 

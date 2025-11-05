@@ -3,8 +3,9 @@
 
 #include "Core/Base.h"
 #include "Image.h"
-#include "Sampler.h"
 #include "Render/RenderDefines.h"
+#include "Sampler.h"
+
 
 namespace ya
 {
@@ -19,11 +20,18 @@ struct ColorRGBA
     ty a;
 };
 
+/**
+ * @brief Texture - Platform-independent texture wrapper
+ *
+ * Manages image data, image view, and metadata.
+ * Can be created from file or raw pixel data.
+ */
 struct Texture
 {
-    EFormat::T _format;
-    uint32_t   _width  = 0;
-    uint32_t   _height = 0;
+    EFormat::T _format   = EFormat::R8G8B8A8_UNORM;
+    uint32_t   _width    = 0;
+    uint32_t   _height   = 0;
+    uint32_t   _channels = 4; // RGBA by default
 
     std::string _label;
     std::string _filepath;
@@ -32,27 +40,52 @@ struct Texture
     std::shared_ptr<IImageView> imageView;
 
 
+    /**
+     * @brief Create texture from file
+     */
     Texture(const std::string &filepath);
+
+    /**
+     * @brief Create texture from raw RGBA8 data
+     */
     Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data);
+
+    /**
+     * @brief Create texture from raw data with custom format
+     */
+    Texture(uint32_t width, uint32_t height, const void *data, size_t dataSize, EFormat::T format);
 
     virtual ~Texture() = default;
 
+    // Disable copy, allow move
+    Texture(const Texture &)            = delete;
+    Texture &operator=(const Texture &) = delete;
+    Texture(Texture &&)                 = default;
+    Texture &operator=(Texture &&)      = default;
+
     // Platform-independent accessors (preferred)
-    ImageHandle     getImage() const { return image ? image->getHandle() : ImageHandle{}; }
-    ImageViewHandle getImageView() const { return imageView ? imageView->getHandle() : ImageViewHandle{}; }
-    FormatHandle    getFormatHandle() const;
+    ImageHandle                 getImage() const { return image ? image->getHandle() : ImageHandle{}; }
+    std::shared_ptr<IImageView> getImageView() const { return imageView; }
+    ImageViewHandle             getImageViewHandle() const { return imageView ? imageView->getHandle() : ImageViewHandle{}; }
+    FormatHandle                getFormatHandle() const;
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }
+    uint32_t   getChannels() const { return _channels; }
     EFormat::T getFormat() const { return _format; }
 
     void               setLabel(const std::string &label) { _label = label; }
     const std::string &getLabel() const { return _label; }
     const std::string &getFilepath() const { return _filepath; }
 
+    /**
+     * @brief Check if texture is valid
+     */
+    bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
+
   private:
 
-    void createImage(const void *pixels, uint32_t texWidth, uint32_t texHeight);
+    void createImage(const void *pixels, uint32_t texWidth, uint32_t texHeight, EFormat::T format = EFormat::R8G8B8A8_UNORM);
 
 
   private:

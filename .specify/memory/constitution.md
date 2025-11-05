@@ -187,6 +187,9 @@ If code or design conflicts with constitution:
 
 This constitution is ratified as of 2025-01-07 and takes immediate effect. All existing code SHALL be brought into compliance through incremental refactoring, with priority on public APIs and framework boundaries.
 
+## 此外
+不要生成无用的说明文档
+
 ---
 
 **Signatures** (Symbolic):

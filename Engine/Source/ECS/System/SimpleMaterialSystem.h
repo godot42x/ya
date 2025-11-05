@@ -10,7 +10,7 @@ namespace ya
 {
 
 
-struct BaseMaterialSystem : public IMaterialSystem
+struct SimpleMaterialSystem : public IMaterialSystem
 {
 
 
