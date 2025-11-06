@@ -1,8 +1,6 @@
 #include "RenderContext.h"
 #include "Core/Log.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/IRenderTarget.h"
-#include "Render/Core/RenderTarget.h"
 
 
 namespace ya
@@ -36,10 +34,11 @@ void RenderContext::destroy()
     _render->waitIdle();
 
     // Cleanup all render targets
-    for (auto *rt : _renderTargets) {
-        delete rt;
-    }
-    _renderTargets.clear();
+    // for (auto *rt : _renderTargets) {
+    //     delete rt;
+    // }
+    // _renderTargets.clear();
+    _ownedRenderTargets.clear();
     _commandBuffers.clear();
 
     _render->destroy();
@@ -54,11 +53,12 @@ IRenderTarget *RenderContext::createSwapchainRenderTarget(IRenderPass *renderPas
     YA_CORE_ASSERT(_render, "RenderContext not initialized");
     YA_CORE_ASSERT(renderPass, "RenderPass is null");
 
-    auto *rt = new RenderTarget(renderPass);
-    _renderTargets.push_back(rt);
+    auto rt = ya::createRenderTarget(renderPass);
+    // _renderTargets.push_back(rt.get());
+    _ownedRenderTargets.push_back(rt);
 
     YA_CORE_INFO("Created swapchain RenderTarget");
-    return rt;
+    return rt.get();
 }
 
 IRenderTarget *RenderContext::createRenderTarget(IRenderPass *renderPass, uint32_t width, uint32_t height, uint32_t bufferCount)
@@ -66,28 +66,31 @@ IRenderTarget *RenderContext::createRenderTarget(IRenderPass *renderPass, uint32
     YA_CORE_ASSERT(_render, "RenderContext not initialized");
     YA_CORE_ASSERT(renderPass, "RenderPass is null");
 
-    auto *rt = new RenderTarget(renderPass, bufferCount, glm::vec2(width, height));
-    _renderTargets.push_back(rt);
+    auto rt = ya::createRenderTarget(renderPass, bufferCount, glm::vec2(width, height));
+    // _renderTargets.push_back(rt.get());
+    _ownedRenderTargets.push_back(rt);
 
     YA_CORE_INFO("Created custom RenderTarget: {}x{}, {} buffers", width, height, bufferCount);
-    return rt;
+    return rt.get();
 }
 
 void RenderContext::registerRenderTarget(IRenderTarget *target)
 {
-    if (target && std::find(_renderTargets.begin(), _renderTargets.end(), target) == _renderTargets.end()) {
-        _renderTargets.push_back(target);
-    }
+    // if (target && std::find(_renderTargets.begin(), _renderTargets.end(), target) == _renderTargets.end()) {
+    //     _renderTargets.push_back(target);
+    // }
+    UNIMPLEMENTED();
 }
 
 void RenderContext::destroyRenderTarget(IRenderTarget *target)
 {
-    auto it = std::find(_renderTargets.begin(), _renderTargets.end(), target);
-    if (it != _renderTargets.end()) {
-        delete it._Ptr;
-        _renderTargets.erase(it);
-        YA_CORE_INFO("RenderTarget destroyed");
-    }
+    // auto it = std::find(_renderTargets.begin(), _renderTargets.end(), target);
+    // if (it != _renderTargets.end()) {
+    //     delete it._Ptr;
+    //     _renderTargets.erase(it);
+    //     YA_CORE_INFO("RenderTarget destroyed");
+    // }
+    UNIMPLEMENTED();
 }
 
 } // namespace ya

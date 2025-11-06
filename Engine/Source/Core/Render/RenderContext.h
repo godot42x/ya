@@ -73,7 +73,7 @@ class RenderContext
     std::vector<std::shared_ptr<ICommandBuffer>>       &getCommandBuffers() { return _commandBuffers; }
     const std::vector<std::shared_ptr<ICommandBuffer>> &getCommandBuffers() const { return _commandBuffers; }
 
-    const std::vector<IRenderTarget *> &getRenderTargets() const { return _renderTargets; }
+    // const std::vector<IRenderTarget *> &getRenderTargets() const { return _renderTargets; }
 
     uint32_t getSwapchainWidth() const { return _render ? _render->getSwapchainWidth() : 0; }
     uint32_t getSwapchainHeight() const { return _render ? _render->getSwapchainHeight() : 0; }
@@ -92,7 +92,8 @@ class RenderContext
   private:
     IRender                                     *_render = nullptr;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
-    std::vector<IRenderTarget *>                 _renderTargets; // Track all render targets
+    // std::vector<IRenderTarget *>                 _renderTargets; // Track all render targets (raw pointers)
+    std::vector<std::shared_ptr<IRenderTarget>> _ownedRenderTargets; // Owned render targets
 
     // Configuration
     RenderCreateInfo _createInfo;

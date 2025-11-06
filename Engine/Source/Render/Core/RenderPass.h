@@ -8,13 +8,13 @@
 namespace ya
 {
 
-class IRender;
-class ICommandBuffer;
+struct IRender;
+struct ICommandBuffer;
 
 /**
  * @brief Generic render pass interface
  */
-class IRenderPass : public plat_base<IRenderPass>
+struct IRenderPass : public plat_base<IRenderPass>
 {
   public:
     virtual ~IRenderPass() = default;

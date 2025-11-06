@@ -1,27 +1,19 @@
-#include "RenderTarget.h"
+#include "VulkanRenderTarget.h"
 #include "Core/App/App.h"
-#include "Core/Event.h"
-#include "Core/MessageBus.h"
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/TransformComponent.h"
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/Image.h"
 #include "imgui.h"
 
-
-// Platform-specific includes
-#if USE_VULKAN
-    #include "Platform/Render/Vulkan/VulkanCommandBuffer.h"
-    #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
-    #include "Platform/Render/Vulkan/VulkanImage.h"
-    #include "Platform/Render/Vulkan/VulkanRender.h"
-#endif
-
+// Vulkan-specific includes
+#include "VulkanCommandBuffer.h"
+#include "VulkanImage.h"
+#include "VulkanRender.h"
 
 namespace ya
 {
 
-RenderTarget::RenderTarget(IRenderPass *renderPass) : _camera(nullptr)
+VulkanRenderTarget::VulkanRenderTarget(IRenderPass *renderPass) : _camera(nullptr)
 {
     _renderPass = renderPass;
 
@@ -52,7 +44,7 @@ RenderTarget::RenderTarget(IRenderPass *renderPass) : _camera(nullptr)
     recreate();
 }
 
-RenderTarget::RenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent) : _camera(nullptr)
+VulkanRenderTarget::VulkanRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent) : _camera(nullptr)
 {
     _renderPass       = renderPass;
     _frameBufferCount = frameBufferCount;
@@ -62,7 +54,12 @@ RenderTarget::RenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, g
     recreate();
 }
 
-void RenderTarget::init()
+VulkanRenderTarget::~VulkanRenderTarget()
+{
+    destroy();
+}
+
+void VulkanRenderTarget::init()
 {
     _clearValues.resize(_renderPass->getAttachmentCount());
     setColorClearValue(ClearValue(0.0f, 0.0f, 0.0f, 1.0f));
@@ -70,9 +67,9 @@ void RenderTarget::init()
 }
 
 
-void RenderTarget::recreate()
+void VulkanRenderTarget::recreate()
 {
-    YA_CORE_INFO("Recreating RenderTarget with extent: {}x{}, frameBufferCount: {}", _extent.width, _extent.height, _frameBufferCount);
+    YA_CORE_INFO("Recreating VulkanRenderTarget with extent: {}x{}, frameBufferCount: {}", _extent.width, _extent.height, _frameBufferCount);
     if (_extent.width <= 0 || _extent.height <= 0)
     {
         return;
@@ -87,13 +84,11 @@ void RenderTarget::recreate()
         return;
     }
 
-#if USE_VULKAN
     auto vkRender    = static_cast<VulkanRender *>(render);
     auto vkSwapChain = static_cast<VulkanSwapChain *>(swapchain);
 
     for (size_t i = 0; i < _frameBufferCount; i++)
     {
-
         std::vector<std::shared_ptr<IImage>> fbAttachments;
         int                                  j = 0;
         for (const AttachmentDescription &attachment : attachments)
@@ -148,30 +143,25 @@ void RenderTarget::recreate()
         _frameBuffers[i] = fb;
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}", i));
     }
-#else
-    #error "Platform not supported"
-#endif
 }
 
-void RenderTarget::destroy()
+void VulkanRenderTarget::destroy()
 {
     _materialSystems.clear();
 }
 
-void RenderTarget::onUpdate(float deltaTime)
+void VulkanRenderTarget::onUpdate(float deltaTime)
 {
-
     for (auto &system : _materialSystems) {
         if (system->bEnabled) {
-
             system->onUpdate(deltaTime);
         }
     }
 }
 
-void RenderTarget::onRenderGUI()
+void VulkanRenderTarget::onRenderGUI()
 {
-    ImGui::CollapsingHeader("RenderTarget", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::CollapsingHeader("VulkanRenderTarget", ImGuiTreeNodeFlags_DefaultOpen);
     if (ImGui::Checkbox("Use Entity Camera", &bEntityCamera)) {
         if (bEntityCamera) {
             // copy transform from app camera to entity camera
@@ -183,9 +173,7 @@ void RenderTarget::onRenderGUI()
     }
 }
 
-
-
-void RenderTarget::begin(ICommandBuffer *cmdBuf)
+void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
 {
     YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
@@ -219,21 +207,20 @@ void RenderTarget::begin(ICommandBuffer *cmdBuf)
     bBeginTarget = true;
 }
 
-void RenderTarget::end(ICommandBuffer *cmdBuf)
+void VulkanRenderTarget::end(ICommandBuffer *cmdBuf)
 {
     // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
     _renderPass->end(cmdBuf);
     bBeginTarget = false;
 }
 
-
-void RenderTarget::setBufferCount(uint32_t count)
+void VulkanRenderTarget::setBufferCount(uint32_t count)
 {
     _frameBufferCount = count;
     bDirty            = true;
 }
 
-void RenderTarget::setColorClearValue(ClearValue clearValue)
+void VulkanRenderTarget::setColorClearValue(ClearValue clearValue)
 {
     for (uint32_t i = 0; i < _clearValues.size(); i++)
     {
@@ -241,7 +228,7 @@ void RenderTarget::setColorClearValue(ClearValue clearValue)
     }
 }
 
-void RenderTarget::setColorClearValue(uint32_t index, ClearValue clearValue)
+void VulkanRenderTarget::setColorClearValue(uint32_t index, ClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size()) {
@@ -261,7 +248,7 @@ void RenderTarget::setColorClearValue(uint32_t index, ClearValue clearValue)
     }
 }
 
-void RenderTarget::setDepthStencilClearValue(ClearValue clearValue)
+void VulkanRenderTarget::setDepthStencilClearValue(ClearValue clearValue)
 {
     for (uint32_t i = 0; i < _clearValues.size(); i++)
     {
@@ -269,7 +256,7 @@ void RenderTarget::setDepthStencilClearValue(ClearValue clearValue)
     }
 }
 
-void RenderTarget::setDepthStencilClearValue(uint32_t index, ClearValue clearValue)
+void VulkanRenderTarget::setDepthStencilClearValue(uint32_t index, ClearValue clearValue)
 {
     const auto &rpAttachments = _renderPass->getAttachments();
     if (index < _clearValues.size())
@@ -289,7 +276,7 @@ void RenderTarget::setDepthStencilClearValue(uint32_t index, ClearValue clearVal
     }
 };
 
-void RenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
+void VulkanRenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
 {
     for (auto &system : _materialSystems) {
         if (system->bEnabled) {
@@ -298,7 +285,7 @@ void RenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
     }
 }
 
-const glm::mat4 RenderTarget::getProjectionMatrix() const
+const glm::mat4 VulkanRenderTarget::getProjectionMatrix() const
 {
     glm::mat4 ret(1.0);
     if (isUseEntityCamera()) {
@@ -316,7 +303,7 @@ const glm::mat4 RenderTarget::getProjectionMatrix() const
     return ret;
 }
 
-const glm::mat4 RenderTarget::getViewMatrix() const
+const glm::mat4 VulkanRenderTarget::getViewMatrix() const
 {
     glm::mat4 ret;
     if (isUseEntityCamera()) {
@@ -332,7 +319,7 @@ const glm::mat4 RenderTarget::getViewMatrix() const
     return ret;
 }
 
-void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
+void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
 {
     view = proj = glm::mat4(1.0f);
     if (isUseEntityCamera()) {
@@ -340,9 +327,7 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
             if (cam->hasComponent<CameraComponent>()) {
                 auto cc = cam->getComponent<CameraComponent>();
                 proj    = cc->getProjection();
-#if USE_VULKAN
-                // proj[1][1] *= -1;
-#endif
+                // proj[1][1] *= -1; // Vulkan Y-flip handled in projection matrix
                 view = cc->getView();
                 return;
             }
@@ -351,26 +336,13 @@ void RenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
 
     // use app camera
     proj = App::get()->camera.getProjectionMatrix();
-#if USE_VULKAN
-    // proj[1][1] *= -1; // Invert Y for Vulkan
-#endif
+    // proj[1][1] *= -1; // Invert Y for Vulkan (already done in camera)
     view = App::get()->camera.getViewMatrix();
 }
 
-void RenderTarget::addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system)
+void VulkanRenderTarget::addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system)
 {
     _materialSystems.push_back(system);
-}
-
-// Factory functions
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass)
-{
-    return std::make_shared<RenderTarget>(renderPass);
-}
-
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
-{
-    return std::make_shared<RenderTarget>(renderPass, frameBufferCount, extent);
 }
 
 } // namespace ya

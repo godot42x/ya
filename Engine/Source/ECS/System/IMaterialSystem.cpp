@@ -4,7 +4,7 @@
 #include "ECS/Component/CameraComponent.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Render.h"
-#include "Render/Core/RenderTarget.h"
+#include "Render/Core/IRenderTarget.h"
 
 
 #include "imgui.h"

@@ -8,7 +8,7 @@
 #include "ECS/Component/CameraComponent.h"
 
 #include "Math/Geometry.h"
-#include "Render/Core/RenderTarget.h"
+#include "Render/Core/IRenderTarget.h"
 
 #include "Render/Core/Swapchain.h"
 #include "Render/Mesh.h"

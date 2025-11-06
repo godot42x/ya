@@ -1,22 +1,26 @@
 #pragma once
 
-#include "ECS/Entity.h"
-#include "IRenderTarget.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/RenderPass.h"
 #include "Render/RenderDefines.h"
-
+#include "ECS/Entity.h"
 
 namespace ya
 {
 
 /**
- * @brief Base implementation of render target
- * This can be used directly or extended by platform-specific implementations
+ * @brief Vulkan-specific implementation of render target
+ * Manages framebuffers, attachments, and rendering operations for Vulkan
  */
-struct RenderTarget : public IRenderTarget
+struct VulkanRenderTarget : public IRenderTarget
 {
+    VulkanRenderTarget(const VulkanRenderTarget &)            = delete;
+    VulkanRenderTarget &operator=(const VulkanRenderTarget &) = delete;
+    VulkanRenderTarget(VulkanRenderTarget &&)                 = delete;
+    VulkanRenderTarget &operator=(VulkanRenderTarget &&)      = delete;
+
     IRenderPass *_renderPass       = nullptr;
     int          subpassRef        = -1; // TODO: a RT should related to a subpass
     uint32_t     _frameBufferCount = 0;
@@ -35,13 +39,10 @@ struct RenderTarget : public IRenderTarget
     bool    bEntityCamera = true; // Whether to use the camera from the entity
 
   public:
-    RenderTarget(IRenderPass *renderPass);
-    RenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
+    VulkanRenderTarget(IRenderPass *renderPass);
+    VulkanRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
 
-    virtual ~RenderTarget() override
-    {
-        destroy();
-    }
+    virtual ~VulkanRenderTarget() override;
 
     // IRenderTarget interface implementation
     void init() override;

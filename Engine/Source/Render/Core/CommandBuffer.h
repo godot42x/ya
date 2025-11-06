@@ -23,7 +23,7 @@ using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 /**
  * @brief Generic command buffer interface for recording GPU commands
  */
-class ICommandBuffer
+struct ICommandBuffer
 {
   public:
     virtual ~ICommandBuffer() = default;
