@@ -90,6 +90,12 @@ struct Material
     void        setLabel(const std::string &label) { _label = label; }
 
 
+    template <typename T>
+    T *as()
+    {
+        static_assert(std::is_base_of<Material, T>::value, "T must be derived from Material");
+        return static_cast<T *>(this);
+    }
 
   protected:
     Material() = default;
@@ -100,12 +106,19 @@ struct Material
 namespace detail
 {
 
+// struct MaterialStores
+// {
+//     std::vector<stdptr<Material>> materials;
+// };
+
 template <template <typename> typename HashFunctor>
 struct MaterialFactoryInternal
 {
     static MaterialFactoryInternal *_instance;
 
     std::unordered_map<uint32_t, std::vector<std::shared_ptr<Material>>> _materials;
+
+    uint32_t _materialCount = 0;
 
   public:
     static void                     init();
@@ -130,10 +143,10 @@ struct MaterialFactoryInternal
 
     template <typename T>
         requires std::is_base_of<Material, T>::value
-    T *createMaterial()
+    T *createMaterialImpl()
     {
         uint32_t typeID = getTypeID<T>();
-        auto     mat    = std::make_shared<T>();
+        auto     mat    = makeShared<T>();
         uint32_t index  = 0;
 
         auto it = _materials.find(typeID);
@@ -146,9 +159,11 @@ struct MaterialFactoryInternal
             index = it->second.size();
             _materials[typeID].push_back(mat);
         }
+        _materialCount += 1;
         // index: 该类型材质的第n个instance, 从0开始
-        static_cast<Material *>(mat.get())->setIndex(static_cast<int32_t>(index));
-        static_cast<Material *>(mat.get())->setTypeID(typeID);
+        auto typeRef = static_cast<Material *>(mat.get());
+        typeRef->setIndex(static_cast<int32_t>(index));
+        typeRef->setTypeID(typeID);
         return mat.get();
     }
 
@@ -156,7 +171,7 @@ struct MaterialFactoryInternal
         requires std::is_base_of<Material, T>::value
     T *createMaterial(std::string label)
     {
-        auto *mat = createMaterial<T>();
+        auto *mat = createMaterialImpl<T>();
         static_cast<Material *>(mat)->setLabel(label);
         return mat;
     }
@@ -168,19 +183,50 @@ struct MaterialFactoryInternal
         return _materials.at(getTypeID<T>());
     }
 
+    auto getAllMaterials() const { return _materials; }
 
-  private:
-    MaterialFactoryInternal() = default;
+
 
     template <typename T>
-    [[nodiscard]] constexpr uint32_t getTypeID() const
+    [[nodiscard]] static constexpr uint32_t getTypeID()
     {
         return HashFunctor<T>::value();
     }
+
+    // TODO: use a dirty marker system to delay destroy
+    // batch destroy for vector erase efficiency
+    void destroyMaterialImpl(Material *material)
+    {
+        uint32_t typeID = material->getTypeID();
+        int32_t  index  = material->getIndex();
+
+        auto it = _materials.find(typeID);
+        if (it != _materials.end())
+        {
+            auto &matVec = it->second;
+            if (index >= 0 && static_cast<size_t>(index) < matVec.size())
+            {
+                matVec.erase(matVec.begin() + index);
+                // Update indices of subsequent materials
+                for (size_t i = index; i < matVec.size(); ++i)
+                {
+                    matVec[i]->setIndex(static_cast<int32_t>(i));
+                }
+                _materialCount -= 1;
+            }
+        }
+    }
+
+    uint32_t getMaterialCount() const { return _materialCount; }
+
+  private:
+    MaterialFactoryInternal() = default;
 };
 } // namespace detail
 
 
 
 using MaterialFactory = detail::MaterialFactoryInternal<ya::TypeIndex>;
+
+
 } // namespace ya

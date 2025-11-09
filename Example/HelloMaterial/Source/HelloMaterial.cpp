@@ -37,16 +37,11 @@ void HelloMaterial::loadTextures()
 
 void HelloMaterial::createMaterials()
 {
-    materials.clear();
-
-#if !ONLY_2D
     // Create base materials
     auto *baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base0");
     auto *baseMaterial1      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base1");
     baseMaterial0->colorType = ya::SimpleMaterial::EColor::Normal;
     baseMaterial1->colorType = ya::SimpleMaterial::EColor::Texcoord;
-    materials.push_back(baseMaterial0);
-    materials.push_back(baseMaterial1);
 
     // Create unlit materials
     auto *unlitMaterial0 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit0");
@@ -92,9 +87,6 @@ void HelloMaterial::createMaterials()
     unlitMaterial2->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial2->setMixValue(0.5);
 
-    materials.push_back(unlitMaterial0);
-    materials.push_back(unlitMaterial1);
-    materials.push_back(unlitMaterial2);
 
     // Create ground plane material
     auto *unlitMaterial3 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit3");
@@ -112,13 +104,13 @@ void HelloMaterial::createMaterials()
     unlitMaterial3->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial3->setMixValue(0.5);
     unlitMaterial3->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
-    materials.push_back(unlitMaterial3);
-#endif
 }
 
 void HelloMaterial::createEntities(ya::Scene *scene)
 {
-    int baseMaterialCount = 2; // baseMaterial0 and baseMaterial1
+
+    auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
+    auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
     // Create ground plane
     if (auto plane = scene->createEntity("Plane")) {
@@ -126,9 +118,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
 
-        auto  umc            = plane->addComponent<ya::UnlitMaterialComponent>();
-        auto *unlitMaterial3 = materials.back();
-        umc->addMesh(cubeMesh.get(), static_cast<ya::UnlitMaterial *>(unlitMaterial3));
+        auto umc = plane->addComponent<ya::UnlitMaterialComponent>();
+        umc->addMesh(cubeMesh.get(), unlitMaterials.back().get()->as<ya::UnlitMaterial>());
     }
 
     // Create cube grid
@@ -137,8 +128,11 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     int   alpha  = (int)std::round(std::pow(count, 1.0 / 3.0));
     YA_CORE_DEBUG("Creating {} entities ({}x{}x{})", alpha * alpha * alpha, alpha, alpha, alpha);
 
-    int      index            = 0;
-    uint32_t maxMaterialIndex = materials.size() - 1;
+    uint32_t index = 0;
+
+    uint32_t maxMaterialIndex    = ya::MaterialFactory::get()->getMaterialCount() - 1;
+    uint32_t simpleMaterialCount = simpleMaterials.size();
+
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
             for (int k = 0; k < alpha; ++k) {
@@ -150,21 +144,22 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                     float scale = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc->setScale(glm::vec3(scale));
 
-                    int materialIndex = index % maxMaterialIndex;
+                    // random material
+                    uint32_t materialIndex = index % maxMaterialIndex;
                     ++index;
-                    if (materialIndex < baseMaterialCount) {
+                    if (materialIndex < simpleMaterialCount) {
                         // use base material
                         auto bmc = cube->addComponent<ya::SimpleMaterialComponent>();
-                        auto mat = static_cast<ya::SimpleMaterial *>(materials[materialIndex]);
+                        auto mat = simpleMaterials[materialIndex];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        bmc->addMesh(cubeMesh.get(), mat);
+                        bmc->addMesh(cubeMesh.get(), mat->as<ya::SimpleMaterial>());
                     }
                     else {
                         // use unlit material
                         auto umc = cube->addComponent<ya::UnlitMaterialComponent>();
-                        auto mat = static_cast<ya::UnlitMaterial *>(materials[materialIndex]);
+                        auto mat = unlitMaterials[materialIndex - simpleMaterialCount];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        umc->addMesh(cubeMesh.get(), mat);
+                        umc->addMesh(cubeMesh.get(), mat->as<ya::UnlitMaterial>());
                     }
                 }
             }

@@ -90,17 +90,20 @@ static DefaultAllocator defaultAllocator;
 namespace ya
 {
 
+extern uint32_t _index_counter;
+
 template <typename T>
 struct TypeIndex
 {
-    inline static uint32_t counter = 0;
-
     static uint32_t value()
     {
-        static uint32_t index = counter++;
+        static uint32_t index = _index_counter++;
         return index;
     }
 };
+
+// Definition of the static counter
+
 
 template <typename T>
 inline static const auto type_index_v = TypeIndex<T>::value();

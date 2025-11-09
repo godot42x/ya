@@ -10,7 +10,6 @@ struct HelloMaterial : public ya::App
 
     // Application-specific resources
     std::shared_ptr<ya::Mesh>   cubeMesh;
-    std::vector<ya::Material *> materials;
 
     void onInit(ya::AppDesc ci) override
     {
@@ -39,7 +38,6 @@ struct HelloMaterial : public ya::App
     {
         // Clean up application-specific resources before scene destruction
         cubeMesh.reset();
-        materials.clear(); // TODO: materials not managed by the scene
 
         Super::onSceneDestroy(scene);
     }

@@ -120,9 +120,6 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    // Materials (TODO: move to MaterialLibrary later)
-    std::vector<Material *> _materials;
-
     IRenderTarget *_rt = nullptr;
 
   public:
@@ -196,6 +193,9 @@ struct App
     bool                           onMouseButtonReleased(const MouseButtonReleasedEvent &event);
     bool                           onMouseScrolled(const MouseScrolledEvent &event);
     [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
+
+
+    void imcDrawMaterials();
 };
 
 

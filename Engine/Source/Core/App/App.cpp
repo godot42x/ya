@@ -913,66 +913,7 @@ void App::onRender(float dt)
                 tc->bDirty = true;
             }
         }
-
-
-
-        if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (uint32_t i = 0; i < _materials.size(); i++) {
-                auto mat   = _materials[i];
-                auto base  = ya::type_index_v<SimpleMaterial>;
-                auto unlit = ya::type_index_v<UnlitMaterial>;
-
-                ImGui::PushID(std::format("Material{}", i).c_str());
-                if (mat->getTypeID() == unlit) {
-                    auto *unlitMat = static_cast<UnlitMaterial *>(mat);
-                    if (ImGui::CollapsingHeader(std::format("Material{} ({})", i, unlitMat->getLabel()).c_str())) {
-                        bool bDirty = false;
-                        bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
-                        bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
-                        bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
-                        for (uint32_t i = 0; i < mat->_textures.size(); i++) {
-                            // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                            auto &tv    = mat->_textures[i];
-                            auto  label = tv.texture->getLabel();
-                            if (label.empty()) {
-                                label = tv.texture->getFilepath();
-                            }
-                            ImGui::Text("Texture %d: %s", i, label.c_str());
-                            bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
-                            bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
-                            bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
-                            static constexpr const auto pi = glm::pi<float>();
-                            bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
-
-
-                            int sampler = tv.sampler == TextureLibrary::getLinearSampler() ? 0 : 1;
-                            if (ImGui::Combo(std::format("Sampler##{}", i).c_str(), &sampler, "linear\0nearest\0\0")) {
-                                // YA_CORE_INFO("Change default sampler to {}", (sampler == 0) ? "linear" : "nearest");
-                                tv.sampler = (sampler == 0) ? TextureLibrary::getLinearSampler() : TextureLibrary::getNearestSampler();
-                                bDirty     = true;
-                            }
-                            // }
-                        }
-                        if (bDirty) {
-                            unlitMat->setParamDirty(true);
-                        }
-                    }
-                }
-                else if (mat->getTypeID() == base)
-                {
-                    auto *baseMat = static_cast<SimpleMaterial *>(mat);
-                    if (ImGui::CollapsingHeader(std::format("Material{} ({})", i, baseMat->getLabel()).c_str()))
-                    {
-                        // use push constant to change color type, no need to mark dirty
-                        int colorType = static_cast<int>(baseMat->colorType);
-                        if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
-                            baseMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
-                        }
-                    }
-                }
-                ImGui::PopID();
-            }
-        }
+        imcDrawMaterials();
     }
     imgui.endFrame();
     imgui.render();
@@ -1091,6 +1032,66 @@ bool App::onMouseScrolled(const MouseScrolledEvent &event)
     // up is +, and down is -, up is close so -=
     cc->_distance = cc->_distance -= event._offsetY * sensitivity;
     return false;
+}
+
+void App::imcDrawMaterials()
+{
+    if (!ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    uint32_t materialIdx = 0;
+
+    auto simpleMaterials = MaterialFactory::get()->getMaterials<SimpleMaterial>();
+    for (auto &mat : simpleMaterials) {
+        auto simpleMat = mat->as<SimpleMaterial>();
+        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, simpleMat->getLabel()).c_str())) {
+            int colorType = static_cast<int>(simpleMat->colorType);
+            if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
+                simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
+            }
+        }
+        ImGui::PopID();
+        materialIdx += 1;
+    }
+    auto unlitMaterials = MaterialFactory::get()->getMaterials<UnlitMaterial>();
+
+    // auto type1 = MaterialFactory::getTypeID<UnlitMaterial>();
+    // auto type2 = MaterialFactory::getTypeID<SimpleMaterial>();
+    // ImGui::Text("Count %d, %d", simpleMaterials.size(), unlitMaterials.size());
+    // ImGui::Text("TypeID %zu, %zu", type1, type2);
+
+
+    for (auto &mat : unlitMaterials) {
+        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+        auto unlitMat = mat->as<UnlitMaterial>();
+        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, unlitMat->getLabel()).c_str())) {
+            bool bDirty = false;
+            bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
+            bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
+            bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
+            for (uint32_t i = 0; i < mat->_textures.size(); i++) {
+                // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                auto &tv    = mat->_textures[i];
+                auto  label = tv.texture->getLabel();
+                if (label.empty()) {
+                    label = tv.texture->getFilepath();
+                }
+                ImGui::Text("Texture %d: %s", i, label.c_str());
+                bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+                static constexpr const auto pi = glm::pi<float>();
+                bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+            }
+            if (bDirty) {
+                unlitMat->setParamDirty(true);
+            }
+        }
+        ImGui::PopID();
+        materialIdx += 1;
+    }
 }
 
 

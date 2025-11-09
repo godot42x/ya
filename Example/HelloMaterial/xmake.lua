@@ -1,7 +1,6 @@
 target("HelloMaterial")
 do
     set_kind("binary")
-    add_files("src/*.cpp")
     add_files("Source/*.cpp")
     -- add_rules("SourceFiles")
     add_deps("ya")

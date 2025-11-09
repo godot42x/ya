@@ -1,7 +1,6 @@
 target("Sandbox")
 do
     set_kind("binary")
-    add_files("src/*.cpp")
     add_files("Source/*.cpp")
     -- add_rules("SourceFiles")
     -- if is_plat("windows") and is_kind("shared") then
