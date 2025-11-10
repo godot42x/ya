@@ -2,8 +2,9 @@
 
 #pragma once
 #include "Core/Base.h"
-#include "Render/Core/Buffer.h"
 #include "Platform/Render/Vulkan/VulkanUtils.h"
+#include "Render/Core/Buffer.h"
+
 
 #include <vulkan/vulkan.h>
 
@@ -32,12 +33,12 @@ struct VulkanBuffer : public ya::IBuffer
 
     VulkanBuffer(decltype(_dummy), VulkanRender *render, const BufferCreateInfo &ci)
     {
-        _render      = render;
-        _usageFlags  = toVk(ci.usage);
-        name         = ci.label;
+        _render         = render;
+        _usageFlags     = toVk(ci.usage);
+        name            = ci.label;
         auto vkMemProps = toVk(ci.memProperties);
-        bHostVisible = vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        _size        = ci.size;
+        bHostVisible    = vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        _size           = ci.size;
 
         if (ci.data.has_value()) {
             createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), vkMemProps);
@@ -61,7 +62,7 @@ struct VulkanBuffer : public ya::IBuffer
     bool               writeData(const void *data, uint32_t size = 0, uint32_t offset = 0) override;
     bool               flush(uint32_t size = 0, uint32_t offset = 0) override;
     void               unmap() override;
-    void              *getHandle() const override { return (void *)(uintptr_t)_handle; }
+    BufferHandle       getHandle() const override { return BufferHandle(_handle); }
     uint32_t           getSize() const override { return static_cast<uint32_t>(_size); }
     bool               isHostVisible() const override { return bHostVisible; }
     const std::string &getName() const override { return name; }

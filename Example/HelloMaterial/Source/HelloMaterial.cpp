@@ -10,6 +10,7 @@
 
 #include "Math/Geometry.h"
 
+#include "Render/Material/LitMaterial.h"
 #include "Render/Mesh.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/Scene.h"
@@ -104,6 +105,9 @@ void HelloMaterial::createMaterials()
     unlitMaterial3->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial3->setMixValue(0.5);
     unlitMaterial3->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
+
+
+    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
 }
 
 void HelloMaterial::createEntities(ya::Scene *scene)

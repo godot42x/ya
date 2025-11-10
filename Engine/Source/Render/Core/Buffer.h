@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "DescriptorSet.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -100,13 +101,13 @@ class IBuffer
     virtual void unmap() = 0;
 
     // Get native handle (backend-specific)
-    virtual void *getHandle() const = 0;
+    virtual BufferHandle getHandle() const = 0;
 
     // Get typed native handle
     template <typename T>
     T getHandleAs() const
     {
-        return static_cast<T>(getHandle());
+        return getHandle().as<T>();
     }
 
     // Get buffer size

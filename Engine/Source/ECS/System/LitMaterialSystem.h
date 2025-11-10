@@ -26,7 +26,6 @@ static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 struct LitMaterialSystem : public IMaterialSystem
 {
 
-
     struct FrameUBO
     {
         glm::mat4 projection{1.f};
@@ -35,6 +34,8 @@ struct LitMaterialSystem : public IMaterialSystem
         alignas(4) uint32_t frameIndex = 0;
         alignas(4) float time;
     };
+
+    using frame_ubo_t = FrameUBO;
 
     struct ModelPushConstant
     {

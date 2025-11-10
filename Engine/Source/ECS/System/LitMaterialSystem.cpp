@@ -227,7 +227,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
-    _pipeline->bind(cmdBuf->getHandle());
+    cmdBuf->bindPipeline(_pipeline.get());
 
     uint32_t width  = rt->getFrameBuffer()->getWidth();
     uint32_t height = rt->getFrameBuffer()->getHeight();
@@ -256,65 +256,65 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     for (entt::entity entity : view)
     {
-        // const auto &[tag, umc, tc] = view.get(entity);
-        // for (const auto &[material, meshIDs] : umc.getMaterial2MeshIDs()) {
+        const auto &[tag, lmc, tc] = view.get(entity);
+        for (const auto &[material, meshIDs] : lmc.getMaterial2MeshIDs()) {
 
-        //     _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
-        //     if (!material || material->getIndex() < 0) {
-        //         YA_CORE_WARN("default material for none or error material");
-        //         continue;
-        //     }
+            _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
+            if (!material || material->getIndex() < 0) {
+                YA_CORE_WARN("default material for none or error material");
+                continue;
+            }
 
-        //     // update each material instance's descriptor set if dirty
-        //     uint32_t            materialID = material->getIndex();
-        //     DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
-        //     DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
+            // update each material instance's descriptor set if dirty
+            uint32_t            materialID = material->getIndex();
+            DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
+            DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
 
-        //     // update the resource set when:
-        //     // 1. this has updated, multiple entity using the same material(not material instance?)
-        //     // 2. material count changed
-        //     // 3. this material's resources(such as texture) changed(dirty)
-        //     if (!updatedMaterial[materialID]) {
-        //         if (bShouldForceUpdateMaterial || material->isParamDirty())
-        //         {
-        //             updateMaterialParamDS(paramDS, material);
-        //             material->setParamDirty(false);
-        //         }
-        //         if (bShouldForceUpdateMaterial || material->isResourceDirty())
-        //         {
-        //             updateMaterialResourceDS(resourceDS, material);
-        //             material->setResourceDirty(false);
-        //         }
-        //         updatedMaterial[materialID] = true;
-        //     }
+            // update the resource set when:
+            // 1. this has updated, multiple entity using the same material(not material instance?)
+            // 2. material count changed
+            // 3. this material's resources(such as texture) changed(dirty)
+            if (!updatedMaterial[materialID]) {
+                if (bShouldForceUpdateMaterial || material->isParamDirty())
+                {
+                    updateMaterialParamDS(paramDS, material);
+                    material->setParamDirty(false);
+                }
+                if (bShouldForceUpdateMaterial || material->isResourceDirty())
+                {
+                    updateMaterialResourceDS(resourceDS, material);
+                    material->setResourceDirty(false);
+                }
+                updatedMaterial[materialID] = true;
+            }
 
-        //     // bind descriptor set
-        //     std::vector<DescriptorSetHandle> descSets{
-        //         _frameDS,
-        //         _materialParamDSs[materialID],
-        //         _materialResourceDSs[materialID],
-        //     };
-        //     cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
+            // bind descriptor set
+            std::vector<DescriptorSetHandle> descSets{
+                _frameDS,
+                _materialParamDSs[materialID],
+                _materialResourceDSs[materialID],
+            };
+            cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
 
-        //     // update push constant
-        //     material::ModelPushConstant pushConst{
-        //         .modelMatrix = tc.getTransform(),
-        //     };
-        //     cmdBuf->pushConstants(_pipelineLayout->getHandle(),
-        //                           EShaderStage::Vertex,
-        //                           0,
-        //                           sizeof(material::ModelPushConstant),
-        //                           &pushConst);
+            // update push constant
+            material::ModelPushConstant pushConst{
+                .modelMatrix = tc.getTransform(),
+            };
+            cmdBuf->pushConstants(_pipelineLayout->getHandle(),
+                                  EShaderStage::Vertex,
+                                  0,
+                                  sizeof(material::ModelPushConstant),
+                                  &pushConst);
 
-        //     // draw each mesh
-        //     for (const auto &meshIndex : meshIDs)
-        //     {
-        //         auto mesh = umc.getMesh(meshIndex);
-        //         if (mesh) {
-        //             mesh->draw(cmdBuf);
-        //         }
-        //     }
-        // }
+            // draw each mesh
+            for (const auto &meshIndex : meshIDs)
+            {
+                auto mesh = lmc.getMesh(meshIndex);
+                if (mesh) {
+                    mesh->draw(cmdBuf);
+                }
+            }
+        }
     }
 }
 
@@ -329,7 +329,7 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     glm::mat4 view;
     rt->getViewAndProjMatrix(view, proj);
 
-    FrameUBO ubo{
+    frame_ubo_t ubo{
         .projection = proj,
         .view       = view,
         .resolution = {
@@ -342,7 +342,7 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 
     _frameUBO->writeData(&ubo, sizeof(ubo), 0);
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(LitMaterialSystem::FrameUBO)));
+    DescriptorBufferInfo bufferInfo(_frameUBO->getHandle(), 0, static_cast<uint64_t>(sizeof(frame_ubo_t)));
 
     render->getDescriptorHelper()
         ->updateDescriptorSets(
@@ -356,6 +356,14 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
                     1),
             },
             {});
+}
+
+void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material)
+{
+}
+
+void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
+{
 }
 
 } // namespace ya

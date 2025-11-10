@@ -38,6 +38,11 @@ struct TagComponent : public IComponent
     TagComponent()                     = default;
     TagComponent(const TagComponent &) = default;
     TagComponent(std::string tag) : _tag(std::move(tag)) {}
+
+  public:
+
+    std::string getTag() const { return _tag; }
+    void        setTag(const std::string &tag) { _tag = tag; }
 };
 
 
