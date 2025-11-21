@@ -4,6 +4,7 @@
 
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
+#include "utility.cc/ranges.h"
 
 #include <algorithm>
 #include <limits>
@@ -165,9 +166,9 @@ void VulkanSwapChain::selectSurfaceFormat(const SwapchainCreateInfo &ci)
     _surfaceFormat     = preferred.format;
     _surfaceColorSpace = preferred.colorSpace;
 
-    YA_CORE_INFO("Using chosen surface format: {} with color space: {}",
-                 std::to_string(_surfaceFormat),
-                 std::to_string(_surfaceColorSpace));
+    YA_CORE_TRACE("Using chosen surface format: {} with color space: {}",
+                  std::to_string(_surfaceFormat),
+                  std::to_string(_surfaceColorSpace));
 }
 
 // Helper: Select present mode
@@ -235,17 +236,23 @@ bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &v
     // Get swap chain images
     uint32_t imageCount = 0;
     vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, nullptr);
-    m_images.resize(imageCount);
-    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, m_images.data());
+    _images.resize(imageCount);
+    vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, _images.data());
 
-    YA_CORE_INFO("Created swapchain success:{} with [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
-                 (uintptr_t)m_swapChain,
-                 imageCount,
-                 std::to_string(_surfaceFormat),
-                 std::to_string(_surfaceColorSpace),
-                 std::to_string(_presentMode),
-                 vkCI.imageExtent.width,
-                 vkCI.imageExtent.height);
+    YA_CORE_TRACE("Created swapchain success:{} with [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
+                  (uintptr_t)m_swapChain,
+                  imageCount,
+                  std::to_string(_surfaceFormat),
+                  std::to_string(_surfaceColorSpace),
+                  std::to_string(_presentMode),
+                  vkCI.imageExtent.width,
+                  vkCI.imageExtent.height);
+    for (auto &&[i, img] : _images | ut::enumerate) {
+        _render->setDebugObjectName(
+            VK_OBJECT_TYPE_IMAGE,
+            img,
+            std::format("SwapChain_Image_{}", i).c_str());
+    }
 
     return true;
 }
@@ -305,7 +312,11 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     }
 
     VkSwapchainKHR oldSwapchain = m_swapChain;
-    cleanup();
+    // leave the old swapchain for ci
+    // Validation Error: [ VUID-VkSwapchainCreateInfoKHR-oldSwapchain-parameter ] | MessageID = 0x9104e0a4
+    // vkCreateSwapchainKHR(): pCreateInfo->oldSwapchain Invalid VkSwapchainKHR Object 0xd000000000d.
+    // The Vulkan spec states: If oldSwapchain is not VK_NULL_HANDLE, oldSwapchain must be a valid VkSwapchainKHR handle (https://vulkan.lunarg.com/doc/view/1.4.321.1/windows/antora/spec/latest/chapters/VK_KHR_surface/wsi.html#VUID-VkSwapchainCreateInfoKHR-oldSwapchain-parameter)
+    // cleanup();
 
     // Select swapchain parameters
     selectSurfaceFormat(ci);
@@ -343,6 +354,11 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     // Create swapchain and retrieve images
     if (!createSwapchainAndImages(vkSwapchainCI)) {
         return false;
+    }
+
+    // Destroy old swapchain after successfully creating the new one
+    if (oldSwapchain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(device, oldSwapchain, _render->getAllocator());
     }
 
     // Set debug name

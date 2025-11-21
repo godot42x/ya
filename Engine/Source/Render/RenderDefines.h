@@ -705,7 +705,8 @@ struct RenderCreateInfo
 
 struct ImageCreateInfo
 {
-    EFormat::T format = EFormat::Undefined;
+    std::string label  = "None";
+    EFormat::T  format = EFormat::Undefined;
     struct
     {
         uint32_t width  = 0;

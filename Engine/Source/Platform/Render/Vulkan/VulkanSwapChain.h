@@ -35,7 +35,7 @@ struct VulkanSwapChain : public ISwapchain
     VkSwapchainKHR                m_swapChain = VK_NULL_HANDLE;
     VulkanSwapChainSupportDetails _supportDetails;
 
-    std::vector<VkImage> m_images;
+    std::vector<VkImage> _images;
 
     VkFormat         _surfaceFormat     = VK_FORMAT_UNDEFINED;
     VkColorSpaceKHR  _surfaceColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -89,7 +89,7 @@ struct VulkanSwapChain : public ISwapchain
 
     // Getters (Vulkan-specific, kept for backward compatibility)
     [[nodiscard]] VkSwapchainKHR   getSwapchain() const { return m_swapChain; }
-    [[nodiscard]] uint32_t         getImageSize() const { return static_cast<uint32_t>(m_images.size()); }
+    [[nodiscard]] uint32_t         getImageSize() const { return static_cast<uint32_t>(_images.size()); }
     [[nodiscard]] VkFormat         getSurfaceFormat() const { return _surfaceFormat; }
     [[nodiscard]] VkPresentModeKHR getPresentMode() const { return _presentMode; }
     [[nodiscard]] uint32_t         getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
@@ -112,7 +112,7 @@ struct VulkanSwapChain : public ISwapchain
 
     uint32_t getImageCount() const override
     {
-        return static_cast<uint32_t>(m_images.size());
+        return static_cast<uint32_t>(_images.size());
     }
 
     // ISwapchain interface: VSync control
@@ -133,7 +133,7 @@ struct VulkanSwapChain : public ISwapchain
 
     // Vulkan-specific getters (for backward compatibility)
     VkSwapchainKHR              getVkHandle() const { return m_swapChain; }
-    const std::vector<VkImage> &getVkImages() const { return m_images; }
+    const std::vector<VkImage> &getVkImages() const { return _images; }
     VkExtent2D                  getVkExtent() const
     {
         return {

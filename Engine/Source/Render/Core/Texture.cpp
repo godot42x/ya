@@ -5,12 +5,12 @@
 #include "stb/stb_image.h"
 #include <cstddef>
 
-#include <vulkan/vulkan_core.h>
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
 #include "Platform/Render/Vulkan/VulkanImageView.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
+#include <vulkan/vulkan_core.h>
 
 
 
@@ -30,7 +30,7 @@ Texture::Texture(const std::string &filepath)
         YA_CORE_ERROR("failed to load texture image! {}", filepath.data());
         return;
     }
-    
+
     _filepath = filepath;
     _channels = 4; // Force RGBA
     createImage(pixels, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
@@ -46,20 +46,20 @@ Texture::Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<ui
     YA_CORE_TRACE("Created texture from data({}x{})", width, height);
 }
 
-Texture::Texture(uint32_t width, uint32_t height, const void* data, size_t dataSize, EFormat::T format)
+Texture::Texture(uint32_t width, uint32_t height, const void *data, size_t dataSize, EFormat::T format)
 {
     _format = format;
     // Derive channels from format
     switch (format) {
-        case EFormat::R8G8B8A8_UNORM:
-        case EFormat::B8G8R8A8_UNORM:
-            _channels = 4;
-            break;
-        default:
-            _channels = 4; // Default
-            break;
+    case EFormat::R8G8B8A8_UNORM:
+    case EFormat::B8G8R8A8_UNORM:
+        _channels = 4;
+        break;
+    default:
+        _channels = 4; // Default
+        break;
     }
-    
+
     createImage(data, width, height, format);
     YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {})", width, height, (int)format);
 }
@@ -78,26 +78,27 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
     _height = texHeight;
     _format = format;
 
-    auto         vkRender  = ya::App::get()->getRender<VulkanRender>();
-    
+    auto vkRender = ya::App::get()->getRender<VulkanRender>();
+
     // Calculate image size based on format
     size_t pixelSize = 4; // Default RGBA
     switch (format) {
-        case EFormat::R8G8B8A8_UNORM:
-        case EFormat::B8G8R8A8_UNORM:
-            pixelSize = 4;
-            break;
-        default:
-            pixelSize = 4;
-            break;
+    case EFormat::R8G8B8A8_UNORM:
+    case EFormat::B8G8R8A8_UNORM:
+        pixelSize = 4;
+        break;
+    default:
+        pixelSize = 4;
+        break;
     }
-    
+
     VkDeviceSize imageSize = pixelSize * texWidth * texHeight;
 
     // Create Vulkan image (will be stored as IImage*)
     auto vkImage = VulkanImage::create(
         vkRender,
         ya::ImageCreateInfo{
+            .label  = std::format("Texture_Image_{}", _label),
             .format = format,
             .extent = {
                 .width  = texWidth,

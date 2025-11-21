@@ -735,6 +735,7 @@ bool VulkanRender::begin(int32_t *outImageIndex)
         vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci
+        YA_CORE_INFO("Swapchain out of date, recreating...");
         bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
         if (!ok) {
             YA_CORE_ERROR("Failed to recreate swapchain");
@@ -791,6 +792,7 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
         });
 
     if (result == VK_SUBOPTIMAL_KHR) {
+        YA_CORE_INFO("Swapchain suboptimal, recreating...");
         // recreate swapchain
         VK_CALL(vkDeviceWaitIdle(this->getDevice()));
         bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());

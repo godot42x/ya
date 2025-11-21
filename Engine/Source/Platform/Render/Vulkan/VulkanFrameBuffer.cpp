@@ -48,7 +48,7 @@ bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> i
         YA_CORE_ERROR("Failed to create framebuffer: {}", result);
         return false;
     }
-    YA_CORE_INFO("Created framebuffer: {} with {} attachments", (uintptr_t)_framebuffer, _imageViews.size());
+    YA_CORE_TRACE("Created framebuffer: {} with {} attachments", (uintptr_t)_framebuffer, _imageViews.size());
 
     return true;
 }

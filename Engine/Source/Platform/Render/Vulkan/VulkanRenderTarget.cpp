@@ -110,6 +110,7 @@ void VulkanRenderTarget::recreate()
                     auto ptr = VulkanImage::create(
                         vkRender,
                         ImageCreateInfo{
+                            .label  = std::format("RT_FrameBuffer_{}_Attachment_{}", i, j),
                             .format = attachment.format,
                             .extent = {
                                 .width  = static_cast<uint32_t>(_extent.width),
