@@ -34,9 +34,6 @@ struct LitMaterialSystem : public IMaterialSystem
         alignas(4) uint32_t frameIndex = 0;
         alignas(4) float time;
     };
-
-    using frame_ubo_t = FrameUBO;
-
     struct ModelPushConstant
     {
         glm::mat4 modelMat;
@@ -46,6 +43,21 @@ struct LitMaterialSystem : public IMaterialSystem
         glm::vec3 position;
         glm::vec2 texCoord0;
         glm::vec3 normal;
+    };
+
+
+    struct alignas(16) LightUBO
+    {
+        glm::vec3 lightDirection   = glm::vec3(-0.5f, -1.0f, -0.3f);
+        float     lightIntensity   = 1.0f;
+        glm::vec3 lightColor       = glm::vec3(1.0f);
+        float     ambientIntensity = 0.1f;
+        glm::vec3 ambientColor     = glm::vec3(0.1f);
+    };
+
+    struct alignas(16) ObjectUBO
+    {
+        glm::vec3 objectColor = glm::vec3(1.0f);
     };
 
 
@@ -59,16 +71,24 @@ struct LitMaterialSystem : public IMaterialSystem
 
 
 
+    // set 0, contains the frame UBO and lighting UBO
     std::shared_ptr<IDescriptorPool> _frameDSP;
     DescriptorSetHandle              _frameDS;
     std::shared_ptr<IBuffer>         _frameUBO;
+    std::shared_ptr<IBuffer>         _lightUBO;
+
+
 
     // material ubo's, dynamically extend
-    uint32_t                              _lastMaterialDSCount = 0;
-    std::shared_ptr<IDescriptorPool>      _materialDSP;
-    std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
-    std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
-    std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
+    uint32_t                         _lastMaterialDSCount = 0;
+    std::shared_ptr<IDescriptorPool> _materialDSP;
+
+    // object ubo
+    std::vector<std::shared_ptr<IBuffer>> _materialObjectUBOs;
+    std::vector<DescriptorSetHandle>      _materialObjectDSs;
+    // std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
+    // std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
+    // std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
     std::string _ctxEntityDebugStr;
 
@@ -80,6 +100,7 @@ struct LitMaterialSystem : public IMaterialSystem
     {
         IMaterialSystem::onRenderGUI();
     }
+
 
 
   private:

@@ -2,10 +2,14 @@
 #include "Core/App/App.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Swapchain.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
+
+
 #include "Scene/Scene.h"
 
 
@@ -189,7 +193,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 1,
+                    .descriptorCount = 2, // frame ubo + lighting ubo
                 },
             },
         });
@@ -203,11 +207,19 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
     _frameUBO = IBuffer::create(
         render,
         ya::BufferCreateInfo{
+            .label         = "Lit_Frame_UBO",
             .usage         = ya::EBufferUsage::UniformBuffer,
             .size          = sizeof(LitMaterialSystem::FrameUBO),
             .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-            .label         = "Unlit_Frame_UBO",
 
+        });
+    _lightUBO = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .label         = "Lit_Light_UBO",
+            .usage         = ya::EBufferUsage::UniformBuffer,
+            .size          = sizeof(LitMaterialSystem::LightUBO),
+            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
         });
 }
 
@@ -244,7 +256,6 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     updateFrameDS(rt);
 
-    //
     bool     bShouldForceUpdateMaterial = false;
     uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<LitMaterial>();
     if (materialCount > _lastMaterialDSCount) {
@@ -252,7 +263,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         bShouldForceUpdateMaterial = true;
     }
 
-    std::vector<bool> updatedMaterial(materialCount);
+    std::vector<int> updatedMaterial(materialCount, 0);
 
     for (entt::entity entity : view)
     {
@@ -266,45 +277,41 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             }
 
             // update each material instance's descriptor set if dirty
-            uint32_t            materialID = material->getIndex();
-            DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
-            DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
+            uint32_t materialIndex = material->getIndex();
+            // DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
+            // DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
+            DescriptorSetHandle objectDS = _materialObjectDSs[materialIndex];
+
+            // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
 
             // update the resource set when:
             // 1. this has updated, multiple entity using the same material(not material instance?)
             // 2. material count changed
             // 3. this material's resources(such as texture) changed(dirty)
-            if (!updatedMaterial[materialID]) {
-                if (bShouldForceUpdateMaterial || material->isParamDirty())
+            if (!updatedMaterial[materialIndex]) {
+                if (bShouldForceUpdateMaterial || material->isDirty())
                 {
-                    updateMaterialParamDS(paramDS, material);
-                    material->setParamDirty(false);
                 }
-                if (bShouldForceUpdateMaterial || material->isResourceDirty())
-                {
-                    updateMaterialResourceDS(resourceDS, material);
-                    material->setResourceDirty(false);
-                }
-                updatedMaterial[materialID] = true;
+                updatedMaterial[materialIndex] = true;
             }
 
             // bind descriptor set
-            std::vector<DescriptorSetHandle> descSets{
-                _frameDS,
-                _materialParamDSs[materialID],
-                _materialResourceDSs[materialID],
-            };
-            cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
+            // std::vector<DescriptorSetHandle> descSets{
+            //     _frameDS,
+            //     _materialParamDSs[materialID],
+            //     _materialResourceDSs[materialID],
+            // };
+            // cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
 
-            // update push constant
-            material::ModelPushConstant pushConst{
-                .modelMatrix = tc.getTransform(),
-            };
-            cmdBuf->pushConstants(_pipelineLayout->getHandle(),
-                                  EShaderStage::Vertex,
-                                  0,
-                                  sizeof(material::ModelPushConstant),
-                                  &pushConst);
+            // // update push constant
+            // material::ModelPushConstant pushConst{
+            //     .modelMatrix = tc.getTransform(),
+            // };
+            // cmdBuf->pushConstants(_pipelineLayout->getHandle(),
+            //                       EShaderStage::Vertex,
+            //                       0,
+            //                       sizeof(material::ModelPushConstant),
+            //                       &pushConst);
 
             // draw each mesh
             for (const auto &meshIndex : meshIDs)
@@ -329,7 +336,7 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     glm::mat4 view;
     rt->getViewAndProjMatrix(view, proj);
 
-    frame_ubo_t ubo{
+    FrameUBO uFrame{
         .projection = proj,
         .view       = view,
         .resolution = {
@@ -339,12 +346,22 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
     };
+    LightUBO uLit{
+        .lightDirection   = glm::vec3(-0.5f, -1.0f, -0.3f),
+        .lightIntensity   = 1.0f,
+        .lightColor       = glm::vec3(1.0f),
+        .ambientIntensity = 0.1f,
+        .ambientColor     = glm::vec3(0.1f),
+    };
 
-    _frameUBO->writeData(&ubo, sizeof(ubo), 0);
+    _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
+    _lightUBO->writeData(&uLit, sizeof(LightUBO), 0);
 
-    DescriptorBufferInfo bufferInfo(_frameUBO->getHandle(), 0, static_cast<uint64_t>(sizeof(frame_ubo_t)));
+    DescriptorBufferInfo frameBufferInfo(_frameUBO->getHandle(), 0, sizeof(FrameUBO));
+    DescriptorBufferInfo lightBufferInfo(_lightUBO->getHandle(), 0, sizeof(LightUBO));
 
-    render->getDescriptorHelper()
+    render
+        ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
                 IDescriptorSetHelper::genBufferWrite(
@@ -352,7 +369,14 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
                     0,
                     0,
                     EPipelineDescriptorType::UniformBuffer,
-                    &bufferInfo,
+                    &frameBufferInfo,
+                    1),
+                IDescriptorSetHelper::genBufferWrite(
+                    _frameDS,
+                    1,
+                    0,
+                    EPipelineDescriptorType::UniformBuffer,
+                    &lightBufferInfo,
                     1),
             },
             {});
@@ -360,10 +384,74 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 
 void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material)
 {
+    // auto render = getRender();
+    // YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
+
+
+    // auto &params = material->uMaterial;
+    // // update param from texture
+    // const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
+    // if (tv0) {
+    //     Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
+    // }
+    // const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+    // if (tv1) {
+    //     Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
+    // }
+
+    // auto paramUBO = _materialParamsUBOs[material->getIndex()].get();
+    // paramUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
+
+    // DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::UnlitMaterialUBO)));
+
+    // render
+    //     ->getDescriptorHelper()
+    //     ->updateDescriptorSets(
+    //         {
+    //             IDescriptorSetHelper::genBufferWrite(
+    //                 ds,
+    //                 0,
+    //                 0,
+    //                 EPipelineDescriptorType::UniformBuffer,
+    //                 &bufferInfo,
+    //                 1),
+    //         },
+    //         {});
 }
 
 void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
 {
+    // auto render = getRender();
+
+
+    // YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
+    // auto &params = material->uMaterial;
+    // // TODO: not texture and default texture?
+    // // update param from texture
+    // const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
+    // const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+
+    // auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
+    // resourceUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
+
+    // DescriptorImageInfo imageInfo0(
+    //     SamplerHandle(tv0->sampler->getHandle()),
+    //     tv0->texture->getImageViewHandle(),
+    //     EImageLayout::ShaderReadOnlyOptimal);
+    // DescriptorImageInfo imageInfo1(
+    //     SamplerHandle(tv1->sampler->getHandle()),
+    //     tv1->texture->getImageViewHandle(),
+    //     EImageLayout::ShaderReadOnlyOptimal);
+
+
+    // render
+    //     ->getDescriptorHelper()
+    //     ->updateDescriptorSets(
+    //         {
+    //             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
+    //             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
+    //         }
+    //         {});
 }
 
 } // namespace ya

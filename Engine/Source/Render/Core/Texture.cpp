@@ -83,7 +83,6 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
     // Calculate image size based on format
     size_t pixelSize = 4; // Default RGBA
     switch (format) {
-    case EFormat::R8G8B8A8_UNORM:
     case EFormat::B8G8R8A8_UNORM:
         pixelSize = 4;
         break;
@@ -119,11 +118,11 @@ void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHei
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
         vkRender,
         ya::BufferCreateInfo{
+            .label         = std::format("StagingBuffer_Texture_{}", _filepath),
             .usage         = EBufferUsage::TransferSrc, // from buffer to image
             .data          = (void *)pixels,
             .size          = static_cast<uint32_t>(imageSize),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
-            .label         = std::format("StagingBuffer_Texture_{}", _filepath),
         });
 
     // TODO: Abstract this - Texture should not directly use Vulkan types

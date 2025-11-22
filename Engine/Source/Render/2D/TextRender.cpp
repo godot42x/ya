@@ -88,10 +88,10 @@ void TextRender::init(IRender *render, IRenderPass *renderPass)
     _frameUBOBuffer = IBuffer::create(
         render,
         BufferCreateInfo{
+            .label         = "TextRender_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
-            .label         = "TextRender_FrameUBO",
         });
 
     // Create pipeline layout
@@ -163,10 +163,10 @@ void TextRender::init(IRender *render, IRenderPass *renderPass)
     _vertexBuffer = IBuffer::create(
         render,
         BufferCreateInfo{
+            .label         = "TextRender_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer,
             .size          = sizeof(Vertex) * MAX_TEXT_VERTICES,
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
-            .label         = "TextRender_VertexBuffer",
         });
 
     _vertices.reserve(MAX_TEXT_VERTICES);

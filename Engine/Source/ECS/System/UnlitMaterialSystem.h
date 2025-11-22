@@ -6,6 +6,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/Texture.h"
 #include "Render/RenderDefines.h"
 
 
@@ -21,6 +22,22 @@ static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
 struct UnlitMaterialSystem : public IMaterialSystem
 {
+
+    struct FrameUBO
+    {
+        glm::mat4 projection{1.f};
+        glm::mat4 view{1.f};
+        alignas(8) glm::ivec2 resolution;
+        alignas(4) uint32_t frameIndex = 0;
+        alignas(4) float time;
+    };
+    struct PushConstant
+    {
+        alignas(16) glm::mat4 modelMatrix{1.0f};
+        alignas(16) glm::mat3 normalMatrix{1.0f};
+    };
+
+
     GraphicsPipelineCreateInfo         _pipelineDesc;
     std::shared_ptr<IGraphicsPipeline> _pipelineOwner;
     IGraphicsPipeline                 *_pipeline       = nullptr;

@@ -11,6 +11,7 @@
 #include "Math/Geometry.h"
 
 #include "Render/Material/LitMaterial.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/Scene.h"

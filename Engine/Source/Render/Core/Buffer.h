@@ -61,11 +61,11 @@ inline EMemoryProperty operator&(EMemoryProperty a, EMemoryProperty b)
 
 struct BufferCreateInfo
 {
+    std::string           label;
     EBufferUsage          usage;
     std::optional<void *> data = std::nullopt;
     uint32_t              size;
     EMemoryProperty       memProperties;
-    std::string           label;
 };
 
 // Generic buffer interface

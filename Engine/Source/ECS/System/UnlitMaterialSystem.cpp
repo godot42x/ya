@@ -9,9 +9,11 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Swapchain.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Render/Material/UnlitMaterial.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
+
 
 
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -35,7 +37,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
-                .size       = sizeof(material::ModelPushConstant),
+                .size       = sizeof(UnlitMaterialSystem::PushConstant),
                 .stageFlags = EShaderStage::Vertex,
             },
         },
@@ -217,10 +219,10 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     _frameUBO = ya::IBuffer::create(
         render,
         ya::BufferCreateInfo{
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(ya::FrameUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             .label         = "Unlit_Frame_UBO",
+            .usage         = ya::EBufferUsage::UniformBuffer,
+            .size          = sizeof(FrameUBO),
+            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
 
         });
 }
@@ -276,44 +278,45 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             }
 
             // update each material instance's descriptor set if dirty
-            uint32_t            materialID = material->getIndex();
-            DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
-            DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
+            uint32_t            materialInstanceIndex = material->getIndex();
+            DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
+            DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
 
             // update the resource set when:
             // 1. this has updated, multiple entity using the same material(not material instance?)
             // 2. material count changed
             // 3. this material's resources(such as texture) changed(dirty)
-            if (!updatedMaterial[materialID]) {
+            if (!updatedMaterial[materialInstanceIndex]) {
                 if (bShouldForceUpdateMaterial || material->isParamDirty())
                 {
                     updateMaterialParamDS(paramDS, material);
                     material->setParamDirty(false);
                 }
+                {}
                 if (bShouldForceUpdateMaterial || material->isResourceDirty())
                 {
                     updateMaterialResourceDS(resourceDS, material);
                     material->setResourceDirty(false);
                 }
-                updatedMaterial[materialID] = true;
+                updatedMaterial[materialInstanceIndex] = true;
             }
 
             // bind descriptor set
             std::vector<DescriptorSetHandle> descSets{
                 _frameDS,
-                _materialParamDSs[materialID],
-                _materialResourceDSs[materialID],
+                _materialParamDSs[materialInstanceIndex],
+                _materialResourceDSs[materialInstanceIndex],
             };
             cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
 
             // update push constant
-            material::ModelPushConstant pushConst{
+            UnlitMaterialSystem::PushConstant pushConst{
                 .modelMatrix = tc.getTransform(),
             };
             cmdBuf->pushConstants(_pipelineLayout->getHandle(),
                                   EShaderStage::Vertex,
                                   0,
-                                  sizeof(material::ModelPushConstant),
+                                  sizeof(UnlitMaterialSystem::PushConstant),
                                   &pushConst);
 
             // draw each mesh
@@ -381,10 +384,10 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
         auto buffer = ya::IBuffer::create(
             render,
             ya::BufferCreateInfo{
-                .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(ya::UnlitMaterialUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
                 .label         = "MaterialParam_UBO",
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(UnlitMaterial::MaterialUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             });
         _materialParamsUBOs.push_back(buffer);
     }
@@ -416,7 +419,7 @@ void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 
     _frameUBO->writeData(&ubo, sizeof(ubo), 0);
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::FrameUBO)));
+    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, sizeof(FrameUBO));
 
     auto *descriptorHelper = render->getDescriptorHelper();
     descriptorHelper->updateDescriptorSets(
@@ -443,17 +446,17 @@ void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMat
     // update param from texture
     const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
     if (tv0) {
-        Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
+        params.textureParam0.updateByTextureView(tv0);
     }
     const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
     if (tv1) {
-        Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
+        params.textureParam1.updateByTextureView(tv1);
     }
 
     auto paramUBO = _materialParamsUBOs[material->getIndex()].get();
-    paramUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
+    paramUBO->writeData(&params, sizeof(UnlitMaterial::MaterialUBO), 0);
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::UnlitMaterialUBO)));
+    DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, sizeof(UnlitMaterial::MaterialUBO));
 
     render
         ->getDescriptorHelper()
@@ -483,7 +486,7 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
     const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
 
     auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
-    resourceUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
+    resourceUBO->writeData(&params, sizeof(UnlitMaterial::MaterialUBO), 0);
 
     DescriptorImageInfo imageInfo0(
         SamplerHandle(tv0->sampler->getHandle()),

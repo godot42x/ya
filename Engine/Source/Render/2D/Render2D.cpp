@@ -203,10 +203,10 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
     _frameUBOBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
+            .label         = "Sprite2D_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
-            .label         = "Sprite2D_FrameUBO",
         });
 
     _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
@@ -328,10 +328,10 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
     _vertexBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
+            .label         = "Sprite2D_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
             .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
             .memProperties = EMemoryProperty::HostVisible,
-            .label         = "Sprite2D_VertexBuffer",
         });
 
     vertexPtr     = _vertexBuffer->map<FQuadData::Vertex>();
@@ -358,11 +358,11 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
     _indexBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
+            .label         = "Sprite2D_IndexBuffer",
             .usage         = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
             .data          = indices.data(),
             .size          = sizeof(uint32_t) * MaxIndexCount,
             .memProperties = EMemoryProperty::DeviceLocal,
-            .label         = "Sprite2D_IndexBuffer",
         });
 
 

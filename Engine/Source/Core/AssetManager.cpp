@@ -25,7 +25,7 @@ AssetManager *AssetManager::get()
 void AssetManager::cleanup()
 {
     modelCache.clear();
-    _textures.clear();
+    _textureViews.clear();
     if (_importer) {
         delete _importer;
         _importer = nullptr;
@@ -180,7 +180,7 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
 std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
 {
     if (isTextureLoaded(filepath)) {
-        return _textures.find(filepath)->second;
+        return _textureViews.find(filepath)->second;
     }
 
     auto texture = std::make_shared<Texture>(filepath);
@@ -188,7 +188,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
         YA_CORE_WARN("Failed to create texture: {}", filepath);
     }
     else {
-        _textures[filepath] = texture;
+        _textureViews[filepath] = texture;
     }
     return texture;
 }
@@ -196,7 +196,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
 std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, const std::string &filepath)
 {
     if (isTextureLoaded(name)) {
-        return _textures.find(name)->second;
+        return _textureViews.find(name)->second;
     }
 
     auto texture = std::make_shared<Texture>(filepath);
@@ -205,7 +205,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, cons
         YA_CORE_WARN("Failed to create texture: {}", filepath);
     }
     else {
-        _textures[name] = texture;
+        _textureViews[name] = texture;
     }
     return texture;
 }

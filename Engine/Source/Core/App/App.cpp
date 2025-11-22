@@ -30,8 +30,10 @@
 // Render
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
+
 
 
 // UI
@@ -1071,9 +1073,9 @@ void App::imcDrawMaterials()
             bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
             bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
             bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
-            for (uint32_t i = 0; i < mat->_textures.size(); i++) {
+            for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
                 // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                auto &tv    = mat->_textures[i];
+                auto &tv    = unlitMat->_textureViews[i];
                 auto  label = tv.texture->getLabel();
                 if (label.empty()) {
                     label = tv.texture->getFilepath();

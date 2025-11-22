@@ -2,6 +2,7 @@
 
 
 #include "Core/Base.h"
+#include "Core/Delegate.h"
 #include "Image.h"
 #include "Render/RenderDefines.h"
 #include "Sampler.h"
@@ -102,7 +103,6 @@ struct TextureView
     glm::vec2 uvScale{1.0f};
     float     uvRotation = 0.f;
 
-
     static TextureView create(stdptr<Texture> texture, stdptr<Sampler> sampler)
     {
         return TextureView{
@@ -117,8 +117,33 @@ struct TextureView
     }
 
     Texture *getTexture() const { return texture.get(); }
+    void     setTexture(const stdptr<Texture> &texture_) { texture = texture_; }
+
     Sampler *getSampler() const { return sampler.get(); }
+    void     setSampler(const stdptr<Sampler> &sampler_) { sampler = sampler_; }
+
+    TextureView *setEnable(bool bEnable_)
+    {
+        bEnable = bEnable_;
+        return this;
+    }
+    TextureView *setUvTranslation(const glm::vec2 &uvTranslation_)
+    {
+        uvTranslation = uvTranslation_;
+        return this;
+    }
+    TextureView *setUvScale(const glm::vec2 &uvScale_)
+    {
+        uvScale = uvScale_;
+        return this;
+    }
+    TextureView *setUvRotation(float uvRotation_)
+    {
+        uvRotation = uvRotation_;
+        return this;
+    }
 };
+
 
 
 } // namespace ya

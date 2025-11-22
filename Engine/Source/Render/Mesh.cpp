@@ -17,21 +17,21 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
     _vertexBuffer = IBuffer::create(
         render,
         {
+            .label         = name.empty() ? name : std::format("{}_VertexBuffer", name),
             .usage         = EBufferUsage::VertexBuffer,
             .data          = (void *)vertices.data(),
             .size          = static_cast<uint32_t>(sizeof(vertices[0]) * vertices.size()),
             .memProperties = EMemoryProperty::DeviceLocal,
-            .label     = name.empty() ? name : std::format("{}_VertexBuffer", name),
         });
 
     _indexBuffer = IBuffer::create(
         render,
         {
+            .label         = name.empty() ? name : std::format("{}_IndexBuffer", name),
             .usage         = EBufferUsage::IndexBuffer,
             .data          = (void *)indices.data(),
             .size          = static_cast<uint32_t>(sizeof(indices[0]) * indices.size()),
             .memProperties = EMemoryProperty::DeviceLocal,
-            .label     = name.empty() ? name : std::format("{}_IndexBuffer", name),
         });
 }
 

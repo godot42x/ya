@@ -19,17 +19,17 @@ layout(push_constant) uniform PushConstants{
 
 
 void main (){
-    gl_Position = uFrame.projMat * 
-        uFrame.viewMat *
-        pc.modelMat * 
-        vec4(aPos, 1.0);
+    gl_Position = uFrame.projMat *
+                uFrame.viewMat *
+                pc.modelMat *
+                vec4(aPos, 1.0);
 }
 
 
 #type fragment
 #version 450
 
-layout(set =0, binding =1, std140) uniform LitUBO {
+layout(set =0, binding =1, std140) uniform LightUBO {
     vec3 lightDir;
     vec3 lightColor;
     float lightIntensity;
