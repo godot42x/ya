@@ -19,9 +19,11 @@ namespace ya
 
 void LitMaterialSystem::onInit(IRenderPass *renderPass)
 {
+    _label                = "LitMaterialSystem";
     IRender *render       = getRender();
     auto     _sampleCount = ESampleCount::Sample_1;
 
+    // MARK: layout
     PipelineDesc pipelineLayout{
         .label         = "LitMaterialSystem_PipelineLayout",
         .pushConstants = {
@@ -53,21 +55,21 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                     },
                 },
             },
+            // DescriptorSetLayout{
+            //     .label    = "LitMaterial_Resource_DSL",
+            //     .set      = 1,
+            //     .bindings = {
+            //         DescriptorSetLayoutBinding{
+            //             .binding         = 0,
+            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+            //             .descriptorCount = 1,
+            //             .stageFlags      = EShaderStage::Fragment,
+            //         },
+            //     },
+            // },
             DescriptorSetLayout{
-                .label    = "LitMaterial_Material_DSL",
+                .label    = "LitMaterial_Param_DSL",
                 .set      = 1,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-            DescriptorSetLayout{
-                .label    = "LitMaterial_Object_DSL",
-                .set      = 2,
                 .bindings = {
                     DescriptorSetLayoutBinding{
                         .binding         = 0,
@@ -80,10 +82,10 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
 
-    auto DSLs          = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
-    _materialFrameDSL  = DSLs[0];
-    _materialDSL       = DSLs[1];
-    _materialObjectDSL = DSLs[2];
+    auto DSLs         = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
+    _materialFrameDSL = DSLs[0];
+    // _materialDSL       = DSLs[1];
+    _materialParamDSL = DSLs[1];
 
     // // Use factory method to create pipeline layout
     _pipelineLayout = IPipelineLayout::create(
@@ -93,16 +95,16 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         DSLs);
 
 
+    // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
-        // .pipelineLayout   = pipelineLayout,
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/Lit.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
-                    .pitch = sizeof(EShaderStage::Vertex),
+                    .pitch = sizeof(ya::Vertex),
                 },
             },
             .vertexAttributes = {
@@ -111,21 +113,21 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                     .bufferSlot = 0,
                     .location   = 0,
                     .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(LitMaterialSystem::Vertex, position),
+                    .offset     = offsetof(ya::Vertex, position),
                 },
                 //  texcoord
                 VertexAttribute{
                     .bufferSlot = 0, // same buffer slot
                     .location   = 1,
                     .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(LitMaterialSystem::Vertex, texCoord0),
+                    .offset     = offsetof(ya::Vertex, texCoord0),
                 },
                 // normal
                 VertexAttribute{
                     .bufferSlot = 0, // same buffer slot
                     .location   = 2,
                     .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(LitMaterialSystem::Vertex, normal),
+                    .offset     = offsetof(ya::Vertex, normal),
                 },
             },
         },
@@ -202,7 +204,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
     _frameDS = sets[0];
 
     // TODO: create a auto extend descriptor pool class to support recreate
-    // recreateMaterialDescPool(NUM_MATERIAL_BATCH);
+    recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
     _frameUBO = IBuffer::create(
         render,
@@ -259,7 +261,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     bool     bShouldForceUpdateMaterial = false;
     uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<LitMaterial>();
     if (materialCount > _lastMaterialDSCount) {
-        // recreateMaterialDescPool(materialCount);
+        recreateMaterialDescPool(materialCount);
         bShouldForceUpdateMaterial = true;
     }
 
@@ -277,10 +279,10 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             }
 
             // update each material instance's descriptor set if dirty
-            uint32_t materialIndex = material->getIndex();
-            // DescriptorSetHandle paramDS    = _materialParamDSs[materialID];
+            uint32_t            materialInstanceIndex = material->getIndex();
+            DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
             // DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
-            DescriptorSetHandle objectDS = _materialObjectDSs[materialIndex];
+            // DescriptorSetHandle objectDS = _materialObjectDSs[materialIndex];
 
             // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
 
@@ -288,30 +290,33 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             // 1. this has updated, multiple entity using the same material(not material instance?)
             // 2. material count changed
             // 3. this material's resources(such as texture) changed(dirty)
-            if (!updatedMaterial[materialIndex]) {
-                if (bShouldForceUpdateMaterial || material->isDirty())
+            if (!updatedMaterial[materialInstanceIndex]) {
+                if (bShouldForceUpdateMaterial || material->isParamDirty())
                 {
+                    updateMaterialParamDS(paramDS, material);
+                    material->setParamDirty(false);
                 }
-                updatedMaterial[materialIndex] = true;
+                updatedMaterial[materialInstanceIndex] = true;
             }
 
             // bind descriptor set
-            // std::vector<DescriptorSetHandle> descSets{
-            //     _frameDS,
-            //     _materialParamDSs[materialID],
-            //     _materialResourceDSs[materialID],
-            // };
-            // cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
+            std::vector<DescriptorSetHandle>
+                descSets{
+                    _frameDS,
+                    _materialParamDSs[materialInstanceIndex],
+                    // _materialResourceDSs[materialID],
+                };
+            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
 
-            // // update push constant
-            // material::ModelPushConstant pushConst{
-            //     .modelMatrix = tc.getTransform(),
-            // };
-            // cmdBuf->pushConstants(_pipelineLayout->getHandle(),
-            //                       EShaderStage::Vertex,
-            //                       0,
-            //                       sizeof(material::ModelPushConstant),
-            //                       &pushConst);
+            // update push constant
+            LitMaterialSystem::ModelPushConstant pushConst{
+                .modelMat = tc.getTransform(),
+            };
+            cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  EShaderStage::Vertex,
+                                  0,
+                                  sizeof(LitMaterialSystem::ModelPushConstant),
+                                  &pushConst);
 
             // draw each mesh
             for (const auto &meshIndex : meshIDs)
@@ -346,6 +351,7 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
     };
+    // TODO: grab from scene's light entity/component
     LightUBO uLit{
         .lightDirection   = glm::vec3(-0.5f, -1.0f, -0.3f),
         .lightIntensity   = 1.0f,
@@ -384,12 +390,12 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 
 void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material)
 {
-    // auto render = getRender();
-    // YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
+    auto render = getRender();
+    YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
 
-    // auto &params = material->uMaterial;
-    // // update param from texture
+    auto &params = material->getParamsMut();
+    // update param from texture
     // const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
     // if (tv0) {
     //     Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
@@ -399,24 +405,24 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
     //     Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
     // }
 
-    // auto paramUBO = _materialParamsUBOs[material->getIndex()].get();
-    // paramUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
+    auto paramUBO = _materialParamsUBOs[material->getIndex()];
+    paramUBO->writeData(&params, sizeof(LitMaterial::ParamUBO), 0);
 
-    // DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(ya::UnlitMaterialUBO)));
+    DescriptorBufferInfo bufferInfo(paramUBO->getHandle(), 0, sizeof(ya::LitMaterial::ParamUBO));
 
-    // render
-    //     ->getDescriptorHelper()
-    //     ->updateDescriptorSets(
-    //         {
-    //             IDescriptorSetHelper::genBufferWrite(
-    //                 ds,
-    //                 0,
-    //                 0,
-    //                 EPipelineDescriptorType::UniformBuffer,
-    //                 &bufferInfo,
-    //                 1),
-    //         },
-    //         {});
+    render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genBufferWrite(
+                    ds,
+                    0,
+                    0,
+                    EPipelineDescriptorType::UniformBuffer,
+                    &bufferInfo,
+                    1),
+            },
+            {});
 }
 
 void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
@@ -452,6 +458,71 @@ void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMate
     //             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
     //         }
     //         {});
+}
+
+void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
+{
+    auto *render = getRender();
+    YA_CORE_ASSERT(render != nullptr, "Render is null");
+    // 1. calculate how many set needed
+    uint32_t newDescriptorSetCount = std::max<uint32_t>(1, _lastMaterialDSCount);
+    if (_lastMaterialDSCount == 0) {
+        _lastMaterialDSCount = newDescriptorSetCount;
+    }
+
+    while (newDescriptorSetCount < _materialCount) {
+        newDescriptorSetCount *= 2;
+    }
+    if (newDescriptorSetCount > NUM_MATERIAL_BATCH_MAX) {
+        YA_CORE_ASSERT(false, "Too many material, exceed the max limit");
+        return;
+    }
+
+    // 2. destroy old
+    _materialParamDSs.clear();
+    // _materialResourceDSs.clear();
+
+    // 3. recreate pool
+    if (_materialDSP) {
+        _materialDSP->resetPool();
+    }
+    DescriptorPoolCreateInfo poolCI{
+        .maxSets   = newDescriptorSetCount, //* 2, // max(param , resource)
+        .poolSizes = {
+            DescriptorPoolSize{
+                .type            = EPipelineDescriptorType::UniformBuffer,
+                .descriptorCount = newDescriptorSetCount,
+            },
+            // DescriptorPoolSize{
+            //     .type            = EPipelineDescriptorType::CombinedImageSampler,
+            //     .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
+            // },
+        },
+    };
+    _materialDSP = IDescriptorPool::create(render, poolCI);
+
+
+    // 4. allocate new sets
+    // 为每一个单独的材质分配描述符集
+    _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
+    // _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
+
+    // 5. create UBOs
+    uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
+    for (uint32_t i = 0; i < diffCount; i++) {
+        auto buffer = ya::IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = "LitMaterial_Param_UBO",
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(LitMaterial::ParamUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+        _materialParamsUBOs.push_back(buffer);
+    }
+
+
+    _lastMaterialDSCount = newDescriptorSetCount;
 }
 
 } // namespace ya

@@ -12,7 +12,9 @@
 
 // Managers
 #include "Core/Render/RenderContext.h"
+#include "ECS/System/LitMaterialSystem.h"
 #include "ImGuiHelper.h"
+#include "Render/Material/LitMaterial.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/SceneManager.h"
 
@@ -353,7 +355,7 @@ void App::init(AppDesc ci)
 #if !ONLY_2D
     _rt->addMaterialSystem<SimpleMaterialSystem>();
     _rt->addMaterialSystem<UnlitMaterialSystem>();
-    // rt->addMaterialSystem<LitMaterialSystem>();
+    _rt->addMaterialSystem<LitMaterialSystem>();
 #endif
 
 #pragma region ImGui Init
@@ -1089,6 +1091,21 @@ void App::imcDrawMaterials()
             }
             if (bDirty) {
                 unlitMat->setParamDirty(true);
+            }
+        }
+        ImGui::PopID();
+        materialIdx += 1;
+    }
+
+    auto litMaterials = MaterialFactory::get()->getMaterials<LitMaterial>();
+    for (auto &mat : litMaterials) {
+        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+        auto litMat = mat->as<LitMaterial>();
+        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, litMat->getLabel()).c_str())) {
+            bool bDirty = false;
+            bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
+            if (bDirty) {
+                litMat->setParamDirty(true);
             }
         }
         ImGui::PopID();

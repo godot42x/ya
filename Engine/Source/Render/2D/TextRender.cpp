@@ -401,11 +401,11 @@ void TextRender::renderText(ICommandBuffer    *cmdBuf,
 
     // Bind frame descriptor set
     std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS};
-    cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descriptorSets);
+    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
 
     // Push constants for color
     TextPushConstant pc{.color = color};
-    cmdBuf->pushConstants(_pipelineLayout->getHandle(), EShaderStage::Fragment, 0, sizeof(pc), &pc);
+    cmdBuf->pushConstants(_pipelineLayout.get(), EShaderStage::Fragment, 0, sizeof(pc), &pc);
 
     // Separate text into atlas characters and standalone characters
     std::vector<std::pair<size_t, size_t>> atlasBatches;    // (startVertex, count)
@@ -482,7 +482,7 @@ void TextRender::renderText(ICommandBuffer    *cmdBuf,
     // Render atlas batches
     if (!atlasBatches.empty()) {
         std::vector<DescriptorSetHandle> atlasDS = {_atlasDescriptorSet};
-        cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 1, atlasDS);
+        cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 1, atlasDS);
 
         for (const auto &[startVertex, count] : atlasBatches) {
             cmdBuf->draw(static_cast<uint32_t>(count), 1, static_cast<uint32_t>(startVertex), 0);
@@ -494,7 +494,7 @@ void TextRender::renderText(ICommandBuffer    *cmdBuf,
         auto dsIt = _standaloneDescriptorSets.find(c);
         if (dsIt != _standaloneDescriptorSets.end()) {
             std::vector<DescriptorSetHandle> charDS = {dsIt->second};
-            cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 1, charDS);
+            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 1, charDS);
             cmdBuf->draw(6, 1, static_cast<uint32_t>(startVertex), 0);
         }
     }

@@ -2,6 +2,8 @@
 #version 450
 
 layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aTexcoord;
+layout(location = 2) in vec3 aNormal;
 
 layout(set =0, binding =0, std140) uniform FrameUBO {
     mat4 projMat;
@@ -19,10 +21,10 @@ layout(push_constant) uniform PushConstants{
 
 
 void main (){
-    gl_Position = uFrame.projMat *
-                uFrame.viewMat *
-                pc.modelMat *
-                vec4(aPos, 1.0);
+    gl_Position = uFrame.projMat * 
+                  uFrame.viewMat * 
+                  pc.modelMat * 
+                  vec4(aPos, 1.0);
 }
 
 
@@ -38,16 +40,17 @@ layout(set =0, binding =1, std140) uniform LightUBO {
 } uLit;
 
 
-layout(set = 1, binding = 0) uniform ObjectUBO{
+layout(set = 1, binding = 0) uniform ParamUBO {
     vec3 objectColor;
-}uMaterial;
-
+} uParams;
 
 
 layout(location = 0) out vec4 fColor;
 
 
 void main (){
-    vec3 color = uLit.ambientColor * uLit.ambientIntensity + uLit.lightColor * uLit.lightIntensity;
+    // vec3 color = uLit.ambientColor * uLit.ambientIntensity * uParams.objectColor +
+    //              uLit.lightColor * uLit.lightIntensity * max(dot(normalize(vec3(0,0,1)), -uLit.lightDir), 0.0) * uParams.objectColor;
+    vec3 color = uParams.objectColor;
     fColor = vec4(color, 1.0);
 }

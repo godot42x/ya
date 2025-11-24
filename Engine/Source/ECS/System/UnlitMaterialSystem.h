@@ -15,13 +15,10 @@ namespace ya
 
 struct UnlitMaterial;
 
-static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
-static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
-
-
 
 struct UnlitMaterialSystem : public IMaterialSystem
 {
+
 
     struct FrameUBO
     {
@@ -37,6 +34,9 @@ struct UnlitMaterialSystem : public IMaterialSystem
         alignas(16) glm::mat3 normalMatrix{1.0f};
     };
 
+
+    static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
+    static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
     GraphicsPipelineCreateInfo         _pipelineDesc;
     std::shared_ptr<IGraphicsPipeline> _pipelineOwner;

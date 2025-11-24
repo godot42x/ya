@@ -227,12 +227,11 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
             // pc.colorType = sin(TimeManager::get()->now().time_since_epoch().count() * 0.001);
 
-            cmdBuf->pushConstants(
-                _pipelineLayout->getHandle(),
-                EShaderStage::Vertex,
-                0,
-                sizeof(PushConstant),
-                &pc);
+            cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  EShaderStage::Vertex,
+                                  0,
+                                  sizeof(PushConstant),
+                                  &pc);
 
             for (const auto &idx : meshIds) {
                 auto mesh = bmc.getMesh(idx);

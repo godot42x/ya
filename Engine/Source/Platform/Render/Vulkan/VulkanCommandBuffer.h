@@ -53,7 +53,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     void reset() override;
 
     void bindPipeline(IGraphicsPipeline *pipeline) override;
-    void bindVertexBuffer(uint32_t binding, IBuffer *buffer, uint64_t offset = 0) override;
+    void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0) override;
     void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false) override;
 
     void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
@@ -71,17 +71,17 @@ class VulkanCommandBuffer : public ICommandBuffer
     void setCullMode(ECullMode::T cullMode) override;
 
     void bindDescriptorSets(
-        void                                   *pipelineLayout,
+        IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,
         const std::vector<DescriptorSetHandle> &descriptorSets,
         const std::vector<uint32_t>            &dynamicOffsets = {}) override;
 
     void pushConstants(
-        void           *pipelineLayout,
-        EShaderStage::T stages,
-        uint32_t        offset,
-        uint32_t        size,
-        const void     *data) override;
+        IPipelineLayout *pipelineLayout,
+        EShaderStage::T  stages,
+        uint32_t         offset,
+        uint32_t         size,
+        const void      *data) override;
 
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;

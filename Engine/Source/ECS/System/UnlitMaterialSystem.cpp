@@ -28,10 +28,13 @@ namespace ya
 
 void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
 {
+    _label = "UnlitMaterialSystem";
+
     IRender *render = getRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
+    // MARK: layout
     PipelineDesc pipelineLayout{
         .label         = "UnlitMaterialSystem_PipelineLayout",
         .pushConstants = {
@@ -99,6 +102,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     _pipelineLayout                                           = IPipelineLayout::create(render, pipelineLayout.label, pipelineLayout.pushConstants, dslVec);
 
 
+    // MARK: pipeline 
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
@@ -307,13 +311,13 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
                 _materialParamDSs[materialInstanceIndex],
                 _materialResourceDSs[materialInstanceIndex],
             };
-            cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descSets);
+            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
 
             // update push constant
             UnlitMaterialSystem::PushConstant pushConst{
                 .modelMatrix = tc.getTransform(),
             };
-            cmdBuf->pushConstants(_pipelineLayout->getHandle(),
+            cmdBuf->pushConstants(_pipelineLayout.get(),
                                   EShaderStage::Vertex,
                                   0,
                                   sizeof(UnlitMaterialSystem::PushConstant),
@@ -384,7 +388,7 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
         auto buffer = ya::IBuffer::create(
             render,
             ya::BufferCreateInfo{
-                .label         = "MaterialParam_UBO",
+                .label         = "UnlitMaterial_Param_UBO",
                 .usage         = ya::EBufferUsage::UniformBuffer,
                 .size          = sizeof(UnlitMaterial::MaterialUBO),
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,

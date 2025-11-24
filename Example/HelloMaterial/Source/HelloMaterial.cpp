@@ -1,6 +1,7 @@
 #include "HelloMaterial.h"
 #include "Core/AssetManager.h"
 
+#include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -109,6 +110,9 @@ void HelloMaterial::createMaterials()
 
 
     auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
+    litMaterial1->setObjectColor(glm::vec3(1.0, 0.0, 0.0));
+    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1");
+    litMaterial2->setObjectColor(glm::vec3(0.0, 1.0, 0.0));
 }
 
 void HelloMaterial::createEntities(ya::Scene *scene)
@@ -162,12 +166,31 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                     else {
                         // use unlit material
                         auto umc = cube->addComponent<ya::UnlitMaterialComponent>();
-                        auto mat = unlitMaterials[materialIndex - simpleMaterialCount];
+                        auto mat = unlitMaterials[materialIndex % unlitMaterials.size()];
                         YA_CORE_ASSERT(mat, "Material is null");
                         umc->addMesh(cubeMesh.get(), mat->as<ya::UnlitMaterial>());
                     }
                 }
             }
         }
+    }
+
+    if (auto *LitTest = scene->createEntity("Lit Test")) {
+        auto tc = LitTest->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-10.f, 0.f, 0.f));
+
+        auto lmc = LitTest->addComponent<ya::LitMaterialComponent>();
+        // TODO: cast check
+        auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit0")->as<ya::LitMaterial>();
+        lmc->addMesh(cubeMesh.get(), litMat);
+    }
+    if (auto *LitTest2 = scene->createEntity("Lit Test 2")) {
+        auto tc = LitTest2->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-10.f, 5.f, 0.f));
+
+        auto lmc = LitTest2->addComponent<ya::LitMaterialComponent>();
+        // TODO: cast check
+        auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1")->as<ya::LitMaterial>();
+        lmc->addMesh(cubeMesh.get(), litMat);
     }
 }

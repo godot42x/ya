@@ -81,7 +81,7 @@ void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline *pipeline)
     pipeline->bind(getHandle());
 }
 
-void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, IBuffer *buffer, uint64_t offset)
+void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset)
 {
     if (!buffer) return;
 
@@ -140,11 +140,10 @@ void VulkanCommandBuffer::setCullMode(ECullMode::T cullMode)
     vkCmdSetCullMode(_commandBuffer, ECullMode::toVk(cullMode));
 }
 
-void VulkanCommandBuffer::bindDescriptorSets(
-    void                                   *pipelineLayout,
-    uint32_t                                firstSet,
-    const std::vector<DescriptorSetHandle> &descriptorSets,
-    const std::vector<uint32_t>            &dynamicOffsets)
+void VulkanCommandBuffer::bindDescriptorSets(IPipelineLayout                        *pipelineLayout,
+                                             uint32_t                                firstSet,
+                                             const std::vector<DescriptorSetHandle> &descriptorSets,
+                                             const std::vector<uint32_t>            &dynamicOffsets)
 {
     std::vector<VkDescriptorSet> vkDescriptorSets;
     vkDescriptorSets.reserve(descriptorSets.size());
@@ -157,7 +156,7 @@ void VulkanCommandBuffer::bindDescriptorSets(
     vkCmdBindDescriptorSets(
         _commandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        static_cast<VkPipelineLayout>(pipelineLayout),
+        pipelineLayout->getHandleAs<VkPipelineLayout>(),
         firstSet,
         static_cast<uint32_t>(vkDescriptorSets.size()),
         vkDescriptorSets.data(),
@@ -165,12 +164,11 @@ void VulkanCommandBuffer::bindDescriptorSets(
         dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
 }
 
-void VulkanCommandBuffer::pushConstants(
-    void           *pipelineLayout,
-    EShaderStage::T stages,
-    uint32_t        offset,
-    uint32_t        size,
-    const void     *data)
+void VulkanCommandBuffer::pushConstants(IPipelineLayout *pipelineLayout,
+                                        EShaderStage::T  stages,
+                                        uint32_t         offset,
+                                        uint32_t         size,
+                                        const void      *data)
 {
     VkShaderStageFlags vkStages = 0;
     if (stages & EShaderStage::Vertex) vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
@@ -180,7 +178,7 @@ void VulkanCommandBuffer::pushConstants(
 
     vkCmdPushConstants(
         _commandBuffer,
-        static_cast<VkPipelineLayout>(pipelineLayout),
+        pipelineLayout->getHandleAs<VkPipelineLayout>(),
         vkStages,
         offset,
         size,

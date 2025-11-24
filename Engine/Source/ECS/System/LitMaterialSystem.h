@@ -38,13 +38,6 @@ struct LitMaterialSystem : public IMaterialSystem
     {
         glm::mat4 modelMat;
     };
-    struct Vertex
-    {
-        glm::vec3 position;
-        glm::vec2 texCoord0;
-        glm::vec3 normal;
-    };
-
 
     struct alignas(16) LightUBO
     {
@@ -55,21 +48,15 @@ struct LitMaterialSystem : public IMaterialSystem
         glm::vec3 ambientColor     = glm::vec3(0.1f);
     };
 
-    struct alignas(16) ObjectUBO
-    {
-        glm::vec3 objectColor = glm::vec3(1.0f);
-    };
 
+    GraphicsPipelineCreateInfo _pipelineDesc;
 
-    std::shared_ptr<IDescriptorSetLayout> _materialFrameDSL;  // set 0
-    std::shared_ptr<IDescriptorSetLayout> _materialDSL;       // set 1
-    std::shared_ptr<IDescriptorSetLayout> _materialObjectDSL; // set 2
+    std::shared_ptr<IDescriptorSetLayout> _materialFrameDSL; // set 0
+    // std::shared_ptr<IDescriptorSetLayout> _materialDSL;       // set 1
+    std::shared_ptr<IDescriptorSetLayout> _materialParamDSL; // set 2
 
-    GraphicsPipelineCreateInfo         _pipelineDesc;
-    std::shared_ptr<IGraphicsPipeline> _pipeline;
     std::shared_ptr<IPipelineLayout>   _pipelineLayout;
-
-
+    std::shared_ptr<IGraphicsPipeline> _pipeline;
 
     // set 0, contains the frame UBO and lighting UBO
     std::shared_ptr<IDescriptorPool> _frameDSP;
@@ -84,10 +71,8 @@ struct LitMaterialSystem : public IMaterialSystem
     std::shared_ptr<IDescriptorPool> _materialDSP;
 
     // object ubo
-    std::vector<std::shared_ptr<IBuffer>> _materialObjectUBOs;
-    std::vector<DescriptorSetHandle>      _materialObjectDSs;
-    // std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
-    // std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
+    std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
+    std::vector<DescriptorSetHandle>      _materialParamDSs; // each material instance
     // std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
     std::string _ctxEntityDebugStr;
@@ -109,6 +94,7 @@ struct LitMaterialSystem : public IMaterialSystem
     void updateFrameDS(IRenderTarget *rt);
     void updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material);
+    void recreateMaterialDescPool(uint32_t _materialCount);
 };
 
 } // namespace ya

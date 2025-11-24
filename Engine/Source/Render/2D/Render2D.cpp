@@ -470,7 +470,7 @@ void FQuadData::flush(ICommandBuffer *cmdBuf)
 
     // Bind descriptor sets using abstract interface
     std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};
-    cmdBuf->bindDescriptorSets(_pipelineLayout->getHandle(), 0, descriptorSets);
+    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
 
     // Bind vertex and index buffers using abstract interface
     cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);

@@ -12,13 +12,8 @@
 #include <imgui_impl_sdl3.h>
 
 #include <imgui_impl_sdlgpu3.h>
+#include <imgui_impl_vulkan.h>
 
-// Forward declarations for Vulkan types (avoid including vulkan headers)
-#if USE_VULKAN
-typedef struct VkCommandBuffer_T *VkCommandBuffer;
-typedef struct VkPipeline_T      *VkPipeline;
-#define VK_NULL_HANDLE 0
-#endif
 
 #include "Core/Event.h"
 #include "Core/Log.h"

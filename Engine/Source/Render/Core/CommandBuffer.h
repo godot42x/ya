@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/Pipeline.h"
 #include "Render/RenderDefines.h"
 #include <vector>
 
@@ -13,12 +14,6 @@ class IGraphicsPipeline;
 class IRenderPass;
 class IBuffer;
 
-/**
- * @brief Type-safe command buffer handle
- */
-struct CommandBufferHandleTag
-{};
-using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 
 /**
  * @brief Generic command buffer interface for recording GPU commands
@@ -69,7 +64,7 @@ struct ICommandBuffer
     /**
      * @brief Bind a vertex buffer
      */
-    virtual void bindVertexBuffer(uint32_t binding, IBuffer *buffer, uint64_t offset = 0) = 0;
+    virtual void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0) = 0;
 
     /**
      * @brief Bind an index buffer
@@ -109,7 +104,7 @@ struct ICommandBuffer
      * @brief Bind descriptor sets
      */
     virtual void bindDescriptorSets(
-        void                                   *pipelineLayout,
+        IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,
         const std::vector<DescriptorSetHandle> &descriptorSets,
         const std::vector<uint32_t>            &dynamicOffsets = {}) = 0;
@@ -118,11 +113,11 @@ struct ICommandBuffer
      * @brief Push constants
      */
     virtual void pushConstants(
-        void           *pipelineLayout,
-        EShaderStage::T stages,
-        uint32_t        offset,
-        uint32_t        size,
-        const void     *data) = 0;
+        IPipelineLayout *pipelineLayout,
+        EShaderStage::T  stages,
+        uint32_t         offset,
+        uint32_t         size,
+        const void      *data) = 0;
 
     /**
      * @brief Copy buffer to buffer

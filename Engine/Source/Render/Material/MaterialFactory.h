@@ -1,3 +1,4 @@
+#include "Core/FName.h"
 #include "Material.h"
 
 
@@ -20,6 +21,7 @@ struct MaterialFactoryInternal
     static MaterialFactoryInternal *_instance;
 
     std::unordered_map<uint32_t, std::vector<std::shared_ptr<Material>>> _materials;
+    std::unordered_map<FName, Material *>                                _materialNameMap;
 
     uint32_t _materialCount = 0;
 
@@ -52,6 +54,7 @@ struct MaterialFactoryInternal
     {
         auto *mat = createMaterialImpl<T>();
         static_cast<Material *>(mat)->setLabel(label);
+        _materialNameMap.insert({FName(label), mat});
         return mat;
     }
 
@@ -60,6 +63,15 @@ struct MaterialFactoryInternal
     [[nodiscard]] const std::vector<std::shared_ptr<Material>> &getMaterials() const
     {
         return _materials.at(getTypeID<T>());
+    }
+
+    Material *getMaterialByName(FName name)
+    {
+        auto it = _materialNameMap.find(name);
+        if (it != _materialNameMap.end()) {
+            return it->second;
+        }
+        return nullptr;
     }
 
     auto getAllMaterials() const { return _materials; }
@@ -76,6 +88,7 @@ struct MaterialFactoryInternal
     void removeMaterial(Material *material) { destroyMaterialImpl(material); }
 
     uint32_t getMaterialCount() const { return _materialCount; }
+
 
   private:
     MaterialFactoryInternal() = default;
@@ -113,6 +126,7 @@ struct MaterialFactoryInternal
     {
         uint32_t typeID = material->getTypeID();
         int32_t  index  = material->getIndex();
+        _materialNameMap.erase(FName(material->getLabel()));
 
         auto it = _materials.find(typeID);
         if (it != _materials.end())

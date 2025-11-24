@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Handle.h"
 #include "glm/glm.hpp"
 #include "reflect.cc/enum"
 #include "utility.cc/hash.h"
@@ -564,7 +565,7 @@ struct DescriptorSetLayoutBinding
 struct DescriptorSetLayout
 {
     std::string                             label = "None";
-    int32_t                                 set   = -1;
+    int32_t                                 set   = -1; // indicate pos only, no ref usage
     std::vector<DescriptorSetLayoutBinding> bindings;
 };
 
@@ -805,4 +806,13 @@ struct RenderHelper
     static bool isDepthOnlyFormat(EFormat::T format) { return format == EFormat::D32_SFLOAT || format == EFormat::D24_UNORM_S8_UINT; }
     static bool isDepthStencilFormat(EFormat::T format) { return format == EFormat::D24_UNORM_S8_UINT || format == EFormat::D32_SFLOAT_S8_UINT; }
 };
+
+
+
+/**
+ * @brief Type-safe command buffer handle
+ */
+struct CommandBufferHandleTag
+{};
+using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 } // namespace ya

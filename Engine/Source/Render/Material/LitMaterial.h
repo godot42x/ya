@@ -7,27 +7,32 @@ namespace ya
 
 struct LitMaterial : public Material
 {
-
-    struct MaterialUBO
+    struct ParamUBO
     {
-        alignas(16) glm::vec3 baseColor0 = glm::vec3(1.0f);
-        alignas(16) glm::vec3 baseColor1 = glm::vec3(1.0f);
-        alignas(4) float mixValue        = 0.5f;
+        alignas(16) glm::vec3 objectColor = glm::vec3(1.0f);
+        // alignas(16) glm::vec3 baseColor1 = glm::vec3(1.0f);
+        // alignas(4) float mixValue        = 0.5f;
         // alignas(16) TextureParam textureParam0;
         // alignas(16) TextureParam textureParam1;
-    } uMaterial;
+    } uParams;
 
 
-
-    bool bDirty = false;
+    bool bParamDirty = false;
 
 
   public:
 
-    [[nodiscard]] MaterialUBO &getParams() { return uMaterial; }
+    [[nodiscard]] const ParamUBO &getParams() { return uParams; }
+    ParamUBO                     &getParamsMut() { return uParams; }
 
-    void               setDirty(bool bInDirty = true) { bDirty = bInDirty; }
-    [[nodiscard]] bool isDirty() const { return bDirty; }
+    void               setParamDirty(bool bInDirty = true) { bParamDirty = bInDirty; }
+    [[nodiscard]] bool isParamDirty() const { return bParamDirty; }
+
+    void setObjectColor(const glm::vec3 &color)
+    {
+        uParams.objectColor = color;
+        setParamDirty();
+    }
 };
 
 } // namespace ya
