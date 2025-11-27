@@ -17,7 +17,7 @@ namespace ya
 {
 class RenderContext;
 class SceneManager;
-class ImGuiManager;
+struct ImGuiManager;
 class Scene;
 struct Material;
 struct IRenderPass;
@@ -143,6 +143,7 @@ struct App
     void requestQuit() { bRunning = false; }
 
     virtual void onInit(AppDesc ci);
+    virtual void onPostInit() {}
     virtual void onQuit() {}
 
 
@@ -175,6 +176,9 @@ struct App
     {
         return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
     }
+
+    // temp
+    IRenderTarget *getRenderTarget() const { return _rt; }
 
   protected:
     // Protected for derived classes to override

@@ -18,6 +18,9 @@
 #include "Scene/Scene.h"
 #include <format>
 
+#include "glm/gtc/type_ptr.hpp"
+#include "imgui.h"
+
 
 
 void HelloMaterial::createCubeMesh()
@@ -178,19 +181,63 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     if (auto *LitTest = scene->createEntity("Lit Test")) {
         auto tc = LitTest->addComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-10.f, 0.f, 0.f));
+        tc->setScale(glm::vec3(3.0f));
+        _litTestEntity = LitTest;
 
         auto lmc = LitTest->addComponent<ya::LitMaterialComponent>();
         // TODO: cast check
         auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit0")->as<ya::LitMaterial>();
         lmc->addMesh(cubeMesh.get(), litMat);
     }
-    if (auto *LitTest2 = scene->createEntity("Lit Test 2")) {
-        auto tc = LitTest2->addComponent<ya::TransformComponent>();
-        tc->setPosition(glm::vec3(-10.f, 5.f, 0.f));
+    if (auto *PointLight = scene->createEntity("Point Light")) {
+        auto tc = PointLight->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-10.f, 4.f, 3.f));
+        _lightEntity = PointLight;
 
-        auto lmc = LitTest2->addComponent<ya::LitMaterialComponent>();
+        auto lmc = PointLight->addComponent<ya::LitMaterialComponent>();
         // TODO: cast check
         auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1")->as<ya::LitMaterial>();
         lmc->addMesh(cubeMesh.get(), litMat);
+        litMat->setObjectColor(glm::vec3(1.0f));
     }
+}
+
+void HelloMaterial::onRenderGUI()
+{
+    Super::onRenderGUI();
+    if (!ImGui::CollapsingHeader("HelloMaterial")) {
+        return;
+    }
+    ImGui::Indent();
+    // TODO: use my gui not imgui
+    // imgui manipulate the lit material  "Lit Test" and "Point Light"
+    if (_litTestEntity && _litTestEntity->hasComponent<ya::LitMaterialComponent>()) {
+        auto lmc = _litTestEntity->getComponent<ya::LitMaterialComponent>();
+        for (const auto &[material, meshIDs] : lmc->getMaterial2MeshIDs()) {
+            auto litMat = material->as<ya::LitMaterial>();
+            ImGui::ColorEdit3("Lit Test Object Color", glm::value_ptr(litMat->uParams.objectColor));
+        }
+
+        // transfrom manipulation
+        auto      tc  = _litTestEntity->getComponent<ya::TransformComponent>();
+        glm::vec3 pos = tc->getPosition();
+        if (ImGui::DragFloat3("Lit Test Position", glm::value_ptr(pos), 0.1f)) {
+            tc->setPosition(pos);
+        }
+    }
+    ImGui::Spacing();
+    if (_lightEntity && _lightEntity->hasComponent<ya::LitMaterialComponent>()) {
+        auto lmc = _lightEntity->getComponent<ya::LitMaterialComponent>();
+        for (const auto &[material, meshIDs] : lmc->getMaterial2MeshIDs()) {
+            auto litMat = material->as<ya::LitMaterial>();
+            ImGui::ColorEdit3("Point Light Object Color", glm::value_ptr(litMat->uParams.objectColor));
+        }
+        // transfrom manipulation
+        auto      tc  = _lightEntity->getComponent<ya::TransformComponent>();
+        glm::vec3 pos = tc->getPosition();
+        if (ImGui::DragFloat3("Point Light Position", glm::value_ptr(pos), 0.1f)) {
+            tc->setPosition(pos);
+        }
+    }
+    ImGui::Unindent();
 }

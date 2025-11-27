@@ -113,6 +113,8 @@ struct IRenderTarget
         addMaterialSystemImpl(system);
     }
 
+    virtual void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) = 0;
+
   protected:
     /**
      * @brief Implementation of adding material system (to be overridden)

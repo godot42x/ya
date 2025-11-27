@@ -11,6 +11,7 @@
 
 
 #include "Scene/Scene.h"
+#include "imgui.h"
 
 
 
@@ -330,6 +331,18 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 }
 
+void LitMaterialSystem::onRenderGUI()
+{
+    IMaterialSystem::onRenderGUI();
+    ImGui::ColorEdit3("Light Color", &uLight.lightColor.x);
+    ImGui::SliderFloat3("Light Direction", &uLight.lightDirection.x, -1.0f, 1.0f);
+    ImGui::SliderFloat("Light Intensity", &uLight.lightIntensity, 0.0f, 10.0f);
+    ImGui::ColorEdit3("Ambient Color", &uLight.ambientColor.x);
+    ImGui::SliderFloat("Ambient Intensity", &uLight.ambientIntensity, 0.0f, 1.0f);
+
+    App *app = getApp();
+}
+
 
 // TODO: descriptor set can be shared if they use same layout and data
 void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
@@ -352,16 +365,8 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
     };
     // TODO: grab from scene's light entity/component
-    LightUBO uLit{
-        .lightDirection   = glm::vec3(-0.5f, -1.0f, -0.3f),
-        .lightIntensity   = 1.0f,
-        .lightColor       = glm::vec3(1.0f),
-        .ambientIntensity = 0.1f,
-        .ambientColor     = glm::vec3(0.1f),
-    };
-
     _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
-    _lightUBO->writeData(&uLit, sizeof(LightUBO), 0);
+    _lightUBO->writeData(&uLight, sizeof(LightUBO), 0);
 
     DescriptorBufferInfo frameBufferInfo(_frameUBO->getHandle(), 0, sizeof(FrameUBO));
     DescriptorBufferInfo lightBufferInfo(_lightUBO->getHandle(), 0, sizeof(LightUBO));

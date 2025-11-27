@@ -10,9 +10,9 @@ namespace ya
 
 
 // Forward declarations
-class IGraphicsPipeline;
-class IRenderPass;
-class IBuffer;
+struct IGraphicsPipeline;
+struct IRenderPass;
+struct IBuffer;
 
 
 /**

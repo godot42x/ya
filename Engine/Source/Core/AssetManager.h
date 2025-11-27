@@ -12,7 +12,7 @@
 
 namespace Assimp
 {
-class Importer;
+struct Importer;
 }
 
 namespace ya

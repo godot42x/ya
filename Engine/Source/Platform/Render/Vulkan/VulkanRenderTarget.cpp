@@ -171,8 +171,7 @@ void VulkanRenderTarget::onRenderGUI()
         }
     }
     for (auto &system : _materialSystems) {
-        system->onRenderGUI();
-        system->onEndRenderGUI();
+        system->renderGUI();
     }
 }
 

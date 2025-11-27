@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Render/Core/IRenderTarget.h"
+#include "ECS/Entity.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderPass.h"
 #include "Render/RenderDefines.h"
-#include "ECS/Entity.h"
+
 
 namespace ya
 {
@@ -74,6 +75,14 @@ struct VulkanRenderTarget : public IRenderTarget
     const glm::mat4 getProjectionMatrix() const override;
     const glm::mat4 getViewMatrix() const override;
     void            getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const override;
+
+  public:
+    void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) override
+    {
+        for (auto &system : _materialSystems) {
+            func(system);
+        }
+    }
 
   protected:
     void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) override;

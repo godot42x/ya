@@ -3,8 +3,9 @@
 #include "Core/App/App.h"
 #include "ECS/Component/CameraComponent.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/Render.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Render.h"
+
 
 
 #include "imgui.h"
@@ -12,18 +13,6 @@
 namespace ya
 {
 
-void IMaterialSystem::onRenderGUI()
-{
-    ImGui::CollapsingHeader(_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-    ImGui::PushID(_label.c_str());
-    ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
-    ImGui::Checkbox("Enabled", &bEnabled);
-    ImGui::PopID();
-}
-
-void IMaterialSystem::onEndRenderGUI()
-{
-}
 
 App *IMaterialSystem::getApp() const
 {

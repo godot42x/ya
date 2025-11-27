@@ -46,7 +46,7 @@ struct LitMaterialSystem : public IMaterialSystem
         glm::vec3 lightColor       = glm::vec3(1.0f);
         float     ambientIntensity = 0.1f;
         glm::vec3 ambientColor     = glm::vec3(0.1f);
-    };
+    } uLight;
 
 
     GraphicsPipelineCreateInfo _pipelineDesc;
@@ -81,10 +81,7 @@ struct LitMaterialSystem : public IMaterialSystem
     void onDestroy() override;
     void onUpdate(float deltaTime) override {}
     void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
-    void onRenderGUI() override
-    {
-        IMaterialSystem::onRenderGUI();
-    }
+    void onRenderGUI() override;
 
 
 

@@ -387,6 +387,11 @@ void App::init(AppDesc ci)
     Render2D::init(_renderContext->getRender(), _renderpass.get());
     // wait something done
     _renderContext->getRender()->waitIdle();
+
+    {
+        YA_PROFILE_SCOPE("Post Init");
+        onPostInit();
+    }
 }
 
 void App::onInit(AppDesc ci)
@@ -1053,6 +1058,7 @@ void App::imcDrawMaterials()
     if (!ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
+    ImGui::Indent();
 
     uint32_t materialIdx = 0;
 
@@ -1121,6 +1127,8 @@ void App::imcDrawMaterials()
         ImGui::PopID();
         materialIdx += 1;
     }
+
+    ImGui::Unindent();
 }
 
 

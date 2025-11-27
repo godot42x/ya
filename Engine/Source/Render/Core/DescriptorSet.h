@@ -84,7 +84,7 @@ struct CopyDescriptorSet
  * @brief Abstract interface for descriptor set layout
  * Describes the bindings in a descriptor set
  */
-class IDescriptorSetLayout
+struct IDescriptorSetLayout
 {
   public:
     virtual ~IDescriptorSetLayout() = default;
@@ -134,7 +134,7 @@ struct IRender;
  * @brief Abstract interface for descriptor pool
  * Manages allocation of descriptor sets
  */
-class IDescriptorPool
+struct IDescriptorPool
 {
   public:
     virtual ~IDescriptorPool() = default;
@@ -185,7 +185,7 @@ class IDescriptorPool
  * @brief Abstract interface for descriptor set operations
  * Provides utilities for updating descriptor sets
  */
-class IDescriptorSetHelper
+struct IDescriptorSetHelper
 {
   public:
     virtual ~IDescriptorSetHelper() = default;

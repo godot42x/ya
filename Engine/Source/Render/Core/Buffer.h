@@ -11,7 +11,7 @@
 namespace ya
 {
 
-class IRender;
+struct IRender;
 
 // Buffer usage flags (backend-agnostic)
 enum class EBufferUsage : uint32_t
@@ -69,7 +69,7 @@ struct BufferCreateInfo
 };
 
 // Generic buffer interface
-class IBuffer
+struct IBuffer
 {
   public:
     virtual ~IBuffer() = default;

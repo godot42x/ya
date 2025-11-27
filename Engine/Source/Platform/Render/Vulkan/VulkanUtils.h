@@ -10,6 +10,8 @@
 
 
 
+namespace ya
+{
 struct VulkanCommandPool;
 
 struct VulkanUtils
@@ -53,8 +55,6 @@ struct VulkanUtils
 };
 
 
-namespace ya
-{
 
 namespace EPrimitiveType
 {
@@ -475,7 +475,7 @@ inline T fromVk(VkPresentModeKHR presentMode)
         UNREACHABLE();
     }
     return FIFO;
-} 
+}
 } // namespace EPresentMode
 
 namespace EColorSpace

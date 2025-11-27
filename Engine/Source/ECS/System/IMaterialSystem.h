@@ -5,6 +5,7 @@
 
 #include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
+#include "imgui.h"
 
 
 namespace ya
@@ -31,8 +32,21 @@ struct IMaterialSystem : public ISystem
     virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) = 0;
     virtual void onUpdate(float deltaTime) override {}
     virtual void onDestroy() = 0;
-    virtual void onRenderGUI();
-    virtual void onEndRenderGUI();
+
+    void renderGUI()
+    {
+        if (!ImGui::CollapsingHeader(_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+        ImGui::Indent();
+        ImGui::PushID(_label.c_str());
+        ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
+        ImGui::Checkbox("Enabled", &bEnabled);
+        ImGui::PopID();
+        onRenderGUI();
+        ImGui::Unindent();
+    }
+    virtual void onRenderGUI() {}
 
 
     App          *getApp() const;

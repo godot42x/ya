@@ -23,7 +23,7 @@
 
 namespace ya
 {
-class ICommandBuffer;
+struct ICommandBuffer;
 struct VulkanRender;
 struct VulkanRenderPass;
 

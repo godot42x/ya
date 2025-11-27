@@ -26,7 +26,7 @@ struct WindowCreateInfo
     bool          bResizable = true;
 };
 
-class IWindowProvider
+struct IWindowProvider
 {
 
   protected:

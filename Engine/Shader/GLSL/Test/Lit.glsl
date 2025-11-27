@@ -51,6 +51,6 @@ layout(location = 0) out vec4 fColor;
 void main (){
     // vec3 color = uLit.ambientColor * uLit.ambientIntensity * uParams.objectColor +
     //              uLit.lightColor * uLit.lightIntensity * max(dot(normalize(vec3(0,0,1)), -uLit.lightDir), 0.0) * uParams.objectColor;
-    vec3 color = uParams.objectColor;
+    vec3 color = uLit.lightColor * uParams.objectColor;
     fColor = vec4(color, 1.0);
 }

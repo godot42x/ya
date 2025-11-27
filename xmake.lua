@@ -15,6 +15,7 @@ if is_plat("windows") then
             "/wd4251"   --  needs to have dll-interface to be used by clients of class
             , "/wd4100" --  unreferenced formal parameter
             , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
+            , "/wd4819" --  character that cannot be represented in the current code page
         )
         add_ldflags(
         -- "/ignore:4099" -- PDB not found

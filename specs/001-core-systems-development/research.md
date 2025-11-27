@@ -181,7 +181,7 @@ glslc shader.vert -o shader.spv
 **Implementation Plan**:
 ```cpp
 // Abstract interface
-class IShaderCompiler {
+struct IShaderCompiler {
     virtual std::vector<uint32_t> compile(const std::string& source, ShaderStage stage) = 0;
 };
 

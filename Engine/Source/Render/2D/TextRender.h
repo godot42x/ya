@@ -15,9 +15,9 @@
 namespace ya
 {
 
-class IRender;
-class IRenderPass;
-class ICommandBuffer;
+struct IRender;
+struct IRenderPass;
+struct ICommandBuffer;
 
 /**
  * @brief Character - Glyph information

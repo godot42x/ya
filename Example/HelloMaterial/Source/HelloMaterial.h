@@ -9,12 +9,30 @@ struct HelloMaterial : public ya::App
     using Super = ya::App;
 
     // Application-specific resources
-    std::shared_ptr<ya::Mesh>   cubeMesh;
+    std::shared_ptr<ya::Mesh> cubeMesh;
+
+    ya::Entity *_lightEntity   = nullptr;
+    ya::Entity *_litTestEntity = nullptr;
 
     void onInit(ya::AppDesc ci) override
     {
         Super::onInit(ci);
     }
+
+    void onPostInit() override
+    {
+        Super::onPostInit();
+        // temp codes to disable other material systems except LitMaterialSystem
+        getRenderTarget()->forEachMaterialSystem(
+            [](std::shared_ptr<ya::IMaterialSystem> system) {
+                if (system) {
+                    if (system->_label != "LitMaterialSystem") {
+                        system->bEnabled = false;
+                    }
+                }
+            });
+    }
+
 
     void onQuit() override
     {
@@ -58,10 +76,7 @@ struct HelloMaterial : public ya::App
         Super::onRender(dt);
     }
 
-    void onRenderGUI() override
-    {
-        Super::onRenderGUI();
-    }
+    void onRenderGUI() override;
 
     int onEvent(const ya::Event &event) override
     {

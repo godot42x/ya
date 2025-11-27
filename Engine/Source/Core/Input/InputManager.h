@@ -17,7 +17,7 @@ enum class KeyState
     Pressed
 };
 
-class InputManager
+struct InputManager
 {
 
   private:

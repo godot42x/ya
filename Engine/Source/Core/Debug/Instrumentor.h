@@ -33,7 +33,7 @@ struct InstrumentationSession
     std::string Name;
 };
 
-class Instrumentor
+struct Instrumentor
 {
     InstrumentationSession *m_CurrentSession = nullptr;
     std::ofstream           m_OutputStream;
@@ -57,7 +57,7 @@ class Instrumentor
     }
 };
 
-class InstrumentationTimer
+struct InstrumentationTimer
 {
     using clock_t = std::chrono::steady_clock;
 

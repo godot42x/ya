@@ -10,9 +10,9 @@ namespace ya
 {
 
 // Forward declarations
-class ICommandBuffer;
+struct ICommandBuffer;
 struct ISwapchain;
-class IDescriptorSetHelper;
+struct IDescriptorSetHelper;
 
 struct IRender : public plat_base<IRender>
 {
@@ -23,11 +23,11 @@ struct IRender : public plat_base<IRender>
     virtual ~IRender() { YA_CORE_TRACE("IRender::~IRender()"); }
 
     // Delete copy operations
-    IRender(const IRender &) = delete;
+    IRender(const IRender &)            = delete;
     IRender &operator=(const IRender &) = delete;
 
     // Default move operations
-    IRender(IRender &&) = default;
+    IRender(IRender &&)            = default;
     IRender &operator=(IRender &&) = default;
 
     static IRender *create(const RenderCreateInfo &ci);

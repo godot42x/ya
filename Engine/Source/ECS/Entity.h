@@ -9,9 +9,9 @@
 
 namespace ya
 {
-class Scene;
+struct Scene;
 
-class Entity
+struct Entity
 {
   private:
     entt::entity _entityHandle{entt::null};

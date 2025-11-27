@@ -30,7 +30,7 @@ namespace ya
  * - Process SDL events and determine if ImGui captured input
  * - Submit ImGui draw commands to command buffer
  */
-class ImGuiManager
+struct ImGuiManager
 {
   public:
     ImGuiManager()  = default;

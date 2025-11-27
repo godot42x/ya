@@ -46,7 +46,7 @@ struct QueueFamilyIndices
 struct VulkanRender : public IRender
 {
     friend struct VulkanUtils;
-    friend class VulkanRenderPass;
+    friend struct VulkanRenderPass;
 
     const std::vector<ya::DeviceFeature> _instanceLayers           = {};
     const std::vector<ya::DeviceFeature> _instanceValidationLayers = {

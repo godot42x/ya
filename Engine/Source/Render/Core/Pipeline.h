@@ -9,10 +9,10 @@
 namespace ya
 {
 
-class IRender;
-class IRenderPass;
-class IDescriptorSetLayout;
-class ICommandBuffer;
+struct IRender;
+struct IRenderPass;
+struct IDescriptorSetLayout;
+struct ICommandBuffer;
 
 // Forward declarations
 struct PushConstantRange;
@@ -21,7 +21,7 @@ struct GraphicsPipelineCreateInfo;
 /**
  * @brief Generic pipeline layout interface
  */
-class IPipelineLayout : public plat_base<IPipelineLayout>
+struct IPipelineLayout : public plat_base<IPipelineLayout>
 {
   public:
     virtual ~IPipelineLayout() = default;
@@ -61,7 +61,7 @@ class IPipelineLayout : public plat_base<IPipelineLayout>
 /**
  * @brief Generic graphics pipeline interface
  */
-class IGraphicsPipeline
+struct IGraphicsPipeline
 {
   public:
     virtual ~IGraphicsPipeline() = default;
