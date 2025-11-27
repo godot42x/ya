@@ -20,7 +20,7 @@ struct VulkanSwapChainSupportDetails
     std::vector<VkPresentModeKHR>   presentModes;
 
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR preferredSurfaceFormat);
-    VkPresentModeKHR   ChooseSwapPresentMode(VkPresentModeKHR preferredMode);
+    VkPresentModeKHR   ChooseSwapPresentMode(const VkPresentModeKHR preferredMode) const;
     VkExtent2D         ChooseSwapExtent(IWindowProvider *provider, int preferredWidth = 0, int preferredHeight = 0);
 
     static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
@@ -79,9 +79,9 @@ struct VulkanSwapChain : public ISwapchain
     VkCompositeAlphaFlagBitsKHR selectCompositeAlpha() const;
 
     void setupQueueFamilySharing(VkSharingMode &sharingMode, uint32_t &queueFamilyCount, uint32_t queueFamilyIndices[2]) const;
-    bool createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI);
+    bool createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI, bool &bImageRecreated);
     void updateMemberVariables(const SwapchainCreateInfo &ci);
-    void handleCIChanged(SwapchainCreateInfo const &ci);
+    void handleCIChanged(SwapchainCreateInfo const &newCI, bool bImageRecreated);
 
   public:
 
@@ -91,7 +91,7 @@ struct VulkanSwapChain : public ISwapchain
     [[nodiscard]] VkSwapchainKHR   getSwapchain() const { return m_swapChain; }
     [[nodiscard]] uint32_t         getImageSize() const { return static_cast<uint32_t>(_images.size()); }
     [[nodiscard]] VkFormat         getSurfaceFormat() const { return _surfaceFormat; }
-    [[nodiscard]] VkPresentModeKHR getPresentMode() const { return _presentMode; }
+    [[nodiscard]] VkPresentModeKHR getVkPresentMode() const { return _presentMode; }
     [[nodiscard]] uint32_t         getWidth() const { return _supportDetails.capabilities.currentExtent.width; }
     [[nodiscard]] uint32_t         getHeight() const { return _supportDetails.capabilities.currentExtent.height; }
 
@@ -120,27 +120,39 @@ struct VulkanSwapChain : public ISwapchain
 
     void setVsync(bool vsync) override
     {
-        bVsync         = vsync;
+        bVsync            = vsync;
+        auto newCI        = _ci;
+        newCI.bVsync      = bVsync;
+        newCI.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
+        recreate(newCI);
+    }
+
+    void setPresentMode(EPresentMode::T presentMode) override
+    {
         auto ci        = _ci;
-        ci.bVsync      = bVsync;
-        ci.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
+        ci.presentMode = presentMode;
+        ci.bVsync      = (presentMode == EPresentMode::FIFO);
         recreate(ci);
     }
+
+    EPresentMode::T getPresentMode() const override;
 
 
     bool acquireNextImage(void *semaphore, void *fence, uint32_t *imageIndex);
     bool present(uint32_t imageIndex);
 
     // Vulkan-specific getters (for backward compatibility)
-    VkSwapchainKHR              getVkHandle() const { return m_swapChain; }
-    const std::vector<VkImage> &getVkImages() const { return _images; }
-    VkExtent2D                  getVkExtent() const
+    [[nodiscard]] VkSwapchainKHR              getVkHandle() const { return m_swapChain; }
+    [[nodiscard]] const std::vector<VkImage> &getVkImages() const { return _images; }
+    [[nodiscard]] VkExtent2D                  getVkExtent() const
     {
         return {
             _supportDetails.capabilities.currentExtent.width,
             _supportDetails.capabilities.currentExtent.height,
         };
     }
+
+    [[nodiscard]] std::vector<EPresentMode::T> getAvailablePresentModes() const override;
 };
 
 }; // namespace ya

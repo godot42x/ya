@@ -81,7 +81,10 @@ struct ISwapchain : public ya::plat_base<ISwapchain>
     /**
      * @brief Set VSync enabled/disabled
      */
-    virtual void setVsync(bool enabled) = 0;
+    virtual void                                       setVsync(bool enabled)                      = 0;
+    virtual void                                       setPresentMode(EPresentMode::T presentMode) = 0;
+    [[nodiscard]] virtual EPresentMode::T              getPresentMode() const                      = 0;
+    [[nodiscard]] virtual std::vector<EPresentMode::T> getAvailablePresentModes() const            = 0;
 
     /**
      * @brief Create a swapchain for the given API
@@ -94,7 +97,7 @@ struct ISwapchain : public ya::plat_base<ISwapchain>
         Extent2D        extent;
         EPresentMode::T presentMode;
     };
-    MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now)> onRecreate;
+    MulticastDelegate<void(const DiffInfo &old, const DiffInfo &now, bool bImageRecreated)> onRecreate;
 };
 
 } // namespace ya

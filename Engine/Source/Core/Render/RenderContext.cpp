@@ -18,7 +18,8 @@ void RenderContext::init(const RenderCreateInfo &createInfo)
     _render->init(createInfo);
 
     // Set VSync
-    setVsync(createInfo.swapchainCI.bVsync);
+    // YA_CORE_INFO("Set default present mode (VSync): {}", createInfo.swapchainCI.bVsync);
+    // setVsync(createInfo.swapchainCI.bVsync);
 
     // Allocate command buffers
     _render->allocateCommandBuffers(getSwapchainImageCount(), _commandBuffers);

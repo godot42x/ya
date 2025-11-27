@@ -32,38 +32,17 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(::VkSu
     return formats[0];
 }
 
-VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(::VkPresentModeKHR preferredMode)
+VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(const VkPresentModeKHR preferredMode) const
 {
     // First try to find the preferred mode
-    for (const auto &modes : presentModes)
+    for (const auto &mode : presentModes)
     {
-        if (modes == preferredMode) {
-            return modes;
+        if (mode == preferredMode) {
+            return mode;
         }
     }
-
     // If preferred mode not found, try fallback strategies
-    YA_CORE_WARN("Preferred present mode {} not available", std::to_string(preferredMode));
-
-    // If we wanted FIFO (VSync) but it's not available, warn user
-    if (preferredMode == VK_PRESENT_MODE_FIFO_KHR) {
-        YA_CORE_WARN("VK_PRESENT_MODE_FIFO_KHR not supported! VSync may not work correctly.");
-
-        // Try FIFO_RELAXED as fallback for VSync
-        for (const auto &modes : presentModes) {
-            if (modes == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
-                YA_CORE_INFO("Using VK_PRESENT_MODE_FIFO_RELAXED_KHR as fallback");
-                return modes;
-            }
-        }
-    }
-
-    // Log available modes for debugging
-    YA_CORE_INFO("Available present modes:");
-    for (const auto &modes : presentModes) {
-        YA_CORE_INFO("  - {}", std::to_string(modes));
-    }
-
+    YA_CORE_ERROR("Preferred present mode {} not available", std::to_string(preferredMode));
     // Use first available mode as last resort
     YA_CORE_WARN("Using first available present mode: {}", std::to_string(presentModes[0]));
     return presentModes[0];
@@ -121,6 +100,12 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
     }
 
+    // Log available modes for debugging
+    YA_CORE_INFO("Available present modes:");
+    for (const auto &modes : details.presentModes) {
+        YA_CORE_INFO("  - {}", std::to_string(modes));
+    }
+
     return details;
 }
 
@@ -176,7 +161,8 @@ void VulkanSwapChain::selectPresentMode(const SwapchainCreateInfo &ci)
 {
     _presentMode = toVk(ci.presentMode);
     // TODO: Add compatibility fallback if needed:
-    // _presentMode = _supportDetails.ChooseSwapPresentMode(_presentMode);
+    _presentMode = _supportDetails.ChooseSwapPresentMode(_presentMode);
+    bVsync       = (_presentMode == VK_PRESENT_MODE_FIFO_KHR);
 }
 
 // Helper: Calculate image count based on capabilities
@@ -208,7 +194,9 @@ VkCompositeAlphaFlagBitsKHR VulkanSwapChain::selectCompositeAlpha() const
 }
 
 // Helper: Setup queue family sharing mode
-void VulkanSwapChain::setupQueueFamilySharing(VkSharingMode &sharingMode, uint32_t &queueFamilyCount, uint32_t queueFamilyIndices[2]) const
+void VulkanSwapChain::setupQueueFamilySharing(VkSharingMode &sharingMode,
+                                              uint32_t      &queueFamilyCount,
+                                              uint32_t       queueFamilyIndices[2]) const
 {
     if (_render->isGraphicsPresentSameQueueFamily())
     {
@@ -225,7 +213,7 @@ void VulkanSwapChain::setupQueueFamilySharing(VkSharingMode &sharingMode, uint32
 
 
 // Helper: Create swapchain and retrieve images
-bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI)
+bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI, bool &bImageRecreated)
 {
     VkResult result = vkCreateSwapchainKHR(_render->getDevice(), &vkCI, nullptr, &m_swapChain);
     if (result != VK_SUCCESS) {
@@ -238,6 +226,7 @@ bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &v
     vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, nullptr);
     _images.resize(imageCount);
     vkGetSwapchainImagesKHR(_render->getDevice(), m_swapChain, &imageCount, _images.data());
+    bImageRecreated = true;
 
     YA_CORE_TRACE("Created swapchain success:{} with [{}] images of format [{}] and color space [{}], present mode [{}], extent {}x{}",
                   (uintptr_t)m_swapChain,
@@ -260,20 +249,20 @@ bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &v
 
 
 // Helper: Broadcast recreate event
-void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &ci)
+void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &newCI, bool bImageRecreated)
 {
 
     YA_PROFILE_SCOPE("SwapChain recreate event");
     DiffInfo old{
         .extent = Extent2D{
-            .width  = ci.width,
-            .height = ci.height,
+            .width  = _ci.width,
+            .height = _ci.height,
         },
-        .presentMode = ci.presentMode,
+        .presentMode = newCI.presentMode,
     };
 
     // update
-    _ci             = ci;
+    _ci             = newCI;
     _ci.width       = _supportDetails.capabilities.currentExtent.width;
     _ci.height      = _supportDetails.capabilities.currentExtent.height;
     _ci.presentMode = EPresentMode::fromVk(_presentMode);
@@ -285,17 +274,20 @@ void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &ci)
         },
         .presentMode = EPresentMode::fromVk(_presentMode),
     };
-    onRecreate.broadcast(old, now);
+    onRecreate.broadcast(old, now, bImageRecreated);
 }
 
-bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
+bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
 {
+    YA_CORE_TRACE("======================================================");
     YA_PROFILE_SCOPE("Swapchain Recreate");
     static uint32_t version = 0;
     version++;
 
     // Query surface capabilities
-    _supportDetails       = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
+    _supportDetails = VulkanSwapChainSupportDetails::query(
+        _render->getPhysicalDevice(),
+        _render->getSurface());
     const auto &newExtent = _supportDetails.capabilities.currentExtent;
 
     // Validate extent (check for minimized window)
@@ -319,9 +311,9 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
     // cleanup();
 
     // Select swapchain parameters
-    selectSurfaceFormat(ci);
-    selectPresentMode(ci);
-    calculateImageCount(ci);
+    selectSurfaceFormat(newCI);
+    selectPresentMode(newCI);
+    calculateImageCount(newCI);
 
     // Setup queue family sharing
     VkSharingMode sharingMode           = {};
@@ -339,7 +331,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .imageFormat           = _surfaceFormat,
         .imageColorSpace       = _surfaceColorSpace,
         .imageExtent           = _supportDetails.capabilities.currentExtent,
-        .imageArrayLayers      = ci.imageArrayLayers,
+        .imageArrayLayers      = newCI.imageArrayLayers,
         .imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode      = sharingMode,
         .queueFamilyIndexCount = queueFamilyCount,
@@ -347,12 +339,13 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         .preTransform          = _supportDetails.capabilities.currentTransform,
         .compositeAlpha        = selectCompositeAlpha(),
         .presentMode           = _presentMode,
-        .clipped               = ci.bClipped ? VK_TRUE : VK_FALSE,
+        .clipped               = newCI.bClipped ? VK_TRUE : VK_FALSE,
         .oldSwapchain          = oldSwapchain,
     };
 
     // Create swapchain and retrieve images
-    if (!createSwapchainAndImages(vkSwapchainCI)) {
+    bool bImageRecreated = false;
+    if (!createSwapchainAndImages(vkSwapchainCI, bImageRecreated)) {
         return false;
     }
 
@@ -361,12 +354,33 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &ci)
         vkDestroySwapchainKHR(device, oldSwapchain, _render->getAllocator());
     }
 
+    // 这是错误的做法，因为vulkan无法获取当前实际使用的 present mode
+    // uint32_t         presentModeCount = 0;
+    // VkPresentModeKHR presentMode{};
+    // vkGetPhysicalDeviceSurfacePresentModesKHR(_render->getPhysicalDevice(),
+    //                                           _render->getSurface(),
+    //                                           &presentModeCount,
+    //                                           &presentMode);
+
+    // std::string currentPresentModeStr = std::to_string(presentMode);
+    // YA_CORE_INFO("Current Present Mode: {}", currentPresentModeStr);
+
+    // if (_presentMode != presentMode)
+    // {
+    //     YA_CORE_ERROR("Requested present mode {}, but current present mode is {}",
+    //                   std::to_string(_presentMode),
+    //                   currentPresentModeStr);
+    //     _presentMode = presentMode;
+    //     this->bVsync = (_presentMode == VK_PRESENT_MODE_FIFO_KHR);
+    // }
+
+    // vkSwapchain
     // Set debug name
     _render->setDebugObjectName(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
                                 m_swapChain,
                                 std::format("SwapChain_{}", version).c_str());
 
-    handleCIChanged(ci);
+    handleCIChanged(newCI, bImageRecreated);
 
     return true;
 }
@@ -439,6 +453,21 @@ EFormat::T VulkanSwapChain::getFormat() const
     default:
         return EFormat::Undefined;
     }
+}
+
+EPresentMode::T VulkanSwapChain::getPresentMode() const
+{
+    return EPresentMode::fromVk(_presentMode);
+}
+
+std::vector<EPresentMode::T> VulkanSwapChain::getAvailablePresentModes() const
+{
+    auto                         details = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
+    std::vector<EPresentMode::T> modes;
+    for (const auto &mode : details.presentModes) {
+        modes.push_back(EPresentMode::fromVk(mode));
+    }
+    return modes;
 }
 
 } // namespace ya

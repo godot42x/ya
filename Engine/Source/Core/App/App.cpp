@@ -868,6 +868,16 @@ void App::onRender(float dt)
                 });
             }
 
+
+            EPresentMode::T presentMode  = swapchain->getPresentMode();
+            const char     *presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
+            if (ImGui::Combo("Present Mode", reinterpret_cast<int *>(&presentMode), presentModes)) {
+                taskManager.registerFrameTask([swapchain, presentMode]() {
+                    // TODO :bind dirty link
+                    swapchain->setPresentMode(presentMode);
+                });
+            }
+
             AppMode mode = _appMode;
             if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
                 _appMode = mode;

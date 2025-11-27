@@ -27,10 +27,12 @@ VulkanRenderTarget::VulkanRenderTarget(IRenderPass *renderPass) : _camera(nullpt
 
     r->getSwapchain()->onRecreate.addLambda(
         this,
-        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now) {
-            if (now.extent.width != old.extent.width ||
-                now.extent.height != old.extent.height ||
-                old.presentMode != now.presentMode)
+        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+            if (
+                bImageRecreated ||
+                (now.extent.width != old.extent.width ||
+                 now.extent.height != old.extent.height ||
+                 old.presentMode != now.presentMode))
             {
                 Extent2D newExtent{
                     .width  = now.extent.width,
