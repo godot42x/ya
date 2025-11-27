@@ -113,7 +113,8 @@ struct IRenderTarget
         addMaterialSystemImpl(system);
     }
 
-    virtual void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) = 0;
+    virtual void             forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) = 0;
+    virtual IMaterialSystem *getMaterialSystemByLabel(const std::string &label)                                = 0;
 
   protected:
     /**

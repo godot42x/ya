@@ -84,6 +84,16 @@ struct VulkanRenderTarget : public IRenderTarget
         }
     }
 
+    IMaterialSystem *getMaterialSystemByLabel(const std::string &label) override
+    {
+        for (auto &system : _materialSystems) {
+            if (system && system->_label == label) {
+                return system.get();
+            }
+        }
+        return nullptr;
+    }
+
   protected:
     void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) override;
 };

@@ -11,8 +11,8 @@ struct HelloMaterial : public ya::App
     // Application-specific resources
     std::shared_ptr<ya::Mesh> cubeMesh;
 
-    ya::Entity *_lightEntity   = nullptr;
-    ya::Entity *_litTestEntity = nullptr;
+    ya::Entity *_pointLightEntity = nullptr;
+    ya::Entity *_litTestEntity    = nullptr;
 
     void onInit(ya::AppDesc ci) override
     {
@@ -66,10 +66,7 @@ struct HelloMaterial : public ya::App
     void createMaterials();
     void createEntities(ya::Scene *scene);
 
-    void onUpdate(float dt) override
-    {
-        Super::onUpdate(dt);
-    }
+    void onUpdate(float dt) override;
 
     void onRender(float dt) override
     {

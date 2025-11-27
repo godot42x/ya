@@ -13,6 +13,7 @@ namespace ya
 
 struct UIElement
 {
+    // todo: multi window
     std::vector<std::shared_ptr<UIElement>> _children;
 
 

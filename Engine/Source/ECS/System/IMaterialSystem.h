@@ -53,5 +53,12 @@ struct IMaterialSystem : public ISystem
     Scene        *getScene() const;
     IRender      *getRender() const;
     VulkanRender *getVulkanRender() const; // Deprecated: use getRender() instead
+
+    template <typename T>
+    T *as()
+    {
+        static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
+        return static_cast<T *>(this);
+    }
 };
 } // namespace ya

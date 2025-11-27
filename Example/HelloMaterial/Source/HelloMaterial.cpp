@@ -6,6 +6,7 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/System/LitMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 
 
@@ -192,7 +193,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     if (auto *PointLight = scene->createEntity("Point Light")) {
         auto tc = PointLight->addComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-10.f, 4.f, 3.f));
-        _lightEntity = PointLight;
+        _pointLightEntity = PointLight;
 
         auto lmc = PointLight->addComponent<ya::LitMaterialComponent>();
         // TODO: cast check
@@ -200,6 +201,19 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         lmc->addMesh(cubeMesh.get(), litMat);
         litMat->setObjectColor(glm::vec3(1.0f));
     }
+}
+
+void HelloMaterial::onUpdate(float dt)
+{
+    Super::onUpdate(dt);
+
+    glm::vec3 pointLightPos = _pointLightEntity->getComponent<ya::TransformComponent>()->getPosition();
+
+    getRenderTarget()
+        ->getMaterialSystemByLabel("LitMaterialSystem")
+        ->as<ya::LitMaterialSystem>()
+        ->uLight
+        .PointLightPos = pointLightPos;
 }
 
 void HelloMaterial::onRenderGUI()
@@ -212,12 +226,6 @@ void HelloMaterial::onRenderGUI()
     // TODO: use my gui not imgui
     // imgui manipulate the lit material  "Lit Test" and "Point Light"
     if (_litTestEntity && _litTestEntity->hasComponent<ya::LitMaterialComponent>()) {
-        auto lmc = _litTestEntity->getComponent<ya::LitMaterialComponent>();
-        for (const auto &[material, meshIDs] : lmc->getMaterial2MeshIDs()) {
-            auto litMat = material->as<ya::LitMaterial>();
-            ImGui::ColorEdit3("Lit Test Object Color", glm::value_ptr(litMat->uParams.objectColor));
-        }
-
         // transfrom manipulation
         auto      tc  = _litTestEntity->getComponent<ya::TransformComponent>();
         glm::vec3 pos = tc->getPosition();
@@ -226,14 +234,9 @@ void HelloMaterial::onRenderGUI()
         }
     }
     ImGui::Spacing();
-    if (_lightEntity && _lightEntity->hasComponent<ya::LitMaterialComponent>()) {
-        auto lmc = _lightEntity->getComponent<ya::LitMaterialComponent>();
-        for (const auto &[material, meshIDs] : lmc->getMaterial2MeshIDs()) {
-            auto litMat = material->as<ya::LitMaterial>();
-            ImGui::ColorEdit3("Point Light Object Color", glm::value_ptr(litMat->uParams.objectColor));
-        }
+    if (_pointLightEntity ) {
         // transfrom manipulation
-        auto      tc  = _lightEntity->getComponent<ya::TransformComponent>();
+        auto      tc  = _pointLightEntity->getComponent<ya::TransformComponent>();
         glm::vec3 pos = tc->getPosition();
         if (ImGui::DragFloat3("Point Light Position", glm::value_ptr(pos), 0.1f)) {
             tc->setPosition(pos);
