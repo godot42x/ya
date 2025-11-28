@@ -9,7 +9,7 @@ namespace ya
 {
 struct Entity;
 
-class Scene
+struct Scene
 {
     friend struct Entity;
     using id_t = entt::entity;

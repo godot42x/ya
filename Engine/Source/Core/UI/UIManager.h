@@ -2,8 +2,9 @@
 
 #include "Core/Base.h"
 #include "Render/UIRender.h"
-#include "UElement.h"
 #include "UIBase.h"
+#include "UIElement.h"
+
 
 
 namespace ya
@@ -56,6 +57,17 @@ struct UIElementRegistry
             // delete *it;
         }
         _allElements.erase(it, _allElements.end());
+    }
+};
+
+struct UIFactory
+{
+    template <typename T, typename... Args>
+    static std::shared_ptr<T> create(Args &&...args)
+    {
+        auto element = makeShared<T>(std::forward<Args>(args)...);
+        UIElementRegistry::get()->registerElement(element.get());
+        return element;
     }
 };
 

@@ -15,10 +15,10 @@
 // Forward declarations
 namespace ya
 {
-class RenderContext;
-class SceneManager;
+struct RenderContext;
+struct SceneManager;
 struct ImGuiManager;
-class Scene;
+struct Scene;
 struct Material;
 struct IRenderPass;
 } // namespace ya

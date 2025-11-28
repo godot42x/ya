@@ -149,6 +149,8 @@ inline auto toVk(T mode) -> VkCullModeFlags
         return VK_CULL_MODE_FRONT_BIT;
     case None:
         return VK_CULL_MODE_NONE;
+    case FrontAndBack:
+        return VK_CULL_MODE_FRONT_AND_BACK;
     default:
         UNREACHABLE();
     }

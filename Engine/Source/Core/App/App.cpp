@@ -402,13 +402,14 @@ void App::onInit(AppDesc ci)
     bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
 
 
-    auto mgr       = UIManager::get();
-    auto panel     = makeShared<UIPanel>();
+    auto panel     = UIFactory::create<UIPanel>();
     panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
-    auto btn       = makeShared<UIButton>();
+    auto btn       = UIFactory::create<UIButton>();
     btn->_position = {50.0f, 50.0f};
     btn->_size     = {200.0f, 100.0f};
     panel->addChild(btn);
+
+    auto mgr = UIManager::get();
     mgr->_rootElement.addChild(panel);
 }
 
