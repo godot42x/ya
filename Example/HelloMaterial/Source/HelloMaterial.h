@@ -50,6 +50,8 @@ struct HelloMaterial : public ya::App
         loadTextures();
         createMaterials();
         createEntities(scene);
+
+        YA_INFO("HelloMaterial scene initialized.");
     }
 
     void onSceneDestroy(ya::Scene *scene) override

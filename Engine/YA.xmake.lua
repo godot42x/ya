@@ -88,6 +88,7 @@ do
     -- add_files("./Source/Renderer/**.cpp", { unity_group = "Renderer" })
     -- add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
     add_files("./Source/**.cpp")
+    remove_files("./Source/Test/**.cpp")
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source/Core/FWD.h")
@@ -144,6 +145,4 @@ do
     end)
 end
 
-target("ya-testing")
-do
-end
+

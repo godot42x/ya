@@ -1,4 +1,4 @@
-add_requires("gtest v1.16.0")
+add_requires("gtest")
 
 target("yalua_test")
 do

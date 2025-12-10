@@ -47,6 +47,7 @@
         "SPIRV",
         "stbi",
         "STENCILOP",
+        "STREQ",
         "subpass",
         "Subpasses",
         "subresource",

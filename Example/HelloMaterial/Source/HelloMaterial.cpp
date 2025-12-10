@@ -146,9 +146,13 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     uint32_t maxMaterialIndex    = ya::MaterialFactory::get()->getMaterialCount() - 1;
     uint32_t simpleMaterialCount = simpleMaterials.size();
 
+    // YA_CORE_DEBUG("1");
+
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
             for (int k = 0; k < alpha; ++k) {
+
+                // YA_CORE_DEBUG("1.1 {} {} {}", i, j, k);
                 auto cube = scene->createEntity(std::format("Cube_{}_{}_{}", i, j, k));
                 {
                     auto v  = glm::vec3(i, j, k);
@@ -175,6 +179,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                         umc->addMesh(cubeMesh.get(), mat->as<ya::UnlitMaterial>());
                     }
                 }
+                // YA_CORE_DEBUG("1.2 {} {} {}", i, j, k);
             }
         }
     }
@@ -197,7 +202,12 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         auto lmc = PointLight->addComponent<ya::LitMaterialComponent>();
         // TODO: cast check
-        auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1")->as<ya::LitMaterial>();
+
+        auto mat = ya::MaterialFactory::get()->getMaterialByName("lit1");
+        YA_CORE_ASSERT(mat, "Material 'lit1' not found");
+        auto litMat = mat->as<ya::LitMaterial>();
+        YA_CORE_ASSERT(litMat, "Lit material is null");
+
         lmc->addMesh(cubeMesh.get(), litMat);
         litMat->setObjectColor(glm::vec3(1.0f));
     }
@@ -234,7 +244,7 @@ void HelloMaterial::onRenderGUI()
         }
     }
     ImGui::Spacing();
-    if (_pointLightEntity ) {
+    if (_pointLightEntity) {
         // transfrom manipulation
         auto      tc  = _pointLightEntity->getComponent<ya::TransformComponent>();
         glm::vec3 pos = tc->getPosition();
