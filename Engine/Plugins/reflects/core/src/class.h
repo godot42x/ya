@@ -500,10 +500,18 @@ struct Class
         return it->second.factory(emptyArgs);
     }
 
+    void *createInstance(const ArgumentList &&args) const = delete;
+    void *createInstance(const ArgumentList &args) const  = delete;
+    void *createInstance(const ArgumentList args) const  = delete;
     // 创建实例（带参数）- 根据参数类型签名选择构造函数
     template <typename... Args>
     void *createInstance(Args &&...args) const
     {
+        if constexpr (sizeof...(Args) > 0) {
+            static_assert(!std::is_same_v<std::tuple_element_t<0, std::tuple<Args...>>, ArgumentList>,
+                          "Use ArgumentList to pass arguments directly.");
+        }
+
         std::string sig = detail::makeSignature<std::decay_t<Args>...>();
         auto        it  = constructors.find(sig);
         if (it == constructors.end()) {
@@ -513,6 +521,7 @@ struct Class
         auto argList = ArgumentList::make(std::forward<Args>(args)...);
         return it->second.factory(argList);
     }
+
 
     // 销毁实例
     void destroyInstance(void *obj) const
