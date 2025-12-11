@@ -411,6 +411,13 @@ void App::onInit(AppDesc ci)
 
     auto mgr = UIManager::get();
     mgr->_rootElement.addChild(panel);
+
+    // LOAD demo testing textures
+    const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
+    const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
+
+    ya::AssetManager::get()->loadTexture("face", faceTexturePath);
+    ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
 }
 
 int App::onEvent(const Event &event)
@@ -730,7 +737,6 @@ int ya::App::iterate(float dt)
         YA_CORE_INFO("Application minimized, skipping frame");
         return 0;
     }
-
     if (!_bPause) {
         onUpdate(dt);
     }

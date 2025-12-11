@@ -35,11 +35,7 @@ void HelloMaterial::createCubeMesh()
 void HelloMaterial::loadTextures()
 {
 
-    const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
-    const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
-
-    ya::AssetManager::get()->loadTexture("face", faceTexturePath);
-    ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
+   
 }
 
 void HelloMaterial::createMaterials()

@@ -1,8 +1,11 @@
 {
     "cSpell.words": [
         "Assimp",
+        "batchcmds",
         "blendfactor",
         "BLENDOP",
+        "buildcmd",
+        "cindex",
         "cmbf",
         "COLORCOMPONENT",
         "cppcoreguidelines",
@@ -35,6 +38,7 @@
         "SAMPLECOUNT",
         "SAMPLERADDRESSMODE",
         "SAMPLERMIPMAPMODE",
+        "scriptdir",
         "SDLGPU",
         "SDLK",
         "SDLMAIN",
@@ -80,5 +84,8 @@
     "chat.tools.terminal.autoApprove": {
         ".specify/scripts/bash/": true,
         ".specify/scripts/powershell/": true
-    }
+    },
+    "Lua.diagnostics.disable": [
+        "undefined-field"
+    ]
 }

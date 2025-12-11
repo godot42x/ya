@@ -59,10 +59,14 @@ struct MaterialFactoryInternal
     }
 
     template <typename T>
-        requires std::is_base_of<Material, T>::value
+        requires std::is_base_of_v<Material, T>
     [[nodiscard]] const std::vector<std::shared_ptr<Material>> &getMaterials() const
     {
-        return _materials.at(getTypeID<T>());
+        if (auto it = _materials.find(getTypeID<T>()); it != _materials.end()) {
+            return it->second;
+        }
+        static const std::vector<std::shared_ptr<Material>> empty;
+        return empty;
     }
 
     Material *getMaterialByName(FName name)
