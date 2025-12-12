@@ -39,4 +39,9 @@ VulkanImageView::~VulkanImageView()
 
 const IImage *VulkanImageView::getImage() const { return static_cast<const IImage *>(_image); }
 
+void VulkanImageView::setDebugName(const std::string &name)
+{
+    _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, (void *)_handle, name);
+}
+
 } // namespace ya

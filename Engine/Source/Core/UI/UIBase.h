@@ -30,6 +30,9 @@ struct FUIColor
     }
 
     [[nodiscard]] const glm::vec4 &asVec4() const { return data; }
+
+
+    static auto red() { return FUIColor(1.0f, 0.0f, 0.0f, 1.0f); }
 };
 
 

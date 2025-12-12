@@ -1,6 +1,7 @@
 #include "AssetManager.h"
 
 
+#include "Core/Debug/Instrumentor.h"
 #include "assimp/Importer.hpp"
 #include "assimp/ObjMaterial.h"
 #include "assimp/mesh.h"
@@ -24,6 +25,7 @@ AssetManager *AssetManager::get()
 
 void AssetManager::cleanup()
 {
+    YA_PROFILE_FUNCTION();
     modelCache.clear();
     _textureViews.clear();
     if (_importer) {

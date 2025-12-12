@@ -9,7 +9,6 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Render/TextureLibrary.h"
 #include "imgui.h"
 
 #include "Core/AssetManager.h"
@@ -23,7 +22,7 @@ namespace ya
 
 static FRender2dData   render2dData;
 static ICommandBuffer *curCmdBuf = nullptr;
-static FQuadData      *quadData  = nullptr;
+static FQuadRender    *quadData  = nullptr;
 
 
 void Render2D::init(IRender *render, IRenderPass *renderpass)
@@ -43,7 +42,7 @@ void Render2D::init(IRender *render, IRenderPass *renderpass)
         return false;
     });
 
-    quadData = new FQuadData();
+    quadData = new FQuadRender();
     quadData->init(render, renderpass);
 }
 
@@ -96,57 +95,26 @@ void Render2D::end()
     curCmdBuf = nullptr;
 }
 
+
 void Render2D::makeSprite(const glm::vec3         &position,
                           const glm::vec2         &size,
                           std::shared_ptr<Texture> texture,
                           const glm::vec4         &tint,
                           const glm::vec2         &uvScale)
 {
-    if (quadData->shouldFlush()) {
-        quadData->flush(curCmdBuf);
-    }
-
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+    quadData->drawTexture(position, size, texture, tint, uvScale);
+}
 
 
-    uint32_t textureIdx = 0; // white texture
-    if (texture) {
-        auto it = quadData->_textureLabel2Idx.find(texture->getLabel());
-        if (it != quadData->_textureLabel2Idx.end())
-        {
-            textureIdx = it->second;
-        }
-        else {
-            // TODO: use map to cache same texture view
-            quadData->_textureViews.push_back(TextureView{
-                .texture = texture,
-                .sampler = TextureLibrary::getDefaultSampler(),
-            });
-            auto idx                                         = static_cast<uint32_t>(quadData->_textureViews.size() - 1);
-            quadData->_textureLabel2Idx[texture->getLabel()] = idx;
-            textureIdx                                       = idx;
-        }
-    }
 
-    for (int i = 0; i < 4; i++) {
-        // rotation -> scale -> offset
-        *quadData->vertexPtr = FQuadData::Vertex{
-            .pos        = model * FQuadData::vertices[i],
-            .color      = tint,
-            .texCoord   = FQuadData::defaultTexcoord[i] * uvScale,
-            .textureIdx = textureIdx,
-        };
-        ++quadData->vertexPtr;
-    }
-
-    quadData->vertexCount += 4;
-    quadData->indexCount += 6;
+void Render2D::makeText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font)
+{
+    quadData->drawText(text, position, color, font);
 }
 
 // MARK: quad init
 
-void FQuadData::init(IRender *render, IRenderPass *renderPass)
+void FQuadRender::init(IRender *render, IRenderPass *renderPass)
 {
     _render = render;
 
@@ -230,7 +198,7 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
                 VertexBufferDescription{
                     .slot = 0,
                     // ??? no copy pasted!!! error
-                    .pitch = sizeof(FQuadData::Vertex),
+                    .pitch = sizeof(FQuadRender::Vertex),
                 },
             },
             // MARK: vertex attributes
@@ -330,11 +298,11 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
         ya::BufferCreateInfo{
             .label         = "Sprite2D_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size          = sizeof(FQuadData::Vertex) * MaxVertexCount,
+            .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
             .memProperties = EMemoryProperty::HostVisible,
         });
 
-    vertexPtr     = _vertexBuffer->map<FQuadData::Vertex>();
+    vertexPtr     = _vertexBuffer->map<FQuadRender::Vertex>();
     vertexPtrHead = vertexPtr;
 
 
@@ -371,7 +339,7 @@ void FQuadData::init(IRender *render, IRenderPass *renderPass)
 }
 
 
-void FQuadData::destroy()
+void FQuadRender::destroy()
 {
     // Note: White texture and default sampler are now managed by TextureLibrary
 
@@ -386,7 +354,7 @@ void FQuadData::destroy()
     _pipelineLayout.reset();
 }
 
-void FQuadData::begin()
+void FQuadRender::begin()
 {
     _textureViews.clear();
     _textureLabel2Idx.clear();
@@ -443,13 +411,13 @@ void FQuadData::begin()
 }
 
 
-void FQuadData::end()
+void FQuadRender::end()
 {
     quadData->flush(curCmdBuf);
 }
 
 // MARK: quad flush
-void FQuadData::flush(ICommandBuffer *cmdBuf)
+void FQuadRender::flush(ICommandBuffer *cmdBuf)
 {
     if (vertexCount <= 0) {
         return;
@@ -484,7 +452,7 @@ void FQuadData::flush(ICommandBuffer *cmdBuf)
     indexCount  = 0;
 }
 
-void FQuadData::updateFrameUBO(glm::mat4 viewProj)
+void FQuadRender::updateFrameUBO(glm::mat4 viewProj)
 {
     FrameUBO ubo{
         .matViewProj = viewProj,
@@ -507,9 +475,15 @@ void FQuadData::updateFrameUBO(glm::mat4 viewProj)
         {});
 }
 
-void FQuadData::updateResources()
+void FQuadRender::updateResources()
 {
+
+    // TODO: let font atlas/icon atlas always on gpu not update every frame
     std::vector<DescriptorImageInfo> imageInfos;
+
+    auto defaultSampler = TextureLibrary::getDefaultSampler();
+    auto whiteTexture   = TextureLibrary::getWhiteTexture();
+
     // make empty slot to be updated
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
 
@@ -522,25 +496,133 @@ void FQuadData::updateResources()
         }
         else {
             imageInfos.emplace_back(
-                TextureLibrary::getDefaultSampler()->getHandle(),
-                TextureLibrary::getWhiteTexture()->getImageViewHandle(),
+                defaultSampler->getHandle(),
+                whiteTexture->getImageViewHandle(),
                 EImageLayout::ShaderReadOnlyOptimal);
         }
     }
 
-    auto *descriptorHelper = _render->getDescriptorHelper();
-    descriptorHelper->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genImageWrite(
-                _resourceDS,
-                0,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                imageInfos.data(),
-                static_cast<uint32_t>(imageInfos.size())),
-        },
-        {});
+    _render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(
+                    _resourceDS,
+                    0,
+                    0,
+                    EPipelineDescriptorType::CombinedImageSampler,
+                    imageInfos.data(),
+                    static_cast<uint32_t>(imageInfos.size())),
+            },
+            {});
 }
 
+
+
+// MARK: quad  interface
+void FQuadRender::drawTexture(const glm::vec3         &position,
+                              const glm::vec2         &size,
+                              std::shared_ptr<Texture> texture,
+                              const glm::vec4         &tint,
+                              const glm::vec2         &uvScale)
+{
+    if (shouldFlush()) {
+        flush(curCmdBuf);
+    }
+
+    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
+                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+
+
+    uint32_t textureIdx = findOrAddTexture(texture);
+
+    for (int i = 0; i < 4; i++) {
+        // rotation -> scale -> offset
+        *vertexPtr = FQuadRender::Vertex{
+            .pos        = model * FQuadRender::vertices[i],
+            .color      = tint,
+            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
+            .textureIdx = textureIdx,
+        };
+        ++vertexPtr;
+    }
+
+    vertexCount += 4;
+    indexCount += 6;
+}
+
+void FQuadRender::drawSubTexture(const glm::vec3         &position,
+                                 const glm::vec2         &size,
+                                 std::shared_ptr<Texture> texture,
+                                 const glm::vec4         &tint,
+                                 const glm::vec4         &uvRect)
+{
+    if (shouldFlush()) {
+        flush(curCmdBuf);
+    }
+
+    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
+                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+    // TODO: check texture full after findOrAddTexture, maybe use same white texture/ same sub texture
+    uint32_t textureIdx = findOrAddTexture(texture);
+    for (int i = 0; i < 4; i++) {
+        glm::vec2 uv = FQuadRender::defaultTexcoord[i] * glm::vec2(uvRect.z, uvRect.w) + glm::vec2(uvRect.x, uvRect.y);
+        *vertexPtr   = FQuadRender::Vertex{
+              .pos        = model * FQuadRender::vertices[i],
+              .color      = tint,
+              .texCoord   = uv,
+              .textureIdx = textureIdx,
+        };
+        ++vertexPtr;
+    }
+
+    vertexCount += 4;
+    indexCount += 6;
+}
+
+
+void FQuadRender::drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font)
+{
+    float cursorX = position.x;
+    float cursorY = position.y;
+
+    // Debug: draw baseline (optional, comment out later)
+    // drawTexture(glm::vec3(position.x, position.y, 0.01f), glm::vec2(500, 2), nullptr, glm::vec4(0, 1, 0, 1));
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        char             ch        = text[i];
+        const Character &character = font->getCharacter(ch);
+
+        // Skip rendering for space (but still advance cursor)
+        if (ch == ' ') {
+            cursorX += static_cast<float>(character.advance >> 6);
+            continue;
+        }
+
+        // Calculate glyph position
+        // bearing.x: offset from cursor to left edge of glyph
+        // bearing.y: offset from baseline to top of glyph (positive = above baseline)
+        float xpos = cursorX + static_cast<float>(character.bearing.x);
+        float ypos = cursorY - static_cast<float>(character.bearing.y); // bearing.y is distance from baseline to top
+
+        glm::vec3 pos = glm::vec3(xpos, ypos, 0.f);
+
+        stdptr<Texture> texture = font->atlasTexture;
+        if (!character.bInAtlas) {
+            UNIMPLEMENTED();
+        }
+
+        glm::vec4 uvRect = character.uvRect;
+        drawSubTexture(
+            pos,
+            glm::vec2(character.size),
+            font->atlasTexture,
+            color,
+            uvRect);
+
+        // Advance cursor for next glyph (advance is in 1/64 pixels)
+        cursorX += static_cast<float>(character.advance >> 6);
+    }
+}
 
 } // namespace ya

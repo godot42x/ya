@@ -27,7 +27,6 @@ struct VulkanImage : public IImage
 
     ya::ImageCreateInfo _ci;
 
-
   public:
 
 
@@ -65,11 +64,14 @@ struct VulkanImage : public IImage
     [[nodiscard]] VkImage  getVkImage() const { return _handle; }
     [[nodiscard]] VkFormat getVkFormat() const { return _format; }
 
+    void setDebugName(const std::string &name) override;
+
 
   public:
     static void transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage);
     static bool transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
                                  VkImageLayout oldLayout, VkImageLayout newLayout);
+
 
   protected:
     bool allocate();

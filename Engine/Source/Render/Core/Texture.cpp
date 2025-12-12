@@ -2,6 +2,7 @@
 
 #include "Core/App/App.h"
 #include "Core/FileSystem/FileSystem.h"
+#include "Core/Render/RenderContext.h"
 #include "stb/stb_image.h"
 #include <cstddef>
 
@@ -70,6 +71,13 @@ FormatHandle Texture::getFormatHandle() const
     // For now, we'll store the VkFormat in the FormatHandle
     // In a more complete abstraction, you'd have a Format enum or interface
     return FormatHandle{reinterpret_cast<void *>(static_cast<std::uintptr_t>(toVk(_format)))};
+}
+
+void Texture::setLabel(const std::string &label)
+{
+    _label = label;
+    image->setDebugName(std::format("Texture_Image_{}", label));
+    imageView->setDebugName(std::format("Texture_ImageView_{}", label));
 }
 
 void Texture::createImage(const void *pixels, uint32_t texWidth, uint32_t texHeight, EFormat::T format)

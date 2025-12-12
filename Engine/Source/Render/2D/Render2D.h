@@ -1,16 +1,21 @@
 
 #pragma once
 
-#include "Render/Core/Buffer.h"
-#include "Render/Core/DescriptorSet.h"
-#include "Render/Core/Pipeline.h"
-#include "Render/Core/Texture.h"
 #include "glm/glm.hpp"
 
 #include "Core/App/App.h"
 #include "Core/Base.h"
+
+#include "Render/Core/Buffer.h"
+#include "Render/Core/DescriptorSet.h"
+#include "Render/Core/Pipeline.h"
+#include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
+#include "Render/TextureLibrary.h"
+
+
+#include "FontManager.h"
 
 namespace ya
 {
@@ -41,18 +46,18 @@ struct Render2D
     static void onImGui();
     static void end();
 
+    // Convenience wrappers - delegate to FQuadRender
     static void makeSprite(const glm::vec3         &position,
                            const glm::vec2         &size,
                            std::shared_ptr<Texture> texture = nullptr,
                            const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2         &uvScale = {1.0f, 1.0f});
 
-    // void makeRotatedSprite(const glm::vec2 &position, const glm::vec2 &size, const glm::vec4 &color, float rotation) {}
-    // void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color) {}
+    static void makeText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font);
 };
 
 
-struct FQuadData
+struct FQuadRender
 {
     struct Vertex
     {
@@ -89,8 +94,8 @@ struct FQuadData
     std::shared_ptr<IBuffer> _vertexBuffer;
     std::shared_ptr<IBuffer> _indexBuffer;
 
-    FQuadData::Vertex *vertexPtr     = nullptr;
-    FQuadData::Vertex *vertexPtrHead = nullptr;
+    FQuadRender::Vertex *vertexPtr     = nullptr;
+    FQuadRender::Vertex *vertexPtrHead = nullptr;
 
     uint32_t vertexCount = 0;
     uint32_t indexCount  = 0;
@@ -131,5 +136,49 @@ struct FQuadData
 
     void updateFrameUBO(glm::mat4 viewProj);
     void updateResources();
+
+  public:
+    void drawTexture(const glm::vec3         &position,
+                     const glm::vec2         &size,
+                     std::shared_ptr<Texture> texture = nullptr,
+                     const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                     const glm::vec2         &uvScale = {1.0f, 1.0f});
+
+    void drawSubTexture(const glm::vec3         &position,
+                        const glm::vec2         &size,
+                        std::shared_ptr<Texture> texture = nullptr,
+                        const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                        const glm::vec4         &uvRect  = glm::vec4(0.0f) // offset: xy , scale: zw
+    );
+
+    void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font);
+
+  private:
+
+    uint32_t findOrAddTexture(stdptr<Texture> texture)
+    {
+        uint32_t textureIdx = 0; // white texture
+        if (texture) {
+            // TODO: use ptr as key?
+            auto it = _textureLabel2Idx.find(texture->getLabel());
+            if (it != _textureLabel2Idx.end())
+            {
+                textureIdx = it->second;
+            }
+            else {
+                // TODO: use map to cache same texture view
+                // TODO: different sampler?
+                _textureViews.push_back(TextureView{
+                    .texture = texture,
+                    .sampler = TextureLibrary::getDefaultSampler(),
+                });
+                auto idx                               = static_cast<uint32_t>(_textureViews.size() - 1);
+                _textureLabel2Idx[texture->getLabel()] = idx;
+                textureIdx                             = idx;
+                _lastPushTextureSlot                   = static_cast<int>(idx);
+            }
+        }
+        return textureIdx;
+    }
 };
 }; // namespace ya

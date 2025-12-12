@@ -14,6 +14,15 @@ struct ICommandBuffer;
 struct ISwapchain;
 struct IDescriptorSetHelper;
 
+
+enum class ERenderObject : uint32_t
+{
+    DeviceMemory,
+    Image,
+    ImageView,
+    // Add more as needed
+};
+
 struct IRender : public plat_base<IRender>
 {
     RenderCreateInfo _ci;

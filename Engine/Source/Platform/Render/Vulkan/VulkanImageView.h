@@ -28,5 +28,7 @@ struct VulkanImageView : public IImageView
 
     // Vulkan-specific accessor
     VkImageView getVkImageView() const { return _handle; }
+
+    void setDebugName(const std::string &name);
 };
 } // namespace ya

@@ -22,6 +22,18 @@
 namespace ya
 {
 
+VkObjectType toVk(ERenderObject type)
+{
+    switch (type) {
+    case ERenderObject::Image:
+        return VK_OBJECT_TYPE_IMAGE;
+    // Add more cases as needed
+    default:
+        UNREACHABLE();
+    }
+    return VK_OBJECT_TYPE_MAX_ENUM;
+}
+
 // Destructor needs to be defined in .cpp where VulkanDescriptor is complete
 VulkanRender::~VulkanRender()
 {
@@ -30,6 +42,7 @@ VulkanRender::~VulkanRender()
         _descriptorHelper = nullptr;
     }
 }
+
 
 
 void VulkanRender::createInstance()

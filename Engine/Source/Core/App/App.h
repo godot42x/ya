@@ -142,8 +142,10 @@ struct App
 
     void requestQuit() { bRunning = false; }
 
+    // before render context created
     virtual void onInit(AppDesc ci);
-    virtual void onPostInit() {}
+    //  after render context created
+    virtual void onPostInit();
     virtual void onQuit() {}
 
 

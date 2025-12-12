@@ -21,6 +21,8 @@ struct ColorRGBA
     ty a;
 };
 
+using ColorU8_t = ColorRGBA<uint8_t>;
+
 /**
  * @brief Texture - Platform-independent texture wrapper
  *
@@ -75,7 +77,7 @@ struct Texture
     uint32_t   getChannels() const { return _channels; }
     EFormat::T getFormat() const { return _format; }
 
-    void               setLabel(const std::string &label) { _label = label; }
+    void setLabel(const std::string &label);
     const std::string &getLabel() const { return _label; }
     const std::string &getFilepath() const { return _filepath; }
 

@@ -37,6 +37,8 @@ namespace ya
 
 // Forward declarations
 
+extern VkObjectType toVk(ERenderObject type);
+
 struct QueueFamilyIndices
 {
     int32_t queueFamilyIndex = -1; // Graphics queue family index
@@ -110,19 +112,19 @@ struct VulkanRender : public IRender
 
 
     // used for GPU-CPU(fame), GPU internal(image) sync
-    static constexpr uint32_t  flightFrameSize = 1;
-    uint32_t                   currentFrameIdx = 0;
-    std::vector<::VkSemaphore> frameImageAvailableSemaphores;
-    std::vector<::VkFence>     frameFences;
-    std::vector<::VkSemaphore> imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
+    static constexpr uint32_t flightFrameSize = 1;
+    uint32_t                  currentFrameIdx = 0;
+    std::vector<VkSemaphore>  frameImageAvailableSemaphores;
+    std::vector<VkFence>      frameFences;
+    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
 
 
   public:
     IWindowProvider *_windowProvider = nullptr;
 
-    Delegate<bool(::VkInstance, ::VkSurfaceKHR *inSurface)> onCreateSurface;
-    Delegate<void(::VkInstance, ::VkSurfaceKHR *inSurface)> onReleaseSurface;
-    Delegate<std::vector<ya::DeviceFeature>()>              onGetRequiredInstanceExtensions;
+    Delegate<bool(VkInstance, VkSurfaceKHR *inSurface)> onCreateSurface;
+    Delegate<void(VkInstance, VkSurfaceKHR *inSurface)> onReleaseSurface;
+    Delegate<std::vector<DeviceFeature>()>              onGetRequiredInstanceExtensions;
 
   public:
 
@@ -283,19 +285,6 @@ struct VulkanRender : public IRender
         onReleaseSurface.executeIfBound(&(*_instance), &_surface);
         vkDestroyInstance(_instance, getAllocator());
     }
-
-
-
-    void OnPostUpdate()
-    {
-        vkDeviceWaitIdle(m_LogicalDevice);
-    };
-
-    void DrawFrame()
-    {
-        // drawTriangle();
-    }
-
 
 
   public:

@@ -14,6 +14,12 @@ VulkanImage::~VulkanImage()
     }
 }
 
+void VulkanImage::setDebugName(const std::string &name)
+{
+    _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, (void *)_handle, name);
+    _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, (void *)_imageMemory, name + "_Memory");
+}
+
 void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage)
 {
 

@@ -394,6 +394,7 @@ void App::init(AppDesc ci)
     }
 }
 
+// MARK: INIT
 void App::onInit(AppDesc ci)
 {
     auto &bus = *MessageBus::get();
@@ -411,13 +412,19 @@ void App::onInit(AppDesc ci)
 
     auto mgr = UIManager::get();
     mgr->_rootElement.addChild(panel);
+}
 
+void App::onPostInit()
+{
+    // those resources are depends on the render context
     // LOAD demo testing textures
     const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
     const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
     ya::AssetManager::get()->loadTexture("face", faceTexturePath);
     ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
+
+    FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
 }
 
 int App::onEvent(const Event &event)
@@ -473,6 +480,7 @@ void ya::App::quit()
     _renderpass.reset(); // shared_ptr, use reset() instead of delete
 
     TextureLibrary::destroy();
+    FontManager::get()->cleanup();
     AssetManager::get()->cleanup();
 
     if (_renderContext) {
@@ -844,6 +852,8 @@ void App::onRender(float dt)
 
         Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
     }
+    auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
+    Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font);
     UIManager::get()->render();
     Render2D::end();
 
