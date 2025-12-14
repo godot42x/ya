@@ -9,7 +9,7 @@ namespace ya
 {
 struct Entity;
 
-struct Scene
+struct [[refl]] Scene
 {
     friend struct Entity;
     using id_t = entt::entity;
@@ -35,19 +35,23 @@ struct Scene
 
     // Entity management
     Entity *createEntity(const std::string &name = "Entity");
-    Entity  createEntityWithUUID(uint64_t uuid, const std::string &name = "Entity");
+    Entity  createEntityWithUUID(uint64_t           uuid,
+                                 const std::string &name = "Entity");
     void    destroyEntity(Entity entity);
     bool    isValidEntity(Entity entity) const;
 
     Entity *getEntityByID(id_t id);
-    Entity *getEntityByID(uint32_t id) { return getEntityByID(static_cast<id_t>(id)); }
+    Entity *getEntityByID(uint32_t id)
+    {
+        return getEntityByID(static_cast<id_t>(id));
+    }
 
     // Scene management
     void clear();
     void onUpdateRuntime(float deltaTime);
     void onUpdateEditor(float deltaTime);
-    void onRenderRuntime();
     void onRenderEditor();
+    void onRenderRuntime();
 
     // Getters
     const std::string &getName() const { return _name; }
@@ -60,6 +64,8 @@ struct Scene
     // Find entities
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
+
+    void serialize(std::string &Name, Entity * entity);
 };
 
 } // namespace ya

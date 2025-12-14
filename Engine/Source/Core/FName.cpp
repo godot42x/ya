@@ -1,10 +1,14 @@
 #include "FName.h"
 #include <mutex>
 
-NameRegistry *NameRegistry::_instance = nullptr;
+namespace ya
+{
+
 
 NameRegistry &NameRegistry::get()
 {
     static NameRegistry instance;
     return instance;
 }
+
+} // namespace ya

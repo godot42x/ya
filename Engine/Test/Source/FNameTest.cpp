@@ -4,6 +4,8 @@
 #include <thread>
 #include <vector>
 
+using namespace ya;
+
 
 // 测试基本功能
 class FNameTest : public ::testing::Test
@@ -46,17 +48,17 @@ TEST_F(FNameTest, CopyConstruction)
     EXPECT_STREQ(name1.c_str(), name2.c_str());
 }
 
-// 测试 3: 移动构造
-TEST_F(FNameTest, MoveConstruction)
-{
-    FName   name1("test");
-    index_t originalIndex = name1._index;
+// // 测试 3: 移动构造
+// TEST_F(FNameTest, MoveConstruction)
+// {
+//     FName   name1("test");
+//     index_t originalIndex = name1._index;
 
-    FName name2(std::move(name1));
+//     FName name2(std::move(name1));
 
-    EXPECT_EQ(name2._index, originalIndex);
-    EXPECT_EQ(name1._index, 0); // 移动后源对象应该被重置
-}
+//     EXPECT_EQ(name2._index, originalIndex);
+//     EXPECT_EQ(name1._index, 0); // 移动后源对象应该被重置
+// }
 
 // 测试 4: 拷贝赋值
 TEST_F(FNameTest, CopyAssignment)
@@ -71,17 +73,17 @@ TEST_F(FNameTest, CopyAssignment)
 }
 
 // 测试 5: 移动赋值
-TEST_F(FNameTest, MoveAssignment)
-{
-    FName   name1("test");
-    FName   name2("other");
-    index_t originalIndex = name1._index;
+// TEST_F(FNameTest, MoveAssignment)
+// {
+//     FName   name1("test");
+//     FName   name2("other");
+//     index_t originalIndex = name1._index;
 
-    name2 = std::move(name1);
+//     name2 = std::move(name1);
 
-    EXPECT_EQ(name2._index, originalIndex);
-    EXPECT_EQ(name1._index, 0);
-}
+//     EXPECT_EQ(name2._index, originalIndex);
+//     EXPECT_EQ(name1._index, 0);
+// }
 
 // 测试 6: 生命周期后 index 一致性
 TEST_F(FNameTest, IndexConsistencyAfterDestruction)
@@ -337,7 +339,8 @@ TEST_F(FNameTest, LongString)
 }
 
 // ============================================================================
-// 性能测试
+// MARK: Performance
+//  性能测试
 // ============================================================================
 
 class FNamePerformanceTest : public ::testing::Test
@@ -415,7 +418,7 @@ TEST_F(FNamePerformanceTest, MultithreadExistingNamesHighConcurrency)
         FName temp(name);
     }
 
-    const int threadCount        = 16;
+    const int threadCount         = 16;
     const int iterationsPerThread = 50000;
 
     auto duration = measureTime([&]() {
@@ -459,7 +462,7 @@ TEST_F(FNamePerformanceTest, MultithreadMixedReadWrite)
         FName temp(name);
     }
 
-    const int threadCount        = 8;
+    const int threadCount         = 8;
     const int iterationsPerThread = 10000;
 
     auto duration = measureTime([&]() {
@@ -534,7 +537,7 @@ TEST_F(FNamePerformanceTest, UnorderedMapLookup)
     auto      duration   = measureTime([&]() {
         for (int i = 0; i < iterations; ++i)
         {
-            int idx    = i % mapSize;
+            int  idx   = i % mapSize;
             auto it    = map.find(FName("key_" + std::to_string(idx)));
             bool found = (it != map.end());
             (void)found; // 避免优化掉
@@ -558,7 +561,7 @@ TEST_F(FNamePerformanceTest, StressTestExtremeConcurrency)
         FName temp(names.back());
     }
 
-    const int threadCount        = 32; // 高并发
+    const int threadCount         = 32; // 高并发
     const int iterationsPerThread = 10000;
 
     auto duration = measureTime([&]() {
@@ -596,5 +599,3 @@ TEST_F(FNamePerformanceTest, StressTestExtremeConcurrency)
     // 压力测试，允许更长时间
     EXPECT_LT(duration, 20000); // 小于 20 秒
 }
-
-

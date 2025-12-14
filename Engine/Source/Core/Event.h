@@ -1,8 +1,6 @@
 #pragma once
 #include "Core/Base.h"
 
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_oldnames.h"
 #include "reflect.cc/enum"
 
 #include "KeyCode.h"

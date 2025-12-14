@@ -11,6 +11,9 @@ add_requires(
     "lua",
     "freetype"
 )
+add_requireconfs("freetype", {
+    system = false,
+})
 add_requires("spirv-cross", {
     configs = {
         shared = true,
@@ -72,12 +75,6 @@ add_requires("entt v3.15.0", {
     }
 })
 
-rule("testing")
-do
-    on_config(function(t)
-        t:remove("files", "**.test.cpp")
-    end)
-end
 
 target("ya") --"Yet Another (Game) Engine"
 do
@@ -93,13 +90,12 @@ do
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source/Core/FWD.h")
 
-    add_rules("testing")
     add_includedirs("./Source", { public = true })
 
     add_deps("utility.cc")
     add_deps("log.cc")
     add_deps("reflect.cc")
-    -- add_deps("log")
+    add_deps("reflects-core")
 
 
     -- Add math library for exp2 and log2 functions
@@ -144,5 +140,3 @@ do
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
 end
-
-
