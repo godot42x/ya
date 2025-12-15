@@ -83,14 +83,14 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
     // Process all meshes in the scene
     for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
         aiMesh *mesh = scene->mMeshes[i];
-        Mesh    newMesh;
+        MeshData    newMesh;
 
         // Get mesh name
         newMesh.name = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
 
         // Process vertices
         for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
-            Vertex vertex;
+            ModelVertex vertex;
 
             // Position
             vertex.position.x = mesh->mVertices[j].x;

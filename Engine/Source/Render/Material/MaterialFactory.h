@@ -1,3 +1,4 @@
+#pragma once
 #include "Core/FName.h"
 #include "Material.h"
 

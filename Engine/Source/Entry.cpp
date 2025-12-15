@@ -3,6 +3,7 @@
 
 #include "Core/App/App.h"
 
+#if YA_IS_EXE 
 
 #pragma region Entry
 
@@ -32,3 +33,5 @@ int main(int argc, char **argv)
     return 0;
 }
 #pragma endregion
+
+#endif

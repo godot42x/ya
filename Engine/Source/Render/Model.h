@@ -9,7 +9,7 @@
 
 struct CommandBuffer;
 
-struct Vertex
+struct ModelVertex
 {
     glm::vec3 position;
     glm::vec3 normal;
@@ -17,21 +17,21 @@ struct Vertex
     glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f}; // Default white color
 };
 
-struct Mesh
+struct MeshData
 {
-    std::vector<Vertex>      vertices;
+    std::vector<ModelVertex>      vertices;
     std::vector<uint32_t>    indices;
     std::string              name;
     // std::shared_ptr<Texture> diffuseTexture = nullptr;
 
-    Mesh()  = default;
-    ~Mesh() = default;
+    MeshData()  = default;
+    ~MeshData() = default;
 };
 
 class Model
 {
   private:
-    std::vector<Mesh> meshes;
+    std::vector<MeshData> meshes;
     glm::mat4         transform = glm::mat4(1.0f);
 
     bool        isLoaded = false;
@@ -43,8 +43,8 @@ class Model
 
     void draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture);
 
-    const std::vector<Mesh> &getMeshes() const { return meshes; }
-    std::vector<Mesh>       &getMeshes() { return meshes; } // Non-const version for adding meshes
+    const std::vector<MeshData> &getMeshes() const { return meshes; }
+    std::vector<MeshData>       &getMeshes() { return meshes; } // Non-const version for adding meshes
 
     glm::mat4 getTransform() const { return transform; }
     void      setTransform(const glm::mat4 &transform) { this->transform = transform; }

@@ -50,6 +50,7 @@
         "SPIR",
         "SPIRV",
         "stbi",
+        "stdptr",
         "STENCILOP",
         "STREQ",
         "subpass",

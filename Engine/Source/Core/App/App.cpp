@@ -11,10 +11,10 @@
 #include "Core/MessageBus.h"
 
 // Managers
-#include "Core/Render/RenderContext.h"
 #include "ECS/System/LitMaterialSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Material/LitMaterial.h"
+#include "Render/Render.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/SceneManager.h"
 
@@ -34,7 +34,6 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
-#include "Render/Render.h"
 
 
 
@@ -76,11 +75,6 @@ namespace ya
 App *App::_instance = nullptr;
 
 // Implementation of getter methods
-IRender *App::getRender() const
-{
-    return _renderContext ? _renderContext->getRender() : nullptr;
-}
-
 Scene *App::getScene() const
 {
     return _sceneManager ? _sceneManager->getCurrentScene() : nullptr;
@@ -175,56 +169,7 @@ void App::init(AppDesc ci)
     _instance = this;
 
     // register terminal  C-c signal
-    {
-
-#if !defined(_WIN32)
-        auto handler = [](int signal) {
-            if (!App::_instance) {
-                return;
-            }
-            YA_CORE_INFO("Received signal: {}", signal);
-
-            switch (signal) {
-            case SIGINT:
-            case SIGTERM:
-            {
-                App::_instance->requestQuit();
-            } break;
-            default:
-                break;
-            }
-        };
-
-        std::signal(SIGINT, handler);  // Ctrl+C
-        std::signal(SIGTERM, handler); // Termination request
-#else
-        // linux: will continue to execute after handle the signal
-        // Windows: need 用SetConsoleCtrlHandler来拦截并阻止默认退出
-        SetConsoleCtrlHandler(
-            [](DWORD dwCtrlType) -> BOOL {
-                switch (dwCtrlType) {
-                case CTRL_C_EVENT:
-                case CTRL_BREAK_EVENT:
-                    YA_CORE_INFO("Received Ctrl+C, requesting graceful shutdown...");
-                    if (App::_instance) {
-                        App::_instance->requestQuit();
-                    }
-                    return true; // 返回TRUE阻止默认的终止行为
-                case CTRL_CLOSE_EVENT:
-                case CTRL_LOGOFF_EVENT:
-                case CTRL_SHUTDOWN_EVENT:
-                    YA_CORE_INFO("Received system shutdown event");
-                    if (App::_instance) {
-                        App::_instance->requestQuit();
-                    }
-                    return true; // 返回TRUE阻止默认的终止行为
-                };
-
-                return FALSE; // 对于其他事件，使用默认处理
-            },
-            TRUE);
-#endif
-    }
+    handleSystemSignals();
 
 
     {
@@ -259,7 +204,7 @@ void App::init(AppDesc ci)
     });
 
 
-    // ===== Initialize RenderContext =====
+    // ===== Initialize Render =====
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
@@ -272,17 +217,18 @@ void App::init(AppDesc ci)
         },
     };
 
-    _renderContext = new RenderContext();
-    _renderContext->init(renderCI);
+    _render = IRender::create(renderCI);
+    YA_CORE_ASSERT(_render, "Failed to create IRender instance");
+    _render->init(renderCI);
 
-    // Get window size from RenderContext
+    // Get window size
     int winW = 0, winH = 0;
-    _renderContext->getWindowSize(winW, winH);
+    _render->getWindowSize(winW, winH);
     _windowSize.x = static_cast<float>(winW);
     _windowSize.y = static_cast<float>(winH);
 
-    // Get command buffers from RenderContext
-    _commandBuffers = _renderContext->getCommandBuffers();
+    // Allocate command buffers
+    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
     // MARK: RenderPass
@@ -294,7 +240,7 @@ void App::init(AppDesc ci)
         input/color/depth/resolved attachment ref from all attachments
         and each subpasses dependencies (source -> next)
      */
-    _renderpass = IRenderPass::create(_renderContext->getRender());
+    _renderpass = IRenderPass::create(_render);
     _renderpass->recreate(RenderPassCreateInfo{
         .attachments = {
             // color to present
@@ -350,8 +296,8 @@ void App::init(AppDesc ci)
         },
     });
 
-    // Create main render target using RenderContext
-    _rt = _renderContext->createSwapchainRenderTarget(_renderpass.get());
+    // Create main render target
+    _rt = ya::createRenderTarget(_renderpass.get());
 #if !ONLY_2D
     _rt->addMaterialSystem<SimpleMaterialSystem>();
     _rt->addMaterialSystem<UnlitMaterialSystem>();
@@ -361,9 +307,7 @@ void App::init(AppDesc ci)
 #pragma region ImGui Init
     // Initialize ImGui Manager
     _imguiManager = new ImGuiManager();
-    _imguiManager->init(
-        _renderContext->getRender(),
-        _renderpass.get());
+    _imguiManager->init(_render, _renderpass.get());
     imgui = *_imguiManager; // Legacy compatibility
 #pragma endregion
 
@@ -384,9 +328,9 @@ void App::init(AppDesc ci)
     loadScene(ci.defaultScenePath);
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    Render2D::init(_renderContext->getRender(), _renderpass.get());
+    Render2D::init(_render, _renderpass.get());
     // wait something done
-    _renderContext->getRender()->waitIdle();
+    _render->waitIdle();
 
     {
         YA_PROFILE_SCOPE("Post Init");
@@ -455,10 +399,8 @@ int App::onEvent(const Event &event)
 // MARK: QUIT
 void ya::App::quit()
 {
-    if (_renderContext) {
-        if (auto render = _renderContext->getRender()) {
-            render->waitIdle();
-        }
+    if (_render) {
+        _render->waitIdle();
     }
     {
         YA_PROFILE_SCOPE("Inheritance Quit");
@@ -477,16 +419,25 @@ void ya::App::quit()
         _imguiManager = nullptr;
     }
 
+    // TODO: manage by render or render-context
+    // Cleanup render target before render pass (dependency order)
+    if (_rt) {
+        _rt->destroy();
+        _rt.reset();
+    }
+
     _renderpass.reset(); // shared_ptr, use reset() instead of delete
 
     TextureLibrary::destroy();
     FontManager::get()->cleanup();
     AssetManager::get()->cleanup();
 
-    if (_renderContext) {
-        _renderContext->destroy();
-        delete _renderContext;
-        _renderContext = nullptr;
+    if (_render) {
+        _render->waitIdle();
+        _commandBuffers.clear();
+        _render->destroy();
+        delete _render;
+        _render = nullptr;
     }
 
     if (_sceneManager) {
@@ -1146,6 +1097,57 @@ void App::imcDrawMaterials()
     }
 
     ImGui::Unindent();
+}
+
+void App::handleSystemSignals()
+{
+#if !defined(_WIN32)
+    auto handler = [](int signal) {
+        if (!App::_instance) {
+            return;
+        }
+        YA_CORE_INFO("Received signal: {}", signal);
+
+        switch (signal) {
+        case SIGINT:
+        case SIGTERM:
+        {
+            App::_instance->requestQuit();
+        } break;
+        default:
+            break;
+        }
+    };
+
+    std::signal(SIGINT, handler);  // Ctrl+C
+    std::signal(SIGTERM, handler); // Termination request
+#else
+    // linux: will continue to execute after handle the signal
+    // Windows: need 用SetConsoleCtrlHandler来拦截并阻止默认退出
+    SetConsoleCtrlHandler(
+        [](DWORD dwCtrlType) -> BOOL {
+            switch (dwCtrlType) {
+            case CTRL_C_EVENT:
+            case CTRL_BREAK_EVENT:
+                YA_CORE_INFO("Received Ctrl+C, requesting graceful shutdown...");
+                if (App::_instance) {
+                    App::_instance->requestQuit();
+                }
+                return true; // 返回TRUE阻止默认的终止行为
+            case CTRL_CLOSE_EVENT:
+            case CTRL_LOGOFF_EVENT:
+            case CTRL_SHUTDOWN_EVENT:
+                YA_CORE_INFO("Received system shutdown event");
+                if (App::_instance) {
+                    App::_instance->requestQuit();
+                }
+                return true; // 返回TRUE阻止默认的终止行为
+            };
+
+            return FALSE; // 对于其他事件，使用默认处理
+        },
+        TRUE);
+#endif
 }
 
 

@@ -109,7 +109,10 @@ struct IRenderTarget
     {
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
         auto system = makeShared<T>(std::forward<Args>(args)...);
-        system->onInit(getRenderPass());
+        auto rp     = getRenderPass();
+        YA_CORE_ASSERT(rp, "Render pass is null when adding material system");
+        system->onInit(rp);
+        YA_CORE_DEBUG("Initialized material system: {}", system->_label);
         addMaterialSystemImpl(system);
     }
 

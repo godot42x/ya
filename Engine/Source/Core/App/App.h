@@ -15,7 +15,6 @@
 // Forward declarations
 namespace ya
 {
-struct RenderContext;
 struct SceneManager;
 struct ImGuiManager;
 struct Scene;
@@ -86,9 +85,9 @@ struct App
     static App *_instance;
 
     // Core subsystems
-    RenderContext *_renderContext = nullptr;
-    SceneManager  *_sceneManager  = nullptr;
-    ImGuiManager  *_imguiManager  = nullptr;
+    IRender      *_render         = nullptr;
+    SceneManager *_sceneManager   = nullptr;
+    ImGuiManager *_imguiManager   = nullptr;
 
     std::shared_ptr<IRenderPass>                 _renderpass;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
@@ -120,7 +119,7 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    IRenderTarget *_rt = nullptr;
+    std::shared_ptr<IRenderTarget> _rt = nullptr;
 
   public:
     App()          = default;
@@ -159,11 +158,10 @@ struct App
     static App *get() { return _instance; }
 
     // Getters for subsystems
-    [[nodiscard]] RenderContext *getRenderContext() const { return _renderContext; }
     [[nodiscard]] SceneManager  *getSceneManager() const { return _sceneManager; }
     [[nodiscard]] ImGuiManager  *getImGuiManager() const { return _imguiManager; }
 
-    [[nodiscard]] IRender *getRender() const;
+    [[nodiscard]] IRender *getRender() const { return _render; }
     template <typename T>
     [[nodiscard]] T *getRender() { return static_cast<T *>(getRender()); }
 
@@ -180,7 +178,7 @@ struct App
     }
 
     // temp
-    IRenderTarget *getRenderTarget() const { return _rt; }
+    IRenderTarget *getRenderTarget() const { return _rt.get(); }
 
   protected:
     // Protected for derived classes to override
@@ -201,7 +199,11 @@ struct App
     [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
 
 
+
     void imcDrawMaterials();
+
+
+    void handleSystemSignals();
 };
 
 
