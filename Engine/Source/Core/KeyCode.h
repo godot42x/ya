@@ -246,6 +246,12 @@ constexpr const char *toString(EKey::T v)
     }
 }
 
+inline EKey::T fromSDLKeycode(SDL_Keycode keycode)
+{
+    // TODO: if no more directly use SDL_Keycode, maintain it
+    return static_cast<EKey::T>(keycode);
+}
+
 } // namespace EKey
 
 namespace EMouse
@@ -273,6 +279,14 @@ constexpr const char *toString(enum T v)
     }
 }
 
+
+inline EMouse::T fromSDLMouseButton(Uint8 button)
+{
+    return static_cast<EMouse::T>(button);
+
 }; // namespace EMouse
+
+
+} // namespace EMouse
 
 } // namespace ya

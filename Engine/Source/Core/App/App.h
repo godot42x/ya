@@ -85,9 +85,9 @@ struct App
     static App *_instance;
 
     // Core subsystems
-    IRender      *_render         = nullptr;
-    SceneManager *_sceneManager   = nullptr;
-    ImGuiManager *_imguiManager   = nullptr;
+    IRender      *_render       = nullptr;
+    SceneManager *_sceneManager = nullptr;
+    ImGuiManager *_imguiManager = nullptr;
 
     std::shared_ptr<IRenderPass>                 _renderpass;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
@@ -158,8 +158,8 @@ struct App
     static App *get() { return _instance; }
 
     // Getters for subsystems
-    [[nodiscard]] SceneManager  *getSceneManager() const { return _sceneManager; }
-    [[nodiscard]] ImGuiManager  *getImGuiManager() const { return _imguiManager; }
+    [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] ImGuiManager *getImGuiManager() const { return _imguiManager; }
 
     [[nodiscard]] IRender *getRender() const { return _render; }
     template <typename T>
@@ -178,7 +178,8 @@ struct App
     }
 
     // temp
-    IRenderTarget *getRenderTarget() const { return _rt.get(); }
+    [[nodiscard]] IRenderTarget      *getRenderTarget() const { return _rt.get(); }
+    [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
 
   protected:
     // Protected for derived classes to override

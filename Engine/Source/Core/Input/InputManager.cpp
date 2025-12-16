@@ -1,13 +1,16 @@
 #include "InputManager.h"
-#include "../Log.h"
+
+#include "Core/Log.h"
 
 #include <SDL3/SDL.h>
 
 #include <SDL3/SDL_mouse.h>
-#include <math.h>
 
 #include "Core/Event.h"
 #include "Core/MessageBus.h"
+
+namespace ya
+{
 
 
 InputManager::InputManager()
@@ -53,31 +56,31 @@ ya::EventProcessState InputManager::processEvent(const SDL_Event &event)
     switch (event.type)
     {
     case SDL_EVENT_KEY_DOWN:
-        currentKeyStates[event.key.key] = KeyState::Pressed;
+        setKeyState(event.key.key, KeyState::Pressed);
         break;
 
     case SDL_EVENT_KEY_UP:
-        currentKeyStates[event.key.key] = KeyState::Released;
+        setKeyState(event.key.key, KeyState::Released);
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        currentMouseStates[event.button.button] = KeyState::Pressed;
+        setMouseState(event.button.button, KeyState::Pressed);
         break;
 
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        currentMouseStates[event.button.button] = KeyState::Released;
+        setMouseState(event.button.button, KeyState::Released);
         break;
     }
     return ya::EventProcessState::Continue;
 }
 
-bool InputManager::isKeyPressed(SDL_Keycode keycode) const
+bool InputManager::isKeyPressed(EKey::T keycode) const
 {
     auto it = currentKeyStates.find(keycode);
     return it != currentKeyStates.end() && it->second == KeyState::Pressed;
 }
 
-bool InputManager::wasKeyPressed(SDL_Keycode keycode) const
+bool InputManager::wasKeyPressed(EKey::T keycode) const
 {
     auto curr = currentKeyStates.find(keycode);
     auto prev = previousKeyStates.find(keycode);
@@ -86,7 +89,7 @@ bool InputManager::wasKeyPressed(SDL_Keycode keycode) const
            (prev == previousKeyStates.end() || prev->second == KeyState::Released);
 }
 
-bool InputManager::wasKeyReleased(SDL_Keycode keycode) const
+bool InputManager::wasKeyReleased(EKey::T keycode) const
 {
     auto curr = currentKeyStates.find(keycode);
     auto prev = previousKeyStates.find(keycode);
@@ -95,13 +98,13 @@ bool InputManager::wasKeyReleased(SDL_Keycode keycode) const
            (prev != previousKeyStates.end() && prev->second == KeyState::Pressed);
 }
 
-bool InputManager::isMouseButtonPressed(Uint8 button) const
+bool InputManager::isMouseButtonPressed(EMouse::T button) const
 {
     auto it = currentMouseStates.find(button);
     return it != currentMouseStates.end() && it->second == KeyState::Pressed;
 }
 
-bool InputManager::wasMouseButtonPressed(Uint8 button) const
+bool InputManager::wasMouseButtonPressed(EMouse::T button) const
 {
     auto curr = currentMouseStates.find(button);
     auto prev = previousMouseStates.find(button);
@@ -110,7 +113,7 @@ bool InputManager::wasMouseButtonPressed(Uint8 button) const
            (prev == previousMouseStates.end() || prev->second == KeyState::Released);
 }
 
-bool InputManager::wasMouseButtonReleased(Uint8 button) const
+bool InputManager::wasMouseButtonReleased(EMouse::T button) const
 {
     auto curr = currentMouseStates.find(button);
     auto prev = previousMouseStates.find(button);
@@ -123,3 +126,5 @@ glm::vec2 InputManager::getMouseScrollDelta() const
 {
     return _mouseScrollDelta;
 }
+
+} // namespace ya

@@ -4,11 +4,14 @@
 #include <SDL3/SDL_keycode.h>
 
 
-#include <functional>
 #include <glm/glm.hpp>
 #include <unordered_map>
 
 #include "Core/Event.h"
+#include "Core/KeyCode.h"
+
+namespace ya
+{
 
 
 enum class KeyState
@@ -19,10 +22,11 @@ enum class KeyState
 
 struct InputManager
 {
+    friend struct App;
 
   private:
-    std::unordered_map<SDL_Keycode, KeyState> currentKeyStates;
-    std::unordered_map<SDL_Keycode, KeyState> previousKeyStates;
+    std::unordered_map<EKey::T, KeyState> currentKeyStates;
+    std::unordered_map<EKey::T, KeyState> previousKeyStates;
 
     std::unordered_map<Uint8, KeyState> currentMouseStates;
     std::unordered_map<Uint8, KeyState> previousMouseStates;
@@ -36,20 +40,41 @@ struct InputManager
     InputManager();
     ~InputManager();
 
+    InputManager(const InputManager &)            = delete;
+    InputManager &operator=(const InputManager &) = delete;
+    InputManager(InputManager &&) noexcept        = default;
+    InputManager &operator=(InputManager &&)      = default;
+
     void init();
-    void                  update();
-    ya::EventProcessState processEvent(const SDL_Event &event);
+    void update();
 
-    bool isKeyPressed(SDL_Keycode keycode) const;
-    bool wasKeyPressed(SDL_Keycode keycode) const;
-    bool wasKeyReleased(SDL_Keycode keycode) const;
+    bool isKeyPressed(EKey::T keycode) const;
+    bool wasKeyPressed(EKey::T keycode) const;
+    bool wasKeyReleased(EKey::T keycode) const;
 
-    bool isMouseButtonPressed(Uint8 button) const;
-    bool wasMouseButtonPressed(Uint8 button) const;
-    bool wasMouseButtonReleased(Uint8 button) const;
+
+    bool isMouseButtonPressed(EMouse::T button) const;
+    bool wasMouseButtonPressed(EMouse::T button) const;
+    bool wasMouseButtonReleased(EMouse::T button) const;
+
 
     glm::vec2 getMouseScrollDelta() const;
 
-    glm::vec2 getMousePosition() const { return mousePosition; }
+    glm::vec2 getMousePosition() const
+    {
+        return mousePosition;
+    }
     glm::vec2 getMouseDelta() const { return mouseDelta; }
+
+  protected:
+    EventProcessState processEvent(const SDL_Event &event);
+
+  private:
+    void setKeyState(EKey::T keycode, KeyState state) { currentKeyStates[keycode] = state; }
+    void setKeyState(SDL_Keycode keycode, KeyState state) { setKeyState(EKey::fromSDLKeycode(keycode), state); }
+
+    void setMouseState(EMouse::T button, KeyState state) { currentMouseStates[button] = state; }
+    void setMouseState(Uint8 button, KeyState state) { setMouseState(EMouse::fromSDLMouseButton(button), state); } // from sdl defines
 };
+
+} // namespace ya

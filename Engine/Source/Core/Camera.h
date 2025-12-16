@@ -45,15 +45,15 @@ struct FreeCamera : public Camera
     float _rotationSpeed = 0.5f; // Degrees per second
 
     // Movement keys (configurable)
-    SDL_Keycode _forwardKey = SDLK_W;
-    SDL_Keycode _backKey    = SDLK_S;
-    SDL_Keycode _leftKey    = SDLK_A;
-    SDL_Keycode _rightKey   = SDLK_D;
-    SDL_Keycode _upKey      = SDLK_Q;
-    SDL_Keycode _downKey    = SDLK_E;
+    EKey::T _forwardKey = EKey::K_W;
+    EKey::T _backKey    = EKey::K_S;
+    EKey::T _leftKey    = EKey::K_A;
+    EKey::T _rightKey   = EKey::K_D;
+    EKey::T _upKey      = EKey::K_Q;
+    EKey::T _downKey    = EKey::K_E;
 
     // Mouse button for rotation
-    Uint8 rotateButton = SDL_BUTTON_RIGHT;
+    EMouse::T rotateButton = EMouse::Right;
 
     enum EProjectionType
     {
