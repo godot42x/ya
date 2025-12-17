@@ -1,3 +1,3 @@
 #pragma once
 
-#include "../../src/lib.h"
+#include "../../src/registry.h"

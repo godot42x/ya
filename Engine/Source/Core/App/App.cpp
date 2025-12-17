@@ -10,13 +10,15 @@
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 
-// Managers
+// Managers/System
+#include "Core/Subsystem/ReflectionSystem.h"
 #include "ECS/System/LitMaterialSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Material/LitMaterial.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/SceneManager.h"
+
 
 
 // ECS
@@ -178,6 +180,7 @@ void App::init(AppDesc ci)
         Logger::init();
         FileSystem::init();
         MaterialFactory::init();
+        ReflectionSystem::init();
     }
 
     currentRenderAPI = ERenderAPI::Vulkan;
@@ -327,7 +330,6 @@ void App::init(AppDesc ci)
         this->onSceneDestroy(scene);
     });
 
-    loadScene(ci.defaultScenePath);
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
     Render2D::init(_render, _renderpass.get());
@@ -338,6 +340,8 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE("Post Init");
         onPostInit();
     }
+
+    loadScene(ci.defaultScenePath);
 }
 
 // MARK: INIT

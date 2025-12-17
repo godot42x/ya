@@ -2,6 +2,8 @@
 #pragma once
 #include "ECS/Component.h"
 
+#include "Core/Serialization/ComponentSerializer.h"
+
 namespace ya
 {
 struct TransformComponent : public IComponent
@@ -50,6 +52,18 @@ struct TransformComponent : public IComponent
     {
         calcMatrix();
         return _cachedMatrix;
+    }
+
+    // ========================================================================
+    // 反射注册 - 自动生成序列化
+    // ========================================================================
+    static void registerReflection()
+    {
+        Register<TransformComponent>("TransformComponent")
+            .constructor<>()
+            .property("position", &TransformComponent::_position)
+            .property("rotation", &TransformComponent::_rotation)
+            .property("scale", &TransformComponent::_scale);
     }
 };
 } // namespace ya

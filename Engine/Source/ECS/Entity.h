@@ -18,6 +18,10 @@ struct Entity
     Scene       *_scene        = nullptr;
 
   public:
+    std::string _name = "Entity";
+
+  public:
+
     Entity() = default;
     Entity(entt::entity handle, Scene *scene)
         : _entityHandle(handle), _scene(scene)

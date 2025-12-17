@@ -35,7 +35,7 @@ struct [[refl]] Scene
 
     // Entity management
     Entity *createEntity(const std::string &name = "Entity");
-    Entity  createEntityWithUUID(uint64_t           uuid,
+    Entity *createEntityWithUUID(uint64_t           uuid,
                                  const std::string &name = "Entity");
     void    destroyEntity(Entity entity);
     bool    isValidEntity(Entity entity) const;
@@ -65,7 +65,8 @@ struct [[refl]] Scene
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
 
-    void serialize(std::string &Name, Entity * entity);
+    void serialize(std::string &Name, Entity *entity);
+    // void deserialize(json);
 };
 
 } // namespace ya

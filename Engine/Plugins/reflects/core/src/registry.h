@@ -11,16 +11,30 @@
 #include <string>
 #include <unordered_map>
 
+
+// namespace refl
+
 struct ClassRegistry
 {
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
+    std::unordered_map<uint32_t, std::shared_ptr<Class>>    typeIdMap;
 
     static ClassRegistry &instance();
 
+    template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
-        classes[name] = std::shared_ptr<Class>(classInfo);
+        auto ptr                         = std::shared_ptr<Class>(classInfo);
+        classes[name]                    = ptr;
+        typeIdMap[refl::type_index_v<T>] = ptr;
+
         return classes[name];
+    }
+
+    Class *getClass(uint32_t typeId)
+    {
+        auto it = typeIdMap.find(typeId);
+        return it != typeIdMap.end() ? it->second.get() : nullptr;
     }
 
     Class *getClass(const std::string &name)
@@ -70,7 +84,7 @@ struct Register
     {
         // 自动注册到全局注册表
         classInfo = new Class(className);
-        classInfo = ClassRegistry::instance().registerClass(className, classInfo).get();
+        classInfo = ClassRegistry::instance().registerClass<T>(className, classInfo).get();
     }
 
     // virtual ~Register() {}
@@ -113,8 +127,8 @@ struct Register
         // 检查是否是指针类型（静态变量）
         else if constexpr (std::is_pointer_v<DecayedType>) {
             // 提取指针指向的类型
-            using PointeeType = std::remove_pointer_t<DecayedType>;
-            using BaseType    = std::remove_const_t<PointeeType>;
+            using PointerType = std::remove_pointer_t<DecayedType>;
+            using BaseType    = std::remove_const_t<PointerType>;
 
             // 禁止引用类型的反射
             static_assert(!std::is_reference_v<BaseType>,
@@ -144,7 +158,9 @@ struct Register
 // ============================================================================
 // Test Example
 // ============================================================================
-inline void test()
+namespace test
+{
+inline void test_lsp()
 {
     struct Person
     {
@@ -302,6 +318,7 @@ inline void test()
 
     printf("\n=== All Tests Passed ===\n");
 }
+} // namespace test
 
 
 // ============================================================================

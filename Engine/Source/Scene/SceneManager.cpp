@@ -1,4 +1,5 @@
 #include "SceneManager.h"
+#include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
 
 namespace ya
@@ -9,7 +10,7 @@ SceneManager::~SceneManager()
     unloadScene();
 }
 
-bool SceneManager::loadScene(const std::string& path)
+bool SceneManager::loadScene(const std::string &path)
 {
     // Unload existing scene first
     if (_currentScene) {
@@ -17,8 +18,10 @@ bool SceneManager::loadScene(const std::string& path)
         unloadScene();
     }
 
+    // FileSystem::get()->getGameRoot()
+
     // Create new scene
-    _currentScene = std::make_unique<Scene>();
+    _currentScene     = std::make_unique<Scene>();
     _currentScenePath = path;
 
     // Call initialization callback if set

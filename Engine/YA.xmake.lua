@@ -9,7 +9,8 @@ add_requires(
     "stb",
     "cxxopts",
     "lua",
-    "freetype"
+    "freetype",
+    "nlohmann_json v3.12.0"
 )
 add_requireconfs("freetype", {
     system = false,
@@ -133,6 +134,7 @@ do
     add_packages("entt", { public = true })
     add_packages("lua", { public = true })
     add_packages("freetype")
+    add_packages("nlohmann_json", { public = true })
 
     -- add_deps("shader")
 

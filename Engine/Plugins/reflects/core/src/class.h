@@ -1,6 +1,7 @@
 #pragma once
 
 #include "function.h"
+#include "lib.h"
 
 
 // ============================================================================
@@ -71,6 +72,7 @@ struct Class
 #ifdef _DEBUG
         prop.debugTypeName = typeid(T).name(); // Debug only: 存储类型名用于调试
 #endif
+        prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
 
         // 设置getter：从对象实例读取成员值
         prop.getter = [member](void *obj) -> std::any {
@@ -502,7 +504,7 @@ struct Class
 
     void *createInstance(const ArgumentList &&args) const = delete;
     void *createInstance(const ArgumentList &args) const  = delete;
-    void *createInstance(const ArgumentList args) const  = delete;
+    void *createInstance(const ArgumentList args) const   = delete;
     // 创建实例（带参数）- 根据参数类型签名选择构造函数
     template <typename... Args>
     void *createInstance(Args &&...args) const

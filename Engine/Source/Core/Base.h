@@ -1,5 +1,6 @@
 #pragma once
 #include "FWD.h"
+#include "reflects-core/lib.h"
 
 using stdpath  = std::filesystem::path;
 using stdclock = std::chrono::steady_clock;
@@ -90,6 +91,8 @@ static DefaultAllocator defaultAllocator;
 namespace ya
 {
 
+#if NOT_USE_REFLECTS
+
 extern uint32_t _index_counter;
 
 template <typename T>
@@ -107,5 +110,20 @@ struct TypeIndex
 
 template <typename T>
 inline static const auto type_index_v = TypeIndex<T>::value();
+#else
+
+template <typename T>
+struct TypeIndex
+{
+    static uint32_t value()
+    {
+        static uint32_t typeId = refl::TypeIndex<T>::value();
+        return typeId;
+    }
+};
+
+template <typename T>
+inline static const auto type_index_v = refl::TypeIndex<T>::value();
+#endif
 
 } // namespace ya

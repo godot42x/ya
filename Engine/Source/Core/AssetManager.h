@@ -47,8 +47,15 @@ class AssetManager
     std::shared_ptr<Texture> loadTexture(const std::string &filepath);
     std::shared_ptr<Texture> getTextureByPath(const std::string &filepath) const { return isTextureLoaded(filepath) ? _textureViews.find(filepath)->second : nullptr; }
     std::shared_ptr<Texture> loadTexture(const std::string &name, const std::string &filepath);
-    std::shared_ptr<Texture> getTextureByName(const std::string &name) const { return isTextureLoaded(name) ? _textureViews.find(name)->second : nullptr; }
-    bool                     isTextureLoaded(const std::string &filepath) const { return _textureViews.find(filepath) != _textureViews.end(); }
+    std::shared_ptr<Texture> getTextureByName(const std::string &name) const
+    {
+        if (isTextureLoaded(name))
+        {
+            return _textureViews.find(name)->second;
+        }
+        return nullptr;
+    }
+    bool isTextureLoaded(const std::string &filepath) const { return _textureViews.find(filepath) != _textureViews.end(); }
 
     void registerTexture(const std::string &name, const stdptr<Texture> &texture)
     {

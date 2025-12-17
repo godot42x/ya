@@ -1,7 +1,10 @@
 #pragma once
 
-
 #include "ECS/Component.h"
+
+#include "Core/Serialization/ComponentSerializer.h"
+
+
 namespace ya
 {
 
@@ -31,6 +34,23 @@ struct CameraComponent : public IComponent
   public:
 
     void setAspectRatio(float aspectRatio) { _aspectRatio = aspectRatio; }
+
+    // ========================================================================
+    // 反射注册 - 自动生成序列化
+    // ========================================================================
+    static void registerReflection()
+    {
+        Register<CameraComponent>("CameraComponent")
+            .constructor<>()
+            .property("primary", &CameraComponent::_primary)
+            .property("fixedAspectRatio", &CameraComponent::_fixedAspectRatio)
+            .property("fov", &CameraComponent::_fov)
+            .property("aspectRatio", &CameraComponent::_aspectRatio)
+            .property("nearClip", &CameraComponent::_nearClip)
+            .property("farClip", &CameraComponent::_farClip)
+            .property("distance", &CameraComponent::_distance)
+            .property("focusPoint", &CameraComponent::_focusPoint);
+    }
 };
 
 

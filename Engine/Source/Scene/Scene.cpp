@@ -21,6 +21,7 @@ Entity *Scene::createEntity(const std::string &name)
 {
     auto   id = _registry.create();
     Entity entity{id, this};
+    entity._name = name;
 
     // Add basic components
     auto *idComponent = entity.addComponent<IDComponent>();
@@ -37,9 +38,10 @@ Entity *Scene::createEntity(const std::string &name)
     return &it.first->second;
 }
 
-Entity Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
+Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 {
     Entity entity = {_registry.create(), this};
+    entity._name  = name;
 
     // Add basic components with specific UUID
     auto idComponent = entity.addComponent<IDComponent>();
@@ -48,9 +50,10 @@ Entity Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
     auto tagComponent  = entity.addComponent<TagComponent>();
     tagComponent->_tag = name.empty() ? "Entity" : name;
 
-    // auto &transformComponent = entity.addComponent<TransformComponent>();
+    auto it = _entityMap.insert({entity.getHandle(), std::move(entity)});
+    YA_CORE_ASSERT(it.second, "Entity ID collision!");
 
-    return entity;
+    return &it.first->second;
 }
 
 void Scene::destroyEntity(Entity entity)

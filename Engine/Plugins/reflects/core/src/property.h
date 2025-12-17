@@ -22,9 +22,10 @@ struct Field
 struct Property : public Field
 {
     std::any value; // 存储成员指针或静态变量指针
-    bool     bConst   = false;
-    bool     bStatic  = false;
-    size_t   typeHash = 0; // 使用 typeid().hash_code() 作为类型标识
+    bool     bConst    = false;
+    bool     bStatic   = false;
+    size_t   typeHash  = 0; // 使用 typeid().hash_code() 作为类型标识
+    uint32_t typeIndex = -1;
 
 #ifdef _DEBUG
     std::string debugTypeName; // Debug only: 用于调试信息和错误提示

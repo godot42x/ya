@@ -11,3 +11,4 @@ EnumRegistry &EnumRegistry::instance()
     static EnumRegistry reg;
     return reg;
 }
+
