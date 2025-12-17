@@ -49,6 +49,7 @@ struct UIButton : public UIElement
                              _size,
                              nullptr,
                              color->asVec4());
+        ctx.pos += _position;
         layerId += 1;
         Super::render(ctx, layerId);
     }

@@ -15,6 +15,7 @@ struct UIElement
 {
     // todo: multi window
     std::vector<std::shared_ptr<UIElement>> _children;
+    UIElement                              *_parent = nullptr;
 
 
   public:
@@ -56,11 +57,16 @@ struct UIElement
     void addChild(std::shared_ptr<UIElement> child)
     {
         _children.push_back(child);
+        child->setParent(this);
     }
     void removeChild(std::shared_ptr<UIElement> child)
     {
         _children.erase(std::remove(_children.begin(), _children.end(), child), _children.end());
+        child->setParent(nullptr);
     }
+
+    UIElement *getParent() const { return _parent; }
+    void       setParent(UIElement *parent) { _parent = parent; }
 };
 
 } // namespace ya

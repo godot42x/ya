@@ -1,5 +1,6 @@
 #include "FontManager.h"
 #include "Core/Debug/Instrumentor.h"
+#include "Core/FileSystem/FileSystem.h"
 #include "freetype/freetype.h"
 
 #include "Core/AssetManager.h"
@@ -49,10 +50,12 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
 {
     YA_PROFILE_FUNCTION();
     FT_Library ft{};
-    if (FT_Init_FreeType(&ft)) {
+    if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
         YA_CORE_ERROR("Failed to initialize FreeType library");
         return nullptr;
     }
+    // FileSystem::get().get
+    // FT_New_Face()
 
     FT_Face face{};
     if (FT_New_Face(ft, fontPath.c_str(), 0, &face)) {
@@ -63,9 +66,12 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
 
     FT_Set_Pixel_Sizes(face, 0, fontSize);
 
-    auto font      = std::make_shared<Font>();
-    font->fontSize = (float)fontSize;
-    font->fontPath = fontPath;
+    auto font        = std::make_shared<Font>();
+    font->fontSize   = (float)fontSize;
+    font->fontPath   = fontPath;
+    font->lineHeight = (float)(face->size->metrics.height >> 6);   // 26.6 fixed point to integer
+    font->ascent     = (float)(face->size->metrics.ascender >> 6);  // Distance from baseline to top
+    font->descent    = (float)(face->size->metrics.descender >> 6); // Distance from baseline to bottom (negative)
 
     // First pass: calculate max glyph dimensions
     uint32_t maxGlyphWidth  = 0;
@@ -79,6 +85,7 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         maxGlyphWidth       = std::max(maxGlyphWidth, glyph->bitmap.width);
         maxGlyphHeight      = std::max(maxGlyphHeight, glyph->bitmap.rows);
     }
+
 
     // Choose atlas width - aim for ~16 glyphs per row
     // For 96 printable ASCII chars (32-127), this gives us ~6 rows
@@ -119,8 +126,8 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
                                      ColorU8_t{.r = 0, .g = 0, .b = 0, .a = 0});
 
     // Second pass: pack glyphs into atlas using simple row-based packing
-    uint32_t offsetX   = 1; // Start with 1px padding
-    uint32_t offsetY   = 1;
+    uint32_t penX      = 1; // Start with 1px padding
+    uint32_t penY      = 1;
     uint32_t rowHeight = 0;
 
     for (unsigned char c = 32; c < 128; c++) {
@@ -133,14 +140,14 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         FT_Bitmap    &bitmap = glyph->bitmap;
 
         // Check if we need to move to next row
-        if (offsetX + bitmap.width + 1 > atlasWidth) {
-            offsetX = 1;
-            offsetY += rowHeight + 1; // Move to next row with padding
+        if (penX + bitmap.width + 1 > atlasWidth) {
+            penX = 1;
+            penY += rowHeight + 1; // Move to next row with padding
             rowHeight = 0;
         }
 
         // Check if we've run out of vertical space
-        if (offsetY + bitmap.rows > atlasHeight) {
+        if (penY + bitmap.rows > atlasHeight) {
             YA_CORE_ERROR("Font atlas too small! Need to increase atlas size.");
             break;
         }
@@ -149,14 +156,14 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         for (uint32_t row = 0; row < bitmap.rows; row++) {
             for (uint32_t col = 0; col < bitmap.width; col++) {
                 uint8_t gray      = bitmap.buffer[row * bitmap.width + col];
-                size_t  dstIdx    = ((offsetY + row) * atlasWidth) + (offsetX + col);
+                size_t  dstIdx    = ((penY + row) * atlasWidth) + (penX + col);
                 atlasData[dstIdx] = ColorRGBA<uint8_t>{.r = 255, .g = 255, .b = 255, .a = gray};
             }
         }
 
         // Calculate UV coordinates (offset + scale format for drawSubTexture)
-        float uOffset = static_cast<float>(offsetX) / static_cast<float>(atlasWidth);
-        float vOffset = static_cast<float>(offsetY) / static_cast<float>(atlasHeight);
+        float uOffset = static_cast<float>(penX) / static_cast<float>(atlasWidth);
+        float vOffset = static_cast<float>(penY) / static_cast<float>(atlasHeight);
         float uScale  = static_cast<float>(bitmap.width) / static_cast<float>(atlasWidth);
         float vScale  = static_cast<float>(bitmap.rows) / static_cast<float>(atlasHeight);
 
@@ -164,25 +171,18 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
             .uvRect  = glm::vec4(uOffset, vOffset, uScale, vScale),
             .size    = glm::ivec2(bitmap.width, bitmap.rows),
             .bearing = glm::ivec2(glyph->bitmap_left, glyph->bitmap_top),
-            // TODO: do we need advance of y?
-            .advance = static_cast<uint32_t>(glyph->advance.x),
+            .advance = glm::vec2(static_cast<float>(glyph->advance.x) / 64.0f,
+                                 static_cast<float>(glyph->advance.y) / 64.0f),
         };
+
+        // 'e' bitmap_left=3, bitmap_top=27
+        // 'H' bitmap_left=4, bitmap_top=35, bitmap.size=21x35
 
         font->characters[static_cast<char>(c)] = character;
 
-        // Debug log for first few characters
-        // if (c <= 'z' && (c == ' ' || c == 'H' || c == 'e' || c == 'l' || c == 'o')) {
-        //     YA_CORE_INFO("Char '{}' ({}): size=({},{}), bearing=({},{}), advance={}, uv=({:.3f},{:.3f},{:.3f},{:.3f})",
-        //                  c, (int)c,
-        //                  bitmap.width, bitmap.rows,
-        //                  glyph->bitmap_left, glyph->bitmap_top,
-        //                  glyph->advance.x >> 6,
-        //                  uOffset, vOffset, uScale, vScale);
-        // }
-
         // Update row tracking
         rowHeight = std::max(rowHeight, bitmap.rows);
-        offsetX += bitmap.width + 1; // +1 for padding
+        penX += bitmap.width + 1; // +1 for padding
     }
 
     FT_Done_Face(face);

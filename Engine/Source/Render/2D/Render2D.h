@@ -22,41 +22,6 @@ namespace ya
 
 
 
-struct FRender2dData
-{
-    uint32_t     windowWidth  = 800;
-    uint32_t     windowHeight = 600;
-    ECullMode::T cullMode     = ECullMode::Back;
-};
-
-
-
-struct Render2D
-{
-
-    Render2D()          = default;
-    virtual ~Render2D() = default;
-
-
-    static void init(IRender *render, IRenderPass *renderpass);
-    static void destroy();
-
-    static void onUpdate();
-    static void begin(ICommandBuffer *cmdBuf);
-    static void onImGui();
-    static void end();
-
-    // Convenience wrappers - delegate to FQuadRender
-    static void makeSprite(const glm::vec3         &position,
-                           const glm::vec2         &size,
-                           std::shared_ptr<Texture> texture = nullptr,
-                           const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                           const glm::vec2         &uvScale = {1.0f, 1.0f});
-
-    static void makeText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font);
-};
-
-
 struct FQuadRender
 {
     struct Vertex
@@ -83,6 +48,8 @@ struct FQuadRender
 
     static constexpr size_t MaxVertexCount = 10000;
     static constexpr size_t MaxIndexCount  = MaxVertexCount * 6 / 4; // 6 indices per quad, 4 vertices per quad
+
+    // static constexpr
 
     struct FrameUBO
     {
@@ -131,6 +98,7 @@ struct FQuadRender
 
     void begin();
     void end();
+
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     void flush(ICommandBuffer *cmdBuf);
 
@@ -151,7 +119,7 @@ struct FQuadRender
                         const glm::vec4         &uvRect  = glm::vec4(0.0f) // offset: xy , scale: zw
     );
 
-    void drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font);
+    void drawText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font);
 
   private:
 
@@ -181,4 +149,64 @@ struct FQuadRender
         return textureIdx;
     }
 };
+
+
+struct FRender2dData
+{
+    uint32_t        windowWidth  = 800;
+    uint32_t        windowHeight = 600;
+    ECullMode::T    cullMode     = ECullMode::Back;
+    ICommandBuffer *curCmdBuf    = nullptr;
+
+
+
+    int TextLayoutMode = 0;
+    int viewMatrixMode = 0;
+};
+
+// MARK: Render2D
+struct Render2D
+{
+
+    static FQuadRender  *quadData;
+    static FRender2dData data;
+
+    Render2D()          = default;
+    virtual ~Render2D() = default;
+
+
+    static void init(IRender *render, IRenderPass *renderpass);
+    static void destroy();
+
+    static void onUpdate();
+    static void begin(ICommandBuffer *cmdBuf)
+    {
+        data.curCmdBuf = cmdBuf;
+        quadData->begin();
+    }
+    static void onImGui();
+    static void onRenderGUI() { onImGui(); }
+    static void end()
+    {
+        quadData->end();
+        data.curCmdBuf = nullptr;
+    }
+
+    // Convenience wrappers - delegate to FQuadRender
+    static void makeSprite(const glm::vec3         &position,
+                           const glm::vec2         &size,
+                           std::shared_ptr<Texture> texture = nullptr,
+                           const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                           const glm::vec2         &uvScale = {1.0f, 1.0f})
+    {
+        quadData->drawTexture(position, size, texture, tint, uvScale);
+    }
+
+    static void makeText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font)
+    {
+        quadData->drawText(text, position, color, font);
+    }
+};
+
+
 }; // namespace ya

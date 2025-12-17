@@ -67,8 +67,8 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
   public:
     FName _name;
 
-    ::VkPipeline       _pipeline       = VK_NULL_HANDLE;
-    ::VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
+    VkPipeline       _pipeline       = VK_NULL_HANDLE;
+    VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
@@ -125,8 +125,8 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     // Pipeline creation helpers
-    ::VkShaderModule createShaderModule(const std::vector<uint32_t> &spv_binary);
-    void             createPipelineInternal();
+    VkShaderModule createShaderModule(const std::vector<uint32_t> &spv_binary);
+    void           createPipelineInternal();
 
     void queryPhysicalDeviceLimits();
 };

@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Render/UIRender.h"
 #include "UIBase.h"
+#include "UICanvas.h"
 #include "UIElement.h"
 
 
@@ -13,7 +14,7 @@ namespace ya
 struct UIManager
 {
 
-    UIElement _rootElement;
+    UICanvas _rootCanvas;
 
     static void init() {}
     static void shutdown() {}
@@ -23,12 +24,12 @@ struct UIManager
     void render()
     {
         UIRenderContext ctx{};
-        _rootElement.render(ctx, 0);
+        _rootCanvas.render(ctx, 0);
     }
 
     void onEvent(const Event &event, UIAppCtx &ctx)
     {
-        _rootElement.handleEvent(event, ctx);
+        _rootCanvas.handleEvent(event, ctx);
     }
 };
 

@@ -14,8 +14,8 @@ struct Scene;
 struct Entity
 {
   private:
-    entt::entity _entityHandle{entt::null};
-    Scene       *_scene = nullptr;
+    entt::entity _entityHandle = {entt::null};
+    Scene       *_scene        = nullptr;
 
   public:
     Entity() = default;
@@ -56,12 +56,6 @@ struct Entity
     template <typename T>
     [[nodiscard]] bool hasComponent() const { return _scene->_registry.all_of<T>(_entityHandle); }
 
-    // template <typename T>
-    // T *tryGetComponent() const
-    // {
-    //     return _scene->_registry.try_get<T>(_entityHandle);
-    // }
-
     template <typename T>
     void removeComponent()
     {
@@ -76,10 +70,10 @@ struct Entity
     auto getComponents() { return _scene->_registry.get<Components...>(_entityHandle); }
 
     // Utility functions
-    bool         isValid() const { return _scene && _scene->isValidEntity(*this); }
-    uint32_t     getId() const { return static_cast<uint32_t>(_entityHandle); }
-    entt::entity getHandle() const { return _entityHandle; }
-    Scene       *getScene() const { return _scene; }
+    [[nodiscard]] bool     isValid() const { return _scene && _scene->isValidEntity(*this); }
+    [[nodiscard]] uint32_t getId() const { return static_cast<uint32_t>(_entityHandle); }
+    entt::entity           getHandle() const { return _entityHandle; }
+    Scene                 *getScene() const { return _scene; }
 
     operator bool() const { return _entityHandle != entt::null && _scene != nullptr; }
     operator entt::entity() const { return _entityHandle; }

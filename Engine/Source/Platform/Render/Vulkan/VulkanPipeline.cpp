@@ -121,13 +121,7 @@ void VulkanPipeline::cleanup()
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 {
     _ci = ci;
-
-    // createDescriptorSetLayout();
-    // createPipelineLayout();
-    // createDescriptorPool();
-    // createDescriptorSets();
     createPipelineInternal();
-
     return true;
 }
 
@@ -151,18 +145,24 @@ void VulkanPipeline::createPipelineInternal()
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", _name.toString()).c_str());
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", _name.toString()).c_str());
 
-    std::array<::VkPipelineShaderStageCreateInfo, 2> shaderStages = {
-        ::VkPipelineShaderStageCreateInfo{
-            .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage  = VK_SHADER_STAGE_VERTEX_BIT,
-            .module = vertShaderModule,
-            .pName  = "main",
+    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
+        VkPipelineShaderStageCreateInfo{
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
+            .flags               = 0,
+            .stage               = VK_SHADER_STAGE_VERTEX_BIT,
+            .module              = vertShaderModule,
+            .pName               = "main",
+            .pSpecializationInfo = {},
         },
         VkPipelineShaderStageCreateInfo{
-            .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .stage  = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module = fragShaderModule,
-            .pName  = "main",
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
+            .flags               = 0,
+            .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module              = fragShaderModule,
+            .pName               = "main",
+            .pSpecializationInfo = {},
         },
     };
 

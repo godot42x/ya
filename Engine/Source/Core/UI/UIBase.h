@@ -16,6 +16,26 @@ struct UIElement;
 
 struct UIRenderContext
 {
+    glm::vec2 pos;
+};
+
+#define UI_TYPE(T, BASE) \
+    using Super = BASE;  \
+    static uint32_t getStaticType() { return ya::type_index_v<T>; }
+
+// Common alignment enums for UI layout
+enum EHorizontalAlignment
+{
+    HAlign_Left   = 0,
+    HAlign_Center = 1,
+    HAlign_Right  = 2,
+};
+
+enum EVerticalAlignment
+{
+    VAlign_Top    = 0,
+    VAlign_Center = 1,
+    VAlign_Bottom = 2,
 };
 
 struct FUIColor

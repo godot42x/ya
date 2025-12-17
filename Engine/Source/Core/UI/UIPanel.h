@@ -38,6 +38,9 @@ struct UIPanel : public UIElement
 
         return 0;
     }
+
+
+
 };
 
 } // namespace ya

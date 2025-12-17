@@ -41,6 +41,7 @@
 #include "Core/UI/UIButton.h"
 #include "Core/UI/UIManager.h"
 #include "Core/UI/UIPanel.h"
+#include "Core/UI/UITextBlock.h"
 
 // Utility
 #include "utility.cc/ranges.h"
@@ -179,11 +180,6 @@ void App::init(AppDesc ci)
         MaterialFactory::init();
     }
 
-
-    {
-        YA_PROFILE_SCOPE("Inheritance Init");
-        onInit(ci);
-    }
     currentRenderAPI = ERenderAPI::Vulkan;
 
     auto shaderProcessor = ShaderProcessorFactory()
@@ -313,6 +309,12 @@ void App::init(AppDesc ci)
 
 
 
+    {
+        YA_PROFILE_SCOPE("Inheritance Init");
+        onInit(ci);
+    }
+
+
     // ===== Initialize TextureLibrary =====
     TextureLibrary::init();
 
@@ -347,6 +349,8 @@ void App::onInit(AppDesc ci)
     bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
 
 
+    FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
+
     auto panel     = UIFactory::create<UIPanel>();
     panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
     auto btn       = UIFactory::create<UIButton>();
@@ -354,8 +358,13 @@ void App::onInit(AppDesc ci)
     btn->_size     = {200.0f, 100.0f};
     panel->addChild(btn);
 
+    auto textBlock   = UIFactory::create<UITextBlock>();
+    textBlock->_font = FontManager::get()->getFont("JetBrainsMono-Medium", 48).get();
+    btn->addChild(textBlock);
+
+
     auto mgr = UIManager::get();
-    mgr->_rootElement.addChild(panel);
+    mgr->_rootCanvas.addChild(panel);
 }
 
 void App::onPostInit()
@@ -367,8 +376,6 @@ void App::onPostInit()
 
     ya::AssetManager::get()->loadTexture("face", faceTexturePath);
     ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
-
-    FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
 }
 
 int App::onEvent(const Event &event)
@@ -804,7 +811,7 @@ void App::onRender(float dt)
         Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
     }
     auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-    Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font);
+    Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
     UIManager::get()->render();
     Render2D::end();
 
@@ -813,11 +820,13 @@ void App::onRender(float dt)
     imgui.beginFrame();
     {
         if (ImGui::CollapsingHeader("Render 2D", 0)) {
+            ImGui::Indent();
             ImGui::DragFloat3("pos1", glm::value_ptr(pos1), 0.1f);
             ImGui::DragFloat3("pos2", glm::value_ptr(pos2), 1.f);
             ImGui::DragFloat3("pos3", glm::value_ptr(pos3), 1.f);
             ImGui::DragFloat3("pos4", glm::value_ptr(pos4), 1.f);
-            Render2D::onImGui();
+            Render2D::onRenderGUI();
+            ImGui::Unindent();
         }
 
 

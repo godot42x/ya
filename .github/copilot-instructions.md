@@ -92,6 +92,15 @@ App
   └── ImGuiManager
 ```
 
+## Render2D 相关
+
+### 坐标系
+
+左上角为原点，X 轴向右，Y 轴向下。
+
+Render2D:drawTexture(),  会以传入的位置为左上角， size 向右下扩展来进行渲染.
+
+
 ## 编码规范
 
 ### 命名约定

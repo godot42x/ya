@@ -8,15 +8,18 @@
 namespace ya
 {
 
-/**
- * @brief Character - Glyph information
- */
+
+struct GlyphDesc
+{
+};
+
+
 struct Character
 {
     glm::vec4                uvRect;                      // UV rect: (offsetU, offsetV, scaleU, scaleV) for drawSubTexture
     glm::ivec2               size;                        // Size of glyph in pixels
     glm::ivec2               bearing;                     // Offset from baseline to left/top of glyph
-    uint32_t                 advance;                     // Horizontal offset to advance to next glyph
+    glm::vec2                advance;                     // Horizontal offset to advance to next glyph
     std::shared_ptr<Texture> standaloneTexture = nullptr; // Individual texture for special characters
     bool                     bInAtlas          = true;    // True if character is in atlas, false if standalone
 };
@@ -27,11 +30,19 @@ struct Character
 struct Font
 {
     std::unordered_map<char, Character> characters;
-    float                               fontSize = 0;
+    float                               fontSize   = 0;
+    float                               lineHeight = 0;         // Line height (ascender - descender + line gap)
+    float                               ascent     = 0;         // Distance from baseline to top of tallest glyph
+    float                               descent    = 0;         // Distance from baseline to bottom of lowest glyph
     std::string                         fontPath;               // Path to font file
     std::shared_ptr<Texture>            atlasTexture = nullptr; // Single texture atlas (optional)
 
-    bool hasCharacter(char c) const { return characters.contains(c); }
+    bool hasCharacter(char asciiCode) const { return characters.contains(asciiCode); }
+    bool hasCharacter(wchar_t wideChar) const
+    {
+        // Currently only supports ASCII characters
+        return wideChar < 128 && hasCharacter(static_cast<char>(wideChar));
+    }
 
     float            getFontSize() const { return fontSize; }
     const Character &getCharacter(char c) const
@@ -43,6 +54,17 @@ struct Font
             return it->second;
         }
         return defaultChar;
+    }
+
+    // Measure text width for layout calculations
+    float measureText(const std::string &text) const
+    {
+        float width = 0.0f;
+        for (char c : text) {
+            const Character &ch = getCharacter(c);
+            width += ch.advance.x;
+        }
+        return width;
     }
 };
 
@@ -85,10 +107,10 @@ struct FontManager
      * @return Adapted font
      */
     std::shared_ptr<Font> getAdaptiveFont(const std::string &fontPath,
-                                          const FName &fontName,
-                                          uint32_t baseSize,
-                                          uint32_t windowHeight,
-                                          uint32_t referenceHeight = 1080);
+                                          const FName       &fontName,
+                                          uint32_t           baseSize,
+                                          uint32_t           windowHeight,
+                                          uint32_t           referenceHeight = 1080);
 
     // TODO: optimize key generation
     static std::string makeCacheKey(const FName &fontName, uint32_t fontSize)

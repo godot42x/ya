@@ -20,9 +20,10 @@
 namespace ya
 {
 
-static FRender2dData   render2dData;
-static ICommandBuffer *curCmdBuf = nullptr;
-static FQuadRender    *quadData  = nullptr;
+FRender2dData Render2D::data;
+FQuadRender  *Render2D::quadData = nullptr;
+
+auto &data2D = Render2D::data;
 
 
 void Render2D::init(IRender *render, IRenderPass *renderpass)
@@ -30,15 +31,15 @@ void Render2D::init(IRender *render, IRenderPass *renderpass)
     auto *swapchain = render->getSwapchain();
     auto  extent    = swapchain->getExtent();
 
-    render2dData.windowWidth  = extent.width;
-    render2dData.windowHeight = extent.height;
+    data.windowWidth  = extent.width;
+    data.windowHeight = extent.height;
 
     MessageBus::get()->subscribe<WindowResizeEvent>([render](const WindowResizeEvent &ev) {
         auto *swapchain = render->getSwapchain();
         auto  extent    = swapchain->getExtent();
         YA_CORE_INFO("Window resized, swapchain extend: {}x{}, event: {}x{}", extent.width, extent.height, ev.GetWidth(), ev.GetHeight());
-        render2dData.windowWidth  = extent.width;
-        render2dData.windowHeight = extent.height;
+        data.windowWidth  = extent.width;
+        data.windowHeight = extent.height;
         return false;
     });
 
@@ -56,61 +57,38 @@ void Render2D::onUpdate()
 {
 }
 
-void Render2D::begin(ICommandBuffer *cmdBuf)
-{
-    curCmdBuf = cmdBuf;
-    quadData->begin();
-}
-
 void Render2D::onImGui()
 {
 #if DYN_CULL
-    int cull = (int)(render2dData.cullMode);
+    int cull = (int)(data.cullMode);
     if (ImGui::Combo("Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
         switch (cull) {
         case 0:
-            render2dData.cullMode = ECullMode::None;
+            data.cullMode = ECullMode::None;
             break;
         case 1:
-            render2dData.cullMode = ECullMode::Front;
+            data.cullMode = ECullMode::Front;
             break;
         case 2:
-            render2dData.cullMode = ECullMode::Back;
+            data.cullMode = ECullMode::Back;
             break;
         case 3:
-            render2dData.cullMode = ECullMode::FrontAndBack;
+            data.cullMode = ECullMode::FrontAndBack;
             break;
         default:
-            render2dData.cullMode = ECullMode::Back;
+            data.cullMode = ECullMode::Back;
             break;
         }
     }
 #endif
+
+    ImGui::InputInt("Text Layout Mode", &data2D.TextLayoutMode);
+    ImGui::InputInt("View Matrix Mode", &data2D.viewMatrixMode);
+
+
     quadData->onImGui();
 }
 
-void Render2D::end()
-{
-    quadData->end();
-    curCmdBuf = nullptr;
-}
-
-
-void Render2D::makeSprite(const glm::vec3         &position,
-                          const glm::vec2         &size,
-                          std::shared_ptr<Texture> texture,
-                          const glm::vec4         &tint,
-                          const glm::vec2         &uvScale)
-{
-    quadData->drawTexture(position, size, texture, tint, uvScale);
-}
-
-
-
-void Render2D::makeText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font)
-{
-    quadData->drawText(text, position, color, font);
-}
 
 // MARK: quad init
 
@@ -279,16 +257,16 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
             .viewports = {Viewport{
                 .x        = 0.0f,
                 .y        = 0.0f,
-                .width    = static_cast<float>(render2dData.windowWidth),
-                .height   = static_cast<float>(render2dData.windowHeight),
+                .width    = static_cast<float>(Render2D::data.windowWidth),
+                .height   = static_cast<float>(Render2D::data.windowHeight),
                 .minDepth = 0.0f,
                 .maxDepth = 1.0f,
             }},
             .scissors  = {Scissor{
                  .offsetX = 0,
                  .offsetY = 0,
-                 .width   = render2dData.windowWidth,
-                 .height  = render2dData.windowHeight,
+                 .width   = Render2D::data.windowWidth,
+                 .height  = Render2D::data.windowHeight,
             }},
         },
     });
@@ -365,8 +343,8 @@ void FQuadRender::begin()
         });
 
 
-    float w      = (float)render2dData.windowWidth;
-    float h      = (float)render2dData.windowHeight;
+    float w      = (float)Render2D::data.windowWidth;
+    float h      = (float)Render2D::data.windowHeight;
     float aspect = w / h;
     if (w > h) {
         h = w / aspect;
@@ -398,23 +376,36 @@ void FQuadRender::begin()
      * 最终，会被映射到sd的窗口坐标系(0, 0) 在左上角:
      * x++ 向下 y++ 向右 z++ 向屏幕外
      */
+
     glm::mat4 proj = glm::orthoRH_ZO(0.0f,
                                      w,
                                      0.0f,
                                      h,
                                      -1.0f,
                                      1.0f);
+    switch (data2D.viewMatrixMode) {
+    case 1:
+    {
+        // center at (w/2, h/2)
+        proj = glm::orthoRH_ZO(0.0f,
+                               w,
+                               h,
+                               0.0f,
+                               -1.0f,
+                               1.0f);
+    } break;
+    }
     // flip y axis
     // proj[1][1] *= -1;
 
     updateFrameUBO(glm::mat4(1.0) * proj);
 }
 
-
 void FQuadRender::end()
 {
-    quadData->flush(curCmdBuf);
+    flush(Render2D::data.curCmdBuf);
 }
+
 
 // MARK: quad flush
 void FQuadRender::flush(ICommandBuffer *cmdBuf)
@@ -427,13 +418,18 @@ void FQuadRender::flush(ICommandBuffer *cmdBuf)
     _vertexBuffer->flush();
 
     // Pipeline bind using abstract command buffer interface
-    _pipeline->bind(cmdBuf->getHandle());
+    cmdBuf->bindPipeline(_pipeline.get());
 
     // Set viewport, scissor and cull mode using abstract interface
-    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(render2dData.windowWidth), static_cast<float>(render2dData.windowHeight), 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, render2dData.windowWidth, render2dData.windowHeight);
+    cmdBuf->setViewport(0.0f,
+                        0.0f,
+                        static_cast<float>(Render2D::data.windowWidth),
+                        static_cast<float>(Render2D::data.windowHeight),
+                        0.0f,
+                        1.0f);
+    cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
 #if DYN_CULL
-    cmdBuf->setCullMode(render2dData.cullMode);
+    cmdBuf->setCullMode(Render2D::data.cullMode);
 #endif
 
     // Bind descriptor sets using abstract interface
@@ -527,7 +523,7 @@ void FQuadRender::drawTexture(const glm::vec3         &position,
                               const glm::vec2         &uvScale)
 {
     if (shouldFlush()) {
-        flush(curCmdBuf);
+        flush(Render2D::data.curCmdBuf);
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -558,7 +554,7 @@ void FQuadRender::drawSubTexture(const glm::vec3         &position,
                                  const glm::vec4         &uvRect)
 {
     if (shouldFlush()) {
-        flush(curCmdBuf);
+        flush(Render2D::data.curCmdBuf);
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -581,13 +577,14 @@ void FQuadRender::drawSubTexture(const glm::vec3         &position,
 }
 
 
-void FQuadRender::drawText(const std::string &text, const glm::vec2 &position, const glm::vec4 &color, stdptr<Font> font)
+void FQuadRender::drawText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font)
 {
     float cursorX = position.x;
     float cursorY = position.y;
 
     // Debug: draw baseline (optional, comment out later)
     // drawTexture(glm::vec3(position.x, position.y, 0.01f), glm::vec2(500, 2), nullptr, glm::vec4(0, 1, 0, 1));
+    YA_CORE_ASSERT(font != nullptr, "TODO: font is null in Render2D::drawText, should make a default font");
 
     for (size_t i = 0; i < text.size(); ++i) {
         char             ch        = text[i];
@@ -595,17 +592,25 @@ void FQuadRender::drawText(const std::string &text, const glm::vec2 &position, c
 
         // Skip rendering for space (but still advance cursor)
         if (ch == ' ') {
-            cursorX += static_cast<float>(character.advance >> 6);
+            cursorX += character.advance.x;
             continue;
         }
+        float xpos = cursorX;
+        float ypos = cursorY;
 
         // Calculate glyph position
         // bearing.x: offset from cursor to left edge of glyph
         // bearing.y: offset from baseline to top of glyph (positive = above baseline)
-        float xpos = cursorX + static_cast<float>(character.bearing.x);
-        float ypos = cursorY - static_cast<float>(character.bearing.y); // bearing.y is distance from baseline to top
+        // position.y is the TOP of the text box, so we calculate:
+        //   baseline = position.y + ascent
+        //   glyph top = baseline - bearing.y
+        //   result: position.y + ascent - bearing.y
 
-        glm::vec3 pos = glm::vec3(xpos, ypos, 0.f);
+        xpos += (float)(character.bearing.x);
+        ypos += (float)(font->ascent - character.bearing.y);
+
+
+        glm::vec3 pos = glm::vec3(xpos, ypos, position.z);
 
         stdptr<Texture> texture = font->atlasTexture;
         if (!character.bInAtlas) {
@@ -621,7 +626,7 @@ void FQuadRender::drawText(const std::string &text, const glm::vec2 &position, c
             uvRect);
 
         // Advance cursor for next glyph (advance is in 1/64 pixels)
-        cursorX += static_cast<float>(character.advance >> 6);
+        cursorX += character.advance.x;
     }
 }
 
