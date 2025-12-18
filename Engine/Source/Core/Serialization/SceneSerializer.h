@@ -31,10 +31,21 @@ concept Serializable = requires(T t, nlohmann::json j) {
  * 3. 支持 Entity 层级结构（Scene Graph）
  * 4. 支持资源引用（Texture, Mesh 等）
  */
-class SceneSerializer
+
+using ComponentSerializer   = std::function<nlohmann::json(entt::registry &, entt::entity)>;
+using ComponentDeserializer = std::function<void(entt::registry &, entt::entity, const nlohmann::json &)>;
+struct SceneSerializer
 {
+    // 特殊组件序列化器注册表
+
+    static std::unordered_map<std::string, ComponentSerializer>   _componentSerializers;
+    static std::unordered_map<std::string, ComponentDeserializer> _componentDeserializers;
+
   public:
     SceneSerializer(Scene *scene) : _scene(scene) {}
+
+
+    static void registerComponentSerializers();
 
     // 保存场景到文件
     bool saveToFile(const std::string &filepath);
@@ -62,15 +73,8 @@ class SceneSerializer
     template <typename ComponentType>
     void deserializeComponent(ComponentType &component, const nlohmann::json &j);
 
-    // 特殊组件序列化器注册表
-    using ComponentSerializer   = std::function<nlohmann::json(entt::registry &, entt::entity)>;
-    using ComponentDeserializer = std::function<void(entt::registry &, entt::entity, const nlohmann::json &)>;
-
-    std::unordered_map<std::string, ComponentSerializer>   _componentSerializers;
-    std::unordered_map<std::string, ComponentDeserializer> _componentDeserializers;
 
     // 注册组件序列化器
-    void registerComponentSerializers();
 
     // 通过组件类型名查找序列化器
     nlohmann::json serializeComponentByName(const std::string &typeName,

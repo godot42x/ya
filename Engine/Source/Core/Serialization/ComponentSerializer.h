@@ -47,13 +47,15 @@ struct ReflectionSerializer
      * 通过反射将对象序列化为 JSON
      */
     template <typename T>
+        requires(!std::is_pointer_v<T>)
     static nlohmann::json serialize(const T &obj)
     {
         nlohmann::json j;
 
         // 获取反射信息
         std::string className = typeid(T).name();
-        auto       *classInfo = ClassRegistry::instance().getClass(className);
+        uint32_t    typeIndex = type_index_v<T>;
+        auto       *classInfo = ClassRegistry::instance().getClass(typeIndex);
 
         if (!classInfo) {
             YA_CORE_WARN("No reflection info for class: {}", className);
@@ -64,7 +66,7 @@ struct ReflectionSerializer
         for (const auto &[propName, prop] : classInfo->properties) {
             try {
                 std::any value = prop.getter(const_cast<T *>(&obj));
-                j[propName]    = anyToJson(prop);
+                j[propName]    = anyToJson(value, prop.typeIndex);
             }
             catch (const std::exception &e) {
                 YA_CORE_WARN("Failed to serialize property {}: {}", propName, e.what());
@@ -73,6 +75,7 @@ struct ReflectionSerializer
 
         return j;
     }
+
 
     /**
      * 从 JSON 反序列化对象
@@ -112,12 +115,10 @@ struct ReflectionSerializer
   private:
     /**
      * 将 std::any 转换为 JSON
-     * 根据类型哈希值判断类型
+     * 根据类型索引判断类型
      */
-    static nlohmann::json anyToJson(const Property &prop)
+    static nlohmann::json anyToJson(const std::any &value, uint32_t typeIndex)
     {
-        auto            typeIndex = prop.typeIndex;
-        const std::any &value     = prop.value;
         // 基础类型
         if (typeIndex == type_index_v<int>) {
             return std::any_cast<int>(value);
@@ -148,7 +149,7 @@ struct ReflectionSerializer
             return SerializerHelper::toJson(std::any_cast<glm::mat4>(value));
         }
 
-        YA_CORE_WARN("Unknown type hash for serialization: {}", typeIndex);
+        YA_CORE_WARN("Unknown type index for serialization: {}", typeIndex);
         return nullptr;
     }
 

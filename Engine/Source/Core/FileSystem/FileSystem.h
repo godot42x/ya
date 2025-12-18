@@ -1,10 +1,15 @@
 #pragma once
 
+#include "Core/Delegate.h"
+#include "Core/Log.h"
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
 
 
 struct FileSystem
@@ -19,6 +24,9 @@ struct FileSystem
     stdpath                                  gameRoot; // Current game/example root
     std::unordered_map<std::string, stdpath> pluginRoots;
     std::unordered_map<std::string, stdpath> mountPoints; // Virtual path -> Physical path mapping
+
+    Delegate<void(const std::string &filepath)>                     onFileAlreadyExistsOnSave;
+    Delegate<void(const std::string &filepath, size_t bytesLoaded)> onFileLoaded;
 
   public:
     static void        init();
@@ -117,5 +125,28 @@ struct FileSystem
     bool isFileExists(const std::string &filepath) const
     {
         return std::filesystem::exists(projectRoot / filepath);
+    }
+
+    void saveToFile(std::string_view filepath, const std::string &data) const
+    {
+        auto fp = stdpath(filepath);
+
+        if (std::filesystem::is_directory(fp.parent_path()) == false)
+        {
+            std::filesystem::create_directories(fp.parent_path());
+        }
+        if (std::filesystem::exists(fp))
+        {
+            std::filesystem::remove(fp);
+        }
+
+        std::ofstream file(fp.c_str(), std::ios::binary);
+        if (!file.is_open())
+        {
+            YA_CORE_ERROR("FileSystem::saveToFile - Failed to open file for writing: {}", filepath);
+            return;
+        }
+        file.write(data.data(), data.size());
+        file.close();
     }
 };

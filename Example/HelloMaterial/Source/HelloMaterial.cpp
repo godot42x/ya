@@ -19,6 +19,7 @@
 #include "Scene/Scene.h"
 #include <format>
 
+#include "Scene/SceneManager.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "imgui.h"
 
@@ -34,8 +35,6 @@ void HelloMaterial::createCubeMesh()
 
 void HelloMaterial::loadTextures()
 {
-
-   
 }
 
 void HelloMaterial::createMaterials()
@@ -225,10 +224,9 @@ void HelloMaterial::onUpdate(float dt)
 void HelloMaterial::onRenderGUI()
 {
     Super::onRenderGUI();
-    if (!ImGui::CollapsingHeader("HelloMaterial")) {
+    if (!ImGui::Begin("HelloMaterial")) {
         return;
     }
-    ImGui::Indent();
     // TODO: use my gui not imgui
     // imgui manipulate the lit material  "Lit Test" and "Point Light"
     if (_litTestEntity && _litTestEntity->hasComponent<ya::LitMaterialComponent>()) {
@@ -248,5 +246,15 @@ void HelloMaterial::onRenderGUI()
             tc->setPosition(pos);
         }
     }
-    ImGui::Unindent();
+
+    if (ImGui::Button("Deserialize Scene"))
+    {
+        auto sceneManager = ya::App::get()->getSceneManager();
+        YA_CORE_ASSERT(sceneManager, "SceneManager is null");
+        sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
+                                      getSceneManager()->getCurrentScene());
+    }
+
+
+    ImGui::End();
 }

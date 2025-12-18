@@ -1,6 +1,7 @@
 #include "SceneManager.h"
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
+#include "Core/Serialization/SceneSerializer.h"
 
 namespace ya
 {
@@ -49,6 +50,38 @@ bool SceneManager::unloadScene()
     _currentScenePath.clear();
 
     return true;
+}
+
+void SceneManager::serializeToFile(const std::string &path, Scene *scene) const
+{
+    if (!scene) {
+        YA_CORE_WARN("No scene loaded to serialize");
+        return;
+    }
+
+    SceneSerializer serializer(scene);
+    if (serializer.saveToFile(path)) {
+        YA_CORE_INFO("Scene serialized to file: {}", path);
+    }
+    else {
+        YA_CORE_ERROR("Failed to serialize scene to file: {}", path);
+    }
+}
+
+void SceneManager::deserializeFromFile(const std::string &path, Scene *scene)
+{
+    if (!scene) {
+        YA_CORE_WARN("No scene provided to deserialize into");
+        return;
+    }
+
+    SceneSerializer serializer(scene);
+    if (serializer.loadFromFile(path)) {
+        YA_CORE_INFO("Scene deserialized from file: {}", path);
+    }
+    else {
+        YA_CORE_ERROR("Failed to deserialize scene from file: {}", path);
+    }
 }
 
 } // namespace ya

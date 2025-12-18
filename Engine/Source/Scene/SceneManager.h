@@ -22,6 +22,14 @@ class SceneManager
   public:
     using SceneInitCallback = std::function<void(Scene *)>;
 
+  private:
+    std::unique_ptr<Scene> _currentScene;
+    SceneInitCallback      _onSceneInit;
+    SceneInitCallback      _onSceneCleanup;
+    std::string            _currentScenePath;
+
+  public:
+
     SceneManager() = default;
     ~SceneManager();
 
@@ -32,30 +40,16 @@ class SceneManager
      */
     bool loadScene(const std::string &path);
 
-    /**
-     * @brief Unload the current scene
-     * @return true if unloaded successfully, false otherwise
-     */
     bool unloadScene();
 
-    /**
-     * @brief Get the current active scene
-     */
     Scene *getCurrentScene() const { return _currentScene.get(); }
-
-    /**
-     * @brief Check if a scene is currently loaded
-     */
-    bool hasScene() const { return _currentScene != nullptr; }
+    bool   hasScene() const { return _currentScene != nullptr; }
 
     void setSceneInitCallback(SceneInitCallback callback) { _onSceneInit = callback; }
     void setSceneCleanupCallback(SceneInitCallback callback) { _onSceneCleanup = callback; }
 
-  private:
-    std::unique_ptr<Scene> _currentScene;
-    SceneInitCallback      _onSceneInit;
-    SceneInitCallback      _onSceneCleanup;
-    std::string            _currentScenePath;
+    void serializeToFile(const std::string &path, Scene *scene) const;
+    void deserializeFromFile(const std::string &path, Scene *scene);
 };
 
 } // namespace ya

@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "Core/Serialization/SceneSerializer.h"
+
 namespace ya
 {
 
@@ -21,6 +23,7 @@ class ReflectionSystem
     static void init()
     {
         ReflectionSystem::registerAllComponents();
+        SceneSerializer::registerComponentSerializers();
     }
 };
 
