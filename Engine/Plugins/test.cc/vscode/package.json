@@ -23,10 +23,25 @@
       {
         "command": "ya.runAllTests",
         "title": "ya: Run All Tests"
+      },
+      {
+        "command": "ya.buildTests",
+        "title": "ya: Build Tests"
+      },
+      {
+        "command": "ya.debugTest",
+        "title": "ya: Debug Test"
       }
-    ],    "configuration": {
+    ],
+    "configuration": {
       "title": "ya Test",
       "properties": {
+        "ya.test.buildSystem": {
+          "type": "string",
+          "enum": ["auto", "xmake", "cmake"],
+          "default": "auto",
+          "description": "Build system to use (auto-detect, xmake, or cmake)"
+        },
         "ya.test.buildMode": {
           "type": "string",
           "enum": ["debug", "release"],
@@ -35,12 +50,18 @@
         },
         "ya.test.buildDir": {
           "type": "string",
-          "default": "${workspaceFolder}/build/windows/x64/${ya.test.buildMode}",
+          "default": "${workspaceFolder}/build",
           "description": "Directory where built test files are located"
-        },        "ya.test.testRunnerPath": {
+        },
+        "ya.test.testRunnerPath": {
           "type": "string",
-          "default": "${ya.test.buildDir}/test_runner.exe",
-          "description": "Path to the test runner executable"
+          "default": "",
+          "description": "Custom path to the test runner executable (leave empty for auto-detection)"
+        },
+        "ya.test.autoBuild": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically build tests before running if executable not found"
         }
       }
     }

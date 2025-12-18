@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -21,6 +22,16 @@
 namespace TestFramework
 {
 
+// Test result structure
+struct TestResult
+{
+    std::string name;
+    bool        passed      = false;
+    double      elapsedMs   = 0.0;
+    std::string output;
+    std::string errorMsg;
+};
+
 class TestRegistry
 {
   public:
@@ -28,15 +39,19 @@ class TestRegistry
 
     static void                     RegisterTest(const std::string &name, TestFunction testFunc, const std::string &file, int line);
     static bool                     RunTest(const std::string &name);
+    static TestResult               RunTestWithResult(const std::string &name);
     static bool                     RunAllTests();
+    static std::vector<TestResult>  RunAllTestsWithResults();
     static std::vector<std::string> GetTestNames();
     static std::string              GetTestLocation(const std::string &name);
     static bool                     HasTest(const std::string &name);
     static int                      GetTestCount();
+    static TestResult               GetLastResult(const std::string &name);
 
   private:
     static std::map<std::string, TestFunction> &GetTests();
     static std::map<std::string, std::string>  &GetLocations();
+    static std::map<std::string, TestResult>   &GetResults();
 };
 
 // Test case helper structure
