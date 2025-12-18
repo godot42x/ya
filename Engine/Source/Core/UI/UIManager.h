@@ -7,30 +7,49 @@
 #include "UIElement.h"
 
 
-
 namespace ya
 {
 
 struct UIManager
 {
 
-    UICanvas _rootCanvas;
+    stdptr<UICanvas> _rootCanvas;
 
-    static void init() {}
-    static void shutdown() {}
+
+    UIManager()
+    {
+        _rootCanvas = makeShared<UICanvas>();
+    }
+    UIManager(UIManager const &)            = delete;
+    UIManager &operator=(UIManager const &) = delete;
 
     static UIManager *get();
 
-    void render()
-    {
-        UIRenderContext ctx{};
-        _rootCanvas.render(ctx, 0);
-    }
 
-    void onEvent(const Event &event, UIAppCtx &ctx)
+    void render();
+
+    void onEvent(const Event &event, UIAppCtx &ctx);
+
+
+    struct PopupWrapper
     {
-        _rootCanvas.handleEvent(event, ctx);
-    }
+        stdptr<UIElement> popup;
+        bool              bOpen  = true;
+        bool              bModal = true;
+
+
+        void show()
+        {
+            if (UIMeta::get()->isBaseOf(UIElement::getStaticType(), popup->getStaticType())) {
+                // popup->update(0.0f);
+                // Render2D::beginUIOverlay();
+                // popup->render(UIRenderContext{glm::vec2(0.0f), glm::vec2(0.0f)}, 1000);
+                // Render2D::endUIOverlay();
+            }
+        }
+    };
+
+    void addPopup(std::shared_ptr<UIElement> popup);
 };
 
 struct UIElementRegistry
@@ -50,7 +69,8 @@ struct UIElementRegistry
         auto it = std::remove_if(_allElements.begin(),
                                  _allElements.end(),
                                  [](UIElement *el) {
-                                     return FUIHelper::isUIPendingKill(el);
+                                     return false;
+                                     //  return FUIHelper::isUIPendingKill(el);
                                  });
         // destruct, release resources...
         for (; it != _allElements.end(); ++it)

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Core/Base.h"
 #include "ECS/Component.h"
 
-#include "Core/Serialization/ComponentSerializer.h"
 
 
 namespace ya

@@ -104,6 +104,7 @@ ClearValue depthClearValue = ClearValue(1.0f, 0);
 void imcFpsControl(FPSControl &fpsCtrl)
 {
     if (ImGui::CollapsingHeader("FPS Control", 0)) {
+        ImGui::Indent();
 
         ImGui::Text("FPS Limit: %.1f", fpsCtrl.fpsLimit);
 
@@ -118,6 +119,7 @@ void imcFpsControl(FPSControl &fpsCtrl)
         }
 
         ImGui::Checkbox("Enable FPS Control", &fpsCtrl.bEnable);
+        ImGui::Unindent();
     }
 }
 
@@ -368,7 +370,7 @@ void App::onInit(AppDesc ci)
 
 
     auto mgr = UIManager::get();
-    mgr->_rootCanvas.addChild(panel);
+    mgr->_rootCanvas->addChild(panel);
 }
 
 void App::onPostInit()
@@ -805,14 +807,16 @@ void App::onRender(float dt)
 
     // MARK: Render2D
     Render2D::begin(curCmdBuf.get());
-    for (const auto &&[idx, p] : ut::enumerate(clicked))
-    {
-        auto tex = idx % 2 == 0
-                     ? AssetManager::get()->getTextureByName("uv1")
-                     : AssetManager::get()->getTextureByName("face");
-        YA_CORE_ASSERT(tex, "Texture not found");
+    if (_appMode == AppMode::Drawing) {
+        for (const auto &&[idx, p] : ut::enumerate(clicked))
+        {
+            auto tex = idx % 2 == 0
+                         ? AssetManager::get()->getTextureByName("uv1")
+                         : AssetManager::get()->getTextureByName("face");
+            YA_CORE_ASSERT(tex, "Texture not found");
 
-        Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
+            Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
+        }
     }
     auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
     Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
@@ -879,12 +883,12 @@ void App::onRender(float dt)
 
         imcEditorCamera(camera);
         imcClearValues();
-        // imcFpsControl(fpsCtrl);
-        // static bool bItemPicker = false;
-        // ImGui::Checkbox("Debug Picker", &bItemPicker);
-        // if (bItemPicker) {
-        //     ImGui::DebugStartItemPicker();
-        // }
+        imcFpsControl(*FPSControl::get());
+        static bool bItemPicker = false;
+        ImGui::Checkbox("Debug Picker", &bItemPicker);
+        if (bItemPicker) {
+            ImGui::DebugStartItemPicker();
+        }
         static bool bDarkMode = true;
         if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
             if (bDarkMode) {

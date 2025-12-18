@@ -9,19 +9,16 @@
 namespace ya
 {
 
-
 using layer_idx_t = uint32_t;
 
-struct UIElement;
+
 
 struct UIRenderContext
 {
     glm::vec2 pos;
 };
 
-#define UI_TYPE(T, BASE) \
-    using Super = BASE;  \
-    static uint32_t getStaticType() { return ya::type_index_v<T>; }
+
 
 // Common alignment enums for UI layout
 enum EHorizontalAlignment
@@ -56,27 +53,11 @@ struct FUIColor
 };
 
 
-struct FUIHelper
-{
-    static bool isPointInRect(const glm::vec2 &point, const glm::vec2 &rectPos, const glm::vec2 &rectSize)
-    {
-        return point.x >= rectPos.x &&
-               point.x <= rectPos.x + rectSize.x &&
-               point.y >= rectPos.y &&
-               point.y <= rectPos.y + rectSize.y;
-    }
-
-
-    static bool isUIPendingKill(UIElement *el)
-    {
-        return el == nullptr; // kill flag....
-    }
-    static bool isValid(UIElement *el)
-    {
-        return el != nullptr && !isUIPendingKill(el);
-    }
-};
-
+// For root UI types without a base class
+#define UI_ROOT_TYPE(T)                                             \
+    using Super = void;                                             \
+    static uint32_t getStaticType() { return ya::type_index_v<T>; } \
+    static uint32_t getStaticBaseType() { return 0; } // Root type has no base
 
 struct UILayout
 {
@@ -90,67 +71,58 @@ struct UIAppCtx
 };
 
 
-// Spatial grid for optimizing hit testing
-struct UISpatialGrid
+struct UIMeta
 {
-    struct Cell
-    {
-        std::vector<UIElement *> elements;
-    };
+    std::unordered_map<uint32_t, uint32_t> inheritanceMap;
 
-    int               _gridWidth  = 10;
-    int               _gridHeight = 10;
-    float             _cellWidth  = 100.0f;
-    float             _cellHeight = 100.0f;
-    std::vector<Cell> _cells;
-
-    UISpatialGrid(int gridWidth = 10, int gridHeight = 10, float viewportWidth = 1000.0f, float viewportHeight = 1000.0f)
-        : _gridWidth(gridWidth), _gridHeight(gridHeight)
+    static UIMeta *get();
+    UIMeta()                          = default;
+    UIMeta(const UIMeta &)            = delete;
+    UIMeta(UIMeta &&)                 = delete;
+    UIMeta &operator=(const UIMeta &) = delete;
+    UIMeta &operator=(UIMeta &&)      = delete;
+    // 自动注册 UI 类型继承关系
+    void registerInheritance(uint32_t childType, uint32_t parentType)
     {
-        _cellWidth  = viewportWidth / static_cast<float>(gridWidth);
-        _cellHeight = viewportHeight / static_cast<float>(gridHeight);
-        _cells.resize(static_cast<size_t>(gridWidth) * static_cast<size_t>(gridHeight));
+        inheritanceMap[childType] = parentType;
     }
 
-    void clear()
+    bool isBaseOf(uint32_t baseType, uint32_t derivedType)
     {
-        for (auto &cell : _cells)
-        {
-            cell.elements.clear();
-        }
-    }
-
-    void insert(UIElement *element, const glm::vec2 &position, const glm::vec2 &size)
-    {
-        int minX = std::max(0, (int)(position.x / _cellWidth));
-        int maxX = std::min(_gridWidth - 1, (int)((position.x + size.x) / _cellWidth));
-        int minY = std::max(0, (int)(position.y / _cellHeight));
-        int maxY = std::min(_gridHeight - 1, (int)((position.y + size.y) / _cellHeight));
-
-        for (int y = minY; y <= maxY; ++y)
-        {
-            for (int x = minX; x <= maxX; ++x)
-            {
-                int index = y * _gridWidth + x;
-                _cells[index].elements.push_back(element);
+        uint32_t currentType = derivedType;
+        while (currentType != 0) {
+            if (currentType == baseType) {
+                return true;
             }
+            auto it = inheritanceMap.find(currentType);
+            if (it == inheritanceMap.end()) {
+                break;
+            }
+            currentType = it->second;
         }
-    }
-
-    std::vector<UIElement *> query(const glm::vec2 &point)
-    {
-        int x = (int)(point.x / _cellWidth);
-        int y = (int)(point.y / _cellHeight);
-
-        if (x < 0 || x >= _gridWidth || y < 0 || y >= _gridHeight)
-        {
-            return {};
-        }
-
-        int index = y * _gridWidth + x;
-        return _cells[index].elements;
+        return false;
     }
 };
 
+#define UI_TYPE(T, BASE)                                                                 \
+    using Super = BASE;                                                                  \
+    static uint32_t    getStaticType() { return ya::type_index_v<T>; }                   \
+    static uint32_t    getStaticBaseType() { return ya::type_index_v<BASE>; }            \
+    inline static bool _auto_registered = []() {                                         \
+        UIMeta::get()->registerInheritance(ya::type_index_v<T>, ya::type_index_v<BASE>); \
+        return true;                                                                     \
+    }();
+
+
+struct FUIHelper
+{
+    static bool isPointInRect(const glm::vec2 &point, const glm::vec2 &rectPos, const glm::vec2 &rectSize)
+    {
+        return point.x >= rectPos.x &&
+               point.x <= rectPos.x + rectSize.x &&
+               point.y >= rectPos.y &&
+               point.y <= rectPos.y + rectSize.y;
+    }
+};
 
 }; // namespace ya

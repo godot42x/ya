@@ -10,7 +10,7 @@ namespace ya
 
 struct UIButton : public UIElement
 {
-    using Super = UIElement;
+    UI_TYPE(UIButton, UIElement);
 
     FUIColor _normalColor  = FUIColor(0.8f, 0.8f, 0.8f, 1.0f);
     FUIColor _hoveredColor = FUIColor(0.6f, 0.6f, 0.6f, 1.0f);

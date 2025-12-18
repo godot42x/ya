@@ -2,7 +2,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "reflects-core/lib.h"
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
 

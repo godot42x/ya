@@ -4,6 +4,7 @@
 
 #include "Core/Base.h"
 #include "Core/Event.h"
+
 #include "UIBase.h"
 
 namespace ya
@@ -13,6 +14,8 @@ namespace ya
 
 struct UIElement
 {
+    UI_ROOT_TYPE(UIElement);
+
     // todo: multi window
     std::vector<std::shared_ptr<UIElement>> _children;
     UIElement                              *_parent = nullptr;

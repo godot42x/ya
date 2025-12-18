@@ -11,7 +11,7 @@ namespace ya
 
 struct UIPanel : public UIElement
 {
-    using Super = UIElement;
+    UI_TYPE(UIPanel, UIElement);
 
     FUIColor  _color    = {0.8f, 0.8f, 0.8f, 1.0f};
     glm::vec2 _position = {0.0f, 0.0f};

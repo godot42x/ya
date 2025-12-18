@@ -126,4 +126,9 @@ template <typename T>
 inline static const auto type_index_v = refl::TypeIndex<T>::value();
 #endif
 
+#define NAMESPACE_BEGIN(name) \
+    namespace name            \
+    {
+#define NAMESPACE_END(name) }
+
 } // namespace ya

@@ -20,9 +20,10 @@
 
 
 
-
 #include "Log.h"
+#include "TimeManager.h"
 #include "Trait.h"
+
 
 
 #include <glm/fwd.hpp>

@@ -9,6 +9,8 @@ namespace ya
 {
 struct UICanvas : public UIElement
 {
+    UI_TYPE(UICanvas, UIElement);
+
     UICanvas()                 = default;
     UICanvas(const UICanvas &) = default;
 };
