@@ -31,30 +31,6 @@ void VulkanRenderPass::cleanup()
 }
 
 
-void VulkanRenderPass::beginVk(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues)
-{
-
-    VkRenderPassBeginInfo renderPassBI{
-        .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext       = nullptr,
-        .renderPass  = getVkHandle(),
-        .framebuffer = framebuffer,
-        .renderArea  = {
-             .offset = {0, 0},
-             .extent = extent,
-        },
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues    = clearValues.data(),
-    };
-
-    vkCmdBeginRenderPass(commandBuffer, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE); // ? contents
-}
-
-void VulkanRenderPass::endVk(VkCommandBuffer commandBuffer)
-{
-    vkCmdEndRenderPass(commandBuffer);
-}
-
 // IRenderPass interface implementation
 void VulkanRenderPass::begin(
     ya::ICommandBuffer            *commandBuffer,
@@ -87,17 +63,29 @@ void VulkanRenderPass::begin(
         vkClearValues.push_back(vkCV);
     }
 
-    beginVk(
-        commandBuffer->getHandleAs<VkCommandBuffer>(),
-        static_cast<VkFramebuffer>(framebuffer),
-        vkExtent,
-        vkClearValues);
+
+    auto vkFramebuffer = static_cast<VkFramebuffer>(framebuffer);
+    auto vkCmdBuf      = commandBuffer->getHandleAs<VkCommandBuffer>();
+
+    VkRenderPassBeginInfo renderPassBI{
+        .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext       = nullptr,
+        .renderPass  = getVkHandle(),
+        .framebuffer = vkFramebuffer,
+        .renderArea  = {
+             .offset = {0, 0},
+             .extent = vkExtent,
+        },
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues    = vkClearValues.data(),
+    };
+    vkCmdBeginRenderPass(vkCmdBuf, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE);
 }
 
 void VulkanRenderPass::end(ya::ICommandBuffer *commandBuffer)
 {
     if (!commandBuffer) return;
-    endVk(commandBuffer->getHandleAs<VkCommandBuffer>());
+    vkCmdEndRenderPass(commandBuffer->getHandleAs<VkCommandBuffer>());
 }
 
 EFormat::T VulkanRenderPass::getDepthFormat() const

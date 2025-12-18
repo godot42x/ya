@@ -1,9 +1,12 @@
 #pragma once
 
+#include "Render/RenderDefines.h"
+
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/RenderDefines.h"
 #include <vector>
+
+
 
 namespace ya
 {
@@ -124,6 +127,37 @@ struct ICommandBuffer
      */
     virtual void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                             uint64_t srcOffset = 0, uint64_t dstOffset = 0) = 0;
+
+    // ========================================================================
+    // Dynamic Rendering Commands (Vulkan 1.3+ / VK_KHR_dynamic_rendering)
+    // ========================================================================
+
+    /**
+     * @brief Begin dynamic rendering
+     * @param info Dynamic rendering configuration
+     * @note Replaces render pass begin in dynamic rendering mode
+     */
+    virtual void beginRendering(const DynamicRenderingInfo &info) = 0;
+
+    /**
+     * @brief End dynamic rendering
+     * @note Replaces render pass end in dynamic rendering mode
+     */
+    virtual void endRendering() = 0;
+
+    /**
+     * @brief Transition image layout
+     * @param image Backend-specific image handle
+     * @param oldLayout Old image layout
+     * @param newLayout New image layout
+     * @param subresourceRange Subresource range to transition
+     * @note Required for manual layout transitions in dynamic rendering
+     */
+    virtual void transitionImageLayout(
+        void                        *image,
+        EImageLayout::T              oldLayout,
+        EImageLayout::T              newLayout,
+        const ImageSubresourceRange &subresourceRange) = 0;
 };
 
 

@@ -15,6 +15,7 @@
 #include "ECS/System/LitMaterialSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Material/LitMaterial.h"
+#include "Render/Material/UnlitMaterial.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/SceneManager.h"
@@ -24,7 +25,6 @@
 // ECS
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/SimpleMaterialSystem.h"
@@ -799,6 +799,7 @@ void App::onRender(float dt)
     // TODO: subpasses?
     _rt->begin(curCmdBuf.get());
     _rt->onRender(curCmdBuf.get());
+    // _rt->getRenderPass()->beginDynamicRendering();
 
     static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
     static glm::vec3 pos2 = glm::vec3(100.f, 100.f, 0.f);

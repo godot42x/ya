@@ -25,7 +25,7 @@ struct Property : public Field
     bool     bConst    = false;
     bool     bStatic   = false;
     size_t   typeHash  = 0; // 使用 typeid().hash_code() 作为类型标识
-    uint32_t typeIndex = -1;
+    uint32_t typeIndex = 0;
 
 #ifdef _DEBUG
     std::string debugTypeName; // Debug only: 用于调试信息和错误提示

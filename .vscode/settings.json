@@ -92,5 +92,5 @@
     },
     "Lua.diagnostics.disable": [
         "undefined-field"
-    ]
+    ],
 }

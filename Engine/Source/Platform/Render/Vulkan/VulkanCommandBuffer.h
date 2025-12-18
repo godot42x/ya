@@ -85,6 +85,19 @@ class VulkanCommandBuffer : public ICommandBuffer
 
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
+
+    void beginRendering(const DynamicRenderingInfo &info) override
+    {
+        UNIMPLEMENTED();
+    }
+    void endRendering() override
+    {
+        UNIMPLEMENTED();
+    }
+    void transitionImageLayout(void *image, EImageLayout::T oldLayout, EImageLayout::T newLayout, const ImageSubresourceRange &subresourceRange) override
+    {
+        UNIMPLEMENTED();
+    }
 };
 
 

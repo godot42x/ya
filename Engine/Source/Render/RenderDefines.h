@@ -1,10 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "Core/Base.h"
+
 #include "Core/Handle.h"
-#include "glm/glm.hpp"
 #include "reflect.cc/enum"
-#include "utility.cc/hash.h"
+
+#include <glm/glm.hpp>
 
 
 
@@ -37,6 +38,27 @@ enum T
     ENUM_MAX,
 };
 }; // namespace ERenderAPI
+
+namespace ERenderingMode
+{
+enum T
+{
+    Subpass,          // Traditional RenderPass + Subpass
+    DynamicRendering, // Vulkan 1.3+ / VK_KHR_dynamic_rendering
+    Auto,             // Auto select based on driver support
+};
+}; // namespace ERenderingMode
+
+namespace EResolveMode
+{
+enum T
+{
+    None    = 0,
+    Average = 1, // VK_RESOLVE_MODE_AVERAGE_BIT
+    Min     = 2, // VK_RESOLVE_MODE_MIN_BIT
+    Max     = 4, // VK_RESOLVE_MODE_MAX_BIT
+};
+}; // namespace EResolveMode
 
 
 // Generic render types
@@ -605,7 +627,17 @@ struct GraphicsPipelineCreateInfo
     // different shader/pipeline can use same pipeline layout
     // PipelineDesc *pipelineLayout = nullptr;
 
-    uint32_t   subPassRef = 0;
+    // Rendering mode
+    ERenderingMode::T renderingMode = ERenderingMode::Subpass;
+
+    // Subpass mode fields
+    uint32_t subPassRef = 0;
+
+    // Dynamic Rendering mode fields (ignored if renderingMode == Subpass)
+    std::vector<EFormat::T> colorAttachmentFormats;                       // Color attachment formats for dynamic rendering
+    EFormat::T              depthAttachmentFormat   = EFormat::Undefined; // Depth format
+    EFormat::T              stencilAttachmentFormat = EFormat::Undefined; // Stencil format
+
     ShaderDesc shaderDesc;
 
     EPipelineDynamicFeature::T dynamicFeatures = {};
@@ -643,6 +675,7 @@ struct RenderPassCreateInfo
         AttachmentRef               resolveAttachment; // Single depth attachment for now
     };
 
+    ERenderingMode::T renderingMode = ERenderingMode::Auto; // Rendering mode
 
     std::vector<AttachmentDescription> attachments; // all attachment
     std::vector<SubpassInfo>           subpasses;   // Multiple subpasses can be defined, but currently we use a single subpass
@@ -650,6 +683,62 @@ struct RenderPassCreateInfo
 
     [[nodiscard]] uint32_t getSubpassCount() const { return static_cast<uint32_t>(subpasses.size()); }
     [[nodiscard]] bool     isValidSubpassIndex(uint32_t index) const { return index < subpasses.size(); }
+};
+
+// ============================================================================
+// Dynamic Rendering Structures
+// ============================================================================
+
+/**
+ * @brief Attachment info for dynamic rendering
+ * Used to specify color/depth/stencil attachments dynamically
+ */
+struct RenderingAttachmentInfo
+{
+    void *imageView = nullptr; // Backend-specific image view (VkImageView, OpenGL texture, etc.)
+
+    EImageLayout::T imageLayout = EImageLayout::ColorAttachmentOptimal; // Image layout during rendering
+
+    EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Load;   // Load operation
+    EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
+
+    ClearValue clearValue; // Clear value (used if loadOp is Clear)
+
+    // MSAA resolve (optional)
+    void           *resolveImageView = nullptr;                              // Resolve target (for MSAA)
+    EImageLayout::T resolveLayout    = EImageLayout::ColorAttachmentOptimal; // Resolve target layout
+    EResolveMode::T resolveMode      = EResolveMode::None;                   // Resolve mode
+};
+
+/**
+ * @brief Dynamic rendering configuration
+ * Replaces VkRenderPassBeginInfo + VkFramebuffer in dynamic rendering
+ */
+struct DynamicRenderingInfo
+{
+    Extent2D renderArea;     // Render area (offset + extent)
+    uint32_t layerCount = 1; // Number of layers to render (for layered rendering)
+
+    // Color attachments (can have multiple for MRT)
+    std::vector<RenderingAttachmentInfo> colorAttachments;
+
+    // Depth attachment (optional)
+    RenderingAttachmentInfo *pDepthAttachment = nullptr;
+
+    // Stencil attachment (optional, can be same as depth)
+    RenderingAttachmentInfo *pStencilAttachment = nullptr;
+};
+
+/**
+ * @brief Image subresource range for layout transitions
+ */
+struct ImageSubresourceRange
+{
+    uint32_t aspectMask     = 1; // Aspect mask (color, depth, stencil)
+    uint32_t baseMipLevel   = 0; // Base mip level
+    uint32_t levelCount     = 1; // Mip level count
+    uint32_t baseArrayLayer = 0; // Base array layer
+    uint32_t layerCount     = 1; // Layer count
 };
 
 

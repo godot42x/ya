@@ -94,7 +94,7 @@ struct InstrumentationTimer
         uint32_t threadID = (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id());
 
         // Instrumentor::Get().WriteProfile({.Name = _name, .Start = start, .End = end, .ThreadID = threadID});
-        YA_CORE_DEBUG("Profile: {0}: {1}ms ({2}ns) on thread {3}", _name, ms, ns, threadID);
+        YA_CORE_DEBUG("Profile: [{0}]: {1}ms ({2}ns) on thread {3}", _name, ms, ns, threadID);
 
         bStop = true;
     }

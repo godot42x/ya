@@ -1,10 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/Log.h"
 #include "Core/PlatBase.h"
 #include "RenderDefines.h"
-#include "reflect.cc/enum"
 
 namespace ya
 {

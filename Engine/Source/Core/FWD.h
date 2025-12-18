@@ -16,14 +16,17 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 
 
-#include "Log.h"
 #include "TimeManager.h"
 #include "Trait.h"
-
+#include "reflects-core/lib.h"
 
 
 #include <glm/fwd.hpp>
+
+
+#include "./Log.h"

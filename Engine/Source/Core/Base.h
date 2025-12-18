@@ -1,6 +1,5 @@
 #pragma once
 #include "FWD.h"
-#include "reflects-core/lib.h"
 
 using stdpath  = std::filesystem::path;
 using stdclock = std::chrono::steady_clock;

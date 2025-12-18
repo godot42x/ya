@@ -2,11 +2,12 @@
 #pragma once
 
 #include "Core/Base.h"
+
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
 
 #include "SerializerHelper.h"
-#include <glm/glm.hpp>
+
 
 
 /**
@@ -65,7 +66,7 @@ struct ReflectionSerializer
         for (const auto &[propName, prop] : classInfo->properties) {
             try {
                 std::any value = prop.getter(const_cast<T *>(&obj));
-                j[propName]    = anyToJson(value, prop.typeIndex);
+                j[propName]    = SerializerHelper::anyToJson(value, prop.typeIndex);
             }
             catch (const std::exception &e) {
                 YA_CORE_WARN("Failed to serialize property {}: {}", propName, e.what());
@@ -109,86 +110,6 @@ struct ReflectionSerializer
         }
 
         return obj;
-    }
-
-  private:
-    /**
-     * 将 std::any 转换为 JSON
-     * 根据类型索引判断类型
-     */
-    static nlohmann::json anyToJson(const std::any &value, uint32_t typeIndex)
-    {
-        // 基础类型
-        if (typeIndex == type_index_v<int>) {
-            return std::any_cast<int>(value);
-        }
-        else if (typeIndex == type_index_v<float>) {
-            return std::any_cast<float>(value);
-        }
-        else if (typeIndex == type_index_v<double>) {
-            return std::any_cast<double>(value);
-        }
-        else if (typeIndex == type_index_v<bool>) {
-            return std::any_cast<bool>(value);
-        }
-        else if (typeIndex == type_index_v<std::string>) {
-            return std::any_cast<std::string>(value);
-        }
-        // glm 类型
-        else if (typeIndex == type_index_v<glm::vec2>) {
-            return SerializerHelper::toJson(std::any_cast<glm::vec2>(value));
-        }
-        else if (typeIndex == type_index_v<glm::vec3>) {
-            return SerializerHelper::toJson(std::any_cast<glm::vec3>(value));
-        }
-        else if (typeIndex == type_index_v<glm::vec4>) {
-            return SerializerHelper::toJson(std::any_cast<glm::vec4>(value));
-        }
-        else if (typeIndex == type_index_v<glm::mat4>) {
-            return SerializerHelper::toJson(std::any_cast<glm::mat4>(value));
-        }
-
-        YA_CORE_WARN("Unknown type index for serialization: {}", typeIndex);
-        return nullptr;
-    }
-
-    /**
-     * 将 JSON 转换为 std::any
-     */
-    static std::any jsonToAny(const nlohmann::json &j, size_t typeHash)
-    {
-        // 基础类型
-        if (typeHash == typeid(int).hash_code()) {
-            return std::any(j.get<int>());
-        }
-        else if (typeHash == typeid(float).hash_code()) {
-            return std::any(j.get<float>());
-        }
-        else if (typeHash == typeid(double).hash_code()) {
-            return std::any(j.get<double>());
-        }
-        else if (typeHash == typeid(bool).hash_code()) {
-            return std::any(j.get<bool>());
-        }
-        else if (typeHash == typeid(std::string).hash_code()) {
-            return std::any(j.get<std::string>());
-        }
-        // glm 类型
-        else if (typeHash == typeid(glm::vec2).hash_code()) {
-            return std::any(SerializerHelper::toVec2(j));
-        }
-        else if (typeHash == typeid(glm::vec3).hash_code()) {
-            return std::any(SerializerHelper::toVec3(j));
-        }
-        else if (typeHash == typeid(glm::vec4).hash_code()) {
-            return std::any(SerializerHelper::toVec4(j));
-        }
-        else if (typeHash == typeid(glm::mat4).hash_code()) {
-            return std::any(SerializerHelper::toMat4(j));
-        }
-
-        YA_CORE_ERROR("Unknown type hash for deserialization: {}", typeHash);
-        return std::any();
     }
 };
 

@@ -62,8 +62,6 @@ struct VulkanRenderPass : public ya::IRenderPass
     [[nodiscard]] VkRenderPass getVkHandle() const { return m_renderPass; }
     [[nodiscard]] VkFormat     getVkDepthFormat() const { return m_depthFormat; }
 
-    void beginVk(VkCommandBuffer commandBuffer, VkFramebuffer framebuffer, VkExtent2D extent, const std::vector<VkClearValue> &clearValues);
-    void endVk(VkCommandBuffer commandBuffer);
 
   private:
     // Find supported format from candidates
