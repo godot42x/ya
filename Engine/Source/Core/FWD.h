@@ -20,13 +20,12 @@
 #include <vector>
 
 
+#include <glm/fwd.hpp>
 
 #include "TimeManager.h"
 #include "Trait.h"
 #include "reflects-core/lib.h"
 
-
-#include <glm/fwd.hpp>
 
 
 #include "./Log.h"

@@ -45,6 +45,8 @@ struct [[refl]] Scene
     {
         return getEntityByID(static_cast<id_t>(id));
     }
+    
+    Entity *getEntityByName(const std::string &name);
 
     // Scene management
     void clear();
@@ -64,9 +66,6 @@ struct [[refl]] Scene
     // Find entities
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
-
-    void serialize(std::string &Name, Entity *entity);
-    // void deserialize(json);
 };
 
 } // namespace ya

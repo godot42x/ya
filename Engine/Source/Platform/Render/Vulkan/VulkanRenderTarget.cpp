@@ -329,7 +329,7 @@ void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) 
             if (cam->hasComponent<CameraComponent>()) {
                 auto cc = cam->getComponent<CameraComponent>();
                 proj    = cc->getProjection();
-                // proj[1][1] *= -1; // Vulkan Y-flip handled in projection matrix
+                // proj[1][1] *= -1; // Vulkan Y-flip (viewport inverted)
                 view = cc->getView();
                 return;
             }
@@ -338,7 +338,7 @@ void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) 
 
     // use app camera
     proj = App::get()->camera.getProjectionMatrix();
-    // proj[1][1] *= -1; // Invert Y for Vulkan (already done in camera)
+    // proj[1][1] *= -1; // Vulkan Y-flip (viewport inverted)
     view = App::get()->camera.getViewMatrix();
 }
 

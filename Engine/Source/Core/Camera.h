@@ -75,7 +75,16 @@ struct FreeCamera : public Camera
         this->_aspectRatio = aspectRatio;
         this->_nearClip    = nearClip;
         this->_farClip     = farClip;
-        projectionMatrix   = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
+
+        // 使用 Vulkan 兼容的投影矩阵（右手坐标系，Z: [0,1]）
+        // Y 轴翻转由渲染后端处理（VulkanRenderTarget 中 proj[1][1] *= -1）
+
+        // 如果不处理，会出现前后上下方向的光照完全相反，eg: 灯光在cube的正上方/正右方， 但是下方/正左方反而产生了高亮
+        // 这是反物理与反直觉的!
+        // 使用了 ZO(zero to one) 兼容 vulkan 后该现象消失了
+        projectionMatrix = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearClip, farClip);
+
+        // projectionMatrix = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
 
         recalculateViewProjectionMatrix();
     }

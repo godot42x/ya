@@ -102,7 +102,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     _pipelineLayout                                           = IPipelineLayout::create(render, pipelineLayout.label, pipelineLayout.pushConstants, dslVec);
 
 
-    // MARK: pipeline 
+    // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
         // .pipelineLayout   = pipelineLayout,
@@ -433,8 +433,7 @@ void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
                 0,
                 0,
                 EPipelineDescriptorType::UniformBuffer,
-                &bufferInfo,
-                1),
+                {bufferInfo}),
         },
         {});
 }
@@ -471,8 +470,7 @@ void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMat
                     0,
                     0,
                     EPipelineDescriptorType::UniformBuffer,
-                    &bufferInfo,
-                    1),
+                    {bufferInfo}),
             },
             {});
 }
@@ -492,22 +490,19 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
     auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
     resourceUBO->writeData(&params, sizeof(UnlitMaterial::MaterialUBO), 0);
 
-    DescriptorImageInfo imageInfo0(
-        SamplerHandle(tv0->sampler->getHandle()),
-        tv0->texture->getImageViewHandle(),
-        EImageLayout::ShaderReadOnlyOptimal);
-    DescriptorImageInfo imageInfo1(
-        SamplerHandle(tv1->sampler->getHandle()),
-        tv1->texture->getImageViewHandle(),
-        EImageLayout::ShaderReadOnlyOptimal);
-
+    DescriptorImageInfo imageInfo0(SamplerHandle(tv0->sampler->getHandle()),
+                                   tv0->texture->getImageViewHandle(),
+                                   EImageLayout::ShaderReadOnlyOptimal);
+    DescriptorImageInfo imageInfo1(SamplerHandle(tv1->sampler->getHandle()),
+                                   tv1->texture->getImageViewHandle(),
+                                   EImageLayout::ShaderReadOnlyOptimal);
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
-                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
+                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo0}),
+                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo1}),
             },
             {});
 }

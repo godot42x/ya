@@ -460,13 +460,11 @@ void FQuadRender::updateFrameUBO(glm::mat4 viewProj)
     auto *descriptorHelper = _render->getDescriptorHelper();
     descriptorHelper->updateDescriptorSets(
         {
-            IDescriptorSetHelper::genBufferWrite(
-                _frameUboDS,
-                0,
-                0,
-                EPipelineDescriptorType::UniformBuffer,
-                &bufferInfo,
-                1),
+            IDescriptorSetHelper::genBufferWrite(_frameUboDS,
+                                                 0,
+                                                 0,
+                                                 EPipelineDescriptorType::UniformBuffer,
+                                                 {bufferInfo}),
         },
         {});
 }
@@ -507,8 +505,7 @@ void FQuadRender::updateResources()
                     0,
                     0,
                     EPipelineDescriptorType::CombinedImageSampler,
-                    imageInfos.data(),
-                    static_cast<uint32_t>(imageInfos.size())),
+                    imageInfos),
             },
             {});
 }

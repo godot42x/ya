@@ -555,11 +555,13 @@ namespace EPipelineDescriptorType
 enum T
 {
     UniformBuffer = 0,
+    StorageBuffer,
+
     Sampler,
     CombinedImageSampler,
     SampledImage,
     StorageImage,
-    StorageBuffer,
+
     ENUM_MAX,
 };
 };

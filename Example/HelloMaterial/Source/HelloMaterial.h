@@ -23,14 +23,14 @@ struct HelloMaterial : public ya::App
     {
         Super::onPostInit();
         // temp codes to disable other material systems except LitMaterialSystem
-        getRenderTarget()->forEachMaterialSystem(
-            [](std::shared_ptr<ya::IMaterialSystem> system) {
-                if (system) {
-                    if (system->_label != "LitMaterialSystem") {
-                        system->bEnabled = false;
-                    }
-                }
-            });
+        // getRenderTarget()->forEachMaterialSystem(
+        //     [](std::shared_ptr<ya::IMaterialSystem> system) {
+        //         if (system) {
+        //             if (system->_label != "LitMaterialSystem") {
+        //                 system->bEnabled = false;
+        //             }
+        //         }
+        //     });
     }
 
 

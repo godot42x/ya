@@ -1,7 +1,10 @@
 #include "LitMaterialSystem.h"
 #include "Core/App/App.h"
+
 #include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
@@ -50,6 +53,13 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                     // Lighting
                     DescriptorSetLayoutBinding{
                         .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    // Debug UBO
+                    DescriptorSetLayoutBinding{
+                        .binding         = 2,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
@@ -196,7 +206,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 2, // frame ubo + lighting ubo
+                    .descriptorCount = 3, // frame ubo + lighting ubo + debug ubo
                 },
             },
         });
@@ -224,10 +234,66 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
             .size          = sizeof(LitMaterialSystem::LightUBO),
             .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
         });
+    _debugUBO = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .label         = "Lit_Debug_UBO",
+            .usage         = ya::EBufferUsage::UniformBuffer,
+            .size          = sizeof(LitMaterialSystem::DebugUBO),
+            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+        });
 }
 
 void LitMaterialSystem::onDestroy()
 {
+}
+
+void LitMaterialSystem::onUpdate(float deltaTime)
+{
+    auto scene = getScene();
+
+    // Reset point light count
+    uLight.numPointLights = 0;
+
+    // Count entities with PointLightComponent
+    auto   lightView   = scene->getRegistry().view<PointLightComponent, TransformComponent>();
+    size_t entityCount = 0;
+    for (auto _ : lightView) {
+        entityCount++;
+    }
+
+    if (entityCount == 0) {
+        YA_CORE_WARN("LitMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
+    }
+    else {
+        // YA_CORE_INFO("LitMaterialSystem::onUpdate - Found {} entities with PointLightComponent", entityCount);
+    }
+
+    // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
+    for (auto entity : scene->getRegistry().view<PointLightComponent, TransformComponent>()) {
+        if (uLight.numPointLights >= MAX_POINT_LIGHTS) {
+            YA_CORE_WARN("Exceeded maximum point lights ({}), ignoring additional lights", MAX_POINT_LIGHTS);
+            break;
+        }
+
+        const auto &[plc, tc] = scene->getRegistry().get<PointLightComponent, TransformComponent>(entity);
+
+        // Fill point light data
+        auto &lightData     = uLight.pointLights[uLight.numPointLights];
+        lightData.position  = tc.getPosition();
+        lightData.intensity = plc._intensity;
+        lightData.color     = plc._color;
+        lightData.radius    = plc._range;
+
+        // YA_CORE_INFO("  Light {}: pos=({:.2f},{:.2f},{:.2f}), intensity={:.2f}, radius={:.2f}",
+        //              uLight.numPointLights,
+        //              lightData.position.x, lightData.position.y, lightData.position.z,
+        //              lightData.intensity, lightData.radius);
+
+        uLight.numPointLights++;
+    }
+
+    // YA_CORE_INFO("LitMaterialSystem::onUpdate - Final numPointLights = {}", uLight.numPointLights);
 }
 
 void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
@@ -240,6 +306,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (view.begin() == view.end()) {
         return;
     }
+
 
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
     cmdBuf->bindPipeline(_pipeline.get());
@@ -286,11 +353,6 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             // DescriptorSetHandle objectDS = _materialObjectDSs[materialIndex];
 
             // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
-
-            // update the resource set when:
-            // 1. this has updated, multiple entity using the same material(not material instance?)
-            // 2. material count changed
-            // 3. this material's resources(such as texture) changed(dirty)
             if (!updatedMaterial[materialInstanceIndex]) {
                 if (bShouldForceUpdateMaterial || material->isParamDirty())
                 {
@@ -334,15 +396,20 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 void LitMaterialSystem::onRenderGUI()
 {
     IMaterialSystem::onRenderGUI();
-    ImGui::ColorEdit3("Light Color", &uLight.lightColor.x);
-    ImGui::SliderFloat3("Light Direction", &uLight.lightDirection.x, -1.0f, 1.0f);
-    ImGui::SliderFloat("Light Intensity", &uLight.lightIntensity, 0.0f, 10.0f);
+    // ImGui::ColorEdit3("Light Color", &uLight.lightColor.x);
+    // ImGui::SliderFloat3("Light Direction", &uLight.lightDirection.x, -1.0f, 1.0f);
+    // ImGui::SliderFloat("Light Intensity", &uLight.lightIntensity, 0.0f, 10.0f);
     ImGui::ColorEdit3("Ambient Color", &uLight.ambientColor.x);
     ImGui::SliderFloat("Ambient Intensity", &uLight.ambientIntensity, 0.0f, 1.0f);
 
-    App *app = getApp();
-}
+    if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent();
+        ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
+        ImGui::Unindent();
+    }
 
+    App *app = getApp();
+};
 
 // TODO: descriptor set can be shared if they use same layout and data
 void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
@@ -354,6 +421,10 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     glm::mat4 view;
     rt->getViewAndProjMatrix(view, proj);
 
+    // 从 view matrix 提取相机位置
+    glm::mat4 invView   = glm::inverse(view);
+    glm::vec3 cameraPos = glm::vec3(invView[3]);
+
     FrameUBO uFrame{
         .projection = proj,
         .view       = view,
@@ -363,32 +434,21 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
         },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
+        .cameraPos  = cameraPos,
     };
-    // TODO: grab from scene's light entity/component
+
     _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
     _lightUBO->writeData(&uLight, sizeof(LightUBO), 0);
+    _debugUBO->writeData(&uDebug, sizeof(DebugUBO), 0);
 
-    DescriptorBufferInfo frameBufferInfo(_frameUBO->getHandle(), 0, sizeof(FrameUBO));
-    DescriptorBufferInfo lightBufferInfo(_lightUBO->getHandle(), 0, sizeof(LightUBO));
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genBufferWrite(
-                    _frameDS,
-                    0,
-                    0,
-                    EPipelineDescriptorType::UniformBuffer,
-                    &frameBufferInfo,
-                    1),
-                IDescriptorSetHelper::genBufferWrite(
-                    _frameDS,
-                    1,
-                    0,
-                    EPipelineDescriptorType::UniformBuffer,
-                    &lightBufferInfo,
-                    1),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 0, EPipelineDescriptorType::UniformBuffer, _frameUBO.get()),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 1, EPipelineDescriptorType::UniformBuffer, _lightUBO.get()),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 2, EPipelineDescriptorType::UniformBuffer, _debugUBO.get()),
             },
             {});
 }
@@ -424,8 +484,7 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
                     0,
                     0,
                     EPipelineDescriptorType::UniformBuffer,
-                    &bufferInfo,
-                    1),
+                    {bufferInfo}),
             },
             {});
 }
@@ -511,6 +570,11 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     // 为每一个单独的材质分配描述符集
     _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
     // _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
+
+    // TODO: set debug name
+    for (auto &ds : _materialParamDSs) {
+        YA_CORE_ASSERT(ds.ptr != nullptr, "Failed to allocate material param descriptor set");
+    }
 
     // 5. create UBOs
     uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();

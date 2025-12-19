@@ -79,6 +79,22 @@ Entity *Scene::getEntityByID(id_t id)
     return nullptr;
 }
 
+Entity *Scene::getEntityByName(const std::string &name)
+{
+    for (auto &[id, entity] : _entityMap)
+    {
+        if (entity.hasComponent<TagComponent>())
+        {
+            auto tag = entity.getComponent<TagComponent>();
+            if (tag->getTag() == name)
+            {
+                return &entity;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void Scene::clear()
 {
     _registry.clear();

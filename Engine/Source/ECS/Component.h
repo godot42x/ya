@@ -73,28 +73,7 @@ struct MeshRendererComponent : public IComponent
         : _meshID(meshId), _materialID(materialId) {}
 };
 
-// Light component for lighting
-struct LightComponent : public IComponent
-{
-    enum class Type
-    {
-        Directional,
-        Point,
-        Spot
-    };
 
-    Type      _type           = Type::Directional;
-    glm::vec3 _color          = {1.0f, 1.0f, 1.0f};
-    float     _intensity      = 1.0f;
-    float     _range          = 10.0f; // For point and spot lights
-    float     _innerConeAngle = 30.0f; // For spot lights
-    float     _outerConeAngle = 45.0f; // For spot lights
-
-    LightComponent()                       = default;
-    LightComponent(const LightComponent &) = default;
-    LightComponent(Type type, const glm::vec3 &color, float intensity)
-        : _type(type), _color(color), _intensity(intensity) {}
-};
 
 // Physics body component (placeholder for future physics integration)
 struct RigidBodyComponent : public IComponent

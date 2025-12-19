@@ -12,7 +12,6 @@
 
 // Managers/System
 #include "Core/Subsystem/ReflectionSystem.h"
-#include "ECS/System/LitMaterialSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Material/LitMaterial.h"
 #include "Render/Material/UnlitMaterial.h"
@@ -27,8 +26,10 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/System/LitMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
+
 
 
 // Render
@@ -202,6 +203,9 @@ void App::init(AppDesc ci)
     });
     _shaderStorage->load(ShaderDesc{
         .shaderName = "Sprite2D.glsl",
+    });
+    _shaderStorage->load(ShaderDesc{
+        .shaderName = "Test/Lit.glsl",
     });
 
 

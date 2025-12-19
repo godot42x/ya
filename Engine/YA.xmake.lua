@@ -87,7 +87,7 @@ target("ya") --"Yet Another (Game) Engine"
 do
     set_kind("static")
     local bEnableUnity = get_config("ya_enable_unity-build")
-    if bEnableUnity and true then
+    if bEnableUnity and false then
         add_rules("c++.unity_build", { batchsize = 2 })
         add_files("./Source/Core/**.cpp", { unity_group = "Core" })
         add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })

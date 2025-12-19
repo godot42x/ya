@@ -54,7 +54,7 @@ struct ReflectionSerializer
 
         // 获取反射信息
         std::string className = typeid(T).name();
-        uint32_t    typeIndex = type_index_v<T>;
+        uint32_t    typeIndex = ya::type_index_v<T>;
         auto       *classInfo = ClassRegistry::instance().getClass(typeIndex);
 
         if (!classInfo) {
@@ -101,7 +101,7 @@ struct ReflectionSerializer
             if (!prop.setter) continue;
 
             try {
-                std::any anyValue = jsonToAny(value, prop.typeHash);
+                std::any anyValue = SerializerHelper::jsonToAny(value, prop.typeHash);
                 prop.setter(&obj, anyValue);
             }
             catch (const std::exception &e) {

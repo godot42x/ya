@@ -1,6 +1,7 @@
 #include "VulkanDescriptorSet.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
+#include "utility.cc/ranges.h"
 
 
 namespace ya
@@ -166,46 +167,94 @@ void VulkanDescriptorHelper::updateDescriptorSets(
     std::vector<VkDescriptorBufferInfo> bufferInfos;
     std::vector<VkDescriptorImageInfo>  imageInfos;
 
+    // 预分配空间，避免扩容导致指针失效
     vkWrites.reserve(writes.size());
 
+    // 预计算总数
+    size_t totalBufferInfos = 0;
+    size_t totalImageInfos  = 0;
     for (const auto &write : writes) {
+        switch (write.descriptorType) {
+        case EPipelineDescriptorType::UniformBuffer:
+        case EPipelineDescriptorType::StorageBuffer:
+            totalBufferInfos += write.bufferInfos.size();
+            break;
+
+        case EPipelineDescriptorType::Sampler:
+        case EPipelineDescriptorType::CombinedImageSampler:
+        case EPipelineDescriptorType::SampledImage:
+        case EPipelineDescriptorType::StorageImage:
+            totalImageInfos += write.imageInfos.size();
+            break;
+
+        case EPipelineDescriptorType::ENUM_MAX:
+            break;
+        }
+    }
+    bufferInfos.reserve(totalBufferInfos);
+    imageInfos.reserve(totalImageInfos);
+
+    for (const auto &write : writes) {
+
+
         VkWriteDescriptorSet vkWrite{
-            .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext           = nullptr,
-            .dstSet          = (VkDescriptorSet)(uintptr_t)write.dstSet,
-            .dstBinding      = write.dstBinding,
-            .dstArrayElement = write.dstArrayElement,
-            .descriptorCount = write.descriptorCount,
-            .descriptorType  = toVk(write.descriptorType),
+            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext            = nullptr,
+            .dstSet           = (VkDescriptorSet)(uintptr_t)write.dstSet,
+            .dstBinding       = write.dstBinding,
+            .dstArrayElement  = write.dstArrayElement,
+            .descriptorCount  = write.descriptorCount,
+            .descriptorType   = toVk(write.descriptorType),
+            .pImageInfo       = nullptr,
+            .pBufferInfo      = nullptr,
+            .pTexelBufferView = nullptr,
         };
 
-        if (write.pBufferInfo) {
-            size_t startIdx = bufferInfos.size();
-            for (uint32_t i = 0; i < write.descriptorCount; ++i) {
-                VkDescriptorBufferInfo bufInfo{};
-                bufInfo.buffer = (VkBuffer)(uintptr_t)write.pBufferInfo[i].buffer;
-                bufInfo.offset = write.pBufferInfo[i].offset;
-                bufInfo.range  = write.pBufferInfo[i].range;
-                bufferInfos.push_back(bufInfo);
+        switch (write.descriptorType) {
+        case EPipelineDescriptorType::UniformBuffer:
+        case EPipelineDescriptorType::StorageBuffer:
+        {
+            int startIdx = static_cast<int>(bufferInfos.size());
+            for (const auto &bufInfo : write.bufferInfos) {
+                bufferInfos.push_back(VkDescriptorBufferInfo{
+                    .buffer = (VkBuffer)(uintptr_t)bufInfo.buffer.as<void *>(),
+                    .offset = bufInfo.offset,
+                    .range  = bufInfo.range,
+                });
             }
             vkWrite.pBufferInfo = &bufferInfos[startIdx];
-        }
-        else if (write.pImageInfo) {
-            size_t startIdx = imageInfos.size();
-            for (uint32_t i = 0; i < write.descriptorCount; ++i) {
-                VkDescriptorImageInfo imgInfo{};
-                imgInfo.sampler     = write.pImageInfo[i].sampler.as<VkSampler>();
-                imgInfo.imageView   = write.pImageInfo[i].imageView.as<VkImageView>();
-                imgInfo.imageLayout = toVk(write.pImageInfo[i].imageLayout);
-                imageInfos.push_back(imgInfo);
+            vkWrites.push_back(std::move(vkWrite));
+
+        } break;
+        case EPipelineDescriptorType::Sampler:
+        case EPipelineDescriptorType::CombinedImageSampler:
+        case EPipelineDescriptorType::SampledImage:
+        case EPipelineDescriptorType::StorageImage:
+        {
+            int startIdx = static_cast<int>(imageInfos.size());
+            for (const auto &imgInfo : write.imageInfos) {
+                imageInfos.push_back(VkDescriptorImageInfo{
+                    .sampler     = (VkSampler)(uintptr_t)imgInfo.sampler.as<void *>(),
+                    .imageView   = (VkImageView)(uintptr_t)imgInfo.imageView.as<void *>(),
+                    .imageLayout = toVk(imgInfo.imageLayout),
+                });
             }
             vkWrite.pImageInfo = &imageInfos[startIdx];
-        }
-        else if (write.pTexelBufferView) {
-            vkWrite.pTexelBufferView = (const VkBufferView *)write.pTexelBufferView;
-        }
+            vkWrites.push_back(std::move(vkWrite));
 
-        vkWrites.push_back(vkWrite);
+        } break;
+        case EPipelineDescriptorType::ENUM_MAX:
+            break;
+        }
+    }
+
+
+    // validation
+    for (const auto &[idx, write] : vkWrites | ut::enumerate) {
+        YA_CORE_ASSERT(
+            (write.pBufferInfo != nullptr) || (write.pImageInfo != nullptr) || (write.pTexelBufferView != nullptr),
+            "VulkanDescriptorHelper::updateDescriptorSets, {}: write descriptor set has no valid info ptr",
+            idx);
     }
 
     // Convert copy descriptors (if any)

@@ -4,6 +4,7 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/LitMaterialSystem.h"
@@ -110,7 +111,7 @@ void HelloMaterial::createMaterials()
 
     auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
     litMaterial1->setObjectColor(glm::vec3(1.0, 0.0, 0.0));
-    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1");
+    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
     litMaterial2->setObjectColor(glm::vec3(0.0, 1.0, 0.0));
 }
 
@@ -120,6 +121,22 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
+    auto matGround = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_ground");
+    matGround->setTextureView(ya::UnlitMaterial::BaseColor0,
+                              ya::TextureView{
+                                  .texture = ya::TextureLibrary::getWhiteTexture(),
+                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
+                              });
+    matGround->setTextureView(ya::UnlitMaterial::BaseColor1,
+                              ya::TextureView{
+                                  .texture = ya::AssetManager::get()->getTextureByName("uv1"),
+                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
+                              });
+    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
+    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
+    matGround->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(50.f, 50.f));
+    matGround->setMixValue(0.86);
+
     // Create ground plane
     if (auto plane = scene->createEntity("Plane")) {
         auto tc = plane->addComponent<ya::TransformComponent>();
@@ -127,8 +144,13 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
 
         auto umc = plane->addComponent<ya::UnlitMaterialComponent>();
-        umc->addMesh(cubeMesh.get(), unlitMaterials.back().get()->as<ya::UnlitMaterial>());
+        umc->addMesh(cubeMesh.get(), matGround);
     }
+
+
+    // YA_CORE_DEBUG("1");
+
+#if create_cube_matrix_for_unlit_material
 
     // Create cube grid
     float offset = 3.f;
@@ -140,9 +162,6 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
     uint32_t maxMaterialIndex    = ya::MaterialFactory::get()->getMaterialCount() - 1;
     uint32_t simpleMaterialCount = simpleMaterials.size();
-
-    // YA_CORE_DEBUG("1");
-
     for (int i = 0; i < alpha; ++i) {
         for (int j = 0; j < alpha; ++j) {
             for (int k = 0; k < alpha; ++k) {
@@ -178,47 +197,54 @@ void HelloMaterial::createEntities(ya::Scene *scene)
             }
         }
     }
+#endif
 
-    if (auto *LitTest = scene->createEntity("Lit Test")) {
-        auto tc = LitTest->addComponent<ya::TransformComponent>();
-        tc->setPosition(glm::vec3(-10.f, 0.f, 0.f));
+    if (auto *LitTestCube0 = scene->createEntity("Lit Test")) {
+        auto tc = LitTestCube0->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(0.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(3.0f));
-        _litTestEntity = LitTest;
+        _litTestEntity = LitTestCube0;
 
-        auto lmc = LitTest->addComponent<ya::LitMaterialComponent>();
+        auto lmc = LitTestCube0->addComponent<ya::LitMaterialComponent>();
         // TODO: cast check
         auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit0")->as<ya::LitMaterial>();
         lmc->addMesh(cubeMesh.get(), litMat);
     }
-    if (auto *PointLight = scene->createEntity("Point Light")) {
-        auto tc = PointLight->addComponent<ya::TransformComponent>();
-        tc->setPosition(glm::vec3(-10.f, 4.f, 3.f));
-        _pointLightEntity = PointLight;
 
-        auto lmc = PointLight->addComponent<ya::LitMaterialComponent>();
-        // TODO: cast check
+    if (auto *pointLt = scene->createEntity("Point Light")) {
+        auto tc = pointLt->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
+        _pointLightEntity = pointLt;
 
-        auto mat = ya::MaterialFactory::get()->getMaterialByName("lit1");
-        YA_CORE_ASSERT(mat, "Material 'lit1' not found");
-        auto litMat = mat->as<ya::LitMaterial>();
-        YA_CORE_ASSERT(litMat, "Lit material is null");
 
-        lmc->addMesh(cubeMesh.get(), litMat);
-        litMat->setObjectColor(glm::vec3(1.0f));
+
+        auto plc = pointLt->addComponent<ya::PointLightComponent>();
+        auto lmc = pointLt->addComponent<ya::UnlitMaterialComponent>();
+
+        auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
+        auto tex           = ya::AssetManager::get()->loadTexture("light", "Engine/Content/TestTextures/icons8-light-64.png");
+        pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
+                                      ya::TextureView{
+                                          .texture = ya::TextureLibrary::getWhiteTexture(),
+                                          .sampler = ya::TextureLibrary::getDefaultSampler(),
+                                      });
+        pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor1,
+                                      ya::TextureView{
+                                          .texture = tex,
+                                          .sampler = ya::TextureLibrary::getDefaultSampler(),
+                                      });
+        pointLightMat->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
+        pointLightMat->setTextureViewUVRotation(ya::UnlitMaterial::BaseColor1, glm::radians(90.f));
+        pointLightMat->setMixValue(0.8f);
+
+
+        lmc->addMesh(cubeMesh.get(), pointLightMat);
     }
 }
 
 void HelloMaterial::onUpdate(float dt)
 {
     Super::onUpdate(dt);
-
-    glm::vec3 pointLightPos = _pointLightEntity->getComponent<ya::TransformComponent>()->getPosition();
-
-    getRenderTarget()
-        ->getMaterialSystemByLabel("LitMaterialSystem")
-        ->as<ya::LitMaterialSystem>()
-        ->uLight
-        .PointLightPos = pointLightPos;
 }
 
 void HelloMaterial::onRenderGUI()

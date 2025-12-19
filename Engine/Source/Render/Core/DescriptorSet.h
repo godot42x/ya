@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Buffer.h"
 #include "Handle.h"
 #include "Render/Core/Sampler.h"
 #include "Render/RenderDefines.h"
@@ -16,14 +17,11 @@ namespace ya
 struct IRender;
 
 // Tag types for different handle kinds
-struct BufferHandleTag
-{};
 struct ImageViewHandleTag
 {};
 struct DescriptorSetHandleTag
 {};
 
-using BufferHandle        = Handle<BufferHandleTag>;
 using ImageViewHandle     = Handle<ImageViewHandleTag>;
 using DescriptorSetHandle = Handle<DescriptorSetHandleTag>;
 
@@ -58,14 +56,14 @@ struct WriteDescriptorSet
     uint32_t                   dstBinding      = 0;
     uint32_t                   dstArrayElement = 0;
     EPipelineDescriptorType::T descriptorType  = EPipelineDescriptorType::UniformBuffer;
-    uint32_t                   descriptorCount = 1;
-
+    uint32_t                   descriptorCount = 0;
     // Only one of these should be non-null based on descriptorType
-    const DescriptorBufferInfo *pBufferInfo      = nullptr;
-    const DescriptorImageInfo  *pImageInfo       = nullptr;
-    const void                 *pTexelBufferView = nullptr; // For texel buffer views
+    std::vector<DescriptorBufferInfo> bufferInfos;
+    std::vector<DescriptorImageInfo>  imageInfos;
 
-    WriteDescriptorSet() = default;
+    // For texel buffer views
+    // 专门为纹理(texel)缓冲视图设计
+    std::vector<void *> texelBufferViews;
 };
 
 // Descriptor copy operation (if needed in the future)
@@ -209,45 +207,59 @@ struct IDescriptorSetHelper
      * @brief Helper to generate a buffer write descriptor
      */
     static WriteDescriptorSet genBufferWrite(
-        DescriptorSetHandle         dstSet,
-        uint32_t                    dstBinding,
-        uint32_t                    dstArrayElement,
-        EPipelineDescriptorType::T  descriptorType,
-        const DescriptorBufferInfo *pBufferInfo,
-        uint32_t                    descriptorCount = 1)
+        DescriptorSetHandle               dstSet,
+        uint32_t                          dstBinding,
+        uint32_t                          dstArrayElement,
+        EPipelineDescriptorType::T        descriptorType,
+        std::vector<DescriptorBufferInfo> bufferInfos)
     {
-        WriteDescriptorSet write;
-        write.dstSet           = dstSet;
-        write.dstBinding       = dstBinding;
-        write.dstArrayElement  = dstArrayElement;
-        write.descriptorType   = descriptorType;
-        write.descriptorCount  = descriptorCount;
-        write.pBufferInfo      = pBufferInfo;
-        write.pImageInfo       = nullptr;
-        write.pTexelBufferView = nullptr;
+        WriteDescriptorSet write{
+            .dstSet           = dstSet,
+            .dstBinding       = dstBinding,
+            .dstArrayElement  = dstArrayElement,
+            .descriptorType   = descriptorType,
+            .descriptorCount  = static_cast<uint32_t>(bufferInfos.size()),
+            .bufferInfos      = bufferInfos,
+            .imageInfos       = {},
+            .texelBufferViews = {},
+        };
         return write;
+    }
+
+    // not array buffer descriptor write generate
+    static WriteDescriptorSet genSingleBufferWrite(
+        DescriptorSetHandle        dstSet,
+        uint32_t                   dstBinding,
+        EPipelineDescriptorType::T descriptorType,
+        IBuffer                   *buf)
+    {
+        return genBufferWrite(dstSet,
+                              dstBinding,
+                              0,
+                              descriptorType,
+                              {DescriptorBufferInfo(buf->getHandle(), 0, buf->getSize())});
     }
 
     /**
      * @brief Helper to generate an image write descriptor
      */
     static WriteDescriptorSet genImageWrite(
-        DescriptorSetHandle        dstSet,
-        uint32_t                   dstBinding,
-        uint32_t                   dstArrayElement,
-        EPipelineDescriptorType::T descriptorType,
-        const DescriptorImageInfo *pImageInfo,
-        uint32_t                   descriptorCount = 1)
+        DescriptorSetHandle              dstSet,
+        uint32_t                         dstBinding,
+        uint32_t                         dstArrayElement,
+        EPipelineDescriptorType::T       descriptorType,
+        std::vector<DescriptorImageInfo> imageInfos)
     {
-        WriteDescriptorSet write;
-        write.dstSet           = dstSet;
-        write.dstBinding       = dstBinding;
-        write.dstArrayElement  = dstArrayElement;
-        write.descriptorType   = descriptorType;
-        write.descriptorCount  = descriptorCount;
-        write.pBufferInfo      = nullptr;
-        write.pImageInfo       = pImageInfo;
-        write.pTexelBufferView = nullptr;
+        WriteDescriptorSet write{
+            .dstSet           = dstSet,
+            .dstBinding       = dstBinding,
+            .dstArrayElement  = dstArrayElement,
+            .descriptorType   = descriptorType,
+            .descriptorCount  = static_cast<uint32_t>(imageInfos.size()),
+            .bufferInfos      = {},
+            .imageInfos       = imageInfos,
+            .texelBufferViews = {},
+        };
         return write;
     }
 
@@ -259,18 +271,20 @@ struct IDescriptorSetHelper
         uint32_t                   dstBinding,
         uint32_t                   dstArrayElement,
         EPipelineDescriptorType::T descriptorType,
-        const void                *pTexelBufferView,
-        uint32_t                   descriptorCount = 1)
+        std::vector<void *>        pTexelBufferView)
+
     {
-        WriteDescriptorSet write;
-        write.dstSet           = dstSet;
-        write.dstBinding       = dstBinding;
-        write.dstArrayElement  = dstArrayElement;
-        write.descriptorType   = descriptorType;
-        write.descriptorCount  = descriptorCount;
-        write.pBufferInfo      = nullptr;
-        write.pImageInfo       = nullptr;
-        write.pTexelBufferView = pTexelBufferView;
+        WriteDescriptorSet write{
+            .dstSet           = dstSet,
+            .dstBinding       = dstBinding,
+            .dstArrayElement  = dstArrayElement,
+            .descriptorType   = descriptorType,
+            .descriptorCount  = static_cast<uint32_t>(pTexelBufferView.size()),
+            .bufferInfos      = {},
+            .imageInfos       = {},
+            .texelBufferViews = pTexelBufferView,
+
+        };
         return write;
     }
 };

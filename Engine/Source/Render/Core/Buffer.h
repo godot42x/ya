@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "DescriptorSet.h"
+#include "Render/Core/Handle.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -67,6 +67,11 @@ struct BufferCreateInfo
     uint32_t              size;
     EMemoryProperty       memProperties;
 };
+
+
+struct BufferHandleTag
+{};
+using BufferHandle = Handle<BufferHandleTag>;
 
 // Generic buffer interface
 struct IBuffer
