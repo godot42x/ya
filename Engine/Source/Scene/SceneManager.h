@@ -42,8 +42,12 @@ class SceneManager
 
     bool unloadScene();
 
-    Scene *getCurrentScene() const { return _currentScene.get(); }
-    bool   hasScene() const { return _currentScene != nullptr; }
+    Scene                 *getCurrentScene() const { return _currentScene.get(); }
+    std::shared_ptr<Scene> getCurrentScenePtr() const
+    {
+        return std::shared_ptr<Scene>(_currentScene.get());
+    }
+    bool hasScene() const { return _currentScene != nullptr; }
 
     void setSceneInitCallback(SceneInitCallback callback) { _onSceneInit = callback; }
     void setSceneCleanupCallback(SceneInitCallback callback) { _onSceneCleanup = callback; }

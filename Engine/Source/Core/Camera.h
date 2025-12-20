@@ -82,7 +82,7 @@ struct FreeCamera : public Camera
         // 如果不处理，会出现前后上下方向的光照完全相反，eg: 灯光在cube的正上方/正右方， 但是下方/正左方反而产生了高亮
         // 这是反物理与反直觉的!
         // 使用了 ZO(zero to one) 兼容 vulkan 后该现象消失了
-        projectionMatrix = glm::perspectiveZO(glm::radians(fov), aspectRatio, nearClip, farClip);
+        projectionMatrix = glm::perspectiveRH_ZO(glm::radians(fov), aspectRatio, nearClip, farClip);
 
         // projectionMatrix = glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip);
 

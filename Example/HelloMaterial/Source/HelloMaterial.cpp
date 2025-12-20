@@ -110,9 +110,9 @@ void HelloMaterial::createMaterials()
 
 
     auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
-    litMaterial1->setObjectColor(glm::vec3(1.0, 0.0, 0.0));
+    litMaterial1->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
     auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
-    litMaterial2->setObjectColor(glm::vec3(0.0, 1.0, 0.0));
+    litMaterial2->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
 }
 
 void HelloMaterial::createEntities(ya::Scene *scene)
@@ -250,37 +250,16 @@ void HelloMaterial::onUpdate(float dt)
 void HelloMaterial::onRenderGUI()
 {
     Super::onRenderGUI();
-    if (!ImGui::Begin("HelloMaterial")) {
-        return;
-    }
-    // TODO: use my gui not imgui
-    // imgui manipulate the lit material  "Lit Test" and "Point Light"
-    if (_litTestEntity && _litTestEntity->hasComponent<ya::LitMaterialComponent>()) {
-        // transfrom manipulation
-        auto      tc  = _litTestEntity->getComponent<ya::TransformComponent>();
-        glm::vec3 pos = tc->getPosition();
-        if (ImGui::DragFloat3("Lit Test Position", glm::value_ptr(pos), 0.1f)) {
-            tc->setPosition(pos);
-        }
-    }
-    ImGui::Spacing();
-    if (_pointLightEntity) {
-        // transfrom manipulation
-        auto      tc  = _pointLightEntity->getComponent<ya::TransformComponent>();
-        glm::vec3 pos = tc->getPosition();
-        if (ImGui::DragFloat3("Point Light Position", glm::value_ptr(pos), 0.1f)) {
-            tc->setPosition(pos);
-        }
-    }
 
-    if (ImGui::Button("Deserialize Scene"))
+    // Render scene hierarchy panel
+    if (_sceneHierarchyPanel)
     {
-        auto sceneManager = ya::App::get()->getSceneManager();
-        YA_CORE_ASSERT(sceneManager, "SceneManager is null");
-        sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
-                                      getSceneManager()->getCurrentScene());
+        _sceneHierarchyPanel->onImGuiRender();
     }
 
-
-    ImGui::End();
+    // if (!ImGui::Begin("HelloMaterial")) {
+    //     return;
+    // ImGui::End();
+    // }
+    // ImGui::End();
 }

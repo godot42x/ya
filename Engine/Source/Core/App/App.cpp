@@ -882,6 +882,14 @@ void App::onRender(float dt)
                 clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
             }
             ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
+
+            if (ImGui::Button("Deserialize Scene"))
+            {
+                auto sceneManager = ya::App::get()->getSceneManager();
+                YA_CORE_ASSERT(sceneManager, "SceneManager is null");
+                sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
+                                              getSceneManager()->getCurrentScene());
+            }
         }
         onRenderGUI();
 
@@ -889,11 +897,11 @@ void App::onRender(float dt)
         imcEditorCamera(camera);
         imcClearValues();
         imcFpsControl(*FPSControl::get());
-        static bool bItemPicker = false;
-        ImGui::Checkbox("Debug Picker", &bItemPicker);
-        if (bItemPicker) {
-            ImGui::DebugStartItemPicker();
-        }
+        // static bool bItemPicker = false;
+        // ImGui::Checkbox("Debug Picker", &bItemPicker);
+        // if (bItemPicker) {
+        //     ImGui::DebugStartItemPicker();
+        // }
         static bool bDarkMode = true;
         if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
             if (bDarkMode) {
@@ -1103,20 +1111,20 @@ void App::imcDrawMaterials()
         materialIdx += 1;
     }
 
-    auto litMaterials = MaterialFactory::get()->getMaterials<LitMaterial>();
-    for (auto &mat : litMaterials) {
-        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
-        auto litMat = mat->as<LitMaterial>();
-        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, litMat->getLabel()).c_str())) {
-            bool bDirty = false;
-            bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
-            if (bDirty) {
-                litMat->setParamDirty(true);
-            }
-        }
-        ImGui::PopID();
-        materialIdx += 1;
-    }
+    // auto litMaterials = MaterialFactory::get()->getMaterials<LitMaterial>();
+    // for (auto &mat : litMaterials) {
+    //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+    //     auto litMat = mat->as<LitMaterial>();
+    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, litMat->getLabel()).c_str())) {
+    //         bool bDirty = false;
+    //         bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
+    //         if (bDirty) {
+    //             litMat->setParamDirty(true);
+    //         }
+    //     }
+    //     ImGui::PopID();
+    //     materialIdx += 1;
+    // }
 
     ImGui::Unindent();
 }

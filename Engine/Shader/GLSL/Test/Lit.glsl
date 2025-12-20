@@ -37,10 +37,9 @@ void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     
     // 法线变换：使用法线矩阵（模型矩阵的逆转置的3x3部分）
-    // mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
-    // vec3 worldNormal = normalMatrix * aNormal;
-    // vNormal = normalize(worldNormal);
-    vNormal = aNormal;
+    mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
+    vec3 worldNormal = normalMatrix * aNormal;
+    vNormal = worldNormal;
     
 }
 
@@ -138,6 +137,7 @@ void main ()
     vec3 lighting = vec3(0.0);
     
     for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) {
+
         PointLight light = uLit.pointLights[0];
         
         // 光照方向（从片段指向光源）
@@ -159,10 +159,12 @@ void main ()
         
         // 累加光照
         // lighting += (diffuse + specular) * attenuation;
-        lighting +=  diffuse * attenuation; // 增加环境光贡献
+        lighting +=  diffuse;
         // fColor = vec4(0,1,0,1);
         // break; // 暂时只支持一个点光源
     }
+
+    // lighting = uLit.directionalLightColor;
     
     // 最终颜色
     vec3 color = (ambient + lighting) * objectColor;

@@ -12,7 +12,6 @@ struct Entity;
 struct [[refl]] Scene
 {
     friend struct Entity;
-    using id_t = entt::entity;
 
     std::string    _name;
     entt::registry _registry;
@@ -40,12 +39,12 @@ struct [[refl]] Scene
     void    destroyEntity(Entity entity);
     bool    isValidEntity(Entity entity) const;
 
-    Entity *getEntityByID(id_t id);
+    Entity *getEntityByEnttID(entt::entity id);
     Entity *getEntityByID(uint32_t id)
     {
-        return getEntityByID(static_cast<id_t>(id));
+        return getEntityByEnttID(static_cast<entt::entity>(id));
     }
-    
+
     Entity *getEntityByName(const std::string &name);
 
     // Scene management
@@ -66,6 +65,10 @@ struct [[refl]] Scene
     // Find entities
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
+
+  private:
+
+    void createEntityImpl(Entity &entity);
 };
 
 } // namespace ya

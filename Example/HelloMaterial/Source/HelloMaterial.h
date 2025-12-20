@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Core/App/App.h"
+#include "Editor/SceneHierarchyPanel.h"
 #include "Render/Mesh.h"
+#include "Scene/SceneManager.h"
+
 
 
 struct HelloMaterial : public ya::App
@@ -13,6 +16,9 @@ struct HelloMaterial : public ya::App
 
     ya::Entity *_pointLightEntity = nullptr;
     ya::Entity *_litTestEntity    = nullptr;
+
+    // Editor
+    std::unique_ptr<ya::SceneHierarchyPanel> _sceneHierarchyPanel;
 
     void onInit(ya::AppDesc ci) override
     {
@@ -51,12 +57,17 @@ struct HelloMaterial : public ya::App
         createMaterials();
         createEntities(scene);
 
+        // Initialize editor
+        auto sharedScene     = getSceneManager()->getCurrentScenePtr();
+        _sceneHierarchyPanel = std::make_unique<ya::SceneHierarchyPanel>(sharedScene);
+
         YA_INFO("HelloMaterial scene initialized.");
     }
 
     void onSceneDestroy(ya::Scene *scene) override
     {
         // Clean up application-specific resources before scene destruction
+        _sceneHierarchyPanel.reset();
         cubeMesh.reset();
 
         Super::onSceneDestroy(scene);

@@ -1,6 +1,7 @@
 includes("./Plugins/Plugins.xmake.lua")
 includes("./Shader/xmake.lua")
 includes("./Test/xmake.lua")
+-- includes("./Source/Editor/xmake.lua")
 
 add_requires(
     "spdlog",

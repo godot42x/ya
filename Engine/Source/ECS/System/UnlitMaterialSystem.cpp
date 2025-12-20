@@ -141,6 +141,10 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
+
+#if !NOT_DYN_CULL
+                           EPipelineDynamicFeature::CullMode |
+#endif
                            EPipelineDynamicFeature::Viewport,
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
@@ -257,6 +261,9 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, width, height);
+#if !NOT_DYN_CULL
+    cmdBuf->setCullMode(_cullMode);
+#endif
 
     updateFrameDS(rt);
 

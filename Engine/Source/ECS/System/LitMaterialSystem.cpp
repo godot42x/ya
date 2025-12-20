@@ -14,6 +14,7 @@
 
 
 #include "Scene/Scene.h"
+#include "glm/gtc/type_ptr.hpp"
 #include "imgui.h"
 
 
@@ -144,6 +145,9 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
+#if !NOT_DYN_CULL
+                           EPipelineDynamicFeature::CullMode |
+#endif
                            EPipelineDynamicFeature::Viewport,
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
@@ -323,6 +327,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, width, height);
+    cmdBuf->setCullMode(_cullMode);
 
     updateFrameDS(rt);
 
@@ -396,19 +401,26 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 void LitMaterialSystem::onRenderGUI()
 {
     IMaterialSystem::onRenderGUI();
-    // ImGui::ColorEdit3("Light Color", &uLight.lightColor.x);
-    // ImGui::SliderFloat3("Light Direction", &uLight.lightDirection.x, -1.0f, 1.0f);
-    // ImGui::SliderFloat("Light Intensity", &uLight.lightIntensity, 0.0f, 10.0f);
-    ImGui::ColorEdit3("Ambient Color", &uLight.ambientColor.x);
-    ImGui::SliderFloat("Ambient Intensity", &uLight.ambientIntensity, 0.0f, 1.0f);
+    ImGui::Text("Directional Light");
+    ImGui::PushID("1");
+    ImGui::DragFloat3("Direction", glm::value_ptr(uLight.directionalLightDir), 0.1f);
+    ImGui::ColorEdit3("Color", glm::value_ptr(uLight.directionalLightColor));
+    ImGui::SliderFloat("Intensity", &uLight.directionalLightIntensity, 0.0f, 10.0f);
+    ImGui::PopID();
+    ImGui::Separator();
+
+    ImGui::PushID("2");
+    ImGui::Text("Ambient Light");
+    ImGui::ColorEdit3("Color", glm::value_ptr(uLight.ambientColor));
+    ImGui::SliderFloat("Intensity", &uLight.ambientIntensity, 0.0f, 1.0f);
+    ImGui::PopID();
+
 
     if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
         ImGui::Unindent();
     }
-
-    App *app = getApp();
 };
 
 // TODO: descriptor set can be shared if they use same layout and data

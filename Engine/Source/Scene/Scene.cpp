@@ -17,6 +17,8 @@ Scene::~Scene()
     clear();
 }
 
+
+
 Entity *Scene::createEntity(const std::string &name)
 {
     auto   id = _registry.create();
@@ -29,6 +31,7 @@ Entity *Scene::createEntity(const std::string &name)
 
     auto *tagComponent = entity.addComponent<TagComponent>();
     tagComponent->_tag = name.empty() ? "Entity" : name;
+
 
     // auto &transformComponent = entity.addComponent<TransformComponent>();
 
@@ -69,7 +72,7 @@ bool Scene::isValidEntity(Entity entity) const
     return _registry.valid(entity.getHandle());
 }
 
-Entity *Scene::getEntityByID(id_t id)
+Entity *Scene::getEntityByEnttID(entt::entity id)
 {
     auto it = _entityMap.find(id);
     if (it != _entityMap.end())

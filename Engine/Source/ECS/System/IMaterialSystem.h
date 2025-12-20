@@ -20,9 +20,10 @@ struct Scene;
 
 struct IMaterialSystem : public ISystem
 {
-    std::string _label            = "IMaterialSystem";
-    bool        bReverseViewportY = true;
-    bool        bEnabled          = true;
+    std::string  _label            = "IMaterialSystem";
+    bool         bReverseViewportY = true;
+    bool         bEnabled          = true;
+    ECullMode::T _cullMode         = ECullMode::Back;
 
     // No material and base material?
     // std::shared_ptr<Material> _baseMaterial;
@@ -42,8 +43,29 @@ struct IMaterialSystem : public ISystem
         ImGui::PushID(_label.c_str());
         ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
         ImGui::Checkbox("Enabled", &bEnabled);
-        ImGui::PopID();
+        int cull = (int)(_cullMode);
+        if (ImGui::Combo("Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
+            switch (cull) {
+            case 0:
+                _cullMode = ECullMode::None;
+                break;
+            case 1:
+                _cullMode = ECullMode::Front;
+                break;
+            case 2:
+                _cullMode = ECullMode::Back;
+                break;
+            case 3:
+                _cullMode = ECullMode::FrontAndBack;
+                break;
+            default:
+                _cullMode = ECullMode::Back;
+                break;
+            }
+        }
+
         onRenderGUI();
+        ImGui::PopID();
         ImGui::Unindent();
     }
     virtual void onRenderGUI() {}

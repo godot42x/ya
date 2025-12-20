@@ -73,7 +73,7 @@ nlohmann::json SceneSerializer::serialize()
     // 遍历所有 Entity
     registry.view<entt::entity>().each([&](auto entityID) {
         // 通过 Scene 获取 Entity 包装器
-        Entity *entity = _scene->getEntityByID(entityID);
+        Entity *entity = _scene->getEntityByEnttID(entityID);
         if (entity) {
             j["entities"].push_back(serializeEntity(entity));
         }
@@ -179,7 +179,7 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
         }
     }
 
-    return _scene->getEntityByID(entity->getHandle());
+    return _scene->getEntityByEnttID(entity->getHandle());
 }
 
 // ============================================================================

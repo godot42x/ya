@@ -79,13 +79,17 @@ struct DefaultAllocator
     }
 };
 
-static DefaultAllocator defaultAllocator;
-
+inline static DefaultAllocator defaultAllocator;
 
 #define CASE_ENUM_TO_STR(x) \
     case x:                 \
         return #x;
 
+
+struct MetaRegister
+{
+    virtual void registerAll() = 0;
+};
 
 
 namespace ya

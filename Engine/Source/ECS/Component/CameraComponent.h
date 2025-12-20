@@ -9,7 +9,7 @@ namespace ya
 {
 
 
-struct CameraComponent : public IComponent
+struct CameraComponent : public IComponent, public MetaRegister
 {
 
     bool _primary          = true; // TODO: think about moving to Scene
@@ -26,7 +26,7 @@ struct CameraComponent : public IComponent
     // TODO: cache
     glm::mat4 getProjection() const
     {
-        return glm::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
+        return glm::perspectiveRH_ZO(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
     }
     glm::mat4 getView() const;
     glm::mat4 getViewProjection() const { return getProjection() * getView(); }
@@ -34,6 +34,11 @@ struct CameraComponent : public IComponent
   public:
 
     void setAspectRatio(float aspectRatio) { _aspectRatio = aspectRatio; }
+
+    void registerAll() override
+    {
+        CameraComponent::registerReflection();
+    }
 
     // ========================================================================
     // 反射注册 - 自动生成序列化

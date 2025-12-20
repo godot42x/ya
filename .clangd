@@ -31,6 +31,7 @@ Diagnostics:
                 cppcoreguidelines-pro-bounds-constant-array-index,
                 cppcoreguidelines-avoid-goto,
                 cppcoreguidelines-no-malloc,
+                cppcoreguidelines-macro-to-enum,
                 #
                 modernize-use-trailing-return-type,
                 modernize-avoid-c-arrays,
