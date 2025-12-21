@@ -246,20 +246,3 @@ void HelloMaterial::onUpdate(float dt)
 {
     Super::onUpdate(dt);
 }
-
-void HelloMaterial::onRenderGUI()
-{
-    Super::onRenderGUI();
-
-    // Render scene hierarchy panel
-    if (_sceneHierarchyPanel)
-    {
-        _sceneHierarchyPanel->onImGuiRender();
-    }
-
-    // if (!ImGui::Begin("HelloMaterial")) {
-    //     return;
-    // ImGui::End();
-    // }
-    // ImGui::End();
-}

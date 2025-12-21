@@ -37,9 +37,11 @@ void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     
     // 法线变换：使用法线矩阵（模型矩阵的逆转置的3x3部分）
-    mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
-    vec3 worldNormal = normalMatrix * aNormal;
-    vNormal = worldNormal;
+    // mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
+    mat4 normalMatrix = transpose(inverse(mat4(pc.modelMat)));
+    // vec3 worldNormal = normalMatrix * aNormal;
+    vec4 worldNormal = normalMatrix * vec4(aNormal, 0.0);
+    vNormal = worldNormal.xyz;
     
 }
 

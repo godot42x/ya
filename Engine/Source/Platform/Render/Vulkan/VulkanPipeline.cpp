@@ -120,6 +120,7 @@ void VulkanPipeline::cleanup()
 
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 {
+    YA_PROFILE_FUNCTION();
     _ci = ci;
     createPipelineInternal();
     return true;

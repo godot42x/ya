@@ -1,6 +1,7 @@
 #pragma once
 #include "Core/Base.h"
 #include "Core/Camera.h"
+#include "Core/CameraController.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
 #include "Render/Core/IRenderTarget.h"
@@ -113,7 +114,10 @@ struct App
     // Input and Camera
     InputManager inputManager;
     TaskManager  taskManager;
-    FreeCamera   camera;
+
+    FreeCamera            camera;
+    FreeCameraController  cameraController;
+    OrbitCameraController orbitCameraController;
 
     // Application state
     AppMode   _appMode      = AppMode::Control;
@@ -122,8 +126,12 @@ struct App
     std::shared_ptr<IRenderTarget> _rt = nullptr;
 
   public:
-    App()          = default;
-    virtual ~App() = default;
+    App()                       = default;
+    App(const App &)            = delete;
+    App &operator=(const App &) = delete;
+    App(App &&)                 = delete;
+    App &operator=(App &&)      = delete;
+    virtual ~App()              = default;
 
     void init(AppDesc ci);
     int  run();
@@ -190,7 +198,7 @@ struct App
 
     bool loadScene(const std::string &path);
     bool unloadScene();
-    bool saveScene(const std::string &path) { return false; } // TODO: implement
+    bool saveScene([[maybe_unused]] const std::string &path) { return false; } // TODO: implement
 
     bool                           onWindowResized(const WindowResizeEvent &event);
     bool                           onKeyReleased(const KeyReleasedEvent &event);

@@ -2,8 +2,10 @@
 
 #include "Core/Base.h"
 #include "ECS/Component.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
 
-
+#include "Core/Math/Math.h"
 
 namespace ya
 {
@@ -28,7 +30,37 @@ struct CameraComponent : public IComponent, public MetaRegister
     {
         return glm::perspectiveRH_ZO(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
     }
-    glm::mat4 getView() const;
+    // TODO: a camera should only define the effect:
+    //  1. projection or orthographic
+    //  2. other fov some camera effect
+    // So we should not take the view form there, Should there
+    // come a CameraController to do this work...
+    glm::mat4 getView() const
+    {
+        if (getOwner() && getOwner()->hasComponent<TransformComponent>()) {
+            auto tc = getOwner()->getComponent<TransformComponent>();
+
+            float yaw   = tc->_rotation.x;
+            float pitch = tc->_rotation.y;
+
+            glm::vec3 dir;
+            dir.x = std::cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+            dir.y = std::sin(glm::radians(pitch));
+            dir.z = std::cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+
+            tc->_position = _focusPoint + dir * _distance;
+
+
+            return FMath::lookAt(
+                tc->_position,
+                _focusPoint,
+                glm::vec3(0, 1, 0));
+        }
+        return FMath::lookAt(
+            glm::vec3(0, 0, _distance) + _focusPoint,
+            _focusPoint,
+            glm::vec3(0, 1, 0));
+    }
     glm::mat4 getViewProjection() const { return getProjection() * getView(); }
 
   public:
@@ -57,6 +89,7 @@ struct CameraComponent : public IComponent, public MetaRegister
             .property("focusPoint", &CameraComponent::_focusPoint);
     }
 };
+
 
 
 }; // namespace ya

@@ -12,17 +12,17 @@ class SceneHierarchyPanel
 
 
   private:
-    std::shared_ptr<Scene> _context       = nullptr;
-    Entity                 _selection     = {};
-    Entity                 _lastSelection = {};
+    Scene *_context       = nullptr;
+    Entity _selection     = {};
+    Entity _lastSelection = {};
 
   public:
-    SceneHierarchyPanel(std::shared_ptr<Scene> scene)
+    SceneHierarchyPanel(Scene *scene)
     {
         _context = scene;
     }
 
-    void setContext(const std::shared_ptr<Scene> &scene);
+    void setContext(Scene *&scene);
     void onImGuiRender();
 
     Entity getSelectedEntity() const { return _selection; }

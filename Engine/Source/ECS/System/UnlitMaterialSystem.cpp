@@ -149,8 +149,8 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            // .frontFace   = EFrontFaceType::CounterClockWise, // GL
-            .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+            .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .multisampleState = MultisampleState{
             .sampleCount          = _sampleCount,

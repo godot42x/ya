@@ -4,12 +4,9 @@
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
-
-#include <SDL3/SDL_events.h>
-
-#include "Input/InputManager.h"
-#include "KeyCode.h"
 #include "Log.h"
+#include "Math/Math.h"
+
 
 namespace ya
 {
@@ -19,6 +16,12 @@ struct Camera
     glm::mat4 projectionMatrix     = {};
     glm::mat4 viewMatrix           = {};
     glm::mat4 viewProjectionMatrix = {};
+
+    Camera()                            = default;
+    Camera(const Camera &)              = default;
+    Camera &operator=(const Camera &)   = default;
+    Camera(Camera &&) noexcept          = default;
+    Camera &operator=(Camera &&) noexcept = default;
 
     [[nodiscard]] const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
 
@@ -40,21 +43,6 @@ struct FreeCamera : public Camera
     glm::vec3 _position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
     glm::vec3 _rotation = {0.0f, 0.0f, 0.0f}; // pitch, yaw, roll
 
-    // Camera control settings
-    float _moveSpeed     = 5.0f; // Units per second
-    float _rotationSpeed = 0.5f; // Degrees per second
-
-    // Movement keys (configurable)
-    EKey::T _forwardKey = EKey::K_W;
-    EKey::T _backKey    = EKey::K_S;
-    EKey::T _leftKey    = EKey::K_A;
-    EKey::T _rightKey   = EKey::K_D;
-    EKey::T _upKey      = EKey::K_Q;
-    EKey::T _downKey    = EKey::K_E;
-
-    // Mouse button for rotation
-    EMouse::T rotateButton = EMouse::Right;
-
     enum EProjectionType
     {
         Perspective,
@@ -63,7 +51,11 @@ struct FreeCamera : public Camera
 
   public:
     FreeCamera() : Camera() {}
-    ~FreeCamera() {}
+        FreeCamera(const FreeCamera &)              = default;
+        FreeCamera &operator=(const FreeCamera &)   = default;
+        FreeCamera(FreeCamera &&) noexcept          = default;
+        FreeCamera &operator=(FreeCamera &&) noexcept = default;
+        ~FreeCamera() override = default;
 
     void setPerspective(float fov, float aspectRatio, float nearClip, float farClip)
     {
@@ -105,10 +97,13 @@ struct FreeCamera : public Camera
     {
         const glm::quat rotQuat = glm::quat(glm::radians(_rotation));
 
-        viewMatrix = glm::translate(glm::mat4(1.0f), _position) *
-                     glm::mat4_cast(rotQuat);
+        // viewMatrix = glm::translate(glm::mat4(1.0f), _position) *
+        //              glm::mat4_cast(rotQuat);
 
-        viewMatrix = glm::inverse(viewMatrix);
+        // viewMatrix = glm::inverse(viewMatrix);
+        viewMatrix = FMath::lookAt(_position,
+                                   _position + (rotQuat * glm::vec3(0.0f, 0.0f, -1.0f)),
+                                   rotQuat * glm::vec3(0.0f, 1.0f, 0.0f));
     }
 
     void recalculateViewProjectionMatrix()
@@ -146,21 +141,15 @@ struct FreeCamera : public Camera
     {
         this->_aspectRatio = aspectRatio;
         if (projectionType == EProjectionType::Perspective) {
-            projectionMatrix = glm::perspective(glm::radians(_fov), aspectRatio, _nearClip, _farClip);
+            // projectionMatrix = glm::perspectiveRH_ZO(glm::radians(_fov), aspectRatio, _nearClip, _farClip);
+            projectionMatrix = FMath::perspective(glm::radians(_fov), aspectRatio, _nearClip, _farClip);
         }
         else {
-            projectionMatrix = glm::ortho(-aspectRatio, aspectRatio, -1.0f, 1.0f, _nearClip, _farClip);
+            // projectionMatrix = glm::orthoRH_ZO(-aspectRatio, aspectRatio, -1.0f, 1.0f, _nearClip, _farClip);
+            projectionMatrix = FMath::orthographic(-aspectRatio, aspectRatio, -1.0f, 1.0f, _nearClip, _farClip);
         }
         recalculateViewProjectionMatrix();
     }
-
-
-  public: // Camera control methods
-    void update(const InputManager &inputManager, float deltaTime);
-
-  private:
-    bool handleKeyboardInput(const InputManager &inputManager, float deltaTime);
-    bool handleMouseRotation(const InputManager &inputManager, float deltaTime);
 };
 
 
@@ -171,9 +160,6 @@ struct OrbitCamera : public Camera
 
     glm::vec3 _position;
     glm::vec3 _rotation; // pitch, yaw, roll
-
-    EMouse::T rotateButton = EMouse::Left;
-    EMouse::T zoomButton   = EMouse::Middle;
 
   public:
     void setDistance(float distance)
@@ -198,17 +184,5 @@ struct OrbitCamera : public Camera
     {
         viewProjectionMatrix = projectionMatrix * viewMatrix;
     }
-
-    void update(const InputManager &inputManager, float deltaTime)
-    {
-        if (inputManager.isMouseButtonPressed(ya::EMouse::Left))
-        {
-            handleMouseRotation(inputManager, deltaTime);
-        }
-    }
-
-  private:
-    bool handleMouseRotation(const InputManager &inputManager, float deltaTime);
-    bool handleMouseZoom(const InputManager &inputManager, float deltaTime);
 };
 } // namespace ya

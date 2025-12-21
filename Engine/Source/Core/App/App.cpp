@@ -138,8 +138,8 @@ bool imcEditorCamera(FreeCamera &camera)
         if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
             bChanged = true;
         }
-        ImGui::DragFloat("Move Speed", &camera._moveSpeed, 0.1f, 0.1f, 20.0f);
-        ImGui::DragFloat("Rotation Speed", &camera._rotationSpeed, 1.f, 10.f, 180.f);
+        ImGui::DragFloat("Move Speed", &App::get()->cameraController._moveSpeed, 0.1f, 0.1f, 20.0f);
+        ImGui::DragFloat("Rotation Speed", &App::get()->cameraController._rotationSpeed, 1.f, 10.f, 180.f);
         ImGui::Text("Hold right mouse button to rotate camera");
         ImGui::Text("WASD: Move horizontally, QE: Move vertically");
     }
@@ -733,36 +733,14 @@ void App::onUpdate(float dt)
 
     auto cam = _rt->getCameraMut();
 
-    camera.update(inputManager, dt); // Camera expects dt in seconds
-    float sensitivity = 0.1f;
+    cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
     if (cam && cam->hasComponent<CameraComponent>()) {
         auto            cc  = cam->getComponent<CameraComponent>();
         const Extent2D &ext = _rt->getExtent();
-        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-        auto &inputManger = App::get()->inputManager;
-
-        if (inputManger.isMouseButtonPressed(EMouse::Right)) {
-            glm::vec2 mouseDelta = inputManger.getMouseDelta();
-            if (glm::length(mouseDelta) > 0.0f) {
-                auto tc = cam->getComponent<TransformComponent>();
-
-                float yaw   = tc->_rotation.x;
-                float pitch = tc->_rotation.y;
-                yaw -= mouseDelta.x * sensitivity;
-                pitch -= mouseDelta.y * sensitivity;
-                if (pitch > 89.f) {
-                    pitch = 89.f;
-                }
-                else if (pitch < -89.f) {
-                    pitch = -89.f;
-                }
-
-                tc->_rotation.x = yaw;
-                tc->_rotation.y = pitch;
-            }
+        if (cam->hasComponent<TransformComponent>()) {
+            auto tc = cam->getComponent<TransformComponent>();
+            orbitCameraController.update(*tc, *cc, inputManager, ext);
         }
-        glm::vec2 scrollDelta = inputManger.getMouseScrollDelta();
-        cc->_distance -= scrollDelta.y * 0.1f;
     }
 
     // auto render = getRender();

@@ -96,8 +96,8 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            // .frontFace   = EFrontFaceType::CounterClockWise, // GL
-            .frontFace = EFrontFaceType::ClockWise, // VK
+            .frontFace   = EFrontFaceType::CounterClockWise, // GL
+            // .frontFace = EFrontFaceType::ClockWise, // VK
         },
         .multisampleState = MultisampleState{
             .sampleCount          = _sampleCount,

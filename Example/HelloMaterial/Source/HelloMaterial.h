@@ -58,8 +58,7 @@ struct HelloMaterial : public ya::App
         createEntities(scene);
 
         // Initialize editor
-        auto sharedScene     = getSceneManager()->getCurrentScenePtr();
-        _sceneHierarchyPanel = std::make_unique<ya::SceneHierarchyPanel>(sharedScene);
+        _sceneHierarchyPanel = std::make_unique<ya::SceneHierarchyPanel>(scene);
 
         YA_INFO("HelloMaterial scene initialized.");
     }
@@ -86,7 +85,22 @@ struct HelloMaterial : public ya::App
         Super::onRender(dt);
     }
 
-    void onRenderGUI() override;
+    void onRenderGUI() override
+    {
+        Super::onRenderGUI();
+
+        // Render scene hierarchy panel
+        if (_sceneHierarchyPanel)
+        {
+            _sceneHierarchyPanel->onImGuiRender();
+        }
+
+        // if (!ImGui::Begin("HelloMaterial")) {
+        //     return;
+        // ImGui::End();
+        // }
+        // ImGui::End();
+    }
 
     int onEvent(const ya::Event &event) override
     {

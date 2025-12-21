@@ -72,7 +72,7 @@ bool Scene::isValidEntity(Entity entity) const
     return _registry.valid(entity.getHandle());
 }
 
-Entity *Scene::getEntityByEnttID(entt::entity id)
+Entity *Scene::getEntityByEnttID(entt::entity id) 
 {
     auto it = _entityMap.find(id);
     if (it != _entityMap.end())

@@ -152,8 +152,10 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            // .frontFace   = EFrontFaceType::CounterClockWise, // GL
-            .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+            //
+            .cullMode  = _cullMode,
+            .frontFace = EFrontFaceType::CounterClockWise, // GL
+            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = true,
@@ -255,6 +257,7 @@ void LitMaterialSystem::onDestroy()
 void LitMaterialSystem::onUpdate(float deltaTime)
 {
     auto scene = getScene();
+    YA_CORE_ASSERT(scene, "LitMaterialSystem::onUpdate - Scene is null");
 
     // Reset point light count
     uLight.numPointLights = 0;
@@ -325,7 +328,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         viewportHeight = -static_cast<float>(height);
     }
 
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
+    cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, width, height);
     cmdBuf->setCullMode(_cullMode);
 
@@ -434,7 +437,8 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     rt->getViewAndProjMatrix(view, proj);
 
     // 从 view matrix 提取相机位置
-    glm::mat4 invView   = glm::inverse(view);
+    // glm::mat4 invView   = glm::inverse(view);
+    glm::mat4 invView   = view;
     glm::vec3 cameraPos = glm::vec3(invView[3]);
 
     FrameUBO uFrame{

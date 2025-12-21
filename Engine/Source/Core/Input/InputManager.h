@@ -28,8 +28,8 @@ struct InputManager
     std::unordered_map<EKey::T, KeyState> currentKeyStates;
     std::unordered_map<EKey::T, KeyState> previousKeyStates;
 
-    std::unordered_map<Uint8, KeyState> currentMouseStates;
-    std::unordered_map<Uint8, KeyState> previousMouseStates;
+    std::unordered_map<EMouse::T, KeyState> currentMouseStates;
+    std::unordered_map<EMouse::T, KeyState> previousMouseStates;
 
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 previousMousePosition{0.0f, 0.0f};
