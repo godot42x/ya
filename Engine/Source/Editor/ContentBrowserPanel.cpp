@@ -11,9 +11,14 @@ ContentBrowserPanel::ContentBrowserPanel()
 
 void ContentBrowserPanel::onImGuiRender()
 {
-    ImGui::Begin("Content Browser", nullptr);
+    ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Content Browser"))
+    {
+        ImGui::End();
+        return;
+    }
 
-    if (_currentDirectory != std::filesystem::current_path())
+    if (_currentDirectory != _baseDirectory && !_baseDirectory.empty())
     {
         if (ImGui::Button("< Back"))
         {
@@ -31,38 +36,45 @@ void ContentBrowserPanel::onImGuiRender()
 
 void ContentBrowserPanel::renderDirectoryContents()
 {
-    static constexpr float padding = 16.0f;
+    static constexpr float padding  = 16.0f;
     static constexpr float cellSize = 128.0f + padding;
 
-    float panelWidth = ImGui::GetContentRegionAvail().x;
-    int columnCount = static_cast<int>(panelWidth / cellSize);
+    float panelWidth  = ImGui::GetContentRegionAvail().x;
+    int   columnCount = static_cast<int>(panelWidth / cellSize);
     if (columnCount < 1)
         columnCount = 1;
 
     ImGui::Columns(columnCount, 0, false);
 
-    for (auto& entry : std::filesystem::directory_iterator(_currentDirectory))
+    try
     {
-        const auto& path = entry.path();
-        auto filename = path.filename().string();
-
-        ImGui::PushID(filename.c_str());
-
-        if (entry.is_directory())
+        for (auto &entry : std::filesystem::directory_iterator(_currentDirectory))
         {
-            ImGui::Text("[DIR] %s", filename.c_str());
-            if (ImGui::IsItemClicked())
+            const auto &path     = entry.path();
+            auto        filename = path.filename().string();
+
+            ImGui::PushID(filename.c_str());
+
+            if (entry.is_directory())
             {
-                _currentDirectory /= filename;
+                ImGui::TextWrapped("[DIR] %s", filename.c_str());
+                if (ImGui::IsItemClicked())
+                {
+                    _currentDirectory /= filename;
+                }
             }
-        }
-        else
-        {
-            ImGui::Text("[FILE] %s", filename.c_str());
-        }
+            else
+            {
+                ImGui::TextWrapped("[FILE] %s", filename.c_str());
+            }
 
-        ImGui::PopID();
-        ImGui::NextColumn();
+            ImGui::PopID();
+            ImGui::NextColumn();
+        }
+    }
+    catch (const std::exception &e)
+    {
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Error reading directory: %s", e.what());
     }
 
     ImGui::Columns(1);

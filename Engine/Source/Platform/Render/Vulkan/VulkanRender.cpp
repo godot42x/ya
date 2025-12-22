@@ -642,21 +642,18 @@ void VulkanRender::createSyncResources(int32_t swapchainImageSize)
 
     // ✅ 为每个飞行帧分配独立的同步对象数组
     // 这是Flight Frames的核心：避免不同帧之间的资源竞争
-    imageSubmittedSignalSemaphores.resize(swapchainImageSize);
+    imageSubmittedSignalSemaphores.resize(swapchainImageSize); // 渲染完成信号量
     frameImageAvailableSemaphores.resize(flightFrameSize);
     frameFences.resize(flightFrameSize);
 
-    // ✅ 循环创建每个飞行帧的同步对象
+    // ✅ 循环创建每个swapchain image的同步对象
     for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
-        // 创建渲染完成信号量：当GPU完成渲染命令时发出信号
+        // 创建渲染完成信号量：当GPU完成渲染时发出信号
         ret = vkCreateSemaphore(this->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
-
-
-
         this->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
                                  imageSubmittedSignalSemaphores[i],
-                                 std::format("SubmittedSignalSemaphore_{}", i).c_str());
+                                 std::format("RenderFinishedSemaphore_{}", i).c_str());
     }
 
     for (uint32_t i = 0; i < flightFrameSize; i++) {
@@ -781,47 +778,98 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
 bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
 {
-    _graphicsQueues[0].submit(
-        (const void *)cmdBufs.data(),
-        cmdBufs.size(),
-        //  wait image available to submit, after acquire image done
-        {
-            frameImageAvailableSemaphores[currentFrameIdx],
-        },
-        // send submitted signal after command buffer submitted completed
-        {
-            imageSubmittedSignalSemaphores[imageIndex], // ⚠️ the signal sema of the submit operation should be the IMAGE_INDEX!!!
-        },
-        frameFences[currentFrameIdx] // GPU完成所有(submit)工作后会发送此fence信号;
-    );
-    auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
+    // If cmdBufs is not empty, use legacy single-pass mode
+    if (!cmdBufs.empty()) {
+        submitToQueue(
+            cmdBufs,
+            {frameImageAvailableSemaphores[currentFrameIdx]},
+            {imageSubmittedSignalSemaphores[imageIndex]},
+            frameFences[currentFrameIdx]);
+    }
+    // Otherwise, App has already submitted with custom sync
 
-
-    // submit and present are asynchronous operations,
-    VkResult result = vkSwapChain->presentImage(
-        imageIndex,
-        {
-            imageSubmittedSignalSemaphores[imageIndex], // ⚠️ the wait sema of the Present operation  should be the IMAGE_INDEX!!!
-        });
+    // Present the image
+    int result = presentImage(imageIndex, {imageSubmittedSignalSemaphores[imageIndex]});
 
     if (result == VK_SUBOPTIMAL_KHR) {
         YA_CORE_INFO("Swapchain suboptimal, recreating...");
-        // recreate swapchain
+        auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
         VK_CALL(vkDeviceWaitIdle(this->getDevice()));
         bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
-        if (ok) {
-        }
-        else {
+        if (!ok) {
             YA_CORE_ERROR("Failed to recreate swapchain after suboptimal!");
         }
         return false;
     }
 
-    // 使用模运算实现环形缓冲区，在多个帧之间循环
-    // 例如：0 -> 1 -> 0 -> 1 ... (当submissionResourceSize=2时)
-    // ⚠️ frameCount can not equal to imageSize of swapchain!!
     currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
     return true;
+}
+
+void VulkanRender::submitToQueue(
+    const std::vector<void *> &cmdBufs,
+    const std::vector<void *> &waitSemaphores,
+    const std::vector<void *> &signalSemaphores,
+    void                      *fence)
+{
+    std::vector<VkSemaphore> vkWaitSemaphores;
+    std::vector<VkSemaphore> vkSignalSemaphores;
+
+    vkWaitSemaphores.reserve(waitSemaphores.size());
+    for (auto sem : waitSemaphores) {
+        vkWaitSemaphores.push_back(static_cast<VkSemaphore>(sem));
+    }
+
+    vkSignalSemaphores.reserve(signalSemaphores.size());
+    for (auto sem : signalSemaphores) {
+        vkSignalSemaphores.push_back(static_cast<VkSemaphore>(sem));
+    }
+
+    _graphicsQueues[0].submit(
+        cmdBufs.data(),
+        cmdBufs.size(),
+        vkWaitSemaphores,
+        vkSignalSemaphores,
+        fence ? static_cast<VkFence>(fence) : VK_NULL_HANDLE);
+}
+
+int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores)
+{
+    std::vector<VkSemaphore> vkWaitSemaphores;
+    vkWaitSemaphores.reserve(waitSemaphores.size());
+    for (auto sem : waitSemaphores) {
+        vkWaitSemaphores.push_back(static_cast<VkSemaphore>(sem));
+    }
+
+    auto     vkSwapChain = this->getSwapchain<VulkanSwapChain>();
+    VkResult result      = vkSwapChain->presentImage(imageIndex, vkWaitSemaphores);
+    return static_cast<int>(result);
+}
+
+void *VulkanRender::createSemaphore(const char *debugName)
+{
+    VkSemaphoreCreateInfo semaphoreInfo{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+    };
+
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    VkResult    ret       = vkCreateSemaphore(getDevice(), &semaphoreInfo, getAllocator(), &semaphore);
+    YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create semaphore! Result: {}", ret);
+
+    if (debugName && bSupportDebugUtils) {
+        setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE, semaphore, debugName);
+    }
+
+    return semaphore;
+}
+
+void VulkanRender::destroySemaphore(void *semaphore)
+{
+    if (semaphore) {
+        vkDestroySemaphore(getDevice(), static_cast<VkSemaphore>(semaphore), getAllocator());
+    }
 }
 
 int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const

@@ -120,6 +120,67 @@ struct IRender : public plat_base<IRender>
      */
     virtual IDescriptorSetHelper *getDescriptorHelper() = 0;
 
+    /**
+     * @brief Submit command buffers to graphics queue with synchronization
+     * @param cmdBufs Command buffers to submit
+     * @param waitSemaphores Semaphores to wait on before execution
+     * @param signalSemaphores Semaphores to signal after execution
+     * @param fence Optional fence to signal when complete
+     */
+    virtual void submitToQueue(
+        const std::vector<void *> &cmdBufs,
+        const std::vector<void *> &waitSemaphores,
+        const std::vector<void *> &signalSemaphores,
+        void                      *fence = nullptr) = 0;
+
+    /**
+     * @brief Present swapchain image
+     * @param imageIndex Swapchain image index to present
+     * @param waitSemaphores Semaphores to wait on before presenting
+     * @return VK_SUCCESS or error code
+     */
+    virtual int presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores) = 0;
+
+    /**
+     * @brief Get current frame's image available semaphore
+     */
+    virtual void *getCurrentImageAvailableSemaphore() = 0;
+
+    /**
+     * @brief Get current frame's fence
+     */
+    virtual void *getCurrentFrameFence() = 0;
+
+    /**
+     * @brief Get current frame index
+     */
+    virtual uint32_t getCurrentFrameIndex() const = 0;
+
+    /**
+     * @brief Get render finished semaphore for given swapchain image index
+     * @param imageIndex Swapchain image index
+     * @return Semaphore that will be signaled when rendering to this image completes
+     */
+    virtual void *getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
+
+    /**
+     * @brief Create a semaphore (for App-managed synchronization)
+     * @param debugName Optional debug name for the semaphore
+     * @return Opaque handle to semaphore
+     */
+    virtual void *createSemaphore(const char *debugName = nullptr) = 0;
+
+    /**
+     * @brief Destroy a semaphore created by createSemaphore
+     * @param semaphore Semaphore to destroy
+     */
+    virtual void destroySemaphore(void *semaphore) = 0;
+
+    /**
+     * @brief Advance to next frame (increment frame index)
+     */
+    virtual void advanceFrame() = 0;
+
   protected:
     /**
      * @brief Get the native window handle (backend-specific)

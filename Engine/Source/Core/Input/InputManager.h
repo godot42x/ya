@@ -66,8 +66,8 @@ struct InputManager
     }
     glm::vec2 getMouseDelta() const { return mouseDelta; }
 
-  protected:
     EventProcessState processEvent(const SDL_Event &event);
+    EventProcessState processEvent(const Event &event);
 
   private:
     void setKeyState(EKey::T keycode, KeyState state) { currentKeyStates[keycode] = state; }

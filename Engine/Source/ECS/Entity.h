@@ -85,6 +85,8 @@ struct Entity
 
     bool operator==(const Entity &other) const { return _entityHandle == other._entityHandle && _scene == other._scene; }
     bool operator!=(const Entity &other) const { return !(*this == other); }
+
+    const std::string &getName() const { return _name; }
 };
 
 } // namespace ya

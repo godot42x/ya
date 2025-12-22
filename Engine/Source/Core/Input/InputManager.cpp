@@ -74,6 +74,27 @@ ya::EventProcessState InputManager::processEvent(const SDL_Event &event)
     return ya::EventProcessState::Continue;
 }
 
+EventProcessState InputManager::processEvent(const Event &event)
+{
+    switch (event.getEventType()) {
+    case EEvent::KeyPressed:
+        setKeyState(static_cast<const KeyPressedEvent &>(event).getKeyCode(), KeyState::Pressed);
+        break;
+    case EEvent::KeyReleased:
+        setKeyState(static_cast<const KeyReleasedEvent &>(event).getKeyCode(), KeyState::Released);
+        break;
+    case EEvent::MouseButtonPressed:
+        setMouseState(static_cast<const MouseButtonPressedEvent &>(event).GetMouseButton(), KeyState::Pressed);
+        break;
+    case EEvent::MouseButtonReleased:
+        setMouseState(static_cast<const MouseButtonReleasedEvent &>(event).GetMouseButton(), KeyState::Released);
+        break;
+    default:
+        break;
+    }
+    return EventProcessState::Continue;
+}
+
 bool InputManager::isKeyPressed(EKey::T keycode) const
 {
     auto it = currentKeyStates.find(keycode);

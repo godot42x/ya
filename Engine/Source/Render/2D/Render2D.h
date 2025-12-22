@@ -185,7 +185,7 @@ struct Render2D
         quadData->begin();
     }
     static void onImGui();
-    static void onRenderGUI() { onImGui(); }
+    static void onRenderGUI() {}
     static void end()
     {
         quadData->end();

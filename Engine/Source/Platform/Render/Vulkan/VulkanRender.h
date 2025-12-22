@@ -114,9 +114,9 @@ struct VulkanRender : public IRender
     // used for GPU-CPU(fame), GPU internal(image) sync
     static constexpr uint32_t flightFrameSize = 1;
     uint32_t                  currentFrameIdx = 0;
-    std::vector<VkSemaphore>  frameImageAvailableSemaphores;
-    std::vector<VkFence>      frameFences;
-    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 每张swapchain image渲染完成信号量
+    std::vector<VkSemaphore>  frameImageAvailableSemaphores;  // 每个飞行帧的图像可用信号量
+    std::vector<VkFence>      frameFences;                    // 每个飞行帧的fence
+    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 渲染完成信号量（每张swapchain image）
 
 
   public:
@@ -192,6 +192,23 @@ struct VulkanRender : public IRender
     }
 
     void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers) override;
+
+    void submitToQueue(
+        const std::vector<void *> &cmdBufs,
+        const std::vector<void *> &waitSemaphores,
+        const std::vector<void *> &signalSemaphores,
+        void                      *fence = nullptr) override;
+
+    int presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores) override;
+
+    void    *getCurrentImageAvailableSemaphore() override { return frameImageAvailableSemaphores[currentFrameIdx]; }
+    void    *getCurrentFrameFence() override { return frameFences[currentFrameIdx]; }
+    uint32_t getCurrentFrameIndex() const override { return currentFrameIdx; }
+    void    *getRenderFinishedSemaphore(uint32_t imageIndex) override { return imageSubmittedSignalSemaphores[imageIndex]; }
+
+    void *createSemaphore(const char *debugName = nullptr) override;
+    void  destroySemaphore(void *semaphore) override;
+    void  advanceFrame() override { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
 
   private:
     void terminate()

@@ -21,8 +21,6 @@
 #include <format>
 
 #include "Scene/SceneManager.h"
-#include "glm/gtc/type_ptr.hpp"
-#include "imgui.h"
 
 
 

@@ -44,6 +44,8 @@ enum T
 
     WindowClose,
     WindowResize,
+    WindowRestore,
+    WindowMinimize,
     WindowFocus,
     WindowFocusLost,
     WindowMoved,
@@ -51,6 +53,7 @@ enum T
     AppTick,
     AppUpdate,
     AppRender,
+    AppQuit,
 
     KeyPressed,
     KeyReleased,
@@ -148,6 +151,19 @@ class Event
 
 // MARK: ApplicationEvent
 
+struct ENGINE_API AppEvent : public Event
+{
+  public:
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+};
+
+struct ENGINE_API AppQuitEvent : public AppEvent
+{
+  public:
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+    EVENT_CLASS_TYPE(AppQuit)
+};
+
 
 struct ENGINE_API WindowEvent : public Event
 {
@@ -236,6 +252,36 @@ struct WindowMovedEvent : public WindowEvent
 
     uint32_t getX() const { return _x; }
     uint32_t getY() const { return _y; }
+};
+
+struct WindowRestoreEvent : public WindowEvent
+{
+
+    WindowRestoreEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    std::string toString() const override
+    {
+        return std::format("{} |WindowRestoreEvent", WindowEvent::toString());
+    }
+
+  public:
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+    EVENT_CLASS_TYPE(WindowRestore)
+};
+
+struct WindowMinimizeEvent : public WindowEvent
+{
+
+    WindowMinimizeEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    std::string toString() const override
+    {
+        return std::format("{} |WindowMinimizeEvent", WindowEvent::toString());
+    }
+
+  public:
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+    EVENT_CLASS_TYPE(WindowMinimize)
 };
 
 

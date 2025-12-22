@@ -5,8 +5,9 @@
 #define IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
 #include <imgui_impl_vulkan.h>
 
-#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Core/Log.h"
+#include "Platform/Render/Vulkan/VulkanRender.h"
+
 
 namespace ya
 {
@@ -15,24 +16,56 @@ void ImGuiManager::initImGuiCore()
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO* io = &ImGui::GetIO();
+    ImGuiIO *io = &ImGui::GetIO();
     io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     ImGui::StyleColorsDark();
+
+    auto colors               = ImGui::GetStyle().Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4{0.1f, 0.105f, 0.11f, 1.0f};
+
+    // Headers
+    colors[ImGuiCol_Header]        = ImVec4{0.2f, 0.205f, 0.21f, 1.0f};
+    colors[ImGuiCol_HeaderHovered] = ImVec4{0.3f, 0.305f, 0.31f, 1.0f};
+    colors[ImGuiCol_HeaderActive]  = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+
+    // Buttons
+    colors[ImGuiCol_Button]        = ImVec4{0.2f, 0.205f, 0.21f, 1.0f};
+    colors[ImGuiCol_ButtonHovered] = ImVec4{0.3f, 0.305f, 0.31f, 1.0f};
+    colors[ImGuiCol_ButtonActive]  = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+
+    // Frame BG
+    colors[ImGuiCol_FrameBg]        = ImVec4{0.2f, 0.205f, 0.21f, 1.0f};
+    colors[ImGuiCol_FrameBgHovered] = ImVec4{0.3f, 0.305f, 0.31f, 1.0f};
+    colors[ImGuiCol_FrameBgActive]  = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+
+    // Tabs
+    colors[ImGuiCol_Tab]                = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+    colors[ImGuiCol_TabHovered]         = ImVec4{0.38f, 0.3805f, 0.381f, 1.0f};
+    colors[ImGuiCol_TabActive]          = ImVec4{0.28f, 0.2805f, 0.281f, 1.0f};
+    colors[ImGuiCol_TabUnfocused]       = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4{0.2f, 0.205f, 0.21f, 1.0f};
+
+    // Title
+    colors[ImGuiCol_TitleBg]          = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+    colors[ImGuiCol_TitleBgActive]    = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
 }
 
-void ImGuiManager::init(IRender* render, IRenderPass* renderPass)
+void ImGuiManager::init(IRender *render, IRenderPass *renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
-    
+
     ERenderAPI::T api = render->getAPI();
-    
+
     switch (api) {
     case ERenderAPI::Vulkan:
     {
-        SDL_Window* window = render->getNativeWindow<SDL_Window*>();
+        SDL_Window *window = render->getNativeWindow<SDL_Window *>();
         initVulkan(window, render, renderPass);
     } break;
-    
+
     case ERenderAPI::None:
     case ERenderAPI::OpenGL:
     case ERenderAPI::DirectX12:
@@ -43,58 +76,64 @@ void ImGuiManager::init(IRender* render, IRenderPass* renderPass)
     }
 }
 
-void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* renderPass)
+void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
-    
+
     initImGuiCore();
-    
-    auto* vkRender = dynamic_cast<VulkanRender*>(render);
+
+    auto *vkRender = dynamic_cast<VulkanRender *>(render);
     YA_CORE_ASSERT(vkRender, "Render must be VulkanRender for Vulkan backend");
-    
-    auto& queue = vkRender->getGraphicsQueues()[0];
-    
+
+    auto &queue = vkRender->getGraphicsQueues()[0];
+
     ImGui_ImplVulkan_InitInfo initInfo{
-        .ApiVersion     = vkRender->getApiVersion(),
-        .Instance       = vkRender->getInstance(),
-        .PhysicalDevice = vkRender->getPhysicalDevice(),
-        .Device         = vkRender->getDevice(),
-        .QueueFamily    = queue.getFamilyIndex(),
-        .Queue          = queue.getHandle(),
-        .DescriptorPool = nullptr,
-        .RenderPass     = renderPass->getHandleAs<VkRenderPass>(),
-        .MinImageCount  = 2,
-        .ImageCount     = vkRender->getSwapchainImageCount(),
-        .MSAASamples    = VK_SAMPLE_COUNT_1_BIT,
-        .PipelineCache = nullptr,
-        .Subpass       = 0,
+        .ApiVersion         = vkRender->getApiVersion(),
+        .Instance           = vkRender->getInstance(),
+        .PhysicalDevice     = vkRender->getPhysicalDevice(),
+        .Device             = vkRender->getDevice(),
+        .QueueFamily        = queue.getFamilyIndex(),
+        .Queue              = queue.getHandle(),
+        .DescriptorPool     = nullptr,
         .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE,
-        .UseDynamicRendering = false,
-#ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-        .PipelineRenderingCreateInfo = VkPipelineRenderingCreateInfoKHR{},
-#endif
-        .Allocator       = vkRender->getAllocator(),
-        .CheckVkResultFn = [](VkResult err) {
+        .MinImageCount      = 2,
+        .ImageCount         = vkRender->getSwapchainImageCount(),
+        .PipelineCache      = nullptr,
+        .PipelineInfoMain   = ImGui_ImplVulkan_PipelineInfo{
+              .RenderPass  = renderPass->getHandleAs<VkRenderPass>(),
+              .Subpass     = 0,
+              .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+            // #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+              .PipelineRenderingCreateInfo = {},
+            // #endif
+              .SwapChainImageUsage = 0,
+        },
+        .PipelineInfoForViewports = {},
+        .UseDynamicRendering      = false,
+        .Allocator                = vkRender->getAllocator(),
+        .CheckVkResultFn          = [](VkResult err) {
             if (err != VK_SUCCESS) {
                 YA_CORE_ERROR("Vulkan error in ImGui: {}", static_cast<int>(err));
             }
         },
-        .MinAllocationSize = static_cast<VkDeviceSize>(1024 * 1024),
+        .MinAllocationSize          = static_cast<VkDeviceSize>(1024 * 1024),
+        .CustomShaderVertCreateInfo = {},
+        .CustomShaderFragCreateInfo = {},
     };
-    
+
     ImGui_ImplSDL3_InitForVulkan(window);
     ImGui_ImplVulkan_Init(&initInfo);
-    
+
     _initialized = true;
     YA_CORE_INFO("ImGuiManager initialized with Vulkan backend");
 }
 
-void ImGuiManager::initSDLGPU(SDL_Window* window, SDL_GPUDevice* device)
+void ImGuiManager::initSDLGPU(SDL_Window *window, SDL_GPUDevice *device)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
-    
+
     initImGuiCore();
-    
+
     ImGui_ImplSDL3_InitForSDLGPU(window);
     SDL_WaitForGPUSwapchain(device, window);
     auto swapChainFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
@@ -106,7 +145,7 @@ void ImGuiManager::initSDLGPU(SDL_Window* window, SDL_GPUDevice* device)
         YA_CORE_ERROR("Failed to get swapchain texture format: {}",
                       SDL_GetError());
     }
-    
+
     _initialized = true;
     YA_CORE_INFO("ImGuiManager initialized with SDLGPU backend");
 }
@@ -116,11 +155,11 @@ void ImGuiManager::shutdown()
     if (!_initialized) {
         return;
     }
-    
+
     ImGui_ImplSDL3_Shutdown();
     ImGui_ImplVulkan_Shutdown();
     ImGui::DestroyContext();
-    
+
     _initialized = false;
     YA_CORE_INFO("ImGuiManager shutdown");
 }
@@ -128,10 +167,11 @@ void ImGuiManager::shutdown()
 void ImGuiManager::beginFrame()
 {
     YA_CORE_ASSERT(_initialized, "ImGuiManager not initialized");
-    
+
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
+    // ImGui::UpdatePlatformWindows();
 }
 
 void ImGuiManager::endFrame()
@@ -143,7 +183,7 @@ bool ImGuiManager::render()
 {
     ImGui::Render();
     _drawData = ImGui::GetDrawData();
-    
+
     // Check if minimized
     const bool bMinimized =
         _drawData->DisplaySize.x <= 0.0f || _drawData->DisplaySize.y <= 0.0f;
@@ -157,36 +197,93 @@ void ImGuiManager::submitVulkan(VkCommandBuffer cmdBuf, VkPipeline pipeline)
     }
 }
 
-void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* renderpass)
+void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass)
 {
     if (_drawData && _drawData->CmdListsCount > 0) {
         ImGui_ImplSDLGPU3_RenderDrawData(_drawData, commandBuffer, renderpass);
     }
 }
 
-EventProcessState ImGuiManager::processEvents(const SDL_Event& event)
+EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
 {
     ImGui_ImplSDL3_ProcessEvent(&event);
-    
+
     auto io = &ImGui::GetIO();
-    
+
     // Check mouse events
     bool isMouseEvent = (event.type == SDL_EVENT_MOUSE_MOTION ||
                          event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                          event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
                          event.type == SDL_EVENT_MOUSE_WHEEL);
-    
     if (io->WantCaptureMouse && isMouseEvent) {
         return EventProcessState::Handled;
     }
-    
+    if (io->WantCaptureKeyboard)
+    {
+        return EventProcessState::Handled;
+    }
+
+    return EventProcessState::Continue;
+}
+
+EventProcessState ImGuiManager::processEvent(const Event &event)
+{
+    if (!bBlockEvents) {
+        return EventProcessState::Continue;
+    }
+    auto io = &ImGui::GetIO();
+    if (event.isInCategory(EEventCategory::Mouse) && io->WantCaptureMouse)
+    {
+        return EventProcessState::Handled;
+    }
+    if (event.isInCategory(EEventCategory::Keyboard) && io->WantCaptureKeyboard)
+    {
+        return EventProcessState::Handled;
+    }
     return EventProcessState::Continue;
 }
 
 bool ImGuiManager::isWantInput() const
 {
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     return io.WantCaptureMouse || io.WantCaptureKeyboard;
+}
+
+ImGuiManager &ImGuiManager::get()
+{
+    static ImGuiManager instance;
+    return instance;
+}
+
+void *ImGuiManager::addTexture(void *imageView, void *sampler, int layout)
+{
+    if (!imageView || !sampler) {
+        YA_CORE_ERROR("ImGuiManager::addTexture: Invalid imageView or sampler");
+        return nullptr;
+    }
+
+    // Platform-specific implementation (Vulkan for now)
+    VkDescriptorSet ds = ImGui_ImplVulkan_AddTexture(
+        static_cast<VkSampler>(sampler),
+        static_cast<VkImageView>(imageView),
+        static_cast<VkImageLayout>(layout == 0 ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : layout));
+
+    if (ds == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("ImGuiManager::addTexture: Failed to create descriptor set");
+        return nullptr;
+    }
+
+    return static_cast<void *>(ds);
+}
+
+void ImGuiManager::removeTexture(void *textureID)
+{
+    if (!textureID) {
+        return;
+    }
+
+    // Platform-specific implementation (Vulkan for now)
+    ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(textureID));
 }
 
 } // namespace ya

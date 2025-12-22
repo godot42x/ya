@@ -55,6 +55,8 @@ struct IFrameBuffer
     static stdptr<IFrameBuffer> create(IRender *render, IRenderPass *renderPass, const FrameBufferCreateInfo &createInfo);
 
     virtual bool recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height) = 0;
+
+    virtual stdptr<IImageView> getImageView(uint32_t attachmentIdx) = 0;
 };
 
 } // namespace ya

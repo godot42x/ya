@@ -18,18 +18,21 @@ struct TransformComponent : public IComponent
 
   public:
     [[nodiscard]] const glm::vec3 &getPosition() const { return _position; }
-
-    void setPosition(const glm::vec3 &translation)
+    void                           setPosition(const glm::vec3 &translation)
     {
         _position = translation;
         bDirty    = true;
     }
-    void setRotation(const glm::vec3 &rotation)
+
+    const glm::vec3 &getRotation() const { return _rotation; }
+    void             setRotation(const glm::vec3 &rotation)
     {
         _rotation = rotation;
         bDirty    = true;
     }
-    void setScale(const glm::vec3 &scale)
+
+    const glm::vec3 &getScale() const { return _scale; }
+    void             setScale(const glm::vec3 &scale)
     {
         _scale = scale;
         bDirty = true;
@@ -48,7 +51,7 @@ struct TransformComponent : public IComponent
     }
 
 
-    [[nodiscard]] glm::mat4 getTransform()
+    [[nodiscard]] const glm::mat4 &getTransform()
     {
         calcMatrix();
         return _cachedMatrix;

@@ -32,9 +32,22 @@ namespace ya
  */
 struct ImGuiManager
 {
+  private:
+    ImDrawData *_drawData    = nullptr;
+    bool        _initialized = false;
+    bool        bBlockEvents = false;
+
+
   public:
-    ImGuiManager()  = default;
-    ~ImGuiManager() = default;
+
+    ImGuiManager()                                = default;
+    ImGuiManager(const ImGuiManager &)            = delete;
+    ImGuiManager(ImGuiManager &&)                 = delete;
+    ImGuiManager &operator=(const ImGuiManager &) = delete;
+    ImGuiManager &operator=(ImGuiManager &&)      = delete;
+    ~ImGuiManager()                               = default;
+
+    static ImGuiManager &get();
 
     /**
      * @brief Initialize ImGui with the appropriate backend based on render API
@@ -92,17 +105,32 @@ struct ImGuiManager
      * @return EventProcessState::Handled if ImGui captured the event, Continue otherwise
      */
     EventProcessState processEvents(const SDL_Event &event);
+    EventProcessState processEvent(const Event &event);
 
     /**
      * @brief Check if ImGui wants to capture input
      */
     bool isWantInput() const;
 
-  private:
-    ImDrawData *_drawData    = nullptr;
-    bool        _initialized = false;
-
     void initImGuiCore();
+
+    void setBlockEvents(bool block) { bBlockEvents = block; }
+
+
+    /**
+     * @brief Create ImGui descriptor set for a texture (platform-agnostic wrapper)
+     * @param imageView Platform image view handle (VkImageView)
+     * @param sampler Platform sampler handle (VkSampler)
+     * @param layout Image layout (default: SHADER_READ_ONLY_OPTIMAL)
+     * @return ImTextureID (descriptor set handle)
+     */
+    static void *addTexture(void *imageView, void *sampler, int layout = 0);
+
+    /**
+     * @brief Remove ImGui descriptor set for a texture
+     * @param textureID ImTextureID to remove
+     */
+    static void removeTexture(void *textureID);
 };
 
 // Legacy alias for backward compatibility

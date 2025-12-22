@@ -7,36 +7,28 @@ namespace ya
 {
 struct Scene;
 
-class SceneHierarchyPanel
+struct SceneHierarchyPanel
 {
-
-
-  private:
     Scene *_context       = nullptr;
     Entity _selection     = {};
     Entity _lastSelection = {};
 
   public:
-    SceneHierarchyPanel(Scene *scene)
-    {
-        _context = scene;
-    }
+    SceneHierarchyPanel() = default;
+    explicit SceneHierarchyPanel(Scene *scene) : _context(scene) {}
 
-    void setContext(Scene *&scene);
+    void setContext(Scene *scene) { _context = scene; }
     void onImGuiRender();
 
-    Entity getSelectedEntity() const { return _selection; }
-    void   setSelection(Entity entity);
-
-  private:
-    void drawEntityNode(Entity &entity);
-    void drawComponents(Entity &entity);
-
+    [[nodiscard]] Entity getSelectedEntity() const { return _selection; }
+    void                 setSelection(Entity entity);
 
 
     void sceneTree();
-
     void detailsView();
+
+    void drawEntityNode(Entity &entity);
+    void drawComponents(Entity &entity);
 };
 
 } // namespace ya

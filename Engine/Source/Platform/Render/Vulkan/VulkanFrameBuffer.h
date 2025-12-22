@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "Platform/Render/Vulkan/VulkanImageView.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/FrameBuffer.h"
 #include "VulkanImage.h"
@@ -17,8 +18,8 @@ struct VulkanFrameBuffer : public IFrameBuffer
     uint32_t          width{};
     uint32_t          height{};
 
-    std::vector<std::shared_ptr<VulkanImage>> _images;
-    std::vector<VkImageView>                  _imageViews;
+    std::vector<stdptr<VulkanImage>>     _images;
+    std::vector<stdptr<VulkanImageView>> _imageViews;
 
     VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 
@@ -47,6 +48,11 @@ struct VulkanFrameBuffer : public IFrameBuffer
 
     // Vulkan-specific accessor
     [[nodiscard]] VkFramebuffer getVkHandle() const { return _framebuffer; }
+
+    stdptr<IImageView> getImageView(uint32_t attachmentIdx) override
+    {
+        return _imageViews[attachmentIdx];
+    }
 };
 
 } // namespace ya

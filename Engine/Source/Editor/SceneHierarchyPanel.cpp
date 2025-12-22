@@ -2,15 +2,22 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Scene.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 
-
 namespace ya
 {
+
+void SceneHierarchyPanel::onImGuiRender()
+{
+    sceneTree();
+    detailsView();
+}
 
 void SceneHierarchyPanel::sceneTree()
 {
@@ -27,46 +34,54 @@ void SceneHierarchyPanel::sceneTree()
         for (auto entity : view)
         {
             Entity *ent = _context->getEntityByEnttID(entity);
-            drawEntityNode(*ent);
+            if (ent)
+            {
+                drawEntityNode(*ent);
+            }
         }
     }
 
     // Right-click on blank space to deselect
-    if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
     {
-        _selection = Entity();
+        if (!ImGui::IsAnyItemHovered())
+        {
+            _selection = Entity();
+        }
     }
 
     ImGui::End();
 }
-
 
 void SceneHierarchyPanel::detailsView()
 {
-    // Properties panel
     ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Properties"))
+    if (!ImGui::Begin("Properties"))
     {
-        if (_selection)
-        {
-            drawComponents(_selection);
-        }
+        ImGui::End();
+        return;
     }
-    ImGui::End();
-}
 
-void SceneHierarchyPanel::onImGuiRender()
-{
-    sceneTree();
-    detailsView();
+    if (_selection)
+    {
+        drawComponents(_selection);
+    }
+
+    ImGui::End();
 }
 
 void SceneHierarchyPanel::drawEntityNode(Entity &entity)
 {
-    const char *name     = entity._name.c_str();
+    if (!entity)
+    {
+        return;
+    }
+
+    const char *name     = entity.getName().c_str();
     bool        selected = (entity == _selection);
 
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+                               ImGuiTreeNodeFlags_SpanAvailWidth;
     if (selected)
     {
         flags |= ImGuiTreeNodeFlags_Selected;
@@ -85,11 +100,11 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
     }
 }
 
-template <class T, class UIFunction>
-static void drawComponent(const std::string &name, Entity entity, UIFunction ui_func)
+template <typename T, typename UIFunction>
+static void drawComponent(const std::string &name, Entity entity, UIFunction uiFunc)
 {
     const auto treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen |
-                               ImGuiTreeNodeFlags_AllowItemOverlap |
+                               ImGuiTreeNodeFlags_AllowOverlap |
                                ImGuiTreeNodeFlags_SpanAvailWidth |
                                ImGuiTreeNodeFlags_FramePadding |
                                ImGuiTreeNodeFlags_Framed;
@@ -108,7 +123,8 @@ static void drawComponent(const std::string &name, Entity entity, UIFunction ui_
         ImGui::PopStyleVar();
         ImGui::SameLine(content_region_available.x - line_height * 0.5f);
 
-        if (ImGui::Button("+", ImVec2{line_height, line_height})) {
+        if (ImGui::Button("+", ImVec2{line_height, line_height}))
+        {
             ImGui::OpenPopup("ComponentSettings");
         }
 
@@ -116,7 +132,8 @@ static void drawComponent(const std::string &name, Entity entity, UIFunction ui_
 
         if (ImGui::BeginPopup("ComponentSettings"))
         {
-            if (ImGui::MenuItem("Remove Component")) {
+            if (ImGui::MenuItem("Remove Component"))
+            {
                 bRemoveComponent = true;
             }
             ImGui::EndPopup();
@@ -124,17 +141,16 @@ static void drawComponent(const std::string &name, Entity entity, UIFunction ui_
 
         if (bOpen)
         {
-            ui_func(component);
-
+            uiFunc(component);
             ImGui::TreePop();
         }
 
-        if (bRemoveComponent) {
+        if (bRemoveComponent)
+        {
             entity.removeComponent<T>();
         }
     }
 }
-
 
 void SceneHierarchyPanel::drawComponents(Entity &entity)
 {
@@ -143,7 +159,6 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
         return;
     }
 
-    // Draw entity name at top
     ImGui::Text("Entity ID: %u", entity.getId());
     ImGui::Separator();
 
@@ -153,6 +168,55 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
         bDirty |= ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 0.1f);
         bDirty |= ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f);
         tc->bDirty = bDirty;
+    });
+
+    // if (entity.getScene()
+    //         ->getRegistry()
+    //         .any_of<SimpleMaterialComponent,
+    //                 UnlitMaterialComponent,
+    //                 LitMaterialComponent>(entity.getHandle())) {
+    // }
+
+    drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent *smc) {
+        for (auto [material, meshId] : smc->getMaterial2MeshIDs()) {
+            auto simpleMat = material->as<SimpleMaterial>();
+            bool bDirty    = false;
+            int  colorType = static_cast<int>(simpleMat->colorType);
+            if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
+                simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
+            }
+        }
+    });
+
+    drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent *umc) {
+        for (auto [mat, meshIndex] : umc->getMaterial2MeshIDs()) {
+            ImGui::CollapsingHeader(mat->getLabel().c_str(), 0);
+            ImGui::Indent();
+
+            auto unlitMat = mat->as<UnlitMaterial>();
+            bool bDirty   = false;
+            bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
+            bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
+            bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
+            for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
+                // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                auto &tv    = unlitMat->_textureViews[i];
+                auto  label = tv.texture->getLabel();
+                if (label.empty()) {
+                    label = tv.texture->getFilepath();
+                }
+                ImGui::Text("Texture %d: %s", i, label.c_str());
+                bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+                static constexpr const auto pi = glm::pi<float>();
+                bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+            }
+            if (bDirty) {
+                unlitMat->setParamDirty(true);
+            }
+            ImGui::Unindent();
+        }
     });
 
     drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
@@ -168,11 +232,30 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
             }
         }
     });
+
+    // auto simpleMaterials = MaterialFactory::get()->getMaterials<SimpleMaterial>();
+    // for (auto &mat : simpleMaterials) {
+    //     auto simpleMat = mat->as<SimpleMaterial>();
+    //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, simpleMat->getLabel()).c_str())) {
+    //         int colorType = static_cast<int>(simpleMat->colorType);
+    //         if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
+    //             simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
+    //         }
+    //     }
+    //     ImGui::PopID();
+    //     materialIdx += 1;
+    // }
+    // auto unlitMaterials = MaterialFactory::get()->getMaterials<UnlitMaterial>();
+
+
+
     drawComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {
         bool bDirty = false;
         bDirty |= ImGui::ColorEdit3("Color", glm::value_ptr(plc->_color));
         bDirty |= ImGui::DragFloat("Intensity", &plc->_intensity, 0.1f, 0.0f, 100.0f);
         bDirty |= ImGui::DragFloat("Radius", &plc->_range, 0.1f, 0.0f, 100.0f);
+        // plc.
     });
 }
 

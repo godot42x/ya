@@ -4,6 +4,7 @@
 #include "Core/CameraController.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
+#include "Editor/EditorLayer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
@@ -17,10 +18,10 @@
 namespace ya
 {
 struct SceneManager;
-struct ImGuiManager;
 struct Scene;
 struct Material;
 struct IRenderPass;
+
 } // namespace ya
 
 
@@ -43,6 +44,7 @@ struct AppDesc
     int         height     = 768;
     bool        fullscreen = false;
     std::string defaultScenePath;
+
 
 
     void init(int argc, char **argv)
@@ -88,7 +90,6 @@ struct App
     // Core subsystems
     IRender      *_render       = nullptr;
     SceneManager *_sceneManager = nullptr;
-    ImGuiManager *_imguiManager = nullptr;
 
     std::shared_ptr<IRenderPass>                 _renderpass;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
@@ -123,7 +124,13 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    std::shared_ptr<IRenderTarget> _rt = nullptr;
+    // Render targets
+    std::shared_ptr<IRenderPass>   _sceneRenderPass;   // Scene render pass
+    std::shared_ptr<IRenderTarget> _sceneRT = nullptr; // Offscreen RT for 3D scene
+
+    std::shared_ptr<IRenderTarget> _finalRT = nullptr; // Swapchain RT for ImGui + viewport
+
+    EditorLayer *_editorLayer;
 
   public:
     App()                       = default;
@@ -138,6 +145,7 @@ struct App
     int  iterate(float dt);
     void quit();
     int  processEvent(SDL_Event &event);
+
     template <typename T>
     int dispatchEvent(const T &event)
     {
@@ -145,6 +153,12 @@ struct App
             MessageBus::get()->publish(event);
         }
         return 0;
+    }
+    void renderGUI(float dt)
+    {
+        _editorLayer->onImGuiRender([this, dt]() {
+            this->onRenderGUI(dt);
+        });
     }
 
     void requestQuit() { bRunning = false; }
@@ -159,7 +173,7 @@ struct App
     virtual int  onEvent(const Event &event);
     virtual void onUpdate(float dt);
     virtual void onRender(float dt);
-    virtual void onRenderGUI();
+    virtual void onRenderGUI(float dt);
 
 
 
@@ -167,7 +181,6 @@ struct App
 
     // Getters for subsystems
     [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
-    [[nodiscard]] ImGuiManager *getImGuiManager() const { return _imguiManager; }
 
     [[nodiscard]] IRender *getRender() const { return _render; }
     template <typename T>
@@ -186,7 +199,6 @@ struct App
     }
 
     // temp
-    [[nodiscard]] IRenderTarget      *getRenderTarget() const { return _rt.get(); }
     [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
 
   protected:

@@ -25,19 +25,22 @@ bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> i
     for (int i = 0; i < images.size(); i++)
     {
         bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getVkFormat());
-        _imageViews[i] = VulkanUtils::createImageView(
-            render->getDevice(),
-            _images[i]->getHandle().as<VkImage>(),
-            _images[i]->getVkFormat(),
-            bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+        _imageViews[i] = makeShared<VulkanImageView>(render, _images[i].get(), bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+    }
+
+    std::vector<VkImageView> vkImageViews;
+    vkImageViews.reserve(_imageViews.size());
+    for (auto &iv : _imageViews)
+    {
+        vkImageViews.push_back(iv->getVkImageView());
     }
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = nullptr,
         .renderPass      = renderPass->getVkHandle(),
-        .attachmentCount = static_cast<uint32_t>(_imageViews.size()),
-        .pAttachments    = _imageViews.data(),
+        .attachmentCount = static_cast<uint32_t>(vkImageViews.size()),
+        .pAttachments    = vkImageViews.data(),
         .width           = width,
         .height          = height,
         .layers          = 1,
@@ -57,14 +60,16 @@ bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> i
 void VulkanFrameBuffer::clean()
 {
     VK_DESTROY(Framebuffer, render->getDevice(), _framebuffer);
-    for (auto &imageView : _imageViews)
-    {
-        VK_DESTROY(ImageView, render->getDevice(), imageView);
-    }
-    for (auto &image : _images)
-    {
-        image.reset(); // Reset shared pointers to release resources
-    }
+    _imageViews.clear();
+    _images.clear();
+    // for (auto &imageView : _imageViews)
+    // {
+    //     imageView.reset(); // Reset shared pointers to release resources
+    // }
+    // for (auto &image : _images)
+    // {
+    //     image.reset(); // Reset shared pointers to release resources
+    // }
 }
 
 } // namespace ya

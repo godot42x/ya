@@ -37,8 +37,9 @@ add_requires("assimp", {
 })
 
 -- just for temp debug in runtime
-add_requires("imgui", {
+add_requires("imgui docking", {
     debug = true,
+    system = false,
     configs = {
         sdl3 = true,
         sdl3_gpu = true,

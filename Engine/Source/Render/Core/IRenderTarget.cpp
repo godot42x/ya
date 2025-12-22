@@ -20,13 +20,34 @@ std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass)
 #endif
 }
 
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent)
+std::shared_ptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci)
 {
-#if USE_VULKAN
-    return makeShared<VulkanRenderTarget>(renderPass, frameBufferCount, extent);
-#else
-    #error "Platform not supported"
-#endif
+
+    auto api = App::get()->currentRenderAPI;
+    switch (api) {
+    case ERenderAPI::Vulkan:
+    {
+        stdptr<IRenderTarget> rt;
+        if (ci.bSwapChainTarget) {
+            rt = makeShared<VulkanRenderTarget>(ci.renderPass);
+        }
+        else {
+            rt = makeShared<VulkanRenderTarget>(ci.renderPass, ci.frameBufferCount, ci.extent);
+        }
+        rt->label = ci.label;
+        return rt;
+
+    } break;
+
+    case ERenderAPI::None:
+    case ERenderAPI::OpenGL:
+    case ERenderAPI::DirectX12:
+    case ERenderAPI::Metal:
+    case ERenderAPI::ENUM_MAX:
+        UNREACHABLE();
+        break;
+    }
+    return nullptr;
 }
 
 } // namespace ya

@@ -3,6 +3,7 @@
 
 // Core
 #include "Core/App/FPSCtrl.h"
+#include "Core/App/SDLMisc.h"
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
@@ -10,11 +11,10 @@
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 
+
 // Managers/System
 #include "Core/Subsystem/ReflectionSystem.h"
 #include "ImGuiHelper.h"
-#include "Render/Material/LitMaterial.h"
-#include "Render/Material/UnlitMaterial.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/SceneManager.h"
@@ -93,8 +93,6 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 std::shared_ptr<Mesh> cubeMesh;
 
 
-
-ImguiState imgui;
 
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
 ClearValue depthClearValue = ClearValue(1.0f, 0);
@@ -232,36 +230,29 @@ void App::init(AppDesc ci)
     _windowSize.x = static_cast<float>(winW);
     _windowSize.y = static_cast<float>(winH);
 
-    // Allocate command buffers
+    // Allocate command buffers for swapchain (both scene and UI in same buffer)
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
-    // MARK: RenderPass
 
-    /**
-      In Vulkan:
-        Create render pass and subpass
-        define all attachments,
-        input/color/depth/resolved attachment ref from all attachments
-        and each subpasses dependencies (source -> next)
-     */
-    _renderpass = IRenderPass::create(_render);
-    _renderpass->recreate(RenderPassCreateInfo{
+    // ===== Create Scene RenderPass (Offscreen) =====
+    _sceneRenderPass = IRenderPass::create(_render);
+    _sceneRenderPass->recreate(RenderPassCreateInfo{
         .attachments = {
-            // color to present
+            // Color attachment (will be sampled by ImGui)
             AttachmentDescription{
                 .index          = 0,
-                .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
-                .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
+                .format         = EFormat::R8G8B8A8_UNORM,
+                .samples        = _sampleCount,
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
                 .initialLayout  = EImageLayout::Undefined,
-                .finalLayout    = EImageLayout::PresentSrcKHR,
-                .usage          = EImageUsage::ColorAttachment,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
+                .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             },
-            // depth attachment
+            // Depth attachment
             AttachmentDescription{
                 .index          = 1,
                 .format         = DEPTH_FORMAT,
@@ -281,12 +272,12 @@ void App::init(AppDesc ci)
                 .inputAttachments = {},
                 .colorAttachments = {
                     RenderPassCreateInfo::AttachmentRef{
-                        .ref    = 0, // color attachment
+                        .ref    = 0,
                         .layout = EImageLayout::ColorAttachmentOptimal,
                     },
                 },
                 .depthAttachment = RenderPassCreateInfo::AttachmentRef{
-                    .ref    = 1, // depth attachment
+                    .ref    = 1,
                     .layout = EImageLayout::DepthStencilAttachmentOptimal,
                 },
                 .resolveAttachment = {},
@@ -301,22 +292,77 @@ void App::init(AppDesc ci)
         },
     });
 
-    // Create main render target
-    _rt = ya::createRenderTarget(_renderpass.get());
+    // ===== Create UI RenderPass (Swapchain) =====
+    _renderpass = IRenderPass::create(_render);
+    _renderpass->recreate(RenderPassCreateInfo{
+        .attachments = {
+            // color to present (swapchain)
+            AttachmentDescription{
+                .index          = 0,
+                .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
+                .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::Undefined,
+                .finalLayout    = EImageLayout::PresentSrcKHR,
+                .usage          = EImageUsage::ColorAttachment,
+            },
+        },
+        .subpasses = {
+            RenderPassCreateInfo::SubpassInfo{
+                .subpassIndex     = 0,
+                .inputAttachments = {},
+                .colorAttachments = {
+                    RenderPassCreateInfo::AttachmentRef{
+                        .ref    = 0, // color attachment
+                        .layout = EImageLayout::ColorAttachmentOptimal,
+                    },
+                },
+                .depthAttachment   = {},
+                .resolveAttachment = {},
+            },
+        },
+        .dependencies = {
+            RenderPassCreateInfo::SubpassDependency{
+                .bSrcExternal = true,
+                .srcSubpass   = 0,
+                .dstSubpass   = 0,
+            },
+        },
+    });
+
+    // Create Scene RenderTarget (offscreen for 3D scene)
+    _sceneRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Scene RenderTarget",
+        .bSwapChainTarget = false,
+        .renderPass       = _sceneRenderPass.get(),
+        .frameBufferCount = 1,
+        .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
+    });
 #if !ONLY_2D
-    _rt->addMaterialSystem<SimpleMaterialSystem>();
-    _rt->addMaterialSystem<UnlitMaterialSystem>();
-    _rt->addMaterialSystem<LitMaterialSystem>();
+    _sceneRT->addMaterialSystem<SimpleMaterialSystem>();
+    _sceneRT->addMaterialSystem<UnlitMaterialSystem>();
+    _sceneRT->addMaterialSystem<LitMaterialSystem>();
 #endif
+
+    // Create UI RenderTarget (swapchain for ImGui)
+    _finalRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Final RenderTarget",
+        .bSwapChainTarget = true,
+        .renderPass       = _renderpass.get(),
+    });
 
 #pragma region ImGui Init
     // Initialize ImGui Manager
-    _imguiManager = new ImGuiManager();
-    _imguiManager->init(_render, _renderpass.get());
-    imgui = *_imguiManager; // Legacy compatibility
+    auto &imManager = ImGuiManager::get();
+    imManager.init(_render, _renderpass.get());
 #pragma endregion
 
 
+    _editorLayer = new EditorLayer(this);
+    _editorLayer->onAttach();
 
     {
         YA_PROFILE_SCOPE("Inheritance Init");
@@ -338,7 +384,9 @@ void App::init(AppDesc ci)
 
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    Render2D::init(_render, _renderpass.get());
+    // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
+    // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
+    Render2D::init(_render, _sceneRenderPass.get());
     // wait something done
     _render->waitIdle();
 
@@ -353,11 +401,7 @@ void App::init(AppDesc ci)
 // MARK: INIT
 void App::onInit(AppDesc ci)
 {
-    auto &bus = *MessageBus::get();
-    bus.subscribe<WindowResizeEvent>(this, &App::onWindowResized);
-    bus.subscribe<KeyReleasedEvent>(this, &App::onKeyReleased);
-    bus.subscribe<MouseScrolledEvent>(this, &App::onMouseScrolled);
-
+    // auto &bus = *MessageBus::get();
 
     FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
 
@@ -390,20 +434,75 @@ void App::onPostInit()
 
 int App::onEvent(const Event &event)
 {
-    switch (event.getEventType()) {
+    // YA_CORE_TRACE("Event processed: {}", event.type);
+    EventProcessState ret = ImGuiManager::get().processEvent(event);
+    if (ret != EventProcessState::Continue) {
+        return 0; // ImGui captured the event
+    }
+
+
+    bool      bHandled = false;
+    EEvent::T ty       = event.getEventType();
+    switch (ty) {
     case EEvent::MouseMoved:
     {
-        onMouseMoved(static_cast<const MouseMoveEvent &>(event));
+        bHandled |= onMouseMoved(static_cast<const MouseMoveEvent &>(event));
 
     } break;
     case EEvent::MouseButtonReleased:
     {
-        onMouseButtonReleased(static_cast<const MouseButtonReleasedEvent &>(event));
+        bHandled |= onMouseButtonReleased(static_cast<const MouseButtonReleasedEvent &>(event));
     } break;
-    default:
+    case EEvent::WindowResize:
+    {
+        bHandled |= onWindowResized(static_cast<const WindowResizeEvent &>(event));
+    } break;
+    case EEvent::KeyReleased:
+    {
+        bHandled |= onKeyReleased(static_cast<const KeyReleasedEvent &>(event));
+    } break;
+    case EEvent::MouseScrolled:
+    {
+        bHandled |= onMouseScrolled(static_cast<const MouseScrolledEvent &>(event));
+    } break;
+    case EEvent::None:
+        break;
+    case EEvent::WindowClose:
+        requestQuit();
+        break;
+    case EEvent::WindowRestore:
+        _bMinimized = false;
+        break;
+    case EEvent::WindowMinimize:
+        _bMinimized = true;
+        break;
+    case EEvent::WindowFocus:
+    case EEvent::WindowFocusLost:
+    case EEvent::WindowMoved:
+    case EEvent::AppTick:
+    case EEvent::AppUpdate:
+    case EEvent::AppRender:
+        break;
+    case EEvent::AppQuit:
+        requestQuit();
+        break;
+    case EEvent::KeyPressed:
+    case EEvent::KeyTyped:
+    case EEvent::MouseButtonPressed:
+    case EEvent::EventTypeCount:
+    case EEvent::ENUM_MAX:
         break;
     }
 
+    if (bHandled) {
+        return 0;
+    }
+
+    inputManager.processEvent(event);
+
+    if (bHandled) {
+        return 0;
+    }
 
     UIAppCtx ctx{
         .lastMousePos = _lastMousePos,
@@ -430,20 +529,23 @@ void ya::App::quit()
     Render2D::destroy();
 
     // Cleanup managers
-    if (_imguiManager) {
-        _imguiManager->shutdown();
-        delete _imguiManager;
-        _imguiManager = nullptr;
+    // if (ImGuiManager::get()) {
+    ImGuiManager::get().shutdown();
+    // }
+
+    // Cleanup render targets before render passes (dependency order)
+    if (_sceneRT) {
+        _sceneRT->destroy();
+        _sceneRT.reset();
     }
 
-    // TODO: manage by render or render-context
-    // Cleanup render target before render pass (dependency order)
-    if (_rt) {
-        _rt->destroy();
-        _rt.reset();
+    if (_finalRT) {
+        _finalRT->destroy();
+        _finalRT.reset();
     }
 
-    _renderpass.reset(); // shared_ptr, use reset() instead of delete
+    _renderpass.reset();
+    _sceneRenderPass.reset();
 
     TextureLibrary::destroy();
     FontManager::get()->cleanup();
@@ -452,6 +554,7 @@ void ya::App::quit()
     if (_render) {
         _render->waitIdle();
         _commandBuffers.clear();
+
         _render->destroy();
         delete _render;
         _render = nullptr;
@@ -491,206 +594,11 @@ int ya::App::run()
 
 int ya::App::processEvent(SDL_Event &event)
 {
-    // TODO: refactor event system
-    //  use bus to dispatch event to each system or subsystems is great
-    // but  there is not serial order for processing events
-    // for example: imgui want to capture mouse/keyboard event first
-    // if subscribe it in imgui's obj, it may be after other systems
 
-    // YA_CORE_TRACE("Event processed: {}", event.type);
-    EventProcessState ret = imgui.processEvents(event);
-    if (ret != EventProcessState::Continue) {
-        return 0;
-    }
-    inputManager.processEvent(event);
-
-#pragma region Sdl Event
-
-    switch (SDL_EventType(event.type))
-    {
-    case SDL_EVENT_FIRST:
-        break;
-    case SDL_EVENT_QUIT:
-    {
-        requestQuit();
-        return 1;
-    } break;
-    case SDL_EVENT_TERMINATING:
-    case SDL_EVENT_LOW_MEMORY:
-    case SDL_EVENT_WILL_ENTER_BACKGROUND:
-    case SDL_EVENT_DID_ENTER_BACKGROUND:
-    case SDL_EVENT_WILL_ENTER_FOREGROUND:
-    case SDL_EVENT_DID_ENTER_FOREGROUND:
-    case SDL_EVENT_LOCALE_CHANGED:
-    case SDL_EVENT_SYSTEM_THEME_CHANGED:
-    case SDL_EVENT_DISPLAY_ORIENTATION:
-    case SDL_EVENT_DISPLAY_ADDED:
-    case SDL_EVENT_DISPLAY_REMOVED:
-    case SDL_EVENT_DISPLAY_MOVED:
-    case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED:
-    case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
-    case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
-    case SDL_EVENT_WINDOW_SHOWN:
-    case SDL_EVENT_WINDOW_HIDDEN:
-    case SDL_EVENT_WINDOW_EXPOSED:
-    case SDL_EVENT_WINDOW_MOVED:
-        break;
-    case SDL_EVENT_WINDOW_RESIZED:
-    {
-        dispatchEvent(WindowResizeEvent(event.window.windowID, event.window.data1, event.window.data2));
-    } break;
-    case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-    case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-        break;
-    case SDL_EVENT_WINDOW_MINIMIZED:
-    {
-        YA_CORE_INFO("Window minimized");
-        _bMinimized = true;
-    } break;
-    case SDL_EVENT_WINDOW_MAXIMIZED:
-    case SDL_EVENT_WINDOW_RESTORED:
-    {
-        YA_CORE_INFO("Window restored/maximized");
-        _bMinimized = false;
-    } break;
-    case SDL_EVENT_WINDOW_MOUSE_ENTER:
-    case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-        break;
-    case SDL_EVENT_WINDOW_FOCUS_GAINED:
-    {
-        dispatchEvent(WindowFocusEvent(event.window.windowID));
-    } break;
-    case SDL_EVENT_WINDOW_FOCUS_LOST:
-    {
-        dispatchEvent(WindowFocusLostEvent(event.window.windowID));
-    } break;
-    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-    {
-        requestQuit();
-        return 1;
-    } break;
-    case SDL_EVENT_WINDOW_HIT_TEST:
-    case SDL_EVENT_WINDOW_ICCPROF_CHANGED:
-    case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
-    case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
-    case SDL_EVENT_WINDOW_SAFE_AREA_CHANGED:
-    case SDL_EVENT_WINDOW_OCCLUDED:
-    case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
-    case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
-    case SDL_EVENT_WINDOW_DESTROYED:
-    case SDL_EVENT_WINDOW_HDR_STATE_CHANGED:
-    case SDL_EVENT_KEY_DOWN:
-    {
-        KeyPressedEvent ev;
-        ev._keyCode = (enum EKey::T)event.key.key;
-        ev._mod     = event.key.mod;
-        ev.bRepeat  = event.key.repeat; // SDL3中的repeat字段
-        dispatchEvent(ev);
-    } break;
-    case SDL_EVENT_KEY_UP:
-    {
-        KeyReleasedEvent ev;
-        ev._keyCode = static_cast<EKey::T>(event.key.key);
-        ev._mod     = event.key.mod;
-        dispatchEvent(ev);
-    } break;
-    case SDL_EVENT_TEXT_EDITING:
-    case SDL_EVENT_TEXT_INPUT:
-    case SDL_EVENT_KEYMAP_CHANGED:
-    case SDL_EVENT_KEYBOARD_ADDED:
-    case SDL_EVENT_KEYBOARD_REMOVED:
-    case SDL_EVENT_TEXT_EDITING_CANDIDATES:
-    case SDL_EVENT_MOUSE_MOTION:
-    {
-        MouseMoveEvent ev(event.motion.x, event.motion.y);
-        // Global size from the window top-left
-        // YA_CORE_INFO("Mouse Move: {}, {}", event.motion.x, event.motion.y);
-        dispatchEvent(ev);
-    } break;
-    case SDL_EVENT_MOUSE_BUTTON_DOWN:
-    {
-        MouseButtonPressedEvent ev(event.button.button);
-        dispatchEvent(ev);
-
-    } break;
-    case SDL_EVENT_MOUSE_BUTTON_UP:
-    {
-        MouseButtonReleasedEvent ev(event.button.button);
-        dispatchEvent(ev);
-
-    } break;
-    case SDL_EVENT_MOUSE_WHEEL:
-    {
-        MouseScrolledEvent ev;
-        ev._offsetX = event.wheel.x;
-        ev._offsetY = event.wheel.y;
-        dispatchEvent(ev);
-    } break;
-    case SDL_EVENT_MOUSE_ADDED:
-    case SDL_EVENT_MOUSE_REMOVED:
-    case SDL_EVENT_JOYSTICK_AXIS_MOTION:
-    case SDL_EVENT_JOYSTICK_BALL_MOTION:
-    case SDL_EVENT_JOYSTICK_HAT_MOTION:
-    case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
-    case SDL_EVENT_JOYSTICK_BUTTON_UP:
-    case SDL_EVENT_JOYSTICK_ADDED:
-    case SDL_EVENT_JOYSTICK_REMOVED:
-    case SDL_EVENT_JOYSTICK_BATTERY_UPDATED:
-    case SDL_EVENT_JOYSTICK_UPDATE_COMPLETE:
-    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-    case SDL_EVENT_GAMEPAD_BUTTON_UP:
-    case SDL_EVENT_GAMEPAD_ADDED:
-    case SDL_EVENT_GAMEPAD_REMOVED:
-    case SDL_EVENT_GAMEPAD_REMAPPED:
-    case SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN:
-    case SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION:
-    case SDL_EVENT_GAMEPAD_TOUCHPAD_UP:
-    case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
-    case SDL_EVENT_GAMEPAD_UPDATE_COMPLETE:
-    case SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED:
-    case SDL_EVENT_FINGER_DOWN:
-    case SDL_EVENT_FINGER_UP:
-    case SDL_EVENT_FINGER_MOTION:
-    case SDL_EVENT_FINGER_CANCELED:
-    case SDL_EVENT_CLIPBOARD_UPDATE:
-    case SDL_EVENT_DROP_FILE:
-    case SDL_EVENT_DROP_TEXT:
-    case SDL_EVENT_DROP_BEGIN:
-    case SDL_EVENT_DROP_COMPLETE:
-    case SDL_EVENT_DROP_POSITION:
-    case SDL_EVENT_AUDIO_DEVICE_ADDED:
-    case SDL_EVENT_AUDIO_DEVICE_REMOVED:
-    case SDL_EVENT_AUDIO_DEVICE_FORMAT_CHANGED:
-    case SDL_EVENT_SENSOR_UPDATE:
-    case SDL_EVENT_PEN_PROXIMITY_IN:
-    case SDL_EVENT_PEN_PROXIMITY_OUT:
-    case SDL_EVENT_PEN_DOWN:
-    case SDL_EVENT_PEN_UP:
-    case SDL_EVENT_PEN_BUTTON_DOWN:
-    case SDL_EVENT_PEN_BUTTON_UP:
-    case SDL_EVENT_PEN_MOTION:
-    case SDL_EVENT_PEN_AXIS:
-    case SDL_EVENT_CAMERA_DEVICE_ADDED:
-    case SDL_EVENT_CAMERA_DEVICE_REMOVED:
-    case SDL_EVENT_CAMERA_DEVICE_APPROVED:
-    case SDL_EVENT_CAMERA_DEVICE_DENIED:
-    case SDL_EVENT_RENDER_TARGETS_RESET:
-    case SDL_EVENT_RENDER_DEVICE_RESET:
-    case SDL_EVENT_RENDER_DEVICE_LOST:
-    case SDL_EVENT_PRIVATE0:
-    case SDL_EVENT_PRIVATE1:
-    case SDL_EVENT_PRIVATE2:
-    case SDL_EVENT_PRIVATE3:
-    case SDL_EVENT_POLL_SENTINEL:
-    case SDL_EVENT_USER:
-    case SDL_EVENT_LAST:
-    case SDL_EVENT_ENUM_PADDING:
-        break;
-    }
-#pragma endregion
-
-
+    processSDLEvent(
+        event,
+        [this](const auto &e) { this->dispatchEvent(e); },
+        [](const auto &e) { ImGuiManager::get().processEvents(e); });
     return 0;
 };
 
@@ -699,10 +607,7 @@ int ya::App::iterate(float dt)
 {
     SDL_Event evt;
     SDL_PollEvent(&evt);
-
-    if (auto result = processEvent(evt); result != 0) {
-        return 1;
-    }
+    processEvent(evt);
 
     dt += FPSControl::get()->update(dt);
 
@@ -727,16 +632,16 @@ void App::onUpdate(float dt)
 {
     inputManager.update();
 
-    _rt->setColorClearValue(colorClearValue);
-    _rt->setDepthStencilClearValue(depthClearValue);
-    _rt->onUpdate(dt);
+    _sceneRT->setColorClearValue(colorClearValue);
+    _sceneRT->setDepthStencilClearValue(depthClearValue);
+    _sceneRT->onUpdate(dt);
 
-    auto cam = _rt->getCameraMut();
+    auto cam = _sceneRT->getCameraMut();
 
     cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
     if (cam && cam->hasComponent<CameraComponent>()) {
         auto            cc  = cam->getComponent<CameraComponent>();
-        const Extent2D &ext = _rt->getExtent();
+        const Extent2D &ext = _sceneRT->getExtent();
         if (cam->hasComponent<TransformComponent>()) {
             auto tc = cam->getComponent<TransformComponent>();
             orbitCameraController.update(*tc, *cc, inputManager, ext);
@@ -758,180 +663,175 @@ void App::onRender(float dt)
         return;
     }
 
+    // ===== Get swapchain image index =====
     int32_t imageIndex = -1;
     if (!render->begin(&imageIndex)) {
         return;
     }
 
-    // Skip rendering if imageIndex is invalid (e.g., window minimized during swapchain recreation)
     if (imageIndex < 0) {
         YA_CORE_WARN("Invalid image index ({}), skipping frame render", imageIndex);
         return;
     }
 
-    // 2. begin command buffer
-    auto curCmdBuf = _commandBuffers[imageIndex];
-    curCmdBuf->reset();
-    curCmdBuf->begin();
-
-    // Get native command buffer handle for render operations
-    CommandBufferHandle cmdBufHandle = curCmdBuf->getHandle();
-
-    // 3 begin render pass && bind frame buffer
-    // TODO: subpasses?
-    _rt->begin(curCmdBuf.get());
-    _rt->onRender(curCmdBuf.get());
-    // _rt->getRenderPass()->beginDynamicRendering();
-
-    static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
-    static glm::vec3 pos2 = glm::vec3(100.f, 100.f, 0.f);
-    static glm::vec3 pos3 = glm::vec3(500.f, 500.f, 0.f);
-    static glm::vec3 pos4 = glm::vec3(-500.f, -500.f, 0.f);
-
-    // MARK: Render2D
-    Render2D::begin(curCmdBuf.get());
-    if (_appMode == AppMode::Drawing) {
-        for (const auto &&[idx, p] : ut::enumerate(clicked))
-        {
-            auto tex = idx % 2 == 0
-                         ? AssetManager::get()->getTextureByName("uv1")
-                         : AssetManager::get()->getTextureByName("face");
-            YA_CORE_ASSERT(tex, "Texture not found");
-
-            Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
-        }
-    }
-    auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-    Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
-    UIManager::get()->render();
-    Render2D::end();
-
-
-#pragma region ImGui
-    imgui.beginFrame();
+    // ===== Single CommandBuffer for both Scene and UI Passes =====
+    auto cmdBuf = _commandBuffers[imageIndex];
     {
-        if (ImGui::CollapsingHeader("Render 2D", 0)) {
-            ImGui::Indent();
-            ImGui::DragFloat3("pos1", glm::value_ptr(pos1), 0.1f);
-            ImGui::DragFloat3("pos2", glm::value_ptr(pos2), 1.f);
-            ImGui::DragFloat3("pos3", glm::value_ptr(pos3), 1.f);
-            ImGui::DragFloat3("pos4", glm::value_ptr(pos4), 1.f);
-            Render2D::onRenderGUI();
-            ImGui::Unindent();
-        }
+        cmdBuf->reset();
+        cmdBuf->begin();
 
+        // --- MARK: PASS 1: Render 3D Scene to Offscreen RT ---
+        _sceneRT->begin(cmdBuf.get());
+        _sceneRT->onRender(cmdBuf.get());
 
-        if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
-            float fps = 1.0f / dt;
-            ImGui::Text("%s", std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f}", _frameIndex, dt * 1000.0f, fps).data());
-            static int count = 0;
-            if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
-                count++;
-                YA_CORE_INFO("=====================================");
-            }
+        // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
+        Render2D::begin(cmdBuf.get());
+        {
+            static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
 
-            // ImGui::DragFloat("Texture Mix Alpha", &pushData.textureMixAlpha, 0.01, 0, 1);
-
-            auto *swapchain = render->getSwapchain();
-            bool  bVsync    = swapchain->getVsync();
-            if (ImGui::Checkbox("VSync", &bVsync)) {
-                taskManager.registerFrameTask([swapchain, bVsync]() {
-                    // TODO :bind dirty link
-                    swapchain->setVsync(bVsync);
-                });
-            }
-
-
-            EPresentMode::T presentMode  = swapchain->getPresentMode();
-            const char     *presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
-            if (ImGui::Combo("Present Mode", reinterpret_cast<int *>(&presentMode), presentModes)) {
-                taskManager.registerFrameTask([swapchain, presentMode]() {
-                    // TODO :bind dirty link
-                    swapchain->setPresentMode(presentMode);
-                });
-            }
-
-            AppMode mode = _appMode;
-            if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
-                _appMode = mode;
-            }
-            std::string clickedPoints;
-            for (const auto &p : clicked) {
-                clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
-            }
-            ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
-
-            if (ImGui::Button("Deserialize Scene"))
-            {
-                auto sceneManager = ya::App::get()->getSceneManager();
-                YA_CORE_ASSERT(sceneManager, "SceneManager is null");
-                sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
-                                              getSceneManager()->getCurrentScene());
-            }
-        }
-        onRenderGUI();
-
-
-        imcEditorCamera(camera);
-        imcClearValues();
-        imcFpsControl(*FPSControl::get());
-        // static bool bItemPicker = false;
-        // ImGui::Checkbox("Debug Picker", &bItemPicker);
-        // if (bItemPicker) {
-        //     ImGui::DebugStartItemPicker();
-        // }
-        static bool bDarkMode = true;
-        if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
-            if (bDarkMode) {
-                ImGui::StyleColorsDark();
-            }
-            else {
-                ImGui::StyleColorsLight();
-            }
-        }
-        auto *scene = getScene();
-        if (scene) {
-            if (auto *random = scene->getEntityByID(10); random && random->hasComponent<TransformComponent>()) {
-                auto tc = random->getComponent<TransformComponent>();
-
-                if (ImGui::CollapsingHeader("Random Cube Transform", 0)) {
-                    ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
-                    ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 1.f);
-                    // TODO: Fix this - glm::value_ptr issue
-                    // ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f, 0.1f);
-                    float scale[3] = {tc->_scale.x, tc->_scale.y, tc->_scale.z};
-                    if (ImGui::DragFloat3("Scale", scale, 0.1f, 0.1f)) {
-                        tc->setScale(glm::vec3(scale[0], scale[1], scale[2]));
-                    }
+            if (_appMode == AppMode::Drawing) {
+                for (const auto &&[idx, p] : ut::enumerate(clicked))
+                {
+                    auto tex = idx % 2 == 0
+                                 ? AssetManager::get()->getTextureByName("uv1")
+                                 : AssetManager::get()->getTextureByName("face");
+                    YA_CORE_ASSERT(tex, "Texture not found");
+                    Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
                 }
-
-                tc->bDirty = true;
             }
+
+            auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
+            Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
+
+            UIManager::get()->render();
+            Render2D::onRenderGUI();
         }
-        imcDrawMaterials();
+        Render2D::end();
+
+        _sceneRT->end(cmdBuf.get());
+
+        // --- MARK: PASS 2: Render UI to Swapchain RT ---
+        _finalRT->begin(cmdBuf.get());
+
+        // Render ImGui
+        auto &imManager = ImGuiManager::get();
+        imManager.beginFrame();
+
+        App::renderGUI(dt);
+
+        // imcDrawMaterials();
+        imManager.endFrame();
+        imManager.render();
+
+        if (render->getAPI() == ERenderAPI::Vulkan) {
+            imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
+        }
+
+        _finalRT->end(cmdBuf.get());
     }
-    imgui.endFrame();
-    imgui.render();
-    // TODO: Abstract ImGui submission for multi-backend support
-    if (render->getAPI() == ERenderAPI::Vulkan) {
-        imgui.submitVulkan(curCmdBuf->getHandleAs<VkCommandBuffer>());
+
+    cmdBuf->end();
+
+    // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
+    render->submitToQueue(
+        {cmdBuf->getHandle()},
+        {render->getCurrentImageAvailableSemaphore()},    // Wait for swapchain image
+        {render->getRenderFinishedSemaphore(imageIndex)}, // Signal when all rendering done
+        render->getCurrentFrameFence());                  // Signal fence when done
+
+    // ===== Present: Wait on renderFinished =====
+    int result = render->presentImage(imageIndex, {render->getRenderFinishedSemaphore(imageIndex)});
+
+    // Check for swapchain recreation needed
+    if (result == 2 /* VK_SUBOPTIMAL_KHR */) {
+        YA_CORE_INFO("Swapchain suboptimal detected in App, will recreate next frame");
     }
 
-
-#pragma endregion
-
-    // TODO: subpasses?
-    _rt->end(curCmdBuf.get());
-    curCmdBuf->end();
-
-    render->end(imageIndex, {cmdBufHandle});
+    // Advance to next frame
+    render->advanceFrame();
 }
 
-
-void App::onRenderGUI()
+void App::onRenderGUI(float dt)
 {
-    _rt->onRenderGUI();
+    auto &io = ImGui::GetIO();
+    if (!ImGui::Begin("App Info"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Render 2D", 0)) {
+        ImGui::Indent();
+        // temp code here to adopt to new Render2D
+        Render2D::onImGui();
+        ImGui::Unindent();
+    }
+
+    _sceneRT->onRenderGUI();
+    _finalRT->onRenderGUI();
+
+    if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float fps = 1.0f / dt;
+        ImGui::Text("%s", std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f}", _frameIndex, dt * 1000.0f, fps).data());
+        static int count = 0;
+        if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
+            count++;
+            YA_CORE_INFO("=====================================");
+        }
+
+        auto *swapchain = _render->getSwapchain();
+        bool  bVsync    = swapchain->getVsync();
+        if (ImGui::Checkbox("VSync", &bVsync)) {
+            taskManager.registerFrameTask([swapchain, bVsync]() {
+                swapchain->setVsync(bVsync);
+            });
+        }
+
+        EPresentMode::T presentMode  = swapchain->getPresentMode();
+        const char     *presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
+        if (ImGui::Combo("Present Mode", reinterpret_cast<int *>(&presentMode), presentModes)) {
+            taskManager.registerFrameTask([swapchain, presentMode]() {
+                swapchain->setPresentMode(presentMode);
+            });
+        }
+
+        AppMode mode = _appMode;
+        if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
+            _appMode = mode;
+        }
+
+        std::string clickedPoints;
+        for (const auto &p : clicked) {
+            clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
+        }
+        ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
+
+        if (ImGui::Button("Deserialize Scene"))
+        {
+            auto sceneManager = ya::App::get()->getSceneManager();
+            YA_CORE_ASSERT(sceneManager, "SceneManager is null");
+            sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
+                                          getSceneManager()->getCurrentScene());
+        }
+    }
+
+    imcEditorCamera(camera);
+    imcClearValues();
+    imcFpsControl(*FPSControl::get());
+
+    static bool bDarkMode = true;
+    if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
+        if (bDarkMode) {
+            ImGui::StyleColorsDark();
+        }
+        else {
+            ImGui::StyleColorsLight();
+        }
+    }
+
+    ImGui::End();
 }
+
 
 // MARK: Scene
 bool App::loadScene(const std::string &path)
@@ -952,6 +852,7 @@ bool App::unloadScene()
 
 void App::onSceneInit(Scene *scene)
 {
+    _editorLayer->setSceneContext(scene);
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
 
@@ -965,7 +866,7 @@ void App::onSceneInit(Scene *scene)
     cam->addComponent<TransformComponent>();
     cam->addComponent<CameraComponent>();
     cam->addComponent<SimpleMaterialComponent>();
-    _rt->setCamera(cam);
+    _sceneRT->setCamera(cam);
 
     YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
     YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
@@ -1022,7 +923,7 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
 {
     float sensitivity = 0.5f;
-    auto  cam         = _rt->getCameraMut();
+    auto  cam         = _sceneRT->getCameraMut();
     auto  cc          = cam->getComponent<CameraComponent>();
     // up is +, and down is -, up is close so -=
     cc->_distance = cc->_distance -= event._offsetY * sensitivity;
@@ -1031,80 +932,80 @@ bool App::onMouseScrolled(const MouseScrolledEvent &event)
 
 void App::imcDrawMaterials()
 {
-    if (!ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-    ImGui::Indent();
+    // if (!ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+    //     return;
+    // }
+    // ImGui::Indent();
 
-    uint32_t materialIdx = 0;
+    // uint32_t materialIdx = 0;
 
-    auto simpleMaterials = MaterialFactory::get()->getMaterials<SimpleMaterial>();
-    for (auto &mat : simpleMaterials) {
-        auto simpleMat = mat->as<SimpleMaterial>();
-        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
-        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, simpleMat->getLabel()).c_str())) {
-            int colorType = static_cast<int>(simpleMat->colorType);
-            if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
-                simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
-            }
-        }
-        ImGui::PopID();
-        materialIdx += 1;
-    }
-    auto unlitMaterials = MaterialFactory::get()->getMaterials<UnlitMaterial>();
-
-    // auto type1 = MaterialFactory::getTypeID<UnlitMaterial>();
-    // auto type2 = MaterialFactory::getTypeID<SimpleMaterial>();
-    // ImGui::Text("Count %d, %d", simpleMaterials.size(), unlitMaterials.size());
-    // ImGui::Text("TypeID %zu, %zu", type1, type2);
-
-
-    for (auto &mat : unlitMaterials) {
-        ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
-        auto unlitMat = mat->as<UnlitMaterial>();
-        if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, unlitMat->getLabel()).c_str())) {
-            bool bDirty = false;
-            bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
-            bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
-            bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
-            for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
-                // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                auto &tv    = unlitMat->_textureViews[i];
-                auto  label = tv.texture->getLabel();
-                if (label.empty()) {
-                    label = tv.texture->getFilepath();
-                }
-                ImGui::Text("Texture %d: %s", i, label.c_str());
-                bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
-                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
-                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
-                static constexpr const auto pi = glm::pi<float>();
-                bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
-            }
-            if (bDirty) {
-                unlitMat->setParamDirty(true);
-            }
-        }
-        ImGui::PopID();
-        materialIdx += 1;
-    }
-
-    // auto litMaterials = MaterialFactory::get()->getMaterials<LitMaterial>();
-    // for (auto &mat : litMaterials) {
+    // auto simpleMaterials = MaterialFactory::get()->getMaterials<SimpleMaterial>();
+    // for (auto &mat : simpleMaterials) {
+    //     auto simpleMat = mat->as<SimpleMaterial>();
     //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
-    //     auto litMat = mat->as<LitMaterial>();
-    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, litMat->getLabel()).c_str())) {
+    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, simpleMat->getLabel()).c_str())) {
+    //         int colorType = static_cast<int>(simpleMat->colorType);
+    //         if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
+    //             simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
+    //         }
+    //     }
+    //     ImGui::PopID();
+    //     materialIdx += 1;
+    // }
+    // auto unlitMaterials = MaterialFactory::get()->getMaterials<UnlitMaterial>();
+
+    // // auto type1 = MaterialFactory::getTypeID<UnlitMaterial>();
+    // // auto type2 = MaterialFactory::getTypeID<SimpleMaterial>();
+    // // ImGui::Text("Count %d, %d", simpleMaterials.size(), unlitMaterials.size());
+    // // ImGui::Text("TypeID %zu, %zu", type1, type2);
+
+
+    // for (auto &mat : unlitMaterials) {
+    //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+    //     auto unlitMat = mat->as<UnlitMaterial>();
+    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, unlitMat->getLabel()).c_str())) {
     //         bool bDirty = false;
-    //         bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
+    //         bDirty |= ImGui::DragFloat3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0), 0.1f);
+    //         bDirty |= ImGui::DragFloat3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1), 0.1f);
+    //         bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
+    //         for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
+    //             // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    //             auto &tv    = unlitMat->_textureViews[i];
+    //             auto  label = tv.texture->getLabel();
+    //             if (label.empty()) {
+    //                 label = tv.texture->getFilepath();
+    //             }
+    //             ImGui::Text("Texture %d: %s", i, label.c_str());
+    //             bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+    //             bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+    //             bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+    //             static constexpr const auto pi = glm::pi<float>();
+    //             bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+    //         }
     //         if (bDirty) {
-    //             litMat->setParamDirty(true);
+    //             unlitMat->setParamDirty(true);
     //         }
     //     }
     //     ImGui::PopID();
     //     materialIdx += 1;
     // }
 
-    ImGui::Unindent();
+    // // auto litMaterials = MaterialFactory::get()->getMaterials<LitMaterial>();
+    // // for (auto &mat : litMaterials) {
+    // //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
+    // //     auto litMat = mat->as<LitMaterial>();
+    // //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, litMat->getLabel()).c_str())) {
+    // //         bool bDirty = false;
+    // //         bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
+    // //         if (bDirty) {
+    // //             litMat->setParamDirty(true);
+    // //         }
+    // //     }
+    // //     ImGui::PopID();
+    // //     materialIdx += 1;
+    // // }
+
+    // ImGui::Unindent();
 }
 
 void App::handleSystemSignals()

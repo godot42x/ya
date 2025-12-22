@@ -76,6 +76,10 @@ void VulkanRenderTarget::recreate()
     {
         return;
     }
+
+    // Notify listeners before clearing framebuffers (so they can cleanup old ImageView references)
+    onFrameBufferRecreated.broadcast();
+
     _frameBuffers.clear();
     _frameBuffers.resize(_frameBufferCount);
 
@@ -164,15 +168,18 @@ void VulkanRenderTarget::onUpdate(float deltaTime)
 
 void VulkanRenderTarget::onRenderGUI()
 {
-    ImGui::CollapsingHeader("VulkanRenderTarget", ImGuiTreeNodeFlags_DefaultOpen);
-    if (ImGui::Checkbox("Use Entity Camera", &bEntityCamera)) {
-        if (bEntityCamera) {
-            // copy transform from app camera to entity camera
+    ImGui::PushID(label.c_str());
+    if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Checkbox("Use Entity Camera", &bEntityCamera)) {
+            if (bEntityCamera) {
+                // copy transform from app camera to entity camera
+            }
+        }
+        for (auto &system : _materialSystems) {
+            system->renderGUI();
         }
     }
-    for (auto &system : _materialSystems) {
-        system->renderGUI();
-    }
+    ImGui::PopID();
 }
 
 void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)

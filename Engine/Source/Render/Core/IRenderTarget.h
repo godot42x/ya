@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Delegate.h"
 #include "ECS/Entity.h"
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/CommandBuffer.h"
@@ -7,6 +8,7 @@
 #include "Render/Core/RenderPass.h"
 #include "Render/RenderDefines.h"
 #include <memory>
+
 
 namespace ya
 {
@@ -18,8 +20,16 @@ namespace ya
  */
 struct IRenderTarget
 {
-    Extent2D _extent = {0, 0};
-    bool     bDirty  = false;
+    std::string label   = "None";
+    Extent2D    _extent = {0, 0};
+    bool        bDirty  = false;
+
+
+    /**
+     * @brief Triggered when framebuffer is recreated (e.g., resize, format change)
+     * Listeners should invalidate any cached ImageView references
+     */
+    MulticastDelegate<void()> onFrameBufferRecreated;
 
     IRenderTarget()          = default;
     virtual ~IRenderTarget() = default;
@@ -126,20 +136,17 @@ struct IRenderTarget
     virtual void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) = 0;
 };
 
-/**
- * @brief Factory function to create a platform-specific render target
- * @param renderPass The render pass to use
- * @return Platform-specific render target instance
- */
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass);
 
-/**
- * @brief Factory function to create a platform-specific render target with custom size
- * @param renderPass The render pass to use
- * @param frameBufferCount Number of framebuffers
- * @param extent Size of the render target
- * @return Platform-specific render target instance
- */
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
+
+struct RenderTargetCreateInfo
+{
+    std::string  label;
+    bool         bSwapChainTarget;
+    IRenderPass *renderPass       = nullptr;
+    uint32_t     frameBufferCount = 1;
+    glm::vec2    extent           = {800.f, 600.f};
+};
+
+extern stdptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci);
 
 } // namespace ya

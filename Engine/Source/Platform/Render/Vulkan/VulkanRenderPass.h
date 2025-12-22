@@ -46,14 +46,14 @@ struct VulkanRenderPass : public ya::IRenderPass
     void cleanup();
 
     // IRenderPass interface
-    void begin(
-        ya::ICommandBuffer            *commandBuffer,
-        void                          *framebuffer,
-        const Extent2D                &extent,
-        const std::vector<ClearValue> &clearValues) override;
-    void                                          end(ya::ICommandBuffer *commandBuffer) override;
-    void                                         *getHandle() const override { return (void *)(uintptr_t)m_renderPass; }
-    EFormat::T                                    getDepthFormat() const override;
+    void       begin(ya::ICommandBuffer            *commandBuffer,
+                     void                          *framebuffer,
+                     const Extent2D                &extent,
+                     const std::vector<ClearValue> &clearValues) override;
+    void       end(ya::ICommandBuffer *commandBuffer) override;
+    void      *getHandle() const override { return (void *)(uintptr_t)m_renderPass; }
+    EFormat::T getDepthFormat() const override;
+
     uint32_t                                      getAttachmentCount() const override { return static_cast<uint32_t>(_ci.attachments.size()); }
     const std::vector<ya::AttachmentDescription> &getAttachments() const override { return _ci.attachments; }
     const ya::RenderPassCreateInfo               &getCreateInfo() const override { return _ci; }
