@@ -49,6 +49,9 @@ class EditorLayer
     std::function<void()> _contentFunc;
 
   public:
+    Delegate<void(Rect2D)> onViewportResized;
+
+  public:
     EditorLayer(App *app);
     ~EditorLayer() = default;
 

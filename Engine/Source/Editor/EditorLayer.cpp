@@ -28,15 +28,15 @@ void EditorLayer::onAttach()
     }
 
     // Subscribe to RenderTarget recreation events to cleanup stale ImageView references
-    if (_app->_sceneRT) {
-        _app->_sceneRT->onFrameBufferRecreated.addLambda(this, [this]() {
+    if (_app->_viewportRT) {
+        _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
             YA_CORE_INFO("EditorLayer: Scene RT recreated, cleaning up ImGui texture cache");
             cleanupImGuiTextures();
         });
     }
 
-    if (_app->_finalRT) {
-        _app->_finalRT->onFrameBufferRecreated.addLambda(this, [this]() {
+    if (_app->_screenRT) {
+        _app->_screenRT->onFrameBufferRecreated.addLambda(this, [this]() {
             YA_CORE_INFO("EditorLayer: UI RT recreated, cleaning up ImGui texture cache");
             cleanupImGuiTextures();
         });
@@ -226,28 +226,31 @@ void EditorLayer::toolbar()
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.6f, 0.6f, 0.5f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.5f));
 
-    if (ImGui::Begin("##toolbar",
-                     nullptr,
-                     ImGuiWindowFlags_NoTitleBar |
-                         ImGuiWindowFlags_NoDecoration |
-                         ImGuiWindowFlags_NoScrollbar |
-                         ImGuiWindowFlags_NoScrollWithMouse |
-                         ImGuiWindowFlags_NoResize))
+    if (!ImGui::Begin("##toolbar",
+                      nullptr,
+                      ImGuiWindowFlags_NoTitleBar |
+                          ImGuiWindowFlags_NoDecoration |
+                          ImGuiWindowFlags_NoScrollbar |
+                          ImGuiWindowFlags_NoScrollWithMouse |
+                          ImGuiWindowFlags_NoResize))
     {
-        float size = ImGui::GetWindowHeight() - 4.0f;
-
-        ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
-
-        if (ImGui::Button("Play", ImVec2(size * 2, size)))
-        {
-            // TODO: Play scene
-        }
 
         ImGui::End();
+        return;
+    }
+
+    float size = ImGui::GetWindowHeight() - 4.0f;
+
+    ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
+
+    if (ImGui::Button("Play", ImVec2(size * 2, size)))
+    {
+        // TODO: Play scene
     }
 
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(3);
+    ImGui::End();
 }
 
 // void EditorLayer::settingsWindow()
@@ -301,10 +304,19 @@ void EditorLayer::viewportWindow()
     // Get viewport panel size
     ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
+
     // Update viewport size if changed
     if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
     {
-        _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
+        _viewportSize  = {viewportPanelSize.x, viewportPanelSize.y};
+        glm::vec2 pos  = {ImGui::GetWindowPos().x, ImGui::GetWindowPos().y};
+        glm::vec2 size = {viewportPanelSize.x, viewportPanelSize.y};
+
+        Rect2D rect = {
+            .pos    = pos,
+            .extent = size,
+        };
+        onViewportResized.executeIfBound(rect);
         YA_CORE_INFO("Viewport resized to: {} x {}", _viewportSize.x, _viewportSize.y);
     }
 
@@ -323,18 +335,17 @@ void EditorLayer::viewportWindow()
     // Display the render texture from editor render target
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        auto *sceneRT = App::get()->_sceneRT.get();
-        if (sceneRT && sceneRT->getFrameBuffer())
+        auto *viewportRT = App::get()->_viewportRT.get();
+        if (viewportRT && viewportRT->getFrameBuffer())
         {
-            if (auto imageView = sceneRT->getFrameBuffer()->getImageView(0))
+            if (auto imageView = viewportRT->getFrameBuffer()->getImageView(0))
             {
                 // Get default sampler for texture display
                 if (auto defaultSampler = TextureLibrary::getDefaultSampler())
                 {
                     // Create ImGui descriptor set through editor layer (application layer)
-                    void *imguiTextureID = getOrCreateImGuiTextureID(
-                        imageView->getHandle().as<void *>(),
-                        defaultSampler->getHandle().as<void *>());
+                    void *imguiTextureID = getOrCreateImGuiTextureID(imageView->getHandle().as<void *>(),
+                                                                     defaultSampler->getHandle().as<void *>());
 
                     if (imguiTextureID)
                     {

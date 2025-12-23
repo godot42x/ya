@@ -6,13 +6,32 @@ namespace ya
 {
 
 
-Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> &indices, const std::string &name)
+Mesh::Mesh(const std::vector<ya::Vertex> &vertices,
+           const std::vector<uint32_t>   &indices,
+           const std::string             &name,
+           CoordinateSystem               sourceCoordSystem)
 {
     _name       = name;
     auto render = App::get()->getRender<VulkanRender>();
 
     _vertexCount = static_cast<uint32_t>(vertices.size());
     _indexCount  = static_cast<uint32_t>(indices.size());
+
+    // Convert coordinate system if source differs from engine target
+    std::vector<uint32_t> processedIndices = indices;
+
+    if (sourceCoordSystem != ENGINE_COORDINATE_SYSTEM) {
+        // Flip winding order when converting between coordinate systems:
+        // - RightHanded→LeftHanded: CCW becomes CW (flip needed)
+        // - LeftHanded→RightHanded: CW becomes CCW (flip needed)
+        for (size_t i = 0; i < processedIndices.size(); i += 3) {
+            std::swap(processedIndices[i], processedIndices[i + 2]);
+        }
+        YA_CORE_TRACE("Mesh '{}': Converted from {} to {} coordinate system",
+                      name,
+                      sourceCoordSystem == CoordinateSystem::RightHanded ? "RightHanded" : "LeftHanded",
+                      ENGINE_COORDINATE_SYSTEM == CoordinateSystem::RightHanded ? "RightHanded" : "LeftHanded");
+    }
 
     _vertexBuffer = IBuffer::create(
         render,
@@ -29,8 +48,8 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> 
         {
             .label         = name.empty() ? name : std::format("{}_IndexBuffer", name),
             .usage         = EBufferUsage::IndexBuffer,
-            .data          = (void *)indices.data(),
-            .size          = static_cast<uint32_t>(sizeof(indices[0]) * indices.size()),
+            .data          = (void *)processedIndices.data(),
+            .size          = static_cast<uint32_t>(sizeof(processedIndices[0]) * processedIndices.size()),
             .memProperties = EMemoryProperty::DeviceLocal,
         });
 }

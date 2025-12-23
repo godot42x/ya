@@ -84,6 +84,16 @@ Scene *App::getScene() const
     return _sceneManager ? _sceneManager->getCurrentScene() : nullptr;
 }
 
+void App::onSceneViewportResized(Rect2D rect)
+{
+    float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
+    camera.setAspectRatio(aspectRatio);
+    _viewportRT->setExtent(Extent2D{
+        .width  = static_cast<uint32_t>(rect.extent.x),
+        .height = static_cast<uint32_t>(rect.extent.y),
+    });
+}
+
 // ===== TODO: These global variables should be moved to appropriate managers =====
 
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
@@ -236,8 +246,8 @@ void App::init(AppDesc ci)
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
 
     // ===== Create Scene RenderPass (Offscreen) =====
-    _sceneRenderPass = IRenderPass::create(_render);
-    _sceneRenderPass->recreate(RenderPassCreateInfo{
+    _viewportRenderPass = IRenderPass::create(_render);
+    _viewportRenderPass->recreate(RenderPassCreateInfo{
         .attachments = {
             // Color attachment (will be sampled by ImGui)
             AttachmentDescription{
@@ -292,7 +302,26 @@ void App::init(AppDesc ci)
         },
     });
 
-    // ===== Create UI RenderPass (Swapchain) =====
+    _render->getSwapchain()->onRecreate.addLambda(
+        this,
+        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+            Extent2D newExtent{
+                .width  = now.extent.width,
+                .height = now.extent.height,
+            };
+
+            if (bImageRecreated) {
+                _screenRT->setExtent(newExtent);
+            }
+            if ((now.extent.width != old.extent.width ||
+                 now.extent.height != old.extent.height ||
+                 old.presentMode != now.presentMode))
+            {
+                _screenRT->setExtent(newExtent);
+            }
+        });
+
+    // ===== Create UI RenderPass (Swapchain RenderTarget) =====
     _renderpass = IRenderPass::create(_render);
     _renderpass->recreate(RenderPassCreateInfo{
         .attachments = {
@@ -334,21 +363,21 @@ void App::init(AppDesc ci)
     });
 
     // Create Scene RenderTarget (offscreen for 3D scene)
-    _sceneRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Scene RenderTarget",
+    _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Viewport RenderTarget",
         .bSwapChainTarget = false,
-        .renderPass       = _sceneRenderPass.get(),
+        .renderPass       = _viewportRenderPass.get(),
         .frameBufferCount = 1,
         .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
     });
 #if !ONLY_2D
-    _sceneRT->addMaterialSystem<SimpleMaterialSystem>();
-    _sceneRT->addMaterialSystem<UnlitMaterialSystem>();
-    _sceneRT->addMaterialSystem<LitMaterialSystem>();
+    _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
+    _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
+    _viewportRT->addMaterialSystem<LitMaterialSystem>();
 #endif
 
     // Create UI RenderTarget (swapchain for ImGui)
-    _finalRT = ya::createRenderTarget(RenderTargetCreateInfo{
+    _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Final RenderTarget",
         .bSwapChainTarget = true,
         .renderPass       = _renderpass.get(),
@@ -363,6 +392,10 @@ void App::init(AppDesc ci)
 
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
+    TODO(use ref)
+    _editorLayer->onViewportResized.set([this](Rect2D rect) {
+        this->onSceneViewportResized(rect);
+    });
 
     {
         YA_PROFILE_SCOPE("Inheritance Init");
@@ -386,7 +419,7 @@ void App::init(AppDesc ci)
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
     // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
     // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
-    Render2D::init(_render, _sceneRenderPass.get());
+    Render2D::init(_render, _viewportRenderPass.get());
     // wait something done
     _render->waitIdle();
 
@@ -402,7 +435,6 @@ void App::init(AppDesc ci)
 void App::onInit(AppDesc ci)
 {
     // auto &bus = *MessageBus::get();
-
     FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
 
     auto panel     = UIFactory::create<UIPanel>();
@@ -430,6 +462,8 @@ void App::onPostInit()
 
     ya::AssetManager::get()->loadTexture("face", faceTexturePath);
     ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
+
+    onScenePostInit.broadcast();
 }
 
 int App::onEvent(const Event &event)
@@ -500,6 +534,7 @@ int App::onEvent(const Event &event)
 
     inputManager.processEvent(event);
 
+
     if (bHandled) {
         return 0;
     }
@@ -524,6 +559,9 @@ void ya::App::quit()
     }
 
     unloadScene();
+    _editorLayer->onDetach();
+    delete _editorLayer;
+
     MaterialFactory::get()->destroy();
 
     Render2D::destroy();
@@ -534,18 +572,18 @@ void ya::App::quit()
     // }
 
     // Cleanup render targets before render passes (dependency order)
-    if (_sceneRT) {
-        _sceneRT->destroy();
-        _sceneRT.reset();
+    if (_viewportRT) {
+        _viewportRT->destroy();
+        _viewportRT.reset();
     }
 
-    if (_finalRT) {
-        _finalRT->destroy();
-        _finalRT.reset();
+    if (_screenRT) {
+        _screenRT->destroy();
+        _screenRT.reset();
     }
 
     _renderpass.reset();
-    _sceneRenderPass.reset();
+    _viewportRenderPass.reset();
 
     TextureLibrary::destroy();
     FontManager::get()->cleanup();
@@ -594,7 +632,6 @@ int ya::App::run()
 
 int ya::App::processEvent(SDL_Event &event)
 {
-
     processSDLEvent(
         event,
         [this](const auto &e) { this->dispatchEvent(e); },
@@ -614,8 +651,8 @@ int ya::App::iterate(float dt)
     // Skip rendering when minimized to avoid swapchain recreation with invalid extent
     // TODO: only skip render, but still update logic
     if (_bMinimized) {
-        SDL_Delay(200); // Small delay to reduce CPU usage when minimized
-        YA_CORE_INFO("Application minimized, skipping frame");
+        SDL_Delay(100); // Small delay to reduce CPU usage when minimized
+        // YA_CORE_INFO("Application minimized, skipping frame");
         return 0;
     }
     if (!_bPause) {
@@ -632,16 +669,16 @@ void App::onUpdate(float dt)
 {
     inputManager.update();
 
-    _sceneRT->setColorClearValue(colorClearValue);
-    _sceneRT->setDepthStencilClearValue(depthClearValue);
-    _sceneRT->onUpdate(dt);
+    _viewportRT->setColorClearValue(colorClearValue);
+    _viewportRT->setDepthStencilClearValue(depthClearValue);
+    _viewportRT->onUpdate(dt);
 
-    auto cam = _sceneRT->getCameraMut();
+    auto cam = _viewportRT->getCameraMut();
 
     cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
     if (cam && cam->hasComponent<CameraComponent>()) {
         auto            cc  = cam->getComponent<CameraComponent>();
-        const Extent2D &ext = _sceneRT->getExtent();
+        const Extent2D &ext = _viewportRT->getExtent();
         if (cam->hasComponent<TransformComponent>()) {
             auto tc = cam->getComponent<TransformComponent>();
             orbitCameraController.update(*tc, *cc, inputManager, ext);
@@ -681,8 +718,8 @@ void App::onRender(float dt)
         cmdBuf->begin();
 
         // --- MARK: PASS 1: Render 3D Scene to Offscreen RT ---
-        _sceneRT->begin(cmdBuf.get());
-        _sceneRT->onRender(cmdBuf.get());
+        _viewportRT->begin(cmdBuf.get());
+        _viewportRT->onRender(cmdBuf.get());
 
         // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
         Render2D::begin(cmdBuf.get());
@@ -696,7 +733,8 @@ void App::onRender(float dt)
                                  ? AssetManager::get()->getTextureByName("uv1")
                                  : AssetManager::get()->getTextureByName("face");
                     YA_CORE_ASSERT(tex, "Texture not found");
-                    Render2D::makeSprite({p.x, p.y, 0}, {50, 50}, tex);
+                    glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
+                    Render2D::makeSprite(pos, {50, 50}, tex);
                 }
             }
 
@@ -708,10 +746,10 @@ void App::onRender(float dt)
         }
         Render2D::end();
 
-        _sceneRT->end(cmdBuf.get());
+        _viewportRT->end(cmdBuf.get());
 
         // --- MARK: PASS 2: Render UI to Swapchain RT ---
-        _finalRT->begin(cmdBuf.get());
+        _screenRT->begin(cmdBuf.get());
 
         // Render ImGui
         auto &imManager = ImGuiManager::get();
@@ -727,7 +765,7 @@ void App::onRender(float dt)
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
-        _finalRT->end(cmdBuf.get());
+        _screenRT->end(cmdBuf.get());
     }
 
     cmdBuf->end();
@@ -767,8 +805,8 @@ void App::onRenderGUI(float dt)
         ImGui::Unindent();
     }
 
-    _sceneRT->onRenderGUI();
-    _finalRT->onRenderGUI();
+    _viewportRT->onRenderGUI();
+    _screenRT->onRenderGUI();
 
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
         float fps = 1.0f / dt;
@@ -866,7 +904,7 @@ void App::onSceneInit(Scene *scene)
     cam->addComponent<TransformComponent>();
     cam->addComponent<CameraComponent>();
     cam->addComponent<SimpleMaterialComponent>();
-    _sceneRT->setCamera(cam);
+    _viewportRT->setCamera(cam);
 
     YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
     YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
@@ -882,7 +920,7 @@ bool App::onWindowResized(const WindowResizeEvent &event)
     auto  h           = event.GetHeight();
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
     YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", w, h, aspectRatio);
-    camera.setAspectRatio(aspectRatio);
+    // camera.setAspectRatio(aspectRatio);
     _windowSize = {w, h};
     return false;
 }
@@ -892,8 +930,9 @@ bool App::onKeyReleased(const KeyReleasedEvent &event)
     if (event.getKeyCode() == EKey::Escape) {
         YA_CORE_INFO("{}", event.toString());
         requestQuit();
+        return true;
     }
-    return true;
+    return false;
 }
 
 bool App::onMouseMoved(const MouseMoveEvent &event)
@@ -923,7 +962,7 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
 {
     float sensitivity = 0.5f;
-    auto  cam         = _sceneRT->getCameraMut();
+    auto  cam         = _viewportRT->getCameraMut();
     auto  cc          = cam->getComponent<CameraComponent>();
     // up is +, and down is -, up is close so -=
     cc->_distance = cc->_distance -= event._offsetY * sensitivity;

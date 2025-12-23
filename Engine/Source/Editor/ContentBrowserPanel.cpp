@@ -1,17 +1,50 @@
 #include "ContentBrowserPanel.h"
+#include "Core/FileSystem/FileSystem.h"
+// #include <filesystem>
+#include "Core/AssetManager.h"
+#include "ImGuiHelper.h"
+#include "Render/TextureLibrary.h"
+#include "vulkan/vulkan_core.h"
 #include <imgui.h>
-#include <filesystem>
 
-namespace ya {
+#include "Core/App/App.h"
+
+
+namespace ya
+{
+
+VkDescriptorSet vkFileIcon;
+VkDescriptorSet vkFolderIcon;
 
 ContentBrowserPanel::ContentBrowserPanel()
     : _currentDirectory(std::filesystem::current_path())
 {
-}
+    _baseDirectory    = FileSystem::get()->getEngineRoot() / "Content";
+    _currentDirectory = _baseDirectory;
+
+
+    App::get()->onScenePostInit.addLambda(
+        this,
+        [this]() {
+            auto am    = AssetManager::get();
+            fileIcon   = am->loadTexture("file", "Engine/Content/TestTextures/editor/file.png").get();
+            folderIcon = am->loadTexture("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
+            // am->loadTexture("pause", "Engine/Content/TestTextures/editor/pause.png");
+            // am->loadTexture("play", "Engine/Content/TestTextures/editor/play.png");
+            // am->loadTexture("stop", "Engine/Content/TestTextures/editor/stop.png");
+            // am->loadTexture("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
+            auto sampler = TextureLibrary::getDefaultSampler();
+
+            vkFileIcon   = (VkDescriptorSet)ImGuiManager::get().addTexture(fileIcon->getImageView()->getHandle(), sampler->getHandle());
+            vkFolderIcon = (VkDescriptorSet)ImGuiManager::get().addTexture(folderIcon->getImageView()->getHandle(), sampler->getHandle());
+
+            TODO("Implement remove subscription");
+            // App::get()->onScenePostInit.remove(this);
+        });
+};
 
 void ContentBrowserPanel::onImGuiRender()
 {
-    ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Content Browser"))
     {
         ImGui::End();
@@ -36,8 +69,10 @@ void ContentBrowserPanel::onImGuiRender()
 
 void ContentBrowserPanel::renderDirectoryContents()
 {
-    static constexpr float padding  = 16.0f;
-    static constexpr float cellSize = 128.0f + padding;
+    static float padding        = 16.0f;
+    static float thumbnail_size = 94.0f;
+
+    float cellSize = thumbnail_size + padding;
 
     float panelWidth  = ImGui::GetContentRegionAvail().x;
     int   columnCount = static_cast<int>(panelWidth / cellSize);
@@ -45,7 +80,6 @@ void ContentBrowserPanel::renderDirectoryContents()
         columnCount = 1;
 
     ImGui::Columns(columnCount, 0, false);
-
     try
     {
         for (auto &entry : std::filesystem::directory_iterator(_currentDirectory))
@@ -55,18 +89,24 @@ void ContentBrowserPanel::renderDirectoryContents()
 
             ImGui::PushID(filename.c_str());
 
-            if (entry.is_directory())
+            auto icon = entry.is_directory() ? vkFolderIcon : vkFileIcon;
+
+            ImGui::ImageButton(
+                entry.path().filename().string().c_str(),
+                (ImTextureID)(uintptr_t)icon,
+                {thumbnail_size, thumbnail_size},
+                {0, 0},
+                {1, 1});
+
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             {
-                ImGui::TextWrapped("[DIR] %s", filename.c_str());
-                if (ImGui::IsItemClicked())
+                if (entry.is_directory())
                 {
-                    _currentDirectory /= filename;
+                    _currentDirectory = path;
                 }
             }
-            else
-            {
-                ImGui::TextWrapped("[FILE] %s", filename.c_str());
-            }
+            ImGui::TextWrapped("%s", filename.c_str());
+
 
             ImGui::PopID();
             ImGui::NextColumn();
@@ -78,6 +118,9 @@ void ContentBrowserPanel::renderDirectoryContents()
     }
 
     ImGui::Columns(1);
+
+    ImGui::DragFloat("Thumbnail Size", &thumbnail_size, 0.1f, 16.0f, 256.0f);
+    ImGui::DragFloat("Padding", &padding, 0.1f, 0.0f, 64.0f);
 }
 
 } // namespace ya

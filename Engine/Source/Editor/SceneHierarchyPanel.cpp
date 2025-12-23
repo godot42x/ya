@@ -232,21 +232,36 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
             }
         }
     });
+    drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
+        for (auto [mat, meshIndex] : lmc->getMaterial2MeshIDs()) {
+            ImGui::CollapsingHeader(mat->getLabel().c_str(), 0);
+            ImGui::Indent();
 
-    // auto simpleMaterials = MaterialFactory::get()->getMaterials<SimpleMaterial>();
-    // for (auto &mat : simpleMaterials) {
-    //     auto simpleMat = mat->as<SimpleMaterial>();
-    //     ImGui::PushID(std::format("Material_{}", materialIdx).c_str());
-    //     if (ImGui::CollapsingHeader(std::format("Material{} ({})", materialIdx, simpleMat->getLabel()).c_str())) {
-    //         int colorType = static_cast<int>(simpleMat->colorType);
-    //         if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
-    //             simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
-    //         }
-    //     }
-    //     ImGui::PopID();
-    //     materialIdx += 1;
-    // }
-    // auto unlitMaterials = MaterialFactory::get()->getMaterials<UnlitMaterial>();
+            auto litMat = mat->as<LitMaterial>();
+            bool bDirty = false;
+            bDirty |= ImGui::DragFloat3("Object Color", glm::value_ptr(litMat->uParams.objectColor), 0.1f);
+            // bDirty |= ImGui::DragFloat3("Base Color", glm::value_ptr(litMat->uMaterial.baseColor), 0.1f);
+            // bDirty |= ImGui::DragFloat("Metallic", &litMat->uMaterial.metallic, 0.01f, 0.0f, 1.0f);
+            // bDirty |= ImGui::DragFloat("Roughness", &litMat->uMaterial.roughness, 0.01f, 0.0f, 1.0f);
+            // for (uint32_t i = 0; i < litMat->_textureViews.size(); i++) {
+            //     auto &tv    = litMat->_textureViews[i];
+            //     auto  label = tv.texture->getLabel();
+            //     if (label.empty()) {
+            //         label = tv.texture->getFilepath();
+            //     }
+            //     ImGui::Text("Texture %d: %s", i, label.c_str());
+            //     bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+            //     bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+            //     bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+            //     static constexpr const auto pi = glm::pi<float>();
+            //     bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+            // }
+            if (bDirty) {
+                litMat->setParamDirty(true);
+            }
+            ImGui::Unindent();
+        }
+    });
 
 
 

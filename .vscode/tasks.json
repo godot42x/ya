@@ -2,20 +2,11 @@
     "version": "2.0.0",
     "inputs": [
         {
-            "id": "build-target",
+            "id": "remember.target",
             "type": "command",
-            "command": "extension.commandvariable.promptStringRemember", // install this 
+            "command": "extension.commandvariable.promptStringRemember",
             "args": {
-                "key": "build-target",
-                "description": "Enter build target ",
-            }
-        },
-        {
-            "id": "rememberPath",
-            "type": "command",
-            "command": "extension.commandvariable.remember",
-            "args": {
-                "key": "build-target"
+                "key": "target"
             }
         }
     ],
@@ -26,13 +17,21 @@
             "command": "xmake",
             "args": [
                 "b",
-                "${input:build-target}"
+                "${input:remember.target}"
             ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": []
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "runOptions": {}
         }
     ]
 }

@@ -13,44 +13,21 @@
 namespace ya
 {
 
-VulkanRenderTarget::VulkanRenderTarget(IRenderPass *renderPass) : _camera(nullptr)
+
+VulkanRenderTarget::VulkanRenderTarget(const RenderTargetCreateInfo &ci)
 {
-    _renderPass = renderPass;
-
-    auto r  = App::get()->getRender();
-    _extent = {
-        .width  = r->getSwapchainWidth(),
-        .height = r->getSwapchainHeight(),
-    };
-    _frameBufferCount = r->getSwapchainImageCount();
-    bSwapChainTarget  = true;
-
-    r->getSwapchain()->onRecreate.addLambda(
-        this,
-        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
-            if (
-                bImageRecreated ||
-                (now.extent.width != old.extent.width ||
-                 now.extent.height != old.extent.height ||
-                 old.presentMode != now.presentMode))
-            {
-                Extent2D newExtent{
-                    .width  = now.extent.width,
-                    .height = now.extent.height,
-                };
-                this->setExtent(newExtent);
-            }
-        });
-
-    init();
-    recreate();
-}
-
-VulkanRenderTarget::VulkanRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent) : _camera(nullptr)
-{
-    _renderPass       = renderPass;
-    _frameBufferCount = frameBufferCount;
-    _extent           = {.width = static_cast<uint32_t>(extent.x), .height = static_cast<uint32_t>(extent.y)};
+    _renderPass       = ci.renderPass;
+    _frameBufferCount = ci.frameBufferCount;
+    _extent           = {.width = static_cast<uint32_t>(ci.extent.x), .height = static_cast<uint32_t>(ci.extent.y)};
+    label             = ci.label;
+    bSwapChainTarget  = ci.bSwapChainTarget;
+    if (bSwapChainTarget) {
+        _extent = {
+            .width  = App::get()->getRender()->getSwapchainWidth(),
+            .height = App::get()->getRender()->getSwapchainHeight(),
+        };
+        _frameBufferCount = App::get()->getRender()->getSwapchain()->getImageCount();
+    }
 
     init();
     recreate();
@@ -71,7 +48,7 @@ void VulkanRenderTarget::init()
 
 void VulkanRenderTarget::recreate()
 {
-    YA_CORE_INFO("Recreating VulkanRenderTarget with extent: {}x{}, frameBufferCount: {}", _extent.width, _extent.height, _frameBufferCount);
+    YA_CORE_INFO("Recreating VulkanRenderTarget {} with extent: {}x{}, frameBufferCount: {}", label, _extent.width, _extent.height, _frameBufferCount);
     if (_extent.width <= 0 || _extent.height <= 0)
     {
         return;
@@ -116,7 +93,7 @@ void VulkanRenderTarget::recreate()
                     auto ptr = VulkanImage::create(
                         vkRender,
                         ImageCreateInfo{
-                            .label  = std::format("RT_FrameBuffer_{}_Attachment_{}", i, j),
+                            .label  = std::format("RT_FrameBuffer_{}_{}_Attachment_{}", label, i, j),
                             .format = attachment.format,
                             .extent = {
                                 .width  = static_cast<uint32_t>(_extent.width),
@@ -134,7 +111,7 @@ void VulkanRenderTarget::recreate()
                 vkRender->setDebugObjectName(
                     VK_OBJECT_TYPE_IMAGE,
                     (fbAttachments.back())->getHandle(),
-                    std::format("RT_FrameBuffer_{}_Attachment_{}", i, j).c_str());
+                    std::format("RT_FrameBuffer_{}_{}_Attachment_{}", label, i, j).c_str());
                 ++j;
             }
         }
@@ -148,7 +125,7 @@ void VulkanRenderTarget::recreate()
                                        });
         fb->recreate(fbAttachments, _extent.width, _extent.height);
         _frameBuffers[i] = fb;
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}", i));
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}_{}", label, i));
     }
 }
 
@@ -205,6 +182,8 @@ void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
     else {
         _currentFrameIndex = (_currentFrameIndex + 1) % _frameBufferCount;
     }
+
+    YA_CORE_ASSERT(getFrameBuffer(), "FrameBuffer is null in VulkanRenderTarget::begin");
 
     _renderPass->begin(cmdBuf,
                        getFrameBuffer()->getHandle(),

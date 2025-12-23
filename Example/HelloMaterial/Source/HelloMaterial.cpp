@@ -28,8 +28,8 @@ void HelloMaterial::createCubeMesh()
 {
     std::vector<ya::Vertex> vertices;
     std::vector<uint32_t>   indices;
-    ya::GeometryUtils::makeCube(-0.5, 0.5, -0.5, 0.5, -0.5, 0.5, vertices, indices, true, true);
-    cubeMesh = std::make_shared<ya::Mesh>(vertices, indices, "cube");
+    ya::PrimitiveGeometry::createCube(glm::vec3(1.0f), vertices, indices);
+    cubeMesh = makeShared<ya::Mesh>(vertices, indices, "cube");
 }
 
 void HelloMaterial::loadTextures()
@@ -119,34 +119,21 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
-    auto matGround = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_ground");
-    matGround->setTextureView(ya::UnlitMaterial::BaseColor0,
-                              ya::TextureView{
-                                  .texture = ya::TextureLibrary::getWhiteTexture(),
-                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
-                              });
-    matGround->setTextureView(ya::UnlitMaterial::BaseColor1,
-                              ya::TextureView{
-                                  .texture = ya::AssetManager::get()->getTextureByName("uv1"),
-                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
-                              });
-    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    matGround->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(50.f, 50.f));
-    matGround->setMixValue(0.86);
-
-    // Create ground plane
+   // Create ground plane
     if (auto plane = scene->createEntity("Plane")) {
         auto tc = plane->addComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
 
-        auto umc = plane->addComponent<ya::UnlitMaterialComponent>();
-        umc->addMesh(cubeMesh.get(), matGround);
+        auto lmc          = plane->addComponent<ya::LitMaterialComponent>();
+        auto groundLitMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
+        groundLitMat->setObjectColor(glm::vec3(0.8f, 0.8f, 0.8f));
+        lmc->addMesh(cubeMesh.get(), groundLitMat);
     }
 
 
-    // YA_CORE_DEBUG("1");
+
+
 
 #if create_cube_matrix_for_unlit_material
 
@@ -209,6 +196,20 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         lmc->addMesh(cubeMesh.get(), litMat);
     }
 
+    if (auto *suzanne = scene->createEntity("Suzanne")) {
+        auto tc = suzanne->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
+        tc->setScale(glm::vec3(2.0f));
+
+        auto lmc   = suzanne->addComponent<ya::LitMaterialComponent>();
+        auto model = ya::AssetManager::get()->loadModel("suzanne",
+                                                        "Engine/Content/Misc/Monkey.obj");
+        for (const auto &mesh : model->getMeshes()) {
+            auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
+            lmc->addMesh(mesh.mesh.get(), litMat);
+        }
+    }
+
     if (auto *pointLt = scene->createEntity("Point Light")) {
         auto tc = pointLt->addComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
@@ -238,6 +239,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         lmc->addMesh(cubeMesh.get(), pointLightMat);
     }
+
+ 
+    // YA_CORE_DEBUG("1");
 }
 
 void HelloMaterial::onUpdate(float dt)

@@ -81,7 +81,7 @@ EventProcessState InputManager::processEvent(const Event &event)
         setKeyState(static_cast<const KeyPressedEvent &>(event).getKeyCode(), KeyState::Pressed);
         break;
     case EEvent::KeyReleased:
-        setKeyState(static_cast<const KeyReleasedEvent &>(event).getKeyCode(), KeyState::Released);
+       setKeyState(static_cast<const KeyReleasedEvent &>(event).getKeyCode(), KeyState::Released);
         break;
     case EEvent::MouseButtonPressed:
         setMouseState(static_cast<const MouseButtonPressedEvent &>(event).GetMouseButton(), KeyState::Pressed);

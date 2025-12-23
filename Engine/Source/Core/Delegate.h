@@ -37,16 +37,16 @@ class Delegate<ReturnType(Args...)>
         return m_Function(std::forward<Args>(args)...);
     }
 
-    ReturnType executeIfBound(Args &&...args) const
+    // NOTICE: Arg already be deduced  when this func called, so Args&& only receive rvalues
+    // ReturnType executeIfBound(const Args&&... args) const
+    // Solution: Accept lvalues and rvalues - use const reference for safety
+    ReturnType executeIfBound(const Args &...args) const
     {
         if (bBound) {
-            return m_Function(std::forward<Args>(args)...);
+            return m_Function(args...);
         }
         if constexpr (std::is_void_v<ReturnType>) {
             return; // No return value for void
-        }
-        else if constexpr (std::is_same_v<ReturnType, bool>) {
-            return true; // Return true if  not bound
         }
         return ReturnType{}; // Return default value if not bound
     }
@@ -123,6 +123,8 @@ class MulticastDelegate<void(Args...)>
             .func   = lambda,
         });
     }
+
+    // void remove()
 
 
     void broadcast(Args... args)

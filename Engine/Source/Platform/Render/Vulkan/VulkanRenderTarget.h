@@ -36,12 +36,12 @@ struct VulkanRenderTarget : public IRenderTarget
 
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
-    Entity *_camera;
-    bool    bEntityCamera = true; // Whether to use the camera from the entity
+    Entity *_camera       = nullptr;
+    bool    bEntityCamera = false; // Whether to use the camera from the entity
 
   public:
-    VulkanRenderTarget(IRenderPass *renderPass);
-    VulkanRenderTarget(IRenderPass *renderPass, uint32_t frameBufferCount, glm::vec2 extent);
+
+    VulkanRenderTarget(const RenderTargetCreateInfo &ci);
 
     virtual ~VulkanRenderTarget() override;
 

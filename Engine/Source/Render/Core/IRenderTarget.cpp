@@ -10,15 +10,6 @@
 namespace ya
 {
 
-// Factory functions - create platform-specific implementations
-std::shared_ptr<IRenderTarget> createRenderTarget(IRenderPass *renderPass)
-{
-#if USE_VULKAN
-    return makeShared<VulkanRenderTarget>(renderPass);
-#else
-    #error "Platform not supported"
-#endif
-}
 
 std::shared_ptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci)
 {
@@ -27,16 +18,7 @@ std::shared_ptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci)
     switch (api) {
     case ERenderAPI::Vulkan:
     {
-        stdptr<IRenderTarget> rt;
-        if (ci.bSwapChainTarget) {
-            rt = makeShared<VulkanRenderTarget>(ci.renderPass);
-        }
-        else {
-            rt = makeShared<VulkanRenderTarget>(ci.renderPass, ci.frameBufferCount, ci.extent);
-        }
-        rt->label = ci.label;
-        return rt;
-
+        return makeShared<VulkanRenderTarget>(ci);
     } break;
 
     case ERenderAPI::None:

@@ -125,12 +125,16 @@ struct App
     glm::vec2 _lastMousePos = {0, 0};
 
     // Render targets
-    std::shared_ptr<IRenderPass>   _sceneRenderPass;   // Scene render pass
-    std::shared_ptr<IRenderTarget> _sceneRT = nullptr; // Offscreen RT for 3D scene
+    Rect2D                         viewportRect;
+    std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass
+    std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
-    std::shared_ptr<IRenderTarget> _finalRT = nullptr; // Swapchain RT for ImGui + viewport
+    std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui + viewport
 
     EditorLayer *_editorLayer;
+
+    MulticastDelegate<void()> onScenePostInit;
+
 
   public:
     App()                       = default;
@@ -192,14 +196,12 @@ struct App
     [[nodiscard]] Scene *getScene() const;
 
     [[nodiscard]] uint32_t getFrameIndex() const { return _frameIndex; }
-    // time count from app started
-    [[nodiscard]] uint64_t getElapsedTimeMS() const
-    {
-        return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
-    }
+    [[nodiscard]] uint64_t getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
 
     // temp
     [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
+
+    [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
 
   protected:
     // Protected for derived classes to override
@@ -212,13 +214,12 @@ struct App
     bool unloadScene();
     bool saveScene([[maybe_unused]] const std::string &path) { return false; } // TODO: implement
 
-    bool                           onWindowResized(const WindowResizeEvent &event);
-    bool                           onKeyReleased(const KeyReleasedEvent &event);
-    bool                           onMouseMoved(const MouseMoveEvent &event);
-    bool                           onMouseButtonReleased(const MouseButtonReleasedEvent &event);
-    bool                           onMouseScrolled(const MouseScrolledEvent &event);
-    [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
-
+    bool onWindowResized(const WindowResizeEvent &event);
+    bool onKeyReleased(const KeyReleasedEvent &event);
+    bool onMouseMoved(const MouseMoveEvent &event);
+    bool onMouseButtonReleased(const MouseButtonReleasedEvent &event);
+    bool onMouseScrolled(const MouseScrolledEvent &event);
+    void onSceneViewportResized(Rect2D rect);
 
 
     void imcDrawMaterials();

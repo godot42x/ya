@@ -9,6 +9,9 @@
 namespace ya
 {
 
+// Forward declaration
+enum class CoordinateSystem;
+
 struct Mesh
 {
 
@@ -22,7 +25,17 @@ struct Mesh
 
   public:
     // TODO: the vertex struct should be different in 2d and 3d, and different pipeline?
-    Mesh(const std::vector<ya::Vertex> &vertices, const std::vector<uint32_t> &indices, const std::string &name = "");
+    /**
+     * @brief Construct mesh from vertices and indices
+     * @param vertices Vertex data
+     * @param indices Index data
+     * @param name Mesh name for debugging
+     * @param sourceCoordSystem Source coordinate system (default: LeftHanded for procedural geometry)
+     */
+    Mesh(const std::vector<ya::Vertex> &vertices, 
+         const std::vector<uint32_t> &indices, 
+         const std::string &name = "",
+         CoordinateSystem sourceCoordSystem = CoordinateSystem::LeftHanded);
     ~Mesh() = default;
 
     [[nodiscard]] uint32_t getIndexCount() const { return _indexCount; }

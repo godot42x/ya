@@ -211,16 +211,24 @@ EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
     auto io = &ImGui::GetIO();
 
     // Check mouse events
-    bool isMouseEvent = (event.type == SDL_EVENT_MOUSE_MOTION ||
-                         event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                         event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
-                         event.type == SDL_EVENT_MOUSE_WHEEL);
-    if (io->WantCaptureMouse && isMouseEvent) {
-        return EventProcessState::Handled;
+    if (io->WantCaptureMouse) {
+
+        bool isMouseEvent = (event.type == SDL_EVENT_MOUSE_MOTION ||
+                             event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                             event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+                             event.type == SDL_EVENT_MOUSE_WHEEL);
+        if (isMouseEvent) {
+            return EventProcessState::Handled;
+        }
     }
     if (io->WantCaptureKeyboard)
     {
-        return EventProcessState::Handled;
+        if (event.type == SDL_EVENT_KEY_DOWN ||
+            event.type == SDL_EVENT_KEY_UP ||
+            event.type == SDL_EVENT_TEXT_INPUT)
+        {
+            return EventProcessState::Handled;
+        }
     }
 
     return EventProcessState::Continue;

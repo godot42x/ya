@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/Texture.h"
 #include <filesystem>
 #include <memory>
 
@@ -10,6 +11,10 @@ struct ContentBrowserPanel
 {
     std::filesystem::path _currentDirectory;
     std::filesystem::path _baseDirectory;
+
+    Texture *folderIcon = nullptr;
+    Texture *fileIcon   = nullptr;
+
 
   public:
     ContentBrowserPanel();
