@@ -422,6 +422,7 @@ void LitMaterialSystem::onRenderGUI()
     if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
+        ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
         ImGui::Unindent();
     }
 };

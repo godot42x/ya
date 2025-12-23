@@ -57,7 +57,7 @@ struct LitMaterialSystem : public IMaterialSystem
         float directionalLightIntensity           = 1.0f; // 可以紧跟在vec3后面的4字节空间
 
         alignas(16) glm::vec3 directionalLightColor = glm::vec3(1.0f);
-        float ambientIntensity                      = 0.3f; // 可以紧跟在vec3后面的4字节空间
+        float ambientIntensity                      = 0.05f; // 可以紧跟在vec3后面的4字节空间
 
         alignas(16) glm::vec3 ambientColor = glm::vec3(1.0f);
         uint32_t numPointLights            = 0;
@@ -69,6 +69,7 @@ struct LitMaterialSystem : public IMaterialSystem
     struct DebugUBO
     {
         alignas(4) bool bDebugNormal = false;
+        glm::vec4 floatParam         = glm::vec4(0.0f);
     } uDebug;
 
 

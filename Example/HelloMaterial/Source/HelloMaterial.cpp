@@ -121,34 +121,21 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
-    auto matGround = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_ground");
-    matGround->setTextureView(ya::UnlitMaterial::BaseColor0,
-                              ya::TextureView{
-                                  .texture = ya::TextureLibrary::getWhiteTexture(),
-                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
-                              });
-    matGround->setTextureView(ya::UnlitMaterial::BaseColor1,
-                              ya::TextureView{
-                                  .texture = ya::AssetManager::get()->getTextureByName("uv1"),
-                                  .sampler = ya::TextureLibrary::getDefaultSampler(),
-                              });
-    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    matGround->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    matGround->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(50.f, 50.f));
-    matGround->setMixValue(0.86);
-
-    // Create ground plane
+   // Create ground plane
     if (auto plane = scene->createEntity("Plane")) {
         auto tc = plane->addComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
 
-        auto umc = plane->addComponent<ya::UnlitMaterialComponent>();
-        umc->addMesh(cubeMesh.get(), matGround);
+        auto lmc          = plane->addComponent<ya::LitMaterialComponent>();
+        auto groundLitMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
+        groundLitMat->setObjectColor(glm::vec3(0.8f, 0.8f, 0.8f));
+        lmc->addMesh(cubeMesh.get(), groundLitMat);
     }
 
 
-    // YA_CORE_DEBUG("1");
+
+
 
 #if create_cube_matrix_for_unlit_material
 
@@ -254,6 +241,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         lmc->addMesh(cubeMesh.get(), pointLightMat);
     }
+
+ 
+    // YA_CORE_DEBUG("1");
 }
 
 void HelloMaterial::onUpdate(float dt)

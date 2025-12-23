@@ -16,7 +16,7 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 layout(set = 0, binding =3, std140) uniform DebugUBO {
     bool bDebugNormal;
-    int  normalMode;
+    vec4 floatParam;
 } uDebug;
 
 
@@ -37,6 +37,7 @@ void main (){
     vPos = pos.xyz;
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     
+    // TODO: put it on CPU side, calculate normal matrix only once per object
     // 法线变换：使用法线矩阵（模型矩阵的逆转置的3x3部分）
     //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性。
     mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
@@ -88,6 +89,7 @@ layout(set =0, binding =1, std140) uniform LightUBO {
 
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
+    vec4 floatParam;
 } uDebug;
 
 
@@ -122,6 +124,7 @@ void main ()
     vec3 norm = normalize(vNormal);
     vec3 viewDir = normalize(uFrame.cameraPos - vPos);
     vec3 objectColor = uParams.objectColor;
+    float shininess = uDebug.floatParam.x == 0.0 ? 32.0 : uDebug.floatParam.x;
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -142,28 +145,28 @@ void main ()
 
         PointLight light = uLit.pointLights[0];
         
-        // vec3 lightDir = vPos -  light.position;
-        vec3 lightDir =   light.position - vPos;
+        vec3 lightDir = vPos -  light.position;
+        // vec3 lightDir =   light.position - vPos;
         float distance = length(lightDir);
         lightDir = normalize(lightDir);
         
         // 漫反射
-        float diff = max(dot(norm, lightDir), 0.0);
+        float diff = max(dot(norm, -lightDir), 0.0);
         vec3 diffuse = diff * light.color * light.intensity;
         
-        // 镜面反射（Blinn-Phong）
+        // 高光
         // vec3 halfwayDir = normalize(lightDir + viewDir);
+        vec3 reflectDir = reflect(-lightDir, norm);
         // float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
         // vec3 specular = spec * light.color * light.intensity;
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+        vec3 specular = spec * light.color * light.intensity;
         
         // 衰减
         float attenuation = 1.0;// calculateAttenuation(distance, light.radius);
         
         // 累加光照
-        // lighting += (diffuse + specular) * attenuation;
-        lighting +=  diffuse;
-        // fColor = vec4(0,1,0,1);
-        // break; // 暂时只支持一个点光源
+        lighting += (diffuse + specular) * attenuation;
     }
 
     // lighting = uLit.directionalLightColor;
