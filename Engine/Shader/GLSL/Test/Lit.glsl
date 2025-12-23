@@ -16,6 +16,7 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 layout(set = 0, binding =3, std140) uniform DebugUBO {
     bool bDebugNormal;
+    int  normalMode;
 } uDebug;
 
 
@@ -37,11 +38,10 @@ void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     
     // 法线变换：使用法线矩阵（模型矩阵的逆转置的3x3部分）
-    // mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
-    mat4 normalMatrix = transpose(inverse(mat4(pc.modelMat)));
-    // vec3 worldNormal = normalMatrix * aNormal;
-    vec4 worldNormal = normalMatrix * vec4(aNormal, 0.0);
-    vNormal = worldNormal.xyz;
+    //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性。
+    mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
+    vec3 worldNormal = normalMatrix * aNormal;
+    vNormal = worldNormal;
     
 }
 
@@ -142,8 +142,8 @@ void main ()
 
         PointLight light = uLit.pointLights[0];
         
-        // 光照方向（从片段指向光源）
-        vec3 lightDir = light.position - vPos;
+        // vec3 lightDir = vPos -  light.position;
+        vec3 lightDir =   light.position - vPos;
         float distance = length(lightDir);
         lightDir = normalize(lightDir);
         
