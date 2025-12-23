@@ -30,8 +30,8 @@ void HelloMaterial::createCubeMesh()
 {
     std::vector<ya::Vertex> vertices;
     std::vector<uint32_t>   indices;
-    ya::GeometryUtils::makeCube(-0.5, 0.5, -0.5, 0.5, -0.5, 0.5, vertices, indices, true, true);
-    cubeMesh = std::make_shared<ya::Mesh>(vertices, indices, "cube");
+    ya::PrimitiveGeometry::createCube(glm::vec3(1.0f), vertices, indices);
+    cubeMesh = makeShared<ya::Mesh>(vertices, indices, "cube");
 }
 
 void HelloMaterial::loadTextures()
@@ -209,6 +209,20 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // TODO: cast check
         auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit0")->as<ya::LitMaterial>();
         lmc->addMesh(cubeMesh.get(), litMat);
+    }
+
+    if (auto *suzanne = scene->createEntity("Suzanne")) {
+        auto tc = suzanne->addComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
+        tc->setScale(glm::vec3(2.0f));
+
+        auto lmc   = suzanne->addComponent<ya::LitMaterialComponent>();
+        auto model = ya::AssetManager::get()->loadModel("suzanne",
+                                                        "Engine/Content/Misc/Monkey.obj");
+        for (const auto &mesh : model->getMeshes()) {
+            auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
+            lmc->addMesh(mesh.mesh.get(), litMat);
+        }
     }
 
     if (auto *pointLt = scene->createEntity("Point Light")) {

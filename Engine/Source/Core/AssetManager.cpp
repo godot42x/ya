@@ -12,8 +12,97 @@
 #include "Core/FileSystem/FileSystem.h"
 #include "Core/Log.h"
 
+#include <algorithm>
+#include <cctype>
+
 namespace ya
 {
+
+namespace
+{
+
+/**
+ * @brief Infer coordinate system from file path and scene metadata
+ * @param filepath Path to the model file
+ * @param scene Assimp scene (may contain metadata)
+ * @return Inferred coordinate system
+ */
+static CoordinateSystem inferAssimpCoordinateSystem(const std::string &filepath, const aiScene *scene)
+{
+    // Extract file extension
+    std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    // Check scene metadata for coordinate system hints
+    if (scene && scene->mMetaData) {
+        int upAxis = 1; // Default Y-up
+        if (scene->mMetaData->Get("UpAxis", upAxis)) {
+            // 0=X, 1=Y, 2=Z
+            // Most right-handed systems are Y-up or Z-up
+        }
+
+        int upAxisSign = 1;
+        scene->mMetaData->Get("UpAxisSign", upAxisSign);
+
+        int frontAxis = 2;
+        scene->mMetaData->Get("FrontAxis", frontAxis);
+
+        int coordAxis = 0;
+        scene->mMetaData->Get("CoordAxis", coordAxis);
+
+        // Some formats explicitly store handedness
+        int coordAxisSign = 1;
+        if (scene->mMetaData->Get("CoordAxisSign", coordAxisSign)) {
+            // CoordAxisSign can indicate handedness
+        }
+    }
+
+    // Format-based heuristics (ordered by reliability)
+    // Note: Assimp often converts to right-handed Y-up during import
+
+    if (ext == "obj") {
+        // Wavefront OBJ: Right-handed, vendor-dependent up axis
+        // Blender OBJ: Right-handed, Z-up
+        // Most tools: Right-handed
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "fbx") {
+        // FBX is complex: can be both left or right handed
+        // Unity FBX: Left-handed Y-up
+        // Maya/Blender FBX: Right-handed Y-up
+        // Default to right-handed (Assimp default conversion)
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "gltf" || ext == "glb") {
+        // glTF 2.0 spec: Right-handed, Y-up
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "dae" || ext == "collada") {
+        // COLLADA: Right-handed, Y-up (default)
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "blend") {
+        // Blender native: Right-handed, Z-up
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "3ds" || ext == "max") {
+        // 3ds Max: Right-handed, Z-up
+        return CoordinateSystem::RightHanded;
+    }
+    else if (ext == "stl") {
+        // STL has no inherent coordinate system, assume right-handed
+        return CoordinateSystem::RightHanded;
+    }
+
+    // Unknown format: assume right-handed (most common)
+    // Log a warning for manual verification
+    YA_CORE_WARN("Unknown model format '{}', assuming RightHanded coordinate system. "
+                 "Manually set MeshData.sourceCoordSystem if incorrect.",
+                 ext);
+    return CoordinateSystem::RightHanded;
+}
+
+} // anonymous namespace
 
 
 
@@ -39,7 +128,7 @@ AssetManager::AssetManager()
     _importer = new Assimp::Importer();
 }
 
-std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std::shared_ptr<CommandBuffer> commandBuffer)
+std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
 {
     // Check if the model is already loaded
     if (isModelLoaded(filepath)) {
@@ -47,7 +136,8 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
     }
 
     // Create a new model
-    auto             model = std::make_shared<Model>();
+    auto model = makeShared<Model>();
+
     Assimp::Importer importer;
 
     // Get directory path for texture loading
@@ -82,11 +172,16 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
 
     // Process all meshes in the scene
     for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh *mesh = scene->mMeshes[i];
-        MeshData    newMesh;
+        aiMesh  *mesh = scene->mMeshes[i];
+        MeshData newMesh;
 
         // Get mesh name
         newMesh.name = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
+
+        // Infer coordinate system from file format and metadata
+        // Note: Assimp may have already converted coordinates during import
+        // depending on aiProcess flags used
+        newMesh.sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
 
         // Process vertices
         for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
@@ -134,6 +229,7 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
                 newMesh.indices.push_back(face.mIndices[k]);
             }
         }
+        newMesh.createGPUResources();
 
         // Process materials/textures
         // if (mesh->mMaterialIndex >= 0 && commandBuffer) {
@@ -161,6 +257,116 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, std:
     // Cache the model
     modelCache[filepath] = model;
 
+    return model;
+}
+
+std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, CoordinateSystem coordSystem)
+{
+    // Check if the model is already loaded
+    if (isModelLoaded(filepath)) {
+        return modelCache[filepath];
+    }
+
+    // Create a new model
+    auto model = makeShared<Model>();
+
+    Assimp::Importer importer;
+
+    // Get directory path for texture loading
+    size_t      lastSlash = filepath.find_last_of("/\\");
+    std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
+
+    // Check if file exists using FileSystem
+    if (!FileSystem::get()->isFileExists(filepath)) {
+        YA_CORE_ERROR("Model file does not exist: {}", filepath);
+        return nullptr;
+    }
+
+    // Read the file using FileSystem
+    std::string fileContent;
+    if (!FileSystem::get()->readFileToString(filepath, fileContent)) {
+        YA_CORE_ERROR("Failed to read model file: {}", filepath);
+        return nullptr;
+    }
+
+    // Load the model using Assimp
+    const aiScene *scene = importer.ReadFileFromMemory(
+        fileContent.data(),
+        fileContent.size(),
+        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+
+
+    // Check for errors
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+        YA_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
+        return nullptr;
+    }
+
+    // Process all meshes in the scene
+    for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
+        aiMesh  *mesh = scene->mMeshes[i];
+        MeshData newMesh;
+
+        // Get mesh name
+        newMesh.name = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
+
+        // Use explicit coordinate system override
+        newMesh.sourceCoordSystem = coordSystem;
+        YA_CORE_INFO("Loading mesh '{}' with explicit coordinate system: {}",
+                     newMesh.name,
+                     coordSystem == CoordinateSystem::LeftHanded ? "LeftHanded" : "RightHanded");
+
+        // Process vertices
+        for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
+            ModelVertex vertex;
+            vertex.position = {mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z};
+
+            // Check if the mesh has normals
+            if (mesh->HasNormals()) {
+                vertex.normal = {mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z};
+            }
+
+            // Check if the mesh has texture coordinates
+            if (mesh->mTextureCoords[0]) {
+                vertex.texCoord = {mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y};
+            }
+
+            // Check if the mesh has tangents and bitangents
+            // if (mesh->HasTangentsAndBitangents()) {
+            //     vertex.tangent = {mesh->mTangents[j].x, mesh->mTangents[j].y, mesh->mTangents[j].z};
+            //     vertex.bitangent = {mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z};
+            // }
+
+            newMesh.vertices.push_back(vertex);
+        }
+
+        // Process indices
+        for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
+            aiFace face = mesh->mFaces[j];
+            for (unsigned int k = 0; k < face.mNumIndices; k++) {
+                newMesh.indices.push_back(face.mIndices[k]);
+            }
+        }
+        newMesh.createGPUResources();
+
+        model->getMeshes().push_back(newMesh);
+    }
+
+    model->setIsLoaded(true);
+    model->setDirectory(directory);
+
+    // Cache the model
+    modelCache[filepath] = model;
+
+    return model;
+}
+
+std::shared_ptr<Model> AssetManager::loadModel(const std::string &name, const std::string &filepath)
+{
+    auto model = loadModel(filepath);
+    if (model) {
+        _name2path[name] = filepath;
+    }
     return model;
 }
 

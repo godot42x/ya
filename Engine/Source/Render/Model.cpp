@@ -13,10 +13,23 @@
 #include <assimp/scene.h>
 
 
-
-void Model::draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture)
+namespace ya
 {
-    // This function would be called if we had direct access to GPU buffers
-    // In our current setup, we'll refactor Entry.cpp to handle the drawing
-    // This is just a placeholder for potential future improvements
+
+
+void MeshData::createGPUResources()
+{
+    std::vector<ya::Vertex> vertices;
+    for (const auto &v : this->vertices) {
+        ya::Vertex vertex;
+        vertex.position  = v.position;
+        vertex.normal    = v.normal;
+        vertex.texCoord0 = v.texCoord;
+        vertices.push_back(vertex);
+    }
+
+    // Pass source coordinate system to Mesh for proper conversion
+    mesh = makeShared<Mesh>(vertices, indices, name, sourceCoordSystem);
 }
+
+} // namespace ya

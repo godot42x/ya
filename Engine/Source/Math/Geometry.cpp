@@ -6,147 +6,14 @@
 namespace ya
 {
 
-void GeometryUtils::makeCube(
-    float leftPlane, float rightPlane, float bottomPlane, float topPlane, float nearPlane, float farPlane,
-    std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices,
-    bool bGenTexcoords,
-    bool bGenNormals /*, glm::mat4 transform*/)
-{
 
-    // to generate each vertex's normal or texcoord, we need not only 8 vertices
-    // but 24 vertices (4 vertices per face * 6 faces)
 
-    glm::vec3 _000 = {leftPlane, bottomPlane, nearPlane};  // Front-Left-Bottom
-    glm::vec3 _100 = {rightPlane, bottomPlane, nearPlane}; // Front-Right-Bottom
-    glm::vec3 _110 = {rightPlane, topPlane, nearPlane};    // Front-Right-Top
-    glm::vec3 _010 = {leftPlane, topPlane, nearPlane};     // Front-Left-Top
-
-    glm::vec3 _001 = {leftPlane, bottomPlane, farPlane};  // Back-Left-Bottom
-    glm::vec3 _101 = {rightPlane, bottomPlane, farPlane}; // Back-Right-Bottom
-    glm::vec3 _111 = {rightPlane, topPlane, farPlane};    // Back-Right-Top
-    glm::vec3 _011 = {leftPlane, topPlane, farPlane};     // Back-Left-Top
-
-    // Left-handed coordinate system: X+ right, Y+ up, Z+ forward (into screen)
-    // Counter-clockwise (CCW) winding order as front-facing
-    // Each face uses LB -> RB -> RT -> LT order, ensuring CCW when viewed from outside
-
-    outVertices = {
-        // Front face (Z = near, normal = -Z)
-        // Viewed from outside (-Z direction)
-        Vertex{.position = _000},
-        Vertex{.position = _100},
-        Vertex{.position = _110},
-        Vertex{.position = _010},
-
-        // Right face (X = right, normal = +X)
-        // Viewed from outside (+X direction)
-        Vertex{.position = _100},
-        Vertex{.position = _101},
-        Vertex{.position = _111},
-        Vertex{.position = _110},
-
-        // Top face (Y = top, normal = +Y)
-        // Viewed from outside (+Y direction)
-        Vertex{.position = _010},
-        Vertex{.position = _110},
-        Vertex{.position = _111},
-        Vertex{.position = _011},
-
-        // Left face (X = left, normal = -X)
-        // Viewed from outside (-X direction)
-        Vertex{.position = _001},
-        Vertex{.position = _000},
-        Vertex{.position = _010},
-        Vertex{.position = _011},
-
-        // Bottom face (Y = bottom, normal = -Y)
-        // Viewed from outside (-Y direction)
-        Vertex{.position = _001},
-        Vertex{.position = _101},
-        Vertex{.position = _100},
-        Vertex{.position = _000},
-
-        // Back face (Z = far, normal = +Z)
-        // Viewed from outside (+Z direction)
-        Vertex{.position = _101},
-        Vertex{.position = _001},
-        Vertex{.position = _011},
-        Vertex{.position = _111},
-    };
-
-    // clang-format off
-    outIndices = {
-        0,  1,  2,  2,  3,  0,   // Front face
-        4,  5,  6,  6,  7,  4,   // Right face
-        8,  9,  10, 10, 11, 8,   // Top face
-        12, 13, 14, 14, 15, 12,  // Left face
-        16, 17, 18, 18, 19, 16,  // Bottom face
-        20, 21, 22, 22, 23, 20   // Back face
-    };
-    // clang-format on
-
-    // Apply transform to all vertex positions
-    for (auto &vertex : outVertices) {
-        // glm::vec4 transformedPos = transform * glm::vec4(vertex.position, 1.0f);
-        // vertex.position          = glm::vec3(transformedPos);
-        // 暂时不需要生成世界空间的mesh.... 捣乱
-        vertex.position = vertex.position;
-    }
-
-    if (bGenTexcoords) {
-        // uv lt = (0,0), lb = (0,1), rt = (1,0), rb = (1,1)
-        // follow the vulkan but not opengl convention
-        for (uint32_t i = 0; i < outVertices.size(); i += 4) {
-            outVertices[i + 0].texCoord0 = {0.0f, 1.0f}; // LB
-            outVertices[i + 1].texCoord0 = {1.0f, 1.0f}; // RB
-            outVertices[i + 2].texCoord0 = {1.0f, 0.0f}; // RT
-            outVertices[i + 3].texCoord0 = {0.0f, 0.0f}; // LT
-        }
-    }
-
-    if (bGenNormals) {
-        // Calculate normal matrix (inverse transpose of transform matrix)
-
-        // WRONG: double  do this in cpu and shader sides
-        // glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(transform)));
-
-        // Face normals pointing outward from cube center
-        // Left-handed system: Z+ forward (into screen), Y+ up, X+ right
-        std::vector<glm::vec3> faceNormals = {
-            glm::vec3(0.0f, 0.0f, -1.0f), // Front face (Z = near, normal points backward out of screen)
-            glm::vec3(1.0f, 0.0f, 0.0f),  // Right face (normal points right)
-            glm::vec3(0.0f, 1.0f, 0.0f),  // Top face (normal points up)
-            glm::vec3(-1.0f, 0.0f, 0.0f), // Left face (normal points left)
-            glm::vec3(0.0f, -1.0f, 0.0f), // Bottom face (normal points down)
-            glm::vec3(0.0f, 0.0f, 1.0f)   // Back face (Z = far, normal points forward into screen)
-        };
-
-        // Apply normal matrix to transform normals and assign to vertices
-        for (int face = 0; face < 6; ++face) {
-            // glm::vec3 transformedNormal = glm::normalize(normalMatrix * faceNormals[face]);
-            // glm::vec4 normal4           = glm::vec4(transformedNormal, 0.0f);
-            glm::vec4 normal4 = glm::vec4(faceNormals[face], 0.0f);
-
-            int baseIndex                     = face * 4;
-            outVertices[baseIndex + 0].normal = normal4;
-            outVertices[baseIndex + 1].normal = normal4;
-            outVertices[baseIndex + 2].normal = normal4;
-            outVertices[baseIndex + 3].normal = normal4;
-        }
-    }
-}
-
-// ===== 快速几何体生成器实现 =====
-
-namespace PrimitiveGeometry
-{
-
-void createCube(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCube(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     createCube(glm::vec3(1.0f), outVertices, outIndices);
 }
 
-void createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     float hw = size.x * 0.5f; // half width
     float hh = size.y * 0.5f; // half height
@@ -155,7 +22,7 @@ void createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::ve
     // Right-Handed coordinate system (OpenGL/Vulkan/Blender convention):
     // X+ right, Y+ up, Z+ toward viewer (out of screen)
     // Counter-clockwise winding when viewed from outside
-    // 
+    //
     // 24 vertices (4 per face) - needed for proper normals and UVs
     outVertices = {
         // Front face (Z-)
@@ -207,8 +74,8 @@ void createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::ve
     // clang-format on
 }
 
-void createSphere(float radius, uint32_t slices, uint32_t stacks,
-                  std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createSphere(float radius, uint32_t slices, uint32_t stacks,
+                                     std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -253,8 +120,8 @@ void createSphere(float radius, uint32_t slices, uint32_t stacks,
     }
 }
 
-void createPlane(float width, float depth, float uRepeat, float vRepeat,
-                 std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createPlane(float width, float depth, float uRepeat, float vRepeat,
+                                    std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     float hw = width * 0.5f;
     float hd = depth * 0.5f;
@@ -268,8 +135,8 @@ void createPlane(float width, float depth, float uRepeat, float vRepeat,
     outIndices = {0, 1, 2, 2, 3, 0};
 }
 
-void createCylinder(float radius, float height, uint32_t segments,
-                    std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segments,
+                                       std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -331,8 +198,8 @@ void createCylinder(float radius, float height, uint32_t segments,
     }
 }
 
-void createCone(float radius, float height, uint32_t segments,
-                std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments,
+                                   std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -382,7 +249,7 @@ void createCone(float radius, float height, uint32_t segments,
     }
 }
 
-void createFullscreenQuad(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createFullscreenQuad(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
 {
     // NDC coordinates, suitable for post-processing
     outVertices = {
@@ -394,7 +261,6 @@ void createFullscreenQuad(std::vector<Vertex> &outVertices, std::vector<uint32_t
     outIndices = {0, 1, 2, 2, 3, 0};
 }
 
-} // namespace PrimitiveGeometry
 
 
 } // namespace ya

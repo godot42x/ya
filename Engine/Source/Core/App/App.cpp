@@ -90,10 +90,6 @@ const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
 
 
-std::shared_ptr<Mesh> cubeMesh;
-
-
-
 ImguiState imgui;
 
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);

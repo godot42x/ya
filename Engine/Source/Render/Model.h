@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Core/Base.h"
+
+#include "Render/Mesh.h"
 #include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 #include <memory>
@@ -7,6 +10,8 @@
 #include <vector>
 
 
+namespace ya
+{
 struct CommandBuffer;
 
 struct ModelVertex
@@ -19,20 +24,25 @@ struct ModelVertex
 
 struct MeshData
 {
-    std::vector<ModelVertex>      vertices;
+    std::vector<ModelVertex> vertices;
     std::vector<uint32_t>    indices;
     std::string              name;
-    // std::shared_ptr<Texture> diffuseTexture = nullptr;
+    CoordinateSystem         sourceCoordSystem = CoordinateSystem::RightHanded; // Default for imported models
+
+    stdptr<Mesh> mesh = nullptr;
 
     MeshData()  = default;
     ~MeshData() = default;
+
+    // TODO: only temp data here
+    void createGPUResources();
 };
 
 class Model
 {
   private:
     std::vector<MeshData> meshes;
-    glm::mat4         transform = glm::mat4(1.0f);
+    glm::mat4             transform = glm::mat4(1.0f);
 
     bool        isLoaded = false;
     std::string directory;
@@ -55,3 +65,5 @@ class Model
     const std::string &getDirectory() const { return directory; }
     void               setDirectory(const std::string &directory) { this->directory = directory; }
 };
+
+} // namespace ya
