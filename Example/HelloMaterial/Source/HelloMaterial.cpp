@@ -119,7 +119,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
-   // Create ground plane
+    // Create ground plane
     if (auto plane = scene->createEntity("Plane")) {
         auto tc = plane->addComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
@@ -130,8 +130,6 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         groundLitMat->setObjectColor(glm::vec3(0.8f, 0.8f, 0.8f));
         lmc->addMesh(cubeMesh.get(), groundLitMat);
     }
-
-
 
 
 
@@ -194,6 +192,13 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // TODO: cast check
         auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit0")->as<ya::LitMaterial>();
         lmc->addMesh(cubeMesh.get(), litMat);
+
+        ya::AssetManager::get()->loadTexture("container_diffuse", "Engine/Content/TestTextures/LearnOpenGL/container2.png");
+        litMat->setTextureView(ya::LitMaterial::EResource::DiffuseTexture,
+                               ya::TextureView{
+                                   .texture = ya::AssetManager::get()->getTextureByName("container_diffuse"),
+                                   .sampler = ya::TextureLibrary::getDefaultSampler(),
+                               });
     }
 
     if (auto *suzanne = scene->createEntity("Suzanne")) {
@@ -240,7 +245,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         lmc->addMesh(cubeMesh.get(), pointLightMat);
     }
 
- 
+
     // YA_CORE_DEBUG("1");
 }
 

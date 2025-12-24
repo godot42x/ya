@@ -120,7 +120,8 @@ bool VulkanDescriptorPool::allocateDescriptorSets(
         .pSetLayouts        = sameLayouts.data(),
     };
 
-    VK_CALL(vkAllocateDescriptorSets(_render->getDevice(), &dsAI, vkSets.data()));
+    VkResult ret = vkAllocateDescriptorSets(_render->getDevice(), &dsAI, vkSets.data());
+    YA_CORE_ASSERT(ret == VK_SUCCESS, "VulkanDescriptorPool::allocateDescriptorSets failed with error: {}", ret);
 
     // Convert VkDescriptorSet handles to DescriptorSetHandle
     for (size_t i = 0; i < count; ++i) {

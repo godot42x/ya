@@ -488,14 +488,10 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
 
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
-    auto &params = material->uMaterial;
     // TODO: not texture and default texture?
     // update param from texture
     const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
     const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
-
-    auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
-    resourceUBO->writeData(&params, sizeof(UnlitMaterial::MaterialUBO), 0);
 
     DescriptorImageInfo imageInfo0(SamplerHandle(tv0->sampler->getHandle()),
                                    tv0->texture->getImageViewHandle(),

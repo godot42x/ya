@@ -220,29 +220,19 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
     });
 
     drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
-        for (auto *mesh : lmc->_meshes) {
-            ImGui::Text("Mesh: %s", mesh->_name.c_str());
-        }
-        for (auto [material, meshId] : lmc->getMaterial2MeshIDs()) {
-            auto LitMat = material->as<LitMaterial>();
-            bool bDirty = false;
-            bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(LitMat->uParams.objectColor));
-            if (bDirty) {
-                LitMat->setParamDirty(true);
-            }
-        }
-    });
-    drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
         for (auto [mat, meshIndex] : lmc->getMaterial2MeshIDs()) {
             ImGui::CollapsingHeader(mat->getLabel().c_str(), 0);
             ImGui::Indent();
+            ImGui::PushID(mat->getLabel().c_str());
 
             auto litMat = mat->as<LitMaterial>();
             bool bDirty = false;
-            bDirty |= ImGui::DragFloat3("Object Color", glm::value_ptr(litMat->uParams.objectColor), 0.1f);
+            bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
             // bDirty |= ImGui::DragFloat3("Base Color", glm::value_ptr(litMat->uMaterial.baseColor), 0.1f);
-            // bDirty |= ImGui::DragFloat("Metallic", &litMat->uMaterial.metallic, 0.01f, 0.0f, 1.0f);
-            // bDirty |= ImGui::DragFloat("Roughness", &litMat->uMaterial.roughness, 0.01f, 0.0f, 1.0f);
+            // bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->uParams.ambient), 0.1f);
+            bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->uParams.diffuse));
+            bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->uParams.specular));
+            bDirty |= ImGui::DragFloat("Shininess", &litMat->uParams.shininess, 1.0f, 1.0f, 256.0f);
             // for (uint32_t i = 0; i < litMat->_textureViews.size(); i++) {
             //     auto &tv    = litMat->_textureViews[i];
             //     auto  label = tv.texture->getLabel();
@@ -259,6 +249,7 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
             if (bDirty) {
                 litMat->setParamDirty(true);
             }
+            ImGui::PopID();
             ImGui::Unindent();
         }
     });

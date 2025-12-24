@@ -11,6 +11,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
+#include "Render/TextureLibrary.h"
 
 
 #include "Scene/Scene.h"
@@ -67,21 +68,27 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                     },
                 },
             },
-            // DescriptorSetLayout{
-            //     .label    = "LitMaterial_Resource_DSL",
-            //     .set      = 1,
-            //     .bindings = {
-            //         DescriptorSetLayoutBinding{
-            //             .binding         = 0,
-            //             .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-            //             .descriptorCount = 1,
-            //             .stageFlags      = EShaderStage::Fragment,
-            //         },
-            //     },
-            // },
+            DescriptorSetLayout{
+                .label    = "LitMaterial_Resource_DSL",
+                .set      = 1,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    DescriptorSetLayoutBinding{
+                        .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
             DescriptorSetLayout{
                 .label    = "LitMaterial_Param_DSL",
-                .set      = 1,
+                .set      = 2,
                 .bindings = {
                     DescriptorSetLayoutBinding{
                         .binding         = 0,
@@ -94,12 +101,11 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
 
-    auto DSLs         = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
-    _materialFrameDSL = DSLs[0];
-    // _materialDSL       = DSLs[1];
-    _materialParamDSL = DSLs[1];
+    auto DSLs            = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
+    _materialFrameDSL    = DSLs[0];
+    _materialResourceDSL = DSLs[1];
+    _materialParamDSL    = DSLs[2];
 
-    // // Use factory method to create pipeline layout
     _pipelineLayout = IPipelineLayout::create(
         render,
         pipelineLayout.label,
@@ -314,7 +320,6 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         return;
     }
 
-
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
     cmdBuf->bindPipeline(_pipeline.get());
 
@@ -356,27 +361,31 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
             // update each material instance's descriptor set if dirty
             uint32_t            materialInstanceIndex = material->getIndex();
+            DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
             DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
-            // DescriptorSetHandle resourceDS = _materialResourceDSs[materialID];
-            // DescriptorSetHandle objectDS = _materialObjectDSs[materialIndex];
 
             // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
             if (!updatedMaterial[materialInstanceIndex]) {
+                if (bShouldForceUpdateMaterial || material->isResourceDirty())
+                {
+                    updateMaterialResourceDS(resourceDS, material);
+                    material->setResourceDirty(false);
+                }
                 if (bShouldForceUpdateMaterial || material->isParamDirty())
                 {
                     updateMaterialParamDS(paramDS, material);
                     material->setParamDirty(false);
                 }
+
                 updatedMaterial[materialInstanceIndex] = true;
             }
 
             // bind descriptor set
-            std::vector<DescriptorSetHandle>
-                descSets{
-                    _frameDS,
-                    _materialParamDSs[materialInstanceIndex],
-                    // _materialResourceDSs[materialID],
-                };
+            std::vector<DescriptorSetHandle> descSets = {
+                _frameDS,
+                resourceDS,
+                paramDS,
+            };
             cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
 
             // update push constant
@@ -508,37 +517,41 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
 
 void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
 {
-    // auto render = getRender();
+    auto render = getRender();
 
-
-    // YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
-    // auto &params = material->uMaterial;
+    YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
     // // TODO: not texture and default texture?
     // // update param from texture
-    // const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
+    const TextureView *tv0 = material->getTextureView(LitMaterial::EResource::DiffuseTexture);
     // const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+    SamplerHandle   samplerHandle;
+    ImageViewHandle imageViewHandle;
+    if (!tv0) {
+        samplerHandle   = TextureLibrary::getDefaultSampler()->getHandle();
+        imageViewHandle = TextureLibrary::getWhiteTexture()->getImageViewHandle();
+    }
+    else {
+        samplerHandle   = SamplerHandle(tv0->sampler->getHandle());
+        imageViewHandle = tv0->texture->getImageViewHandle();
+    }
 
-    // auto resourceUBO = _materialParamsUBOs[material->getIndex()].get();
-    // resourceUBO->writeData(&params, sizeof(ya::UnlitMaterialUBO), 0);
 
-    // DescriptorImageInfo imageInfo0(
-    //     SamplerHandle(tv0->sampler->getHandle()),
-    //     tv0->texture->getImageViewHandle(),
-    //     EImageLayout::ShaderReadOnlyOptimal);
+
+    DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
     // DescriptorImageInfo imageInfo1(
     //     SamplerHandle(tv1->sampler->getHandle()),
     //     tv1->texture->getImageViewHandle(),
     //     EImageLayout::ShaderReadOnlyOptimal);
 
 
-    // render
-    //     ->getDescriptorHelper()
-    //     ->updateDescriptorSets(
-    //         {
-    //             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo0, 1),
-    //             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
-    //         }
-    //         {});
+    render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo0}),
+                // IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
+            },
+            {});
 }
 
 void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
@@ -561,23 +574,23 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 
     // 2. destroy old
     _materialParamDSs.clear();
-    // _materialResourceDSs.clear();
+    _materialResourceDSs.clear();
 
     // 3. recreate pool
     if (_materialDSP) {
         _materialDSP->resetPool();
     }
     DescriptorPoolCreateInfo poolCI{
-        .maxSets   = newDescriptorSetCount, //* 2, // max(param , resource)
+        .maxSets   = newDescriptorSetCount * 2, // max(param , resource)
         .poolSizes = {
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::UniformBuffer,
                 .descriptorCount = newDescriptorSetCount,
             },
-            // DescriptorPoolSize{
-            //     .type            = EPipelineDescriptorType::CombinedImageSampler,
-            //     .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
-            // },
+            DescriptorPoolSize{
+                .type            = EPipelineDescriptorType::CombinedImageSampler,
+                .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
+            },
         },
     };
     _materialDSP = IDescriptorPool::create(render, poolCI);
@@ -586,9 +599,8 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     // 4. allocate new sets
     // 为每一个单独的材质分配描述符集
     _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
-    // _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
+    _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
 
-    // TODO: set debug name
     for (auto &ds : _materialParamDSs) {
         YA_CORE_ASSERT(ds.ptr != nullptr, "Failed to allocate material param descriptor set");
     }

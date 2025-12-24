@@ -57,7 +57,7 @@ struct LitMaterialSystem : public IMaterialSystem
         float directionalLightIntensity           = 1.0f; // 可以紧跟在vec3后面的4字节空间
 
         alignas(16) glm::vec3 directionalLightColor = glm::vec3(1.0f);
-        float ambientIntensity                      = 0.05f; // 可以紧跟在vec3后面的4字节空间
+        float ambientIntensity                      = 0.1f; // 可以紧跟在vec3后面的4字节空间
 
         alignas(16) glm::vec3 ambientColor = glm::vec3(1.0f);
         uint32_t numPointLights            = 0;
@@ -82,9 +82,9 @@ struct LitMaterialSystem : public IMaterialSystem
 
     GraphicsPipelineCreateInfo _pipelineDesc;
 
-    std::shared_ptr<IDescriptorSetLayout> _materialFrameDSL; // set 0
-    // std::shared_ptr<IDescriptorSetLayout> _materialDSL;       // set 1
-    std::shared_ptr<IDescriptorSetLayout> _materialParamDSL; // set 2
+    std::shared_ptr<IDescriptorSetLayout> _materialFrameDSL;    // set 0: perframe
+    std::shared_ptr<IDescriptorSetLayout> _materialResourceDSL; // set 1: per material resource (textures)
+    std::shared_ptr<IDescriptorSetLayout> _materialParamDSL;    // set 2: per material param
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout;
     std::shared_ptr<IGraphicsPipeline> _pipeline;
@@ -104,8 +104,8 @@ struct LitMaterialSystem : public IMaterialSystem
 
     // object ubo
     std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
-    std::vector<DescriptorSetHandle>      _materialParamDSs; // each material instance
-    // std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
+    std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
+    std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
     std::string _ctxEntityDebugStr;
 

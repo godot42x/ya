@@ -21,7 +21,8 @@ layout(set = 0, binding =3, std140) uniform DebugUBO {
 
 
 layout(location = 0) out vec3 vPos;
-layout(location = 1) out vec3 vNormal;
+layout(location = 1) out vec2 vTexcoord;
+layout(location = 2) out vec3 vNormal;
 
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
@@ -35,6 +36,7 @@ layout(push_constant) uniform PushConstants{
 void main (){
     vec4 pos =  pc.modelMat * vec4(aPos, 1.0);
     vPos = pos.xyz;
+    vTexcoord = aTexcoord;
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     
     // TODO: put it on CPU side, calculate normal matrix only once per object
@@ -93,12 +95,20 @@ layout(set = 0, binding =2, std140) uniform DebugUBO {
 } uDebug;
 
 
-layout(set = 1, binding = 0) uniform ParamUBO {
+
+layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
+layout(set =1, binding = 1) uniform sampler2D uTexture1;
+
+layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 objectColor;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
 } uParams;
 
 layout(location = 0) in vec3 vPos;
-layout(location = 1) in vec3 vNormal;
+layout(location = 1) in vec2 vTexcoord;
+layout(location = 2) in vec3 vNormal;
 
 layout(location = 0) out vec4 fColor;
 
@@ -122,9 +132,10 @@ float calculateAttenuation(float distance, float radius) {
 void main ()
 {
     vec3 norm = normalize(vNormal);
+    // from fragment to camera(eye)
     vec3 viewDir = normalize(uFrame.cameraPos - vPos);
     vec3 objectColor = uParams.objectColor;
-    float shininess = uDebug.floatParam.x == 0.0 ? 32.0 : uDebug.floatParam.x;
+    float shininess = uDebug.floatParam.x == 0.0 ? uParams.shininess : uDebug.floatParam.x;
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -134,16 +145,17 @@ void main ()
         fColor = vec4(0,0,1,1);
         return;
     }
+
+    vec4 diffuseTexColor = texture(uTexDiffuse, vTexcoord);
     
-    // 环境光
-    vec3 ambient = uLit.ambientIntensity * uLit.ambientColor;
     
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
+    vec3 lightColor;
     
     for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) {
 
-        PointLight light = uLit.pointLights[0];
+        PointLight light = uLit.pointLights[i];
         
         vec3 lightDir = vPos -  light.position;
         // vec3 lightDir =   light.position - vPos;
@@ -152,24 +164,27 @@ void main ()
         
         // 漫反射
         float diff = max(dot(norm, -lightDir), 0.0);
-        vec3 diffuse = diff * light.color * light.intensity;
+        vec3 diffuse = (diff * uParams.diffuse) * vec3(diffuseTexColor)  * light.color * light.intensity;
         
         // 高光
         // vec3 halfwayDir = normalize(lightDir + viewDir);
         vec3 reflectDir = reflect(-lightDir, norm);
         // float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
-        // vec3 specular = spec * light.color * light.intensity;
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-        vec3 specular = spec * light.color * light.intensity;
+        vec3 specular = (spec * uParams.specular) * light.color * light.intensity;
         
         // 衰减
         float attenuation = 1.0;// calculateAttenuation(distance, light.radius);
         
         // 累加光照
         lighting += (diffuse + specular) * attenuation;
+        lightColor *= light.color ;
     }
 
-    // lighting = uLit.directionalLightColor;
+
+    // 环境光
+    vec3 ambientColor = uLit.ambientColor ;//* lightColor;
+    vec3 ambient = uLit.ambientIntensity * ambientColor ;//* vec3(diffuseTexColor);
     
     // 最终颜色
     vec3 color = (ambient + lighting) * objectColor;
