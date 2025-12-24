@@ -11,7 +11,14 @@
 namespace ya
 {
 
-struct FreeCameraController
+struct CameraController
+{
+    virtual ~CameraController() = default;
+
+    // virtual void update(Camera &camera, const InputManager &inputManager, float deltaTime) = 0;
+};
+
+struct FreeCameraController : public CameraController
 {
     float _moveSpeed     = 5.0f; // Units per second
     float _rotationSpeed = 0.5f; // Degrees per mouse unit
@@ -37,10 +44,10 @@ struct FreeCameraController
 
 
 // Controller for the ECS camera entity (TransformComponent + CameraComponent)
-struct OrbitCameraController
+struct OrbitCameraController : public CameraController
 {
-    float    _mouseSensitivity = 0.1f;
-    float    _zoomSensitivity  = 0.1f;
+    float     _mouseSensitivity = 0.1f;
+    float     _zoomSensitivity  = 0.1f;
     EMouse::T _rotateButton     = EMouse::Right;
 
   public:

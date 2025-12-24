@@ -28,7 +28,7 @@ struct CameraComponent : public IComponent, public MetaRegister
     // TODO: cache
     glm::mat4 getProjection() const
     {
-        return glm::perspectiveRH_ZO(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
+        return FMath::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
     }
     // TODO: a camera should only define the effect:
     //  1. projection or orthographic

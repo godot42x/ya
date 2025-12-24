@@ -86,6 +86,7 @@ Scene *App::getScene() const
 
 void App::onSceneViewportResized(Rect2D rect)
 {
+    viewportRect      = rect;
     float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
     camera.setAspectRatio(aspectRatio);
     _viewportRT->setExtent(Extent2D{
@@ -393,9 +394,7 @@ void App::init(AppDesc ci)
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
     TODO(use ref)
-    _editorLayer->onViewportResized.set([this](Rect2D rect) {
-        this->onSceneViewportResized(rect);
-    });
+    _editorLayer->onViewportResized.set([this](Rect2D rect) { this->onSceneViewportResized(rect); });
 
     {
         YA_PROFILE_SCOPE("Inheritance Init");
@@ -539,10 +538,21 @@ int App::onEvent(const Event &event)
         return 0;
     }
 
-    UIAppCtx ctx{
-        .lastMousePos = _lastMousePos,
-    };
-    UIManager::get()->onEvent(event, ctx);
+    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
+    // currently ui only rendering in viewport
+    if (bInViewport) {
+
+
+        UIAppCtx ctx{
+            .lastMousePos = _lastMousePos,
+            .bInViewport  = bInViewport,
+            .viewportRect = viewportRect,
+        };
+        _editorLayer->screenToViewport(_lastMousePos, ctx.lastMousePos);
+        UIManager::get()->onEvent(event, ctx);
+    }
+
+    // if()
     return 0;
 }
 
@@ -673,21 +683,21 @@ void App::onUpdate(float dt)
     _viewportRT->setDepthStencilClearValue(depthClearValue);
     _viewportRT->onUpdate(dt);
 
+    _screenRT->onUpdate(dt);
+
     auto cam = _viewportRT->getCameraMut();
 
-    cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
-    if (cam && cam->hasComponent<CameraComponent>()) {
-        auto            cc  = cam->getComponent<CameraComponent>();
-        const Extent2D &ext = _viewportRT->getExtent();
-        if (cam->hasComponent<TransformComponent>()) {
-            auto tc = cam->getComponent<TransformComponent>();
-            orbitCameraController.update(*tc, *cc, inputManager, ext);
+    if (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) {
+        cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
+        if (cam && cam->hasComponent<CameraComponent>()) {
+            auto            cc  = cam->getComponent<CameraComponent>();
+            const Extent2D &ext = _viewportRT->getExtent();
+            if (cam->hasComponent<TransformComponent>()) {
+                auto tc = cam->getComponent<TransformComponent>();
+                orbitCameraController.update(*tc, *cc, inputManager, ext);
+            }
         }
     }
-
-    // auto render = getRender();
-    // auto cmdBuf = render->beginIsolateCommands();
-    // render->endIsolateCommands(cmdBuf);
 }
 
 // MARK: Render

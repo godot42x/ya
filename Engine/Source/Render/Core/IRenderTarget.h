@@ -24,6 +24,9 @@ struct IRenderTarget
     Extent2D    _extent = {0, 0};
     bool        bDirty  = false;
 
+    // ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
+    // ClearValue depthClearValue = ClearValue(1.0f, 0);
+
 
     /**
      * @brief Triggered when framebuffer is recreated (e.g., resize, format change)
@@ -70,7 +73,7 @@ struct IRenderTarget
     /**
      * @brief Render ImGui interface for this render target
      */
-    virtual void onRenderGUI() = 0;
+    virtual void onRenderGUI();
 
     /**
      * @brief Begin rendering to this render target

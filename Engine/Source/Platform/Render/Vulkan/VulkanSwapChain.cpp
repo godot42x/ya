@@ -101,10 +101,14 @@ VulkanSwapChainSupportDetails VulkanSwapChainSupportDetails::query(VkPhysicalDev
     }
 
     // Log available modes for debugging
-    YA_CORE_INFO("Available present modes:");
-    for (const auto &modes : details.presentModes) {
-        YA_CORE_INFO("  - {}", std::to_string(modes));
-    }
+    static std::once_flag flag;
+    std::call_once(flag, [&details]() {
+        YA_CORE_INFO("Available present modes:");
+        for (const auto &modes : details.presentModes) {
+            YA_CORE_INFO("  - {}", std::to_string(modes));
+        }
+    });
+
 
     return details;
 }

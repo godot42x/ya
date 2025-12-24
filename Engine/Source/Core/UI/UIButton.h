@@ -29,6 +29,8 @@ struct UIButton : public UIElement
 
     void render(UIRenderContext &ctx, layer_idx_t layerId) override
     {
+
+
         FUIColor *color = nullptr;
         switch (_state)
         {
@@ -56,10 +58,12 @@ struct UIButton : public UIElement
 
     int handleEvent(const Event &event, UIAppCtx &ctx) override
     {
+        glm::vec2 &pos = _position;
+
         switch (event.getEventType()) {
         case ya::EEvent::MouseButtonPressed:
         {
-            if (FUIHelper::isPointInRect(ctx.lastMousePos, _position, _size))
+            if (FUIHelper::isPointInRect(ctx.lastMousePos, pos, _size))
             {
                 _state = Pressed;
                 return 1;
@@ -69,7 +73,7 @@ struct UIButton : public UIElement
         {
             if (_state == Pressed)
             {
-                if (FUIHelper::isPointInRect(ctx.lastMousePos, _position, _size)) {
+                if (FUIHelper::isPointInRect(ctx.lastMousePos, pos, _size)) {
                     _state = Hovered;
                 }
                 else {
@@ -80,7 +84,7 @@ struct UIButton : public UIElement
         } break;
         case EEvent::MouseMoved:
         {
-            if (FUIHelper::isPointInRect(ctx.lastMousePos, _position, _size))
+            if (FUIHelper::isPointInRect(ctx.lastMousePos, pos, _size))
             {
                 _state = Hovered;
             }

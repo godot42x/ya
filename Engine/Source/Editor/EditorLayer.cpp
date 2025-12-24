@@ -58,6 +58,8 @@ void EditorLayer::onUpdate(float dt)
     // TODO: Resize scene RT if viewport size changed
 }
 
+
+
 bool EditorLayer::screenToViewport(float screenX, float screenY, float &outX, float &outY) const
 {
     // Check if point is within viewport bounds
@@ -72,6 +74,11 @@ bool EditorLayer::screenToViewport(float screenX, float screenY, float &outX, fl
     outY = screenY - _viewportBounds[0].y;
 
     return true;
+}
+
+bool EditorLayer::screenToViewport(const glm::vec2 in, glm::vec2 &out) const
+{
+    return screenToViewport(in.x, in.y, out.x, out.y);
 }
 
 void EditorLayer::onEvent(const Event &event)
@@ -289,10 +296,11 @@ void EditorLayer::toolbar()
 void EditorLayer::viewportWindow()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{128, 128});
 
     if (!ImGui::Begin("Viewport"))
     {
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
         ImGui::End();
         return;
     }
@@ -305,21 +313,6 @@ void EditorLayer::viewportWindow()
     ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
 
-    // Update viewport size if changed
-    if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
-    {
-        _viewportSize  = {viewportPanelSize.x, viewportPanelSize.y};
-        glm::vec2 pos  = {ImGui::GetWindowPos().x, ImGui::GetWindowPos().y};
-        glm::vec2 size = {viewportPanelSize.x, viewportPanelSize.y};
-
-        Rect2D rect = {
-            .pos    = pos,
-            .extent = size,
-        };
-        onViewportResized.executeIfBound(rect);
-        YA_CORE_INFO("Viewport resized to: {} x {}", _viewportSize.x, _viewportSize.y);
-    }
-
     // Calculate viewport bounds for mouse picking
     auto   windowPos = ImGui::GetWindowPos();
     ImVec2 minBound  = ImGui::GetWindowContentRegionMin();
@@ -331,6 +324,21 @@ void EditorLayer::viewportWindow()
 
     _viewportBounds[0] = {minBound.x, minBound.y};
     _viewportBounds[1] = {maxBound.x, maxBound.y};
+
+
+    // Update viewport size if changed
+    if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
+    {
+        _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
+
+        Rect2D rect = {
+            .pos    = {_viewportBounds[0].x, _viewportBounds[0].y},
+            .extent = {viewportPanelSize.x, viewportPanelSize.y},
+        };
+        onViewportResized.executeIfBound(rect);
+
+        YA_CORE_INFO("Viewport resized to: {} x {}", _viewportSize.x, _viewportSize.y);
+    }
 
     // Display the render texture from editor render target
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
@@ -367,7 +375,7 @@ void EditorLayer::viewportWindow()
     bViewportHovered = ImGui::IsWindowHovered();
     ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered);
 
-    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
     ImGui::End();
 }
 

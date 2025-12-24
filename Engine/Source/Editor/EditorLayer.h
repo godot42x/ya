@@ -36,6 +36,7 @@ class EditorLayer
     // Viewport state
     glm::vec2 _viewportSize = {1280.f, 720.f};
     glm::vec2 _viewportBounds[2]; // Min and max bounds
+    Rect2D    viewportRect;
     bool      bViewportFocused = false;
     bool      bViewportHovered = false;
 
@@ -79,8 +80,9 @@ class EditorLayer
      * @return true if coordinate is within viewport bounds
      */
     bool screenToViewport(float screenX, float screenY, float &outX, float &outY) const;
+    bool screenToViewport(const glm::vec2 in, glm::vec2 &out) const;
 
-    void onImGuiRender(auto content)
+        void onImGuiRender(auto content)
     {
         updateWindowFlags();
 

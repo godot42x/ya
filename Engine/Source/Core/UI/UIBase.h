@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/RenderDefines.h"
 #include <glm/glm.hpp>
 
 
@@ -68,6 +69,8 @@ struct UILayout
 struct UIAppCtx
 {
     glm::vec2 lastMousePos;
+    bool      bInViewport = false;
+    Rect2D    viewportRect;
 };
 
 
