@@ -6,16 +6,17 @@
 namespace ya
 {
 struct Scene;
+struct EditorLayer;
 
 struct SceneHierarchyPanel
 {
-    Scene *_context       = nullptr;
-    Entity _selection     = {};
-    Entity _lastSelection = {};
+    EditorLayer *_owner;
+    Scene       *_context       = nullptr;
+    Entity       _selection     = {};
+    Entity       _lastSelection = {};
 
   public:
-    SceneHierarchyPanel() = default;
-    explicit SceneHierarchyPanel(Scene *scene) : _context(scene) {}
+    SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
 
     void setContext(Scene *scene) { _context = scene; }
     void onImGuiRender();

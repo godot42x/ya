@@ -21,6 +21,9 @@
 namespace ya
 {
 
+struct IImageView;
+struct Sampler;
+
 /**
  * @brief ImGuiManager - Manages ImGui lifecycle and rendering
  *
@@ -36,6 +39,7 @@ struct ImGuiManager
     ImDrawData *_drawData    = nullptr;
     bool        _initialized = false;
     bool        bBlockEvents = false;
+
 
 
   public:
@@ -124,7 +128,7 @@ struct ImGuiManager
      * @param layout Image layout (default: SHADER_READ_ONLY_OPTIMAL)
      * @return ImTextureID (descriptor set handle)
      */
-    static void *addTexture(void *imageView, void *sampler, int layout = 0);
+    static void *addTexture(IImageView *imageView, Sampler *sampler, EImageLayout::T layout = EImageLayout::ShaderReadOnlyOptimal);
 
     /**
      * @brief Remove ImGui descriptor set for a texture

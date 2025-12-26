@@ -5,7 +5,7 @@
 
 namespace ya
 {
-struct ScriptingSystem : public ISystem
+struct ScriptingSystem : public GameInstanceSystem
 {
     virtual void init() = 0;
 };

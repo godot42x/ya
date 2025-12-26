@@ -13,35 +13,25 @@
 namespace ya
 {
 
-VkDescriptorSet vkFileIcon;
-VkDescriptorSet vkFolderIcon;
 
-ContentBrowserPanel::ContentBrowserPanel()
-    : _currentDirectory(std::filesystem::current_path())
+ContentBrowserPanel::ContentBrowserPanel(EditorLayer *owner)
+    : _owner(owner),
+      _currentDirectory(std::filesystem::current_path())
 {
     _baseDirectory    = FileSystem::get()->getEngineRoot() / "Content";
     _currentDirectory = _baseDirectory;
+}
 
+void ContentBrowserPanel::init()
+{
+    auto am            = AssetManager::get();
+    auto fileTexture   = am->loadTexture("file", "Engine/Content/TestTextures/editor/file.png").get();
+    auto folderTexture = am->loadTexture("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
+    auto sampler       = TextureLibrary::getDefaultSampler();
 
-    App::get()->onScenePostInit.addLambda(
-        this,
-        [this]() {
-            auto am    = AssetManager::get();
-            fileIcon   = am->loadTexture("file", "Engine/Content/TestTextures/editor/file.png").get();
-            folderIcon = am->loadTexture("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
-            // am->loadTexture("pause", "Engine/Content/TestTextures/editor/pause.png");
-            // am->loadTexture("play", "Engine/Content/TestTextures/editor/play.png");
-            // am->loadTexture("stop", "Engine/Content/TestTextures/editor/stop.png");
-            // am->loadTexture("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
-            auto sampler = TextureLibrary::getDefaultSampler();
-
-            vkFileIcon   = (VkDescriptorSet)ImGuiManager::get().addTexture(fileIcon->getImageView()->getHandle(), sampler->getHandle());
-            vkFolderIcon = (VkDescriptorSet)ImGuiManager::get().addTexture(folderIcon->getImageView()->getHandle(), sampler->getHandle());
-
-            TODO("Implement remove subscription");
-            // App::get()->onScenePostInit.remove(this);
-        });
-};
+    fileIcon   = _owner->getOrCreateImGuiTextureID(fileTexture->getImageView(), sampler);
+    folderIcon = _owner->getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler);
+}
 
 void ContentBrowserPanel::onImGuiRender()
 {
@@ -89,14 +79,13 @@ void ContentBrowserPanel::renderDirectoryContents()
 
             ImGui::PushID(filename.c_str());
 
-            auto icon = entry.is_directory() ? vkFolderIcon : vkFileIcon;
+            auto icon = entry.is_directory() ? folderIcon : fileIcon;
 
-            ImGui::ImageButton(
-                entry.path().filename().string().c_str(),
-                (ImTextureID)(uintptr_t)icon,
-                {thumbnail_size, thumbnail_size},
-                {0, 0},
-                {1, 1});
+            ImGui::ImageButton(entry.path().filename().string().c_str(),
+                               *icon,
+                               {thumbnail_size, thumbnail_size},
+                               {0, 0},
+                               {1, 1});
 
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
             {

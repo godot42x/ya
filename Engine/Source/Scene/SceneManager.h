@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Delegate.h"
 #include "Scene/Scene.h"
 #include <functional>
 #include <memory>
@@ -24,9 +25,21 @@ class SceneManager
 
   private:
     std::unique_ptr<Scene> _currentScene;
-    SceneInitCallback      _onSceneInit;
-    SceneInitCallback      _onSceneCleanup;
     std::string            _currentScenePath;
+
+  public:
+    /**
+  State:
+  Engine Start->
+  SceneManager created ->
+  Open scene ->
+  Scene initialized (onSceneInit) ->
+  Engine running ->
+  Close scene (onSceneDestroy) -> Unload scene -> Engine Quit
+*/
+
+    MulticastDelegate<void(Scene *)> onSceneInit;
+    MulticastDelegate<void(Scene *)> onSceneDestroy;
 
   public:
 
@@ -45,8 +58,6 @@ class SceneManager
     [[nodiscard]] Scene *getCurrentScene() const { return _currentScene.get(); }
     bool                 hasScene() const { return _currentScene != nullptr; }
 
-    void setSceneInitCallback(SceneInitCallback callback) { _onSceneInit = callback; }
-    void setSceneCleanupCallback(SceneInitCallback callback) { _onSceneCleanup = callback; }
 
     void serializeToFile(const std::string &path, Scene *scene) const;
     void deserializeFromFile(const std::string &path, Scene *scene);

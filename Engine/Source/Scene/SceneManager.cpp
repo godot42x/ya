@@ -1,7 +1,8 @@
 #include "SceneManager.h"
-#include "Core/System/FileSystem.h"
 #include "Core/Log.h"
 #include "Core/Serialization/SceneSerializer.h"
+#include "Core/System/FileSystem.h"
+
 
 namespace ya
 {
@@ -26,9 +27,7 @@ bool SceneManager::loadScene(const std::string &path)
     _currentScenePath = path;
 
     // Call initialization callback if set
-    if (_onSceneInit) {
-        _onSceneInit(_currentScene.get());
-    }
+    onSceneInit.broadcast(_currentScene.get());
 
     YA_CORE_INFO("Scene loaded: {}", path);
     return true;
@@ -39,11 +38,7 @@ bool SceneManager::unloadScene()
     if (!_currentScene) {
         return false;
     }
-
-    // Call cleanup callback if set
-    if (_onSceneCleanup) {
-        _onSceneCleanup(_currentScene.get());
-    }
+    onSceneDestroy.broadcast(_currentScene.get());
 
     _currentScene.reset();
     YA_CORE_INFO("Scene unloaded: {}", _currentScenePath);

@@ -1,8 +1,10 @@
 #include "EditorLayer.h"
 #include "Core/App/App.h"
+#include "Core/AssetManager.h"
 #include "ImGuiHelper.h"
 #include "Scene/Scene.h"
 #include <glm/gtc/type_ptr.hpp>
+
 
 #include "Render/TextureLibrary.h"
 
@@ -10,7 +12,10 @@
 namespace ya
 {
 
-EditorLayer::EditorLayer(App *app) : _app(app)
+EditorLayer::EditorLayer(App *app)
+    : _app(app),
+      _sceneHierarchyPanel(this),
+      _contentBrowserPanel(this)
 {
 }
 
@@ -27,20 +32,48 @@ void EditorLayer::onAttach()
         _sceneHierarchyPanel.setContext(scene);
     }
 
+    _contentBrowserPanel.init();
+
     // Subscribe to RenderTarget recreation events to cleanup stale ImageView references
-    if (_app->_viewportRT) {
-        _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
-            YA_CORE_INFO("EditorLayer: Scene RT recreated, cleaning up ImGui texture cache");
-            cleanupImGuiTextures();
-        });
-    }
+    // if (_app->_viewportRT) {
+    //     _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
+    //         YA_CORE_INFO("EditorLayer: Scene RT recreated, cleaning up ImGui texture cache");
+    //         cleanupImGuiTextures();
+    //     });
+    // }
+
+    auto am             = AssetManager::get();
+    auto playIcon       = am->loadTexture("play", "Engine/Content/TestTextures/editor/play.png");
+    auto pauseIcon      = am->loadTexture("pause", "Engine/Content/TestTextures/editor/pause.png");
+    auto stopIcon       = am->loadTexture("stop", "Engine/Content/TestTextures/editor/stop.png");
+    auto simulationIcon = am->loadTexture("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
+
+    // Validate texture loading
+    if (!playIcon) YA_CORE_ERROR("Failed to load play icon");
+    if (!pauseIcon) YA_CORE_ERROR("Failed to load pause icon");
+    if (!stopIcon) YA_CORE_ERROR("Failed to load stop icon");
+    if (!simulationIcon) YA_CORE_ERROR("Failed to load simulation icon");
+
+    _playIcon       = getOrCreateImGuiTextureID(playIcon->getImageView());
+    _pauseIcon      = getOrCreateImGuiTextureID(pauseIcon->getImageView());
+    _stopIcon       = getOrCreateImGuiTextureID(stopIcon->getImageView());
+    _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
+
+    auto *viewportRT = App::get()->_viewportRT.get();
+    auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
+    _viewportImage   = getOrCreateImGuiTextureID(imageView);
 
     if (_app->_screenRT) {
         _app->_screenRT->onFrameBufferRecreated.addLambda(this, [this]() {
             YA_CORE_INFO("EditorLayer: UI RT recreated, cleaning up ImGui texture cache");
-            cleanupImGuiTextures();
+            this->removeImGuiTexture(_viewportImage);
+            auto *viewportRT = App::get()->_viewportRT.get();
+            auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
+            _viewportImage   = getOrCreateImGuiTextureID(imageView);
         });
     }
+
+
 
     YA_CORE_INFO("EditorLayer attached successfully");
 }
@@ -48,7 +81,6 @@ void EditorLayer::onAttach()
 void EditorLayer::onDetach()
 {
     YA_CORE_INFO("EditorLayer::onDetach");
-
     // Cleanup ImGui textures before destroying panels
     cleanupImGuiTextures();
 }
@@ -169,6 +201,7 @@ void EditorLayer::setupDockspace()
     }
 }
 
+
 void EditorLayer::menuBar()
 {
     ImGui::BeginMenuBar();
@@ -246,13 +279,25 @@ void EditorLayer::toolbar()
         return;
     }
 
+
     float size = ImGui::GetWindowHeight() - 4.0f;
 
     ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
 
-    if (ImGui::Button("Play", ImVec2(size * 2, size)))
+    if (ImGui::ImageButton("Play", *_playIcon, ImVec2(size, size)))
     {
+        _app->requestQuit();
         // TODO: Play scene
+    }
+    ImGui::SameLine();
+    if (ImGui::ImageButton("Simulate", *_simulationIcon, ImVec2(size, size)))
+    {
+    }
+    // if (ImGui::ImageButton("Pause", pauseDS, ImVec2(size * 2, size)))
+    // {
+    // }
+    if (ImGui::ImageButton("Stop", *_stopIcon, ImVec2(size, size)))
+    {
     }
 
     ImGui::PopStyleVar(2);
@@ -274,24 +319,6 @@ void EditorLayer::toolbar()
 //     ImGui::End();
 // }
 
-// void EditorLayer::renderStatsWindow()
-// {
-//     if (!bShowRenderStats)
-//     {
-//         return;
-//     }
-
-//     if (!ImGui::Begin("Render Stats", &bShowRenderStats))
-//     {
-//         ImGui::End();
-//         return;
-//     }
-
-//     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-//     ImGui::Text("Frame Time: %.3f ms", 1000.0f / ImGui::GetIO().Framerate);
-
-//     ImGui::End();
-// }
 
 void EditorLayer::viewportWindow()
 {
@@ -348,20 +375,13 @@ void EditorLayer::viewportWindow()
         {
             if (auto imageView = viewportRT->getFrameBuffer()->getImageView(0))
             {
-                // Get default sampler for texture display
-                if (auto defaultSampler = TextureLibrary::getDefaultSampler())
+                // Create ImGui descriptor set through editor layer (application layer)
+                if (auto entry = getOrCreateImGuiTextureID(imageView))
                 {
-                    // Create ImGui descriptor set through editor layer (application layer)
-                    void *imguiTextureID = getOrCreateImGuiTextureID(imageView->getHandle().as<void *>(),
-                                                                     defaultSampler->getHandle().as<void *>());
-
-                    if (imguiTextureID)
-                    {
-                        ImGui::Image(imguiTextureID,
-                                     viewportPanelSize,
-                                     ImVec2(0, 0),  // UV0
-                                     ImVec2(1, 1)); // UV1
-                    }
+                    ImGui::Image((void *)entry->ds,
+                                 viewportPanelSize,
+                                 ImVec2(0, 0),
+                                 ImVec2(1, 1));
                 }
             }
         }
@@ -379,45 +399,61 @@ void EditorLayer::viewportWindow()
     ImGui::End();
 }
 
-void *EditorLayer::getOrCreateImGuiTextureID(void *imageView, void *sampler)
+const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView> imageView, stdptr<Sampler> sampler)
 {
-    if (!imageView || !sampler) {
+    if (!imageView) {
         YA_CORE_WARN("EditorLayer::getOrCreateImGuiTextureID: Invalid imageView or sampler");
         return nullptr;
     }
+    if (!sampler) {
+        sampler = TextureLibrary::getDefaultSampler();
+    }
 
+    ImGuiImageEntry entry{
+        .imageView = imageView,
+        .sampler   = sampler,
+    };
     // Check if already cached
-    auto it = _imguiTextureCache.find(imageView);
-    if (it != _imguiTextureCache.end()) {
-        return it->second; // Return cached descriptor set
+    auto it = _imguiTextureCache.find(entry);
+    if (it != _imguiTextureCache.end())
+    {
+        if (it->ds != nullptr) {
+            return &(*it); // Return cached descriptor set
+        }
     }
 
     // Create new ImGui descriptor set (platform-agnostic through ImGuiManager)
-    void *textureID = ImGuiManager::addTexture(imageView, sampler);
+    void *textureID = ImGuiManager::addTexture(imageView.get(), sampler.get(), EImageLayout::ShaderReadOnlyOptimal);
 
     if (!textureID) {
         YA_CORE_ERROR("EditorLayer::getOrCreateImGuiTextureID: Failed to create descriptor set");
         return nullptr;
     }
 
+    entry.ds = textureID;
     // Cache and return
-    _imguiTextureCache[imageView] = textureID;
-    YA_CORE_TRACE("Created ImGui descriptor set for imageView: {}", imageView);
+    _imguiTextureCache.insert(entry);
+    YA_CORE_TRACE("Created ImGui descriptor set for imageView: {}", imageView->getHandle().ptr);
 
-    return textureID;
+    return &(*_imguiTextureCache.find(entry));
 }
 
 void EditorLayer::cleanupImGuiTextures()
 {
     YA_CORE_INFO("EditorLayer::cleanupImGuiTextures - Releasing {} descriptor sets", _imguiTextureCache.size());
 
-    for (auto &[imageView, descriptorSet] : _imguiTextureCache) {
-        if (descriptorSet) {
-            ImGuiManager::removeTexture(descriptorSet);
+    for (auto &entry : _imguiTextureCache) {
+        if (entry.ds) {
+            ImGuiManager::removeTexture(entry.ds);
         }
     }
-
     _imguiTextureCache.clear();
+}
+
+void EditorLayer::removeImGuiTexture(const ImGuiImageEntry *entry)
+{
+    ImGuiManager::removeTexture(entry->ds);
+    _imguiTextureCache.erase(*entry);
 }
 
 } // namespace ya

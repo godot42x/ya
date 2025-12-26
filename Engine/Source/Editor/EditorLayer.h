@@ -2,17 +2,61 @@
 
 #include "ContentBrowserPanel.h"
 #include "Core/Event.h"
+#include "Render/Core/DescriptorSet.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
 #include <memory>
 #include <unordered_map>
 
 
+
+namespace ya
+{
+
+struct ImGuiImageEntry
+{
+    stdptr<IImageView>  imageView;
+    stdptr<Sampler>     sampler;
+    DescriptorSetHandle ds;
+
+    bool operator==(const ImGuiImageEntry &other) const
+    {
+        return imageView == other.imageView && sampler == other.sampler;
+    }
+    bool operator<(const ImGuiImageEntry &other) const
+    {
+        if (imageView != other.imageView)
+            return imageView < other.imageView;
+        return sampler < other.sampler;
+    }
+
+    operator ImTextureRef() const
+    {
+        return (ImTextureRef)ds.ptr;
+    }
+};
+
+} // namespace ya
+
+// Provide std::hash specialization for unordered_set support
+namespace std
+{
+template <>
+struct hash<ya::ImGuiImageEntry>
+{
+    size_t operator()(const ya::ImGuiImageEntry &entry) const noexcept
+    {
+        size_t h1 = hash<void *>{}(entry.sampler.get());
+        size_t h2 = hash<void *>{}(entry.imageView.get());
+        return h1 ^ (h2 << 1);
+    }
+};
+} // namespace std
+
 namespace ya
 {
 
 struct App;
-
 class EditorLayer
 {
   private:
@@ -45,9 +89,15 @@ class EditorLayer
     float     _debugFloat = 0.0f;
 
     // ImGui texture descriptor set cache (editor-only, application layer)
-    std::unordered_map<void *, void *> _imguiTextureCache; // ImageView → VkDescriptorSet
+    std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
 
     std::function<void()> _contentFunc;
+
+    const ImGuiImageEntry *_playIcon;
+    const ImGuiImageEntry *_pauseIcon;
+    const ImGuiImageEntry *_stopIcon;
+    const ImGuiImageEntry *_simulationIcon;
+    const ImGuiImageEntry *_viewportImage;
 
   public:
     Delegate<void(Rect2D)> onViewportResized;
@@ -71,18 +121,10 @@ class EditorLayer
      */
     bool shouldCaptureInput() const { return bViewportFocused; }
 
-    /**
-     * @brief Transform screen coordinates to viewport local coordinates
-     * @param screenX Screen X coordinate
-     * @param screenY Screen Y coordinate
-     * @param outX Output viewport-local X
-     * @param outY Output viewport-local Y
-     * @return true if coordinate is within viewport bounds
-     */
     bool screenToViewport(float screenX, float screenY, float &outX, float &outY) const;
     bool screenToViewport(const glm::vec2 in, glm::vec2 &out) const;
 
-        void onImGuiRender(auto content)
+    void onImGuiRender(auto content)
     {
         updateWindowFlags();
 
@@ -126,6 +168,14 @@ class EditorLayer
     }
 
 
+    /**
+     * @brief Get or create ImGui texture ID for rendering in ImGui::Image()
+     * @param imageView Platform image view handle (e.g., VkImageView)
+     * @param sampler Platform sampler handle (e.g., VkSampler)
+     * @return ImTextureID (VkDescriptorSet as void*)
+     */
+    const ImGuiImageEntry *getOrCreateImGuiTextureID(stdptr<IImageView> imageView, stdptr<Sampler> sampler = nullptr);
+
 
   private:
     // UI Methods
@@ -139,18 +189,9 @@ class EditorLayer
     // Helpers
     void setupDockspace();
 
-    /**
-     * @brief Get or create ImGui texture ID for rendering in ImGui::Image()
-     * @param imageView Platform image view handle (e.g., VkImageView)
-     * @param sampler Platform sampler handle (e.g., VkSampler)
-     * @return ImTextureID (VkDescriptorSet as void*)
-     */
-    void *getOrCreateImGuiTextureID(void *imageView, void *sampler);
 
-    /**
-     * @brief Cleanup all ImGui texture descriptor sets
-     */
     void cleanupImGuiTextures();
+    void removeImGuiTexture(const ImGuiImageEntry *entry);
 
   public:
     // Public getters

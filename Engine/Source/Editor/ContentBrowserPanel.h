@@ -7,17 +7,21 @@
 namespace ya
 {
 
+struct EditorLayer;
+struct ImGuiImageEntry;
+
 struct ContentBrowserPanel
 {
+    EditorLayer          *_owner = nullptr;
     std::filesystem::path _currentDirectory;
     std::filesystem::path _baseDirectory;
 
-    Texture *folderIcon = nullptr;
-    Texture *fileIcon   = nullptr;
+    const ImGuiImageEntry *folderIcon = nullptr;
+    const ImGuiImageEntry *fileIcon   = nullptr;
 
 
   public:
-    ContentBrowserPanel();
+    ContentBrowserPanel(EditorLayer *owner);
     ~ContentBrowserPanel() = default;
 
     // Deleted copy/move operations
@@ -26,6 +30,7 @@ struct ContentBrowserPanel
     ContentBrowserPanel(ContentBrowserPanel &&)                 = delete;
     ContentBrowserPanel &operator=(ContentBrowserPanel &&)      = delete;
 
+    void init(); // Load resources after EditorLayer is fully initialized
     void onImGuiRender();
 
   private:

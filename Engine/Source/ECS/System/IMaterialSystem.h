@@ -71,10 +71,9 @@ struct IMaterialSystem : public ISystem
     virtual void onRenderGUI() {}
 
 
-    App          *getApp() const;
-    Scene        *getScene() const;
-    IRender      *getRender() const;
-    VulkanRender *getVulkanRender() const; // Deprecated: use getRender() instead
+    App     *getApp() const;
+    Scene   *getScene() const;
+    IRender *getRender() const;
 
     template <typename T>
     T *as()

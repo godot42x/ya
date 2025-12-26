@@ -7,9 +7,10 @@
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
-#include "Core/System/FileSystem.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
+#include "Core/System/FileSystem.h"
+
 
 
 // Managers/System
@@ -391,10 +392,6 @@ void App::init(AppDesc ci)
 #pragma endregion
 
 
-    _editorLayer = new EditorLayer(this);
-    _editorLayer->onAttach();
-    TODO(use ref)
-    _editorLayer->onViewportResized.set([this](Rect2D rect) { this->onSceneViewportResized(rect); });
 
     {
         YA_PROFILE_SCOPE("Inheritance Init");
@@ -407,13 +404,8 @@ void App::init(AppDesc ci)
 
     // ===== Initialize SceneManager =====
     _sceneManager = new SceneManager();
-    _sceneManager->setSceneInitCallback([this](Scene *scene) {
-        this->onSceneInit(scene);
-    });
-    _sceneManager->setSceneCleanupCallback([this](Scene *scene) {
-        this->onSceneDestroy(scene);
-    });
-
+    _sceneManager->onSceneInit.addLambda(this, [this](Scene *scene) { this->onSceneInit(scene); });
+    _sceneManager->onSceneDestroy.addLambda(this, [this](Scene *scene) { this->onSceneDestroy(scene); });
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
     // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
@@ -426,6 +418,11 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE("Post Init");
         onPostInit();
     }
+
+    _editorLayer = new EditorLayer(this);
+    _editorLayer->onAttach();
+    TODO(use ref)
+    _editorLayer->onViewportResized.set([this](Rect2D rect) { this->onSceneViewportResized(rect); });
 
     loadScene(ci.defaultScenePath);
 }
@@ -679,10 +676,12 @@ void App::onUpdate(float dt)
 {
     inputManager.update();
 
+    // Store real-time delta for editor
+
     _viewportRT->setColorClearValue(colorClearValue);
     _viewportRT->setDepthStencilClearValue(depthClearValue);
-    _viewportRT->onUpdate(dt);
 
+    _viewportRT->onUpdate(dt);
     _screenRT->onUpdate(dt);
 
     auto cam = _viewportRT->getCameraMut();
@@ -922,6 +921,55 @@ void App::onSceneInit(Scene *scene)
     auto cc    = cam->getComponent<CameraComponent>();
     auto owner = cc->getOwner();
     YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
+}
+
+void App::startRuntime()
+{
+    if (_appState != AppState::Editor) {
+        YA_CORE_WARN("Cannot start runtime: not in editor mode");
+        return;
+    }
+
+    YA_CORE_INFO("Starting runtime...");
+    _appState = AppState::Runtime;
+    onEnterRuntime();
+}
+
+void App::startSimulation()
+{
+    if (_appState != AppState::Editor) {
+        YA_CORE_WARN("Cannot start simulation: not in editor mode");
+        return;
+    }
+
+    YA_CORE_INFO("Starting simulation...");
+    _appState = AppState::Simulation;
+
+    onEnterSimulation();
+}
+
+void App::stopRuntime()
+{
+    if (_appState != AppState::Runtime) {
+        YA_CORE_WARN("Cannot stop: not in runtime mode");
+        return;
+    }
+
+    YA_CORE_INFO("Stopping runtime");
+    _appState = AppState::Editor;
+}
+
+void App::stopSimulation()
+{
+    if (_appState != AppState::Simulation) {
+        YA_CORE_WARN("Cannot stop: not in simulation mode");
+        return;
+    }
+
+    YA_CORE_INFO("Stopping simulation");
+    _appState = AppState::Editor;
+
+    onExitSimulation();
 }
 
 bool App::onWindowResized(const WindowResizeEvent &event)

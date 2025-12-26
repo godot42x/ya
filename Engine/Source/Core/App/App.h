@@ -34,6 +34,28 @@ enum AppMode
     Drawing,
 };
 
+/**
+ * @brief Application runtime state
+ *
+ * Editor: Editing mode, no gameplay simulation
+ * Simulation: Play mode in editor, can pause/step
+ * Runtime: Standalone game mode
+ */
+enum class AppState
+{
+    Editor,     // Editing scene, no gameplay
+    Simulation, // Playing in editor (can pause/step)
+    Runtime     // Standalone runtime (game build)
+};
+
+// enum class SimulationState
+// {
+//     Stopped,
+//     Playing,
+//     Paused,
+//     Stepping // Advance one frame
+// };
+
 
 struct AppDesc
 {
@@ -112,6 +134,10 @@ struct App
     AppDesc   _ci;
     glm::vec2 _windowSize = {0, 0};
 
+    // State management
+    AppState _appState = AppState::Editor;
+    // SimulationState _simulationState = SimulationState::Stopped;
+
     // Input and Camera
     InputManager inputManager;
     TaskManager  taskManager;
@@ -183,8 +209,6 @@ struct App
 
     static App *get() { return _instance; }
 
-    // Getters for subsystems
-    [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
 
     [[nodiscard]] IRender *getRender() const { return _render; }
     template <typename T>
@@ -192,23 +216,53 @@ struct App
 
     [[nodiscard]] const AppDesc                 &getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
+    [[nodiscard]] Scene                         *getScene() const;
 
-    [[nodiscard]] Scene *getScene() const;
+    // Getters for subsystems
+    [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] uint32_t      getFrameIndex() const { return _frameIndex; }
+    [[nodiscard]] uint64_t      getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
 
-    [[nodiscard]] uint32_t getFrameIndex() const { return _frameIndex; }
-    [[nodiscard]] uint64_t getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
+    // State getters
+    [[nodiscard]] AppState getAppState() const { return _appState; }
+    // [[nodiscard]] SimulationState getSimulationState() const { return _simulationState; }
+    [[nodiscard]] bool isEditorMode() const { return _appState == AppState::Editor; }
+    [[nodiscard]] bool isSimulationMode() const { return _appState == AppState::Simulation; }
+    [[nodiscard]] bool isRuntimeMode() const { return _appState == AppState::Runtime; }
+    bool               isPaused() const { return _bPause; }
+    // [[nodiscard]] bool            isSimulationPlaying() const { return _simulationState == SimulationState::Playing; }
+    // [[nodiscard]] bool            isSimulationPaused() const { return _simulationState == SimulationState::Paused; }
+    // [[nodiscard]] float getSimulationDeltaTime() const { return _simulationDeltaTime; }
+    // [[nodiscard]] float getEditorDeltaTime() const { return _editorDeltaTime; }
 
-    // temp
-    [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
-
-    [[nodiscard]] const glm::vec2 &getWindowSize() const { return _windowSize; }
+    void startRuntime();
+    void startSimulation();
+    void stopRuntime();
+    void stopSimulation();
 
   protected:
     // Protected for derived classes to override
     virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene) {}
 
+    // void onScenePostInit(Scene *scene) {}
+
+    // State transition hooks
+    virtual void onEnterRuntime() {}
+    virtual void onEnterSimulation() {}
+    virtual void onExitSimulation() {}
+    virtual void onSimulationPaused() {}
+    virtual void onSimulationResumed() {}
+
   private:
+
+    // temp
+    [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
+    [[nodiscard]] const glm::vec2    &getWindowSize() const { return _windowSize; }
+
+
+  private:
+
 
     bool loadScene(const std::string &path);
     bool unloadScene();

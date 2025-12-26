@@ -35,14 +35,6 @@ IRender *IMaterialSystem::getRender() const
     return nullptr;
 }
 
-VulkanRender *IMaterialSystem::getVulkanRender() const
-{
-    if (getApp()) {
-        return getApp()->getRender<VulkanRender>();
-    }
-    return nullptr;
-}
-
 
 
 } // namespace ya

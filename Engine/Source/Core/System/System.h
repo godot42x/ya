@@ -24,7 +24,6 @@ struct EngineSystem : public ISystem
 // life time: game start to game end
 struct GameInstanceSystem : public ISystem
 {
-    void onGameInit() {}
     void onUpdate(float deltaTime) override;
 };
 

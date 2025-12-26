@@ -1,4 +1,5 @@
 #include "ImGuiHelper.h"
+#include "Render/Core/Image.h"
 
 #include <vulkan/vulkan.h>
 
@@ -53,6 +54,7 @@ void ImGuiManager::initImGuiCore()
     colors[ImGuiCol_TitleBgCollapsed] = ImVec4{0.15f, 0.1505f, 0.151f, 1.0f};
 }
 
+
 void ImGuiManager::init(IRender *render, IRenderPass *renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
@@ -95,7 +97,7 @@ void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *
         .QueueFamily        = queue.getFamilyIndex(),
         .Queue              = queue.getHandle(),
         .DescriptorPool     = nullptr,
-        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE,
+        .DescriptorPoolSize = 64,
         .MinImageCount      = 2,
         .ImageCount         = vkRender->getSwapchainImageCount(),
         .PipelineCache      = nullptr,
@@ -263,7 +265,7 @@ ImGuiManager &ImGuiManager::get()
     return instance;
 }
 
-void *ImGuiManager::addTexture(void *imageView, void *sampler, int layout)
+void *ImGuiManager::addTexture(IImageView *imageView, Sampler *sampler, EImageLayout::T layout)
 {
     if (!imageView || !sampler) {
         YA_CORE_ERROR("ImGuiManager::addTexture: Invalid imageView or sampler");
@@ -272,9 +274,10 @@ void *ImGuiManager::addTexture(void *imageView, void *sampler, int layout)
 
     // Platform-specific implementation (Vulkan for now)
     VkDescriptorSet ds = ImGui_ImplVulkan_AddTexture(
-        static_cast<VkSampler>(sampler),
-        static_cast<VkImageView>(imageView),
-        static_cast<VkImageLayout>(layout == 0 ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : layout));
+        sampler->getHandle().as<VkSampler>(),
+        imageView->getHandle().as<VkImageView>(),
+        toVk(layout));
+
 
     if (ds == VK_NULL_HANDLE) {
         YA_CORE_ERROR("ImGuiManager::addTexture: Failed to create descriptor set");
