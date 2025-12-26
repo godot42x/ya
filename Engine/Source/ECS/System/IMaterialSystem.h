@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/FWD.h"
-#include "ECS/System.h"
+#include "Core/System/System.h"
 
 #include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
@@ -36,7 +36,7 @@ struct IMaterialSystem : public ISystem
 
     void renderGUI()
     {
-        if (!ImGui::CollapsingHeader(_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (!ImGui::CollapsingHeader(_label.c_str())) {
             return;
         }
         ImGui::Indent();

@@ -1,6 +1,7 @@
 #include "HelloMaterial.h"
 #include "Core/AssetManager.h"
 
+#include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -199,6 +200,10 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                                    .texture = ya::AssetManager::get()->getTextureByName("container_diffuse"),
                                    .sampler = ya::TextureLibrary::getDefaultSampler(),
                                });
+
+        // 添加 Lua 旋转脚本
+        auto lsc        = LitTestCube0->addComponent<ya::LuaScriptComponent>();
+        lsc->scriptPath = "Engine/Content/Lua/RotateScript.lua";
     }
 
     if (auto *suzanne = scene->createEntity("Suzanne")) {
@@ -241,15 +246,16 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         pointLightMat->setTextureViewUVRotation(ya::UnlitMaterial::BaseColor1, glm::radians(90.f));
         pointLightMat->setMixValue(0.8f);
 
-
         lmc->addMesh(cubeMesh.get(), pointLightMat);
+
+        // 添加 Lua 圆周运动脚本
+        auto lsc        = pointLt->addComponent<ya::LuaScriptComponent>();
+        lsc->scriptPath = "Engine/Content/Lua/OrbitScript.lua";
     }
-
-
-    // YA_CORE_DEBUG("1");
 }
-
 void HelloMaterial::onUpdate(float dt)
 {
     Super::onUpdate(dt);
+
+    // Lua 脚本已经处理旋转，不需要手动更新
 }

@@ -15,7 +15,7 @@
         {
             "id": "remember.target",
             "type": "command",
-            "command": "extension.commandvariable.promptStringRemember",
+            "command": "extension.commandvariable.remember",
             "args": {
                 "key": "target"
             }

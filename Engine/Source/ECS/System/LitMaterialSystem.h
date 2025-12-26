@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/Base.h"
 
-#include "ECS/System.h"
+#include "Core/System/System.h"
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"

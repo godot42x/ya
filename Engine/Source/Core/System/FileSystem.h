@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/System/System.h"
+
 #include "Core/Delegate.h"
 #include "Core/Log.h"
 #include <filesystem>

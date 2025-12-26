@@ -5,7 +5,7 @@
 
 #include "Model.h"
 
-#include "Core/FileSystem/FileSystem.h"
+#include "Core/System/FileSystem.h"
 #include "Core/Log.h"
 
 #include <assimp/Importer.hpp>

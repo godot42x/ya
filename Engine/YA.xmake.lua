@@ -11,7 +11,9 @@ add_requires(
     "cxxopts",
     "lua",
     "freetype",
-    "nlohmann_json v3.12.0"
+    "nlohmann_json v3.12.0",
+    "sol2",
+    "glad"
 )
 add_requireconfs("freetype", {
     system = false,
@@ -71,11 +73,10 @@ add_requires("vulkansdk", {
         }
     }
 })
-add_requires("glad")
 add_requires("entt v3.15.0", {
-    configs = {
-        debug = is_mode("debug"),
-    }
+    -- configs = {
+    -- debug = is_mode("debug"),
+    -- }
 })
 
 option("ya_enable_unity-build")
@@ -137,6 +138,7 @@ do
     add_packages("lua", { public = true })
     add_packages("freetype")
     add_packages("nlohmann_json", { public = true })
+    add_packages("sol2", { public = true })
 
     -- add_deps("shader")
 

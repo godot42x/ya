@@ -24,7 +24,7 @@
 #include <SDL3/SDL_gpu.h>
 
 
-#include "Core/FileSystem/FileSystem.h"
+#include "Core/System/FileSystem.h"
 
 
 static const char *eolFlag =

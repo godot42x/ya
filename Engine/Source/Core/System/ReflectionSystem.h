@@ -1,7 +1,10 @@
 
 #pragma once
 
+
+
 #include "Core/Serialization/SceneSerializer.h"
+#include "Core/System/System.h"
 
 namespace ya
 {

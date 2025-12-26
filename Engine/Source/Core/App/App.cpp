@@ -7,13 +7,13 @@
 #include "Core/AssetManager.h"
 #include "Core/Camera.h"
 #include "Core/Event.h"
-#include "Core/FileSystem/FileSystem.h"
+#include "Core/System/FileSystem.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 
 
 // Managers/System
-#include "Core/Subsystem/ReflectionSystem.h"
+#include "Core/System/ReflectionSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
