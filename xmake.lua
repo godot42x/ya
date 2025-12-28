@@ -43,5 +43,4 @@ set_rundir(os.scriptdir())
 
 add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 
-includes("./Example/Sandbox/xmake.lua")
 includes("./Example/xmake.lua")

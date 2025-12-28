@@ -34,13 +34,6 @@ void EditorLayer::onAttach()
 
     _contentBrowserPanel.init();
 
-    // Subscribe to RenderTarget recreation events to cleanup stale ImageView references
-    // if (_app->_viewportRT) {
-    //     _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
-    //         YA_CORE_INFO("EditorLayer: Scene RT recreated, cleaning up ImGui texture cache");
-    //         cleanupImGuiTextures();
-    //     });
-    // }
 
     auto am             = AssetManager::get();
     auto playIcon       = am->loadTexture("play", "Engine/Content/TestTextures/editor/play.png");
@@ -59,19 +52,9 @@ void EditorLayer::onAttach()
     _stopIcon       = getOrCreateImGuiTextureID(stopIcon->getImageView());
     _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
 
-    auto *viewportRT = App::get()->_viewportRT.get();
-    auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
-    _viewportImage   = getOrCreateImGuiTextureID(imageView);
-
-    if (_app->_screenRT) {
-        _app->_screenRT->onFrameBufferRecreated.addLambda(this, [this]() {
-            YA_CORE_INFO("EditorLayer: UI RT recreated, cleaning up ImGui texture cache");
-            this->removeImGuiTexture(_viewportImage);
-            auto *viewportRT = App::get()->_viewportRT.get();
-            auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
-            _viewportImage   = getOrCreateImGuiTextureID(imageView);
-        });
-    }
+    // auto *viewportRT = App::get()->_viewportRT.get();
+    // auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
+    // _viewportImage   = getOrCreateImGuiTextureID(imageView);
 
 
 
@@ -87,7 +70,7 @@ void EditorLayer::onDetach()
 
 void EditorLayer::onUpdate(float dt)
 {
-    // TODO: Resize scene RT if viewport size changed
+    // Handle delayed viewport resize
 }
 
 
@@ -356,34 +339,30 @@ void EditorLayer::viewportWindow()
     // Update viewport size if changed
     if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
     {
-        _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
+        if (!ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
 
-        Rect2D rect = {
-            .pos    = {_viewportBounds[0].x, _viewportBounds[0].y},
-            .extent = {viewportPanelSize.x, viewportPanelSize.y},
-        };
-        onViewportResized.executeIfBound(rect);
+            Rect2D rect = {
+                .pos    = {_viewportBounds[0].x, _viewportBounds[0].y},
+                .extent = {viewportPanelSize.x, viewportPanelSize.y},
+            };
+            onViewportResized.executeIfBound(rect);
 
-        YA_CORE_INFO("Viewport resized to: {} x {}", _viewportSize.x, _viewportSize.y);
+            YA_CORE_INFO("Viewport resized to: {} x {}", _viewportSize.x, _viewportSize.y);
+        }
     }
 
     // Display the render texture from editor render target
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
+        // Create ImGui descriptor set through editor layer (application layer)
+
         auto *viewportRT = App::get()->_viewportRT.get();
-        if (viewportRT && viewportRT->getFrameBuffer())
+        auto  imageView  = viewportRT->getFrameBuffer()->getImageView(0);
+        _viewportImage   = getOrCreateImGuiTextureID(imageView);
+        if (_viewportImage->isValid())
         {
-            if (auto imageView = viewportRT->getFrameBuffer()->getImageView(0))
-            {
-                // Create ImGui descriptor set through editor layer (application layer)
-                if (auto entry = getOrCreateImGuiTextureID(imageView))
-                {
-                    ImGui::Image((void *)entry->ds,
-                                 viewportPanelSize,
-                                 ImVec2(0, 0),
-                                 ImVec2(1, 1));
-                }
-            }
+            ImGui::Image(*_viewportImage, viewportPanelSize, ImVec2(0, 0), ImVec2(1, 1));
         }
     }
     else

@@ -29,6 +29,15 @@ struct ImGuiImageEntry
             return imageView < other.imageView;
         return sampler < other.sampler;
     }
+    operator bool() const
+    {
+        return imageView != nullptr && sampler != nullptr && ds != nullptr;
+    }
+
+    bool isValid() const
+    {
+        return this->operator bool();
+    }
 
     operator ImTextureRef() const
     {
@@ -198,6 +207,7 @@ class EditorLayer
     glm::vec2 getViewportSize() const { return _viewportSize; }
     bool      isViewportFocused() const { return bViewportFocused; }
     bool      isViewportHovered() const { return bViewportHovered; }
+    // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 
 } // namespace ya

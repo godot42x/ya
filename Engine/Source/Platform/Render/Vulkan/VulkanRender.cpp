@@ -741,11 +741,11 @@ bool VulkanRender::begin(int32_t *outImageIndex)
         imageIndex);
 
     // Do a sync recreation here, Can it be async?(just return and register a frame task)
-    if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR) {
         vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci
-        YA_CORE_INFO("Swapchain out of date, recreating...");
+        YA_CORE_INFO("Swapchain out of date or suboptimal, recreating...");
         bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
         if (!ok) {
             YA_CORE_ERROR("Failed to recreate swapchain");

@@ -17,7 +17,7 @@ r:  clean_if_needed cfg_if_needed
 
 
 cfg: 
-	xmake f -c 
+	xmake f -c -y
 	xmake f -m debug -y
 	xmake project -k compile_commands
 

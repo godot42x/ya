@@ -369,7 +369,7 @@ void App::init(AppDesc ci)
         .label            = "Viewport RenderTarget",
         .bSwapChainTarget = false,
         .renderPass       = _viewportRenderPass.get(),
-        .frameBufferCount = 1,
+        .frameBufferCount = _render->getSwapchainImageCount(),
         .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
     });
 #if !ONLY_2D
@@ -421,8 +421,14 @@ void App::init(AppDesc ci)
 
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
-    TODO(use ref)
-    _editorLayer->onViewportResized.set([this](Rect2D rect) { this->onSceneViewportResized(rect); });
+    // todo: use ref
+    _editorLayer->onViewportResized.set([this](Rect2D rect) { onSceneViewportResized(rect); });
+
+    // _viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
+    //     YA_CORE_INFO("EditorLayer: viewport RT recreated, cleaning up ImGui texture cache");
+    //     auto imageView = _viewportRT->getFrameBuffer()->getImageView(0);
+    //     _editorLayer->setViewportImage(imageView);
+    // });
 
     loadScene(ci.defaultScenePath);
 }
@@ -697,6 +703,7 @@ void App::onUpdate(float dt)
             }
         }
     }
+    _editorLayer->onUpdate(dt);
 }
 
 // MARK: Render

@@ -8,7 +8,7 @@
             "args": {
                 "key": "target"
             }
-        }
+        },
     ],
     "tasks": [
         {
@@ -29,7 +29,8 @@
                 "focus": false,
                 "panel": "shared",
                 "showReuseMessage": true,
-                "clear": false
+                "clear": false,
+                "revealProblems": "never",
             },
             "runOptions": {}
         }
