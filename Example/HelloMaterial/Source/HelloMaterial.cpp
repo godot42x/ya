@@ -203,7 +203,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         // 添加 Lua 旋转脚本
         auto lsc        = LitTestCube0->addComponent<ya::LuaScriptComponent>();
-        lsc->scriptPath = "Engine/Content/Lua/RotateScript.lua";
+        // lsc->scriptPath = "Engine/Content/Lua/RotateScript.lua";
     }
 
     if (auto *suzanne = scene->createEntity("Suzanne")) {
@@ -250,7 +250,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         // 添加 Lua 圆周运动脚本
         auto lsc        = pointLt->addComponent<ya::LuaScriptComponent>();
-        lsc->scriptPath = "Engine/Content/Lua/OrbitScript.lua";
+        lsc->scriptPath = "Engine/Content/Lua/TestPointLight.lua";
     }
 }
 void HelloMaterial::onUpdate(float dt)

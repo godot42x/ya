@@ -21,12 +21,8 @@ struct SceneManager;
 struct Scene;
 struct Material;
 struct IRenderPass;
+struct LuaScriptingSystem;
 
-} // namespace ya
-
-
-namespace ya
-{
 
 enum AppMode
 {
@@ -161,6 +157,8 @@ struct App
     EditorLayer *_editorLayer;
 
     MulticastDelegate<void()> onScenePostInit;
+
+    LuaScriptingSystem *_luaScriptingSystem;
 
 
   public:

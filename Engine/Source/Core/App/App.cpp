@@ -2,6 +2,7 @@
 
 
 // Core
+#include "Core/App/App.h"
 #include "Core/App/FPSCtrl.h"
 #include "Core/App/SDLMisc.h"
 #include "Core/AssetManager.h"
@@ -29,6 +30,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/LitMaterialSystem.h"
+#include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
 
@@ -432,6 +434,8 @@ void App::init(AppDesc ci)
     //     auto imageView = _viewportRT->getFrameBuffer()->getImageView(0);
     //     _editorLayer->setViewportImage(imageView);
     // });
+    _luaScriptingSystem = new LuaScriptingSystem();
+    _luaScriptingSystem->init();
 
     loadScene(ci.defaultScenePath);
 }
@@ -442,20 +446,20 @@ void App::onInit(AppDesc ci)
     // auto &bus = *MessageBus::get();
     FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
 
-    auto panel     = UIFactory::create<UIPanel>();
-    panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
-    auto btn       = UIFactory::create<UIButton>();
-    btn->_position = {50.0f, 50.0f};
-    btn->_size     = {200.0f, 100.0f};
-    panel->addChild(btn);
+    // auto panel     = UIFactory::create<UIPanel>();
+    // panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
+    // auto btn       = UIFactory::create<UIButton>();
+    // btn->_position = {50.0f, 50.0f};
+    // btn->_size     = {200.0f, 100.0f};
+    // panel->addChild(btn);
 
-    auto textBlock   = UIFactory::create<UITextBlock>();
-    textBlock->_font = FontManager::get()->getFont("JetBrainsMono-Medium", 48).get();
-    btn->addChild(textBlock);
+    // auto textBlock   = UIFactory::create<UITextBlock>();
+    // textBlock->_font = FontManager::get()->getFont("JetBrainsMono-Medium", 48).get();
+    // btn->addChild(textBlock);
 
 
     auto mgr = UIManager::get();
-    mgr->_rootCanvas->addChild(panel);
+    // mgr->_rootCanvas->addChild(panel);
 }
 
 void App::onPostInit()
@@ -577,6 +581,8 @@ void ya::App::quit()
     unloadScene();
     _editorLayer->onDetach();
     delete _editorLayer;
+
+    delete _luaScriptingSystem;
 
     MaterialFactory::get()->destroy();
 
@@ -707,6 +713,19 @@ void App::onUpdate(float dt)
             }
         }
     }
+
+    switch (_appState) {
+
+    case AppState::Editor:
+        break;
+    case AppState::Simulation:
+    case AppState::Runtime:
+    {
+        _luaScriptingSystem->onUpdate(dt);
+    } break;
+    }
+
+
     _editorLayer->onUpdate(dt);
 }
 
@@ -758,8 +777,8 @@ void App::onRender(float dt)
                 }
             }
 
-            auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-            Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
+            // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
+            // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
 
             UIManager::get()->render();
             Render2D::onRenderGUI();
@@ -968,6 +987,7 @@ void App::stopRuntime()
 
     YA_CORE_INFO("Stopping runtime");
     _appState = AppState::Editor;
+    _luaScriptingSystem->onStop();
 }
 
 void App::stopSimulation()

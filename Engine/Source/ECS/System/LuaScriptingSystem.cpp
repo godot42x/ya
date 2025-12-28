@@ -16,6 +16,10 @@ void LuaScriptingSystem::init()
 {
     YA_CORE_INFO("LuaScriptingSystem::init");
 
+    _lua.set_exception_handler([](lua_State *L, sol::optional<const std::exception &> e, sol::string_view desc) {
+        YA_CORE_ERROR("Lua Exception: {},  {}", e->what(), desc);
+        return 0;
+    });
     _lua.open_libraries(sol::lib::base,
                         sol::lib::package,
                         sol::lib::string,
@@ -96,6 +100,9 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                 catch (const sol::error &e) {
                     YA_CORE_ERROR("Lua script error ({}): {}", luaComp.scriptPath, e.what());
                 }
+                catch (const std::exception &e) {
+                    YA_CORE_ERROR("Lua script error: {}", e.what());
+                }
             }
             else {
                 YA_CORE_ERROR("Failed to load Lua script: {}", luaComp.scriptPath);
@@ -115,6 +122,19 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                 YA_CORE_ERROR("Lua onUpdate error ({}): {}", luaComp.scriptPath, e.what());
             }
         }
+    }
+}
+
+void LuaScriptingSystem::onStop()
+{
+    // TODO: let app use serialization to reload all/ recreate entity and components
+    auto *scene = App::get()->getSceneManager()->getCurrentScene();
+    if (!scene) return;
+
+    auto view = scene->getRegistry().view<LuaScriptComponent>();
+    for (auto entityHandle : view) {
+        auto &luaComp   = view.get<LuaScriptComponent>(entityHandle);
+        luaComp.bLoaded = false;
     }
 }
 

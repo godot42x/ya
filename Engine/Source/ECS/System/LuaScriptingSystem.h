@@ -11,6 +11,7 @@ struct LuaScriptingSystem : public ScriptingSystem
 
     void init() override;
     void onUpdate(float deltaTime) override;
+    void onStop();
 };
 
 
