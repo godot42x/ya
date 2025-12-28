@@ -102,14 +102,18 @@ class EditorLayer
 
     std::function<void()> _contentFunc;
 
-    const ImGuiImageEntry *_playIcon;
-    const ImGuiImageEntry *_pauseIcon;
-    const ImGuiImageEntry *_stopIcon;
-    const ImGuiImageEntry *_simulationIcon;
-    const ImGuiImageEntry *_viewportImage;
+    const ImGuiImageEntry *_playIcon       = nullptr;
+    const ImGuiImageEntry *_pauseIcon      = nullptr;
+    const ImGuiImageEntry *_stopIcon       = nullptr;
+    const ImGuiImageEntry *_simulationIcon = nullptr;
+    const ImGuiImageEntry *_viewportImage  = nullptr;
+
+    void *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
+
+    uint32_t _resizeTimerHandle = 0;
 
   public:
-    Delegate<void(Rect2D)> onViewportResized;
+    Delegate<void(Rect2D /*rect*/)> onViewportResized;
 
   public:
     EditorLayer(App *app);

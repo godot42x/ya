@@ -202,7 +202,7 @@ void VulkanRenderTarget::end(ICommandBuffer *cmdBuf)
     bBeginTarget = false;
 }
 
-void VulkanRenderTarget::setBufferCount(uint32_t count)
+void VulkanRenderTarget::setFrameBufferCount(uint32_t count)
 {
     _frameBufferCount = count;
     bDirty            = true;

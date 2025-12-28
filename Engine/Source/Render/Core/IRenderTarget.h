@@ -95,7 +95,7 @@ struct IRenderTarget
     const Extent2D &getExtent() const { return _extent; }
 
 
-    virtual void setBufferCount(uint32_t count)                                           = 0;
+    virtual void setFrameBufferCount(uint32_t count)                                      = 0;
     virtual void setColorClearValue(ClearValue clearValue)                                = 0;
     virtual void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue)        = 0;
     virtual void setDepthStencilClearValue(ClearValue clearValue)                         = 0;
@@ -103,8 +103,10 @@ struct IRenderTarget
     virtual void setCamera(Entity *camera)                                                = 0;
 
     // Getters
+    virtual uint32_t                      getFrameBufferCount() const                                  = 0;
     [[nodiscard]] virtual IRenderPass    *getRenderPass() const                                        = 0;
     [[nodiscard]] virtual IFrameBuffer   *getFrameBuffer() const                                       = 0;
+    [[nodiscard]] virtual uint32_t        getFrameBufferIndex() const                                  = 0; // Temp
     [[nodiscard]] virtual Entity         *getCameraMut()                                               = 0;
     [[nodiscard]] virtual const Entity   *getCamera() const                                            = 0;
     [[nodiscard]] virtual bool            isUseEntityCamera() const                                    = 0;

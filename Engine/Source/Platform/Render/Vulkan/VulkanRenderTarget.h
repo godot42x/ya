@@ -56,7 +56,6 @@ struct VulkanRenderTarget : public IRenderTarget
     void begin(ICommandBuffer *cmdBuf) override;
     void end(ICommandBuffer *cmdBuf) override;
 
-    void setBufferCount(uint32_t count) override;
     void setColorClearValue(ClearValue clearValue) override;
     void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue) override;
     void setDepthStencilClearValue(ClearValue clearValue) override;
@@ -64,6 +63,9 @@ struct VulkanRenderTarget : public IRenderTarget
 
     [[nodiscard]] IRenderPass  *getRenderPass() const override { return _renderPass; }
     [[nodiscard]] IFrameBuffer *getFrameBuffer() const override { return _frameBuffers[_currentFrameIndex].get(); }
+    void                        setFrameBufferCount(uint32_t count) override;
+    uint32_t                    getFrameBufferCount() const override { return _frameBufferCount; }
+    uint32_t                    getFrameBufferIndex() const override { return _currentFrameIndex; } // Temp
 
     void renderMaterialSystems(ICommandBuffer *cmdBuf);
 
@@ -93,6 +95,7 @@ struct VulkanRenderTarget : public IRenderTarget
         }
         return nullptr;
     }
+
 
   protected:
     void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) override;

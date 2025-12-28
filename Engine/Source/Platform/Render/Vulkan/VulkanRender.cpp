@@ -741,7 +741,7 @@ bool VulkanRender::begin(int32_t *outImageIndex)
         imageIndex);
 
     // Do a sync recreation here, Can it be async?(just return and register a frame task)
-    if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR) {
+    if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
         vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci

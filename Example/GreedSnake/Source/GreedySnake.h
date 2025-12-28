@@ -49,9 +49,9 @@ struct GreedySnake : public ya::App
         Super::onRender(dt);
     }
 
-    void onRenderGUI() override
+    void onRenderGUI(float dt) override
     {
-        Super::onRenderGUI();
+        Super::onRenderGUI(dt);
     }
 
     int onEvent(const ya::Event &event) override

@@ -14,6 +14,7 @@
 
 
 // Managers/System
+#include "Core/Manager/Facade.h"
 #include "Core/System/ReflectionSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
@@ -369,7 +370,7 @@ void App::init(AppDesc ci)
         .label            = "Viewport RenderTarget",
         .bSwapChainTarget = false,
         .renderPass       = _viewportRenderPass.get(),
-        .frameBufferCount = _render->getSwapchainImageCount(),
+        .frameBufferCount = 1,
         .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
     });
 #if !ONLY_2D
@@ -422,7 +423,9 @@ void App::init(AppDesc ci)
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
     // todo: use ref
-    _editorLayer->onViewportResized.set([this](Rect2D rect) { onSceneViewportResized(rect); });
+    _editorLayer->onViewportResized.set([this](Rect2D rect) {
+        onSceneViewportResized(rect);
+    });
 
     // _viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
     //     YA_CORE_INFO("EditorLayer: viewport RT recreated, cleaning up ImGui texture cache");
@@ -681,6 +684,7 @@ int ya::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     inputManager.update();
+    Facade.timerManager.onUpdate(dt);
 
     // Store real-time delta for editor
 
@@ -787,22 +791,22 @@ void App::onRender(float dt)
     cmdBuf->end();
 
     // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
-    render->submitToQueue(
-        {cmdBuf->getHandle()},
-        {render->getCurrentImageAvailableSemaphore()},    // Wait for swapchain image
-        {render->getRenderFinishedSemaphore(imageIndex)}, // Signal when all rendering done
-        render->getCurrentFrameFence());                  // Signal fence when done
+    // render->submitToQueue(
+    //     {cmdBuf->getHandle()},
+    //     {render->getCurrentImageAvailableSemaphore()},    // Wait for swapchain image
+    //     {render->getRenderFinishedSemaphore(imageIndex)}, // Signal when all rendering done
+    //     render->getCurrentFrameFence());                  // Signal fence when done
 
-    // ===== Present: Wait on renderFinished =====
-    int result = render->presentImage(imageIndex, {render->getRenderFinishedSemaphore(imageIndex)});
+    // // ===== Present: Wait on renderFinished =====
+    // int result = render->presentImage(imageIndex, {render->getRenderFinishedSemaphore(imageIndex)});
 
-    // Check for swapchain recreation needed
-    if (result == 2 /* VK_SUBOPTIMAL_KHR */) {
-        YA_CORE_INFO("Swapchain suboptimal detected in App, will recreate next frame");
-    }
-
-    // Advance to next frame
-    render->advanceFrame();
+    // // Check for swapchain recreation needed
+    // if (result == 2 /* VK_SUBOPTIMAL_KHR */) {
+    //     YA_CORE_INFO("Swapchain suboptimal detected in App, will recreate next frame");
+    // }
+    // // Advance to next frame
+    // render->advanceFrame();
+    render->end(imageIndex, {cmdBuf->getHandle()});
 }
 
 void App::onRenderGUI(float dt)
