@@ -1,10 +1,9 @@
-
 #pragma once
 #include "ECS/Component.h"
 namespace ya
 {
 // Light component for lighting
-struct PointLightComponent : public IComponent
+struct PointLightComponent : public IComponent, public MetaRegister
 {
     // TODO: one represent multiple light types?
     // enum class Type
@@ -24,5 +23,18 @@ struct PointLightComponent : public IComponent
 
     PointLightComponent()                            = default;
     PointLightComponent(const PointLightComponent &) = default;
+
+    void registerAll() override
+    {
+        registerReflection();
+    }
+
+    static void registerReflection()
+    {
+        Register<PointLightComponent>("PointLightComponent")
+            .property("color", &PointLightComponent::_color)
+            .property("intensity", &PointLightComponent::_intensity)
+            .property("range", &PointLightComponent::_range);
+    }
 };
 } // namespace ya

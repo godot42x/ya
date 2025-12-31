@@ -7,6 +7,8 @@
 
 #include "Core/Math/Math.h"
 
+#include "Core/System/ReflectionSystem.h"
+
 namespace ya
 {
 

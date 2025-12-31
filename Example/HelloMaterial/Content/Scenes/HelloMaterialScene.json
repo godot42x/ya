@@ -1,0 +1,135 @@
+{
+    "entities": [
+        {
+            "components": {
+                "TransformComponent": {
+                    "position": [
+                        0.0,
+                        5.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 4,
+            "name": "Point Light"
+        },
+        {
+            "components": {
+                "TransformComponent": {
+                    "position": [
+                        5.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "scale": [
+                        2.0,
+                        2.0,
+                        2.0
+                    ]
+                }
+            },
+            "id": 3,
+            "name": "Suzanne"
+        },
+        {
+            "components": {
+                "TransformComponent": {
+                    "position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "scale": [
+                        3.0,
+                        3.0,
+                        3.0
+                    ]
+                }
+            },
+            "id": 2,
+            "name": "Lit Test"
+        },
+        {
+            "components": {
+                "TransformComponent": {
+                    "position": [
+                        0.0,
+                        -20.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "scale": [
+                        1000.0,
+                        10.0,
+                        1000.0
+                    ]
+                }
+            },
+            "id": 1,
+            "name": "Plane"
+        },
+        {
+            "components": {
+                "CameraComponent": {
+                    "aspectRatio": 0.78899085521698,
+                    "distance": 6.0,
+                    "farClip": 1000.0,
+                    "fixedAspectRatio": false,
+                    "focusPoint": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "fov": 45.0,
+                    "nearClip": 0.10000000149011612,
+                    "primary": true
+                },
+                "TransformComponent": {
+                    "position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 0,
+            "name": "Camera"
+        }
+    ],
+    "name": "Untitled Scene",
+    "version": "1.0"
+}

@@ -16,13 +16,20 @@ void ReflectionSystem::registerAllComponents()
     // 注册所有组件的反射信息
     TransformComponent::registerReflection();
     CameraComponent::registerReflection();
+    PointLightComponent::registerReflection();
 
     // TODO: 添加更多组件
-    // MeshComponent::registerReflection();
-    // MaterialComponent::registerReflection();
-    // ScriptComponent::registerReflection();
+    // registerComponent<MeshComponent>();
+    // registerComponent<MaterialComponent>();
+    // registerComponent<ScriptComponent>();
 
     YA_CORE_INFO("Component reflection registration complete");
+}
+
+ReflectionSystem *ReflectionSystem::get()
+{
+    static ReflectionSystem instance;
+    return &instance;
 }
 
 } // namespace ya

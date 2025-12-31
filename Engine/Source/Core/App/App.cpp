@@ -190,8 +190,8 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE("App Init Subsystems");
         Logger::init();
         FileSystem::init();
+        ReflectionSystem::get()->init();
         MaterialFactory::init();
-        ReflectionSystem::init();
     }
 
     currentRenderAPI = ERenderAPI::Vulkan;
@@ -940,20 +940,6 @@ void App::onSceneActivated(Scene *scene)
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
 
-    // Set up default camera
-
-    // auto cam = scene->createEntity("Camera");
-    // cam->addComponent<TransformComponent>();
-    // cam->addComponent<CameraComponent>();
-    // cam->addComponent<SimpleMaterialComponent>();
-    // _viewportRT->setCamera(cam);
-
-    // YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
-    // YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
-
-    // auto cc    = cam->getComponent<CameraComponent>();
-    // auto owner = cc->getOwner();
-    // YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
 }
 
 // State transition hooks

@@ -1,11 +1,14 @@
 #include "SceneSerializer.h"
 #include "Core/Debug/Instrumentor.h"
-#include "Core/System/FileSystem.h"
 #include "Core/Log.h"
+#include "Core/Serialization/ReflectionSerializer.h"
+#include "Core/System/FileSystem.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/Material/MaterialComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+
 
 
 namespace ya
@@ -118,35 +121,17 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
     auto        &registry = _scene->getRegistry();
     entt::entity handle   = entity->getHandle();
 
-    // TransformComponent - 使用反射自动序列化
-
-    // if (entity->hasComponent<TransformComponent>()) {
-    //     auto *tc = entity->getComponent<TransformComponent>();
-
-    //     j["components"]["TransformComponent"] = ReflectionSerializer::serialize(*tc);
-    // }
-
-    // CameraComponent - 使用反射自动序列化
-    if (entity->hasComponent<CameraComponent>()) {
-        auto *cc = entity->getComponent<CameraComponent>();
-
-        j["components"]["CameraComponent"] = ReflectionSerializer::serialize(*cc);
-    }
-
-    // TODO: 添加更多组件的序列化
-    // 可以通过反射自动遍历所有组件类型
     for (auto &[typeName, serializer] : _componentSerializers) {
-        j["components"][typeName] = serializer(registry, handle);
+        serializer(registry, handle, j["components"]);
     }
-
     return j;
 }
 
 Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
 {
     // 创建 Entity
-    std::string name = j.contains("name") ? j["name"].get<std::string>() : "Entity";
-    uint64_t    uuid = j.contains("id") ? j["id"].get<uint64_t>() : 0;
+    std::string name = j["name"].get<std::string>();
+    uint64_t    uuid = j["id"].get<uint64_t>();
 
     Entity *entity = uuid ? _scene->createEntityWithUUID(uuid, name)
                           : _scene->createEntity(name);
@@ -156,22 +141,6 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
         auto &components = j["components"];
         auto &registry   = _scene->getRegistry();
 
-        // TransformComponent - 使用反射自动反序列化
-        // if (components.contains("TransformComponent")) {
-        //     auto transform = ReflectionSerializer::deserialize<TransformComponent>(
-        //         components["TransformComponent"]);
-        //     registry.emplace<TransformComponent>(entity->getHandle(), transform);
-        // }
-
-        // // CameraComponent - 使用反射自动反序列化
-        // if (components.contains("CameraComponent")) {
-        //     auto camera = ReflectionSerializer::deserialize<CameraComponent>(
-        //         components["CameraComponent"]);
-        //     registry.emplace<CameraComponent>(entity->getHandle(), camera);
-        // }
-
-        // TODO: 添加更多组件的反序列化
-        //- 使用反射自动反序列化
         for (auto &[typeName, deserializer] : _componentDeserializers) {
             if (components.contains(typeName)) {
                 deserializer(registry, entity->getHandle(), components[typeName]);
@@ -188,43 +157,37 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
 
 void SceneSerializer::registerComponentSerializers()
 {
-    // 通过反射自动注册所有组件的序列化器
-    // 这里展示手动注册的模板，未来可以通过反射系统自动化
-
-    // TransformComponent
-    _componentSerializers["TransformComponent"] =
-        [](entt::registry &registry, entt::entity entity) -> nlohmann::json {
-        auto &tc = registry.get<TransformComponent>(entity);
-        return ReflectionSerializer::serialize(tc);
-    };
-
-    _componentDeserializers["TransformComponent"] =
-        [](entt::registry &registry, entt::entity entity, const nlohmann::json &j) {
-            auto tc = ReflectionSerializer::deserialize<TransformComponent>(j);
-            registry.emplace<TransformComponent>(entity, tc);
+#define REGISTER_COMPONENT_SERIALIZER(ComponentType)                                    \
+    _componentSerializers[#ComponentType] =                                             \
+        [](entt::registry &registry, entt::entity entity, nlohmann::json &components) { \
+            if (registry.all_of<ComponentType>(entity)) {                               \
+                auto &comp                 = registry.get<ComponentType>(entity);       \
+                components[#ComponentType] = ReflectionSerializer::serialize(comp);     \
+            }                                                                           \
+        };
+#define REGISTER_COMPONENT_DESERIALIZER(ComponentType)                               \
+    _componentDeserializers[#ComponentType] =                                        \
+        [](entt::registry &registry, entt::entity entity, const nlohmann::json &j) { \
+            auto comp = ReflectionSerializer::deserialize<ComponentType>(j);         \
+            registry.emplace<ComponentType>(entity, comp);                           \
         };
 
-    // TODO: 使用反射系统自动注册
-    // 伪代码：
-    // for (auto &[typeName, classInfo] : ClassRegistry::instance().classes) {
-    //     if (classInfo->hasBaseClass<IComponent>()) {
-    //         registerComponentSerializer(typeName, classInfo);
-    //     }
-    // }
-}
 
-nlohmann::json SceneSerializer::serializeComponentByName(
-    const std::string &typeName,
-    entt::registry    &registry,
-    entt::entity       entity)
-{
-    auto it = _componentSerializers.find(typeName);
-    if (it != _componentSerializers.end()) {
-        return it->second(registry, entity);
+#define REGISTER_COMPONENT(ComponentType)        \
+    REGISTER_COMPONENT_SERIALIZER(ComponentType) \
+    REGISTER_COMPONENT_DESERIALIZER(ComponentType)
+
+    {
+        REGISTER_COMPONENT(TransformComponent)
+        REGISTER_COMPONENT(CameraComponent)
+        REGISTER_COMPONENT(PointLightComponent)
     }
 
-    YA_CORE_WARN("No serializer found for component type: {}", typeName);
-    return nlohmann::json::object();
+
+#undef REGISTER_COMPONENT
+#undef REGISTER_COMPONENT_SERIALIZER
+#undef REGISTER_COMPONENT_DESERIALIZER
 }
+
 
 } // namespace ya

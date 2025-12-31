@@ -2,11 +2,11 @@
 #pragma once
 #include "ECS/Component.h"
 
-#include "Core/Serialization/ComponentSerializer.h"
+#include "Core/System/ReflectionSystem.h"
 
 namespace ya
 {
-struct TransformComponent : public IComponent
+struct TransformComponent : public IComponent, public MetaRegister
 {
     glm::mat4 _cachedMatrix = glm::mat4(1.0f);
     glm::vec3 _position     = {0.0f, 0.0f, 0.0f};
@@ -56,6 +56,12 @@ struct TransformComponent : public IComponent
         calcMatrix();
         return _cachedMatrix;
     }
+
+    void registerAll() override
+    {
+        registerReflection();
+    }
+
 
     // ========================================================================
     // 反射注册 - 自动生成序列化

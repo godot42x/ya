@@ -2,6 +2,7 @@
 
 #include "function.h"
 #include "lib.h"
+#include <memory>
 
 
 // ============================================================================
@@ -37,11 +38,19 @@ std::string makeSignature()
 } // namespace detail
 
 
+template <typename T, typename... Args>
+    requires std::is_constructible_v<T, Args...>
+std::shared_ptr<T> makePtr(Args &&...args)
+{
+    return std::make_shared<T>(std::forward<Args>(args)...);
+}
 
 struct Class
 {
     std::string _name;
 
+    // TODO: 使用一个field 来存所有-> 省内存
+    // std::unordered_map<std::string, std::shared_ptr<Field>> fields;
     // 属性和函数存储
     std::unordered_map<std::string, Property> properties;
     std::unordered_map<std::string, Function> functions;

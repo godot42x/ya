@@ -9,34 +9,8 @@
 #include "SerializerHelper.h"
 
 
-
-/**
- * @brief 组件序列化框架 - 基于 ECS + 反射
- *
- * 设计目标:
- * 1. 自动通过反射序列化组件
- * 2. 支持手动序列化（toJson/fromJson）
- * 3. 类型安全的序列化/反序列化
- */
-
 namespace ya
 {
-
-// ============================================================================
-// 序列化宏
-// ============================================================================
-
-/**
- * 在组件中声明此宏以启用自动序列化
- */
-#define YA_COMPONENT_SERIALIZABLE() \
-    nlohmann::json toJson() const;  \
-    static auto    fromJson(const nlohmann::json &j) -> std::decay_t<decltype(*this)>;
-
-
-// ============================================================================
-// 反射序列化适配器
-// ============================================================================
 
 /**
  * @brief 通过反射系统自动序列化组件
@@ -72,7 +46,6 @@ struct ReflectionSerializer
                 YA_CORE_WARN("Failed to serialize property {}: {}", propName, e.what());
             }
         }
-
         return j;
     }
 

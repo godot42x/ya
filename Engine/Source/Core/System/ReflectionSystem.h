@@ -9,6 +9,7 @@
 namespace ya
 {
 
+
 /**
  * @brief 组件注册中心 - 负责注册所有组件的反射信息
  *
@@ -17,17 +18,22 @@ namespace ya
 class ReflectionSystem
 {
   public:
+
+
+    static ReflectionSystem *get();
+
+    void init()
+    {
+        ReflectionSystem::registerAllComponents();
+        SceneSerializer::registerComponentSerializers();
+    }
+
+
     /**
      * 注册所有组件的反射信息
      * 应该在 App::onInit() 中调用一次
      */
     static void registerAllComponents();
-
-    static void init()
-    {
-        ReflectionSystem::registerAllComponents();
-        SceneSerializer::registerComponentSerializers();
-    }
 };
 
 } // namespace ya

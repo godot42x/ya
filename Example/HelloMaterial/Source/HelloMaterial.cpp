@@ -134,6 +134,21 @@ void HelloMaterial::createMaterials()
 void HelloMaterial::createEntities(ya::Scene *scene)
 {
 
+    // Set up default camera
+
+    auto cam = scene->createEntity("Camera");
+    cam->addComponent<ya::TransformComponent>();
+    cam->addComponent<ya::CameraComponent>();
+    cam->addComponent<ya::SimpleMaterialComponent>();
+    _viewportRT->setCamera(cam);
+
+    YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(cam->getHandle()), "Camera component not found");
+    YA_CORE_ASSERT(cam->hasComponent<ya::CameraComponent>(), "Camera component not attached");
+
+    auto cc    = cam->getComponent<ya::CameraComponent>();
+    auto owner = cc->getOwner();
+    YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
+
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
