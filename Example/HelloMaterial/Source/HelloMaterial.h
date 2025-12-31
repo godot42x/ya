@@ -5,6 +5,7 @@
 #include "Render/Mesh.h"
 #include "Scene/SceneManager.h"
 #include <imgui.h>
+#include "Core/System/FileSystem.h"
 
 struct HelloMaterial : public ya::App
 {
@@ -24,6 +25,7 @@ struct HelloMaterial : public ya::App
 
         createCubeMesh();
         loadTextures();
+        FileSystem::get()->setGameRoot("Example/HelloMaterial");
     }
 
     void onPostInit() override

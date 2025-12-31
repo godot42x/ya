@@ -1,25 +1,98 @@
 #include "ContentBrowserPanel.h"
 #include "Core/System/FileSystem.h"
-// #include <filesystem>
 #include "Core/AssetManager.h"
 #include "ImGuiHelper.h"
 #include "Render/TextureLibrary.h"
 #include "vulkan/vulkan_core.h"
 #include <imgui.h>
-
 #include "Core/App/App.h"
-
 
 namespace ya
 {
 
-
 ContentBrowserPanel::ContentBrowserPanel(EditorLayer *owner)
-    : _owner(owner),
-      _currentDirectory(std::filesystem::current_path())
+    : _owner(owner)
 {
-    _baseDirectory    = FileSystem::get()->getEngineRoot() / "Content";
-    _currentDirectory = _baseDirectory;
+    discoverContentRoots();
+    
+    // Default to Engine Content
+    if (!_contentRoots.empty())
+    {
+        switchToRoot(&_contentRoots[0]);
+    }
+}
+
+void ContentBrowserPanel::discoverContentRoots()
+{
+    auto fs = FileSystem::get();
+    
+    // 1. Engine Content
+    auto engineContentPath = fs->getEngineRoot() / "Content";
+    if (std::filesystem::exists(engineContentPath))
+    {
+        _contentRoots.push_back({
+            "Engine",
+            engineContentPath,
+            ContentRootType::Engine,
+            false
+        });
+    }
+    
+    // 2. Project/Game Content
+    if (!fs->getGameRoot().empty())
+    {
+        auto gameContentPath = fs->getGameRoot() / "Content";
+        if (std::filesystem::exists(gameContentPath))
+        {
+            auto gameName = fs->getGameRoot().filename().string();
+            _contentRoots.push_back({
+                gameName,
+                gameContentPath,
+                ContentRootType::Project,
+                false
+            });
+        }
+    }
+    
+    // 3. Plugin Contents
+    for (const auto &[pluginName, pluginRoot] : fs->getPluginRoots())
+    {
+        auto pluginContentPath = pluginRoot / "Content";
+        if (std::filesystem::exists(pluginContentPath))
+        {
+            _contentRoots.push_back({
+                pluginName,
+                pluginContentPath,
+                ContentRootType::Plugin,
+                false
+            });
+        }
+    }
+}
+
+void ContentBrowserPanel::switchToRoot(ContentRoot *root)
+{
+    if (!root) return;
+    
+    // Deactivate previous root
+    if (_activeRoot)
+    {
+        _activeRoot->isActive = false;
+    }
+    
+    // Activate new root
+    _activeRoot           = root;
+    _activeRoot->isActive = true;
+    _currentDirectory     = _activeRoot->path;
+}
+
+bool ContentBrowserPanel::isPathWithinActiveRoot(const std::filesystem::path &path) const
+{
+    if (!_activeRoot) return false;
+    
+    auto relativePath = std::filesystem::relative(path, _activeRoot->path);
+    // If relative path starts with "..", it's outside the root
+    return !relativePath.empty() && !relativePath.string().starts_with("..");
 }
 
 void ContentBrowserPanel::init()
@@ -41,20 +114,137 @@ void ContentBrowserPanel::onImGuiRender()
         return;
     }
 
-    if (_currentDirectory != _baseDirectory && !_baseDirectory.empty())
+    // Split into left sidebar (roots) and right content area
+    
+    // Left panel - Content roots list
+    ImGui::BeginChild("RootsList", ImVec2(_leftPanelWidth, 0), true);
+    renderRootSelector();
+    ImGui::EndChild();
+    
+    ImGui::SameLine();
+    
+    // Splitter
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_Button));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Button));
+    ImGui::Button("##splitter", ImVec2(3.0f, -1));
+    ImGui::PopStyleColor(2);
+    
+    if (ImGui::IsItemActive())
+    {
+        _leftPanelWidth += ImGui::GetIO().MouseDelta.x;
+        if (_leftPanelWidth < 100.0f) _leftPanelWidth = 100.0f;
+        if (_leftPanelWidth > 400.0f) _leftPanelWidth = 400.0f;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    
+    ImGui::SameLine();
+    
+    // Right panel - Directory browser
+    ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
+    
+    // Navigation bar
+    if (_activeRoot && _currentDirectory != _activeRoot->path)
     {
         if (ImGui::Button("< Back"))
         {
-            _currentDirectory = _currentDirectory.parent_path();
+            auto parent = _currentDirectory.parent_path();
+            // Only allow navigation within active root
+            if (isPathWithinActiveRoot(parent) || parent == _activeRoot->path)
+            {
+                _currentDirectory = parent;
+            }
         }
+        ImGui::SameLine();
     }
 
-    ImGui::Text("Current: %s", _currentDirectory.string().c_str());
+    // Show current path relative to root
+    if (_activeRoot)
+    {
+        auto relativePath = std::filesystem::relative(_currentDirectory, _activeRoot->path);
+        ImGui::Text("%s: %s", _activeRoot->name.c_str(), 
+                    relativePath.empty() ? "/" : relativePath.string().c_str());
+    }
+    else
+    {
+        ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "No content root selected");
+    }
+    
     ImGui::Separator();
 
-    renderDirectoryContents();
+    // Directory contents
+    if (_activeRoot)
+    {
+        renderDirectoryContents();
+    }
+    
+    ImGui::EndChild();
 
     ImGui::End();
+}
+
+void ContentBrowserPanel::renderRootSelector()
+{
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Content Roots");
+    ImGui::Separator();
+    
+    if (_contentRoots.empty())
+    {
+        ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "No content\ndirectories\nfound");
+        return;
+    }
+
+    // Vertical list of content roots
+    for (auto &root : _contentRoots)
+    {
+        const char *icon = "";
+        ImVec4 color = ImVec4(1, 1, 1, 1);
+        
+        switch (root.type)
+        {
+            case ContentRootType::Engine:
+                icon = "[E]";
+                color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f); // Light blue
+                break;
+            case ContentRootType::Project:
+                icon = "[P]";
+                color = ImVec4(0.3f, 1.0f, 0.3f, 1.0f); // Green
+                break;
+            case ContentRootType::Plugin:
+                icon = "[+]";
+                color = ImVec4(1.0f, 0.7f, 0.3f, 1.0f); // Orange
+                break;
+        }
+        
+        bool isSelected = (_activeRoot == &root);
+        
+        // Highlight selected root
+        if (isSelected)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.5f, 0.8f, 0.8f));
+        }
+        
+        ImGui::PushID(&root);
+        
+        // Draw icon with color
+        ImGui::TextColored(color, "%s", icon);
+        ImGui::SameLine();
+        
+        // Selectable root name
+        if (ImGui::Selectable(root.name.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
+        {
+            switchToRoot(&root);
+        }
+        
+        ImGui::PopID();
+        
+        if (isSelected)
+        {
+            ImGui::PopStyleColor();
+        }
+    }
 }
 
 void ContentBrowserPanel::renderDirectoryContents()
@@ -91,7 +281,11 @@ void ContentBrowserPanel::renderDirectoryContents()
             {
                 if (entry.is_directory())
                 {
-                    _currentDirectory = path;
+                    // Only navigate if within active root
+                    if (isPathWithinActiveRoot(path))
+                    {
+                        _currentDirectory = path;
+                    }
                 }
             }
             ImGui::TextWrapped("%s", filename.c_str());
