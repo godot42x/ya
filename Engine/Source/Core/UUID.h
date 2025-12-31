@@ -13,6 +13,8 @@ struct UUID
     UUID();
     explicit UUID(uint64_t val) : value(val) {}
 
+    operator uint64_t() const { return value; }
+
     bool operator==(const UUID &other) const { return value == other.value; }
     bool operator!=(const UUID &other) const { return value != other.value; }
     bool operator<(const UUID &other) const { return value < other.value; }

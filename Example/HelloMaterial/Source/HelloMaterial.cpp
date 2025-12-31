@@ -35,6 +35,7 @@ void HelloMaterial::createCubeMesh()
 
 void HelloMaterial::loadTextures()
 {
+    auto tex = ya::AssetManager::get()->loadTexture("light", "Engine/Content/TestTextures/icons8-light-64.png");
 }
 
 void HelloMaterial::createMaterials()
@@ -112,6 +113,22 @@ void HelloMaterial::createMaterials()
     litMaterial1->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
     auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
     litMaterial2->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
+
+
+    auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
+    pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
+                                  ya::TextureView{
+                                      .texture = ya::TextureLibrary::getWhiteTexture(),
+                                      .sampler = ya::TextureLibrary::getDefaultSampler(),
+                                  });
+    pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor1,
+                                  ya::TextureView{
+                                      .texture = ya::AssetManager::get()->getTextureByName("light"),
+                                      .sampler = ya::TextureLibrary::getDefaultSampler(),
+                                  });
+    pointLightMat->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
+    pointLightMat->setTextureViewUVRotation(ya::UnlitMaterial::BaseColor1, glm::radians(90.f));
+    pointLightMat->setMixValue(0.8f);
 }
 
 void HelloMaterial::createEntities(ya::Scene *scene)
@@ -202,7 +219,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                                });
 
         // 添加 Lua 旋转脚本
-        auto lsc        = LitTestCube0->addComponent<ya::LuaScriptComponent>();
+        auto lsc = LitTestCube0->addComponent<ya::LuaScriptComponent>();
         // lsc->scriptPath = "Engine/Content/Lua/RotateScript.lua";
     }
 
@@ -230,21 +247,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto plc = pointLt->addComponent<ya::PointLightComponent>();
         auto lmc = pointLt->addComponent<ya::UnlitMaterialComponent>();
 
-        auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
-        auto tex           = ya::AssetManager::get()->loadTexture("light", "Engine/Content/TestTextures/icons8-light-64.png");
-        pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                      ya::TextureView{
-                                          .texture = ya::TextureLibrary::getWhiteTexture(),
-                                          .sampler = ya::TextureLibrary::getDefaultSampler(),
-                                      });
-        pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                      ya::TextureView{
-                                          .texture = tex,
-                                          .sampler = ya::TextureLibrary::getDefaultSampler(),
-                                      });
-        pointLightMat->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-        pointLightMat->setTextureViewUVRotation(ya::UnlitMaterial::BaseColor1, glm::radians(90.f));
-        pointLightMat->setMixValue(0.8f);
+        auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
 
         lmc->addMesh(cubeMesh.get(), pointLightMat);
 

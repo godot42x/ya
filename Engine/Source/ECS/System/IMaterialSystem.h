@@ -72,7 +72,7 @@ struct IMaterialSystem : public ISystem
 
 
     App     *getApp() const;
-    Scene   *getScene() const;
+    Scene   *getActiveScene() const;
     IRender *getRender() const;
 
     template <typename T>

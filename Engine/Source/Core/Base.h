@@ -121,8 +121,7 @@ struct TypeIndex
 {
     static uint32_t value()
     {
-        static uint32_t typeId = refl::TypeIndex<T>::value();
-        return typeId;
+        return refl::TypeIndex<T>::value();
     }
 };
 

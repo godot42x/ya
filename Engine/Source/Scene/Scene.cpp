@@ -1,8 +1,17 @@
 #include "Scene.h"
 #include "ECS/Component.h"
+#include "ECS/Component/LuaScriptComponent.h"
+#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include <algorithm>
 
+#include "reflects-core/lib.h"
+
+#include "Core/UUID.h"
 
 
 namespace ya
@@ -21,24 +30,7 @@ Scene::~Scene()
 
 Entity *Scene::createEntity(const std::string &name)
 {
-    auto   id = _registry.create();
-    Entity entity{id, this};
-    entity._name = name;
-
-    // Add basic components
-    auto *idComponent = entity.addComponent<IDComponent>();
-    idComponent->_id  = _entityCounter++;
-
-    auto *tagComponent = entity.addComponent<TagComponent>();
-    tagComponent->_tag = name.empty() ? "Entity" : name;
-
-
-    // auto &transformComponent = entity.addComponent<TransformComponent>();
-
-    auto it = _entityMap.insert({id, std::move(entity)});
-    YA_CORE_ASSERT(it.second, "Entity ID collision!");
-
-    return &it.first->second;
+    return createEntityWithUUID(UUID{}, name);
 }
 
 Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
@@ -48,7 +40,7 @@ Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 
     // Add basic components with specific UUID
     auto idComponent = entity.addComponent<IDComponent>();
-    idComponent->_id = static_cast<uint32_t>(uuid);
+    idComponent->_id = UUID(uuid);
 
     auto tagComponent  = entity.addComponent<TagComponent>();
     tagComponent->_tag = name.empty() ? "Entity" : name;
@@ -72,7 +64,7 @@ bool Scene::isValidEntity(Entity entity) const
     return _registry.valid(entity.getHandle());
 }
 
-Entity *Scene::getEntityByEnttID(entt::entity id) 
+Entity *Scene::getEntityByEnttID(entt::entity id)
 {
     auto it = _entityMap.find(id);
     if (it != _entityMap.end())
@@ -173,6 +165,59 @@ std::vector<Entity> Scene::findEntitiesByTag(const std::string &tag)
 
     return entities;
 }
+
+template <class Component>
+static void copyComponent(const entt::registry &src, entt::registry &dst, const std::unordered_map<UUID, entt::entity> &entityMap)
+{
+    for (auto e : src.view<Component>())
+    {
+        UUID uuid = src.get<IDComponent>(e)._id;
+        YA_CORE_ASSERT(entityMap.contains(uuid), "UUID not found in entity map");
+        auto dstEnttID = entityMap.at(uuid);
+
+        auto &srcComponent = src.get<Component>(e);
+        dst.emplace_or_replace<Component>(dstEnttID, srcComponent);
+    }
+}
+
+stdptr<Scene> Scene::cloneScene(const Scene *scene)
+{
+    stdptr<Scene> newScene = makeShared<Scene>();
+
+    std::unordered_map<UUID, entt::entity> entityMap;
+
+    const auto &srcRegistry = scene->getRegistry();
+    auto       &dstRegistry = newScene->getRegistry();
+
+    auto idView = srcRegistry.view<IDComponent>();
+    for (auto entity : idView)
+    {
+        auto         id        = srcRegistry.get<IDComponent>(entity)._id;
+        const auto  &name      = srcRegistry.get<TagComponent>(entity)._tag;
+        entt::entity newEntity = newScene->createEntityWithUUID(id, name)->getHandle();
+        entityMap.insert({id, newEntity});
+    }
+
+    using components_to_copy = refl::type_list<
+        IDComponent,
+        TagComponent,
+        TransformComponent,
+        SimpleMaterialComponent,
+        UnlitMaterialComponent,
+        LitMaterialComponent,
+        LuaScriptComponent,
+        PointLightComponent>;
+
+    refl::foreach_in_typelist<components_to_copy>([&](const auto &T) {
+        copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
+    });
+    // refl::foreach_types(components_to_copy{}, [&](const auto &T) {
+    //     copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
+    // });
+
+    return newScene;
+}
+
 
 
 } // namespace ya

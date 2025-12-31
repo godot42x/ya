@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/UUID.h"
 #include <glm/glm.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -24,11 +25,12 @@ struct IComponent
 // Basic component for entity identification
 struct IDComponent : public IComponent
 {
-    uint32_t _id = 0;
+    UUID _id = UUID(0);
 
     IDComponent()                    = default;
     IDComponent(const IDComponent &) = default;
-    IDComponent(uint32_t id) : _id(id) {}
+    IDComponent(UUID id) : _id(id) {}
+    IDComponent(uint64_t id) : _id(id) {}
 };
 
 struct TagComponent : public IComponent

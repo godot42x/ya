@@ -66,6 +66,18 @@ struct [[refl]] Scene
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
 
+    void addToScene(stdptr<Node> node)
+    {
+        if (!_rootNode) {
+            _rootNode = std::make_shared<Node>();
+            _rootNode->setName("Root");
+        }
+        _rootNode->addChild(node.get());
+    }
+
+    stdptr<Scene>        clone() { return Scene::cloneScene(this); }
+    static stdptr<Scene> cloneScene(const Scene *scene);
+
   private:
 
     void createEntityImpl(Entity &entity);

@@ -1,4 +1,4 @@
-ackage("vulkansdk")
+package("vulkansdk")
 do
     set_homepage("https://www.lunarg.com/vulkan-sdk/")
     set_description("LunarG Vulkan® SDK")

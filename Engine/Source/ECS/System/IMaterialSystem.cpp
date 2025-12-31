@@ -5,6 +5,7 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
+#include "Scene/SceneManager.h"
 
 
 
@@ -19,10 +20,10 @@ App *IMaterialSystem::getApp() const
     return App::get();
 }
 
-Scene *IMaterialSystem::getScene() const
+Scene *IMaterialSystem::getActiveScene() const
 {
     if (getApp()) {
-        return getApp()->getScene();
+        return getApp()->getSceneManager()->getActiveScene();
     }
     return nullptr;
 }

@@ -179,7 +179,7 @@ class MyGame : public App
         // FileSystem::get()->setGameRoot(gameRoot);
 
         // 加载场景
-        auto           *scene = getSceneManager()->getCurrentScene();
+        auto           *scene = getSceneManager()->getEditorScene();
         SceneSerializer serializer(scene);
 
         if (serializer.loadFromFile("Content/MainScene.json")) {
@@ -193,7 +193,7 @@ class MyGame : public App
     void onQuit() override
     {
         // 可选：保存场景
-        auto           *scene = getSceneManager()->getCurrentScene();
+        auto           *scene = getSceneManager()->getEditorScene();
         SceneSerializer serializer(scene);
         serializer.saveToFile("Content/MainScene_Autosave.json");
 

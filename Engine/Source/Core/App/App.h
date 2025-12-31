@@ -215,7 +215,6 @@ struct App
 
     [[nodiscard]] const AppDesc                 &getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
-    [[nodiscard]] Scene                         *getScene() const;
 
     // Getters for subsystems
     [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
@@ -244,10 +243,11 @@ struct App
     virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene) {}
 
+    virtual void onSceneActivated(Scene *scene);
+
     // void onScenePostInit(Scene *scene) {}
 
-    // State transition hooks
-    virtual void onEnterRuntime() {}
+    virtual void onEnterRuntime();
     virtual void onEnterSimulation() {}
     virtual void onExitSimulation() {}
     virtual void onSimulationPaused() {}

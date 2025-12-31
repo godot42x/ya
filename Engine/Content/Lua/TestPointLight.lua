@@ -5,11 +5,12 @@ local script = {}
 
 script.radius = 5.0 -- 圆周半径
 script.speed = 90.0 -- 角速度 (度/秒)
-script.height = 5.0 -- Y轴高度
 script.angle = 0.0  -- 当前角度
 
 function script:onInit()
     print("OrbitScript initialized")
+    self.startPos = self.entity:getTransform():getPosition()
+    print("Start Position: ", self.startPos.x, self.startPos.y, self.startPos.z)
 end
 
 function script:onUpdate(dt)
@@ -23,9 +24,9 @@ function script:onUpdate(dt)
 
             -- 计算新位置
             local angleRad = math.rad(self.angle)
-            local newPos = vec3.new(
+            local newPos = self.startPos + Vec3.new(
                 self.radius * math.cos(angleRad),
-                self.height,
+                0,
                 self.radius * math.sin(angleRad)
             )
 

@@ -166,7 +166,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
 
     auto render = getRender();
-    auto scene  = getScene();
+    auto scene  = getActiveScene();
     if (!scene) {
         return;
     }

@@ -237,7 +237,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
 
 void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
-    Scene *scene = getScene();
+    Scene *scene = getActiveScene();
     if (!scene) {
         return;
     }

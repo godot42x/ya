@@ -82,11 +82,6 @@ namespace ya
 // Define the static member variable
 App *App::_instance = nullptr;
 
-// Implementation of getter methods
-Scene *App::getScene() const
-{
-    return _sceneManager ? _sceneManager->getCurrentScene() : nullptr;
-}
 
 void App::onSceneViewportResized(Rect2D rect)
 {
@@ -409,6 +404,7 @@ void App::init(AppDesc ci)
     _sceneManager = new SceneManager();
     _sceneManager->onSceneInit.addLambda(this, [this](Scene *scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene *scene) { this->onSceneDestroy(scene); });
+    _sceneManager->onSceneActivated.addLambda(this, [this](Scene *scene) { this->onSceneActivated(scene); });
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
     // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
@@ -438,6 +434,10 @@ void App::init(AppDesc ci)
     _luaScriptingSystem->init();
 
     loadScene(ci.defaultScenePath);
+
+    camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
+    camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
+    camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 }
 
 // MARK: INIT
@@ -888,7 +888,7 @@ void App::onRenderGUI(float dt)
             auto sceneManager = ya::App::get()->getSceneManager();
             YA_CORE_ASSERT(sceneManager, "SceneManager is null");
             sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
-                                          getSceneManager()->getCurrentScene());
+                                          getSceneManager()->getEditorScene());
         }
     }
 
@@ -929,28 +929,36 @@ bool App::unloadScene()
 
 void App::onSceneInit(Scene *scene)
 {
+
+    // Create camera entity
+}
+
+void App::onSceneActivated(Scene *scene)
+{
     _editorLayer->setSceneContext(scene);
+
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
 
     // Set up default camera
-    camera.setPosition(glm::vec3(0.0f, 0.0f, 3.0f));
-    camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
-    camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 
-    // Create camera entity
-    auto cam = scene->createEntity("Camera");
-    cam->addComponent<TransformComponent>();
-    cam->addComponent<CameraComponent>();
-    cam->addComponent<SimpleMaterialComponent>();
-    _viewportRT->setCamera(cam);
+    // auto cam = scene->createEntity("Camera");
+    // cam->addComponent<TransformComponent>();
+    // cam->addComponent<CameraComponent>();
+    // cam->addComponent<SimpleMaterialComponent>();
+    // _viewportRT->setCamera(cam);
 
-    YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
-    YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
+    // YA_CORE_ASSERT(scene->getRegistry().any_of<CameraComponent>(cam->getHandle()), "Camera component not found");
+    // YA_CORE_ASSERT(cam->hasComponent<CameraComponent>(), "Camera component not attached");
 
-    auto cc    = cam->getComponent<CameraComponent>();
-    auto owner = cc->getOwner();
-    YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
+    // auto cc    = cam->getComponent<CameraComponent>();
+    // auto owner = cc->getOwner();
+    // YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
+}
+
+// State transition hooks
+void App::onEnterRuntime()
+{
 }
 
 void App::startRuntime()
@@ -961,7 +969,10 @@ void App::startRuntime()
     }
 
     YA_CORE_INFO("Starting runtime...");
+    _sceneManager->onStartRuntime();
     _appState = AppState::Runtime;
+
+
     onEnterRuntime();
 }
 
@@ -987,6 +998,7 @@ void App::stopRuntime()
 
     YA_CORE_INFO("Stopping runtime");
     _appState = AppState::Editor;
+    _sceneManager->onStopRuntime();
     _luaScriptingSystem->onStop();
 }
 

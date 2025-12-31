@@ -262,7 +262,7 @@ void LitMaterialSystem::onDestroy()
 
 void LitMaterialSystem::onUpdate(float deltaTime)
 {
-    auto scene = getScene();
+    auto scene = getActiveScene();
     YA_CORE_ASSERT(scene, "LitMaterialSystem::onUpdate - Scene is null");
 
     // Reset point light count
@@ -276,7 +276,7 @@ void LitMaterialSystem::onUpdate(float deltaTime)
     }
 
     if (entityCount == 0) {
-        YA_CORE_WARN("LitMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
+        // YA_CORE_WARN("LitMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
     }
     else {
         // YA_CORE_INFO("LitMaterialSystem::onUpdate - Found {} entities with PointLightComponent", entityCount);
@@ -311,7 +311,7 @@ void LitMaterialSystem::onUpdate(float deltaTime)
 
 void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
-    Scene *scene = getScene();
+    Scene *scene = getActiveScene();
     if (!scene) {
         return;
     }

@@ -4,7 +4,9 @@
 #include "Core/Manager/Facade.h"
 #include "ImGuiHelper.h"
 #include "Scene/Scene.h"
+#include "Scene/SceneManager.h"
 #include <glm/gtc/type_ptr.hpp>
+
 
 
 #include "Render/TextureLibrary.h"
@@ -28,7 +30,7 @@ void EditorLayer::onAttach()
         return;
 
     // Initialize editor panels
-    if (auto scene = _app->getScene())
+    if (auto scene = _app->getSceneManager()->getActiveScene())
     {
         _sceneHierarchyPanel.setContext(scene);
     }
@@ -316,7 +318,8 @@ void EditorLayer::toolbar()
 void EditorLayer::viewportWindow()
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{128, 128});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{460, 300});
+
 
     if (!ImGui::Begin("Viewport"))
     {
@@ -331,6 +334,7 @@ void EditorLayer::viewportWindow()
 
     // Get viewport panel size
     ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+
 
 
     // Calculate viewport bounds for mouse picking

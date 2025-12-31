@@ -21,6 +21,9 @@ struct HelloMaterial : public ya::App
     void onInit(ya::AppDesc ci) override
     {
         Super::onInit(ci);
+
+        createCubeMesh();
+        loadTextures();
     }
 
     void onPostInit() override
@@ -30,6 +33,7 @@ struct HelloMaterial : public ya::App
 
     void onQuit() override
     {
+        cubeMesh.reset();
         Super::onQuit();
     }
 
@@ -38,12 +42,22 @@ struct HelloMaterial : public ya::App
     void onSceneInit(ya::Scene *scene) override
     {
         Super::onSceneInit(scene);
+    }
 
+    void onSceneActivated(ya::Scene *scene) override
+    {
+        Super::onSceneActivated(scene);
         // HelloMaterial-specific initialization
-        createCubeMesh();
-        loadTextures();
-        createMaterials();
-        createEntities(scene);
+        static std::once_flag flag;
+        std::call_once(flag, [&]() {
+            // TODO: entities and components could be create in one scene in multiple times
+            //      Remove this when you implement the:
+            // 1. Scene serialization/deserialization
+            // 2. Scene cloning
+            // 3. Scene load/init/unload/destroy
+            createMaterials();
+            createEntities(scene);
+        });
 
         // Initialize editor layer
 
@@ -52,7 +66,7 @@ struct HelloMaterial : public ya::App
 
     void onSceneDestroy(ya::Scene *scene) override
     {
-        cubeMesh.reset();
+        // cubeMesh.reset();
 
         Super::onSceneDestroy(scene);
     }

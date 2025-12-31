@@ -2,6 +2,7 @@
 #include "Core/Log.h"
 #include "Core/Serialization/SceneSerializer.h"
 #include "Core/System/FileSystem.h"
+#include "ECS/Component.h"
 
 
 namespace ya
@@ -16,18 +17,18 @@ bool SceneManager::loadScene(const std::string &path)
 {
     // Unload existing scene first
     if (_currentScene) {
-        YA_CORE_WARN("Scene already loaded, unloading previous scene: {}", _currentScenePath);
+        // YA_CORE_WARN("Scene already loaded, unloading previous scene: {}", _currentScenePath);
         unloadScene();
     }
 
     // FileSystem::get()->getGameRoot()
 
     // Create new scene
-    _currentScene     = std::make_unique<Scene>();
-    _currentScenePath = path;
+    _editorScene = makeShared<Scene>();
+    // _currentScenePath = path;
 
     // Call initialization callback if set
-    onSceneInit.broadcast(_currentScene.get());
+    setActiveScene(_editorScene);
 
     YA_CORE_INFO("Scene loaded: {}", path);
     return true;
@@ -35,14 +36,15 @@ bool SceneManager::loadScene(const std::string &path)
 
 bool SceneManager::unloadScene()
 {
+    // UNIMPLEMENTED();
     if (!_currentScene) {
         return false;
     }
     onSceneDestroy.broadcast(_currentScene.get());
 
     _currentScene.reset();
-    YA_CORE_INFO("Scene unloaded: {}", _currentScenePath);
-    _currentScenePath.clear();
+    // YA_CORE_INFO("Scene unloaded: {}", _currentScenePath);
+    // _currentScenePath.clear();
 
     return true;
 }
@@ -77,6 +79,22 @@ void SceneManager::deserializeFromFile(const std::string &path, Scene *scene)
     else {
         YA_CORE_ERROR("Failed to deserialize scene from file: {}", path);
     }
+}
+
+void SceneManager::onStartRuntime()
+{
+    auto newScene = getEditorScene()->clone();
+    setActiveScene(newScene);
+}
+
+void SceneManager::onStopRuntime()
+{
+    setActiveScene(_editorScene);
+}
+
+stdptr<Scene> SceneManager::cloneScene(Scene *scene) const
+{
+    return scene->clone();
 }
 
 } // namespace ya

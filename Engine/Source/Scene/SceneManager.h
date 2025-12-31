@@ -24,8 +24,9 @@ class SceneManager
     using SceneInitCallback = std::function<void(Scene *)>;
 
   private:
-    std::unique_ptr<Scene> _currentScene;
-    std::string            _currentScenePath;
+    stdptr<Scene> _currentScene;
+    stdptr<Scene> _editorScene = nullptr;
+    // std::string   _currentScenePath;
 
   public:
     /**
@@ -40,6 +41,7 @@ class SceneManager
 
     MulticastDelegate<void(Scene *)> onSceneInit;
     MulticastDelegate<void(Scene *)> onSceneDestroy;
+    MulticastDelegate<void(Scene *)> onSceneActivated;
 
   public:
 
@@ -55,12 +57,25 @@ class SceneManager
 
     bool unloadScene();
 
-    [[nodiscard]] Scene *getCurrentScene() const { return _currentScene.get(); }
+    void setActiveScene(stdptr<Scene> scene)
+    {
+        _currentScene = scene;
+        onSceneActivated.broadcast(scene.get());
+    }
+    [[nodiscard]] Scene *getActiveScene() const { return _currentScene.get(); }
+    [[nodiscard]] Scene *getEditorScene() const { return _editorScene.get(); }
     bool                 hasScene() const { return _currentScene != nullptr; }
 
 
     void serializeToFile(const std::string &path, Scene *scene) const;
     void deserializeFromFile(const std::string &path, Scene *scene);
+    void setCurrentScene(stdptr<Scene> scene) { _currentScene = scene; }
+
+    void onStartRuntime();
+    void onStopRuntime();
+
+
+    stdptr<Scene> cloneScene(Scene *scene) const;
 };
 
 } // namespace ya

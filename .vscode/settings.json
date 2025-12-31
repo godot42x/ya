@@ -94,4 +94,7 @@
     "Lua.diagnostics.disable": [
         "undefined-field"
     ],
+    "Lua.diagnostics.globals": [
+        "Vec3"
+    ],
 }
