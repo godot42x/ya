@@ -3,11 +3,8 @@
 #include "Core/Log.h"
 #include "Core/Serialization/ReflectionSerializer.h"
 #include "Core/System/FileSystem.h"
-#include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/Material/MaterialComponent.h"
-#include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+#include "SerializerRegistry.h"
 
 
 
@@ -15,8 +12,8 @@ namespace ya
 {
 
 
-std::unordered_map<std::string, ComponentSerializer>   SceneSerializer::_componentSerializers;
-std::unordered_map<std::string, ComponentDeserializer> SceneSerializer::_componentDeserializers;
+// std::unordered_map<std::string, ComponentSerializer>   SceneSerializer::_componentSerializers;
+// std::unordered_map<std::string, ComponentDeserializer> SceneSerializer::_componentDeserializers;
 
 // ============================================================================
 // 保存/加载文件
@@ -72,6 +69,8 @@ nlohmann::json SceneSerializer::serialize()
     // Serialize all entities
     j["entities"] = nlohmann::json::array();
 
+    // 处理 ECS
+    // TODO: 怎么处理树状Scene?
     auto &registry = _scene->getRegistry();
     // 遍历所有 Entity
     registry.view<entt::entity>().each([&](auto entityID) {
@@ -118,11 +117,12 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
     // Serialize components
     j["components"] = nlohmann::json::object();
 
-    auto        &registry = _scene->getRegistry();
-    entt::entity handle   = entity->getHandle();
+    auto        &registry   = _scene->getRegistry();
+    entt::entity handle     = entity->getHandle();
+    auto        &components = j["components"];
 
-    for (auto &[typeName, serializer] : _componentSerializers) {
-        serializer(registry, handle, j["components"]);
+    for (auto &[typeName, serializer] : ECSSerializerRegistry::get().getSerializers()) {
+        serializer(registry, handle, components);
     }
     return j;
 }
@@ -141,7 +141,7 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
         auto &components = j["components"];
         auto &registry   = _scene->getRegistry();
 
-        for (auto &[typeName, deserializer] : _componentDeserializers) {
+        for (auto &[typeName, deserializer] : ECSSerializerRegistry::get().getDeserializers()) {
             if (components.contains(typeName)) {
                 deserializer(registry, entity->getHandle(), components[typeName]);
             }
@@ -149,44 +149,6 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
     }
 
     return _scene->getEntityByEnttID(entity->getHandle());
-}
-
-// ============================================================================
-// 组件序列化器注册（基于反射的自动化版本）
-// ============================================================================
-
-void SceneSerializer::registerComponentSerializers()
-{
-#define REGISTER_COMPONENT_SERIALIZER(ComponentType)                                    \
-    _componentSerializers[#ComponentType] =                                             \
-        [](entt::registry &registry, entt::entity entity, nlohmann::json &components) { \
-            if (registry.all_of<ComponentType>(entity)) {                               \
-                auto &comp                 = registry.get<ComponentType>(entity);       \
-                components[#ComponentType] = ReflectionSerializer::serialize(comp);     \
-            }                                                                           \
-        };
-#define REGISTER_COMPONENT_DESERIALIZER(ComponentType)                               \
-    _componentDeserializers[#ComponentType] =                                        \
-        [](entt::registry &registry, entt::entity entity, const nlohmann::json &j) { \
-            auto comp = ReflectionSerializer::deserialize<ComponentType>(j);         \
-            registry.emplace<ComponentType>(entity, comp);                           \
-        };
-
-
-#define REGISTER_COMPONENT(ComponentType)        \
-    REGISTER_COMPONENT_SERIALIZER(ComponentType) \
-    REGISTER_COMPONENT_DESERIALIZER(ComponentType)
-
-    {
-        REGISTER_COMPONENT(TransformComponent)
-        REGISTER_COMPONENT(CameraComponent)
-        REGISTER_COMPONENT(PointLightComponent)
-    }
-
-
-#undef REGISTER_COMPONENT
-#undef REGISTER_COMPONENT_SERIALIZER
-#undef REGISTER_COMPONENT_DESERIALIZER
 }
 
 

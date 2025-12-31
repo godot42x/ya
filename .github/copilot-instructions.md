@@ -113,6 +113,8 @@ Render2D:drawTexture(),  会以传入的位置为左上角， size 向右下扩�
 - **函数**: camelCase
 - **常量**: UPPER_SNAKE_CASE
 
+所有类的成员变量应该在最上方进行声明, 关注数据而不是方法
+
 ### 内存管理
 
 - **智能指针优先**: 使用 `std::shared_ptr` / `std::unique_ptr`

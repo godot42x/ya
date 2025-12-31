@@ -14,6 +14,8 @@ namespace ya
 
 struct LuaScriptComponent : public IComponent
 {
+    YA_ECS_COMPONENT(LuaScriptComponent)
+
     std::string scriptPath;
     bool        bLoaded = false;
 
@@ -21,6 +23,12 @@ struct LuaScriptComponent : public IComponent
     sol::function onInit;
     sol::function onUpdate;
     sol::function onDestroy;
+
+    static void registerReflection()
+    {
+        Register<LuaScriptComponent>("LuaScriptComponent")
+            .property("scriptPath", &LuaScriptComponent::scriptPath);
+    }
 };
 
 

@@ -2,6 +2,18 @@
     "entities": [
         {
             "components": {
+                "LuaScriptComponent": {
+                    "scriptPath": "Engine/Content/Lua/TestPointLight.lua"
+                },
+                "PointLightComponent": {
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "intensity": 1.0,
+                    "range": 50.0
+                },
                 "TransformComponent": {
                     "position": [
                         0.0,
@@ -48,6 +60,9 @@
         },
         {
             "components": {
+                "LuaScriptComponent": {
+                    "scriptPath": ""
+                },
                 "TransformComponent": {
                     "position": [
                         0.0,
@@ -115,8 +130,8 @@
                         0.0
                     ],
                     "rotation": [
-                        0.0,
-                        0.0,
+                        2.399998664855957,
+                        -0.5999999642372131,
                         0.0
                     ],
                     "scale": [

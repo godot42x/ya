@@ -41,6 +41,10 @@ includes("./Test/xmake.lua")
 set_rundir(os.scriptdir())
 
 
-add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
+local bEnableUnity = get_config("ya_enable_unity-build")
+if not bEnableUnity then
+    add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
+end
+
 
 includes("./Example/xmake.lua")

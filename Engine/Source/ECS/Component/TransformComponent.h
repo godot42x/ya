@@ -2,12 +2,14 @@
 #pragma once
 #include "ECS/Component.h"
 
-#include "Core/System/ReflectionSystem.h"
+#include "Core/System/AutoRegister.h"
 
 namespace ya
 {
-struct TransformComponent : public IComponent, public MetaRegister
+struct TransformComponent : public IComponent
 {
+    YA_ECS_COMPONENT(TransformComponent)
+
     glm::mat4 _cachedMatrix = glm::mat4(1.0f);
     glm::vec3 _position     = {0.0f, 0.0f, 0.0f};
     glm::vec3 _rotation     = {0.0f, 0.0f, 0.0f};
@@ -55,11 +57,6 @@ struct TransformComponent : public IComponent, public MetaRegister
     {
         calcMatrix();
         return _cachedMatrix;
-    }
-
-    void registerAll() override
-    {
-        registerReflection();
     }
 
 

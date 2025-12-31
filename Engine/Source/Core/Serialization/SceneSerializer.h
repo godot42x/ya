@@ -11,16 +11,6 @@
 namespace ya
 {
 
-// Component 序列化特征
-template <typename T>
-concept Serializable = requires(T t, nlohmann::json j) {
-    {
-        t.toJson()
-    } -> std::same_as<nlohmann::json>;
-    {
-        T::fromJson(j)
-    } -> std::same_as<T>;
-};
 
 /**
  * @brief Scene 序列化器 - 基于 ECS + 反射
@@ -32,19 +22,14 @@ concept Serializable = requires(T t, nlohmann::json j) {
  * 4. 支持资源引用（Texture, Mesh 等）
  */
 
-using ComponentSerializer   = std::function<void(entt::registry &, entt::entity, nlohmann::json &)>;
-using ComponentDeserializer = std::function<void(entt::registry &, entt::entity, const nlohmann::json &)>;
 struct SceneSerializer
 {
   private:
     Scene *_scene = nullptr;
 
-    static std::unordered_map<std::string, ComponentSerializer>   _componentSerializers;
-    static std::unordered_map<std::string, ComponentDeserializer> _componentDeserializers;
 
   public:
     SceneSerializer(Scene *scene) : _scene(scene) {}
-    static void registerComponentSerializers();
 
     bool saveToFile(const std::string &filepath);
     bool loadFromFile(const std::string &filepath);

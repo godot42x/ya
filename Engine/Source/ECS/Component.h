@@ -10,6 +10,8 @@
 
 #include "Core/Base.h"
 
+#include "Core/System/AutoRegister.h"
+
 
 namespace ya
 {

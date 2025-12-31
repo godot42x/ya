@@ -2,12 +2,6 @@
 #include "FWD.h"
 
 
-using stdpath  = std::filesystem::path;
-using stdclock = std::chrono::steady_clock;
-using namespace std::string_literals;
-using namespace std::literals;
-
-
 #if _WIN32
     #define PLATFORM_BREAK() __debugbreak()
 #elif defined(__clang__) || defined(__GNUC__)
@@ -86,14 +80,13 @@ inline static DefaultAllocator defaultAllocator;
         return #x;
 
 
-struct MetaRegister
-{
-    virtual void registerAll() = 0;
-};
-
-
 namespace ya
 {
+
+using stdpath  = std::filesystem::path;
+using stdclock = std::chrono::steady_clock;
+using namespace std::string_literals;
+using namespace std::literals;
 
 #if NOT_USE_REFLECTS
 

@@ -9,6 +9,7 @@ namespace ya
 {
 struct LuaScriptingSystem : public ScriptingSystem
 {
+
     sol::state _lua;
 
     void init() override;

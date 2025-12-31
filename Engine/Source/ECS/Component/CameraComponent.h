@@ -7,14 +7,15 @@
 
 #include "Core/Math/Math.h"
 
-#include "Core/System/ReflectionSystem.h"
+#include "Core/System/AutoRegister.h"
 
 namespace ya
 {
 
 
-struct CameraComponent : public IComponent, public MetaRegister
+struct CameraComponent : public IComponent
 {
+    YA_ECS_COMPONENT(CameraComponent)
 
     bool _primary          = true; // TODO: think about moving to Scene
     bool _fixedAspectRatio = false;
@@ -32,6 +33,7 @@ struct CameraComponent : public IComponent, public MetaRegister
     {
         return FMath::perspective(glm::radians(_fov), _aspectRatio, _nearClip, _farClip);
     }
+
     // TODO: a camera should only define the effect:
     //  1. projection or orthographic
     //  2. other fov some camera effect
@@ -69,11 +71,6 @@ struct CameraComponent : public IComponent, public MetaRegister
 
     void setAspectRatio(float aspectRatio) { _aspectRatio = aspectRatio; }
 
-    void registerAll() override
-    {
-        CameraComponent::registerReflection();
-    }
-
     // ========================================================================
     // 反射注册 - 自动生成序列化
     // ========================================================================
@@ -94,4 +91,4 @@ struct CameraComponent : public IComponent, public MetaRegister
 
 
 
-}; // namespace ya
+} // namespace ya
