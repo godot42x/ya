@@ -402,7 +402,7 @@ void App::init(AppDesc ci)
 
     // ===== Initialize SceneManager =====
     _sceneManager = new SceneManager();
-    _sceneManager->onSceneInit.addLambda(this, [this](Scene *scene) { this->onSceneInit(scene); });
+    // _sceneManager->onSceneInit.addLambda(this, [this](Scene *scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene *scene) { this->onSceneDestroy(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene *scene) { this->onSceneActivated(scene); });
 
@@ -887,8 +887,8 @@ void App::onRenderGUI(float dt)
         {
             auto sceneManager = ya::App::get()->getSceneManager();
             YA_CORE_ASSERT(sceneManager, "SceneManager is null");
-            sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterialScene.json",
-                                          getSceneManager()->getEditorScene());
+            sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
+                                          getSceneManager()->getActiveScene());
         }
     }
 
@@ -913,6 +913,15 @@ void App::onRenderGUI(float dt)
 // MARK: Scene
 bool App::loadScene(const std::string &path)
 {
+    switch (_appState) {
+    case AppState::Runtime:
+    case AppState::Simulation:
+        stopRuntime();
+        break;
+    case AppState::Editor:
+        break;
+    }
+
     if (_sceneManager) {
         return _sceneManager->loadScene(path);
     }
@@ -927,11 +936,11 @@ bool App::unloadScene()
     return false;
 }
 
-void App::onSceneInit(Scene *scene)
-{
+// void App::onSceneInit(Scene *scene)
+// {
 
-    // Create camera entity
-}
+//     // Create camera entity
+// }
 
 void App::onSceneActivated(Scene *scene)
 {
@@ -939,7 +948,6 @@ void App::onSceneActivated(Scene *scene)
 
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
-
 }
 
 // State transition hooks

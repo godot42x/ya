@@ -30,8 +30,9 @@
                 "panel": "shared",
                 "showReuseMessage": true,
                 "clear": false,
-                "revealProblems": "never",
+                "revealProblems": "never"
             },
+            "problemMatcher": [],
             "runOptions": {}
         }
     ]

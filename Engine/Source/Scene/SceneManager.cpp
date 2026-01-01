@@ -26,6 +26,8 @@ bool SceneManager::loadScene(const std::string &path)
     // Create new scene
     _editorScene = makeShared<Scene>();
     // _currentScenePath = path;
+    SceneSerializer serializer(_editorScene.get());
+    serializer.loadFromFile(path);
 
     // Call initialization callback if set
     setActiveScene(_editorScene);

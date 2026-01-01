@@ -25,12 +25,12 @@ struct GreedySnake : public ya::App
         Super::onQuit();
     }
 
-    void onSceneInit(ya::Scene *scene) override
-    {
-        Super::onSceneInit(scene);
+    // void onSceneInit(ya::Scene *scene) override
+    // {
+    //     Super::onSceneInit(scene);
 
-        YA_INFO("GreedySnake scene initialized.");
-    }
+    //     YA_INFO("GreedySnake scene initialized.");
+    // }
 
     void onSceneDestroy(ya::Scene *scene) override
     {

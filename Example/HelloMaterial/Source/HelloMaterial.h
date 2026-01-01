@@ -1,11 +1,12 @@
 #pragma once
 
 #include "Core/App/App.h"
+#include "Core/System/FileSystem.h"
 #include "Editor/EditorLayer.h"
 #include "Render/Mesh.h"
 #include "Scene/SceneManager.h"
 #include <imgui.h>
-#include "Core/System/FileSystem.h"
+
 
 struct HelloMaterial : public ya::App
 {
@@ -41,10 +42,10 @@ struct HelloMaterial : public ya::App
 
 
 
-    void onSceneInit(ya::Scene *scene) override
-    {
-        Super::onSceneInit(scene);
-    }
+    // void onSceneInit(ya::Scene *scene) override
+    // {
+    //     Super::onSceneInit(scene);
+    // }
 
     void onSceneActivated(ya::Scene *scene) override
     {

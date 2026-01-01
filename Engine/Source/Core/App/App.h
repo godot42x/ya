@@ -238,11 +238,13 @@ struct App
     void stopRuntime();
     void stopSimulation();
 
+    bool loadScene(const std::string &path);
+    bool unloadScene();
+
   protected:
     // Protected for derived classes to override
-    virtual void onSceneInit(Scene *scene);
+    // virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene) {}
-
     virtual void onSceneActivated(Scene *scene);
 
     // void onScenePostInit(Scene *scene) {}
@@ -263,8 +265,6 @@ struct App
   private:
 
 
-    bool loadScene(const std::string &path);
-    bool unloadScene();
     bool saveScene([[maybe_unused]] const std::string &path) { return false; } // TODO: implement
 
     bool onWindowResized(const WindowResizeEvent &event);

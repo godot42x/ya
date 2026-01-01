@@ -58,7 +58,11 @@ struct Entity
         return &_scene->_registry.get<T>(_entityHandle);
     }
     template <typename T>
-    [[nodiscard]] bool hasComponent() const { return _scene->_registry.all_of<T>(_entityHandle); }
+    [[nodiscard]] bool hasComponent() const
+    {
+        YA_CORE_ASSERT(_entityHandle != entt::null, "Entity handle is null!");
+        return _scene->_registry.all_of<T>(_entityHandle);
+    }
 
     template <typename T>
     void removeComponent()
@@ -79,7 +83,10 @@ struct Entity
     entt::entity           getHandle() const { return _entityHandle; }
     Scene                 *getScene() const { return _scene; }
 
-    operator bool() const { return _entityHandle != entt::null && _scene != nullptr; }
+    operator bool() const
+    {
+        return _scene && _scene->getRegistry().valid(_entityHandle);
+    }
     operator entt::entity() const { return _entityHandle; }
     operator uint32_t() const { return static_cast<uint32_t>(_entityHandle); }
 

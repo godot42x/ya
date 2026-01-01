@@ -29,7 +29,7 @@ class SceneManager
     // std::string   _currentScenePath;
 
   public:
-    /**
+/**
   State:
   Engine Start->
   SceneManager created ->
@@ -39,7 +39,7 @@ class SceneManager
   Close scene (onSceneDestroy) -> Unload scene -> Engine Quit
 */
 
-    MulticastDelegate<void(Scene *)> onSceneInit;
+    // MulticastDelegate<void(Scene *)> onSceneInit;
     MulticastDelegate<void(Scene *)> onSceneDestroy;
     MulticastDelegate<void(Scene *)> onSceneActivated;
 

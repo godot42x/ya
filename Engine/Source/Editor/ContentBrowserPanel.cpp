@@ -1,11 +1,12 @@
 #include "ContentBrowserPanel.h"
-#include "Core/System/FileSystem.h"
+#include "Core/App/App.h"
 #include "Core/AssetManager.h"
+#include "Core/System/FileSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/TextureLibrary.h"
 #include "vulkan/vulkan_core.h"
 #include <imgui.h>
-#include "Core/App/App.h"
+
 
 namespace ya
 {
@@ -14,7 +15,7 @@ ContentBrowserPanel::ContentBrowserPanel(EditorLayer *owner)
     : _owner(owner)
 {
     discoverContentRoots();
-    
+
     // Default to Engine Content
     if (!_contentRoots.empty())
     {
@@ -25,19 +26,19 @@ ContentBrowserPanel::ContentBrowserPanel(EditorLayer *owner)
 void ContentBrowserPanel::discoverContentRoots()
 {
     auto fs = FileSystem::get();
-    
+
     // 1. Engine Content
     auto engineContentPath = fs->getEngineRoot() / "Content";
     if (std::filesystem::exists(engineContentPath))
     {
         _contentRoots.push_back({
-            "Engine",
-            engineContentPath,
-            ContentRootType::Engine,
-            false
+            .name     = "Engine",
+            .path     = engineContentPath,
+            .type     = ContentRootType::Engine,
+            .isActive = false,
         });
     }
-    
+
     // 2. Project/Game Content
     if (!fs->getGameRoot().empty())
     {
@@ -46,14 +47,14 @@ void ContentBrowserPanel::discoverContentRoots()
         {
             auto gameName = fs->getGameRoot().filename().string();
             _contentRoots.push_back({
-                gameName,
-                gameContentPath,
-                ContentRootType::Project,
-                false
+                .name     = gameName,
+                .path     = gameContentPath,
+                .type     = ContentRootType::Project,
+                .isActive = false,
             });
         }
     }
-    
+
     // 3. Plugin Contents
     for (const auto &[pluginName, pluginRoot] : fs->getPluginRoots())
     {
@@ -61,10 +62,10 @@ void ContentBrowserPanel::discoverContentRoots()
         if (std::filesystem::exists(pluginContentPath))
         {
             _contentRoots.push_back({
-                pluginName,
-                pluginContentPath,
-                ContentRootType::Plugin,
-                false
+                .name     = pluginName,
+                .path     = pluginContentPath,
+                .type     = ContentRootType::Plugin,
+                .isActive = false,
             });
         }
     }
@@ -73,13 +74,13 @@ void ContentBrowserPanel::discoverContentRoots()
 void ContentBrowserPanel::switchToRoot(ContentRoot *root)
 {
     if (!root) return;
-    
+
     // Deactivate previous root
     if (_activeRoot)
     {
         _activeRoot->isActive = false;
     }
-    
+
     // Activate new root
     _activeRoot           = root;
     _activeRoot->isActive = true;
@@ -89,7 +90,7 @@ void ContentBrowserPanel::switchToRoot(ContentRoot *root)
 bool ContentBrowserPanel::isPathWithinActiveRoot(const std::filesystem::path &path) const
 {
     if (!_activeRoot) return false;
-    
+
     auto relativePath = std::filesystem::relative(path, _activeRoot->path);
     // If relative path starts with "..", it's outside the root
     return !relativePath.empty() && !relativePath.string().starts_with("..");
@@ -115,20 +116,23 @@ void ContentBrowserPanel::onImGuiRender()
     }
 
     // Split into left sidebar (roots) and right content area
-    
+
     // Left panel - Content roots list
     ImGui::BeginChild("RootsList", ImVec2(_leftPanelWidth, 0), true);
     renderRootSelector();
     ImGui::EndChild();
-    
+
     ImGui::SameLine();
-    
+
     // Splitter
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_Button));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Button));
-    ImGui::Button("##splitter", ImVec2(3.0f, -1));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(-19, 0));
+    ImGui::Button("##splitter", ImVec2(8.0f, -1));
     ImGui::PopStyleColor(2);
-    
+    ImGui::PopStyleVar(1);
+
+
     if (ImGui::IsItemActive())
     {
         _leftPanelWidth += ImGui::GetIO().MouseDelta.x;
@@ -139,16 +143,20 @@ void ContentBrowserPanel::onImGuiRender()
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
     }
-    
+
     ImGui::SameLine();
-    
+
     // Right panel - Directory browser
     ImGui::BeginChild("ContentArea", ImVec2(0, 0), false);
-    
+
+    bool bFocused = ImGui::IsWindowFocused();
+    bool bExit    = ImGui::IsMouseClicked(3) && bFocused;
+
+
     // Navigation bar
     if (_activeRoot && _currentDirectory != _activeRoot->path)
     {
-        if (ImGui::Button("< Back"))
+        if (ImGui::Button("< Back") || bExit)
         {
             auto parent = _currentDirectory.parent_path();
             // Only allow navigation within active root
@@ -164,14 +172,13 @@ void ContentBrowserPanel::onImGuiRender()
     if (_activeRoot)
     {
         auto relativePath = std::filesystem::relative(_currentDirectory, _activeRoot->path);
-        ImGui::Text("%s: %s", _activeRoot->name.c_str(), 
-                    relativePath.empty() ? "/" : relativePath.string().c_str());
+        ImGui::Text("%s: %s", _activeRoot->name.c_str(), relativePath.empty() ? "/" : relativePath.string().c_str());
     }
     else
     {
         ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "No content root selected");
     }
-    
+
     ImGui::Separator();
 
     // Directory contents
@@ -179,7 +186,7 @@ void ContentBrowserPanel::onImGuiRender()
     {
         renderDirectoryContents();
     }
-    
+
     ImGui::EndChild();
 
     ImGui::End();
@@ -189,7 +196,7 @@ void ContentBrowserPanel::renderRootSelector()
 {
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Content Roots");
     ImGui::Separator();
-    
+
     if (_contentRoots.empty())
     {
         ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "No content\ndirectories\nfound");
@@ -199,47 +206,47 @@ void ContentBrowserPanel::renderRootSelector()
     // Vertical list of content roots
     for (auto &root : _contentRoots)
     {
-        const char *icon = "";
-        ImVec4 color = ImVec4(1, 1, 1, 1);
-        
+        const char *icon  = "";
+        ImVec4      color = ImVec4(1, 1, 1, 1);
+
         switch (root.type)
         {
-            case ContentRootType::Engine:
-                icon = "[E]";
-                color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f); // Light blue
-                break;
-            case ContentRootType::Project:
-                icon = "[P]";
-                color = ImVec4(0.3f, 1.0f, 0.3f, 1.0f); // Green
-                break;
-            case ContentRootType::Plugin:
-                icon = "[+]";
-                color = ImVec4(1.0f, 0.7f, 0.3f, 1.0f); // Orange
-                break;
+        case ContentRootType::Engine:
+            icon  = "[E]";
+            color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f); // Light blue
+            break;
+        case ContentRootType::Project:
+            icon  = "[P]";
+            color = ImVec4(0.3f, 1.0f, 0.3f, 1.0f); // Green
+            break;
+        case ContentRootType::Plugin:
+            icon  = "[+]";
+            color = ImVec4(1.0f, 0.7f, 0.3f, 1.0f); // Orange
+            break;
         }
-        
+
         bool isSelected = (_activeRoot == &root);
-        
+
         // Highlight selected root
         if (isSelected)
         {
             ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.5f, 0.8f, 0.8f));
         }
-        
+
         ImGui::PushID(&root);
-        
+
         // Draw icon with color
         ImGui::TextColored(color, "%s", icon);
         ImGui::SameLine();
-        
+
         // Selectable root name
         if (ImGui::Selectable(root.name.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
         {
             switchToRoot(&root);
         }
-        
+
         ImGui::PopID();
-        
+
         if (isSelected)
         {
             ImGui::PopStyleColor();
@@ -286,6 +293,10 @@ void ContentBrowserPanel::renderDirectoryContents()
                     {
                         _currentDirectory = path;
                     }
+                }
+                else if (entry.path().string().ends_with(".scene.json")) {
+                    // Open scene file in editor
+                    App::get()->loadScene(entry.path().string());
                 }
             }
             ImGui::TextWrapped("%s", filename.c_str());
