@@ -1,19 +1,34 @@
 -- OrbitScript.lua
 -- 圆周运动脚本
 
-local script = {}
+local ScriptBase = require("ScriptBase")
+local MathUtils = require("MathUtils")
 
-script.radius = 5.0 -- 圆周半径
-script.speed = 90.0 -- 角速度 (度/秒)
-script.angle = 0.0  -- 当前角度
+-- ✅ 使用实例模式（不是继承类）
+local Script = ScriptBase:new()
 
-function script:onInit()
+-- 定义属性初始值
+Script.radius = 5.0
+Script.speed = 90.0
+Script.angle = 0.0  -- 私有，不暴露
+
+-- 调试：检查环境标志
+print(string.format("[TestPointLight] IS_EDITOR=%s, IS_RUNTIME=%s", 
+                    tostring(IS_EDITOR), tostring(IS_RUNTIME)))
+
+-- 定义属性元数据（仅编辑器需要）
+Script:properties({
+    radius = { min = 0.1, max = 100.0, tooltip = "圆周运动的半径" },
+    speed = { min = 1.0, max = 360.0, tooltip = "角速度（度/秒）" }
+})
+
+function Script:onInit()
     print("OrbitScript initialized")
     self.startPos = self.entity:getTransform():getPosition()
     print("Start Position: ", self.startPos.x, self.startPos.y, self.startPos.z)
 end
 
-function script:onUpdate(dt)
+function Script:onUpdate(dt)
     local entity = self.entity
 
     if entity and entity:hasTransform() then
@@ -35,8 +50,8 @@ function script:onUpdate(dt)
     end
 end
 
-function script:onDestroy()
+function Script:onDestroy()
     print("OrbitScript destroyed")
 end
 
-return script
+return Script

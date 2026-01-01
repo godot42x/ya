@@ -11,12 +11,13 @@
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 #include "Core/System/FileSystem.h"
+#include "Core/System/FileWatcher.h"
 
 
 
 // Managers/System
 #include "Core/Manager/Facade.h"
-#include "Core/System/ReflectionSystem.h"
+#include "Core/System/TypeRegistry.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
@@ -190,7 +191,8 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE("App Init Subsystems");
         Logger::init();
         FileSystem::init();
-        ReflectionSystem::get()->init();
+        FileWatcher::init();
+        TypeRegistry::get()->initReflection(); // 原 ReflectionSystem::init()
         MaterialFactory::init();
     }
 
@@ -691,6 +693,11 @@ void App::onUpdate(float dt)
 {
     inputManager.update();
     Facade.timerManager.onUpdate(dt);
+    
+    // 文件监视器轮询（检测文件变化）
+    if (auto* watcher = FileWatcher::get()) {
+        watcher->poll();
+    }
 
     // Store real-time delta for editor
 

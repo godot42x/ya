@@ -233,9 +233,11 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                                    .sampler = ya::TextureLibrary::getDefaultSampler(),
                                });
 
-        // 添加 Lua 旋转脚本
+        // 添加 Lua 旋转脚本（新 API）
         auto lsc = LitTestCube0->addComponent<ya::LuaScriptComponent>();
-        // lsc->scriptPath = "Engine/Content/Lua/RotateScript.lua";
+        // 可以添加多个脚本，类似 Unity
+        // lsc->addScript("Content/Scripts/Health.lua");
+        // lsc->addScript("Content/Scripts/Inventory.lua");
     }
 
     if (auto *suzanne = scene->createEntity("Suzanne")) {
@@ -266,9 +268,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         lmc->addMesh(cubeMesh.get(), pointLightMat);
 
-        // 添加 Lua 圆周运动脚本
-        auto lsc        = pointLt->addComponent<ya::LuaScriptComponent>();
-        lsc->scriptPath = "Engine/Content/Lua/TestPointLight.lua";
+        // 添加 Lua 圆周运动脚本（新 API）
+        auto lsc = pointLt->addComponent<ya::LuaScriptComponent>();
+        lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
     }
 }
 void HelloMaterial::onUpdate(float dt)

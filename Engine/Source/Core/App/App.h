@@ -190,7 +190,11 @@ struct App
         });
     }
 
-    void requestQuit() { bRunning = false; }
+    void requestQuit()
+    {
+        stopRuntime();
+        bRunning = false;
+    }
 
     // before render context created
     virtual void onInit(AppDesc ci);

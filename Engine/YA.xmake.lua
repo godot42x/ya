@@ -4,16 +4,16 @@ includes("./Test/xmake.lua")
 -- includes("./Source/Editor/xmake.lua")
 
 add_requires(
-    "spdlog",
-    "libsdl3_image",
-    "glm",
-    "stb",
-    "cxxopts",
-    "lua",
-    "freetype",
-    "nlohmann_json v3.12.0",
-    "sol2",
-    "glad"
+    "spdlog"
+    , "libsdl3_image"
+    , "glm"
+    , "stb"
+    , "cxxopts"
+    , "lua"
+    , "freetype"
+    , "nlohmann_json v3.12.0"
+    , "sol2"
+    , "glad"
 )
 add_requireconfs("freetype", {
     system = false,

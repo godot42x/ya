@@ -1,7 +1,8 @@
 #include "LuaScriptingSystem.h"
 #include "Core/App/App.h"
 #include "Core/System/FileSystem.h"
-#include "Core/System/ReflectionSystem.h"
+#include "Core/System/FileWatcher.h"
+#include "Core/System/TypeRegistry.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -29,6 +30,25 @@ void LuaScriptingSystem::init()
                         sol::lib::math,
                         sol::lib::table,
                         sol::lib::os);
+
+    // 设置全局环境标识
+    _lua["IS_EDITOR"]  = false;
+    _lua["IS_RUNTIME"] = true;
+
+    // 配置 Lua 模块搜索路径（支持 require）
+    // 添加 Engine/Content/Lua 和项目脚本目录到搜索路径
+    _lua.script(R"(
+        -- 添加引擎 Lua 库路径
+        package.path = package.path .. ';./Engine/Content/Lua/?.lua'
+        package.path = package.path .. ';./Engine/Content/Lua/?/init.lua'
+        
+        -- 添加项目脚本路径（相对于工作目录）
+        package.path = package.path .. ';./Content/Scripts/?.lua'
+        package.path = package.path .. ';./Content/Scripts/?/init.lua'
+        
+        print('[Lua] Package search paths configured:')
+        print(package.path)
+    )");
 
     // 暴露 glm::vec3 类型
     _lua.new_usertype<glm::vec3>("Vec3",
@@ -84,6 +104,9 @@ void LuaScriptingSystem::init()
     // 自动绑定所有反射组件（跳过已手动绑定的）
     // ========================================================================
     bindReflectedComponents();
+
+    // 启用脚本热重载
+    enableHotReload();
 }
 
 void LuaScriptingSystem::onUpdate(float deltaTime)
@@ -95,54 +118,69 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
     for (auto entityHandle : view) {
         auto &luaComp = view.get<LuaScriptComponent>(entityHandle);
 
-        // 首次加载脚本
-        if (!luaComp.bLoaded && !luaComp.scriptPath.empty()) {
-            std::string scriptContent;
-            if (FileSystem::get()->readFileToString(luaComp.scriptPath, scriptContent)) {
-                try {
-                    // 执行脚本并获取返回的 table
-                    sol::table scriptTable = _lua.script(scriptContent);
+        Entity entity(entityHandle, scene);
 
-                    luaComp.self      = scriptTable;
-                    luaComp.onInit    = scriptTable["onInit"];
-                    luaComp.onUpdate  = scriptTable["onUpdate"];
-                    luaComp.onDestroy = scriptTable["onDestroy"];
+        // 遍历所有脚本实例
+        for (auto &script : luaComp.scripts) {
+            // 首次加载脚本
+            if (!script.bLoaded && !script.scriptPath.empty()) {
+                std::string scriptContent;
+                if (FileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
+                    try {
+                        // 【重要】不再使用独立环境，改为共享全局环境
+                        // 原因：
+                        // 1. 支持 require() 导入公共模块
+                        // 2. 脚本间可以共享工具库（如 Vector3 工具函数）
+                        // 3. 减少内存开销
+                        // 注意：脚本应该返回 local 表避免全局污染
 
-                    // 创建 Entity 对象并设置到脚本的 self 中
-                    Entity entity(entityHandle, scene);
-                    luaComp.self["entity"] = &entity;
+                        sol::table scriptTable = _lua.script(scriptContent);
 
-                    // 调用 onInit
-                    if (luaComp.onInit.valid()) {
-                        luaComp.onInit(luaComp.self);
+                        script.self      = scriptTable;
+                        script.onInit    = scriptTable["onInit"];
+                        script.onUpdate  = scriptTable["onUpdate"];
+                        script.onDestroy = scriptTable["onDestroy"];
+                        script.onEnable  = scriptTable["onEnable"];
+                        script.onDisable = scriptTable["onDisable"];
+
+                        // 设置 entity 引用
+                        script.self["entity"] = &entity;
+
+                        // 刷新属性列表并应用编辑器修改的覆盖值
+                        script.refreshProperties();
+                        script.applyPropertyOverrides(_lua);
+
+                        // 调用 onInit
+                        if (script.onInit.valid()) {
+                            script.onInit(script.self);
+                        }
+
+                        script.bLoaded = true;
+                        YA_CORE_INFO("Loaded Lua script: {}", script.scriptPath);
                     }
+                    catch (const sol::error &e) {
+                        YA_CORE_ERROR("Lua script error ({}): {}", script.scriptPath, e.what());
+                    }
+                    catch (const std::exception &e) {
+                        YA_CORE_ERROR("Lua script error: {}", e.what());
+                    }
+                }
+                else {
+                    YA_CORE_ERROR("Failed to load Lua script: {}", script.scriptPath);
+                }
+            }
 
-                    luaComp.bLoaded = true;
-                    YA_CORE_INFO("Loaded Lua script: {}", luaComp.scriptPath);
+            // 调用 onUpdate（如果脚本已加载且启用）
+            if (script.enabled && script.bLoaded && script.onUpdate.valid()) {
+                try {
+                    // 更新 entity 引用（防止 entity 被移动）
+                    script.self["entity"] = &entity;
+
+                    script.onUpdate(script.self, deltaTime);
                 }
                 catch (const sol::error &e) {
-                    YA_CORE_ERROR("Lua script error ({}): {}", luaComp.scriptPath, e.what());
+                    YA_CORE_ERROR("Lua onUpdate error ({}): {}", script.scriptPath, e.what());
                 }
-                catch (const std::exception &e) {
-                    YA_CORE_ERROR("Lua script error: {}", e.what());
-                }
-            }
-            else {
-                YA_CORE_ERROR("Failed to load Lua script: {}", luaComp.scriptPath);
-            }
-        }
-
-        // 调用 onUpdate
-        if (luaComp.bLoaded && luaComp.onUpdate.valid()) {
-            try {
-                // 更新 entity 引用（防止 entity 被移动）
-                Entity entity(entityHandle, scene);
-                luaComp.self["entity"] = &entity;
-
-                luaComp.onUpdate(luaComp.self, deltaTime);
-            }
-            catch (const sol::error &e) {
-                YA_CORE_ERROR("Lua onUpdate error ({}): {}", luaComp.scriptPath, e.what());
             }
         }
     }
@@ -156,8 +194,20 @@ void LuaScriptingSystem::onStop()
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
     for (auto entityHandle : view) {
-        auto &luaComp   = view.get<LuaScriptComponent>(entityHandle);
-        luaComp.bLoaded = false;
+        auto &luaComp = view.get<LuaScriptComponent>(entityHandle);
+
+        // 调用所有脚本的 onDestroy
+        for (auto &script : luaComp.scripts) {
+            if (script.bLoaded && script.onDestroy.valid()) {
+                try {
+                    script.onDestroy(script.self);
+                }
+                catch (const sol::error &e) {
+                    YA_CORE_ERROR("Lua onDestroy error ({}): {}", script.scriptPath, e.what());
+                }
+            }
+            script.bLoaded = false;
+        }
     }
 }
 
@@ -197,6 +247,7 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
 
     // 创建 Lua usertype 并设置 __index 和 __newindex 元方法
     sol::usertype<void> componentType = _lua.new_usertype<void>(
+
         className,
         sol::no_constructor, // 组件不应该在Lua中直接构造
 
@@ -217,24 +268,7 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
 
             try {
                 std::any value = prop.getter(obj);
-
-                // 根据类型ID转换为Lua对象
-                if (prop.typeIndex == refl::TypeIndex<glm::vec3>::value()) {
-                    return sol::make_object(sol::state_view(_lua), std::any_cast<glm::vec3>(value));
-                }
-                else if (prop.typeIndex == refl::TypeIndex<float>::value()) {
-                    return sol::make_object(sol::state_view(_lua), std::any_cast<float>(value));
-                }
-                else if (prop.typeIndex == refl::TypeIndex<int>::value()) {
-                    return sol::make_object(sol::state_view(_lua), std::any_cast<int>(value));
-                }
-                else if (prop.typeIndex == refl::TypeIndex<bool>::value()) {
-                    return sol::make_object(sol::state_view(_lua), std::any_cast<bool>(value));
-                }
-                else if (prop.typeIndex == refl::TypeIndex<std::string>::value()) {
-                    return sol::make_object(sol::state_view(_lua), std::any_cast<std::string>(value));
-                }
-                // TODO: 添加更多类型支持
+                return TypeRegistry::get()->anyToLuaObject(value, prop.typeIndex, _lua);
             }
             catch (const std::exception &e) {
                 YA_CORE_ERROR("Lua __index error for {}.{}: {}", classInfo->_name, key, e.what());
@@ -258,31 +292,12 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
             }
 
             try {
-                // 根据类型ID转换Lua对象到C++类型
-                if (prop.typeIndex == refl::TypeIndex<glm::vec3>::value()) {
-                    if (value.is<glm::vec3>()) {
-                        prop.setter(obj, value.as<glm::vec3>());
-                    }
+                std::any cppValue;
+                if (TypeRegistry::get()->luaObjectToAny(value, prop.typeIndex, cppValue)) {
+                    prop.setter(obj, cppValue);
                 }
-                else if (prop.typeIndex == refl::TypeIndex<float>::value()) {
-                    if (value.is<float>()) {
-                        prop.setter(obj, value.as<float>());
-                    }
-                }
-                else if (prop.typeIndex == refl::TypeIndex<int>::value()) {
-                    if (value.is<int>()) {
-                        prop.setter(obj, value.as<int>());
-                    }
-                }
-                else if (prop.typeIndex == refl::TypeIndex<bool>::value()) {
-                    if (value.is<bool>()) {
-                        prop.setter(obj, value.as<bool>());
-                    }
-                }
-                else if (prop.typeIndex == refl::TypeIndex<std::string>::value()) {
-                    if (value.is<std::string>()) {
-                        prop.setter(obj, value.as<std::string>());
-                    }
+                else {
+                    YA_CORE_WARN("Type mismatch for property '{}.{}'", classInfo->_name, key);
                 }
             }
             catch (const std::exception &e) {
@@ -290,9 +305,15 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
             }
         });
 
+
     // 仍然保留 getter/setter 方法作为备选
     for (const auto &[propName, prop] : classInfo->properties) {
         if (prop.bStatic) continue; // 跳过静态属性
+
+        // 注意：不能使用 componentType.set(propName, prop.ptr)，因为：
+        // 1. prop.ptr 是 void*，sol2 无法识别类型
+        // 2. 已有 __index/__newindex 元方法处理属性访问
+        // 3. 下面的 getter/setter 提供显式访问接口
 
         // Getter 方法
         if (prop.getter) {
@@ -301,21 +322,7 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
             componentType[getterName] = [this, prop, classInfo, propName](void *obj) -> sol::object {
                 try {
                     std::any value = prop.getter(obj);
-
-                    // 根据类型ID转换为Lua对象
-                    if (prop.typeIndex == refl::TypeIndex<glm::vec3>::value()) {
-                        return sol::make_object(sol::state_view(_lua), std::any_cast<glm::vec3>(value));
-                    }
-                    else if (prop.typeIndex == refl::TypeIndex<float>::value()) {
-                        return sol::make_object(sol::state_view(_lua), std::any_cast<float>(value));
-                    }
-                    else if (prop.typeIndex == ya::TypeIndex<int>::value()) {
-                        return sol::make_object(sol::state_view{_lua}, std::any_cast<int>(value));
-                    }
-                    else if (prop.typeIndex == refl::TypeIndex<bool>::value()) {
-                        return sol::make_object(sol::state_view(_lua), std::any_cast<bool>(value));
-                    }
-                    // TODO: 添加更多类型支持
+                    return TypeRegistry::get()->anyToLuaObject(value, prop.typeIndex, _lua);
                 }
                 catch (const std::exception &e) {
                     YA_CORE_ERROR("Lua getter error for {}.{}: {}", classInfo->_name, propName, e.what());
@@ -328,28 +335,14 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
         if (prop.setter && !prop.bConst) {
             std::string setterName = "set" + std::string(1, std::toupper(propName[0])) + propName.substr(1);
 
-            componentType[setterName] = [prop, classInfo, propName](void *obj, sol::object value) {
+            componentType[setterName] = [this, prop, classInfo, propName](void *obj, sol::object value) {
                 try {
-                    // 根据类型ID转换Lua对象到C++类型
-                    if (prop.typeIndex == refl::TypeIndex<glm::vec3>::value()) {
-                        if (value.is<glm::vec3>()) {
-                            prop.setter(obj, value.as<glm::vec3>());
-                        }
+                    std::any cppValue;
+                    if (TypeRegistry::get()->luaObjectToAny(value, prop.typeIndex, cppValue)) {
+                        prop.setter(obj, cppValue);
                     }
-                    else if (prop.typeIndex == refl::TypeIndex<float>::value()) {
-                        if (value.is<float>()) {
-                            prop.setter(obj, value.as<float>());
-                        }
-                    }
-                    else if (prop.typeIndex == refl::TypeIndex<int>::value()) {
-                        if (value.is<int>()) {
-                            prop.setter(obj, value.as<int>());
-                        }
-                    }
-                    else if (prop.typeIndex == refl::TypeIndex<bool>::value()) {
-                        if (value.is<bool>()) {
-                            prop.setter(obj, value.as<bool>());
-                        }
+                    else {
+                        YA_CORE_WARN("Type mismatch for property '{}.{}'", classInfo->_name, propName);
                     }
                 }
                 catch (const std::exception &e) {
@@ -364,6 +357,123 @@ void LuaScriptingSystem::bindComponentType(Class *classInfo)
         // 函数绑定需要根据参数类型动态生成wrapper
         // 这需要更复杂的模板元编程或代码生成
     }
+}
+
+void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
+{
+    YA_CORE_INFO("[Hot Reload] Reloading script: {}", scriptPath);
+
+    auto *scene = App::get()->getSceneManager()->getActiveScene();
+    if (!scene) return;
+
+    // 查找所有使用该脚本的实体
+    auto view = scene->getRegistry().view<LuaScriptComponent>();
+    for (auto entityHandle : view) {
+        auto  &luaComp = view.get<LuaScriptComponent>(entityHandle);
+        Entity entity(entityHandle, scene);
+
+        for (auto &script : luaComp.scripts) {
+            if (script.scriptPath != scriptPath) continue;
+
+            // 保存当前属性值
+            std::unordered_map<std::string, sol::object> savedProperties;
+            if (script.self.valid()) {
+                for (const auto &prop : script.properties) {
+                    savedProperties[prop.name] = script.self[prop.name];
+                }
+            }
+
+            // 调用 onDestroy（如果存在）
+            if (script.onDestroy.valid()) {
+                try {
+                    script.onDestroy(script.self);
+                }
+                catch (const sol::error &e) {
+                    YA_CORE_ERROR("[Hot Reload] onDestroy error: {}", e.what());
+                }
+            }
+
+            // 重新加载脚本
+            std::string scriptContent;
+            if (FileSystem::get()->readFileToString(scriptPath, scriptContent)) {
+                try {
+                    sol::table scriptTable = _lua.script(scriptContent);
+
+                    script.self      = scriptTable;
+                    script.onInit    = scriptTable["onInit"];
+                    script.onUpdate  = scriptTable["onUpdate"];
+                    script.onDestroy = scriptTable["onDestroy"];
+                    script.onEnable  = scriptTable["onEnable"];
+                    script.onDisable = scriptTable["onDisable"];
+
+                    // 设置 entity 引用
+                    script.self["entity"] = &entity;
+
+                    // 刷新属性并恢复值
+                    script.refreshProperties();
+                    for (const auto &[propName, value] : savedProperties) {
+                        if (value.valid()) {
+                            script.self[propName] = value;
+                        }
+                    }
+
+                    // 应用编辑器覆盖值
+                    script.applyPropertyOverrides(_lua);
+
+                    // 调用 onInit
+                    if (script.onInit.valid()) {
+                        script.onInit(script.self);
+                    }
+
+                    YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", scriptPath);
+                }
+                catch (const sol::error &e) {
+                    YA_CORE_ERROR("[Hot Reload] Failed to reload {}: {}", scriptPath, e.what());
+                }
+            }
+        }
+    }
+}
+
+void LuaScriptingSystem::enableHotReload()
+{
+    if (_hotReloadEnabled) return;
+
+    auto *watcher = FileWatcher::get();
+    if (!watcher) {
+        YA_CORE_WARN("FileWatcher not initialized, hot reload disabled");
+        return;
+    }
+
+    // 监视 Lua 脚本目录
+    watcher->watchDirectory("Engine/Content/Lua", ".lua", [this](const FileWatcher::FileEvent &event) {
+        if (event.type == FileWatcher::ChangeType::Modified) {
+            reloadScript(event.path);
+        }
+    });
+
+    watcher->watchDirectory("Content/Scripts", ".lua", [this](const FileWatcher::FileEvent &event) {
+        if (event.type == FileWatcher::ChangeType::Modified) {
+            reloadScript(event.path);
+        }
+    });
+
+    _hotReloadEnabled = true;
+    YA_CORE_INFO("[Hot Reload] Enabled for Lua scripts");
+}
+
+void LuaScriptingSystem::disableHotReload()
+{
+    if (!_hotReloadEnabled) return;
+
+    auto *watcher = FileWatcher::get();
+    if (watcher) {
+        watcher->unwatchDirectory("Engine/Content/Lua");
+        watcher->unwatchDirectory("Content/Scripts");
+    }
+
+    _hotReloadEnabled = false;
+    YA_CORE_INFO("[Hot Reload] Disabled");
 }
 
 } // namespace ya

@@ -1,12 +1,16 @@
 #include "AutoRegister.h"
+#include "TypeRegistry.h"
 
 namespace ya
 {
 
-AutoRegisterRegistry &AutoRegisterRegistry::get()
+// ============================================================================
+// 辅助函数：将反射注册转发到 TypeRegistry
+// ============================================================================
+
+void registerReflectionToTypeRegistry(std::function<void()> registrar)
 {
-    static AutoRegisterRegistry registry;
-    return registry;
+    TypeRegistry::get()->addReflectionRegistrar(std::move(registrar));
 }
 
 } // namespace ya
