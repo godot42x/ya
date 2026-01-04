@@ -163,7 +163,15 @@ void VulkanSwapChain::selectSurfaceFormat(const SwapchainCreateInfo &ci)
 // Helper: Select present mode
 void VulkanSwapChain::selectPresentMode(const SwapchainCreateInfo &ci)
 {
-    _presentMode = toVk(ci.presentMode);
+    EPresentMode::T preferredMode{};
+    if (ci.bVsync) {
+        preferredMode = EPresentMode::FIFO; // Override to FIFO if VSync is enabled
+    }
+    else {
+        preferredMode = EPresentMode::Immediate; // Override to Immediate if VSync is disabled
+    }
+
+    _presentMode = toVk(preferredMode);
     // TODO: Add compatibility fallback if needed:
     _presentMode = _supportDetails.ChooseSwapPresentMode(_presentMode);
     bVsync       = (_presentMode == VK_PRESENT_MODE_FIFO_KHR);

@@ -85,8 +85,10 @@ struct Entity
 
     operator bool() const
     {
-        return _scene && _scene->getRegistry().valid(_entityHandle);
+        // Check _scene first to avoid accessing destroyed Scene
+        return _scene != nullptr && _entityHandle != entt::null && _scene->getRegistry().valid(_entityHandle);
     }
+    bool isValidEntity() const { return this->operator bool(); }
     operator entt::entity() const { return _entityHandle; }
     operator uint32_t() const { return static_cast<uint32_t>(_entityHandle); }
 

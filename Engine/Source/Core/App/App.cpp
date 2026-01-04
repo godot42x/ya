@@ -223,13 +223,14 @@ void App::init(AppDesc ci)
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .presentMode   = EPresentMode::FIFO, // vsync
-            .bVsync        = true,
+            .bVsync        = false,
             .minImageCount = 3,
             .width         = static_cast<uint32_t>(_ci.width),
             .height        = static_cast<uint32_t>(_ci.height),
         },
     };
+    FPSControl::get()->bEnable = true;
+    FPSControl::get()->setFPSLimit(120.f);
 
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
@@ -710,7 +711,7 @@ void App::onUpdate(float dt)
 
     if (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) {
         cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
-        if (cam && cam->hasComponent<CameraComponent>()) {
+        if (cam && cam->isValid() && cam->hasComponent<CameraComponent>()) {
             auto            cc  = cam->getComponent<CameraComponent>();
             const Extent2D &ext = _viewportRT->getExtent();
             if (cam->hasComponent<TransformComponent>()) {
@@ -947,6 +948,25 @@ bool App::unloadScene()
 
 //     // Create camera entity
 // }
+
+void App::onSceneDestroy(Scene *scene)
+{
+    // Clear camera references in render targets to avoid dangling Entity pointers
+    // when Scene is destroyed
+    // if (_viewportRT) {
+    //     auto cam = _viewportRT->getCameraMut();
+    //     if (cam && cam->getScene() == scene) {
+    //         _viewportRT->setCamera(nullptr);
+    //     }
+    // }
+
+    // if (_screenRT) {
+    //     auto cam = _screenRT->getCameraMut();
+    //     if (cam && cam->getScene() == scene) {
+    //         _screenRT->setCamera(nullptr);
+    //     }
+    // }
+}
 
 void App::onSceneActivated(Scene *scene)
 {

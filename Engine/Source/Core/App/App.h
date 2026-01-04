@@ -248,7 +248,7 @@ struct App
   protected:
     // Protected for derived classes to override
     // virtual void onSceneInit(Scene *scene);
-    virtual void onSceneDestroy(Scene *scene) {}
+    virtual void onSceneDestroy(Scene *scene);
     virtual void onSceneActivated(Scene *scene);
 
     // void onScenePostInit(Scene *scene) {}

@@ -38,13 +38,13 @@ struct MeshData
     void createGPUResources();
 };
 
-class Model
+struct Model
 {
-  private:
     std::vector<MeshData> meshes;
     glm::mat4             transform = glm::mat4(1.0f);
 
     bool        isLoaded = false;
+    std::string filepath;
     std::string directory;
 
   public:

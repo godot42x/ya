@@ -296,7 +296,10 @@ void ContentBrowserPanel::renderDirectoryContents()
                 }
                 else if (entry.path().string().ends_with(".scene.json")) {
                     // Open scene file in editor
-                    App::get()->loadScene(entry.path().string());
+                    App::get()->taskManager.registerFrameTask(
+                        [scenePath = entry.path().string()]() {
+                            App::get()->loadScene(scenePath);
+                        });
                 }
             }
             ImGui::TextWrapped("%s", filename.c_str());

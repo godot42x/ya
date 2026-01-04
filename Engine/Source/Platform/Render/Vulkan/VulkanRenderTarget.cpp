@@ -169,7 +169,8 @@ void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
         bDirty = false;
     }
 
-    if (getCamera() && getCamera()->hasComponent<CameraComponent>()) {
+    if (getCamera() && getCamera()->isValid() && getCamera()->hasComponent<CameraComponent>()) {
+
         auto cc = getCameraMut()->getComponent<CameraComponent>();
         cc->setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
     }
