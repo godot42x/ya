@@ -1,8 +1,5 @@
 #include "OpenGLState.h"
 #include "Core/Base.h"
-#include <fstream>
-#include <iostream>
-#include <sstream>
 
 
 namespace ya

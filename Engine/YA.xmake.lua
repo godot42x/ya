@@ -113,6 +113,11 @@ do
     -- Add math library for exp2 and log2 functions
     if is_plat("windows") then
         add_ldflags("/NODEFAULTLIB:LIBCMT") -- Fix runtime library conflict
+        
+        -- Debug 模式下禁用链接器优化，保留所有代码（包括静态初始化）
+        if is_mode("debug") then
+            add_ldflags("/OPT:NOREF", "/OPT:NOICF", {force = true})
+        end
     end
 
 

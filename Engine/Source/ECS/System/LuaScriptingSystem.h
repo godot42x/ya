@@ -1,12 +1,11 @@
 
 #include "ScriptingSystem.h"
+#include <functional>
 #include <sol/sol.hpp>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
-#include <any>
 
-
-struct Class;
 
 namespace ya
 {
@@ -43,8 +42,9 @@ struct LuaScriptingSystem : public ScriptingSystem
     // 自动绑定所有已注册的反射组件到Lua
     void bindReflectedComponents();
 
-    // 为单个组件类型注册Lua绑定
-    void bindComponentType(Class *classInfo);
+    // 通用组件绑定模板（利用反射自动绑定）
+    // template <typename ComponentType>
+    // void bindComponentAuto(const std::string &className);
 };
 
 

@@ -173,7 +173,7 @@ bool VulkanRenderPass::createDefaultRenderPass()
 
 bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
 {
-    YA_CORE_INFO("Recreating render pass...");
+    YA_CORE_INFO("Recreating render pass... {}", ci.label);
     _ci = ci;
 
     YA_CORE_ASSERT(!_ci.attachments.empty(), "Render pass must have at least one attachment defined!");

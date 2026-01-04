@@ -7,7 +7,7 @@
 
 #include "Core/Math/Math.h"
 
-#include "Core/System/AutoRegister.h"
+#include "Core/Reflection/UnifiedReflection.h"
 
 namespace ya
 {
@@ -15,7 +15,15 @@ namespace ya
 
 struct CameraComponent : public IComponent
 {
-    YA_ECS_COMPONENT(CameraComponent)
+    YA_REFLECT(CameraComponent,
+               PROP(_primary),
+               PROP(_fixedAspectRatio),
+               PROP(_fov),
+               PROP(_aspectRatio),
+               PROP(_nearClip),
+               PROP(_farClip),
+               PROP(_distance),
+               PROP(_focusPoint))
 
     bool _primary          = true; // TODO: think about moving to Scene
     bool _fixedAspectRatio = false;
@@ -70,23 +78,6 @@ struct CameraComponent : public IComponent
   public:
 
     void setAspectRatio(float aspectRatio) { _aspectRatio = aspectRatio; }
-
-    // ========================================================================
-    // 反射注册 - 自动生成序列化
-    // ========================================================================
-    static void registerReflection()
-    {
-        Register<CameraComponent>("CameraComponent")
-            .constructor<>()
-            .property("primary", &CameraComponent::_primary)
-            .property("fixedAspectRatio", &CameraComponent::_fixedAspectRatio)
-            .property("fov", &CameraComponent::_fov)
-            .property("aspectRatio", &CameraComponent::_aspectRatio)
-            .property("nearClip", &CameraComponent::_nearClip)
-            .property("farClip", &CameraComponent::_farClip)
-            .property("distance", &CameraComponent::_distance)
-            .property("focusPoint", &CameraComponent::_focusPoint);
-    }
 };
 
 

@@ -83,6 +83,18 @@ struct Class
 #endif
         prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
 
+        // 获取成员地址（用于复杂类型递归序列化）
+        prop.addressGetter = [member](const void *obj) -> const void * {
+            auto *self = static_cast<const ClassType *>(obj);
+            return &(self->*member);
+        };
+
+        // 获取成员可写地址（用于反序列化递归写回）
+        prop.addressGetterMutable = [member](void *obj) -> void * {
+            auto *self = static_cast<ClassType *>(obj);
+            return &(self->*member);
+        };
+
         // 设置getter：从对象实例读取成员值
         prop.getter = [member](void *obj) -> std::any {
             ClassType *self = static_cast<ClassType *>(obj);
@@ -113,6 +125,17 @@ struct Class
         prop.debugTypeName = typeid(T).name();
 #endif
 
+    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
+
+        // 获取成员地址（只读成员同样可用于递归序列化）
+        prop.addressGetter = [member](const void *obj) -> const void * {
+            auto *self = static_cast<const ClassType *>(obj);
+            return &(self->*member);
+        };
+
+        // const 成员不可写
+        prop.addressGetterMutable = nullptr;
+
         // 设置getter（只读）
         prop.getter = [member](void *obj) -> std::any {
             const ClassType *self = static_cast<const ClassType *>(obj);
@@ -139,6 +162,8 @@ struct Class
 #ifdef _DEBUG
         prop.debugTypeName = typeid(T).name();
 #endif
+
+    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
 
         // 静态属性的getter不需要对象实例
         prop.getter = [staticVar](void * /*obj*/) -> std::any {
@@ -167,6 +192,8 @@ struct Class
 #ifdef _DEBUG
         prop.debugTypeName = typeid(T).name();
 #endif
+
+    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
 
         // const静态属性只有getter
         prop.getter = [staticVar](void * /*obj*/) -> std::any {

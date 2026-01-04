@@ -66,7 +66,7 @@ namespace ya
 {
 
 struct App;
-class EditorLayer
+struct EditorLayer
 {
   private:
     App *_app = nullptr;

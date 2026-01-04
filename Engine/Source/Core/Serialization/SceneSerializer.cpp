@@ -1,7 +1,7 @@
 #include "SceneSerializer.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/Log.h"
-#include "Core/Serialization/ReflectionSerializer.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/FileSystem.h"
 #include "ECS/Entity.h"
 #include "SerializerRegistry.h"

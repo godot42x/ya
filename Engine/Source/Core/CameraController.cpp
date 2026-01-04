@@ -1,6 +1,5 @@
 #include "Core/CameraController.h"
-
-#include <glm/gtc/quaternion.hpp>
+#include "Math/GLM.h"
 
 namespace ya
 {

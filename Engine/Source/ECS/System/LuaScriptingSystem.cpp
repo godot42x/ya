@@ -1,16 +1,16 @@
 #include "LuaScriptingSystem.h"
 #include "Core/App/App.h"
+#include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/FileSystem.h"
 #include "Core/System/FileWatcher.h"
-#include "Core/System/TypeRegistry.h"
+#include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Scene/SceneManager.h"
 #include <glm/glm.hpp>
 
-// Reflects
-#include <reflects-core/lib.h>
 
 
 namespace ya
@@ -20,7 +20,7 @@ void LuaScriptingSystem::init()
 {
     YA_CORE_INFO("LuaScriptingSystem::init");
 
-    _lua.set_exception_handler([](lua_State *L, sol::optional<const std::exception &> e, sol::string_view desc) {
+    _lua.set_exception_handler([](lua_State * /*L*/, sol::optional<const std::exception &> e, sol::string_view desc) {
         YA_CORE_ERROR("Lua Exception: {},  {}", e->what(), desc);
         return 0;
     });
@@ -210,153 +210,52 @@ void LuaScriptingSystem::onStop()
         }
     }
 }
+// ============================================================================
+// 通用组件绑定 - 利用反射 visitor 自动绑定所有属性
+// ============================================================================
+
+// template <typename ComponentType>
+// void LuaScriptingSystem::bindComponentAuto(const std::string &className)
+// {
+//     using namespace ya::reflection;
+// TODO: unimplemented
+// How to get static type so that can transfer property value between sol::object and std::any?
+
+// // 验证组件是否已注册反射（通过尝试获取属性列表）
+// auto *cls = ClassRegistry::instance().getClass(className);
+// if (!cls || cls->properties.empty()) {
+//     YA_CORE_WARN("No reflection properties found for: {}", className);
+//     return;
+// }
+
+// _lua.new_usertype<ComponentType>(
+//     className,
+//     sol::no_constructor,
+//     // 反射属性绑定
+//     "__index",
+//     [cls](ComponentType &self, const std::string &key) -> sol::object {
+//         auto *prop = cls->getProperty(key);
+//         }
+//     },
+//     "__newindex",
+//     [cls](ComponentType &self, const std::string &key, sol::object value) {
+//         auto *prop = cls->getProperty(key);
+//         if (prop) {
+//             reflection::setPropertyValueFromSolObject(self, *prop, value);
+//         }
+//     });
+
+//     YA_CORE_TRACE("  Auto-bound component: {}", className);
+// }
 
 void LuaScriptingSystem::bindReflectedComponents()
 {
     YA_CORE_INFO("Auto-binding reflected components to Lua...");
 
-    auto &registry = ClassRegistry::instance();
-
-    // 已手动优化绑定的组件列表（跳过反射）
-    static const std::unordered_set<std::string> manuallyBound = {
-        "TransformComponent" // 热点组件，已手动绑定
-        // 在这里添加其他需要性能优化的组件
-    };
-
-    // 遍历所有已注册的类
-    for (const auto &[className, classInfo] : registry.classes) {
-        // 只绑定组件类型（可以通过命名约定或基类判断）
-        if (className.find("Component") != std::string::npos) {
-            // 跳过已手动绑定的组件
-            if (manuallyBound.count(className) > 0) {
-                YA_CORE_TRACE("  Skipped (manually bound): {}", className);
-                continue;
-            }
-
-            bindComponentType(classInfo.get());
-            YA_CORE_TRACE("  Bound component: {}", className);
-        }
-    }
-}
-
-void LuaScriptingSystem::bindComponentType(Class *classInfo)
-{
-    if (!classInfo) return;
-
-    const std::string &className = classInfo->_name;
-
-    // 创建 Lua usertype 并设置 __index 和 __newindex 元方法
-    sol::usertype<void> componentType = _lua.new_usertype<void>(
-
-        className,
-        sol::no_constructor, // 组件不应该在Lua中直接构造
-
-        // __index 元方法：支持直接属性访问 component.position
-        sol::meta_function::index,
-        [this, classInfo](void *obj, const std::string &key) -> sol::object {
-            auto it = classInfo->properties.find(key);
-            if (it == classInfo->properties.end()) {
-                YA_CORE_WARN("Property '{}' not found in {}", key, classInfo->_name);
-                return sol::nil;
-            }
-
-            const Property &prop = it->second;
-            if (!prop.getter) {
-                YA_CORE_WARN("Property '{}' in {} has no getter", key, classInfo->_name);
-                return sol::nil;
-            }
-
-            try {
-                std::any value = prop.getter(obj);
-                return TypeRegistry::get()->anyToLuaObject(value, prop.typeIndex, _lua);
-            }
-            catch (const std::exception &e) {
-                YA_CORE_ERROR("Lua __index error for {}.{}: {}", classInfo->_name, key, e.what());
-            }
-            return sol::nil;
-        },
-
-        // __newindex 元方法：支持直接属性赋值 component.position = vec3
-        sol::meta_function::new_index,
-        [this, classInfo](void *obj, const std::string &key, sol::object value) {
-            auto it = classInfo->properties.find(key);
-            if (it == classInfo->properties.end()) {
-                YA_CORE_WARN("Property '{}' not found in {}", key, classInfo->_name);
-                return;
-            }
-
-            const Property &prop = it->second;
-            if (!prop.setter) {
-                YA_CORE_WARN("Property '{}' in {} is read-only", key, classInfo->_name);
-                return;
-            }
-
-            try {
-                std::any cppValue;
-                if (TypeRegistry::get()->luaObjectToAny(value, prop.typeIndex, cppValue)) {
-                    prop.setter(obj, cppValue);
-                }
-                else {
-                    YA_CORE_WARN("Type mismatch for property '{}.{}'", classInfo->_name, key);
-                }
-            }
-            catch (const std::exception &e) {
-                YA_CORE_ERROR("Lua __newindex error for {}.{}: {}", classInfo->_name, key, e.what());
-            }
-        });
-
-
-    // 仍然保留 getter/setter 方法作为备选
-    for (const auto &[propName, prop] : classInfo->properties) {
-        if (prop.bStatic) continue; // 跳过静态属性
-
-        // 注意：不能使用 componentType.set(propName, prop.ptr)，因为：
-        // 1. prop.ptr 是 void*，sol2 无法识别类型
-        // 2. 已有 __index/__newindex 元方法处理属性访问
-        // 3. 下面的 getter/setter 提供显式访问接口
-
-        // Getter 方法
-        if (prop.getter) {
-            std::string getterName = "get" + std::string(1, std::toupper(propName[0])) + propName.substr(1);
-
-            componentType[getterName] = [this, prop, classInfo, propName](void *obj) -> sol::object {
-                try {
-                    std::any value = prop.getter(obj);
-                    return TypeRegistry::get()->anyToLuaObject(value, prop.typeIndex, _lua);
-                }
-                catch (const std::exception &e) {
-                    YA_CORE_ERROR("Lua getter error for {}.{}: {}", classInfo->_name, propName, e.what());
-                }
-                return sol::nil;
-            };
-        }
-
-        // Setter (如果不是const)
-        if (prop.setter && !prop.bConst) {
-            std::string setterName = "set" + std::string(1, std::toupper(propName[0])) + propName.substr(1);
-
-            componentType[setterName] = [this, prop, classInfo, propName](void *obj, sol::object value) {
-                try {
-                    std::any cppValue;
-                    if (TypeRegistry::get()->luaObjectToAny(value, prop.typeIndex, cppValue)) {
-                        prop.setter(obj, cppValue);
-                    }
-                    else {
-                        YA_CORE_WARN("Type mismatch for property '{}.{}'", classInfo->_name, propName);
-                    }
-                }
-                catch (const std::exception &e) {
-                    YA_CORE_ERROR("Lua setter error for {}.{}: {}", classInfo->_name, propName, e.what());
-                }
-            };
-        }
-    }
-
-    // TODO: 自动绑定成员函数
-    for (const auto &[funcName, func] : classInfo->functions) {
-        // 函数绑定需要根据参数类型动态生成wrapper
-        // 这需要更复杂的模板元编程或代码生成
-    }
+    // bindComponentAuto<PointLightComponent>("PointLightComponent");
+    // bindComponentAuto<CameraComponent>("CameraComponent");
+    // TODO: 实现  UFUNCTION
+    // bindComponentAuto<TransformComponent>("TransformComponent");
 }
 
 void LuaScriptingSystem::reloadScript(const std::string &scriptPath)

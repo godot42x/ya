@@ -1,17 +1,13 @@
 #pragma once
 
 #include "Core/UUID.h"
-#include <glm/glm.hpp>
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/quaternion.hpp>
+#include "Math/GLM.h"
 #include <string>
 #include <utility>
 
 #include "Core/Base.h"
 
-#include "Core/System/AutoRegister.h"
-
+#include "Core/Reflection/ECSSerializerHelper.h"
 
 namespace ya
 {

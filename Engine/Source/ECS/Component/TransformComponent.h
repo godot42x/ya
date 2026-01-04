@@ -1,14 +1,18 @@
 
 #pragma once
+#include "Core/Reflection/UnifiedReflection.h"
 #include "ECS/Component.h"
+#include "Math/GLM.h"
 
-#include "Core/System/AutoRegister.h"
 
 namespace ya
 {
 struct TransformComponent : public IComponent
 {
-    YA_ECS_COMPONENT(TransformComponent)
+    YA_REFLECT(TransformComponent,
+               PROP(_position),
+               PROP(_rotation),
+               PROP(_scale))
 
     glm::mat4 _cachedMatrix = glm::mat4(1.0f);
     glm::vec3 _position     = {0.0f, 0.0f, 0.0f};
@@ -57,19 +61,6 @@ struct TransformComponent : public IComponent
     {
         calcMatrix();
         return _cachedMatrix;
-    }
-
-
-    // ========================================================================
-    // 反射注册 - 自动生成序列化
-    // ========================================================================
-    static void registerReflection()
-    {
-        Register<TransformComponent>("TransformComponent")
-            .constructor<>()
-            .property("position", &TransformComponent::_position)
-            .property("rotation", &TransformComponent::_rotation)
-            .property("scale", &TransformComponent::_scale);
     }
 };
 } // namespace ya

@@ -22,7 +22,6 @@
 
 #include <glm/fwd.hpp>
 
-#include "TimeManager.h"
 #include "Trait.h"
 #include "reflects-core/lib.h"
 

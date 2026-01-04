@@ -1,12 +1,17 @@
 #pragma once
 #include "ECS/Component.h"
+#include "Core/Reflection/UnifiedReflection.h"
 
 namespace ya
 {
 // Light component for lighting
 struct PointLightComponent : public IComponent
 {
-    YA_ECS_COMPONENT(PointLightComponent);
+    YA_REFLECT(PointLightComponent, 
+        PROP(_color), 
+        PROP(_intensity), 
+        PROP(_range)
+    )
   private:
   public:
     // TODO: one represent multiple light types?
@@ -27,13 +32,5 @@ struct PointLightComponent : public IComponent
 
     PointLightComponent()                            = default;
     PointLightComponent(const PointLightComponent &) = default;
-
-    static void registerReflection()
-    {
-        Register<PointLightComponent>("PointLightComponent")
-            .property("color", &PointLightComponent::_color)
-            .property("intensity", &PointLightComponent::_intensity)
-            .property("range", &PointLightComponent::_range);
-    }
 };
 } // namespace ya

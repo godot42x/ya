@@ -13,6 +13,8 @@ struct Logger
     static logcc::SyncLogger AppLogger;
 
     static void init();
+
+    static logcc::SyncLogger &getLazyLog();
 };
 
 
@@ -38,6 +40,9 @@ struct Logger
 #define YA_INFO(...)  Logger::AppLogger.log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
 #define YA_WARN(...)  Logger::AppLogger.log(logcc::LogLevel::Warn, std::format(__VA_ARGS__))
 #define YA_ERROR(...) Logger::AppLogger.log(logcc::LogLevel::Error, std::format(__VA_ARGS__))
+
+
+#define YA_CORE_TRACE_LZ(...) Logger::getLazyLog().log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
 // clang-format on
 
 

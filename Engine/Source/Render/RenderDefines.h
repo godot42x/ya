@@ -677,6 +677,7 @@ struct RenderPassCreateInfo
         AttachmentRef               resolveAttachment; // Single depth attachment for now
     };
 
+    std::string       label         = "None";
     ERenderingMode::T renderingMode = ERenderingMode::Auto; // Rendering mode
 
     std::vector<AttachmentDescription> attachments; // all attachment

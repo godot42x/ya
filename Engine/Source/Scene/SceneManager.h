@@ -18,7 +18,7 @@ namespace ya
  * - Scene transitions
  * - Provide callbacks for custom scene initialization
  */
-class SceneManager
+struct SceneManager
 {
   public:
     using SceneInitCallback = std::function<void(Scene *)>;
@@ -29,15 +29,15 @@ class SceneManager
     // std::string   _currentScenePath;
 
   public:
-/**
-  State:
-  Engine Start->
-  SceneManager created ->
-  Open scene ->
-  Scene initialized (onSceneInit) ->
-  Engine running ->
-  Close scene (onSceneDestroy) -> Unload scene -> Engine Quit
-*/
+    /**
+      State:
+      Engine Start->
+      SceneManager created ->
+      Open scene ->
+      Scene initialized (onSceneInit) ->
+      Engine running ->
+      Close scene (onSceneDestroy) -> Unload scene -> Engine Quit
+    */
 
     // MulticastDelegate<void(Scene *)> onSceneInit;
     MulticastDelegate<void(Scene *)> onSceneDestroy;
