@@ -1,9 +1,7 @@
 
 #pragma once
 
-#include "glm/ext.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/glm.hpp"
+#include "Math/GLM.h"
 
 
 

@@ -23,7 +23,10 @@ struct Start
     }
 };
 
+    #pragma warning(push)
+    #pragma warning(disable : 4073) // warning C4073: initializers put in
     #pragma init_seg(lib)
+    #pragma warning(pop)
 static Start static_init_start_obj;
 
 

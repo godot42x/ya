@@ -119,7 +119,9 @@ struct TypeIndex
 };
 
 template <typename T>
-inline static const auto type_index_v = refl::TypeIndex<T>::value();
+inline static const auto type_index_v = TypeIndex<T>::value();
+
+
 #endif
 
 #define NAMESPACE_BEGIN(name) \

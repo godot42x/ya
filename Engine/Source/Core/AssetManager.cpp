@@ -9,8 +9,9 @@
 #include "assimp/scene.h"
 
 
-#include "Core/System/FileSystem.h"
 #include "Core/Log.h"
+#include "Core/System/FileSystem.h"
+
 
 #include <algorithm>
 #include <cctype>
@@ -136,7 +137,8 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
     }
 
     // Create a new model
-    auto model = makeShared<Model>();
+    auto model      = makeShared<Model>();
+    model->filepath = filepath;
 
     Assimp::Importer importer;
 

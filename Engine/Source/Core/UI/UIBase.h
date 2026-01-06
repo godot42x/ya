@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
 #include "Render/RenderDefines.h"
 #include <glm/glm.hpp>
 
@@ -107,13 +108,15 @@ struct UIMeta
     }
 };
 
-#define UI_TYPE(T, BASE)                                                                 \
-    using Super = BASE;                                                                  \
-    static uint32_t    getStaticType() { return ya::type_index_v<T>; }                   \
-    static uint32_t    getStaticBaseType() { return ya::type_index_v<BASE>; }            \
-    inline static bool _auto_registered = []() {                                         \
-        UIMeta::get()->registerInheritance(ya::type_index_v<T>, ya::type_index_v<BASE>); \
-        return true;                                                                     \
+#define UI_TYPE(T, BASE)                                                        \
+    using Super = BASE;                                                         \
+    static uint32_t    getStaticType() { return ::ya::type_index_v<T>; }        \
+    static uint32_t    getStaticBaseType() { return ::ya::type_index_v<BASE>; } \
+    inline static bool _auto_registered = []() {                                \
+        UIMeta::get()->registerInheritance(                                     \
+            ::ya::type_index_v<T>,                                              \
+            ::ya::type_index_v<BASE>);                                          \
+        return true;                                                            \
     }();
 
 

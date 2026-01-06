@@ -30,18 +30,23 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-#include "Core/Reflection/UnifiedReflection.h"
+#include "Core/Reflection/Reflection.h"
 
+// GLM 类型反射支持
+YA_REFLECT_EXTERNAL_BEGIN(glm::vec2)
+YA_REFLECT_FIELD(x, )
+YA_REFLECT_FIELD(y, )
+YA_REFLECT_EXTERNAL_END()
 
-YA_REFLECT_EXTERNAL(glm::vec2,
-                    PROP(x),
-                    PROP(y));
-YA_REFLECT_EXTERNAL(glm::vec3,
-                    PROP(x),
-                    PROP(y),
-                    PROP(z));
-YA_REFLECT_EXTERNAL(glm::vec4,
-                    PROP(x),
-                    PROP(y),
-                    PROP(z),
-                    PROP(w));
+YA_REFLECT_EXTERNAL_BEGIN(glm::vec3)
+YA_REFLECT_FIELD(x, )
+YA_REFLECT_FIELD(y, )
+YA_REFLECT_FIELD(z, )
+YA_REFLECT_EXTERNAL_END()
+
+YA_REFLECT_EXTERNAL_BEGIN(glm::vec4)
+YA_REFLECT_FIELD(x, )
+YA_REFLECT_FIELD(y, )
+YA_REFLECT_FIELD(z, )
+YA_REFLECT_FIELD(w, )
+YA_REFLECT_EXTERNAL_END()

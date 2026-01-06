@@ -67,142 +67,111 @@ struct Class
     virtual ~Class() = default;
 
 
+#pragma region Field-Register
+
+  private:
+    // 提取共用逻辑：初始化 Property 的基础字段
+    template <typename T>
+    static void initPropertyBase(Property &prop, const std::string &inName, bool isConst, bool isStatic)
+    {
+        prop.name      = inName;
+        prop.bConst    = isConst;
+        prop.bStatic   = isStatic;
+        prop.typeIndex = TYPE_ID(T);
+        prop.typeName  = detail::getTypeName<T>();
+    }
+
+    // 共用逻辑：插入或更新 property 并返回引用
+    Property &insertProperty(const std::string &inName, Property &&prop)
+    {
+        auto it = properties.insert_or_assign(inName, std::move(prop));
+        return it.first->second;
+    }
+
+  public:
     // 注册普通成员变量（可读写）
     template <typename ClassType, typename T>
-    void property(const std::string &inName, T ClassType::*member)
+    Property &property(const std::string &inName, T ClassType::*member)
     {
         Property prop;
-        prop.name     = inName;
-        prop.value    = member; // 存储成员指针
-        prop.bConst   = false;
-        prop.bStatic  = false;
-        prop.typeHash = typeid(T).hash_code(); // 使用 hash_code 作为类型标识
+        initPropertyBase<T>(prop, inName, false, false);
+        prop.value = member;
 
-#ifdef _DEBUG
-        prop.debugTypeName = typeid(T).name(); // Debug only: 存储类型名用于调试
-#endif
-        prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
-
-        // 获取成员地址（用于复杂类型递归序列化）
         prop.addressGetter = [member](const void *obj) -> const void * {
-            auto *self = static_cast<const ClassType *>(obj);
-            return &(self->*member);
+            return &(static_cast<const ClassType *>(obj)->*member);
         };
 
-        // 获取成员可写地址（用于反序列化递归写回）
         prop.addressGetterMutable = [member](void *obj) -> void * {
-            auto *self = static_cast<ClassType *>(obj);
-            return &(self->*member);
+            return &(static_cast<ClassType *>(obj)->*member);
         };
 
-        // 设置getter：从对象实例读取成员值
         prop.getter = [member](void *obj) -> std::any {
-            ClassType *self = static_cast<ClassType *>(obj);
-            return std::any(self->*member);
+            return std::any(static_cast<ClassType *>(obj)->*member);
         };
 
-        // 设置setter：向对象实例写入成员值
         prop.setter = [member](void *obj, const std::any &val) {
-            ClassType *self = static_cast<ClassType *>(obj);
-            self->*member   = std::any_cast<T>(val);
+            static_cast<ClassType *>(obj)->*member = std::any_cast<T>(val);
         };
 
-        properties[inName] = prop;
+        return insertProperty(inName, std::move(prop));
     }
 
     // 注册const成员变量（只读）
     template <typename ClassType, typename T>
-    void property(const std::string &inName, const T ClassType::*member)
+    Property &property(const std::string &inName, const T ClassType::*member)
     {
         Property prop;
-        prop.name     = inName;
-        prop.value    = member;
-        prop.bConst   = true;
-        prop.bStatic  = false;
-        prop.typeHash = typeid(T).hash_code();
+        initPropertyBase<T>(prop, inName, true, false);
+        prop.value = member;
 
-#ifdef _DEBUG
-        prop.debugTypeName = typeid(T).name();
-#endif
-
-    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
-
-        // 获取成员地址（只读成员同样可用于递归序列化）
         prop.addressGetter = [member](const void *obj) -> const void * {
-            auto *self = static_cast<const ClassType *>(obj);
-            return &(self->*member);
+            return &(static_cast<const ClassType *>(obj)->*member);
         };
 
-        // const 成员不可写
         prop.addressGetterMutable = nullptr;
 
-        // 设置getter（只读）
         prop.getter = [member](void *obj) -> std::any {
-            const ClassType *self = static_cast<const ClassType *>(obj);
-            return std::any(self->*member);
+            return std::any(static_cast<const ClassType *>(obj)->*member);
         };
 
-        // const属性没有setter
         prop.setter = nullptr;
 
-        properties[inName] = prop;
+        return insertProperty(inName, std::move(prop));
     }
 
     // 注册静态变量（可读写）
     template <typename T>
-    void staticProperty(const std::string &inName, T *staticVar)
+    Property &staticProperty(const std::string &inName, T *staticVar)
     {
         Property prop;
-        prop.name     = inName;
-        prop.value    = staticVar;
-        prop.bConst   = false;
-        prop.bStatic  = true;
-        prop.typeHash = typeid(T).hash_code();
+        initPropertyBase<T>(prop, inName, false, true);
 
-#ifdef _DEBUG
-        prop.debugTypeName = typeid(T).name();
-#endif
-
-    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
-
-        // 静态属性的getter不需要对象实例
+        prop.value  = staticVar;
         prop.getter = [staticVar](void * /*obj*/) -> std::any {
             return std::any(*staticVar);
         };
-
-        // 静态属性的setter
         prop.setter = [staticVar](void * /*obj*/, const std::any &val) {
             *staticVar = std::any_cast<T>(val);
         };
 
-        properties[inName] = prop;
+        return insertProperty(inName, std::move(prop));
     }
 
     // 注册const静态变量（只读）
     template <typename T>
-    void staticProperty(const std::string &inName, const T *staticVar)
+    Property &staticProperty(const std::string &inName, const T *staticVar)
     {
         Property prop;
-        prop.name     = inName;
-        prop.value    = staticVar;
-        prop.bConst   = true;
-        prop.bStatic  = true;
-        prop.typeHash = typeid(T).hash_code();
+        initPropertyBase<T>(prop, inName, true, true);
+        prop.value = staticVar;
 
-#ifdef _DEBUG
-        prop.debugTypeName = typeid(T).name();
-#endif
-
-    prop.typeIndex = refl::TypeIndex<T>::value(); // 存储类型ID用于运行时类型识别
-
-        // const静态属性只有getter
         prop.getter = [staticVar](void * /*obj*/) -> std::any {
             return std::any(*staticVar);
         };
 
         prop.setter = nullptr;
 
-        properties[inName] = prop;
+        return insertProperty(inName, std::move(prop));
     }
 
 
@@ -211,7 +180,7 @@ struct Class
     // 注册普通成员函数
     // ------------------------------------------------------------------------
     template <typename Ret, typename ClassType, typename... Args>
-    void function(const std::string &inName, Ret (ClassType::*func)(Args...))
+    Function &function(const std::string &inName, Ret (ClassType::*func)(Args...))
     {
         Function f;
         f.name           = inName;
@@ -225,14 +194,15 @@ struct Class
             return detail::memberFunctionWrapper(self, func, args);
         };
 
-        functions[inName] = std::move(f);
+        auto it = functions.insert_or_assign(inName, std::move(f));
+        return it.first->second;
     }
 
     // ------------------------------------------------------------------------
     // 注册 const 成员函数
     // ------------------------------------------------------------------------
     template <typename Ret, typename ClassType, typename... Args>
-    void function(const std::string &inName, Ret (ClassType::*func)(Args...) const)
+    Function &function(const std::string &inName, Ret (ClassType::*func)(Args...) const)
     {
         Function f;
         f.name           = inName;
@@ -246,14 +216,15 @@ struct Class
             return detail::constMemberFunctionWrapper(self, func, args);
         };
 
-        functions[inName] = std::move(f);
+        auto it = functions.insert_or_assign(inName, std::move(f));
+        return it.first->second;
     }
 
     // ------------------------------------------------------------------------
     // 注册静态成员函数
     // ------------------------------------------------------------------------
     template <typename Ret, typename... Args>
-    void staticFunction(const std::string &inName, Ret (*func)(Args...))
+    Function &staticFunction(const std::string &inName, Ret (*func)(Args...))
     {
         Function f;
         f.name           = inName;
@@ -266,9 +237,14 @@ struct Class
             return detail::staticFunctionWrapper(func, args);
         };
 
-        functions[inName] = std::move(f);
+        auto it = functions.insert_or_assign(inName, std::move(f));
+        return it.first->second;
     }
 
+#pragma endregion
+
+
+#pragma region Invocation
     // ------------------------------------------------------------------------
     // 底层调用接口：使用 ArgumentList
     // ------------------------------------------------------------------------
@@ -353,7 +329,9 @@ struct Class
             return std::any_cast<Ret>(result);
         }
     }
+#pragma endregion
 
+    // MARK:  Query
     // ------------------------------------------------------------------------
     // 查询函数信息
     // ------------------------------------------------------------------------
@@ -388,6 +366,7 @@ struct Class
         return it != properties.end() ? &it->second : nullptr;
     }
 
+#pragma region getter-setter
     // ------------------------------------------------------------------------
     // 高级属性访问接口
     // ------------------------------------------------------------------------
@@ -525,7 +504,10 @@ struct Class
             };
         }
     }
+#pragma endregion
 
+
+#pragma region Instance-Creation
     // 创建实例（无参数）- 自动选择0参数的构造函数
     void *createInstance() const
     {
@@ -608,4 +590,5 @@ struct Class
         }
         return sigs;
     }
+#pragma endregion
 };

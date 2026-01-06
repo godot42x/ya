@@ -1,10 +1,7 @@
 #pragma once
 
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include "Log.h"
+
 #include "Math/Math.h"
 
 
@@ -17,10 +14,10 @@ struct Camera
     glm::mat4 viewMatrix           = {};
     glm::mat4 viewProjectionMatrix = {};
 
-    Camera()                            = default;
-    Camera(const Camera &)              = default;
-    Camera &operator=(const Camera &)   = default;
-    Camera(Camera &&) noexcept          = default;
+    Camera()                              = default;
+    Camera(const Camera &)                = default;
+    Camera &operator=(const Camera &)     = default;
+    Camera(Camera &&) noexcept            = default;
     Camera &operator=(Camera &&) noexcept = default;
 
     [[nodiscard]] const glm::mat4 &getViewProjectionMatrix() const { return viewProjectionMatrix; }
@@ -51,11 +48,11 @@ struct FreeCamera : public Camera
 
   public:
     FreeCamera() : Camera() {}
-        FreeCamera(const FreeCamera &)              = default;
-        FreeCamera &operator=(const FreeCamera &)   = default;
-        FreeCamera(FreeCamera &&) noexcept          = default;
-        FreeCamera &operator=(FreeCamera &&) noexcept = default;
-        ~FreeCamera() override = default;
+    FreeCamera(const FreeCamera &)                = default;
+    FreeCamera &operator=(const FreeCamera &)     = default;
+    FreeCamera(FreeCamera &&) noexcept            = default;
+    FreeCamera &operator=(FreeCamera &&) noexcept = default;
+    ~FreeCamera() override                        = default;
 
     void setPerspective(float fov, float aspectRatio, float nearClip, float farClip)
     {

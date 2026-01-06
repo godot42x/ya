@@ -1,6 +1,6 @@
 
 #pragma once
-#include "Core/Reflection/UnifiedReflection.h"
+#include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
 #include "Math/GLM.h"
 
@@ -9,10 +9,11 @@ namespace ya
 {
 struct TransformComponent : public IComponent
 {
-    YA_REFLECT(TransformComponent,
-               PROP(_position),
-               PROP(_rotation),
-               PROP(_scale))
+    YA_REFLECT_BEGIN(TransformComponent)
+    YA_REFLECT_FIELD(_position)
+    YA_REFLECT_FIELD(_rotation)
+    YA_REFLECT_FIELD(_scale)
+    YA_REFLECT_END()
 
     glm::mat4 _cachedMatrix = glm::mat4(1.0f);
     glm::vec3 _position     = {0.0f, 0.0f, 0.0f};

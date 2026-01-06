@@ -1,13 +1,11 @@
 #pragma once
 
-#include "Core/UUID.h"
-#include "Math/GLM.h"
-#include <string>
-#include <utility>
-
 #include "Core/Base.h"
 
-#include "Core/Reflection/ECSSerializerHelper.h"
+
+#include "Core/UUID.h"
+#include "Math/GLM.h"
+
 
 namespace ya
 {

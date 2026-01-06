@@ -116,15 +116,13 @@ struct Field
 // ============================================================================
 struct Property : public Field
 {
-    std::any value; // 存储成员指针或静态变量指针
-    bool     bConst    = false;
-    bool     bStatic   = false;
-    size_t   typeHash  = 0; // 使用 typeid().hash_code() 作为类型标识
-    uint32_t typeIndex = 0;
+    std::any    value; // 存储成员指针或静态变量指针
+    bool        bConst    = false;
+    bool        bStatic   = false;
+    uint32_t    typeIndex = 0;
+    std::string typeName;
 
-#ifdef _DEBUG
-    std::string debugTypeName; // Debug only: 用于调试信息和错误提示
-#endif
+
 
     // ============================================================================
     // 反射运行时功能
@@ -144,21 +142,10 @@ struct Property : public Field
     // 用于向对象实例写入属性值
     std::function<void(void *, const std::any &)> setter;
 
-    // 检查属性是否为指定类型
-    template <typename T>
-    bool isType() const
-    {
-        return typeHash == typeid(T).hash_code();
-    }
-
     // 获取类型名称（仅用于调试）
     std::string getTypeName() const
     {
-#ifdef _DEBUG
-        return debugTypeName;
-#else
-        return std::to_string(typeHash); // Release 模式无类型名
-#endif
+        return typeName;
     }
 
     // 获取属性值（从对象实例）

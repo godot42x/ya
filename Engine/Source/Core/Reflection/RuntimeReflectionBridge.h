@@ -11,7 +11,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/Reflection/MetadataSupport.h"
 #include <any>
 #include <optional>
 #include <reflects-core/lib.h>
@@ -22,66 +21,6 @@
 
 namespace ya::reflection::detail
 {
-
-/**
- * @brief 运行时反射注册器 - 封装 reflects-core 的 Register<T> + 元数据
- *
- * 在 YA_REFLECT 宏展开时自动调用，合并运行时反射和元数据注册。
- *
- * @tparam T 要注册的类类型
- */
-template <typename T>
-struct RuntimeReflectionRegistrar
-{
-    Register<T> *registrar = nullptr;
-    std::string  className;
-
-    RuntimeReflectionRegistrar(const std::string &inClassName)
-        : className(inClassName)
-    {
-        // 使用 reflects-core 的 Register<T> 来注册类
-        // 它会自动创建 Class 对象并注册到 ClassRegistry
-        registrar = new Register<T>(className);
-
-        // YA_CORE_TRACE_LZ("Registered runtime class: {}", className);
-    }
-
-    // 注册属性（支持元数据）- 直接设置到 reflects-core 的 Property 中
-    template <typename PropType>
-    RuntimeReflectionRegistrar &property(const std::string &propName,
-                                         PropType T::   *memberPtr,
-                                         const Metadata &metadata = Metadata{})
-    {
-        if (registrar) {
-            // 1. 注册到 reflects-core（运行时反射）
-            registrar->property(propName, memberPtr);
-
-            // 2. 设置元数据到 Property 对象（直接修改 reflects-core 的 Property）
-            if (metadata.hasAnyMetadata()) {
-                auto &registry = ClassRegistry::instance();
-                auto *classPtr = registry.getClass(className);
-                if (classPtr) {
-                    auto *prop = classPtr->getProperty(propName);
-                    if (prop) {
-                        // 直接设置元数据字段
-                        prop->metadata = metadata;
-                        // YA_CORE_TRACE_LZ("Set property metadata: {}.{}", className, propName);
-                    }
-                }
-            }
-
-            // YA_CORE_TRACE_LZ("Registered runtime property: {}.{}", className, propName);
-        }
-        return *this;
-    }
-
-    ~RuntimeReflectionRegistrar()
-    {
-        // Register<T> 会在析构时自动注册到 ClassRegistry
-        // 我们不需要手动管理生命周期
-        delete registrar;
-    }
-};
 
 /**
  * @brief 辅助函数：从运行时反射系统获取属性值

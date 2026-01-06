@@ -6,10 +6,13 @@
 
 struct TestComponent
 {
-    YA_REFLECT(TestComponent, PROP(value), PROP(name))
-
     int         value = 42;
     std::string name  = "test";
+
+    YA_REFLECT_BEGIN(TestComponent)
+    YA_REFLECT_FIELD(value, )
+    YA_REFLECT_FIELD(name, )
+    YA_REFLECT_END()
 };
 
 int main()
@@ -21,7 +24,7 @@ int main()
     assert(std::string(TestComponent::getTypeName()) == "TestComponent");
 
     // 测试2: 属性遍历
-    int propCount = 0;
+    int           propCount = 0;
     TestComponent p;
     p.__visit_properties([&](const char *name, auto &value) {
         std::cout << "  属性: " << name << std::endl;

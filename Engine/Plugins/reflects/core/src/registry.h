@@ -24,9 +24,11 @@ struct ClassRegistry
     template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
-        auto ptr                         = std::shared_ptr<Class>(classInfo);
-        classes[name]                    = ptr;
-        typeIdMap[refl::type_index_v<T>] = ptr;
+        auto ptr      = std::shared_ptr<Class>(classInfo);
+        classes[name] = ptr;
+        auto id       = TYPE_ID(T);
+        typeIdMap[id] = ptr;
+        printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), id);
 
         return classes[name];
     }
@@ -69,6 +71,10 @@ struct ClassRegistry
     {
         return classes.find(name) != classes.end();
     }
+    bool hasClass(uint32_t typeId) const
+    {
+        return typeIdMap.find(typeId) != typeIdMap.end();
+    }
 };
 
 // ============================================================================
@@ -106,9 +112,10 @@ struct Register
 
     // 统一的property函数 - 通过静态反射自动判断成员类型
     template <typename PropertyType>
-    Register &property(const std::string &name, PropertyType prop)
+    Register &property(const std::string &name, PropertyType prop, Metadata meta = {})
     {
         using DecayedType = std::decay_t<PropertyType>;
+        Property *p       = nullptr;
 
         // 检查是否是成员指针
         if constexpr (std::is_member_object_pointer_v<DecayedType>) {
@@ -122,7 +129,7 @@ struct Register
                           "Use pointer types instead.");
 
             // 成员指针：可以是 T::* 或 const T::*
-            classInfo->property(name, prop);
+            p = &classInfo->property(name, prop);
         }
         // 检查是否是指针类型（静态变量）
         else if constexpr (std::is_pointer_v<DecayedType>) {
@@ -136,12 +143,13 @@ struct Register
                           "Use pointer types instead.");
 
             // 静态变量指针：可以是 T* 或 const T*
-            classInfo->staticProperty(name, prop);
+            p = &classInfo->staticProperty(name, prop);
         }
         else {
             static_assert(std::is_member_object_pointer_v<DecayedType> || std::is_pointer_v<DecayedType>,
                           "Property must be either a member pointer (T::*) or a static variable pointer");
         }
+        p->metadata = std::move(meta);
 
         return *this;
     }

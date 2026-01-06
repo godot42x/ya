@@ -1,17 +1,18 @@
 #pragma once
+#include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Core/Reflection/UnifiedReflection.h"
+
 
 namespace ya
 {
 // Light component for lighting
 struct PointLightComponent : public IComponent
 {
-    YA_REFLECT(PointLightComponent, 
-        PROP(_color), 
-        PROP(_intensity), 
-        PROP(_range)
-    )
+    YA_REFLECT_BEGIN(PointLightComponent)
+    YA_REFLECT_FIELD(_color)
+    YA_REFLECT_FIELD(_intensity)
+    YA_REFLECT_FIELD(_range)
+    YA_REFLECT_END()
   private:
   public:
     // TODO: one represent multiple light types?
