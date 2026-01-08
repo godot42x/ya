@@ -18,6 +18,24 @@ struct Importer;
 namespace ya
 {
 
+namespace EResource
+{
+enum T
+{
+    None = 0,
+    Texture,
+    Model,
+
+};
+
+
+};
+
+struct Resource
+{
+};
+
+
 class AssetManager
 {
   private:

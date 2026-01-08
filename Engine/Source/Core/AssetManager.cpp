@@ -174,16 +174,17 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
 
     // Process all meshes in the scene
     for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh  *mesh = scene->mMeshes[i];
-        MeshData newMesh;
+        aiMesh *mesh = scene->mMeshes[i];
 
         // Get mesh name
-        newMesh.name = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
+        std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
 
-        // Infer coordinate system from file format and metadata
-        // Note: Assimp may have already converted coordinates during import
-        // depending on aiProcess flags used
-        newMesh.sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
+        // Infer coordinate system from file format
+        CoordinateSystem sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
+
+        // Temporary storage for vertex data
+        std::vector<ModelVertex> modelVertices;
+        std::vector<uint32_t>    indices;
 
         // Process vertices
         for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
@@ -221,35 +222,29 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
                 vertex.color = glm::vec4(1.0f);
             }
 
-            newMesh.vertices.push_back(std::move(vertex));
+            modelVertices.push_back(std::move(vertex));
         }
 
         // Process indices
         for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
             aiFace face = mesh->mFaces[j];
             for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                newMesh.indices.push_back(face.mIndices[k]);
+                indices.push_back(face.mIndices[k]);
             }
         }
-        newMesh.createGPUResources();
 
-        // Process materials/textures
-        // if (mesh->mMaterialIndex >= 0 && commandBuffer) {
-        //     aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
+        // Convert ModelVertex to engine Vertex format
+        std::vector<ya::Vertex> vertices;
+        for (const auto &v : modelVertices) {
+            ya::Vertex vertex;
+            vertex.position  = v.position;
+            vertex.normal    = v.normal;
+            vertex.texCoord0 = v.texCoord;
+            vertices.push_back(vertex);
+        }
 
-        //     // Load diffuse texture
-        //     if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0) {
-        //         aiString texturePath;
-        //         if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-        //             std::string fullPath = (std::filesystem::path(directory) / texturePath.C_Str()).string();
-        //             if (FileSystem::get()->isFileExists(fullPath)) {
-        //                 newMesh.diffuseTexture = Texture::CreateFromFile(fullPath, commandBuffer);
-        //             }
-        //         }
-        //     }
-        //     // You can add more texture types here (normal maps, specular maps, etc.)
-        // }
-
+        // Create Mesh GPU resource directly
+        auto newMesh = makeShared<Mesh>(vertices, indices, meshName, sourceCoordSystem);
         model->getMeshes().push_back(newMesh);
     }
 
@@ -306,17 +301,18 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, Coor
 
     // Process all meshes in the scene
     for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh  *mesh = scene->mMeshes[i];
-        MeshData newMesh;
+        aiMesh *mesh = scene->mMeshes[i];
 
         // Get mesh name
-        newMesh.name = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
+        std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
 
-        // Use explicit coordinate system override
-        newMesh.sourceCoordSystem = coordSystem;
         YA_CORE_INFO("Loading mesh '{}' with explicit coordinate system: {}",
-                     newMesh.name,
+                     meshName,
                      coordSystem == CoordinateSystem::LeftHanded ? "LeftHanded" : "RightHanded");
+
+        // Temporary storage
+        std::vector<ModelVertex> modelVertices;
+        std::vector<uint32_t>    indices;
 
         // Process vertices
         for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
@@ -333,24 +329,29 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, Coor
                 vertex.texCoord = {mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y};
             }
 
-            // Check if the mesh has tangents and bitangents
-            // if (mesh->HasTangentsAndBitangents()) {
-            //     vertex.tangent = {mesh->mTangents[j].x, mesh->mTangents[j].y, mesh->mTangents[j].z};
-            //     vertex.bitangent = {mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z};
-            // }
-
-            newMesh.vertices.push_back(vertex);
+            modelVertices.push_back(vertex);
         }
 
         // Process indices
         for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
             aiFace face = mesh->mFaces[j];
             for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                newMesh.indices.push_back(face.mIndices[k]);
+                indices.push_back(face.mIndices[k]);
             }
         }
-        newMesh.createGPUResources();
 
+        // Convert to engine Vertex format
+        std::vector<ya::Vertex> vertices;
+        for (const auto &v : modelVertices) {
+            ya::Vertex vertex;
+            vertex.position  = v.position;
+            vertex.normal    = v.normal;
+            vertex.texCoord0 = v.texCoord;
+            vertices.push_back(vertex);
+        }
+
+        // Create Mesh with explicit coordinate system
+        auto newMesh = makeShared<Mesh>(vertices, indices, meshName, coordSystem);
         model->getMeshes().push_back(newMesh);
     }
 

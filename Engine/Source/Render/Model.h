@@ -1,9 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
-
+#include "Math/AABB.h"
 #include "Render/Mesh.h"
-#include <SDL3/SDL_gpu.h>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -12,58 +11,66 @@
 
 namespace ya
 {
-struct CommandBuffer;
 
+/**
+ * @brief Vertex format for imported 3D models
+ * Used during model loading, converted to engine's internal Vertex format
+ */
 struct ModelVertex
 {
     glm::vec3 position;
     glm::vec3 normal;
     glm::vec2 texCoord;
-    glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f}; // Default white color
+    glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
-struct MeshData
-{
-    std::vector<ModelVertex> vertices;
-    std::vector<uint32_t>    indices;
-    std::string              name;
-    CoordinateSystem         sourceCoordSystem = CoordinateSystem::RightHanded; // Default for imported models
-
-    stdptr<Mesh> mesh = nullptr;
-
-    MeshData()  = default;
-    ~MeshData() = default;
-
-    // TODO: only temp data here
-    void createGPUResources();
-};
-
+/**
+ * @brief Model resource - file-level asset container
+ * Represents a loaded 3D model file (.obj, .fbx, .gltf, etc.)
+ * One model can contain multiple meshes (e.g., character = head + body + weapon)
+ * 
+ * Responsibility:
+ * - Asset management (loading, caching)
+ * - Mesh collection
+ * - Metadata (filepath, bounds)
+ * 
+ * NOT responsible for:
+ * - Materials (managed by MeshRendererComponent)
+ * - Transforms (managed by TransformComponent)
+ * - Rendering (handled by render systems)
+ */
 struct Model
 {
-    std::vector<MeshData> meshes;
-    glm::mat4             transform = glm::mat4(1.0f);
-
-    bool        isLoaded = false;
+    std::string name;
     std::string filepath;
     std::string directory;
+    
+    std::vector<stdptr<Mesh>> meshes;  // GPU geometry resources
+    AABB boundingBox;                   // Overall bounding box
+    
+    bool isLoaded = false;
 
   public:
-    Model()  = default;
+    Model() = default;
     ~Model() = default;
 
-    void draw(SDL_GPURenderPass *renderPass, SDL_GPUTexture *defaultTexture);
-
-    const std::vector<MeshData> &getMeshes() const { return meshes; }
-    std::vector<MeshData>       &getMeshes() { return meshes; } // Non-const version for adding meshes
-
-    glm::mat4 getTransform() const { return transform; }
-    void      setTransform(const glm::mat4 &transform) { this->transform = transform; }
-
+    // Accessors
+    const std::vector<stdptr<Mesh>> &getMeshes() const { return meshes; }
+    std::vector<stdptr<Mesh>>       &getMeshes() { return meshes; }
+    
+    size_t getMeshCount() const { return meshes.size(); }
+    stdptr<Mesh> getMesh(size_t index) const { return index < meshes.size() ? meshes[index] : nullptr; }
+    
+    const std::string &getFilepath() const { return filepath; }
+    const std::string &getDirectory() const { return directory; }
+    const std::string &getName() const { return name; }
+    
+    void setDirectory(const std::string &dir) { directory = dir; }
+    void setFilepath(const std::string &path) { filepath = path; }
+    void setName(const std::string &n) { name = n; }
+    
     bool getIsLoaded() const { return isLoaded; }
     void setIsLoaded(bool loaded) { isLoaded = loaded; }
-
-    const std::string &getDirectory() const { return directory; }
-    void               setDirectory(const std::string &directory) { this->directory = directory; }
 };
 
 } // namespace ya

@@ -250,7 +250,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                                                         "Engine/Content/Misc/Monkey.obj");
         for (const auto &mesh : model->getMeshes()) {
             auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
-            lmc->addMesh(mesh.mesh.get(), litMat);
+            lmc->addMesh(mesh.get(), litMat);  // mesh is now stdptr<Mesh>, not MeshData
         }
     }
 
