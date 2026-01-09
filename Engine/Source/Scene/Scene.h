@@ -13,6 +13,10 @@ struct [[refl]] Scene
 {
     friend struct Entity;
 
+    // Magic number for dangling pointer detection
+    static constexpr uint32_t SCENE_MAGIC = 0x5343454E; // 'SCEN'
+    uint32_t                  _magic      = SCENE_MAGIC;
+
     std::string    _name;
     entt::registry _registry;
     uint32_t       _entityCounter = 0;
@@ -37,8 +41,11 @@ struct [[refl]] Scene
     Entity *createEntity(const std::string &name = "Entity");
     Entity *createEntityWithUUID(uint64_t           uuid,
                                  const std::string &name = "Entity");
-    void    destroyEntity(Entity entity);
-    bool    isValidEntity(Entity entity) const;
+    void    destroyEntity(Entity *entity);
+    bool    isValidEntity(const Entity *entity) const;
+
+    // Check if Scene pointer is safe to access
+    bool isValid() const { return this && _magic == SCENE_MAGIC; }
 
     Entity *getEntityByEnttID(entt::entity id);
     Entity *getEntityByID(uint32_t id)

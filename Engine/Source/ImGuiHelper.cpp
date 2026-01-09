@@ -230,7 +230,11 @@ EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
             event.type == SDL_EVENT_KEY_UP ||
             event.type == SDL_EVENT_TEXT_INPUT)
         {
-            return EventProcessState::Handled;
+            if (ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny()) {
+            }
+            else {
+                return EventProcessState::Handled;
+            }
         }
     }
 

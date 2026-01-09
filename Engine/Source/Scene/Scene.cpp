@@ -23,6 +23,7 @@ Scene::Scene(const std::string &name)
 
 Scene::~Scene()
 {
+    _magic = 0xDEADBEEF; // Mark as destroyed
     clear();
 }
 
@@ -50,17 +51,19 @@ Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
     return &it.first->second;
 }
 
-void Scene::destroyEntity(Entity entity)
+void Scene::destroyEntity(Entity *entity)
 {
     if (isValidEntity(entity))
     {
-        _registry.destroy(entity.getHandle());
+        _registry.destroy(entity->getHandle());
     }
 }
 
-bool Scene::isValidEntity(Entity entity) const
+bool Scene::isValidEntity(const Entity *entity) const
 {
-    return _registry.valid(entity.getHandle());
+    return entity &&
+           _entityMap.contains(entity->getHandle()) &&
+           _registry.valid(entity->getHandle());
 }
 
 Entity *Scene::getEntityByEnttID(entt::entity id)

@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Base.h"
+#include "Core/Log.h"
 
 #include <entt/entt.hpp>
 
@@ -78,17 +79,15 @@ struct Entity
     auto getComponents() { return _scene->_registry.get<Components...>(_entityHandle); }
 
     // Utility functions
-    [[nodiscard]] bool     isValid() const { return _scene && _scene->isValidEntity(*this); }
+    [[nodiscard]] bool     isValid() const { return this && this->operator bool(); }
     [[nodiscard]] uint32_t getId() const { return static_cast<uint32_t>(_entityHandle); }
     entt::entity           getHandle() const { return _entityHandle; }
     Scene                 *getScene() const { return _scene; }
 
     operator bool() const
     {
-        // Check _scene first to avoid accessing destroyed Scene
-        return _scene != nullptr && _entityHandle != entt::null && _scene->getRegistry().valid(_entityHandle);
+        return _entityHandle != entt::null && _scene->isValid() && _scene->isValidEntity(this);
     }
-    bool isValidEntity() const { return this->operator bool(); }
     operator entt::entity() const { return _entityHandle; }
     operator uint32_t() const { return static_cast<uint32_t>(_entityHandle); }
 
