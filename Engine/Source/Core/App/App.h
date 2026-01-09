@@ -245,6 +245,8 @@ struct App
     bool loadScene(const std::string &path);
     bool unloadScene();
 
+    glm::vec2 getLastMousePos() const { return _lastMousePos; }
+
   protected:
     // Protected for derived classes to override
     // virtual void onSceneInit(Scene *scene);

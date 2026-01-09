@@ -4,6 +4,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "ECS/Component/TransformComponent.h"
+#include "ECS/System/RayCastMousePickingSystem.h"
 #include "ImGuiHelper.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
@@ -122,16 +123,22 @@ void EditorLayer::onEvent(const Event &event)
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
     {
-        // auto& mouseEvent = static_cast<const MouseMoveEvent&>(event);
-        // float localX, localY;
-        // if (screenToViewport(mouseEvent._x, mouseEvent._y, localX, localY)) {
-        //     // Handle mouse hover for object picking, gizmo highlighting, etc.
-        // }
     } break;
 
     case EEvent::MouseButtonPressed:
+        break;
+    case EEvent::MouseButtonReleased:
     {
         // Handle viewport clicks (object selection, gizmo interaction)
+        auto &mouseEvent = static_cast<const MouseButtonPressedEvent &>(event);
+        // Only pick on left click and when gizmo is not being used
+        if (mouseEvent.GetMouseButton() == EMouse::Left && !isGizmoActive()) {
+            float localX{}, localY{};
+            auto  cursorPos = _app->getLastMousePos();
+            if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
+                pickEntity(localX, localY);
+            }
+        }
     } break;
 
     case EEvent::MouseScrolled:
@@ -141,20 +148,22 @@ void EditorLayer::onEvent(const Event &event)
 
     case EEvent::KeyPressed:
     {
-        // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
-        auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
-        switch (keyEvent._keyCode) {
-        case EKey::K_W:
-            _gizmoOperation = ImGuizmo::TRANSLATE;
-            break;
-        case EKey::K_E:
-            _gizmoOperation = ImGuizmo::ROTATE;
-            break;
-        case EKey::K_R:
-            _gizmoOperation = ImGuizmo::SCALE;
-            break;
-        default:
-            break;
+        if (ImGuizmo::IsUsingAny()) {
+            // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
+            auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
+            switch (keyEvent._keyCode) {
+            case EKey::K_W:
+                _gizmoOperation = ImGuizmo::TRANSLATE;
+                break;
+            case EKey::K_E:
+                _gizmoOperation = ImGuizmo::ROTATE;
+                break;
+            case EKey::K_R:
+                _gizmoOperation = ImGuizmo::SCALE;
+                break;
+            default:
+                break;
+            }
         }
     } break;
 
@@ -606,6 +615,41 @@ void EditorLayer::renderGizmo()
 
 
         YA_CORE_TRACE("Gizmo manipulated: pos({}, {}, {})", position.x, position.y, position.z);
+    }
+}
+
+void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
+{
+    YA_PROFILE_FUNCTION();
+    auto *app = App::get();
+    if (!app) {
+        return;
+    }
+
+    // Get active scene
+    auto *scene = app->getSceneManager()->getActiveScene();
+    if (!scene) {
+        return;
+    }
+
+    // Use RayCastMousePickingSystem to pick entity
+    // viewportLocalX/Y are in viewport space (0,0 = top-left of viewport)
+    Entity *pickedEntity = RayCastMousePickingSystem::pickEntity(
+        scene,
+        viewportLocalX,
+        viewportLocalY,
+        _viewportSize.x,
+        _viewportSize.y,
+        app->camera);
+
+    // Update selection
+    if (pickedEntity) {
+        _sceneHierarchyPanel.setSelection(pickedEntity);
+        YA_CORE_INFO("Picked entity: {}", pickedEntity->getName());
+    }
+    else {
+        _sceneHierarchyPanel.setSelection(nullptr);
+        YA_CORE_INFO("No entity picked");
     }
 }
 

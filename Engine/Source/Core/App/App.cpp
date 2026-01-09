@@ -564,6 +564,8 @@ int App::onEvent(const Event &event)
         UIManager::get()->onEvent(event, ctx);
     }
 
+    _editorLayer->onEvent(event);
+
     // if()
     return 0;
 }
@@ -710,9 +712,8 @@ void App::onUpdate(float dt)
     auto cam = _viewportRT->getCameraMut();
 
     // Only update camera controller when viewport is hovered/focused AND gizmo is not active
-    bool shouldUpdateCamera = (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) 
-                              && !_editorLayer->isGizmoActive();
-    
+    bool shouldUpdateCamera = (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) && !_editorLayer->isGizmoActive();
+
     if (shouldUpdateCamera) {
         cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
         if (cam && cam->isValid() && cam->hasComponent<CameraComponent>()) {

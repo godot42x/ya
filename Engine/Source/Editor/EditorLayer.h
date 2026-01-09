@@ -211,6 +211,7 @@ struct EditorLayer
     void cleanupImGuiTextures();
     void removeImGuiTexture(const ImGuiImageEntry *entry);
     void renderGizmo();
+    void pickEntity(float viewportX, float viewportY);
 
   public:
     // Public getters
