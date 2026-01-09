@@ -17,7 +17,7 @@
 namespace ya
 {
 Scene::Scene(const std::string &name)
-    : _name(name), _entityCounter(0)
+    : _name(name)
 {
 }
 
@@ -25,7 +25,6 @@ Scene::~Scene()
 {
     clear();
 }
-
 
 
 Entity *Scene::createEntity(const std::string &name)

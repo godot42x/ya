@@ -15,8 +15,9 @@ struct HelloMaterial : public ya::App
     // Application-specific resources
     std::shared_ptr<ya::Mesh> cubeMesh;
 
-    ya::Entity *_pointLightEntity = nullptr;
-    ya::Entity *_litTestEntity    = nullptr;
+    ya::Entity              *_pointLightEntity = nullptr;
+    ya::Entity              *_litTestEntity    = nullptr;
+    std::vector<std::string> _pongMaterialNames;
 
     // Editor layer
 
@@ -24,8 +25,9 @@ struct HelloMaterial : public ya::App
     {
         Super::onInit(ci);
 
+
         createCubeMesh();
-        loadTextures();
+        loadResources();
         FileSystem::get()->setGameRoot("Example/HelloMaterial");
     }
 
@@ -76,7 +78,7 @@ struct HelloMaterial : public ya::App
 
     // Application-specific methods implemented in HelloMaterial.cpp
     void createCubeMesh();
-    void loadTextures();
+    void loadResources();
     void createMaterials();
     void createEntities(ya::Scene *scene);
 
@@ -87,10 +89,7 @@ struct HelloMaterial : public ya::App
         Super::onRender(dt);
     }
 
-    void onRenderGUI(float dt) override
-    {
-        Super::onRenderGUI(dt);
-    }
+    void onRenderGUI(float dt) override;
 
     int onEvent(const ya::Event &event) override
     {

@@ -51,6 +51,13 @@ bool SceneManager::unloadScene()
     return true;
 }
 
+void SceneManager::setActiveScene(stdptr<Scene> scene)
+{
+    _currentScene.reset();
+    _currentScene = scene;
+    onSceneActivated.broadcast(scene.get());
+}
+
 void SceneManager::serializeToFile(const std::string &path, Scene *scene) const
 {
     if (!scene) {

@@ -49,6 +49,11 @@ add_requires("imgui docking", {
         debug = is_mode("debug"),
     }
 })
+add_requires("imguizmo-local", {
+    configs = {
+        docking = true,
+    }
+})
 add_requires("shaderc", {
     configs = {
         shared = false,
@@ -127,6 +132,7 @@ do
     add_packages("libsdl3_image")
     add_packages("glm", { public = true })
     add_packages("imgui", { public = true })
+    add_packages("imguizmo-local", { public = true })
     --add_packages("glad")
     add_packages("assimp")
 

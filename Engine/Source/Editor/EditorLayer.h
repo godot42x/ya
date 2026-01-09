@@ -5,6 +5,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
+#include <ImGuizmo.h>
 #include <memory>
 #include <unordered_map>
 
@@ -101,6 +102,10 @@ struct EditorLayer
     std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
 
     std::function<void()> _contentFunc;
+
+    // Gizmo state
+    ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
+    ImGuizmo::MODE      _gizmoMode = ImGuizmo::LOCAL;
 
     const ImGuiImageEntry *_playIcon       = nullptr;
     const ImGuiImageEntry *_pauseIcon      = nullptr;
@@ -205,12 +210,14 @@ struct EditorLayer
 
     void cleanupImGuiTextures();
     void removeImGuiTexture(const ImGuiImageEntry *entry);
+    void renderGizmo();
 
   public:
     // Public getters
     glm::vec2 getViewportSize() const { return _viewportSize; }
     bool      isViewportFocused() const { return bViewportFocused; }
     bool      isViewportHovered() const { return bViewportHovered; }
+    bool      isGizmoActive() const; // Check if ImGuizmo is being used or hovered
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 

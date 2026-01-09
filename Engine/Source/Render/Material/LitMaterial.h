@@ -9,15 +9,10 @@ struct LitMaterial : public Material
 {
     struct ParamUBO
     {
-        alignas(16) glm::vec3 objectColor = glm::vec3(1.0f);
-        // alignas(16) glm::vec3 ambient     = glm::vec3(0.1f);
+        alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
         alignas(4) float shininess     = 32.0f;
-        // alignas(16) glm::vec3 baseColor1 = glm::vec3(1.0f);
-        // alignas(4) float mixValue        = 0.5f;
-        // alignas(16) TextureParam textureParam0;
-        // alignas(16) TextureParam textureParam1;
     } uParams;
 
 
@@ -43,14 +38,6 @@ struct LitMaterial : public Material
     void               setResourceDirty(bool bInDirty = true) { bResourceDirty = bInDirty; }
     [[nodiscard]] bool isResourceDirty() const { return bResourceDirty; }
 
-
-    void setObjectColor(const glm::vec3 &color)
-    {
-        uParams.objectColor = color;
-        setParamDirty();
-    }
-
-
     // resource
     [[nodiscard]] TextureView *getTextureView(EResource type)
     {
@@ -66,6 +53,35 @@ struct LitMaterial : public Material
         _textureViews[type] = tv;
         setResourceDirty();
         return &_textureViews[type];
+    }
+
+    void setPhongParam(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess)
+    {
+        uParams.ambient   = ambient;
+        uParams.diffuse   = diffuse;
+        uParams.specular  = specular;
+        uParams.shininess = shininess;
+        setParamDirty();
+    }
+    void setDiffuseParam(const glm::vec3 &diffuse)
+    {
+        uParams.diffuse = diffuse;
+        setParamDirty();
+    }
+    [[deprecated("Not use")]]
+    void setObjectColor(const glm::vec3 &color)
+    {
+        setDiffuseParam(color);
+    }
+    void setSpecularParam(const glm::vec3 &specular)
+    {
+        uParams.specular = specular;
+        setParamDirty();
+    }
+    void setShininess(float shininess)
+    {
+        uParams.shininess = shininess;
+        setParamDirty();
     }
 };
 

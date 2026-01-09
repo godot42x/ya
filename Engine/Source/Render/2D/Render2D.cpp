@@ -53,8 +53,20 @@ void Render2D::destroy()
     delete quadData;
 }
 
-void Render2D::onUpdate()
+void Render2D::onUpdate(float dt)
 {
+    for (auto sys : Render2D::data._systems)
+    {
+        sys->onUpdate(dt);
+    }
+}
+
+void Render2D::onRender()
+{
+    for (auto sys : Render2D::data._systems)
+    {
+        sys->onRender();
+    }
 }
 
 void Render2D::onImGui()

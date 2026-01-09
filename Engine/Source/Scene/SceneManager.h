@@ -57,11 +57,7 @@ struct SceneManager
 
     bool unloadScene();
 
-    void setActiveScene(stdptr<Scene> scene)
-    {
-        _currentScene = scene;
-        onSceneActivated.broadcast(scene.get());
-    }
+    void                 setActiveScene(stdptr<Scene> scene);
     [[nodiscard]] Scene *getActiveScene() const { return _currentScene.get(); }
     [[nodiscard]] Scene *getEditorScene() const { return _editorScene.get(); }
     bool                 hasScene() const { return _currentScene != nullptr; }

@@ -5,6 +5,7 @@
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Material/LitMaterial.h"
 #include "Render/RenderDefines.h"
 
 
@@ -25,6 +26,8 @@ static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
 struct LitMaterialSystem : public IMaterialSystem
 {
+
+    using material_param_t = LitMaterial::ParamUBO;
 
     struct FrameUBO
     {
@@ -123,7 +126,11 @@ struct LitMaterialSystem : public IMaterialSystem
     void updateFrameDS(IRenderTarget *rt);
     void updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material);
+
+
     void recreateMaterialDescPool(uint32_t _materialCount);
 };
+
+
 
 } // namespace ya

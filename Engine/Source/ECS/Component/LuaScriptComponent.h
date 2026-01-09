@@ -98,6 +98,32 @@ struct LuaScriptComponent : public IComponent
         scripts.erase(std::remove_if(scripts.begin(), scripts.end(), [&](auto &s) { return s.scriptPath == path; }),
                       scripts.end());
     }
+
+    /**
+     * @brief Cleanup all Lua references safely
+     * Should be called before lua state is destroyed
+     */
+    void cleanup()
+    {
+        for (auto& script : scripts) {
+            script.properties.clear();
+            script.propertyOverrides.clear();
+            // Release sol references explicitly
+            script.self = sol::lua_nil;
+            script.onInit = sol::lua_nil;
+            script.onUpdate = sol::lua_nil;
+            script.onDestroy = sol::lua_nil;
+            script.onEnable = sol::lua_nil;
+            script.onDisable = sol::lua_nil;
+        }
+        scripts.clear();
+    }
+
+    ~LuaScriptComponent()
+    {
+        // Destructor - references should already be cleared by cleanup()
+        // If not, they may crash if lua state is already destroyed
+    }
 };
 
 

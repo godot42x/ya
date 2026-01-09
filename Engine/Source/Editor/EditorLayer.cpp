@@ -1,10 +1,13 @@
 #include "EditorLayer.h"
 #include "Core/App/App.h"
 #include "Core/AssetManager.h"
+#include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
+#include "ECS/Component/TransformComponent.h"
 #include "ImGuiHelper.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
+#include <ImGuizmo.h>
 #include <glm/gtc/type_ptr.hpp>
 
 
@@ -138,7 +141,21 @@ void EditorLayer::onEvent(const Event &event)
 
     case EEvent::KeyPressed:
     {
-        // Handle viewport shortcuts (W/A/S/D for camera, Delete for selection, etc.)
+        // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
+        auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
+        switch (keyEvent._keyCode) {
+        case EKey::K_W:
+            _gizmoOperation = ImGuizmo::TRANSLATE;
+            break;
+        case EKey::K_E:
+            _gizmoOperation = ImGuizmo::ROTATE;
+            break;
+        case EKey::K_R:
+            _gizmoOperation = ImGuizmo::SCALE;
+            break;
+        default:
+            break;
+        }
     } break;
 
     default:
@@ -415,6 +432,9 @@ void EditorLayer::viewportWindow()
                 if (_viewportImage && _viewportImage->isValid())
                 {
                     ImGui::Image(*_viewportImage, viewportPanelSize, ImVec2(0, 0), ImVec2(1, 1));
+
+                    // Render gizmo overlay
+                    renderGizmo();
                 }
             }
         }
@@ -426,7 +446,11 @@ void EditorLayer::viewportWindow()
 
     bViewportFocused = ImGui::IsWindowFocused();
     bViewportHovered = ImGui::IsWindowHovered();
-    ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered);
+
+    // Allow ImGuizmo to receive input even when viewport is focused
+    // Block events only when viewport is NOT focused/hovered AND ImGuizmo is not using/over
+    bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();
+    ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
 
     ImGui::PopStyleVar(2);
     ImGui::End();
@@ -488,6 +512,101 @@ void EditorLayer::removeImGuiTexture(const ImGuiImageEntry *entry)
 {
     ImGuiManager::removeTexture(entry->ds);
     _imguiTextureCache.erase(*entry);
+}
+
+bool EditorLayer::isGizmoActive() const
+{
+    return ImGuizmo::IsUsing() || ImGuizmo::IsOver();
+}
+
+void EditorLayer::renderGizmo()
+{
+    // Get selected entity from hierarchy panel
+    Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
+    if (!selectedEntity) {
+        return; // No entity selected
+    }
+
+    // Get transform component
+    auto *tc = selectedEntity->getComponent<TransformComponent>();
+    if (!tc) {
+        return; // No transform component
+    }
+
+    // Get camera view and projection matrices
+    auto *app = App::get();
+    if (!app) {
+        return;
+    }
+
+    glm::mat4 view = app->camera.getViewMatrix();
+    glm::mat4 proj = app->camera.getProjectionMatrix();
+
+    // Setup ImGuizmo context
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetDrawlist();
+
+    // Set gizmo rect to match viewport bounds
+    ImGuizmo::SetRect(
+        _viewportBounds[0].x,
+        _viewportBounds[0].y,
+        _viewportSize.x,
+        _viewportSize.y);
+
+    // a copy for manipulation
+    glm::mat4 transform = tc->getTransform();
+
+    // Snap settings (can be toggled with Ctrl key)
+    float snap[3] = {0.0f, 0.0f, 0.0f};     // No snap by default
+    bool  useSnap = ImGui::GetIO().KeyCtrl; // Hold Ctrl to enable snap
+
+    if (useSnap) {
+        // Snap values for different operations
+        switch (_gizmoOperation) {
+        case ImGuizmo::TRANSLATE:
+            snap[0] = snap[1] = snap[2] = 0.5f; // 0.5 unit snap for translation
+            break;
+        case ImGuizmo::ROTATE:
+            snap[0] = snap[1] = snap[2] = 15.0f; // 15 degree snap for rotation
+            break;
+        case ImGuizmo::SCALE:
+            snap[0] = snap[1] = snap[2] = 0.1f; // 0.1 snap for scale
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Manipulate transform with gizmo
+    if (ImGuizmo::Manipulate(
+            glm::value_ptr(view),
+            glm::value_ptr(proj),
+            _gizmoOperation,
+            _gizmoMode,
+            glm::value_ptr(transform),
+            nullptr,
+            useSnap ? snap : nullptr))
+    {
+        // Gizmo was used, decompose matrix back to position/rotation/scale
+        glm::vec3 position, rotation, scale;
+        ImGuizmo::DecomposeMatrixToComponents(
+            glm::value_ptr(transform),
+            glm::value_ptr(position),
+            glm::value_ptr(rotation),
+            glm::value_ptr(scale));
+
+        // Update transform component
+        tc->_position = position;
+        tc->_rotation = glm::radians(rotation); // ImGuizmo uses degrees
+        tc->_scale    = scale;
+        tc->bDirty    = true;
+        // tc->setPosition(position);
+        // tc->setRotation(glm::radians(rotation)); // ImGuizmo uses degrees
+        // tc->setScale(scale);
+
+
+        YA_CORE_TRACE("Gizmo manipulated: pos({}, {}, {})", position.x, position.y, position.z);
+    }
 }
 
 } // namespace ya

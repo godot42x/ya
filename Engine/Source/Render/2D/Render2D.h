@@ -14,6 +14,8 @@
 #include "Render/RenderDefines.h"
 #include "Render/TextureLibrary.h"
 
+#include "Core/System/System.h"
+
 
 #include "FontManager.h"
 
@@ -153,6 +155,8 @@ struct FQuadRender
 
 struct FRender2dData
 {
+    std::vector<stdptr<RenderSystem>> _systems;
+
     uint32_t        windowWidth  = 800;
     uint32_t        windowHeight = 600;
     ECullMode::T    cullMode     = ECullMode::Back;
@@ -171,6 +175,7 @@ struct Render2D
     static FQuadRender  *quadData;
     static FRender2dData data;
 
+
     Render2D()          = default;
     virtual ~Render2D() = default;
 
@@ -178,7 +183,8 @@ struct Render2D
     static void init(IRender *render, IRenderPass *renderpass);
     static void destroy();
 
-    static void onUpdate();
+    static void onUpdate(float dt);
+    static void onRender();
     static void begin(ICommandBuffer *cmdBuf)
     {
         data.curCmdBuf = cmdBuf;

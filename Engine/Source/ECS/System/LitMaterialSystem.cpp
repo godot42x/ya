@@ -117,7 +117,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Test/Lit.glsl",
+            .shaderName        = "Test/PhongLit.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -491,15 +491,15 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
     // if (tv0) {
     //     Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
     // }
-    // const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+    // const TextureView *tv1 = material->getTextureView(LitMaterial::BaseColor1);
     // if (tv1) {
     //     Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
     // }
 
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
-    paramUBO->writeData(&params, sizeof(LitMaterial::ParamUBO), 0);
+    paramUBO->writeData(&params, sizeof(material_param_t), 0);
 
-    DescriptorBufferInfo bufferInfo(paramUBO->getHandle(), 0, sizeof(ya::LitMaterial::ParamUBO));
+    DescriptorBufferInfo bufferInfo(paramUBO->getHandle(), 0, sizeof(material_param_t));
 
     render
         ->getDescriptorHelper()
@@ -613,7 +613,7 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
             ya::BufferCreateInfo{
                 .label         = "LitMaterial_Param_UBO",
                 .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(LitMaterial::ParamUBO),
+                .size          = sizeof(material_param_t),
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             });
         _materialParamsUBOs.push_back(buffer);

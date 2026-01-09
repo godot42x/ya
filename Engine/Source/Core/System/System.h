@@ -15,7 +15,7 @@ struct ISystem
     virtual ~ISystem() = default;
 };
 
-// life time: exe start to exe end 
+// life time: exe start to exe end
 struct EngineSystem : public ISystem
 {
     void onUpdate(float deltaTime) override;
@@ -27,6 +27,12 @@ struct GameInstanceSystem : public ISystem
     void onUpdate(float deltaTime) override = 0;
 };
 
+
+struct RenderSystem : public EngineSystem
+{
+    virtual void onUpdate(float deltaTime) override = 0;
+    virtual void onRender()                         = 0;
+};
 
 
 } // namespace ya

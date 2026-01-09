@@ -584,6 +584,11 @@ void ya::App::quit()
     _editorLayer->onDetach();
     delete _editorLayer;
 
+    // CRITICAL: Destroy SceneManager BEFORE LuaScriptingSystem
+    // LuaScriptComponent holds sol::object references to lua state
+    // If lua state is destroyed first, component destruction will crash
+    delete _sceneManager;
+
     delete _luaScriptingSystem;
 
     MaterialFactory::get()->destroy();
@@ -620,11 +625,6 @@ void ya::App::quit()
         _render->destroy();
         delete _render;
         _render = nullptr;
-    }
-
-    if (_sceneManager) {
-        delete _sceneManager;
-        _sceneManager = nullptr;
     }
 }
 
@@ -709,7 +709,11 @@ void App::onUpdate(float dt)
 
     auto cam = _viewportRT->getCameraMut();
 
-    if (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) {
+    // Only update camera controller when viewport is hovered/focused AND gizmo is not active
+    bool shouldUpdateCamera = (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) 
+                              && !_editorLayer->isGizmoActive();
+    
+    if (shouldUpdateCamera) {
         cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
         if (cam && cam->isValid() && cam->hasComponent<CameraComponent>()) {
             auto            cc  = cam->getComponent<CameraComponent>();

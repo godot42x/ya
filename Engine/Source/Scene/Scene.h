@@ -24,6 +24,7 @@ struct [[refl]] Scene
     Scene(const std::string &name = "Untitled Scene");
     ~Scene();
 
+
     // Delete copy constructor and assignment operator
     Scene(const Scene &)            = delete;
     Scene &operator=(const Scene &) = delete;

@@ -52,7 +52,7 @@ void SceneHierarchyPanel::sceneTree()
     {
         if (!ImGui::IsAnyItemHovered())
         {
-            _selection = Entity();
+            _selection = nullptr;
         }
     }
 
@@ -70,7 +70,7 @@ void SceneHierarchyPanel::detailsView()
 
     if (_selection)
     {
-        drawComponents(_selection);
+        drawComponents(*_selection);
     }
 
     ImGui::End();
@@ -84,7 +84,7 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
     }
 
     const char *name     = entity.getName().c_str();
-    bool        selected = (entity == _selection);
+    bool        selected = (&entity == _selection);
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
                                ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -97,7 +97,7 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
 
     if (ImGui::IsItemClicked())
     {
-        setSelection(entity);
+        setSelection(&entity);
     }
 
     if (opened)
@@ -169,7 +169,7 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
     ImGui::Separator();
 
     drawComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
-        bool bDirty = false;
+        bool bDirty = tc->bDirty; // Preserve existing dirty state
         bDirty |= ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
         bDirty |= ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 0.1f);
         bDirty |= ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f);
@@ -234,9 +234,9 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
 
                 auto litMat = mat->as<LitMaterial>();
                 bool bDirty = false;
-                bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
+                // bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
                 // bDirty |= ImGui::DragFloat3("Base Color", glm::value_ptr(litMat->uMaterial.baseColor), 0.1f);
-                // bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->uParams.ambient), 0.1f);
+                bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->uParams.ambient));
                 bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->uParams.diffuse));
                 bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->uParams.specular));
                 bDirty |= ImGui::DragFloat("Shininess", &litMat->uParams.shininess, 1.0f, 1.0f, 256.0f);
@@ -417,8 +417,8 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         SameLine();
     }
 
-    bool bModified = false;
-    std::any anyValue;  // 直接存储类型化的值
+    bool     bModified = false;
+    std::any anyValue; // 直接存储类型化的值
 
     if (prop.typeHint == "float")
     {
@@ -426,9 +426,9 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         if (DragFloat(prop.name.c_str(), &value, 0.1f, prop.min, prop.max))
         {
             scriptTable[prop.name] = value;
-            prop.value = sol::make_object(scriptTable.lua_state(), value);
-            anyValue = value;
-            bModified = true;
+            prop.value             = sol::make_object(scriptTable.lua_state(), value);
+            anyValue               = value;
+            bModified              = true;
         }
     }
     else if (prop.typeHint == "int")
@@ -437,9 +437,9 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         if (DragInt(prop.name.c_str(), &value, 1.0f, (int)prop.min, (int)prop.max))
         {
             scriptTable[prop.name] = value;
-            prop.value = sol::make_object(scriptTable.lua_state(), value);
-            anyValue = value;
-            bModified = true;
+            prop.value             = sol::make_object(scriptTable.lua_state(), value);
+            anyValue               = value;
+            bModified              = true;
         }
     }
     else if (prop.typeHint == "bool")
@@ -448,9 +448,9 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         if (Checkbox(prop.name.c_str(), &value))
         {
             scriptTable[prop.name] = value;
-            prop.value = sol::make_object(scriptTable.lua_state(), value);
-            anyValue = value;
-            bModified = true;
+            prop.value             = sol::make_object(scriptTable.lua_state(), value);
+            anyValue               = value;
+            bModified              = true;
         }
     }
     else if (prop.typeHint == "string")
@@ -461,11 +461,11 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         strncpy(buffer, value.c_str(), sizeof(buffer) - 1);
         if (InputText(prop.name.c_str(), buffer, sizeof(buffer)))
         {
-            std::string newValue = buffer;
+            std::string newValue   = buffer;
             scriptTable[prop.name] = newValue;
-            prop.value = sol::make_object(scriptTable.lua_state(), newValue);
-            anyValue = newValue;
-            bModified = true;
+            prop.value             = sol::make_object(scriptTable.lua_state(), newValue);
+            anyValue               = newValue;
+            bModified              = true;
         }
     }
     else if (prop.typeHint == "Vec3")
@@ -474,9 +474,9 @@ void SceneHierarchyPanel::renderScriptProperty(void *propPtr, void *scriptInstan
         if (DragFloat3(prop.name.c_str(), &value.x, 0.1f))
         {
             scriptTable[prop.name] = value;
-            prop.value = sol::make_object(scriptTable.lua_state(), value);
-            anyValue = value;
-            bModified = true;
+            prop.value             = sol::make_object(scriptTable.lua_state(), value);
+            anyValue               = value;
+            bModified              = true;
         }
     }
     else
@@ -605,7 +605,7 @@ void SceneHierarchyPanel::tryLoadScriptForEditor(void *scriptPtr)
     }
 }
 
-void SceneHierarchyPanel::setSelection(Entity newSelection)
+void SceneHierarchyPanel::setSelection(Entity *newSelection)
 {
     if (_selection != newSelection)
     {

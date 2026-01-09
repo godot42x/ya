@@ -1,16 +1,19 @@
 #include "HelloMaterial.h"
 #include "Core/AssetManager.h"
 
+#include "Core/UI/UITextBlock.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "ECS/Component/WidgetComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/LitMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 
+#include "Core/UI/UIManager.h"
 
 #include "Math/Geometry.h"
 
@@ -23,6 +26,7 @@
 
 #include "Scene/SceneManager.h"
 
+#include "Core/System/FileSystem.h"
 
 
 void HelloMaterial::createCubeMesh()
@@ -33,8 +37,10 @@ void HelloMaterial::createCubeMesh()
     cubeMesh = makeShared<ya::Mesh>(vertices, indices, "cube");
 }
 
-void HelloMaterial::loadTextures()
+void HelloMaterial::loadResources()
 {
+
+    ya::FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 18);
     auto tex = ya::AssetManager::get()->loadTexture("light", "Engine/Content/TestTextures/icons8-light-64.png");
 }
 
@@ -109,11 +115,28 @@ void HelloMaterial::createMaterials()
     unlitMaterial3->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
 
 
-    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
-    litMaterial1->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
-    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
-    litMaterial2->setObjectColor(glm::vec3(1.0, 1.0, 1.0));
+    _pongMaterialNames.clear();
+    std::string jsonContent;
+    if (FileSystem::get()->readFileToString("Example/HelloMaterial/Content/PhongSamples.json", jsonContent)) {
+        nlohmann::json j = nlohmann::json::parse(jsonContent);
+        for (auto it : j["materials"]) {
+            auto name = it["name"].get<std::string>();
+            _pongMaterialNames.push_back(name);
+            auto *mat       = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>(name);
+            auto  ambient   = it["ambient"].get<std::vector<float>>();
+            auto  diff      = it["diffuse"].get<std::vector<float>>();
+            auto  specular  = it["specular"].get<std::vector<float>>();
+            auto  shininess = it["shininess"].get<float>();
+            mat->setPhongParam(
+                glm::vec3(ambient[0], ambient[1], ambient[2]),
+                glm::vec3(diff[0], diff[1], diff[2]),
+                glm::vec3(specular[0], specular[1], specular[2]),
+                shininess);
+        }
+    }
 
+    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
+    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
 
     auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
     pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
@@ -250,7 +273,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                                                         "Engine/Content/Misc/Monkey.obj");
         for (const auto &mesh : model->getMeshes()) {
             auto litMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
-            lmc->addMesh(mesh.get(), litMat);  // mesh is now stdptr<Mesh>, not MeshData
+            lmc->addMesh(mesh.get(), litMat); // mesh is now stdptr<Mesh>, not MeshData
         }
     }
 
@@ -272,10 +295,40 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto lsc = pointLt->addComponent<ya::LuaScriptComponent>();
         lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
     }
+
+
+    // create
+    glm::vec3 startPos(-10.0f, -10.0f, -10.0f);
+    float     xDir    = 1.0f;
+    float     zDir    = 1.0f;
+    float     spacing = 3.0f;
+    for (size_t i = 0; i < _pongMaterialNames.size(); ++i) {
+        auto *entity = scene->createEntity(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
+        auto  tc     = entity->addComponent<ya::TransformComponent>();
+        float x      = startPos.x + (i % 5) * spacing;
+        float z      = startPos.z + (i / 5) * spacing;
+        tc->setPosition(glm::vec3(x, 0.0f, z));
+
+        auto lmc = entity->addComponent<ya::LitMaterialComponent>();
+        auto mat = ya::MaterialFactory::get()->getMaterialByName(_pongMaterialNames[i])->as<ya::LitMaterial>();
+        lmc->addMesh(cubeMesh.get(), mat);
+
+        // TODO: implement the 3D UI system to show material name
+        // auto wc          = entity->addComponent<ya::WidgetComponent>();
+        // auto textBlock   = ya::UIFactory::create<ya::UITextBlock>();
+        // textBlock->_font = ya::FontManager::get()->getFont("JetBrainsMono-Medium", 18).get();
+        // textBlock->setText(_pongMaterialNames[i]);
+        // wc->widget = textBlock;
+    }
 }
 void HelloMaterial::onUpdate(float dt)
 {
     Super::onUpdate(dt);
 
     // Lua 脚本已经处理旋转，不需要手动更新
+}
+
+void HelloMaterial::onRenderGUI(float dt)
+{
+    Super::onRenderGUI(dt);
 }

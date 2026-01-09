@@ -50,3 +50,22 @@ YA_REFLECT_FIELD(y, )
 YA_REFLECT_FIELD(z, )
 YA_REFLECT_FIELD(w, )
 YA_REFLECT_EXTERNAL_END()
+
+
+#include "nlohmann/json.hpp"
+
+
+namespace glm
+{
+
+inline void to_json(nlohmann::json &j, const glm::vec2 &vec)
+{
+    j = nlohmann::json{{"x", vec.x}, {"y", vec.y}};
+}
+inline void from_json(const nlohmann::json &j, glm::vec2 &vec)
+{
+    j.at("x").get_to(vec.x);
+    j.at("y").get_to(vec.y);
+}
+
+} // namespace glm

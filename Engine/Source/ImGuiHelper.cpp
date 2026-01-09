@@ -173,6 +173,7 @@ void ImGuiManager::beginFrame()
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
+    ImGuizmo::BeginFrame();
     // ImGui::UpdatePlatformWindows();
 }
 
@@ -295,6 +296,21 @@ void ImGuiManager::removeTexture(void *textureID)
 
     // Platform-specific implementation (Vulkan for now)
     ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(textureID));
+}
+
+bool ImGuiManager::manipulate(
+    const float        *view,
+    const float        *projection,
+    ImGuizmo::OPERATION operation,
+    ImGuizmo::MODE      mode,
+    float              *matrix)
+{
+    return ImGuizmo::Manipulate(view, projection, operation, mode, matrix);
+}
+
+void ImGuiManager::setGizmoRect(float x, float y, float width, float height)
+{
+    ImGuizmo::SetRect(x, y, width, height);
 }
 
 } // namespace ya
