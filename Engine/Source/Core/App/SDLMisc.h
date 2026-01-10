@@ -11,9 +11,9 @@ namespace ya
 // Forward declaration
 class EditorLayer;
 
-inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent, auto && imguiProcessor)
+inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
 {
-    imguiProcessor(event);
+    ImGuiManager::get().processEvents(event);
 
     switch (SDL_EventType(event.type))
     {

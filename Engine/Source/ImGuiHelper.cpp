@@ -216,11 +216,9 @@ EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
     // Check mouse events
     if (io->WantCaptureMouse) {
 
-        bool isMouseEvent = (event.type == SDL_EVENT_MOUSE_MOTION ||
-                             event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                             event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
-                             event.type == SDL_EVENT_MOUSE_WHEEL);
-        if (isMouseEvent) {
+        if (ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny()) {
+        }
+        else {
             return EventProcessState::Handled;
         }
     }

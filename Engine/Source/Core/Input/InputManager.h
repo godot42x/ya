@@ -54,6 +54,7 @@ struct InputManager
     bool wasKeyReleased(EKey::T keycode) const;
 
 
+    bool isMouseButtonDown(EMouse::T button) const { return isMouseButtonPressed(button); }
     bool isMouseButtonPressed(EMouse::T button) const;
     bool wasMouseButtonPressed(EMouse::T button) const;
     bool wasMouseButtonReleased(EMouse::T button) const;

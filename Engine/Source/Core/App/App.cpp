@@ -659,8 +659,7 @@ int ya::App::processEvent(SDL_Event &event)
 {
     processSDLEvent(
         event,
-        [this](const auto &e) { this->dispatchEvent(e); },
-        [](const auto &e) { ImGuiManager::get().processEvents(e); });
+        [this](const auto &e) { this->dispatchEvent(e); });
     return 0;
 };
 
@@ -710,10 +709,10 @@ void App::onUpdate(float dt)
 
     auto cam = _viewportRT->getCameraMut();
 
-    // Only update camera controller when viewport is hovered/focused AND gizmo is not active
-    bool shouldUpdateCamera = (_editorLayer->isViewportHovered() || _editorLayer->isViewportFocused()) && !_editorLayer->isGizmoActive();
+    bool bShouldUpdateEntityCamera = _editorLayer->isViewportHovered() ||
+                                     _editorLayer->isViewportFocused();
 
-    if (shouldUpdateCamera) {
+    if (bShouldUpdateEntityCamera) {
         cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
         if (cam && cam->isValid() && cam->hasComponent<CameraComponent>()) {
             auto            cc  = cam->getComponent<CameraComponent>();
