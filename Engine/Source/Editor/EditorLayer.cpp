@@ -15,6 +15,7 @@
 
 #include "Render/TextureLibrary.h"
 
+#include "Core/Math/Math.h"
 
 namespace ya
 {
@@ -148,9 +149,9 @@ void EditorLayer::onEvent(const Event &event)
 
     case EEvent::KeyPressed:
     {
+        auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
         if (ImGuizmo::IsUsingAny()) {
             // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
-            auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
             switch (keyEvent._keyCode) {
             case EKey::K_W:
                 _gizmoOperation = ImGuizmo::TRANSLATE;
@@ -165,6 +166,15 @@ void EditorLayer::onEvent(const Event &event)
                 break;
             }
         }
+
+        if (keyEvent.getKeyCode() == EKey::K_F) {
+            // Focus camera on selected entity
+            if (_sceneHierarchyPanel.getSelectedEntity()->isValid()) {
+                focusCameraOnEntity(_sceneHierarchyPanel.getSelectedEntity());
+            }
+        }
+
+
     } break;
 
     default:
@@ -305,6 +315,7 @@ void EditorLayer::toolbar()
 
     if (ImGui::ImageButton("Play", *_playIcon, ImVec2(size, size)))
     {
+        _sceneHierarchyPanel.setSelection(nullptr);
         _app->startRuntime();
         // TODO: Play scene
     }
@@ -453,6 +464,11 @@ void EditorLayer::viewportWindow()
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "Viewport: %.0f x %.0f", _viewportSize.x, _viewportSize.y);
     }
 
+    if (ImGui::IsMouseClicked(1)) {
+        ImGui::SetWindowFocus();
+    }
+
+
     bViewportFocused = ImGui::IsWindowFocused();
     bViewportHovered = ImGui::IsWindowHovered();
 
@@ -532,8 +548,8 @@ void EditorLayer::renderGizmo()
 {
     // Get selected entity from hierarchy panel
     Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
-    if (!selectedEntity) {
-        return; // No entity selected
+    if (!selectedEntity || !selectedEntity->isValid()) {
+        return; // No entity selected or invalid
     }
 
     // Get transform component
@@ -651,6 +667,79 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         _sceneHierarchyPanel.setSelection(nullptr);
         YA_CORE_INFO("No entity picked");
     }
+}
+
+glm::vec3 extractEulerAnglesFromViewMatrix(const glm::mat4 &viewMatrix)
+{
+    glm::mat3 rotMat  = glm::mat3(viewMatrix);
+    glm::vec3 forward = -rotMat[2];
+    glm::vec3 right   = rotMat[0];
+    glm::vec3 up      = rotMat[1];
+
+    // 计算 yaw（偏航，绕y轴）
+    float yaw = atan2(forward.x, forward.z);
+    // 计算 pitch（俯仰，绕x轴）
+    float pitch = asin(forward.y);
+    // 计算 roll（翻滚，绕z轴），此处因锁定worldUp，roll应为0
+    float roll = atan2(-right.y, up.y);
+
+    // 转换为角度制（若你的 Camera::setRotation 期望角度而非弧度，根据需求调整）
+    return glm::vec3(glm::degrees(pitch), glm::degrees(yaw), glm::degrees(roll));
+}
+
+void EditorLayer::focusCameraOnEntity(Entity *entity)
+{
+    if (!entity || !entity->isValid()) {
+        return;
+    }
+    auto *tc = entity->getComponent<TransformComponent>();
+    if (!tc) {
+        return;
+    }
+    auto *app = App::get();
+    if (!app) {
+        return;
+    }
+    float distance = 10.0f; // Fixed distance from entity, can be adjusted
+
+    glm::vec3 entityPos = tc->getPosition();
+    glm::vec3 camPos    = app->camera.getPosition();
+
+    glm::vec3 camToEntity = glm::normalize(entityPos - camPos);
+
+    // Position camera behind entity at fixed distance
+    glm::vec3 newCamPos = entityPos - camToEntity * distance;
+
+    glm::vec3 newCamRotation{};
+    {
+        glm::vec3 newCamToEntity = glm::normalize(entityPos - newCamPos);
+        // y 为 dir 与 xoz 平面的夹角的正弦值 sin(theta), arcsin(sin(theta)) 得到角度值 theta, 即 pitch
+        float pitch = glm::degrees(std::asin(newCamToEntity.y));
+
+
+        glm::vec2 xozPlane = glm::vec2{FMath::Vector::WorldRight.x, FMath::Vector::WorldForward.z};
+        (void)xozPlane;
+        //  现在我们在 xoz 平面上, 想象一个平面坐标系, dir.x 向右， dir.z 向上(1),  yaw 即为角度值
+        // tan(theta) = y/x, 即通过角度求斜率, atan(y/x) 会丢失象限信息(如45度与135度), 即单独的 dir.x 和 dir.z 无法确定正确的角度
+        // 使用 atan2(y,x) 可以保留象限信息, 通过 dir.x 和 dir.z 的正负号确定正确的角度
+        // atan2(1,1) = 45度, atan2(1,-1)=135度, atan2(-1,-1)=-135度, atan2(-1,1)=-45度
+
+        // 注意这里 direction.z 应该取反，因为在右手坐标系中，Z 轴正方向是向屏幕外侧的，
+        // 这样 xoz 就与 屏幕坐标系的 y 向上相反，所以整个方向旋转 180 度(单独z相反会导致左右相反)
+        if constexpr (FMath::Vector::IsRightHanded) {
+            newCamToEntity.z = -newCamToEntity.z;
+            newCamToEntity.x = -newCamToEntity.x; // 否则会左右相反
+        }
+        float yaw = glm::degrees(std::atan2(newCamToEntity.x, newCamToEntity.z));
+
+
+        // float pitch    = glm::degrees(std::atan2(newCamToEntity.y, newCamToEntity.z));
+        newCamRotation = glm::vec3(pitch, yaw, 0.0f);
+    }
+
+
+    app->camera.setPosition(newCamPos);
+    app->camera.setRotation(newCamRotation);
 }
 
 } // namespace ya

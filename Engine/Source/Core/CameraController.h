@@ -20,8 +20,8 @@ struct CameraController
 
 struct FreeCameraController : public CameraController
 {
-    float _moveSpeed     = 5.0f; // Units per second
-    float _rotationSpeed = 0.5f; // Degrees per mouse unit
+    float _moveSpeed     = 5.0f;  // Units per second
+    float _rotationSpeed = 45.0f; // Degrees per mouse unit
 
     // Movement keys (configurable)
     EKey::T _forwardKey = EKey::K_W;
@@ -39,19 +39,19 @@ struct FreeCameraController : public CameraController
 
   private:
     bool handleKeyboardInput(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
-    bool handleMouseRotation(FreeCamera &camera, const InputManager &inputManager);
+    bool handleMouseRotation(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
 };
 
 
 // Controller for the ECS camera entity (TransformComponent + CameraComponent)
 struct OrbitCameraController : public CameraController
 {
-    float     _mouseSensitivity = 0.1f;
-    float     _zoomSensitivity  = 0.1f;
+    float     _mouseSensitivity = 15.0f;
+    float     _zoomSensitivity  = 1000.f;
     EMouse::T _rotateButton     = EMouse::Right;
 
   public:
-    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent);
+    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt);
 };
 
 } // namespace ya

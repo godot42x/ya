@@ -693,7 +693,7 @@ int ya::App::iterate(float dt)
 
 void App::onUpdate(float dt)
 {
-    inputManager.update();
+    inputManager.preUpdate();
     Facade.timerManager.onUpdate(dt);
 
     // 文件监视器轮询（检测文件变化）
@@ -721,7 +721,7 @@ void App::onUpdate(float dt)
             const Extent2D &ext = _viewportRT->getExtent();
             if (cam->hasComponent<TransformComponent>()) {
                 auto tc = cam->getComponent<TransformComponent>();
-                orbitCameraController.update(*tc, *cc, inputManager, ext);
+                orbitCameraController.update(*tc, *cc, inputManager, ext, dt);
             }
         }
     }
@@ -739,6 +739,7 @@ void App::onUpdate(float dt)
 
 
     _editorLayer->onUpdate(dt);
+    inputManager.postUpdate();
 }
 
 // MARK: Render
@@ -1087,11 +1088,6 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
 
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
 {
-    float sensitivity = 0.5f;
-    auto  cam         = _viewportRT->getCameraMut();
-    auto  cc          = cam->getComponent<CameraComponent>();
-    // up is +, and down is -, up is close so -=
-    cc->_distance = cc->_distance -= event._offsetY * sensitivity;
     return false;
 }
 

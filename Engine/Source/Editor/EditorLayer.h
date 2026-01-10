@@ -212,6 +212,7 @@ struct EditorLayer
     void removeImGuiTexture(const ImGuiImageEntry *entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
+    void focusCameraOnEntity(Entity* entity);
 
   public:
     // Public getters

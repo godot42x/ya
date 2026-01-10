@@ -46,7 +46,8 @@ struct InputManager
     InputManager &operator=(InputManager &&)      = default;
 
     void init();
-    void update();
+    void preUpdate();
+    void postUpdate();
 
     bool isKeyPressed(EKey::T keycode) const;
     bool wasKeyPressed(EKey::T keycode) const;

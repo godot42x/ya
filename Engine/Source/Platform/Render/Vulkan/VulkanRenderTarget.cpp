@@ -298,7 +298,7 @@ const glm::mat4 VulkanRenderTarget::getViewMatrix() const
     if (isUseEntityCamera()) {
         if (auto *cam = getCamera()) {
             if (cam->hasComponent<CameraComponent>()) {
-                ret = cam->getComponent<CameraComponent>()->getView();
+                ret = cam->getComponent<CameraComponent>()->getOrbitView();
             }
         }
     }
@@ -317,7 +317,7 @@ void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) 
                 auto cc = cam->getComponent<CameraComponent>();
                 proj    = cc->getProjection();
                 // proj[1][1] *= -1; // Vulkan Y-flip (viewport inverted)
-                view = cc->getView();
+                view = cc->getOrbitView();
                 return;
             }
         }

@@ -28,15 +28,9 @@ InputManager::~InputManager()
 
 void InputManager::init()
 {
-    ya::MessageBus::get()->subscribe<ya::MouseScrolledEvent>(
-        this,
-        [this](const ya::MouseScrolledEvent &event) {
-            _mouseScrollDelta = {event._offsetX, event._offsetY};
-            return false;
-        });
 }
 
-void InputManager::update()
+void InputManager::preUpdate()
 {
     // Store previous states
     previousKeyStates   = currentKeyStates;
@@ -46,8 +40,13 @@ void InputManager::update()
     previousMousePosition = mousePosition;
     float x = 0, y = 0;
     SDL_GetMouseState(&x, &y);
-    mousePosition     = {static_cast<float>(x), static_cast<float>(y)};
-    mouseDelta        = mousePosition - previousMousePosition;
+    mousePosition = {static_cast<float>(x), static_cast<float>(y)};
+    mouseDelta    = mousePosition - previousMousePosition;
+}
+
+void InputManager::postUpdate()
+{
+    // Reset scroll delta after events
     _mouseScrollDelta = glm::vec2(0.f);
 }
 
@@ -81,7 +80,7 @@ EventProcessState InputManager::processEvent(const Event &event)
         setKeyState(static_cast<const KeyPressedEvent &>(event).getKeyCode(), KeyState::Pressed);
         break;
     case EEvent::KeyReleased:
-       setKeyState(static_cast<const KeyReleasedEvent &>(event).getKeyCode(), KeyState::Released);
+        setKeyState(static_cast<const KeyReleasedEvent &>(event).getKeyCode(), KeyState::Released);
         break;
     case EEvent::MouseButtonPressed:
         setMouseState(static_cast<const MouseButtonPressedEvent &>(event).GetMouseButton(), KeyState::Pressed);
@@ -89,6 +88,11 @@ EventProcessState InputManager::processEvent(const Event &event)
     case EEvent::MouseButtonReleased:
         setMouseState(static_cast<const MouseButtonReleasedEvent &>(event).GetMouseButton(), KeyState::Released);
         break;
+    case EEvent::MouseScrolled:
+    {
+        const auto &e     = static_cast<const MouseScrolledEvent &>(event);
+        _mouseScrollDelta = {e._offsetX, e._offsetY};
+    } break;
     default:
         break;
     }
