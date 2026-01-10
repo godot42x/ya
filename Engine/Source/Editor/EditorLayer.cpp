@@ -134,11 +134,13 @@ void EditorLayer::onEvent(const Event &event)
         // Handle viewport clicks (object selection, gizmo interaction)
         auto &mouseEvent = static_cast<const MouseButtonPressedEvent &>(event);
         // Only pick on left click and when gizmo is not being used
-        if (mouseEvent.GetMouseButton() == EMouse::Left && !isGizmoActive()) {
-            float localX{}, localY{};
-            auto  cursorPos = _app->getLastMousePos();
-            if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
-                pickEntity(localX, localY);
+        if (mouseEvent.GetMouseButton() == EMouse::Left) {
+            if (!isGizmoActive()) {
+                float localX{}, localY{};
+                auto  cursorPos = _app->getLastMousePos();
+                if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
+                    pickEntity(localX, localY);
+                }
             }
         }
     } break;
@@ -542,7 +544,9 @@ void EditorLayer::removeImGuiTexture(const ImGuiImageEntry *entry)
 
 bool EditorLayer::isGizmoActive() const
 {
-    return ImGuizmo::IsUsing() || ImGuizmo::IsOver();
+    bool bUsing = ImGuizmo::IsUsing();
+    bool bOver  = ImGuizmo::IsOver();
+    return bUsing || bOver;
 }
 
 void EditorLayer::renderGizmo()
@@ -550,8 +554,10 @@ void EditorLayer::renderGizmo()
     // Get selected entity from hierarchy panel
     Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
     if (!selectedEntity || !selectedEntity->isValid()) {
+        ImGuizmo::Enable(false);
         return; // No entity selected or invalid
     }
+    ImGuizmo::Enable(true);
 
     // Get transform component
     auto *tc = selectedEntity->getComponent<TransformComponent>();

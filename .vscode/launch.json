@@ -20,8 +20,6 @@
                 "key": "target"
             }
         },
-        
-
     ],
     "configurations": [
         {
@@ -67,6 +65,7 @@
             "visualizerFile": "${workspaceFolder}/all.natvis",
             // "justMyCode": true,
             "preLaunchTask": "xmake build",
+            "requireExactSource": false,
         },
     ]
 }

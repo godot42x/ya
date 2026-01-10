@@ -55,7 +55,8 @@ add_requires(imgui_version_str, {
 add_requires("imguizmo-local", {
     configs = {
         ["imgui_version_str"] = imgui_version_str,
-        ["imgui_configs"] = imgui_configs
+        ["imgui_configs"] = imgui_configs,
+        docking = true,
     }
 })
 add_requires("shaderc", {

@@ -22,6 +22,12 @@ void SceneHierarchyPanel::onImGuiRender()
     sceneTree();
 }
 
+void SceneHierarchyPanel::setSelection(Entity *entity)
+{
+    _selection = entity;
+    _owner->setSelectedEntity(entity);
+}
+
 void SceneHierarchyPanel::sceneTree()
 {
     ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);

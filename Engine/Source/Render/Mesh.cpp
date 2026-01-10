@@ -14,6 +14,10 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices,
     _name       = name;
     auto render = App::get()->getRender<VulkanRender>();
 
+    std::ranges::for_each(vertices, [&](const ya::Vertex &v) {
+        boundingBox.expand(v.position);
+    });
+
     _vertexCount = static_cast<uint32_t>(vertices.size());
     _indexCount  = static_cast<uint32_t>(indices.size());
 

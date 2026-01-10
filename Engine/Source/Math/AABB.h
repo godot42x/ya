@@ -36,6 +36,28 @@ struct AABB
         max = glm::max(max, other.max);
     }
 
+    AABB transformed(const glm::mat4 &transform) const
+    {
+        AABB      result;
+        glm::vec3 corners[8] = {
+            glm::vec3(min.x, min.y, min.z),
+            glm::vec3(max.x, min.y, min.z),
+            glm::vec3(min.x, max.y, min.z),
+            glm::vec3(max.x, max.y, min.z),
+            glm::vec3(min.x, min.y, max.z),
+            glm::vec3(max.x, min.y, max.z),
+            glm::vec3(min.x, max.y, max.z),
+            glm::vec3(max.x, max.y, max.z),
+        };
+
+        for (const auto &corner : corners)
+        {
+            glm::vec4 transformedCorner = transform * glm::vec4(corner, 1.0f);
+            result.expand(glm::vec3(transformedCorner));
+        }
+        return result;
+    }
+
     glm::vec3 getCenter() const { return (min + max) * 0.5f; }
     glm::vec3 getExtent() const { return max - min; }
     float     getRadius() const { return glm::length(getExtent()) * 0.5f; }
