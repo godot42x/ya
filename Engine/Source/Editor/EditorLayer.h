@@ -2,12 +2,15 @@
 
 #include "ContentBrowserPanel.h"
 #include "Core/Event.h"
+#include "DetailsView.h"
 #include "Render/Core/DescriptorSet.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
+
 #include <ImGuizmo.h>
 #include <memory>
 #include <unordered_map>
+
 
 
 
@@ -70,10 +73,12 @@ struct App;
 struct EditorLayer
 {
   private:
-    App *_app = nullptr;
+    App                  *_app = nullptr;
+    std::vector<Entity *> _selections;
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
+    DetailsView         _detailsView;
     ContentBrowserPanel _contentBrowserPanel;
 
     // ImGui Docking state
@@ -105,7 +110,7 @@ struct EditorLayer
 
     // Gizmo state
     ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
-    ImGuizmo::MODE      _gizmoMode = ImGuizmo::LOCAL;
+    ImGuizmo::MODE      _gizmoMode      = ImGuizmo::LOCAL;
 
     const ImGuiImageEntry *_playIcon       = nullptr;
     const ImGuiImageEntry *_pauseIcon      = nullptr;
@@ -131,6 +136,12 @@ struct EditorLayer
     void setSceneContext(Scene *scene)
     {
         _sceneHierarchyPanel.setContext(scene);
+    }
+
+    // Entity selection bus - notifies DetailsView of selection changes
+    void setSelectedEntity(Entity *entity)
+    {
+        _selections = {entity};
     }
 
     /**
@@ -162,6 +173,7 @@ struct EditorLayer
         viewportWindow();
 
         _sceneHierarchyPanel.onImGuiRender();
+        _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
 
         // Render windows
@@ -212,14 +224,15 @@ struct EditorLayer
     void removeImGuiTexture(const ImGuiImageEntry *entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
-    void focusCameraOnEntity(Entity* entity);
+    void focusCameraOnEntity(Entity *entity);
 
   public:
     // Public getters
-    glm::vec2 getViewportSize() const { return _viewportSize; }
-    bool      isViewportFocused() const { return bViewportFocused; }
-    bool      isViewportHovered() const { return bViewportHovered; }
-    bool      isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    glm::vec2                    getViewportSize() const { return _viewportSize; }
+    bool                         isViewportFocused() const { return bViewportFocused; }
+    bool                         isViewportHovered() const { return bViewportHovered; }
+    bool                         isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    const std::vector<Entity *> &getSelections() const { return _selections; }
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 

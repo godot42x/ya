@@ -38,20 +38,24 @@ add_requires("assimp", {
     }
 })
 
--- just for temp debug in runtime
-add_requires("imgui docking", {
+
+local imgui_version_str = "imgui docking"
+local imgui_configs = {
+    sdl3 = true,
+    sdl3_gpu = true,
+    vulkan = true,
+    debug = is_mode("debug"),
+    docking = true,
+}
+add_requires(imgui_version_str, {
     debug = true,
     system = false,
-    configs = {
-        sdl3 = true,
-        sdl3_gpu = true,
-        vulkan = true,
-        debug = is_mode("debug"),
-    }
+    configs = imgui_configs
 })
 add_requires("imguizmo-local", {
     configs = {
-        docking = true,
+        ["imgui_version_str"] = imgui_version_str,
+        ["imgui_configs"] = imgui_configs
     }
 })
 add_requires("shaderc", {

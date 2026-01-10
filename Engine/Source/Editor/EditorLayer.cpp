@@ -23,6 +23,7 @@ namespace ya
 EditorLayer::EditorLayer(App *app)
     : _app(app),
       _sceneHierarchyPanel(this),
+      _detailsView(this),
       _contentBrowserPanel(this)
 {
 }

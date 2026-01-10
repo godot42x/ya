@@ -34,21 +34,8 @@ struct SceneHierarchyPanel
 
 
     void sceneTree();
-    void detailsView();
 
     void drawEntityNode(Entity &entity);
-    void drawComponents(Entity &entity);
-
-  private:
-    void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
-    void tryLoadScriptForEditor(void *scriptPtr);
-
-    // 编辑器专用 Lua 状态（用于预览属性）
-    sol::state _editorLua;
-    bool       _editorLuaInitialized = false;
-
-    // 文件选择器
-    FilePicker _filePicker;
 };
 
 } // namespace ya
