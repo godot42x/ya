@@ -166,7 +166,7 @@ void main ()
         // 高光/specular
         // vec3 halfwayDir = normalize(lightDir + viewDir);
         // float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
-        vec3 reflectDir = reflect(-lightDir, norm);
+        vec3 reflectDir = reflect(lightDir, norm);
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
         vec3 specular = (spec * uParams.specular) * rawLightColor;
         

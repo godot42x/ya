@@ -196,7 +196,7 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
 
     drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent *umc) {
         for (auto [mat, meshIndex] : umc->getMaterial2MeshIDs()) {
-            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), 0)) {
+            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
 
                 auto unlitMat = mat->as<UnlitMaterial>();
@@ -228,7 +228,7 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
 
     drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
         for (auto [mat, meshIndex] : lmc->getMaterial2MeshIDs()) {
-            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), 0)) {
+            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::Indent();
                 ImGui::PushID(mat->getLabel().c_str());
 

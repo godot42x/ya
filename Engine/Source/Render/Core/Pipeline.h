@@ -97,6 +97,7 @@ struct IGraphicsPipeline
      * @brief Get the pipeline name
      */
     virtual const std::string &getName() const = 0;
+    virtual void               reloadShaders() = 0;
 
     /**
      * @brief Factory method to create graphics pipeline

@@ -132,6 +132,7 @@ void HelloMaterial::createMaterials()
                 glm::vec3(diff[0], diff[1], diff[2]),
                 glm::vec3(specular[0], specular[1], specular[2]),
                 shininess);
+            YA_CORE_INFO("Created Phong material: {}", name);
         }
     }
 

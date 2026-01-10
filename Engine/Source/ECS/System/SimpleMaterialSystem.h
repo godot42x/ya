@@ -27,7 +27,7 @@ struct SimpleMaterialSystem : public IMaterialSystem
     // int   totalCount      = 0;
 
     std::shared_ptr<IPipelineLayout> _pipelineLayoutOwner;
-    stdptr<IGraphicsPipeline>        _pipeline       = nullptr;
+    // stdptr<IGraphicsPipeline>        _pipeline       = nullptr; // temp move to IMaterialSystem
     stdptr<IPipelineLayout>          _pipelineLayout = nullptr;
 
     void onInit(IRenderPass *renderPass) override;

@@ -90,7 +90,7 @@ struct LitMaterialSystem : public IMaterialSystem
     std::shared_ptr<IDescriptorSetLayout> _materialParamDSL;    // set 2: per material param
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout;
-    std::shared_ptr<IGraphicsPipeline> _pipeline;
+    // std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
 
     // set 0, contains the frame UBO and lighting UBO
     stdptr<IDescriptorPool> _frameDSP;
@@ -117,7 +117,6 @@ struct LitMaterialSystem : public IMaterialSystem
     void onUpdate(float deltaTime) override;
     void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
     void onRenderGUI() override;
-
 
 
   private:

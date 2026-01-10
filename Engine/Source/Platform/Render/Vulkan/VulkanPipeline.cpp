@@ -126,6 +126,13 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
     return true;
 }
 
+void VulkanPipeline::reloadShaders()
+{
+    auto shaderStorage = ya::App::get()->getShaderStorage();
+    shaderStorage->removeCache(_ci.shaderDesc.shaderName);
+    recreate(_ci);
+}
+
 
 void VulkanPipeline::createPipelineInternal()
 {

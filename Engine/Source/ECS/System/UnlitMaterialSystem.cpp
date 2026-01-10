@@ -201,8 +201,8 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
     // Use factory method to create graphics pipeline
-    _pipelineOwner = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
-    _pipeline      = _pipelineOwner.get();
+    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    // _pipeline      = _pipelineOwner;
     _pipeline->recreate(_pipelineDesc);
 
 
@@ -247,7 +247,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
-    cmdBuf->bindPipeline(_pipeline);
+    cmdBuf->bindPipeline(_pipeline.get());
 
     uint32_t width  = rt->getFrameBuffer()->getWidth();
     uint32_t height = rt->getFrameBuffer()->getHeight();

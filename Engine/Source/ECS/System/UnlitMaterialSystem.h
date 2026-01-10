@@ -39,8 +39,8 @@ struct UnlitMaterialSystem : public IMaterialSystem
     static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
     GraphicsPipelineCreateInfo         _pipelineDesc;
-    std::shared_ptr<IGraphicsPipeline> _pipelineOwner;
-    IGraphicsPipeline                 *_pipeline       = nullptr;
+    // std::shared_ptr<IGraphicsPipeline> _pipelineOwner;
+    // IGraphicsPipeline                 *_pipeline       = nullptr; // temp move to IMaterialSystem
     stdptr<IPipelineLayout>            _pipelineLayout = nullptr;
 
 

@@ -223,6 +223,15 @@ struct ShaderStorage
         return &it->second;
     }
 
+    void removeCache(const std::string &key)
+    {
+        auto it = _shaderCache.find(key);
+        if (it != _shaderCache.end()) {
+            _shaderCache.erase(it);
+            YA_CORE_INFO("Removed shader from cache: {}", key);
+        }
+    }
+
     const IShaderProcessor::stage2spirv_t *load(const ShaderDesc &ci)
     {
         // TODO: cache it

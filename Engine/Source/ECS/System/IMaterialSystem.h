@@ -28,6 +28,8 @@ struct IMaterialSystem : public ISystem
     // No material and base material?
     // std::shared_ptr<Material> _baseMaterial;
 
+    std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
+
     // TODO: abstract render api
     virtual void onInit(IRenderPass *renderPass)                     = 0;
     virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) = 0;
@@ -63,12 +65,16 @@ struct IMaterialSystem : public ISystem
                 break;
             }
         }
+        if (ImGui::Button("Reload Shaders")) {
+            reloadShaders();
+        }
 
         onRenderGUI();
         ImGui::PopID();
         ImGui::Unindent();
     }
     virtual void onRenderGUI() {}
+    virtual void reloadShaders() { _pipeline->reloadShaders(); };
 
 
     App     *getApp() const;

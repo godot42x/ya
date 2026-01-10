@@ -121,6 +121,10 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
         vkCmdBindPipeline(commandBuffer, bindPoint, _pipeline);
     }
 
+    // 2025/1/10 @godot42: now can only reload shader calculating logics, not any unifrom/vertex layout change
+    // TODO: sniff layout from ShaderReflection?
+    void reloadShaders() override;
+
     ::VkPipeline getVkHandle() const { return _pipeline; }
 
   private:
