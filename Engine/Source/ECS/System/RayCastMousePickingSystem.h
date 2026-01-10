@@ -23,7 +23,7 @@ struct RaycastHit
 
 /**
  * @brief System for mouse picking using raycast
- * 
+ *
  * Handles conversion from screen coordinates to world-space rays
  * and collision detection with scene entities.
  */
@@ -51,13 +51,13 @@ class RayCastMousePickingSystem
      * @param camera Camera
      * @return Picked entity or nullptr
      */
-    static Entity *pickEntity(
-        Scene      *scene,
-        float       screenX,
-        float       screenY,
-        float       viewportWidth,
-        float       viewportHeight,
-        FreeCamera &camera);
+    static Entity *pickEntity(Scene    *scene,
+                              float     screenX,
+                              float     screenY,
+                              float     viewportWidth,
+                              float     viewportHeight,
+                              glm::mat4 viewMatrix,
+                              glm::mat4 projectionMatrix);
 };
 
 } // namespace ya

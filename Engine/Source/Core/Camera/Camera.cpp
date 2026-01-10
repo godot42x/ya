@@ -1,4 +1,4 @@
-#include "Core/Camera.h"
+#include "Core/Camera/Camera.h"
 
 namespace ya
 {

@@ -6,7 +6,6 @@
 #include "Core/App/FPSCtrl.h"
 #include "Core/App/SDLMisc.h"
 #include "Core/AssetManager.h"
-#include "Core/Camera.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"

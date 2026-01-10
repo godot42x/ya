@@ -1,22 +1,15 @@
 #pragma once
-
-#include "Core/Camera.h"
+#include "CameraController.h"
+#include "Core/Camera/Camera.h"
 #include "Core/Input/InputManager.h"
-#include "KeyCode.h"
+#include "Core/KeyCode.h"
 
-#include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/TransformComponent.h"
-#include "Render/RenderDefines.h"
+
+
 
 namespace ya
 {
 
-struct CameraController
-{
-    virtual ~CameraController() = default;
-
-    // virtual void update(Camera &camera, const InputManager &inputManager, float deltaTime) = 0;
-};
 
 struct FreeCameraController : public CameraController
 {
@@ -42,16 +35,5 @@ struct FreeCameraController : public CameraController
     bool handleMouseRotation(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
 };
 
-
-// Controller for the ECS camera entity (TransformComponent + CameraComponent)
-struct OrbitCameraController : public CameraController
-{
-    float     _mouseSensitivity = 15.0f;
-    float     _zoomSensitivity  = 1000.f;
-    EMouse::T _rotateButton     = EMouse::Right;
-
-  public:
-    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt);
-};
 
 } // namespace ya

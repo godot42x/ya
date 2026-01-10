@@ -1,7 +1,8 @@
 #pragma once
 #include "Core/Base.h"
-#include "Core/Camera.h"
-#include "Core/CameraController.h"
+#include "Core/Camera/Camera.h"
+#include "Core/Camera/FreeCameraController.h"
+#include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
 #include "Editor/EditorLayer.h"

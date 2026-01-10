@@ -1,5 +1,5 @@
 #include "RayCastMousePickingSystem.h"
-#include "Core/Camera.h"
+#include "Core/Camera/Camera.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -96,17 +96,17 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
 }
 
 Entity *RayCastMousePickingSystem::pickEntity(
-    Scene      *scene,
-    float       screenX,
-    float       screenY,
-    float       viewportWidth,
-    float       viewportHeight,
-    FreeCamera &camera)
+    Scene    *scene,
+    float     screenX,
+    float     screenY,
+    float     viewportWidth,
+    float     viewportHeight,
+    glm::mat4 viewMatrix,
+    glm::mat4 projectionMatrix)
 {
     // Generate ray from screen coordinates
     Ray ray = Ray::fromScreen(
-        screenX, screenY, viewportWidth, viewportHeight, camera.getViewMatrix(), camera.getProjectionMatrix());
-
+        screenX, screenY, viewportWidth, viewportHeight, viewMatrix, projectionMatrix);
     // Perform raycast
     auto hit = raycast(scene, ray);
 

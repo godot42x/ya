@@ -647,6 +647,21 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     if (!scene) {
         return;
     }
+    glm::mat4 view{}, projection{};
+
+    // Focus DO NOT support orbit camera for now
+    // if (app->_viewportRT->isUseEntityCamera()) {
+    //     auto *entityCam = app->_viewportRT->getCamera();
+    //     YA_CORE_ASSERT(entityCam->isValid(), "Entity camera is null despite isUseEntityCamera being true");
+    //     if (auto *camComp = entityCam->getComponent<CameraComponent>()) {
+    //         view       = camComp->getOrbitView();
+    //         projection = camComp->getProjection();
+    //     }
+    // }
+    // else {
+    view       = app->camera.getViewMatrix();
+    projection = app->camera.getProjectionMatrix();
+    // }
 
     // Use RayCastMousePickingSystem to pick entity
     // viewportLocalX/Y are in viewport space (0,0 = top-left of viewport)
@@ -656,7 +671,8 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         viewportLocalY,
         _viewportSize.x,
         _viewportSize.y,
-        app->camera);
+        view,
+        projection);
 
     // Update selection
     if (pickedEntity) {

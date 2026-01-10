@@ -27,4 +27,5 @@
 
 
 
-#include "./Log.h"
+#include "Core/Common.h"
+#include "Core/Log.h"
