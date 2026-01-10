@@ -89,7 +89,7 @@ struct LitMaterialSystem : public IMaterialSystem
     std::shared_ptr<IDescriptorSetLayout> _materialResourceDSL; // set 1: per material resource (textures)
     std::shared_ptr<IDescriptorSetLayout> _materialParamDSL;    // set 2: per material param
 
-    std::shared_ptr<IPipelineLayout>   _pipelineLayout;
+    std::shared_ptr<IPipelineLayout> _pipelineLayout;
     // std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
 
     // set 0, contains the frame UBO and lighting UBO
@@ -128,6 +128,8 @@ struct LitMaterialSystem : public IMaterialSystem
 
 
     void recreateMaterialDescPool(uint32_t _materialCount);
+
+     DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv0);
 };
 
 

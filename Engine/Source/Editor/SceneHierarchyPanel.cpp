@@ -239,7 +239,7 @@ void SceneHierarchyPanel::drawComponents(Entity &entity)
                 bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->uParams.ambient));
                 bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->uParams.diffuse));
                 bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->uParams.specular));
-                bDirty |= ImGui::DragFloat("Shininess", &litMat->uParams.shininess, 1.0f, 1.0f, 256.0f);
+                bDirty |= ImGui::SliderFloat("Shininess", &litMat->uParams.shininess, 0.0f, 256.f);
                 // for (uint32_t i = 0; i < litMat->_textureViews.size(); i++) {
                 //     auto &tv    = litMat->_textureViews[i];
                 //     auto  label = tv.texture->getLabel();

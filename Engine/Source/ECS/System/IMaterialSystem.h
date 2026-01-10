@@ -65,9 +65,11 @@ struct IMaterialSystem : public ISystem
                 break;
             }
         }
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
         if (ImGui::Button("Reload Shaders")) {
             reloadShaders();
         }
+        ImGui::PopStyleColor();
 
         onRenderGUI();
         ImGui::PopID();

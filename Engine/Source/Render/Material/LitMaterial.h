@@ -13,12 +13,23 @@ struct LitMaterial : public Material
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
         alignas(4) float shininess     = 32.0f;
+
+        ParamUBO normalize()
+        {
+            return ParamUBO{
+                .ambient   = glm::normalize(ambient),
+                .diffuse   = glm::normalize(diffuse),
+                .specular  = glm::normalize(specular),
+                .shininess = shininess,
+            };
+        }
     } uParams;
 
 
     enum EResource
     {
-        DiffuseTexture = 0,
+        DiffuseTexture  = 0,
+        SpecularTexture = 1,
     };
 
     std::unordered_map<LitMaterial::EResource, TextureView> _textureViews;

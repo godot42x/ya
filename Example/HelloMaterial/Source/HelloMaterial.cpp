@@ -251,9 +251,15 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         lmc->addMesh(cubeMesh.get(), litMat);
 
         ya::AssetManager::get()->loadTexture("container_diffuse", "Engine/Content/TestTextures/LearnOpenGL/container2.png");
+        ya::AssetManager::get()->loadTexture("container_specular", "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
         litMat->setTextureView(ya::LitMaterial::EResource::DiffuseTexture,
                                ya::TextureView{
                                    .texture = ya::AssetManager::get()->getTextureByName("container_diffuse"),
+                                   .sampler = ya::TextureLibrary::getDefaultSampler(),
+                               });
+        litMat->setTextureView(ya::LitMaterial::EResource::SpecularTexture,
+                               ya::TextureView{
+                                   .texture = ya::AssetManager::get()->getTextureByName("container_specular"),
                                    .sampler = ya::TextureLibrary::getDefaultSampler(),
                                });
 

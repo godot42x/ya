@@ -84,15 +84,16 @@ layout(set =0, binding =1, std140) uniform LightUBO {
     PointLight pointLights[MAX_POINT_LIGHTS];
 } uLit;
 
+
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
     vec4 floatParam;
 } uDebug;
 
 
-
 layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
-layout(set =1, binding = 1) uniform sampler2D uTexture1;
+layout(set =1, binding = 1) uniform sampler2D uTexSpecular;
+
 
 layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 ambient; 
@@ -100,6 +101,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 specular;
     float shininess;
 } uParams;
+
 
 layout(location = 0) in vec3 vPos;
 layout(location = 1) in vec2 vTexcoord;
@@ -109,8 +111,8 @@ layout(location = 0) out vec4 fColor;
 
 // 计算点光源的衰减
 float calculateAttenuation(float distance, float radius) {
-    return 1;
     // 使用物理衰减：1 / (distance^2)
+    return 1;
     // 添加半径限制，超出范围衰减为 0
     if (distance > radius) {
         return 0.0;
@@ -141,6 +143,9 @@ void main ()
     }
 
     vec4 diffuseTexColor = texture(uTexDiffuse, vTexcoord);
+    vec4 specularTexColor = texture(uTexSpecular, vTexcoord);
+    // lib: 尝试在片段着色器中反转镜面光贴图的颜色值，让木头显示镜面高光而钢制边缘不反光（由于钢制边缘中有一些裂缝，边缘仍会显示一些镜面高光，虽然强度会小很多
+    // specularTexColor  = vec4(1.0) -specularTexColor;
     
     
     // 累积所有点光源的光照
@@ -150,29 +155,39 @@ void main ()
 
         PointLight light = uLit.pointLights[i];
 
-        vec3 lightDir = vPos -  light.position;
-        // vec3 lightDir =   light.position - vPos;
-        // float distance = length(lightDir);
-        lightDir = normalize(lightDir);
-        vec3 rawLightColor = light.color * light.intensity;
+        // 修正：lightDir 应该是从片段指向光源的方向
+        vec3 lightDir  = normalize(light.position - vPos);
+        float distance = length(light.position - vPos);
+        vec3 lampColor = light.color * light.intensity;
+        
+        // 计算衰减
+        float attenuation = calculateAttenuation(distance, light.radius);
+        if (attenuation <= 0.0) {
+            continue; // 超出光照范围，跳过
+        }
 
-        // 环境光/ambient
-        vec3 ambient = rawLightColor * uParams.ambient;
+        // 环境光/ambient（环境光不受距离衰减影响，但强度应该较小）
+        vec3 ambient = lampColor * uParams.ambient * diffuseTexColor.rgb * 0.1;
         
         // 漫反射/diffuse
-        float diff = max(dot(norm, -lightDir), 0.0);
-        vec3 diffuse = (diff * uParams.diffuse) * vec3(diffuseTexColor)  * rawLightColor;
+        float diff = max(dot(norm, lightDir), 0.0);
+        vec3 diffuse = lampColor* attenuation*   (diff * uParams.diffuse) * diffuseTexColor.rgb;
         
         // 高光/specular
-        // vec3 halfwayDir = normalize(lightDir + viewDir);
-        // float spec = pow(max(dot(norm, halfwayDir), 0.0), 32.0);
-        vec3 reflectDir = reflect(lightDir, norm);
+    #if BLING_PHONG_HALFWAY
+        vec3 halfwayDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
+    #else
+        // 修正：使用正确的反射方向（反射入射光线）
+        vec3 reflectDir = reflect(-lightDir, norm);
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-        vec3 specular = (spec * uParams.specular) * rawLightColor;
+    #endif
+        vec3 specular = lampColor * attenuation * spec * uParams.specular * specularTexColor.rgb;
         
         // 累加光照
-        lighting += (diffuse + specular + ambient);
+        lighting += (ambient + diffuse + specular);
     }
     
-    fColor = vec4(lighting, 1.0);
+    // 限制输出范围，避免过曝导致的视觉错误
+    fColor = vec4(clamp(lighting, 0.0, 1.0), 1.0);
 }

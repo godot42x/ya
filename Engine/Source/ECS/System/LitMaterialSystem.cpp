@@ -521,36 +521,16 @@ void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMate
     auto render = getRender();
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
-    // // TODO: not texture and default texture?
-    // // update param from texture
-    const TextureView *tv0 = material->getTextureView(LitMaterial::EResource::DiffuseTexture);
-    // const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
-    SamplerHandle   samplerHandle;
-    ImageViewHandle imageViewHandle;
-    if (!tv0) {
-        samplerHandle   = TextureLibrary::getDefaultSampler()->getHandle();
-        imageViewHandle = TextureLibrary::getWhiteTexture()->getImageViewHandle();
-    }
-    else {
-        samplerHandle   = SamplerHandle(tv0->sampler->getHandle());
-        imageViewHandle = tv0->texture->getImageViewHandle();
-    }
 
-
-
-    DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
-    // DescriptorImageInfo imageInfo1(
-    //     SamplerHandle(tv1->sampler->getHandle()),
-    //     tv1->texture->getImageViewHandle(),
-    //     EImageLayout::ShaderReadOnlyOptimal);
-
+    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(material->getTextureView(LitMaterial::EResource::DiffuseTexture));
+    DescriptorImageInfo specularTexture = getDescriptorImageInfo(material->getTextureView(LitMaterial::EResource::SpecularTexture));
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo0}),
-                // IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, &imageInfo1, 1),
+                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuseTexture}),
+                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specularTexture}),
             },
             {});
 }
@@ -622,6 +602,23 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 
 
     _lastMaterialDSCount = newDescriptorSetCount;
+}
+
+DescriptorImageInfo LitMaterialSystem::getDescriptorImageInfo(TextureView const *tv)
+{
+    SamplerHandle   samplerHandle;
+    ImageViewHandle imageViewHandle;
+    if (!tv) {
+        samplerHandle   = TextureLibrary::getDefaultSampler()->getHandle();
+        imageViewHandle = TextureLibrary::getWhiteTexture()->getImageViewHandle();
+    }
+    else {
+        samplerHandle   = SamplerHandle(tv->sampler->getHandle());
+        imageViewHandle = tv->texture->getImageViewHandle();
+    }
+
+    DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
+    return imageInfo0;
 }
 
 } // namespace ya
