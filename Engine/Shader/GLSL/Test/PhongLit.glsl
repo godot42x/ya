@@ -47,6 +47,7 @@ void main (){
 }
 
 
+// MARK: Splitter
 #type fragment
 #version 450
 
@@ -61,6 +62,19 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
+struct DirectionalLight {
+    vec3  direction;    // 光源方向
+    float intensity;    // 光照强度
+    vec3  color;       // 光源颜色
+    float padding;      // 填充以保持对齐
+    vec3  ambient;
+
+    // attenuation factors
+    float constant;
+    float linear;
+    float quadratic;
+};
+
 
 struct PointLight {
     vec3  position;      // 光源位置
@@ -72,16 +86,10 @@ struct PointLight {
 #define MAX_POINT_LIGHTS 4
 
 layout(set =0, binding =1, std140) uniform LightUBO {
-    vec3  directionalLightDir;
-    float directionalLightIntensity;
-
-    vec3  directionalLightColor;
-    float ambientIntensity;
-
-    vec3  ambientColor;
-    uint numPointLights;  // 实际使用的点光源数量
+    DirectionalLight dirLight;
 
     PointLight pointLights[MAX_POINT_LIGHTS];
+    uint numPointLights;   // collect from scene
 } uLit;
 
 
@@ -110,17 +118,21 @@ layout(location = 2) in vec3 vNormal;
 layout(location = 0) out vec4 fColor;
 
 // 计算点光源的衰减
-float calculateAttenuation(float distance, float radius) {
+float calculateAttenuation(float distance) {
     // 使用物理衰减：1 / (distance^2)
-    return 1;
-    // 添加半径限制，超出范围衰减为 0
-    if (distance > radius) {
-        return 0.0;
-    }
-    float attenuation = 1.0 / (1.0 + distance * distance);
-    // 平滑过渡到边缘
-    float smoothFactor = 1.0 - pow(distance / radius, 4.0);
-    return attenuation * smoothFactor;
+
+    float attenuation = 1.0 / (
+        uLit.dirLight.constant +
+        uLit.dirLight.linear * distance +
+        uLit.dirLight.quadratic * (distance * distance)
+    );
+
+    return attenuation;
+
+    // float attenuation = 1.0 / (1.0 + distance * distance);
+    // // 平滑过渡到边缘
+    // float smoothFactor = 1.0 - pow(distance / radius, 4.0);
+    // return attenuation * smoothFactor;
 }
 
 
@@ -131,7 +143,9 @@ void main ()
     vec3 norm = normalize(vNormal);
     // from fragment to camera(eye)
     vec3 viewDir = normalize(uFrame.cameraPos - vPos);
-    float shininess = uDebug.floatParam.x == 0.0 ? uParams.shininess : uDebug.floatParam.x;
+    float shininess =  uParams.shininess;
+
+    vec3 lightDir = normalize(-uLit.dirLight.direction);
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -161,7 +175,7 @@ void main ()
         vec3 lampColor = light.color * light.intensity;
         
         // 计算衰减
-        float attenuation = calculateAttenuation(distance, light.radius);
+        float attenuation = calculateAttenuation(distance/*, light.radius*/);
         if (attenuation <= 0.0) {
             continue; // 超出光照范围，跳过
         }

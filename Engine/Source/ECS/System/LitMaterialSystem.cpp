@@ -414,18 +414,20 @@ void LitMaterialSystem::onRenderGUI()
 {
     IMaterialSystem::onRenderGUI();
     ImGui::Text("Directional Light");
-    ImGui::PushID("1");
-    ImGui::DragFloat3("Direction", glm::value_ptr(uLight.directionalLightDir), 0.1f);
-    ImGui::ColorEdit3("Color", glm::value_ptr(uLight.directionalLightColor));
-    ImGui::SliderFloat("Intensity", &uLight.directionalLightIntensity, 0.0f, 10.0f);
-    ImGui::PopID();
+    ImGui::Indent();
+    {
+        ImGui::PushID("1");
+        ImGui::DragFloat3("Direction", glm::value_ptr(uLight.dirLight.direction), 0.1f);
+        ImGui::ColorEdit3("Color", glm::value_ptr(uLight.dirLight.color));
+        ImGui::SliderFloat("Intensity", &uLight.dirLight.intensity, 0.0f, 10.0f);
+        ImGui::ColorEdit3("Ambient", glm::value_ptr(uLight.dirLight.ambient));
+        ImGui::DragFloat("Constant", &uLight.dirLight.constant, 0.01f, 0.0f, 10.0f);
+        ImGui::DragFloat("Linear", &uLight.dirLight.linear, 0.001f, 0.0f, 1.0f);
+        ImGui::DragFloat("Quadratic", &uLight.dirLight.quadratic, 0.001f, 0.0f, 1.0f);
+        ImGui::PopID();
+    }
+    ImGui::Unindent();
     ImGui::Separator();
-
-    ImGui::PushID("2");
-    ImGui::Text("Ambient Light");
-    ImGui::ColorEdit3("Color", glm::value_ptr(uLight.ambientColor));
-    ImGui::SliderFloat("Intensity", &uLight.ambientIntensity, 0.0f, 1.0f);
-    ImGui::PopID();
 
 
     if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {

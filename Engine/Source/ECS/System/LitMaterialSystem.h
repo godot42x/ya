@@ -45,10 +45,27 @@ struct LitMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 position; // 光源位置
         float intensity;                // 光照强度
         alignas(16) glm::vec3 color;    // 光源颜色
-        float radius;                   // 光照半径
+        float radius;                   // 光照半径（用于衰减计算）
     };
 
     static constexpr uint32_t MAX_POINT_LIGHTS = 4;
+
+    // 对应 shader 中的 DirectionalLight 结构
+    struct alignas(16) DirectionalLightData
+    {
+        glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
+        float     intensity = 1.0f;
+
+        glm::vec3 color   = glm::vec3(1.0f);
+        float     padding = 0.0f;
+
+        glm::vec3 ambient = glm::vec3(0.1f);
+
+        // attenuation factors
+        float constant  = 1.0f;
+        float linear    = 0.09f;
+        float quadratic = 0.032f;
+    };
 
     // std140 布局规则（GLSL）：
     // - vec3 自身占12字节，但按16字节对齐（下一个变量从16字节边界开始）
@@ -56,17 +73,9 @@ struct LitMaterialSystem : public IMaterialSystem
     // - 数组元素按最大成员对齐（vec3数组元素按16字节）
     struct alignas(16) LightUBO
     {
-        alignas(16) glm::vec3 directionalLightDir = glm::vec3(-0.5f, -1.0f, -0.3f);
-        float directionalLightIntensity           = 1.0f; // 可以紧跟在vec3后面的4字节空间
-
-        alignas(16) glm::vec3 directionalLightColor = glm::vec3(1.0f);
-        float ambientIntensity                      = 0.1f; // 可以紧跟在vec3后面的4字节空间
-
-        alignas(16) glm::vec3 ambientColor = glm::vec3(1.0f);
-        uint32_t numPointLights            = 0;
-
-        // offset 64: 数组（按16对齐）
-        alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
+        DirectionalLightData dirLight;
+        PointLightData       pointLights[MAX_POINT_LIGHTS];
+        uint32_t             numPointLights = 0;
     } uLight;
 
     struct DebugUBO
@@ -129,7 +138,7 @@ struct LitMaterialSystem : public IMaterialSystem
 
     void recreateMaterialDescPool(uint32_t _materialCount);
 
-     DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv0);
+    DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv0);
 };
 
 
