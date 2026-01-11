@@ -70,6 +70,7 @@ struct SceneManager
     void onStartRuntime();
     void onStopRuntime();
 
+    bool isSceneValid(Scene *ptr);
 
     stdptr<Scene> cloneScene(Scene *scene) const;
 };

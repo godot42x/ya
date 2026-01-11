@@ -170,20 +170,4 @@ struct Property : public Field
         }
         setter(obj, std::any(val));
     }
-
-    // 旧的API保持兼容（用于静态值）
-    template <typename T>
-    T get() const
-    {
-        return std::any_cast<T>(value);
-    }
-
-    template <typename T>
-    void set(const T &val)
-    {
-        if (bConst) {
-            throw std::runtime_error("Cannot set const property: " + name);
-        }
-        value = val;
-    }
 };

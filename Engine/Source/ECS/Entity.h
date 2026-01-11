@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Base.h"
+#include "Core/FName.h"
 #include "Core/Log.h"
 
 #include <entt/entt.hpp>
@@ -19,7 +20,8 @@ struct Entity
     Scene       *_scene        = nullptr;
 
   public:
-    std::string _name = "Entity";
+    std::string        _name = "Entity";
+    std::vector<FName> _components;
 
   public:
 
@@ -84,10 +86,7 @@ struct Entity
     entt::entity           getHandle() const { return _entityHandle; }
     Scene                 *getScene() const { return _scene; }
 
-    operator bool() const
-    {
-        return _entityHandle != entt::null && _scene->isValid() && _scene->isValidEntity(this);
-    }
+    operator bool() const;
     operator entt::entity() const { return _entityHandle; }
     operator uint32_t() const { return static_cast<uint32_t>(_entityHandle); }
 

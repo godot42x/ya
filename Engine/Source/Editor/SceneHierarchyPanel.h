@@ -26,7 +26,15 @@ struct SceneHierarchyPanel
   public:
     SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
 
-    void setContext(Scene *scene) { _context = scene; }
+    void setContext(Scene *scene)
+    {
+        _context = scene;
+        // 清空选中实体，防止指向已销毁场景中的实体
+        if (_selection && (!_selection->isValid() || _selection->getScene() != scene)) {
+            _selection     = nullptr;
+            _lastSelection = nullptr;
+        }
+    }
     void onImGuiRender();
 
     [[nodiscard]] Entity *getSelectedEntity() const { return _selection; }

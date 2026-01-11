@@ -141,7 +141,12 @@ struct EditorLayer
     // Entity selection bus - notifies DetailsView of selection changes
     void setSelectedEntity(Entity *entity)
     {
-        _selections = {entity};
+        // 验证实体有效性，防止悬空指针
+        if (entity && entity->isValid()) {
+            _selections = {entity};
+        } else {
+            _selections = {nullptr};
+        }
     }
 
     /**

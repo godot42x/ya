@@ -45,7 +45,11 @@ struct [[refl]] Scene
     bool    isValidEntity(const Entity *entity) const;
 
     // Check if Scene pointer is safe to access
-    bool isValid() const { return this && _magic == SCENE_MAGIC; }
+    bool isValid() const
+    {
+        // return this && _magic == SCENE_MAGIC;
+        return _magic == SCENE_MAGIC;
+    }
 
     Entity *getEntityByEnttID(entt::entity id);
     Entity *getEntityByID(uint32_t id)

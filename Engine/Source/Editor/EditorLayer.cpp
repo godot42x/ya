@@ -35,6 +35,15 @@ void EditorLayer::onAttach()
     if (!_app)
         return;
 
+    // Subscribe to scene activation events to cleanup stale entity references
+    // _app->getSceneManager()->onSceneActivated.addLambda(this, [this](Scene* newScene) {
+    //     YA_CORE_INFO("EditorLayer: Scene activated, clearing selection");
+    //     // Clear selection to avoid dangling pointer to destroyed entities
+    //     _sceneHierarchyPanel.setSelection(nullptr);
+    //     // Update hierarchy panel context
+    //     _sceneHierarchyPanel.setContext(newScene);
+    // });
+
     // Initialize editor panels
     if (auto scene = _app->getSceneManager()->getActiveScene())
     {
@@ -80,6 +89,10 @@ void EditorLayer::onAttach()
 void EditorLayer::onDetach()
 {
     YA_CORE_INFO("EditorLayer::onDetach");
+    // Unsubscribe from scene manager events
+    if (_app && _app->getSceneManager()) {
+        _app->getSceneManager()->onSceneActivated.removeAll(this);
+    }
     // Cleanup ImGui textures before destroying panels
     cleanupImGuiTextures();
 }
@@ -553,10 +566,23 @@ void EditorLayer::renderGizmo()
 {
     // Get selected entity from hierarchy panel
     Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
-    if (!selectedEntity || !selectedEntity->isValid()) {
+
+    // CRITICAL: Do NOT call selectedEntity->isValid() before null check!
+    // The entity pointer may point to destroyed memory after scene switch.
+    // The scene switch handler should have cleared selection, but double-check here.
+    if (!selectedEntity) {
         ImGuizmo::Enable(false);
-        return; // No entity selected or invalid
+        return; // No entity selected
     }
+
+    // Now safe to call member functions - verify entity is still valid
+    if (!selectedEntity->isValid()) {
+        YA_CORE_WARN("Selected entity is invalid after scene switch, clearing selection");
+        _sceneHierarchyPanel.setSelection(nullptr);
+        ImGuizmo::Enable(false);
+        return;
+    }
+
     ImGuizmo::Enable(true);
 
     // Get transform component

@@ -55,7 +55,9 @@ void Scene::destroyEntity(Entity *entity)
 {
     if (isValidEntity(entity))
     {
-        _registry.destroy(entity->getHandle());
+        auto handle = entity->getHandle();
+        _registry.destroy(handle);
+        _entityMap.erase(handle); // 清理 _entityMap，防止悬空指针
     }
 }
 
@@ -65,6 +67,7 @@ bool Scene::isValidEntity(const Entity *entity) const
            _entityMap.contains(entity->getHandle()) &&
            _registry.valid(entity->getHandle());
 }
+
 
 Entity *Scene::getEntityByEnttID(entt::entity id)
 {

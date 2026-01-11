@@ -13,9 +13,102 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
 
+#include "reflects-core/lib.h"
 
 namespace ya
 {
+
+// 获取或创建反射缓存
+ReflectionCache *DetailsView::getOrCreateReflectionCache(uint32_t typeIndex)
+{
+    auto it = _reflectionCache.find(typeIndex);
+
+    if (it != _reflectionCache.end()) {
+        if (auto &cache = it->second; cache.isValid(typeIndex)) {
+            return &it->second;
+        }
+    }
+
+    auto            cls = ClassRegistry::instance().getClass(typeIndex);
+    ReflectionCache cache;
+    cache.componentClassPtr = cls;
+    cache.propertyCount     = cls ? cls->properties.size() : 0;
+    cache.typeIndex         = typeIndex;
+
+    return &(_reflectionCache[typeIndex] = cache);
+}
+
+
+// 递归反射属性渲染
+bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeIndex, void *instancePtr, int depth)
+{
+    if (depth >= MAX_RECURSION_DEPTH) {
+        ImGui::TextDisabled("%s: [max recursion depth reached]", name.c_str());
+        return false;
+    }
+
+    if (auto it = _typeRender.find(typeIndex); it != _typeRender.end()) {
+        return it->second(instancePtr,
+                          PropRenderContext{
+                              .name = name,
+                          });
+    }
+
+    bool bModified = false;
+
+    auto cache = getOrCreateReflectionCache(typeIndex);
+    if (cache && cache->componentClassPtr && cache->propertyCount > 0) {
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
+
+        auto iterateChildren = [&]() {
+            for (auto &[propName, prop] : cache->componentClassPtr->properties) {
+                auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
+                if (renderReflectedType(propName, prop.typeIndex, subPropInstancePtr, depth + 1)) {
+                    bModified = true;
+                }
+            }
+        };
+
+        // TODO: better performance
+        if (depth == 0)
+        {
+            iterateChildren();
+        }
+        else {
+            if (ImGui::TreeNodeEx(name.c_str(), flags, "%s", name.c_str())) {
+                ImGui::Indent();
+                iterateChildren();
+                ImGui::Unindent();
+                ImGui::TreePop();
+            }
+        }
+    }
+    else {
+        ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
+    }
+
+    return bModified;
+}
+
+
+DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
+{
+    _typeRender.insert(
+        {ya::type_index_v<glm::vec3>,
+         [](void *instance, const PropRenderContext &ctx) {
+             bool bModified = ImGui::DragFloat3(ctx.name.c_str(), (float *)instance, 0.1f);
+             return bModified;
+         }});
+    _typeRender.insert(
+        {
+            ya::type_index_v<glm::vec4>,
+            [](void *instance, const PropRenderContext &ctx) {
+                bool bModified = ImGui::ColorEdit4(ctx.name.c_str(), (float *)instance);
+                return bModified;
+            },
+        });
+};
+
 
 void DetailsView::onImGuiRender()
 {
@@ -40,57 +133,7 @@ void DetailsView::onImGuiRender()
     _filePicker.render();
 }
 
-template <typename T, typename UIFunction>
-static void drawComponent(const std::string &name, Entity entity, UIFunction uiFunc)
-{
-    const auto treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen |
-                               ImGuiTreeNodeFlags_AllowOverlap |
-                               ImGuiTreeNodeFlags_SpanAvailWidth |
-                               ImGuiTreeNodeFlags_FramePadding |
-                               ImGuiTreeNodeFlags_Framed;
 
-    if (entity.hasComponent<T>())
-    {
-        auto  *component                = entity.getComponent<T>();
-        ImVec2 content_region_available = ImGui::GetContentRegionAvail();
-
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
-        float line_height = ImGui::GetFont()->LegacySize + ImGui::GetStyle().FramePadding.y * 2.f;
-        ImGui::Separator();
-
-        bool bOpen = ImGui::TreeNodeEx((void *)typeid(T).hash_code(), treeNodeFlags, "%s", name.c_str());
-
-        ImGui::PopStyleVar();
-        ImGui::SameLine(content_region_available.x - line_height * 0.5f);
-
-        if (ImGui::Button("+", ImVec2{line_height, line_height}))
-        {
-            ImGui::OpenPopup("ComponentSettings");
-        }
-
-        bool bRemoveComponent = false;
-
-        if (ImGui::BeginPopup("ComponentSettings"))
-        {
-            if (ImGui::MenuItem("Remove Component"))
-            {
-                bRemoveComponent = true;
-            }
-            ImGui::EndPopup();
-        }
-
-        if (bOpen)
-        {
-            uiFunc(component);
-            ImGui::TreePop();
-        }
-
-        if (bRemoveComponent)
-        {
-            entity.removeComponent<T>();
-        }
-    }
-}
 
 void DetailsView::drawComponents(Entity &entity)
 {
@@ -102,21 +145,12 @@ void DetailsView::drawComponents(Entity &entity)
     ImGui::Text("Entity ID: %u", entity.getId());
     ImGui::Separator();
 
-    drawComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
-        bool bDirty = tc->bDirty; // Preserve existing dirty state
-        bDirty |= ImGui::DragFloat3("Position", glm::value_ptr(tc->_position), 0.1f);
-        bDirty |= ImGui::DragFloat3("Rotation", glm::value_ptr(tc->_rotation), 0.1f);
-        bDirty |= ImGui::DragFloat3("Scale", glm::value_ptr(tc->_scale), 0.1f);
-        tc->bDirty = bDirty;
+    drawReflectedComponent<TagComponent>("Tag", entity, nullptr);
+    drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
+        tc->bDirty = true;
     });
 
-    // if (entity.getScene()
-    //         ->getRegistry()
-    //         .any_of<SimpleMaterialComponent,
-    //                 UnlitMaterialComponent,
-    //                 LitMaterialComponent>(entity.getHandle())) {
-    // }
-
+    // 其他组件保持原有的自定义渲染逻辑
     drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent *smc) {
         for (auto [material, meshId] : smc->getMaterial2MeshIDs()) {
             auto simpleMat = material->as<SimpleMaterial>();

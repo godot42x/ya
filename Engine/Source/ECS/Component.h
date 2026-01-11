@@ -33,6 +33,10 @@ struct IDComponent : public IComponent
 
 struct TagComponent : public IComponent
 {
+    YA_REFLECT_BEGIN(TagComponent)
+    YA_REFLECT_FIELD(_tag)
+    YA_REFLECT_END()
+
     std::string _tag;
 
     TagComponent()                     = default;

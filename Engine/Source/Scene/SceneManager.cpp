@@ -101,6 +101,11 @@ void SceneManager::onStopRuntime()
     setActiveScene(_editorScene);
 }
 
+bool SceneManager::isSceneValid(Scene *ptr)
+{
+    return ptr == _currentScene.get() || ptr == _editorScene.get();
+}
+
 stdptr<Scene> SceneManager::cloneScene(Scene *scene) const
 {
     return scene->clone();
