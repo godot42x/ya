@@ -18,8 +18,14 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Reflection/RuntimeReflectionBridge.h"
-#include "Core/Serialization/SerializerRegistry.h"
 
+// TODO: should not be in core?
+#include "ECS/ECSRegistry.h"
+
+namespace ya
+{
+struct IComponent;
+}
 
 
 namespace ya::reflection
@@ -56,31 +62,29 @@ struct Visitor
  * 支持所有注册到运行时反射系统的类型
  */
 template <typename Type>
-void registerECSSerializer(const std::string &typeName)
+void registerECSType(const std::string &typeName)
 {
-    ::ya::ECSSerializerRegistry::get().registerSerializer(
-        typeName,
-        // Serializer: 优先使用 Registry 模式
-        [typeName](::entt::registry &registry, ::entt::entity entity, ::nlohmann::json &components) {
-            if (registry.all_of<Type>(entity)) {
+    // printf("Registering ECS Serializer for type: %s\n", typeName.c_str());
+    // printf("Type Index: %u\n", ya::type_index_v<Type>);
+    // printf("hash code: %zu\n", typeid(Type).hash_code());
+    // inline static const uint32_t typeIndex = ya::type_index_v<Type>; always be 0 at static init time?
+    // -> put after static init
 
-                // if constexpr (requires { Type::visit_properties(void *, void *); }) {
-                //     auto &comp = registry.get<Type>(entity);
-                //     nlohmann::json j;
-                //     ::ya::ReflectionSerializer::serializeByVisitor(comp, j);
-                //     components[typeName] = j;
-                //     return;
-                // }
 
-                auto &comp           = registry.get<Type>(entity);
-                components[typeName] = ::ya::ReflectionSerializer::serializeByRuntimeReflection(comp, typeName);
-            }
-        },
-        // Deserializer: 优先使用 Registry 模式
-        [typeName](::entt::registry &registry, ::entt::entity entity, const ::nlohmann::json &j) {
-            auto &comp = registry.emplace_or_replace<Type>(entity);
-            ::ya::ReflectionSerializer::deserializeByRuntimeReflection(comp, j, typeName);
-        });
+    if constexpr (std::derived_from<Type, ::ya::IComponent>) {
+        ::ya::ECSRegistry::get().registerComponent<Type>(
+            typeName,
+            // Serializer: 优先使用 Registry 模式
+            [](::entt::registry &registry, ::entt::entity entity) -> void * {
+                if (registry.all_of<Type>(entity)) {
+                    return &registry.get<Type>(entity);
+                }
+                return nullptr;
+            },
+            [](::entt::registry &registry, ::entt::entity entity) -> void * {
+                return &registry.emplace<Type>(entity);
+            });
+    }
 }
 
 
@@ -99,7 +103,7 @@ void registerECSSerializer(const std::string &typeName)
 #ifndef YA_REFLECT_EXTENSION
     #define YA_REFLECT_EXTENSION(type_name) \
         YA_PROFILE_STATIC_INIT(type_name);  \
-        ::ya::reflection::detail::registerECSSerializer<_ReflectClass>(type_name);
+        ::ya::reflection::detail::registerECSType<_ReflectClass>(type_name);
 #endif
 
 
@@ -127,13 +131,15 @@ void registerECSSerializer(const std::string &typeName)
                                                                                                      \
         reflection_detail()                                                                          \
         {                                                                                            \
-            ::Register<_ReflectClass> reg(type_name);                                                \
+            ClassRegistry::instance().addPostStaticInitializer([]() {                                \
+                ::Register<_ReflectClass> reg(type_name);                                            \
                                                                                                      \
-            visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                 \
-                reg.property(name, fieldPtr, meta);                                                  \
+                visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {             \
+                    reg.property(name, fieldPtr, meta);                                              \
+                });                                                                                  \
+                                                                                                     \
+                YA_REFLECT_EXTENSION(type_name)                                                      \
             });                                                                                      \
-                                                                                                     \
-            YA_REFLECT_EXTENSION(type_name)                                                          \
         }                                                                                            \
                                                                                                      \
         template <typename Visitor>                                                                  \
@@ -190,13 +196,15 @@ void registerECSSerializer(const std::string &typeName)
         {                                                                                                \
             _reflect_registrar()                                                                         \
             {                                                                                            \
-                ::Register<_ReflectClass> reg(type_name);                                                \
+                ClassRegistry::instance().addPostStaticInitializer([]() {                                \
+                    ::Register<_ReflectClass> reg(type_name);                                            \
                                                                                                          \
-                visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                 \
-                    reg.property(name, fieldPtr, meta);                                                  \
+                    visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {             \
+                        reg.property(name, fieldPtr, meta);                                              \
+                    });                                                                                  \
+                                                                                                         \
+                    YA_REFLECT_EXTENSION(type_name)                                                      \
                 });                                                                                      \
-                                                                                                         \
-                YA_REFLECT_EXTENSION(type_name)                                                          \
             }                                                                                            \
         };                                                                                               \
         static inline _reflect_registrar _reflect_helper_instance{};                                     \

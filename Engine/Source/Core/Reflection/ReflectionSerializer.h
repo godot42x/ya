@@ -43,16 +43,15 @@ struct ReflectionSerializer
     template <typename T>
     static nlohmann::json serializeByRuntimeReflection(const T &obj, std::string className)
     {
-        return serializeByRuntimeReflection(obj, ya::type_index_v<T>, className);
+        return serializeByRuntimeReflection(&obj, ya::type_index_v<T>, className);
     }
     template <typename T>
     static nlohmann::json serializeByRuntimeReflection(const T &obj)
     {
-        return serializeByRuntimeReflection(obj, ya::type_index_v<T>);
+        return serializeByRuntimeReflection(&obj, ya::type_index_v<T>);
     }
 
-    template <typename T>
-    static nlohmann::json serializeByRuntimeReflection(const T &obj, uint32_t typeIndex, const std::string &typeName = "")
+    static nlohmann::json serializeByRuntimeReflection(const void *obj, uint32_t typeIndex, const std::string &typeName = "")
     {
         nlohmann::json j;
 
@@ -71,7 +70,7 @@ struct ReflectionSerializer
             // }
 
             try {
-                j[propName] = ReflectionSerializer::serializeProperty(&obj, prop);
+                j[propName] = ReflectionSerializer::serializeProperty(obj, prop);
             }
             catch (const std::exception &e) {
                 YA_CORE_WARN("ReflectionSerializer: Failed to serialize property '{}.{}': {}",
@@ -145,6 +144,44 @@ struct ReflectionSerializer
 
     // MARK: Deserialization
 
+
+    static void deserializeByRuntimeReflection(void *obj, uint32_t typeIndex, const nlohmann::json &j, const std::string &className)
+    {
+
+        auto &registry = ClassRegistry::instance();
+        auto *classPtr = registry.getClass(typeIndex);
+
+        if (!classPtr) {
+            YA_CORE_WARN("ReflectionSerializer: Class '{}' not found in registry", className);
+            return;
+        }
+
+        // 遍历 JSON 中的所有字段
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            const std::string &jsonKey   = it.key();
+            const auto        &jsonValue = it.value();
+
+            auto *prop = classPtr->getProperty(jsonKey);
+            if (!prop) {
+                YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", className, jsonKey);
+                continue;
+            }
+
+            // if (prop->metadata.hasFlag(FieldFlags::NotSerialized)) {
+            //     continue;
+            // }
+
+            try {
+                deserializeProperty(*prop, obj, jsonValue);
+            }
+            catch (const std::exception &e) {
+                YA_CORE_WARN("ReflectionSerializer: Failed to deserialize property '{}.{}': {}",
+                             className,
+                             jsonKey,
+                             e.what());
+            }
+        }
+    }
 
     /**
      * 通过运行时反射 registry 就地反序列化对象
@@ -240,37 +277,6 @@ struct ReflectionSerializer
             }
         }
     }
-
-
-    // /**
-    //  * 序列化外部反射类型（非侵入式）
-    //  */
-    // template <typename T>
-    //     requires serializer_detail::has_external_reflect_v<T>
-    // static nlohmann::json serializeExternal(const T &obj)
-    // {
-    //     nlohmann::json j;
-
-    //     auto visitor = [&j](const char *name, auto &value) {
-    //         using ValueType = std::decay_t<decltype(value)>;
-
-    //         if constexpr (requires { value.__visit_properties(std::declval<void (*)(const char *, int &)>()); }) {
-    //             j[name] = serialize(value);
-    //         }
-    //         else if constexpr (serializer_detail::has_external_reflect_v<ValueType>) {
-    //             j[name] = serializeExternal(value);
-    //         }
-    //         else {
-    //             j[name] = value;
-    //         }
-    //     };
-
-    //     T &mutableObj = const_cast<T &>(obj); // NOLINT(cppcoreguidelines-pro-type-const-cast)
-    //     ::ya::reflection::detail::ExternalReflect<T>::visit_properties(mutableObj, visitor);
-
-    //     return j;
-    // }
-
 
     /**
      * 反序列化外部反射类型（非侵入式）

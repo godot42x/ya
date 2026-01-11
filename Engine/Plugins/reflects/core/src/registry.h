@@ -19,6 +19,8 @@ struct ClassRegistry
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
     std::unordered_map<uint32_t, std::shared_ptr<Class>>    typeIdMap;
 
+    std::vector<std::function<void()>> postStaticInitializers;
+
     static ClassRegistry &instance();
 
     template <typename T>
@@ -74,6 +76,18 @@ struct ClassRegistry
     bool hasClass(uint32_t typeId) const
     {
         return typeIdMap.find(typeId) != typeIdMap.end();
+    }
+
+    void addPostStaticInitializer(std::function<void()> &&initFunc)
+    {
+        postStaticInitializers.push_back(std::move(initFunc));
+    }
+    void executeAllPostStaticInitializers()
+    {
+        for (auto &initFunc : postStaticInitializers) {
+            initFunc();
+        }
+        postStaticInitializers.clear();
     }
 };
 
@@ -163,6 +177,7 @@ struct Register
     }
 };
 
+#if 0
 // ============================================================================
 // Test Example
 // ============================================================================
@@ -327,6 +342,7 @@ inline void test_lsp()
     printf("\n=== All Tests Passed ===\n");
 }
 } // namespace test
+#endif
 
 
 // ============================================================================

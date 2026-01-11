@@ -3,7 +3,6 @@
 #include "Core/Log.h"
 #include "Core/System/FileSystem.h"
 #include "ECS/Entity.h"
-#include "SerializerRegistry.h"
 
 
 
@@ -120,8 +119,41 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
     entt::entity handle     = entity->getHandle();
     auto        &components = j["components"];
 
-    for (auto &[typeName, serializer] : ECSSerializerRegistry::get().getSerializers()) {
-        serializer(registry, handle, components);
+    auto &reg = ECSRegistry::get();
+
+    // YA_CORE_INFO("=== Serializing entity: {} (handle: {}) ===", entity->_name, (uint32_t)handle);
+    // YA_CORE_INFO("Registry address: {}", (void *)&registry);
+
+    // 直接检查 TagComponent
+    // bool hasTag = registry.all_of<TagComponent>(handle);
+    // YA_CORE_INFO("Entity has TagComponent (direct check): {}", hasTag);
+    // if (hasTag) {
+    //     auto *tagPtr = &registry.get<TagComponent>(handle);
+    //     YA_CORE_INFO("TagComponent address: {}", (void *)tagPtr);
+    // }
+
+    // TODO: loop Entity::_components instead, now this field is not implemented
+    //      so that we don't need to check the component_ptr or loop every component
+    for (auto &[name, typeIndex] : reg._typeIndexCache) {
+        auto getterIt = reg._componentGetters.find(typeIndex);
+        // if (getterIt == reg._componentGetters.end()) {
+        //     YA_CORE_WARN("No getter found for component type: {}", name.toString());
+        //     continue;
+        // }
+
+        // bool bTagComponent = registry.all_of<TagComponent>(handle);
+        // YA_CORE_INFO("Checking component: {} (typeIndex: {}) - has component: {}", name.toString(), typeIndex, bTagComponent);
+
+        auto getter = getterIt->second;
+        // YA_CORE_TRACE("Checking component: {} for entity: {}", name.toString(), entity->_name);
+
+        void *componentPtr = getter(registry, handle);
+        // YA_CORE_TRACE("  -> componentPtr: {}", (void *)componentPtr);
+
+        if (componentPtr) {
+            components[name.toString()] = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, name.toString());
+            // YA_CORE_TRACE("  -> Serialized component: {}", name.toString());
+        }
     }
     return j;
 }
@@ -140,9 +172,21 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
         auto &components = j["components"];
         auto &registry   = _scene->getRegistry();
 
-        for (auto &[typeName, deserializer] : ECSSerializerRegistry::get().getDeserializers()) {
-            if (components.contains(typeName)) {
-                deserializer(registry, entity->getHandle(), components[typeName]);
+
+        for (auto it = components.begin(); it != components.end(); ++it) {
+            const std::string &typeName   = it.key();
+            const auto        &componentJ = it.value();
+
+            std::unordered_map<FName, uint32_t>::const_iterator typeIndexIt = ECSRegistry::get()._typeIndexCache.find(FName(typeName));
+            if (typeIndexIt != ECSRegistry::get()._typeIndexCache.end()) {
+
+                auto  typeIndex    = typeIndexIt->second;
+                void *componentPtr = ECSRegistry::get()._componentCreators[typeIndex](registry, entity->getHandle());
+
+                auto cls = ClassRegistry::instance().getClass(typeIndex);
+                if (cls) {
+                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, typeIndex, componentJ, cls->_name);
+                }
             }
         }
     }

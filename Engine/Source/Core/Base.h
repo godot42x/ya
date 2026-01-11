@@ -102,11 +102,9 @@ struct TypeIndex
     }
 };
 
-// Definition of the static counter
-
-
+// Keep the original approach but let TypeIndex<T>::value() handle uniqueness
 template <typename T>
-inline static const auto type_index_v = TypeIndex<T>::value();
+inline const uint32_t type_index_v = TypeIndex<T>::value();
 #else
 
 template <typename T>
@@ -119,7 +117,7 @@ struct TypeIndex
 };
 
 template <typename T>
-inline static const auto type_index_v = TypeIndex<T>::value();
+inline static auto type_index_v = TypeIndex<T>::value();
 
 
 #endif

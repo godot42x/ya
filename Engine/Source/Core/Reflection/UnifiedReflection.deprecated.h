@@ -14,7 +14,7 @@
 #include "Core/Profiling/StaticInitProfiler.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Reflection/RuntimeReflectionBridge.h"
-#include "Core/Serialization/SerializerRegistry.h"
+// #include "Core/Serialization/SerializerRegistry.h"
 
 
 
@@ -41,28 +41,28 @@ struct ExternalReflect
  * 优先使用 Registry 模式，兼容 Visitor 模式
  * 支持所有注册到运行时反射系统的类型
  */
-template <typename Type>
-void registerECSSerializer(const std::string &typeName)
-{
-    ::ya::ECSSerializerRegistry::get().registerSerializer(
-        typeName,
-        // Serializer: 优先使用 Registry 模式
-        [typeName](::entt::registry &registry, ::entt::entity entity, ::nlohmann::json &components) {
-            if (registry.all_of<Type>(entity)) {
-                auto &comp = registry.get<Type>(entity);
+// template <typename Type>
+// void registerECSSerializer(const std::string &typeName)
+// {
+//     ::ya::ECSSerializerRegistry::get().registerSerializer(
+//         typeName,
+//         // Serializer: 优先使用 Registry 模式
+//         [typeName](::entt::registry &registry, ::entt::entity entity, ::nlohmann::json &components) {
+//             if (registry.all_of<Type>(entity)) {
+//                 auto &comp = registry.get<Type>(entity);
 
-                // 优先使用 Registry 模式（支持所有反射类型）
-                components[typeName] = ::ya::ReflectionSerializer::serializeProperty(comp, typeName);
-            }
-        },
-        // Deserializer: 优先使用 Registry 模式
-        [typeName](::entt::registry &registry, ::entt::entity entity, const ::nlohmann::json &j) {
-            auto &comp = registry.emplace_or_replace<Type>(entity);
+//                 // 优先使用 Registry 模式（支持所有反射类型）
+//                 components[typeName] = ::ya::ReflectionSerializer::serializeProperty(comp, typeName);
+//             }
+//         },
+//         // Deserializer: 优先使用 Registry 模式
+//         [typeName](::entt::registry &registry, ::entt::entity entity, const ::nlohmann::json &j) {
+//             auto &comp = registry.emplace_or_replace<Type>(entity);
 
-            // 优先使用 Registry 模式（支持所有反射类型）
-            ::ya::ReflectionSerializer::deserializeByRuntimeReflection(comp, j, typeName);
-        });
-}
+//             // 优先使用 Registry 模式（支持所有反射类型）
+//             ::ya::ReflectionSerializer::deserializeByRuntimeReflection(comp, j, typeName);
+//         });
+// }
 
 
 

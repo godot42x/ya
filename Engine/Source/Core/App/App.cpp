@@ -187,6 +187,12 @@ void App::init(AppDesc ci)
 
     {
         YA_PROFILE_SCOPE("App Init Subsystems");
+        {
+            YA_PROFILE_SCOPE("Static Initializers");
+            profiling::StaticInitProfiler::recordStart();
+            ClassRegistry::instance().executeAllPostStaticInitializers();
+            profiling::StaticInitProfiler::recordEnd();
+        }
         Logger::init();
         FileSystem::init();
         FileWatcher::init();

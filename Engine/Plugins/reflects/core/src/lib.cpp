@@ -5,7 +5,6 @@
 namespace refl
 {
 
-
-uint32_t _nextTypeId = 0;
+uint32_t _nextTypeID = 0;
 
 } // namespace refl

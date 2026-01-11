@@ -137,12 +137,12 @@ struct DetailsView
         });
     }
 
-    void drawReflectedComponentByTypeIndex(const std::string &name, uint32_t typeIndex, Entity &entity, void *componentInstance)
-    {
-        componentWrapper<void>(name, entity, [this, typeIndex, &name](void *component) {
-            renderReflectedType(name, typeIndex, component, 0);
-        });
-    }
+    // void drawReflectedComponentByTypeIndex(const std::string &name, uint32_t typeIndex, Entity &entity, void *componentInstance)
+    // {
+    //     componentWrapper<void>(name, entity, [this, typeIndex, &name](void *component) {
+    //         renderReflectedType(name, typeIndex, component, 0);
+    //     });
+    // }
 
     template <typename T, typename UIFunction>
     void drawComponent(const std::string &name, Entity entity, UIFunction uiFunc)
