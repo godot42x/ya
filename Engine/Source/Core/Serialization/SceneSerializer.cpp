@@ -109,7 +109,7 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
     nlohmann::json j;
 
     // Entity ID and name
-    j["id"]   = (uint32_t)entity->getHandle();
+    j["id"]   = entity->getComponents<IDComponent>()._id.value; // uuid
     j["name"] = entity->_name;
 
     // Serialize components
@@ -134,7 +134,16 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
 
     // TODO: loop Entity::_components instead, now this field is not implemented
     //      so that we don't need to check the component_ptr or loop every component
+
+    static std::unordered_set<FName> ignoredComponents = {
+        FName("IDComponent"),
+    };
+
     for (auto &[name, typeIndex] : reg._typeIndexCache) {
+        if (ignoredComponents.contains(name)) {
+            continue;
+        }
+
         auto getterIt = reg._componentGetters.find(typeIndex);
         // if (getterIt == reg._componentGetters.end()) {
         //     YA_CORE_WARN("No getter found for component type: {}", name.toString());
@@ -164,18 +173,27 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
     std::string name = j["name"].get<std::string>();
     uint64_t    uuid = j["id"].get<uint64_t>();
 
-    Entity *entity = uuid ? _scene->createEntityWithUUID(uuid, name)
-                          : _scene->createEntity(name);
+    Entity                          *entity            = uuid ? _scene->createEntityWithUUID(uuid, name)
+                                                              : _scene->createEntity(name);
+    static std::unordered_set<FName> ignoredComponents = {
+        FName("IDComponent"),
+        FName("TagComponent"),
+    };
 
     // 反序列化组件
     if (j.contains("components")) {
         auto &components = j["components"];
-        auto &registry   = _scene->getRegistry();
 
+        if (components.is_null() || components.size() < 1) {
+            return entity;
+        }
 
-        for (auto it = components.begin(); it != components.end(); ++it) {
-            const std::string &typeName   = it.key();
-            const auto        &componentJ = it.value();
+        auto &registry = _scene->getRegistry();
+
+        for (auto &[typeName, componentJ] : components.items()) {
+            if (ignoredComponents.contains(FName(typeName))) {
+                continue;
+            }
 
             std::unordered_map<FName, uint32_t>::const_iterator typeIndexIt = ECSRegistry::get()._typeIndexCache.find(FName(typeName));
             if (typeIndexIt != ECSRegistry::get()._typeIndexCache.end()) {
@@ -191,7 +209,7 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
         }
     }
 
-    return _scene->getEntityByEnttID(entity->getHandle());
+    return entity;
 }
 
 

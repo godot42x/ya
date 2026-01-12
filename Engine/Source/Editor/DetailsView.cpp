@@ -94,6 +94,20 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
 DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
 {
     _typeRender.insert(
+        {ya::type_index_v<std::string>,
+         [](void *instance, const PropRenderContext &ctx) {
+             auto &s = *static_cast<std::string *>(instance);
+             char  buf[256];
+             std::memcpy(buf, s.c_str(), std::min(s.size() + 1, sizeof(buf)));
+             buf[sizeof(buf) - 1] = '\0';
+
+             bool bModified = ImGui::InputText(ctx.name.c_str(), buf, sizeof(buf));
+             if (bModified) {
+                 s = buf;
+             }
+             return bModified;
+         }});
+    _typeRender.insert(
         {ya::type_index_v<glm::vec3>,
          [](void *instance, const PropRenderContext &ctx) {
              bool bModified = ImGui::DragFloat3(ctx.name.c_str(), (float *)instance, 0.1f);

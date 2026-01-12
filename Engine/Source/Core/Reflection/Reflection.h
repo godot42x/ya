@@ -82,6 +82,7 @@ void registerECSType(const std::string &typeName)
                 return nullptr;
             },
             [](::entt::registry &registry, ::entt::entity entity) -> void * {
+                // 使用 emplace_or_replace 避免重复添加崩溃
                 return &registry.emplace<Type>(entity);
             });
     }

@@ -30,7 +30,7 @@ struct ClassRegistry
         classes[name] = ptr;
         auto id       = TYPE_ID(T);
         typeIdMap[id] = ptr;
-        printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), id);
+        printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), (uint64_t)id);
 
         return classes[name];
     }
