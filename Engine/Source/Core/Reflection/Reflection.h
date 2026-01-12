@@ -16,8 +16,10 @@
 
 #include "Core/Profiling/StaticInitProfiler.h"
 #include "Core/Reflection/MetadataSupport.h"
+#include "Core/Reflection/PropertyExtensions.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Reflection/RuntimeReflectionBridge.h"
+
 
 // TODO: should not be in core?
 #include "ECS/ECSRegistry.h"
@@ -108,43 +110,52 @@ void registerECSType(const std::string &typeName)
 #endif
 
 
-#define YA_REFLECT_BEGIN(ClassName)                                                                  \
-  private:                                                                                           \
-    static inline const char *__type_name = #ClassName;                                              \
-    struct reflection_detail;                                                                        \
-    using _reflect_helper_class = reflection_detail;                                                 \
-    struct reflection_detail                                                                         \
-    {                                                                                                \
-        using _ReflectClass                    = ClassName;                                          \
-        static constexpr const char *type_name = #ClassName;                                         \
-                                                                                                     \
-                                                                                                     \
-        template <typename Visitor>                                                                  \
-        static void visit_fields(void *obj, Visitor &&visitor)                                       \
-        {                                                                                            \
-            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto /*meta*/) {   \
-                using ClassType     = _ReflectClass;                                                 \
-                using FieldType     = std::decay_t<decltype(std::declval<ClassType &>().*fieldPtr)>; \
-                FieldType &fieldRef = static_cast<ClassType *>(obj)->*fieldPtr;                      \
-                std::forward<Visitor>(visitor)(name, fieldRef);                                      \
-            });                                                                                      \
-        }                                                                                            \
-                                                                                                     \
-        reflection_detail()                                                                          \
-        {                                                                                            \
-            ClassRegistry::instance().addPostStaticInitializer([]() {                                \
-                ::Register<_ReflectClass> reg(type_name);                                            \
-                                                                                                     \
-                visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {             \
-                    reg.property(name, fieldPtr, meta);                                              \
-                });                                                                                  \
-                                                                                                     \
-                YA_REFLECT_EXTENSION(type_name)                                                      \
-            });                                                                                      \
-        }                                                                                            \
-                                                                                                     \
-        template <typename Visitor>                                                                  \
-        static void visit_static_fields(Visitor &&visitor)                                           \
+#define YA_REFLECT_BEGIN(ClassName)                                                                            \
+  private:                                                                                                     \
+    static inline const char *__type_name = #ClassName;                                                        \
+    struct reflection_detail;                                                                                  \
+    using _reflect_helper_class = reflection_detail;                                                           \
+    struct reflection_detail                                                                                   \
+    {                                                                                                          \
+        using _ReflectClass                    = ClassName;                                                    \
+        static constexpr const char *type_name = #ClassName;                                                   \
+                                                                                                               \
+                                                                                                               \
+        template <typename Visitor>                                                                            \
+        static void visit_fields(void *obj, Visitor &&visitor)                                                 \
+        {                                                                                                      \
+            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto /*meta*/) {             \
+                using ClassType     = _ReflectClass;                                                           \
+                using FieldType     = std::decay_t<decltype(std::declval<ClassType &>().*fieldPtr)>;           \
+                FieldType &fieldRef = static_cast<ClassType *>(obj)->*fieldPtr;                                \
+                std::forward<Visitor>(visitor)(name, fieldRef);                                                \
+            });                                                                                                \
+        }                                                                                                      \
+                                                                                                               \
+        reflection_detail()                                                                                    \
+        {                                                                                                      \
+            ClassRegistry::instance().addPostStaticInitializer([]() {                                          \
+                ::Register<_ReflectClass> reg(type_name);                                                      \
+                                                                                                               \
+                visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                       \
+                    reg.property(name, fieldPtr, meta);                                                        \
+                    /* TODO: Move into reflects-core*/                                                         \
+                    /* 自动注册容器元数据 */                                                                   \
+                    using FieldType = std::decay_t<decltype(std::declval<_ReflectClass>().*fieldPtr)>;         \
+                    auto &registry  = ClassRegistry::instance();                                               \
+                    if (auto *cls = registry.getClass(ya::type_index_v<_ReflectClass>)) {                      \
+                        if (auto *prop = cls->getProperty(name)) {                                             \
+                            ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop); \
+                        }                                                                                      \
+                    }                                                                                          \
+                });                                                                                            \
+                                                                                                               \
+                YA_REFLECT_EXTENSION(type_name)                                                                \
+            });                                                                                                \
+        }                                                                                                      \
+                                                                                                               \
+        template <typename Visitor>                                                                            \
+        static void visit_static_fields(Visitor &&visitor)                                                     \
         {
 
 // YA_REFLECT_FIELD: collect compile-time field list (+ metadata)

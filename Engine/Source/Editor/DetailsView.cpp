@@ -1,5 +1,7 @@
 #include "DetailsView.h"
 #include "Core/System/FileSystem.h"
+#include "Editor/ContainerPropertyRenderer.h"
+
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
@@ -48,10 +50,10 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
     }
 
     if (auto it = _typeRender.find(typeIndex); it != _typeRender.end()) {
-        return it->second(instancePtr,
-                          PropRenderContext{
-                              .name = name,
-                          });
+        return it->second.func(instancePtr,
+                               PropRenderContext{
+                                   .name = name,
+                               });
     }
 
     bool bModified = false;
@@ -63,19 +65,51 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
         auto iterateChildren = [&]() {
             for (auto &[propName, prop] : cache->componentClassPtr->properties) {
                 auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
-                if (renderReflectedType(propName, prop.typeIndex, subPropInstancePtr, depth + 1)) {
-                    bModified = true;
+
+                // 从缓存获取容器信息，避免重复metadata查询
+                auto it = cache->propertyCache.find(propName);
+                if (it == cache->propertyCache.end()) {
+                    // 首次访问，检测并缓存
+                    auto &propCache = cache->propertyCache[propName];
+                    propCache.isContainer = ::ya::reflection::PropertyContainerHelper::isContainer(prop);
+                    if (propCache.isContainer) {
+                        propCache.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
+                    }
+                    it = cache->propertyCache.find(propName);
+                }
+
+                const bool isContainer = it->second.isContainer;
+                if (isContainer) {
+                    // 渲染容器 - 优化：减少lambda捕获，直接传递this和depth
+                    bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
+                        propName,
+                        prop,
+                        subPropInstancePtr,
+                        [this, depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
+                            return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
+                        });
+
+                    if (containerModified) {
+                        bModified = true;
+                    }
+                }
+                else {
+                    // 普通属性
+                    if (renderReflectedType(propName, prop.typeIndex, subPropInstancePtr, depth + 1)) {
+                        bModified = true;
+                    }
                 }
             }
         };
 
-        // TODO: better performance
         if (depth == 0)
         {
             iterateChildren();
         }
         else {
-            if (ImGui::TreeNodeEx(name.c_str(), flags, "%s", name.c_str())) {
+            // 优化：depth > 1 时默认折叠，减少渲染开销
+            ImGuiTreeNodeFlags nodeFlags = (depth > 1) ? flags & ~ImGuiTreeNodeFlags_DefaultOpen : flags;
+            if (ImGui::TreeNodeEx(name.c_str(), nodeFlags, "%s", name.c_str())) {
                 ImGui::Indent();
                 iterateChildren();
                 ImGui::Unindent();
@@ -94,31 +128,67 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
 DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
 {
     _typeRender.insert(
-        {ya::type_index_v<std::string>,
-         [](void *instance, const PropRenderContext &ctx) {
-             auto &s = *static_cast<std::string *>(instance);
-             char  buf[256];
-             std::memcpy(buf, s.c_str(), std::min(s.size() + 1, sizeof(buf)));
-             buf[sizeof(buf) - 1] = '\0';
-
-             bool bModified = ImGui::InputText(ctx.name.c_str(), buf, sizeof(buf));
-             if (bModified) {
-                 s = buf;
-             }
-             return bModified;
-         }});
+        {
+            ya::type_index_v<int>,
+            PropRender{
+                .typeName = "int",
+                .func     = [](void *instance, const PropRenderContext &ctx) {
+                    return ImGui::InputInt(ctx.name.c_str(), static_cast<int *>(instance));
+                },
+            },
+        });
     _typeRender.insert(
-        {ya::type_index_v<glm::vec3>,
-         [](void *instance, const PropRenderContext &ctx) {
-             bool bModified = ImGui::DragFloat3(ctx.name.c_str(), (float *)instance, 0.1f);
-             return bModified;
-         }});
+        {
+            ya::type_index_v<float>,
+            PropRender{
+                .typeName = "float",
+                .func     = [](void *instance, const PropRenderContext &ctx) {
+                    return ImGui::InputFloat(ctx.name.c_str(), static_cast<float *>(instance));
+                },
+            },
+        });
+
+    _typeRender.insert(
+        {
+            ya::type_index_v<std::string>,
+            PropRender{
+                .typeName = "std::string",
+                .func     = [](void *instance, const PropRenderContext &ctx) {
+                    auto &s = *static_cast<std::string *>(instance);
+                    char  buf[256];
+                    std::memcpy(buf, s.c_str(), std::min(s.size() + 1, sizeof(buf)));
+                    buf[sizeof(buf) - 1] = '\0';
+
+                    bool bModified = ImGui::InputText(ctx.name.c_str(), buf, sizeof(buf));
+                    if (bModified) {
+                        s = buf;
+                    }
+                    return bModified;
+                },
+            },
+        });
+    _typeRender.insert(
+        {
+            ya::type_index_v<glm::vec3>,
+            PropRender{
+                .typeName = "glm::vec3",
+                .func =
+                    [](void *instance, const PropRenderContext &ctx) {
+                        bool bModified = ImGui::DragFloat3(ctx.name.c_str(), (float *)instance, 0.1f);
+                        return bModified;
+                    },
+            },
+        });
     _typeRender.insert(
         {
             ya::type_index_v<glm::vec4>,
-            [](void *instance, const PropRenderContext &ctx) {
-                bool bModified = ImGui::ColorEdit4(ctx.name.c_str(), (float *)instance);
-                return bModified;
+            {
+                .typeName = "glm::vec4",
+                .func =
+                    [](void *instance, const PropRenderContext &ctx) {
+                        bool bModified = ImGui::ColorEdit4(ctx.name.c_str(), (float *)instance);
+                        return bModified;
+                    },
             },
         });
 };

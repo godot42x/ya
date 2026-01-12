@@ -2,146 +2,779 @@
     "entities": [
         {
             "components": {
-                "LuaScriptComponent": {
-                    "scriptPath": "Engine/Content/Lua/TestPointLight.lua"
-                },
-                "PointLightComponent": {
-                    "color": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "intensity": 1.0,
-                    "range": 50.0
+                "TagComponent": {
+                    "_tag": "PhongSample_23_yellow rubber"
                 },
                 "TransformComponent": {
-                    "position": [
-                        0.0,
-                        5.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "scale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": 2.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
                 }
             },
-            "id": 4,
+            "id": 8883538581297339395,
+            "name": "PhongSample_23_yellow rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_22_white rubber"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -4.0,
+                        "y": 0.0,
+                        "z": 2.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 9004462414715915253,
+            "name": "PhongSample_22_white rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_21_red rubber"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -7.0,
+                        "y": 0.0,
+                        "z": 2.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 8039905024388097255,
+            "name": "PhongSample_21_red rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_20_green rubber"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -10.0,
+                        "y": 0.0,
+                        "z": 2.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 4962435383852926578,
+            "name": "PhongSample_20_green rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_19_cyan rubber"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": -1.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 7128146487035762736,
+            "name": "PhongSample_19_cyan rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_18_black rubber"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": -1.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 12002520401660074010,
+            "name": "PhongSample_18_black rubber"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_17_yellow plastic"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -4.0,
+                        "y": 0.0,
+                        "z": -1.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 10426566167733772296,
+            "name": "PhongSample_17_yellow plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "123"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -7.0,
+                        "y": 0.0,
+                        "z": -1.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 5284541492806449678,
+            "name": "PhongSample_16_white plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_15_red plastic"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -10.0,
+                        "y": 0.0,
+                        "z": -1.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 6552717436101918727,
+            "name": "PhongSample_15_red plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_14_green plastic"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": -4.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 5535804421876285179,
+            "name": "PhongSample_14_green plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_13_cyan plastic"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": -4.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 9485194683111781597,
+            "name": "PhongSample_13_cyan plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_12_black plastic"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -4.0,
+                        "y": 0.0,
+                        "z": -4.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 4296206860141459626,
+            "name": "PhongSample_12_black plastic"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_11_silver"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -7.0,
+                        "y": 0.0,
+                        "z": -4.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 17723315657466315622,
+            "name": "PhongSample_11_silver"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_10_gold"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -10.0,
+                        "y": 0.0,
+                        "z": -4.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 2896895071022113206,
+            "name": "PhongSample_10_gold"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_9_copper"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": -7.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 11682760464546473035,
+            "name": "PhongSample_9_copper"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_8_chrome"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": -7.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 15280444441748125097,
+            "name": "PhongSample_8_chrome"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_7_bronze"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -4.0,
+                        "y": 0.0,
+                        "z": -7.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 14013635615973535538,
+            "name": "PhongSample_7_bronze"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_6_brass"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -7.0,
+                        "y": 0.0,
+                        "z": -7.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 15243711666806391463,
+            "name": "PhongSample_6_brass"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_5_turquoise"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -10.0,
+                        "y": 0.0,
+                        "z": -7.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 14547280783442164365,
+            "name": "PhongSample_5_turquoise"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "314314"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 2.0,
+                        "y": 0.0,
+                        "z": -10.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 2551729806117107221,
+            "name": "PhongSample_4_ruby"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_3_pearl"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": -10.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 15177686935762154365,
+            "name": "PhongSample_3_pearl"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "314314"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -4.0,
+                        "y": 0.0,
+                        "z": -10.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 15591133686207559413,
+            "name": "PhongSample_2_obsidian"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_1_jade"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -7.0,
+                        "y": 0.0,
+                        "z": -10.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 14360858328111415468,
+            "name": "PhongSample_1_jade"
+        },
+        {
+            "components": {
+                "TagComponent": {
+                    "_tag": "PhongSample_0_emerald"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -10.0,
+                        "y": 0.0,
+                        "z": -10.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 1932015200346841884,
+            "name": "PhongSample_0_emerald"
+        },
+        {
+            "components": {
+                "PointLightComponent": {
+                    "_color": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "_intensity": 1.0,
+                    "_range": 50.0
+                },
+                "TagComponent": {
+                    "_tag": "Point Light"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 0.0,
+                        "y": 5.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 14983789323799311173,
             "name": "Point Light"
         },
         {
             "components": {
+                "TagComponent": {
+                    "_tag": "Suzanne"
+                },
                 "TransformComponent": {
-                    "position": [
-                        5.0,
-                        0.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "scale": [
-                        2.0,
-                        2.0,
-                        2.0
-                    ]
+                    "_position": {
+                        "x": 5.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 2.0,
+                        "y": 2.0,
+                        "z": 2.0
+                    }
                 }
             },
-            "id": 3,
+            "id": 10773199692636592383,
             "name": "Suzanne"
         },
         {
             "components": {
-                "LuaScriptComponent": {
-                    "scriptPath": ""
+                "TagComponent": {
+                    "_tag": "Lit Test"
                 },
                 "TransformComponent": {
-                    "position": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "scale": [
-                        3.0,
-                        3.0,
-                        3.0
-                    ]
+                    "_position": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 3.0,
+                        "y": 3.0,
+                        "z": 3.0
+                    }
                 }
             },
-            "id": 2,
+            "id": 11908155440383359348,
             "name": "Lit Test"
         },
         {
             "components": {
+                "TagComponent": {
+                    "_tag": "Plane"
+                },
                 "TransformComponent": {
-                    "position": [
-                        0.0,
-                        -20.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "scale": [
-                        1000.0,
-                        10.0,
-                        1000.0
-                    ]
+                    "_position": {
+                        "x": 0.0,
+                        "y": -20.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1000.0,
+                        "y": 10.0,
+                        "z": 1000.0
+                    }
                 }
             },
-            "id": 1,
+            "id": 15756693455455422739,
             "name": "Plane"
         },
         {
             "components": {
                 "CameraComponent": {
-                    "aspectRatio": 0.78899085521698,
-                    "distance": 6.0,
-                    "farClip": 1000.0,
-                    "fixedAspectRatio": false,
-                    "focusPoint": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "fov": 45.0,
-                    "nearClip": 0.10000000149011612,
-                    "primary": true
+                    "_aspectRatio": 0.5737265348434448,
+                    "_distance": 14.333333969116211,
+                    "_farClip": 1000.0,
+                    "_fixedAspectRatio": false,
+                    "_focusPoint": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_fov": 45.0,
+                    "_nearClip": 0.10000000149011612,
+                    "_primary": true
+                },
+                "TagComponent": {
+                    "_tag": "Camera"
                 },
                 "TransformComponent": {
-                    "position": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "rotation": [
-                        2.399998664855957,
-                        -0.5999999642372131,
-                        0.0
-                    ],
-                    "scale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
+                    "_position": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 1.8652448654174805,
+                        "y": -14.182395935058594,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
                 }
             },
-            "id": 0,
+            "id": 8218765353068757636,
             "name": "Camera"
         }
     ],

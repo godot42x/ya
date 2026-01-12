@@ -663,7 +663,7 @@ void EditorLayer::renderGizmo()
         // tc->setScale(scale);
 
 
-        YA_CORE_TRACE("Gizmo manipulated: pos({}, {}, {})", position.x, position.y, position.z);
+        // YA_CORE_TRACE("Gizmo manipulated: pos({}, {}, {})", position.x, position.y, position.z);
     }
 }
 

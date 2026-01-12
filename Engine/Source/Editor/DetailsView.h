@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ContainerPropertyRenderer.h"
 #include "ECS/Entity.h"
 #include "FilePicker.h"
 #include <imgui.h>
@@ -28,6 +29,13 @@ struct ReflectionCache
     size_t   propertyCount = 0;
     uint32_t typeIndex     = 0;
 
+    // 缓存容器属性信息，避免每帧查询
+    struct PropertyCache {
+        bool isContainer = false;
+        reflection::IContainerProperty* containerAccessor = nullptr;
+    };
+    std::unordered_map<std::string, PropertyCache> propertyCache;
+
     bool isValid(uint32_t ti) const { return ti == typeIndex && componentClassPtr != nullptr; }
 };
 
@@ -49,7 +57,13 @@ struct DetailsView
     {
         const std::string &name;
     };
-    std::unordered_map<uint32_t, bool (*)(void *instance, const PropRenderContext &ctx)> _typeRender;
+    struct PropRender
+    {
+        using t = bool (*)(void *instance, const PropRenderContext &ctx);
+        std::string typeName;
+        t           func;
+    };
+    std::unordered_map<uint32_t, PropRender> _typeRender;
 
     // 递归深度追踪（防止无限递归）
     int                  _recursionDepth     = 0;
