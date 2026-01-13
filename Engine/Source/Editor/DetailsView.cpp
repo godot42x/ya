@@ -27,6 +27,7 @@ ReflectionCache *DetailsView::getOrCreateReflectionCache(uint32_t typeIndex)
 
     if (it != _reflectionCache.end()) {
         if (auto &cache = it->second; cache.isValid(typeIndex)) {
+            // TODO: check type properties changed
             return &it->second;
         }
     }
@@ -63,24 +64,30 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
 
         auto iterateChildren = [&]() {
-            for (auto &[propName, prop] : cache->componentClassPtr->properties) {
-                auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
-
-                // 从缓存获取容器信息，避免重复metadata查询
-                auto it = cache->propertyCache.find(propName);
-                if (it == cache->propertyCache.end()) {
-                    // 首次访问，检测并缓存
-                    auto &propCache = cache->propertyCache[propName];
+            // 优化：预先缓存所有属性信息，避免每次查找
+            if (cache->propertyCache.empty() && cache->propertyCount > 0) {
+                for (auto &[propName, prop] : cache->componentClassPtr->properties) {
+                    auto &propCache       = cache->propertyCache[propName];
                     propCache.isContainer = ::ya::reflection::PropertyContainerHelper::isContainer(prop);
                     if (propCache.isContainer) {
                         propCache.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
                     }
-                    it = cache->propertyCache.find(propName);
                 }
+            }
 
-                const bool isContainer = it->second.isContainer;
+            for (auto &[propName, prop] : cache->componentClassPtr->properties) {
+                auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
+
+                // 从缓存获取容器信息（已预先填充）
+                const auto &propCache   = cache->propertyCache[propName];
+                const bool  isContainer = propCache.isContainer;
+
                 if (isContainer) {
-                    // 渲染容器 - 优化：减少lambda捕获，直接传递this和depth
+                    // 容器属性：只显示简单信息，不渲染内容
+                    // 注意：不调用 getSize() 避免虚函数开销
+                    // ImGui::TextDisabled("%s: [Container]", propName.c_str());
+
+                    // 如果需要启用完整容器渲染，取消下面的注释
                     bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
                         propName,
                         prop,
@@ -88,7 +95,6 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
                         [this, depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
                             return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
                         });
-
                     if (containerModified) {
                         bModified = true;
                     }
@@ -108,8 +114,10 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
         }
         else {
             // 优化：depth > 1 时默认折叠，减少渲染开销
+            // 只有在TreeNode展开时才执行iterateChildren，避免不必要的计算
             ImGuiTreeNodeFlags nodeFlags = (depth > 1) ? flags & ~ImGuiTreeNodeFlags_DefaultOpen : flags;
-            if (ImGui::TreeNodeEx(name.c_str(), nodeFlags, "%s", name.c_str())) {
+            bool               isOpen    = ImGui::TreeNodeEx(name.c_str(), nodeFlags, "%s", name.c_str());
+            if (isOpen) {
                 ImGui::Indent();
                 iterateChildren();
                 ImGui::Unindent();

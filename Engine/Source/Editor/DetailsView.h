@@ -30,9 +30,10 @@ struct ReflectionCache
     uint32_t typeIndex     = 0;
 
     // 缓存容器属性信息，避免每帧查询
-    struct PropertyCache {
-        bool isContainer = false;
-        reflection::IContainerProperty* containerAccessor = nullptr;
+    struct PropertyCache
+    {
+        bool                            isContainer       = false;
+        reflection::IContainerProperty *containerAccessor = nullptr;
     };
     std::unordered_map<std::string, PropertyCache> propertyCache;
 
