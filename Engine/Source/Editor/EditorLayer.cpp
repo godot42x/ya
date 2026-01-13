@@ -1,6 +1,7 @@
 #include "EditorLayer.h"
 #include "Core/App/App.h"
 #include "Core/AssetManager.h"
+#include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "ECS/Component/TransformComponent.h"
@@ -30,6 +31,7 @@ EditorLayer::EditorLayer(App *app)
 
 void EditorLayer::onAttach()
 {
+    YA_PROFILE_FUNCTION();
     YA_CORE_INFO("EditorLayer::onAttach");
 
     if (!_app)
@@ -99,6 +101,7 @@ void EditorLayer::onDetach()
 
 void EditorLayer::onUpdate(float dt)
 {
+    YA_PROFILE_FUNCTION();
     // Update logic here if needed
 }
 
@@ -200,6 +203,7 @@ void EditorLayer::onEvent(const Event &event)
 
 void EditorLayer::updateWindowFlags()
 {
+    YA_PROFILE_FUNCTION();
     if (bFullscreen)
     {
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -231,6 +235,7 @@ void EditorLayer::updateWindowFlags()
 
 void EditorLayer::setupDockspace()
 {
+    YA_PROFILE_FUNCTION();
     ImGuiIO &io = ImGui::GetIO();
 
     ImGuiStyle &style          = ImGui::GetStyle();
@@ -249,6 +254,7 @@ void EditorLayer::setupDockspace()
 
 void EditorLayer::menuBar()
 {
+    YA_PROFILE_FUNCTION();
     ImGui::BeginMenuBar();
 
     if (ImGui::BeginMenu("File"))
@@ -304,6 +310,7 @@ void EditorLayer::menuBar()
 
 void EditorLayer::toolbar()
 {
+    YA_PROFILE_FUNCTION();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
 
@@ -370,6 +377,7 @@ void EditorLayer::toolbar()
 
 void EditorLayer::viewportWindow()
 {
+    YA_PROFILE_FUNCTION();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{460, 300});
 
@@ -499,6 +507,7 @@ void EditorLayer::viewportWindow()
 
 const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView> imageView, stdptr<Sampler> sampler)
 {
+    YA_PROFILE_FUNCTION();
     if (!imageView) {
         YA_CORE_WARN("EditorLayer::getOrCreateImGuiTextureID: Invalid imageView or sampler");
         return nullptr;
@@ -564,6 +573,7 @@ bool EditorLayer::isGizmoActive() const
 
 void EditorLayer::renderGizmo()
 {
+    YA_PROFILE_FUNCTION();
     // Get selected entity from hierarchy panel
     Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
 

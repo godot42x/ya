@@ -21,6 +21,9 @@ cfg:
 	xmake f -m debug -y
 	xmake project -k compile_commands
 
+profile:
+	npm install -g speedscope
+	speedscope "./Engine/Saved/Profiling/App.speedscope.json"
 
 clean_if_needed:
 	$(if $(filter true,$(f)), xmake c )

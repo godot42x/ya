@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "Core/Debug/Instrumentor.h"
 #include "Core/Reflection/ContainerProperty.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include <imgui.h>
@@ -41,6 +42,7 @@ class ContainerPropertyRenderer
                                 void              *containerPtr,
                                 RenderFn         &&renderFn)
     {
+        YA_PROFILE_SCOPE("ContainerPropertyRenderer::renderContainer");
         using namespace reflection;
 
         auto *accessor = PropertyContainerHelper::getContainerAccessor(prop);

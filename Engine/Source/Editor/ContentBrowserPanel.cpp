@@ -1,6 +1,7 @@
 #include "ContentBrowserPanel.h"
 #include "Core/App/App.h"
 #include "Core/AssetManager.h"
+#include "Core/Debug/Instrumentor.h"
 #include "Core/System/FileSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/TextureLibrary.h"
@@ -109,6 +110,7 @@ void ContentBrowserPanel::init()
 
 void ContentBrowserPanel::onImGuiRender()
 {
+    YA_PROFILE_FUNCTION();
     if (!ImGui::Begin("Content Browser"))
     {
         ImGui::End();
@@ -256,6 +258,7 @@ void ContentBrowserPanel::renderRootSelector()
 
 void ContentBrowserPanel::renderDirectoryContents()
 {
+    YA_PROFILE_FUNCTION();
     static float padding        = 16.0f;
     static float thumbnail_size = 94.0f;
 

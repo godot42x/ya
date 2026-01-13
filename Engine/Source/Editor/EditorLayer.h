@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ContentBrowserPanel.h"
+#include "Core/Debug/Instrumentor.h"
 #include "Core/Event.h"
 #include "DetailsView.h"
 #include "Render/Core/DescriptorSet.h"
@@ -160,6 +161,7 @@ struct EditorLayer
 
     void onImGuiRender(auto content)
     {
+        YA_PROFILE_FUNCTION();
         updateWindowFlags();
 
         // Begin main dockspace window

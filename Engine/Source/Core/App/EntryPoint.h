@@ -8,11 +8,13 @@
 
 extern ya::App *createApp();
 
+
 #if defined YA_ENTRY_POINT
 
 int main(int argc, char **argv)
 {
 
+    YA_PROFILE_SESSION_BEGIN("App", "Engine/Saved/Profiling/App.speedscope.json")
     // 静态初始化已完成，显示性能报告（如果未自动打印）
     ya::profiling::StaticInitProfiler::refOBJ();
     ya::profiling::StaticInitProfiler::recordEnd();
@@ -38,6 +40,7 @@ int main(int argc, char **argv)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Give time for logs to flush
     YA_CORE_INFO("Application exited successfully");
+    YA_PROFILE_SESSION_END()
     return 0;
 }
 #endif

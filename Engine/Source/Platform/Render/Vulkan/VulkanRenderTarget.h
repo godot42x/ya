@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Debug/Instrumentor.h"
 #include "ECS/Entity.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
@@ -50,7 +51,11 @@ struct VulkanRenderTarget : public IRenderTarget
     void recreate() override;
     void destroy() override;
     void onUpdate(float deltaTime) override;
-    void onRender(ICommandBuffer *cmdBuf) override { renderMaterialSystems(cmdBuf); }
+    void onRender(ICommandBuffer *cmdBuf) override
+    {
+        YA_PROFILE_FUNCTION()
+        renderMaterialSystems(cmdBuf);
+    }
     void onRenderGUI() override;
 
     void begin(ICommandBuffer *cmdBuf) override;

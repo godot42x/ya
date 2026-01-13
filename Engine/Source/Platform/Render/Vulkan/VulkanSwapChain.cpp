@@ -264,7 +264,7 @@ bool VulkanSwapChain::createSwapchainAndImages(const VkSwapchainCreateInfoKHR &v
 void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &newCI, bool bImageRecreated)
 {
 
-    YA_PROFILE_SCOPE("SwapChain recreate event");
+    YA_PROFILE_SCOPE_LOG("SwapChain recreate event");
     DiffInfo old{
         .extent = Extent2D{
             .width  = _ci.width,
@@ -292,7 +292,7 @@ void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &newCI, bool bIm
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
 {
     YA_CORE_TRACE("======================================================");
-    YA_PROFILE_SCOPE("Swapchain Recreate");
+    YA_PROFILE_SCOPE_LOG("Swapchain Recreate");
     static uint32_t version = 0;
     version++;
 

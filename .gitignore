@@ -25,3 +25,5 @@ Intermediate
 Temp
 __pycache__
 build*
+
+Engine/Saved/Profiling/**

@@ -48,7 +48,7 @@ void FontManager::clearCache()
 
 std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const FName &fontName, uint32_t fontSize)
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
         YA_CORE_ERROR("Failed to initialize FreeType library");

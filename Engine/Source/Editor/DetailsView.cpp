@@ -1,4 +1,5 @@
 #include "DetailsView.h"
+#include "Core/Debug/Instrumentor.h"
 #include "Core/System/FileSystem.h"
 #include "Editor/ContainerPropertyRenderer.h"
 
@@ -20,9 +21,10 @@
 namespace ya
 {
 
-// 获取或创建反射缓存
+// Get or create reflection cache
 ReflectionCache *DetailsView::getOrCreateReflectionCache(uint32_t typeIndex)
 {
+    YA_PROFILE_FUNCTION();
     auto it = _reflectionCache.find(typeIndex);
 
     if (it != _reflectionCache.end()) {
@@ -42,9 +44,10 @@ ReflectionCache *DetailsView::getOrCreateReflectionCache(uint32_t typeIndex)
 }
 
 
-// 递归反射属性渲染
+// Recursive reflection property rendering
 bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeIndex, void *instancePtr, int depth)
 {
+    YA_PROFILE_SCOPE("renderReflectedType");
     if (depth >= MAX_RECURSION_DEPTH) {
         ImGui::TextDisabled("%s: [max recursion depth reached]", name.c_str());
         return false;
@@ -85,18 +88,22 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
                 if (isContainer) {
                     // 容器属性：只显示简单信息，不渲染内容
                     // 注意：不调用 getSize() 避免虚函数开销
-                    // ImGui::TextDisabled("%s: [Container]", propName.c_str());
+                    if constexpr (false) {
+                        ImGui::TextDisabled("%s: [Container]", propName.c_str());
+                    }
+                    else {
 
-                    // 如果需要启用完整容器渲染，取消下面的注释
-                    bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
-                        propName,
-                        prop,
-                        subPropInstancePtr,
-                        [this, depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
-                            return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
-                        });
-                    if (containerModified) {
-                        bModified = true;
+                        // 如果需要启用完整容器渲染，取消下面的注释
+                        bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
+                            propName,
+                            prop,
+                            subPropInstancePtr,
+                            [this, depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
+                                return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
+                            });
+                        if (containerModified) {
+                            bModified = true;
+                        }
                     }
                 }
                 else {
@@ -204,6 +211,7 @@ DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
 
 void DetailsView::onImGuiRender()
 {
+    YA_PROFILE_FUNCTION();
     ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Properties"))
     {
@@ -229,6 +237,7 @@ void DetailsView::onImGuiRender()
 
 void DetailsView::drawComponents(Entity &entity)
 {
+    YA_PROFILE_FUNCTION();
     if (!entity)
     {
         return;

@@ -115,7 +115,7 @@ AssetManager *AssetManager::get()
 
 void AssetManager::cleanup()
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     modelCache.clear();
     _textureViews.clear();
     if (_importer) {

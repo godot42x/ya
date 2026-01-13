@@ -719,6 +719,7 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
 // MARK: Being/End
 bool VulkanRender::begin(int32_t *outImageIndex)
 {
+    YA_PROFILE_FUNCTION()
 
     // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
@@ -778,6 +779,7 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
 bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
 {
+    YA_PROFILE_FUNCTION()
     // If cmdBufs is not empty, use legacy single-pass mode
     if (!cmdBufs.empty()) {
         submitToQueue(

@@ -1,4 +1,5 @@
 #include "SceneHierarchyPanel.h"
+#include "Core/Debug/Instrumentor.h"
 #include "EditorLayer.h"
 
 #include "Core/System/FileSystem.h"
@@ -19,6 +20,7 @@ namespace ya
 
 void SceneHierarchyPanel::onImGuiRender()
 {
+    YA_PROFILE_FUNCTION();
     sceneTree();
 }
 
@@ -30,6 +32,7 @@ void SceneHierarchyPanel::setSelection(Entity *entity)
 
 void SceneHierarchyPanel::sceneTree()
 {
+    YA_PROFILE_FUNCTION();
     ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Scene Hierarchy"))
     {

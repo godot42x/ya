@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Debug/Instrumentor.h"
 #include "Core/FWD.h"
 #include "Core/System/System.h"
 

@@ -79,7 +79,8 @@ namespace ya
 {
 
 // Define the static member variable
-App *App::_instance = nullptr;
+App     *App::_instance        = nullptr;
+uint32_t App::App::_frameIndex = 0;
 
 
 void App::onSceneViewportResized(Rect2D rect)
@@ -176,7 +177,7 @@ void imcClearValues()
 
 void App::init(AppDesc ci)
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     _ci = ci;
     YA_CORE_ASSERT(_instance == nullptr, "Only one instance of App is allowed");
     _instance = this;
@@ -186,9 +187,9 @@ void App::init(AppDesc ci)
 
 
     {
-        YA_PROFILE_SCOPE("App Init Subsystems");
+        YA_PROFILE_SCOPE_LOG("App Init Subsystems");
         {
-            YA_PROFILE_SCOPE("Static Initializers");
+            YA_PROFILE_SCOPE_LOG("Static Initializers");
             profiling::StaticInitProfiler::recordStart();
             ClassRegistry::instance().executeAllPostStaticInitializers();
             profiling::StaticInitProfiler::recordEnd();
@@ -399,7 +400,7 @@ void App::init(AppDesc ci)
 
 
     {
-        YA_PROFILE_SCOPE("Inheritance Init");
+        YA_PROFILE_SCOPE_LOG("Inheritance Init");
         onInit(ci);
     }
 
@@ -421,7 +422,7 @@ void App::init(AppDesc ci)
     _render->waitIdle();
 
     {
-        YA_PROFILE_SCOPE("Post Init");
+        YA_PROFILE_SCOPE_LOG("Post Init");
         onPostInit();
     }
 
@@ -445,6 +446,13 @@ void App::init(AppDesc ci)
     camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
     camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
+}
+
+void App::renderGUI(float dt)
+{
+    _editorLayer->onImGuiRender([this, dt]() {
+        this->onRenderGUI(dt);
+    });
 }
 
 // MARK: INIT
@@ -583,7 +591,7 @@ void ya::App::quit()
         _render->waitIdle();
     }
     {
-        YA_PROFILE_SCOPE("Inheritance Quit");
+        YA_PROFILE_SCOPE_LOG("Inheritance Quit");
         onQuit();
     }
 
@@ -672,6 +680,7 @@ int ya::App::processEvent(SDL_Event &event)
 
 int ya::App::iterate(float dt)
 {
+    YA_PROFILE_FUNCTION()
     SDL_Event evt;
     SDL_PollEvent(&evt);
     processEvent(evt);
@@ -697,6 +706,7 @@ int ya::App::iterate(float dt)
 
 void App::onUpdate(float dt)
 {
+    YA_PROFILE_FUNCTION()
     inputManager.preUpdate();
     Facade.timerManager.onUpdate(dt);
 
@@ -749,6 +759,7 @@ void App::onUpdate(float dt)
 // MARK: Render
 void App::onRender(float dt)
 {
+    YA_PROFILE_FUNCTION()
     auto render = getRender();
 
     if (_windowSize.x <= 0 || _windowSize.y <= 0) {
@@ -774,54 +785,61 @@ void App::onRender(float dt)
         cmdBuf->begin();
 
         // --- MARK: PASS 1: Render 3D Scene to Offscreen RT ---
-        _viewportRT->begin(cmdBuf.get());
-        _viewportRT->onRender(cmdBuf.get());
-
-        // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
-        Render2D::begin(cmdBuf.get());
         {
-            static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
+            YA_PROFILE_SCOPE("ViewPort pass")
+            _viewportRT->begin(cmdBuf.get());
+            _viewportRT->onRender(cmdBuf.get());
 
-            if (_appMode == AppMode::Drawing) {
-                for (const auto &&[idx, p] : ut::enumerate(clicked))
-                {
-                    auto tex = idx % 2 == 0
-                                 ? AssetManager::get()->getTextureByName("uv1")
-                                 : AssetManager::get()->getTextureByName("face");
-                    YA_CORE_ASSERT(tex, "Texture not found");
-                    glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
-                    Render2D::makeSprite(pos, {50, 50}, tex);
+            {
+                YA_PROFILE_SCOPE("Render2D");
+                // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
+                Render2D::begin(cmdBuf.get());
+                static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
+
+                if (_appMode == AppMode::Drawing) {
+                    for (const auto &&[idx, p] : ut::enumerate(clicked))
+                    {
+                        auto tex = idx % 2 == 0
+                                     ? AssetManager::get()->getTextureByName("uv1")
+                                     : AssetManager::get()->getTextureByName("face");
+                        YA_CORE_ASSERT(tex, "Texture not found");
+                        glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
+                        Render2D::makeSprite(pos, {50, 50}, tex);
+                    }
                 }
+
+                // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
+                // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
+
+                UIManager::get()->render();
+                Render2D::onRenderGUI();
+                Render2D::end();
             }
 
-            // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-            // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
-
-            UIManager::get()->render();
-            Render2D::onRenderGUI();
-        }
-        Render2D::end();
-
-        _viewportRT->end(cmdBuf.get());
-
-        // --- MARK: PASS 2: Render UI to Swapchain RT ---
-        _screenRT->begin(cmdBuf.get());
-
-        // Render ImGui
-        auto &imManager = ImGuiManager::get();
-        imManager.beginFrame();
-
-        App::renderGUI(dt);
-
-        // imcDrawMaterials();
-        imManager.endFrame();
-        imManager.render();
-
-        if (render->getAPI() == ERenderAPI::Vulkan) {
-            imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
+            _viewportRT->end(cmdBuf.get());
         }
 
-        _screenRT->end(cmdBuf.get());
+        {
+            YA_PROFILE_SCOPE("Screen pass")
+            // --- MARK: PASS 2: Render UI to Swapchain RT ---
+            _screenRT->begin(cmdBuf.get());
+
+            // Render ImGui
+            auto &imManager = ImGuiManager::get();
+            imManager.beginFrame();
+
+            this->renderGUI(dt);
+
+            // imcDrawMaterials();
+            imManager.endFrame();
+            imManager.render();
+
+            if (render->getAPI() == ERenderAPI::Vulkan) {
+                imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
+            }
+
+            _screenRT->end(cmdBuf.get());
+        }
     }
 
     cmdBuf->end();
@@ -847,6 +865,7 @@ void App::onRender(float dt)
 
 void App::onRenderGUI(float dt)
 {
+    YA_PROFILE_FUNCTION()
     auto &io = ImGui::GetIO();
     if (!ImGui::Begin("App Info"))
     {

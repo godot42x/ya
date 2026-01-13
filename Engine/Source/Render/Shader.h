@@ -245,7 +245,7 @@ struct ShaderStorage
         //     _shaderCache.erase(it);
         // }
 
-        YA_PROFILE_SCOPE(std::format("ShaderStorage::load {}", ci.shaderName).c_str());
+        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", ci.shaderName).c_str());
         auto opt = getProcessor()->process(ci);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", ci.shaderName));

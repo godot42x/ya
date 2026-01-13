@@ -161,6 +161,7 @@ void VulkanRenderTarget::onRenderGUI()
 
 void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
 {
+    YA_PROFILE_FUNCTION()
     YA_CORE_ASSERT(!bBeginTarget, "Render target is already begun");
 
     if (bDirty)
@@ -267,8 +268,10 @@ void VulkanRenderTarget::setDepthStencilClearValue(uint32_t index, ClearValue cl
 
 void VulkanRenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
 {
+    YA_PROFILE_FUNCTION()
     for (auto &system : _materialSystems) {
         if (system->bEnabled) {
+            YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
             system->onRender(cmdBuf, this);
         }
     }

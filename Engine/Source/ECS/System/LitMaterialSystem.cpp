@@ -1,5 +1,6 @@
 #include "LitMaterialSystem.h"
 #include "Core/App/App.h"
+#include "Core/Debug/Instrumentor.h"
 
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -25,6 +26,8 @@ namespace ya
 
 void LitMaterialSystem::onInit(IRenderPass *renderPass)
 {
+    YA_PROFILE_FUNCTION();
+
     _label                = "LitMaterialSystem";
     IRender *render       = getRender();
     auto     _sampleCount = ESampleCount::Sample_1;
@@ -262,6 +265,8 @@ void LitMaterialSystem::onDestroy()
 
 void LitMaterialSystem::onUpdate(float deltaTime)
 {
+    YA_PROFILE_FUNCTION();
+
     auto scene = getActiveScene();
     YA_CORE_ASSERT(scene, "LitMaterialSystem::onUpdate - Scene is null");
 
@@ -311,6 +316,8 @@ void LitMaterialSystem::onUpdate(float deltaTime)
 
 void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
+    YA_PROFILE_FUNCTION();
+
     Scene *scene = getActiveScene();
     if (!scene) {
         return;
@@ -321,7 +328,10 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
-    cmdBuf->bindPipeline(_pipeline.get());
+    {
+        YA_PROFILE_SCOPE("LitMaterial::BindPipeline");
+        cmdBuf->bindPipeline(_pipeline.get());
+    }
 
     uint32_t width  = rt->getFrameBuffer()->getWidth();
     uint32_t height = rt->getFrameBuffer()->getHeight();
@@ -333,21 +343,29 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         viewportHeight = -static_cast<float>(height);
     }
 
-    cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, width, height);
-    cmdBuf->setCullMode(_cullMode);
+    {
+        YA_PROFILE_SCOPE("LitMaterial::SetViewportScissorCull");
+        cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
+        cmdBuf->setScissor(0, 0, width, height);
+        cmdBuf->setCullMode(_cullMode);
+    }
 
-    updateFrameDS(rt);
+    {
+        YA_PROFILE_SCOPE("LitMaterial::UpdateFrameDS");
+        updateFrameDS(rt);
+    }
 
     bool     bShouldForceUpdateMaterial = false;
     uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<LitMaterial>();
     if (materialCount > _lastMaterialDSCount) {
+        YA_PROFILE_SCOPE("LitMaterial::RecreateMaterialDescPool");
         recreateMaterialDescPool(materialCount);
         bShouldForceUpdateMaterial = true;
     }
 
     std::vector<int> updatedMaterial(materialCount, 0);
 
+    YA_PROFILE_SCOPE("LitMaterial::EntityLoop");
     for (entt::entity entity : view)
     {
         const auto &[tag, lmc, tc] = view.get(entity);
@@ -368,11 +386,13 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             if (!updatedMaterial[materialInstanceIndex]) {
                 if (bShouldForceUpdateMaterial || material->isResourceDirty())
                 {
+                    YA_PROFILE_SCOPE("LitMaterial::UpdateResourceDS");
                     updateMaterialResourceDS(resourceDS, material);
                     material->setResourceDirty(false);
                 }
                 if (bShouldForceUpdateMaterial || material->isParamDirty())
                 {
+                    YA_PROFILE_SCOPE("LitMaterial::UpdateParamDS");
                     updateMaterialParamDS(paramDS, material);
                     material->setParamDirty(false);
                 }
@@ -381,29 +401,38 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             }
 
             // bind descriptor set
-            std::vector<DescriptorSetHandle> descSets = {
-                _frameDS,
-                resourceDS,
-                paramDS,
-            };
-            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+            {
+                YA_PROFILE_SCOPE("LitMaterial::BindDescriptorSets");
+                std::vector<DescriptorSetHandle> descSets = {
+                    _frameDS,
+                    resourceDS,
+                    paramDS,
+                };
+                cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+            }
 
             // update push constant
-            LitMaterialSystem::ModelPushConstant pushConst{
-                .modelMat = tc.getTransform(),
-            };
-            cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex,
-                                  0,
-                                  sizeof(LitMaterialSystem::ModelPushConstant),
-                                  &pushConst);
+            {
+                YA_PROFILE_SCOPE("LitMaterial::PushConstants");
+                LitMaterialSystem::ModelPushConstant pushConst{
+                    .modelMat = tc.getTransform(),
+                };
+                cmdBuf->pushConstants(_pipelineLayout.get(),
+                                      EShaderStage::Vertex,
+                                      0,
+                                      sizeof(LitMaterialSystem::ModelPushConstant),
+                                      &pushConst);
+            }
 
             // draw each mesh
-            for (const auto &meshIndex : meshIDs)
             {
-                auto mesh = lmc.getMesh(meshIndex);
-                if (mesh) {
-                    mesh->draw(cmdBuf);
+                YA_PROFILE_SCOPE("LitMaterial::DrawMeshes");
+                for (const auto &meshIndex : meshIDs)
+                {
+                    auto mesh = lmc.getMesh(meshIndex);
+                    if (mesh) {
+                        mesh->draw(cmdBuf);
+                    }
                 }
             }
         }
@@ -442,6 +471,8 @@ void LitMaterialSystem::onRenderGUI()
 // TODO: descriptor set can be shared if they use same layout and data
 void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 {
+    YA_PROFILE_FUNCTION();
+
     auto app    = getApp();
     auto render = getRender();
 
@@ -484,6 +515,8 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
 
 void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material)
 {
+    YA_PROFILE_FUNCTION();
+
     auto render = getRender();
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
@@ -520,6 +553,8 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
 
 void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
 {
+    YA_PROFILE_FUNCTION();
+
     auto render = getRender();
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
@@ -539,6 +574,8 @@ void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMate
 
 void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 {
+    YA_PROFILE_FUNCTION();
+
     auto *render = getRender();
     YA_CORE_ASSERT(render != nullptr, "Render is null");
     // 1. calculate how many set needed

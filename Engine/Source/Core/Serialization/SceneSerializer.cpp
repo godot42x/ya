@@ -19,7 +19,7 @@ namespace ya
 
 bool SceneSerializer::saveToFile(const std::string &filepath)
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     try {
         nlohmann::json j = serialize();
         FileSystem::get()->saveToFile(filepath, j.dump(4));
@@ -34,7 +34,7 @@ bool SceneSerializer::saveToFile(const std::string &filepath)
 
 bool SceneSerializer::loadFromFile(const std::string &filepath)
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     try {
         std::string content;
         FileSystem::get()->readFileToString(filepath, content);

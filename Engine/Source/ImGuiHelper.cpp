@@ -168,6 +168,7 @@ void ImGuiManager::shutdown()
 
 void ImGuiManager::beginFrame()
 {
+    YA_PROFILE_FUNCTION()
     YA_CORE_ASSERT(_initialized, "ImGuiManager not initialized");
 
     ImGui_ImplSDL3_NewFrame();
@@ -179,11 +180,13 @@ void ImGuiManager::beginFrame()
 
 void ImGuiManager::endFrame()
 {
+    YA_PROFILE_FUNCTION()
     ImGui::EndFrame();
 }
 
 bool ImGuiManager::render()
 {
+    YA_PROFILE_FUNCTION()
     ImGui::Render();
     _drawData = ImGui::GetDrawData();
 

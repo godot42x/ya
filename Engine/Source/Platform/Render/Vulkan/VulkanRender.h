@@ -140,7 +140,7 @@ struct VulkanRender : public IRender
     bool init(const ya::RenderCreateInfo &ci) override
     {
         IRender::init(ci);
-        YA_PROFILE_FUNCTION();
+        YA_PROFILE_FUNCTION_LOG();
 
         bool success = initInternal(ci);
         YA_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
