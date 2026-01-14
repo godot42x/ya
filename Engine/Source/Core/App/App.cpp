@@ -220,7 +220,7 @@ void App::init(AppDesc ci)
         .shaderName = "Sprite2D.glsl",
     });
     _shaderStorage->load(ShaderDesc{
-        .shaderName = "Test/Lit.glsl",
+        .shaderName = "Test/PhongLit.glsl", // 使用新版带 type 和 cutOff 的 shader
     });
 
 

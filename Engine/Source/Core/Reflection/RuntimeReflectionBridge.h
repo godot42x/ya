@@ -10,13 +10,9 @@
 
 #pragma once
 
-#include "Core/Base.h"
-#include <any>
-#include <optional>
+#include "Core/Common/FWD-std.h"
 #include <reflects-core/lib.h>
-#include <string>
-#include <type_traits>
-#include <typeinfo>
+
 
 
 namespace ya::reflection::detail

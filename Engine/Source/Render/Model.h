@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Math/AABB.h"
+#include "Core/Math/AABB.h"
 #include "Render/Mesh.h"
 #include <glm/glm.hpp>
 #include <memory>

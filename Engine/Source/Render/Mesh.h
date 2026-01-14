@@ -2,8 +2,8 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Math/AABB.h"
-#include "Math/Geometry.h"
+#include "Core/Math/AABB.h"
+#include "Core/Math/Geometry.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 

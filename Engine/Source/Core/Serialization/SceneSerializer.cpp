@@ -1,6 +1,7 @@
 #include "SceneSerializer.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/Log.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/FileSystem.h"
 #include "ECS/Entity.h"
 
@@ -149,7 +150,6 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
         //     YA_CORE_WARN("No getter found for component type: {}", name.toString());
         //     continue;
         // }
-
         // bool bTagComponent = registry.all_of<TagComponent>(handle);
         // YA_CORE_INFO("Checking component: {} (typeIndex: {}) - has component: {}", name.toString(), typeIndex, bTagComponent);
 

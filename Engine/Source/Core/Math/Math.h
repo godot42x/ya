@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "Math/GLM.h"
+#include "Core/Math/GLM.h"
 
 
 
@@ -17,7 +17,8 @@ struct FMath
         static constexpr bool      IsRightHanded = true;
         static constexpr glm::vec3 WorldUp       = glm::vec3(0.0f, 1.0f, 0.0f);
         static constexpr glm::vec3 WorldRight    = glm::vec3(1.0f, 0.0f, 0.0f);
-        static constexpr glm::vec3 WorldForward  = glm::vec3(0.0f, 0.0f, 1.0f);
+        // right-handed 看向屏幕内侧
+        static constexpr glm::vec3 WorldForward = glm::vec3(0.0f, 0.0f, -1.0f);
     };
 
     // use these functions to avoid Left-Handed and Right-Handed system confusion, Zero-to-One or Negative-One-to-One clip space etc.

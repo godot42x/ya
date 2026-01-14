@@ -7,7 +7,7 @@
 #include "ECS/Component.h"
 #include "ECS/Component/CameraComponent.h"
 
-#include "Math/Geometry.h"
+#include "Core/Math/Geometry.h"
 #include "Render/Core/IRenderTarget.h"
 
 #include "Render/Core/Swapchain.h"

@@ -12,9 +12,7 @@
 #pragma once
 
 #include "ContainerTraits.h"
-#include "Core/Base.h"
-#include <any>
-#include <functional>
+#include "Core/TypeIndex.h"
 #include <memory>
 #include <string>
 
@@ -31,13 +29,13 @@ namespace ya::reflection
  */
 struct ContainerIterator
 {
-    virtual ~ContainerIterator()                    = default;
-    virtual bool        hasNext() const             = 0;
-    virtual void        next()                      = 0;
-    virtual void       *getElementPtr()             = 0; // 返回当前元素的指针
-    virtual uint32_t    getElementTypeIndex() const = 0;
-    virtual void       *getKeyPtr() { return nullptr; }   // Map 专用：获取当前 key 指针
-    virtual uint32_t    getKeyTypeIndex() const { return 0; } // Map 专用：获取 key 类型索引
+    virtual ~ContainerIterator()                 = default;
+    virtual bool     hasNext() const             = 0;
+    virtual void     next()                      = 0;
+    virtual void    *getElementPtr()             = 0; // 返回当前元素的指针
+    virtual uint32_t getElementTypeIndex() const = 0;
+    virtual void    *getKeyPtr() { return nullptr; }       // Map 专用：获取当前 key 指针
+    virtual uint32_t getKeyTypeIndex() const { return 0; } // Map 专用：获取 key 类型索引
 };
 
 /**
@@ -68,10 +66,10 @@ struct IContainerProperty
     virtual std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) = 0;
 
     // 添加/删除（可选）
-    virtual void addElement(void *containerPtr, void *elementPtr) {}                 // Vector::push_back
-    virtual void removeElement(void *containerPtr, size_t index) {}                  // Vector::erase
-    virtual void removeByKey(void *containerPtr, void *keyPtr) {}                    // Map::erase (keyPtr 指向实际的 key)
-    virtual void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) {}  // Map::insert
+    virtual void addElement(void *containerPtr, void *elementPtr) {}                // Vector::push_back
+    virtual void removeElement(void *containerPtr, size_t index) {}                 // Vector::erase
+    virtual void removeByKey(void *containerPtr, void *keyPtr) {}                   // Map::erase (keyPtr 指向实际的 key)
+    virtual void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) {} // Map::insert
 };
 
 // ============================================================================
@@ -100,7 +98,7 @@ class VectorProperty : public IContainerProperty
             return currentIndex < container->size() ? &(*container)[currentIndex] : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -134,7 +132,7 @@ class VectorProperty : public IContainerProperty
         return nullptr; // Vector 不支持 key 访问
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -188,14 +186,14 @@ class MapProperty : public IContainerProperty
             return current != container->end() ? &current->second : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
         void *getKeyPtr() override
         {
-            return current != container->end() ? const_cast<K*>(&current->first) : nullptr;
+            return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
         }
 
-        uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
     };
 
   public:
@@ -255,8 +253,8 @@ class MapProperty : public IContainerProperty
         return it != map->end() ? &it->second : nullptr;
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
-    uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -266,9 +264,9 @@ class MapProperty : public IContainerProperty
     void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) override
     {
         if (!keyPtr) return;
-        
-        auto *map = static_cast<ContainerType *>(containerPtr);
-        const K& key = *static_cast<K*>(keyPtr);
+
+        auto    *map = static_cast<ContainerType *>(containerPtr);
+        const K &key = *static_cast<K *>(keyPtr);
 
         if (valuePtr) {
             (*map)[key] = *static_cast<V *>(valuePtr);
@@ -281,9 +279,9 @@ class MapProperty : public IContainerProperty
     void removeByKey(void *containerPtr, void *keyPtr) override
     {
         if (!keyPtr) return;
-        
-        auto *map = static_cast<ContainerType *>(containerPtr);
-        const K& key = *static_cast<K*>(keyPtr);
+
+        auto    *map = static_cast<ContainerType *>(containerPtr);
+        const K &key = *static_cast<K *>(keyPtr);
         map->erase(key);
     }
 };

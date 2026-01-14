@@ -94,7 +94,7 @@ struct FreeCamera : public Camera
         //              glm::mat4_cast(rotQuat);
 
         // 看向 -z 方向，右手坐标系， 屏幕内测
-        glm::vec3 forward  = rotQuat * -FMath::Vector::WorldForward;
+        glm::vec3 forward  = rotQuat * FMath::Vector::WorldForward;
         glm::vec3 target   = _position + forward;
         glm::vec3 cameraUp = rotQuat * FMath::Vector::WorldUp;
 

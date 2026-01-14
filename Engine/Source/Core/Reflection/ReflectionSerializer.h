@@ -2,37 +2,12 @@
 #pragma once
 
 #include "Core/Log.h"
+#include "Core/TypeIndex.h"
 #include <nlohmann/json.hpp>
-#include <reflects-core/lib.h>
 #include <unordered_set>
-
-namespace ya::reflection::detail
-{
-// 前向声明 ExternalReflect
-template <typename T>
-struct ExternalReflect;
-} // namespace ya::reflection::detail
 
 namespace ya
 {
-
-namespace serializer_detail
-{
-// 检测是否支持外部反射
-template <typename T, typename = void>
-struct has_external_reflect : std::false_type
-{};
-
-template <typename T>
-struct has_external_reflect<T, std::void_t<
-                                   decltype(::ya::reflection::detail::ExternalReflect<T>::visit_properties(
-                                       std::declval<T &>(),
-                                       std::declval<int (*)(const char *, int &)>()))>> : std::true_type
-{};
-
-template <typename T>
-inline constexpr bool has_external_reflect_v = has_external_reflect<T>::value;
-} // namespace serializer_detail
 
 
 struct ReflectionSerializer
@@ -282,7 +257,7 @@ struct ReflectionSerializer
      * 反序列化外部反射类型（非侵入式）
      */
     template <typename T>
-        requires serializer_detail::has_external_reflect_v<T>
+        requires reflection::detail::has_external_reflect_v<T>
     static T deserializeExternal(const nlohmann::json &j)
     {
         T obj{};
@@ -295,7 +270,7 @@ struct ReflectionSerializer
             if constexpr (requires { value.__visit_properties(std::declval<void (*)(const char *, int &)>()); }) {
                 value = deserializeByRuntimeReflection<ValueType>(j[name]);
             }
-            else if constexpr (serializer_detail::has_external_reflect_v<ValueType>) {
+            else if constexpr (reflection::detail::has_external_reflect_v<ValueType>) {
                 value = deserializeExternal<ValueType>(j[name]);
             }
             else {
@@ -312,7 +287,7 @@ struct ReflectionSerializer
      * 就地反序列化外部反射类型（非侵入式）
      */
     template <typename T>
-        requires serializer_detail::has_external_reflect_v<T>
+        requires reflection::detail::has_external_reflect_v<T>
     static void deserializeInPlaceExternal(T &obj, const nlohmann::json &j)
     {
         auto visitor = [&j](const char *name, auto &value) {
@@ -323,7 +298,7 @@ struct ReflectionSerializer
             if constexpr (requires { value.__visit_properties(std::declval<void (*)(const char *, int &)>()); }) {
                 deserializeInPlace(value, j[name]);
             }
-            else if constexpr (serializer_detail::has_external_reflect_v<ValueType>) {
+            else if constexpr (reflection::detail::has_external_reflect_v<ValueType>) {
                 deserializeInPlaceExternal(value, j[name]);
             }
             else {
@@ -352,19 +327,19 @@ struct ReflectionSerializer
 
 
         // 基础类型
-        if (typeIdx == refl::TypeIndex<int>::value()) {
+        if (typeIdx == ya::TypeIndex<int>::value()) {
             return std::any_cast<int>(value);
         }
-        if (typeIdx == refl::TypeIndex<float>::value()) {
+        if (typeIdx == ya::TypeIndex<float>::value()) {
             return std::any_cast<float>(value);
         }
-        if (typeIdx == refl::TypeIndex<double>::value()) {
+        if (typeIdx == ya::TypeIndex<double>::value()) {
             return std::any_cast<double>(value);
         }
-        if (typeIdx == refl::TypeIndex<bool>::value()) {
+        if (typeIdx == ya::TypeIndex<bool>::value()) {
             return std::any_cast<bool>(value);
         }
-        if (typeIdx == refl::TypeIndex<std::string>::value()) {
+        if (typeIdx == ya::TypeIndex<std::string>::value()) {
             return std::any_cast<std::string>(value);
         }
 

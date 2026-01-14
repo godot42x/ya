@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Math/GLM.h"
-#include "Math/Ray.h"
+#include "Core/Math/GLM.h"
+#include "Core/Math/Ray.h"
 #include <optional>
 
 namespace ya

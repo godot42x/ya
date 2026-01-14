@@ -4,7 +4,6 @@
 
 
 #include "Core/UUID.h"
-#include "Math/GLM.h"
 
 
 namespace ya

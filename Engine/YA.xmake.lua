@@ -91,7 +91,7 @@ add_requires("entt v3.15.0", {
 
 option("ya_enable_unity-build")
 do
-    set_default(true)
+    set_default(false)
 end
 
 
@@ -100,7 +100,7 @@ target("ya") --"Yet Another (Game) Engine"
 do
     set_kind("static")
     local bEnableUnity = get_config("ya_enable_unity-build")
-    if bEnableUnity and false then
+    if bEnableUnity then
         add_rules("c++.unity_build", { batchsize = 2 })
         add_files("./Source/Core/**.cpp", { unity_group = "Core" })
         add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
@@ -110,7 +110,7 @@ do
     add_files("./Source/**.cpp")
 
     add_headerfiles("./Source/**.h")
-    set_pcheader("./Source/Core/FWD.h")
+    set_pcheader("./Source//FWD.h")
 
     add_includedirs("./Source", { public = true })
 

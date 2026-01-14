@@ -151,9 +151,17 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
         glm::vec3 normal = glm::normalize(glm::vec3(x, 0.0f, z));
 
         // Bottom vertex
-        outVertices.push_back({{x, -halfHeight, z}, {float(i) / segments, 0.0f}, normal});
+        outVertices.push_back({
+            .position  = {x, -halfHeight, z},
+            .texCoord0 = {float(i) / segments, 0.0f},
+            .normal    = normal,
+        });
         // Top vertex
-        outVertices.push_back({{x, halfHeight, z}, {float(i) / segments, 1.0f}, normal});
+        outVertices.push_back({
+            .position  = {x, halfHeight, z},
+            .texCoord0 = {float(i) / segments, 1.0f},
+            .normal    = normal,
+        });
     }
 
     // Side indices
@@ -170,18 +178,34 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
 
     // Caps (simplified - center vertex + ring)
     uint32_t bottomCenterIdx = outVertices.size();
-    outVertices.push_back({{0.0f, -halfHeight, 0.0f}, {0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}});
+    outVertices.push_back({
+        .position  = {0.0f, -halfHeight, 0.0f},
+        .texCoord0 = {0.5f, 0.5f},
+        .normal    = {0.0f, -1.0f, 0.0f},
+    });
 
     uint32_t topCenterIdx = outVertices.size();
-    outVertices.push_back({{0.0f, halfHeight, 0.0f}, {0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}});
+    outVertices.push_back({
+        .position  = {0.0f, halfHeight, 0.0f},
+        .texCoord0 = {0.5f, 0.5f},
+        .normal    = {0.0f, 1.0f, 0.0f},
+    });
 
     for (uint32_t i = 0; i <= segments; ++i) {
         float theta = 2.0f * glm::pi<float>() * float(i) / float(segments);
         float x     = radius * cos(theta);
         float z     = radius * sin(theta);
 
-        outVertices.push_back({{x, -halfHeight, z}, {0.5f + 0.5f * cos(theta), 0.5f + 0.5f * sin(theta)}, {0.0f, -1.0f, 0.0f}});
-        outVertices.push_back({{x, halfHeight, z}, {0.5f + 0.5f * cos(theta), 0.5f + 0.5f * sin(theta)}, {0.0f, 1.0f, 0.0f}});
+        outVertices.push_back({
+            .position  = {x, -halfHeight, z},
+            .texCoord0 = {0.5f + 0.5f * cos(theta), 0.5f + 0.5f * sin(theta)},
+            .normal    = {0.0f, -1.0f, 0.0f},
+        });
+        outVertices.push_back({
+            .position  = {x, halfHeight, z},
+            .texCoord0 = {0.5f + 0.5f * cos(theta), 0.5f + 0.5f * sin(theta)},
+            .normal    = {0.0f, 1.0f, 0.0f},
+        });
     }
 
     uint32_t capStartIdx = bottomCenterIdx + 2;

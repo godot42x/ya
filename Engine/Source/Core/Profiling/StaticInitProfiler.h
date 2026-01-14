@@ -11,14 +11,8 @@
 
 #pragma once
 
-#include "Core/Base.h"
-#include <atomic>
-#include <chrono>
-#include <mutex>
-#include <string>
-#include <vector>
 
-
+#include "Core/Common/FWD-std.h"
 namespace ya::profiling
 {
 

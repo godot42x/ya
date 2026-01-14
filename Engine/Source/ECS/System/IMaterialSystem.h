@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Core/Base.h"
 #include "Core/Debug/Instrumentor.h"
-#include "Core/FWD.h"
 #include "Core/System/System.h"
 
 #include "Render/Core/CommandBuffer.h"

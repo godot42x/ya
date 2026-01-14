@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Math/GLM.h"
-#include "Math/AABB.h"
+#include "Core/Math/GLM.h"
+#include "Core/Math/AABB.h"
 
 namespace ya
 {

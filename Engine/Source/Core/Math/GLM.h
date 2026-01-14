@@ -14,7 +14,7 @@
  * // #include "Core/Reflection/GlmReflection.h"
  *
  * // 只需一行：
- * #include "Math/GLMer.h"
+ * #include "Core/Math/GLMer.h"
  */
 
 #pragma once

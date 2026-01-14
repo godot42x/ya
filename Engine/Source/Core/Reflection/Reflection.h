@@ -1,28 +1,19 @@
 
 #pragma once
 
-// #include "Core/Reflection/UnifiedReflection.h"
-
-#include "Core/Base.h"
-
-
-#include <functional>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
+#include "Core/Common/FWD-std.h"
 
 
 
 #include "Core/Profiling/StaticInitProfiler.h"
+
 #include "Core/Reflection/MetadataSupport.h"
+
 #include "Core/Reflection/PropertyExtensions.h"
-#include "Core/Reflection/ReflectionSerializer.h"
-#include "Core/Reflection/RuntimeReflectionBridge.h"
 
 
 // TODO: should not be in core?
-#include "ECS/ECSRegistry.h"
+#include "Core/Reflection/ECSRegistry.h"
 
 namespace ya
 {
@@ -30,23 +21,46 @@ struct IComponent;
 }
 
 
-namespace ya::reflection
+namespace ya::reflection::detail
 {
+// 前向声明 ExternalReflect
+template <typename T>
+struct ExternalReflect;
+} // namespace ya::reflection::detail
+
+namespace ya
+{
+
+namespace reflection
+{
+
 namespace detail
 {
-// 外部反射模板（默认实现）
+// 检测是否支持外部反射
+template <typename T, typename = void>
+struct has_external_reflect : std::false_type
+{};
+
 template <typename T>
-struct ExternalReflect
-{
-    static constexpr bool has_external_reflection = false;
-};
+struct has_external_reflect<T, std::void_t<
+                                   decltype(::ya::reflection::detail::ExternalReflect<T>::visit_properties(
+                                       std::declval<T &>(),
+                                       std::declval<int (*)(const char *, int &)>()))>> : std::true_type
+{};
+
+template <typename T>
+inline constexpr bool has_external_reflect_v = has_external_reflect<T>::value;
+
+} // namespace detail
+
+
 
 template <typename T>
 struct Visitor
 {
     static void visit_properties(T &obj, auto &&visitor)
     {
-        if constexpr (serializer_detail::has_external_reflect_v<T>) {
+        if constexpr (reflection::detail::has_external_reflect_v<T>) {
             ::ya::reflection::detail::ExternalReflect<T>::visit_properties(obj, std::forward<decltype(visitor)>(visitor));
         }
         else {
@@ -91,10 +105,10 @@ void registerECSType(const std::string &typeName)
 }
 
 
+} // namespace reflection
 
-} // namespace detail
 
-} // namespace ya::reflection
+} // namespace ya
 
 
 
@@ -106,7 +120,7 @@ void registerECSType(const std::string &typeName)
 #ifndef YA_REFLECT_EXTENSION
     #define YA_REFLECT_EXTENSION(type_name) \
         YA_PROFILE_STATIC_INIT(type_name);  \
-        ::ya::reflection::detail::registerECSType<_ReflectClass>(type_name);
+        ::ya::reflection::registerECSType<_ReflectClass>(type_name);
 #endif
 
 

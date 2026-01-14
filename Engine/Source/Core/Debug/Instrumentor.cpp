@@ -81,15 +81,15 @@ void Instrumentor::EndSessionInternal()
     if (m_OutputStream.is_open()) {
         WriteSpeedscopeJson();
         m_OutputStream.close();
-        
+
         // 打印可点击的链接
         auto absPath = std::filesystem::absolute(_outputPath);
         auto pathStr = absPath.string();
-        
+
         // 转换为 URL 编码的路径 (替换反斜杠)
         std::string urlPath = pathStr;
         std::replace(urlPath.begin(), urlPath.end(), '\\', '/');
-        
+
         YA_CORE_INFO("Instrumentor: Session '{}' ended, wrote to '{}'", m_SessionName, pathStr);
         YA_CORE_INFO("========================================");
         YA_CORE_INFO("🔥 Profile Ready! Choose one option:");
@@ -106,7 +106,7 @@ void Instrumentor::EndSessionInternal()
         YA_CORE_INFO("    npm install -g speedscope");
         YA_CORE_INFO("    speedscope \"{}\"", pathStr);
         YA_CORE_INFO("========================================");
-        
+
         m_SessionName.clear();
     }
 

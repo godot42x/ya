@@ -36,6 +36,7 @@ struct Resource
 };
 
 
+
 class AssetManager
 {
   private:
@@ -60,7 +61,7 @@ class AssetManager
 
     std::shared_ptr<Model> loadModel(const std::string &filepath);
     std::shared_ptr<Model> loadModel(const std::string &name, const std::string &filepath);
-    
+
     /**
      * @brief Load model with explicit coordinate system override
      * @param filepath Path to model file
@@ -68,7 +69,7 @@ class AssetManager
      * @return Loaded model
      */
     std::shared_ptr<Model> loadModel(const std::string &filepath, CoordinateSystem coordSystem);
-    
+
     std::shared_ptr<Model> getModel(const std::string &filepath) const;
     bool                   isModelLoaded(const std::string &filepath) const;
 

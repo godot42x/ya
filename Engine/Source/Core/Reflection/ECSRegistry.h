@@ -1,10 +1,11 @@
 #pragma once
 
-#include "Core/Base.h"
 #include "Core/FName.h"
+#include "Core/TypeIndex.h"
 #include <entt/entt.hpp>
 #include <functional>
 #include <nlohmann/json.hpp>
+#include <reflects-core/lib.h>
 #include <string>
 #include <unordered_map>
 
@@ -28,7 +29,7 @@ struct ECSRegistry
     template <typename T>
     void registerComponent(const std::string &name, auto &&componentGetter, auto &&componentCreator)
     {
-        uint32_t typeIndex = ya::type_index_v<T>;
+        uint32_t typeIndex = ya::TypeIndex<T>::value();
 
         _componentGetters[typeIndex]  = componentGetter;
         _componentCreators[typeIndex] = componentCreator;
