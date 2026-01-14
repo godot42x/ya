@@ -263,7 +263,7 @@ void LitMaterialSystem::onDestroy()
 {
 }
 
-void LitMaterialSystem::onUpdate(float deltaTime)
+void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();
 
@@ -283,8 +283,8 @@ void LitMaterialSystem::onUpdate(float deltaTime)
     if (entityCount == 0) {
         // YA_CORE_WARN("LitMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
     }
-    else {
-        // YA_CORE_INFO("LitMaterialSystem::onUpdate - Found {} entities with PointLightComponent", entityCount);
+    else if (entityCount > MAX_POINT_LIGHTS) {
+        YA_CORE_WARN("LitMaterialSystem::onUpdate - Found {} entities with PointLightComponent, but only {} are supported", entityCount, MAX_POINT_LIGHTS);
     }
 
     // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
@@ -480,25 +480,19 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     auto app    = getApp();
     auto render = getRender();
 
-    glm::mat4 proj;
-    glm::mat4 view;
-    rt->getViewAndProjMatrix(view, proj);
-
-    // 从 view matrix 提取相机位置
-    // glm::mat4 invView   = glm::inverse(view);
-    glm::mat4 invView   = view;
-    glm::vec3 cameraPos = glm::vec3(invView[3]);
+    // Use cached camera context (updated once per frame in App::onUpdate)
+    const auto &camCtx = rt->getCameraContext();
 
     FrameUBO uFrame{
-        .projection = proj,
-        .view       = view,
+        .projection = camCtx.projection,
+        .view       = camCtx.view,
         .resolution = {
             rt->getFrameBuffer()->getWidth(),
             rt->getFrameBuffer()->getHeight(),
         },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
-        .cameraPos  = cameraPos,
+        .cameraPos  = camCtx.cameraPos,
     };
 
     _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);

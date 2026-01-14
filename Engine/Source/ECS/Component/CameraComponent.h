@@ -15,7 +15,7 @@ namespace ya
 struct CameraComponent : public IComponent
 {
     YA_REFLECT_BEGIN(CameraComponent)
-    YA_REFLECT_FIELD(_primary)
+    YA_REFLECT_FIELD(bPrimary)
     YA_REFLECT_FIELD(_fixedAspectRatio)
     YA_REFLECT_FIELD(_fov)
     YA_REFLECT_FIELD(_aspectRatio)
@@ -25,7 +25,7 @@ struct CameraComponent : public IComponent
     YA_REFLECT_FIELD(_focusPoint)
     YA_REFLECT_END()
 
-    bool _primary          = true; // TODO: think about moving to Scene
+    bool bPrimary          = false; // TODO: think about moving to Scene
     bool _fixedAspectRatio = false;
 
     float _fov         = 45.0f;
@@ -44,7 +44,8 @@ struct CameraComponent : public IComponent
 
     glm::mat4 getOrbitView() const;
     glm::mat4 getFreeView() const;
-    glm::mat4 getViewProjection() const { return getProjection() * getOrbitView(); }
+    glm::mat4 getViewProjection() const { return getProjection() * getFreeView(); }
+    glm::mat4 getOrbitViewProjection() const { return getProjection() * getOrbitView(); }
 
   public:
 

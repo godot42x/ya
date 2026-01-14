@@ -61,6 +61,7 @@ namespace ya::reflection
 /**
  * @brief 元数据构建器
  */
+template <typename T>
 struct MetaBuilder
 {
     Metadata meta;
@@ -73,10 +74,28 @@ struct MetaBuilder
     }
 
     MetaBuilder &range(float min, float max)
+        requires std::is_arithmetic_v<T>
     {
         // TODO: check is a number type
         meta.set("range_min", min);
         meta.set("range_max", max);
+        return *this;
+    }
+
+    MetaBuilder &uiModifiedStep(float step)
+        requires std::is_arithmetic_v<T>
+    {
+        meta.set("ui_modified_step", step);
+        return *this;
+    }
+
+    // float -> drag float, input float
+    // int -> drag int, input int
+    // vec -> drag vec, input vec, color vec
+    MetaBuilder &manipulatorSpec(const std::string &spec)
+        requires std::is_arithmetic_v<T>
+    {
+        meta.set("manipulator_spec", spec);
         return *this;
     }
 

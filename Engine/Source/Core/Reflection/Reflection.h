@@ -174,7 +174,7 @@ void registerECSType(const std::string &typeName)
 
 // YA_REFLECT_FIELD: collect compile-time field list (+ metadata)
 #define YA_REFLECT_FIELD(FieldName, ...) \
-    std::forward<Visitor>(visitor)(#FieldName, &_ReflectClass::FieldName, ::ya::reflection::MetaBuilder() __VA_ARGS__);
+    std::forward<Visitor>(visitor)(#FieldName, &_ReflectClass::FieldName, ::ya::reflection::MetaBuilder<decltype(_ReflectClass::FieldName)>() __VA_ARGS__);
 
 // clang-format off
 #define YA_REFLECT_END()                                                                               \

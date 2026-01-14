@@ -208,9 +208,10 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     // vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
 #pragma endregion
 
-    // FIXME: this is just a test material, we should move the projection and view to frame data UBO, not push constant
-
-    rt->getViewAndProjMatrix(pc.view, pc.projection);
+    // Use cached camera context (updated once per frame in App::onUpdate)
+    const auto &camCtx = rt->getCameraContext();
+    pc.view            = camCtx.view;
+    pc.projection      = camCtx.projection;
 
     for (const auto entity : view) {
         const auto &[tc, bmc] = view.get(entity);

@@ -134,7 +134,7 @@ struct LitMaterialSystem : public IMaterialSystem
 
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override;
-    void onUpdate(float deltaTime) override;
+    void onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt) override;
     void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
     void onRenderGUI() override;
 

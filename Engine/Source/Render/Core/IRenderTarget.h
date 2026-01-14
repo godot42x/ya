@@ -9,9 +9,22 @@
 #include "Render/RenderDefines.h"
 #include <memory>
 
+#include <glm/glm.hpp>
 
 namespace ya
 {
+
+/**
+ * @brief Camera context data cached per-frame
+ * Computed once per frame in App::onUpdate, used by all MaterialSystems
+ * This decouples camera data acquisition from rendering systems
+ */
+struct FrameCameraContext
+{
+    glm::mat4 view       = glm::mat4(1.0f);
+    glm::mat4 projection = glm::mat4(1.0f);
+    glm::vec3 cameraPos  = glm::vec3(0.0f);
+};
 
 /**
  * @brief Abstract interface for render targets
@@ -100,19 +113,17 @@ struct IRenderTarget
     virtual void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue)        = 0;
     virtual void setDepthStencilClearValue(ClearValue clearValue)                         = 0;
     virtual void setDepthStencilClearValue(uint32_t attachmentIdx, ClearValue clearValue) = 0;
-    virtual void setCamera(Entity *camera)                                                = 0;
 
     // Getters
     virtual uint32_t                      getFrameBufferCount() const                                  = 0;
     [[nodiscard]] virtual IRenderPass    *getRenderPass() const                                        = 0;
     [[nodiscard]] virtual IFrameBuffer   *getFrameBuffer() const                                       = 0;
     [[nodiscard]] virtual uint32_t        getFrameBufferIndex() const                                  = 0; // Temp
-    [[nodiscard]] virtual Entity         *getCameraMut()                                               = 0;
-    [[nodiscard]] virtual const Entity   *getCamera() const                                            = 0;
-    [[nodiscard]] virtual bool            isUseEntityCamera() const                                    = 0;
-    [[nodiscard]] virtual const glm::mat4 getProjectionMatrix() const                                  = 0;
-    [[nodiscard]] virtual const glm::mat4 getViewMatrix() const                                        = 0;
-    virtual void                          getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const = 0;
+
+    // Frame camera context methods
+    // App is responsible for computing and setting camera context each frame
+    virtual void                                     setCameraContext(const FrameCameraContext &ctx) = 0;
+    [[nodiscard]] virtual const FrameCameraContext &getCameraContext() const                         = 0;
 
     /**
      * @brief Add a material system to this render target

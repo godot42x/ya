@@ -6,12 +6,14 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Component/WidgetComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/LitMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
+
 
 #include "Core/UI/UIManager.h"
 
@@ -158,20 +160,7 @@ void HelloMaterial::createMaterials()
 void HelloMaterial::createEntities(ya::Scene *scene)
 {
 
-    // Set up default camera
 
-    auto cam = scene->createEntity("Camera");
-    cam->addComponent<ya::TransformComponent>();
-    cam->addComponent<ya::CameraComponent>();
-    cam->addComponent<ya::SimpleMaterialComponent>();
-    _viewportRT->setCamera(cam);
-
-    YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(cam->getHandle()), "Camera component not found");
-    YA_CORE_ASSERT(cam->hasComponent<ya::CameraComponent>(), "Camera component not attached");
-
-    auto cc    = cam->getComponent<ya::CameraComponent>();
-    auto owner = cc->getOwner();
-    YA_CORE_ASSERT(owner == cam, "Camera component owner mismatch");
 
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
@@ -180,7 +169,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     if (auto plane = scene->createEntity("Plane")) {
         auto tc = plane->addComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
-        tc->setPosition(glm::vec3(0.f, -20.f, 0.f));
+        tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
 
         auto lmc          = plane->addComponent<ya::LitMaterialComponent>();
         auto groundLitMat = ya::MaterialFactory::get()->getMaterialByName("lit1_WorldBasic")->as<ya::LitMaterial>();
@@ -305,9 +294,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
 
     // create
-    glm::vec3 startPos(-10.0f, -10.0f, -10.0f);
-    float     xDir    = 1.0f;
-    float     zDir    = 1.0f;
+    glm::vec3 startPos(-10.0f, -20.0f, -20.0f);
     float     spacing = 3.0f;
     for (size_t i = 0; i < _pongMaterialNames.size(); ++i) {
         auto *entity = scene->createEntity(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
@@ -338,4 +325,33 @@ void HelloMaterial::onUpdate(float dt)
 void HelloMaterial::onRenderGUI(float dt)
 {
     Super::onRenderGUI(dt);
+}
+
+void HelloMaterial::onEnterRuntime()
+{
+    Super::onEnterRuntime();
+    // Set up default camera
+    auto scene = ya::App::get()->getSceneManager()->getActiveScene();
+    YA_CORE_ASSERT(scene, "Scene is null");
+
+    if (auto player = scene->createEntity("Player"))
+    {
+        player->addComponent<ya::PlayerComponent>();
+        player->addComponent<ya::TransformComponent>();
+        player->addComponent<ya::CameraComponent>();
+        player->addComponent<ya::SimpleMaterialComponent>();
+        player->addComponent<ya::LuaScriptComponent>();
+        if (auto spot = player->addComponent<ya::PointLightComponent>()) {
+            spot->_type           = ya::PointLightComponent::Spot;
+            spot->_innerConeAngle = 10.0f;
+            spot->_outerConeAngle = 30.0f;
+        }
+
+        YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(player->getHandle()), "Camera component not found");
+        YA_CORE_ASSERT(player->hasComponent<ya::CameraComponent>(), "Camera component not attached");
+
+        auto cc    = player->getComponent<ya::CameraComponent>();
+        auto owner = cc->getOwner();
+        YA_CORE_ASSERT(owner == player, "Camera component owner mismatch");
+    }
 }

@@ -1,8 +1,9 @@
 
 #pragma once
+#include "Core/Math/Math.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Core/Math/Math.h"
+
 
 
 namespace ya
@@ -51,10 +52,11 @@ struct TransformComponent : public IComponent
         if (!bDirty) {
             return;
         }
-        glm::mat4 rotation = glm::mat4_cast(glm::quat(_rotation));
-        _cachedMatrix      = glm::translate(glm::mat4(1.0f), _position) *
-                        rotation *
-                        glm::scale(glm::mat4(1.0f), _scale);
+        glm::mat4 rotation = glm::mat4_cast(glm::quat(glm::radians(_rotation)));
+        _cachedMatrix =
+            glm::translate(glm::mat4(1.0f), _position) *
+            rotation *
+            glm::scale(glm::mat4(1.0f), _scale);
         bDirty = false;
     }
 

@@ -37,8 +37,7 @@ struct VulkanRenderTarget : public IRenderTarget
 
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
-    Entity *_camera       = nullptr;
-    bool    bEntityCamera = false; // Whether to use the camera from the entity
+    FrameCameraContext _cameraContext; // Cached camera data per-frame
 
   public:
 
@@ -74,14 +73,9 @@ struct VulkanRenderTarget : public IRenderTarget
 
     void renderMaterialSystems(ICommandBuffer *cmdBuf);
 
-    Entity            *getCameraMut() override { return _camera; }
-    const Entity      *getCamera() const override { return _camera; }
-    void               setCamera(Entity *camera) override { _camera = camera; }
-    [[nodiscard]] bool isUseEntityCamera() const override { return bEntityCamera; }
-
-    const glm::mat4 getProjectionMatrix() const override;
-    const glm::mat4 getViewMatrix() const override;
-    void            getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const override;
+    // Frame camera context - set by App, used by MaterialSystems
+    void                      setCameraContext(const FrameCameraContext &ctx) override { _cameraContext = ctx; }
+    const FrameCameraContext &getCameraContext() const override { return _cameraContext; }
 
   public:
     void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) override

@@ -1,6 +1,5 @@
 #include "VulkanRenderTarget.h"
 #include "Core/App/App.h"
-#include "ECS/Component/CameraComponent.h"
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/Image.h"
 #include "imgui.h"
@@ -138,7 +137,7 @@ void VulkanRenderTarget::onUpdate(float deltaTime)
 {
     for (auto &system : _materialSystems) {
         if (system->bEnabled) {
-            system->onUpdate(deltaTime);
+            system->onUpdateByRenderTarget(deltaTime, this);
         }
     }
 }
@@ -147,11 +146,6 @@ void VulkanRenderTarget::onRenderGUI()
 {
     ImGui::PushID(label.c_str());
     if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (ImGui::Checkbox("Use Entity Camera", &bEntityCamera)) {
-            if (bEntityCamera) {
-                // copy transform from app camera to entity camera
-            }
-        }
         for (auto &system : _materialSystems) {
             system->renderGUI();
         }
@@ -168,12 +162,6 @@ void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
     {
         recreate();
         bDirty = false;
-    }
-
-    if (getCamera() && getCamera()->isValid() && getCamera()->hasComponent<CameraComponent>()) {
-
-        auto cc = getCameraMut()->getComponent<CameraComponent>();
-        cc->setAspectRatio(static_cast<float>(_extent.width) / static_cast<float>(_extent.height));
     }
 
     if (bSwapChainTarget) {
@@ -275,61 +263,6 @@ void VulkanRenderTarget::renderMaterialSystems(ICommandBuffer *cmdBuf)
             system->onRender(cmdBuf, this);
         }
     }
-}
-
-const glm::mat4 VulkanRenderTarget::getProjectionMatrix() const
-{
-    glm::mat4 ret(1.0);
-    if (isUseEntityCamera()) {
-        if (const Entity *cam = getCamera()) {
-            if (cam->hasComponent<CameraComponent>()) {
-                ret = cam->getComponent<CameraComponent>()->getProjection();
-            }
-        }
-    }
-    else {
-        // use app camera
-        return App::get()->camera.getProjectionMatrix();
-    }
-    ret[1][1] *= -1;
-    return ret;
-}
-
-const glm::mat4 VulkanRenderTarget::getViewMatrix() const
-{
-    glm::mat4 ret;
-    if (isUseEntityCamera()) {
-        if (auto *cam = getCamera()) {
-            if (cam->hasComponent<CameraComponent>()) {
-                ret = cam->getComponent<CameraComponent>()->getOrbitView();
-            }
-        }
-    }
-    else {
-        ret = App::get()->camera.getViewMatrix();
-    }
-    return ret;
-}
-
-void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4 &view, glm::mat4 &proj) const
-{
-    view = proj = glm::mat4(1.0f);
-    if (isUseEntityCamera()) {
-        if (auto *cam = getCamera()) {
-            if (cam->hasComponent<CameraComponent>()) {
-                auto cc = cam->getComponent<CameraComponent>();
-                proj    = cc->getProjection();
-                // proj[1][1] *= -1; // Vulkan Y-flip (viewport inverted)
-                view = cc->getOrbitView();
-                return;
-            }
-        }
-    }
-
-    // use app camera
-    proj = App::get()->camera.getProjectionMatrix();
-    // proj[1][1] *= -1; // Vulkan Y-flip (viewport inverted)
-    view = App::get()->camera.getViewMatrix();
 }
 
 void VulkanRenderTarget::addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system)

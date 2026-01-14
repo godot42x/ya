@@ -234,6 +234,10 @@ struct App
     void stopRuntime();
     void stopSimulation();
 
+    // Get primary camera from ECS (entity with CameraComponent._primary == true)
+    // Returns nullptr if no primary camera found
+    Entity *getPrimaryCamera() const;
+
     bool loadScene(const std::string &path);
     bool unloadScene();
 

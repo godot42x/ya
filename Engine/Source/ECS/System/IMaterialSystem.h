@@ -35,6 +35,7 @@ struct IMaterialSystem : public ISystem
     virtual void onInit(IRenderPass *renderPass)                     = 0;
     virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) = 0;
     virtual void onUpdate(float deltaTime) override {}
+    virtual void onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt) {}
     virtual void onDestroy() = 0;
 
     void renderGUI()

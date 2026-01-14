@@ -26,6 +26,7 @@
 // ECS
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/LitMaterialSystem.h"
@@ -724,30 +725,58 @@ void App::onUpdate(float dt)
         watcher->poll();
     }
 
-    // Store real-time delta for editor
 
+    // Update Editor camera (FreeCamera)
+    cameraController.update(camera, inputManager, dt);
+
+    // Get primary camera from ECS for runtime/simulation mode
+    Entity *runtimeCamera = getPrimaryCamera();
+    if (runtimeCamera && runtimeCamera->isValid())
+    {
+
+        auto cc = runtimeCamera->getComponent<CameraComponent>();
+        auto tc = runtimeCamera->getComponent<TransformComponent>();
+
+        const Extent2D &ext = _viewportRT->getExtent();
+        cameraController.update(*tc, *cc, inputManager, ext, dt);
+        // Update aspect ratio for runtime camera
+        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+    }
+
+    // Compute and set camera context for viewport render target
+    // App decides which camera to use based on app state
+    {
+        FrameCameraContext ctx;
+
+        bool bUseRuntimeCamera = (_appState == AppState::Runtime || _appState == AppState::Simulation) &&
+                                 runtimeCamera && runtimeCamera->isValid() &&
+                                 runtimeCamera->hasComponent<CameraComponent>();
+
+        if (bUseRuntimeCamera) {
+            // Use runtime camera (Entity with CameraComponent)
+            auto cc        = runtimeCamera->getComponent<CameraComponent>();
+            ctx.view       = cc->getFreeView();
+            ctx.projection = cc->getProjection();
+        }
+        else {
+            // Use editor camera (FreeCamera)
+            ctx.view       = camera.getViewMatrix();
+            ctx.projection = camera.getProjectionMatrix();
+        }
+
+        // Extract camera position from view matrix inverse
+        glm::mat4 invView = glm::inverse(ctx.view);
+        ctx.cameraPos     = glm::vec3(invView[3]);
+
+        _viewportRT->setCameraContext(ctx);
+    }
+
+    // Store real-time delta for editor
     _viewportRT->setColorClearValue(colorClearValue);
     _viewportRT->setDepthStencilClearValue(depthClearValue);
 
     _viewportRT->onUpdate(dt);
     _screenRT->onUpdate(dt);
-
-    auto cam = _viewportRT->getCameraMut();
-
-    bool bShouldUpdateEntityCamera = _editorLayer->isViewportHovered() ||
-                                     _editorLayer->isViewportFocused();
-
-    if (bShouldUpdateEntityCamera) {
-        cameraController.update(camera, inputManager, dt); // Camera expects dt in seconds
-        if (cam && cam->isValid() && cam->hasComponent<CameraComponent>()) {
-            auto            cc  = cam->getComponent<CameraComponent>();
-            const Extent2D &ext = _viewportRT->getExtent();
-            if (cam->hasComponent<TransformComponent>()) {
-                auto tc = cam->getComponent<TransformComponent>();
-                orbitCameraController.update(*tc, *cc, inputManager, ext, dt);
-            }
-        }
-    }
 
     switch (_appState) {
 
@@ -989,21 +1018,8 @@ bool App::unloadScene()
 
 void App::onSceneDestroy(Scene *scene)
 {
-    // Clear camera references in render targets to avoid dangling Entity pointers
-    // when Scene is destroyed
-    // if (_viewportRT) {
-    //     auto cam = _viewportRT->getCameraMut();
-    //     if (cam && cam->getScene() == scene) {
-    //         _viewportRT->setCamera(nullptr);
-    //     }
-    // }
-
-    // if (_screenRT) {
-    //     auto cam = _screenRT->getCameraMut();
-    //     if (cam && cam->getScene() == scene) {
-    //         _screenRT->setCamera(nullptr);
-    //     }
-    // }
+    // No longer need to clear runtime camera reference
+    // as we query it from ECS each frame
 }
 
 void App::onSceneActivated(Scene *scene)
@@ -1176,6 +1192,38 @@ void App::handleSystemSignals()
         },
         TRUE);
 #endif
+}
+
+Entity *App::getPrimaryCamera() const
+{
+    if (!_sceneManager) {
+        return nullptr;
+    }
+
+    Scene *scene = _sceneManager->getActiveScene();
+    if (!scene || !scene->isValid()) {
+        return nullptr;
+    }
+
+    auto &registry = scene->getRegistry();
+
+    // Strategy 1: Find camera with PlayerComponent (fallback)
+    auto playerCameraView = registry.view<CameraComponent, PlayerComponent>();
+    for (auto entity : playerCameraView) {
+        return scene->getEntityByEnttID(entity);
+    }
+
+    // Strategy 2: Find camera with _primary == true
+    auto view = registry.view<CameraComponent>();
+    for (auto entity : view) {
+        auto &cc = view.get<CameraComponent>(entity);
+        if (cc.bPrimary) {
+            return scene->getEntityByEnttID(entity);
+        }
+    }
+
+    // No primary camera found
+    return nullptr;
 }
 
 

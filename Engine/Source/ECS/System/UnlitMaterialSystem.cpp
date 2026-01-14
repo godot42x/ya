@@ -413,13 +413,12 @@ void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     auto app    = getApp();
     auto render = getRender();
 
-    glm::mat4 proj;
-    glm::mat4 view;
-    rt->getViewAndProjMatrix(view, proj);
+    // Use cached camera context (updated once per frame in App::onUpdate)
+    const auto &camCtx = rt->getCameraContext();
 
     FrameUBO ubo{
-        .projection = proj,
-        .view       = view,
+        .projection = camCtx.projection,
+        .view       = camCtx.view,
         .resolution = {
             rt->getFrameBuffer()->getWidth(),
             rt->getFrameBuffer()->getHeight(),

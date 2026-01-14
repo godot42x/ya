@@ -96,4 +96,6 @@ struct HelloMaterial : public ya::App
         Super::onEvent(event);
         return 0;
     }
+
+    void onEnterRuntime() override;
 };

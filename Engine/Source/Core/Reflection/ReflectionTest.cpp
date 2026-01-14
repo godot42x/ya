@@ -39,9 +39,10 @@ struct DummyStruct
 // 测试更多字段（演示无限制）
 struct LargeComponent
 {
-    int field1 = 0, field2 = 0, field3 = 0, field4 = 0, field5 = 0, field6 = 0;
-    int field7 = 0, field8 = 0, field9 = 0, field10 = 0, field11 = 0, field12 = 0;
-    int field13 = 0, field14 = 0, field15 = 0, field16 = 0, field17 = 0, field18 = 0;
+    int  field1 = 0, field2 = 0, field3 = 0, field4 = 0, field5 = 0, field6 = 0;
+    int  field7 = 0, field8 = 0, field9 = 0, field10 = 0, field11 = 0, field12 = 0;
+    int  field13 = 0, field14 = 0, field15 = 0, field16 = 0, field17 = 0, field18 = 0;
+    int *ptr = nullptr;
 
     YA_REFLECT_BEGIN(LargeComponent)
     YA_REFLECT_FIELD(field1, .tooltip("Field 1"))
@@ -62,6 +63,7 @@ struct LargeComponent
     YA_REFLECT_FIELD(field16, )
     YA_REFLECT_FIELD(field17, )
     YA_REFLECT_FIELD(field18, )
+    YA_REFLECT_FIELD(ptr, )
     // 可以继续添加，没有 16 个的限制！
     YA_REFLECT_END()
 };

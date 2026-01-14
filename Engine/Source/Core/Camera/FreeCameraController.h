@@ -3,7 +3,8 @@
 #include "Core/Camera/Camera.h"
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
-
+#include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/TransformComponent.h"
 
 
 
@@ -30,9 +31,12 @@ struct FreeCameraController : public CameraController
   public:
     void update(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
 
+    // update ecs component
+    void update(TransformComponent &tc, CameraComponent &cc, const InputManager &inputManager, const Extent2D &extent, float dt);
+
   private:
-    bool handleKeyboardInput(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
-    bool handleMouseRotation(FreeCamera &camera, const InputManager &inputManager, float deltaTime);
+    bool handleKeyboardInput(glm::vec3 &pos, const glm::vec3 &rot, const InputManager &inputManager, float deltaTime);
+    bool handleMouseRotation(glm::vec3 &rot, const InputManager &inputManager, float deltaTime);
 };
 
 
