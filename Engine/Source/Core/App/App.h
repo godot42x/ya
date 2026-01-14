@@ -179,13 +179,7 @@ struct App
     int  processEvent(SDL_Event &event);
 
     template <typename T>
-    int dispatchEvent(const T &event)
-    {
-        if (0 == onEvent(event)) {
-            MessageBus::get()->publish(event);
-        }
-        return 0;
-    }
+    int dispatchEvent(const T &event);
     void renderGUI(float dt);
 
     void requestQuit()

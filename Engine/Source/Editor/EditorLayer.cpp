@@ -134,7 +134,7 @@ void EditorLayer::onEvent(const Event &event)
     // Example: Camera controls, object picking, gizmo manipulation
 
     if (!bViewportFocused) {
-        return; // Only process events when viewport is focused
+        return; // Only process other events when viewport is focused
     }
 
     // Example event handling (extend as needed):
@@ -169,7 +169,8 @@ void EditorLayer::onEvent(const Event &event)
     case EEvent::KeyPressed:
     {
         auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
-        if (ImGuizmo::IsUsingAny()) {
+        if (_selections.size() > 0 && _selections[0]->isValid())
+        {
             // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
             switch (keyEvent._keyCode) {
             case EKey::K_W:
@@ -679,7 +680,7 @@ void EditorLayer::renderGizmo()
 
 void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
 {
-    YA_PROFILE_FUNCTION();
+    YA_PROFILE_FUNCTION_LOG();
     auto *app = App::get();
     if (!app) {
         return;

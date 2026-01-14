@@ -52,6 +52,7 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
         ImGui::TextDisabled("%s: [max recursion depth reached]", name.c_str());
         return false;
     }
+    auto cache = getOrCreateReflectionCache(typeIndex);
 
     if (auto it = _typeRender.find(typeIndex); it != _typeRender.end()) {
         return it->second.func(instancePtr,
@@ -62,7 +63,6 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
 
     bool bModified = false;
 
-    auto cache = getOrCreateReflectionCache(typeIndex);
     if (cache && cache->componentClassPtr && cache->propertyCount > 0) {
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
 
@@ -75,6 +75,17 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
                     if (propCache.isContainer) {
                         propCache.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
                     }
+
+                    propCache.prettyName = [&propName]() {
+                        auto sv = std::string_view(propName);
+                        if (sv.starts_with("_")) {
+                            sv.remove_prefix(1);
+                        }
+                        if (sv.starts_with("m_")) {
+                            sv.remove_prefix(2);
+                        }
+                        return std::string(sv);
+                    }();
                 }
             }
 
@@ -84,6 +95,7 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
                 // 从缓存获取容器信息（已预先填充）
                 const auto &propCache   = cache->propertyCache[propName];
                 const bool  isContainer = propCache.isContainer;
+                const auto &prettyName  = propCache.prettyName;
 
                 if (isContainer) {
                     // 容器属性：只显示简单信息，不渲染内容
@@ -95,7 +107,7 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
 
                         // 如果需要启用完整容器渲染，取消下面的注释
                         bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
-                            propName,
+                            prettyName,
                             prop,
                             subPropInstancePtr,
                             [this, depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
@@ -108,7 +120,7 @@ bool DetailsView::renderReflectedType(const std::string &name, uint32_t typeInde
                 }
                 else {
                     // 普通属性
-                    if (renderReflectedType(propName, prop.typeIndex, subPropInstancePtr, depth + 1)) {
+                    if (renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, depth + 1)) {
                         bModified = true;
                     }
                 }
@@ -158,7 +170,7 @@ DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
             PropRender{
                 .typeName = "float",
                 .func     = [](void *instance, const PropRenderContext &ctx) {
-                    return ImGui::InputFloat(ctx.name.c_str(), static_cast<float *>(instance));
+                    return ImGui::DragFloat(ctx.name.c_str(), static_cast<float *>(instance));
                 },
             },
         });
@@ -332,12 +344,8 @@ void DetailsView::drawComponents(Entity &entity)
         }
     });
 
-    drawComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {
-        bool bDirty = false;
-        bDirty |= ImGui::ColorEdit3("Color", glm::value_ptr(plc->_color));
-        bDirty |= ImGui::DragFloat("Intensity", &plc->_intensity, 0.1f, 0.0f, 100.0f);
-        bDirty |= ImGui::DragFloat("Radius", &plc->_range, 0.1f, 0.0f, 100.0f);
-        // plc.
+    drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {
+        // TODO: implement point light component details
     });
 
     drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent *lsc) {

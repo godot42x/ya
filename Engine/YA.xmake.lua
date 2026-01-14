@@ -48,11 +48,12 @@ local imgui_configs = {
     docking = true,
 }
 add_requires(imgui_version_str, {
-    debug = true,
+    debug = is_mode("debug"),
     system = false,
     configs = imgui_configs
 })
 add_requires("imguizmo-local", {
+    debug = is_mode("debug"),
     configs = {
         ["imgui_version_str"] = imgui_version_str,
         ["imgui_configs"] = imgui_configs,
@@ -91,7 +92,7 @@ add_requires("entt v3.15.0", {
 
 option("ya_enable_unity-build")
 do
-    set_default(false)
+    set_default(true)
 end
 
 
@@ -106,6 +107,7 @@ do
         add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
+        add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     add_files("./Source/**.cpp")
 

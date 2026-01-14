@@ -14,7 +14,6 @@
 
 
 
-
 namespace ya
 {
 
@@ -145,7 +144,8 @@ struct EditorLayer
         // 验证实体有效性，防止悬空指针
         if (entity && entity->isValid()) {
             _selections = {entity};
-        } else {
+        }
+        else {
             _selections = {nullptr};
         }
     }

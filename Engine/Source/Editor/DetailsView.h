@@ -34,6 +34,7 @@ struct ReflectionCache
     {
         bool                            isContainer       = false;
         reflection::IContainerProperty *containerAccessor = nullptr;
+        std::string                     prettyName;
     };
     std::unordered_map<std::string, PropertyCache> propertyCache;
 

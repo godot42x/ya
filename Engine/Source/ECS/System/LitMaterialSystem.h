@@ -40,12 +40,23 @@ struct LitMaterialSystem : public IMaterialSystem
     };
 
     // 点光源结构体（对应 shader 中的 PointLight）
-    struct PointLightData
+    // 严格按照 std140 布局规则对齐
+    struct alignas(16) PointLightData
     {
-        alignas(16) glm::vec3 position; // 光源位置
-        float intensity;                // 光照强度
-        alignas(16) glm::vec3 color;    // 光源颜色
-        float radius;                   // 光照半径（用于衰减计算）
+        int   type = 0; // offset 0
+        float padding[3];
+
+        glm::vec3 position;  // offset 16 (光源位置)
+        float     intensity; // offset 28 (光照强度)
+
+        glm::vec3 color;  // offset 32 (光源颜色, 自动对齐到 16)
+        float     radius; // offset 44 (光照半径)
+
+        // spot light
+        glm::vec3 spotDir;
+        float     innerCutOff;
+        float     outerCutOff;
+        float     padding2[2];
     };
 
     static constexpr uint32_t MAX_POINT_LIGHTS = 4;

@@ -297,11 +297,15 @@ void LitMaterialSystem::onUpdate(float deltaTime)
         const auto &[plc, tc] = scene->getRegistry().get<PointLightComponent, TransformComponent>(entity);
 
         // Fill point light data
-        auto &lightData     = uLight.pointLights[uLight.numPointLights];
-        lightData.position  = tc.getPosition();
-        lightData.intensity = plc._intensity;
-        lightData.color     = plc._color;
-        lightData.radius    = plc._range;
+        auto &lightData       = uLight.pointLights[uLight.numPointLights];
+        lightData.type        = plc._type;
+        lightData.position    = tc.getPosition();
+        lightData.intensity   = plc._intensity;
+        lightData.color       = plc._color;
+        lightData.radius      = plc._range;
+        lightData.spotDir     = tc.getForward();
+        lightData.innerCutOff = glm::cos(glm::radians(plc._innerConeAngle));
+        lightData.outerCutOff = glm::cos(glm::radians(plc._outerConeAngle));
 
         // YA_CORE_INFO("  Light {}: pos=({:.2f},{:.2f},{:.2f}), intensity={:.2f}, radius={:.2f}",
         //              uLight.numPointLights,

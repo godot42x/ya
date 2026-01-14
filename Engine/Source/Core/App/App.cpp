@@ -448,6 +448,15 @@ void App::init(AppDesc ci)
     camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
 }
 
+template <typename T>
+int App::dispatchEvent(const T &event)
+{
+    if (0 == onEvent(event)) {
+        MessageBus::get()->publish(event);
+    }
+    return 0;
+}
+
 void App::renderGUI(float dt)
 {
     _editorLayer->onImGuiRender([this, dt]() {

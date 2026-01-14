@@ -77,10 +77,16 @@ struct DirectionalLight {
 
 
 struct PointLight {
+    int   type; // 0 point, 1 spot
     vec3  position;      // 光源位置
     float intensity;    // 光照强度
     vec3  color;         // 光源颜色
     float radius;       // 光照范围（用于衰减计算）
+    vec3  spotDir;
+    // float innerAngle;
+    // float outerAngle;
+    float innerCutoff;
+    float outerCutoff;
 };
 
 #define MAX_POINT_LIGHTS 4
@@ -146,6 +152,7 @@ void main ()
     float shininess =  uParams.shininess;
 
     vec3 lightDir = normalize(-uLit.dirLight.direction);
+    float ambientIntensity = 0.1;
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -162,6 +169,7 @@ void main ()
     // specularTexColor  = vec4(1.0) -specularTexColor;
     
     
+    
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
     
@@ -173,6 +181,18 @@ void main ()
         vec3 lightDir  = normalize(light.position - vPos);
         float distance = length(light.position - vPos);
         vec3 lampColor = light.color * light.intensity;
+
+        if (light.type == 1){
+            // 
+            float theta = dot(lightDir, normalize(-light.spotDir));
+            if (theta > light.innerCutoff){
+                // do normal calculation
+            }else{
+                // only ambient
+                lighting += lampColor * uParams.ambient * diffuseTexColor.rgb * ambientIntensity;
+                continue;
+            }
+        }
         
         // 计算衰减
         float attenuation = calculateAttenuation(distance/*, light.radius*/);
@@ -181,7 +201,10 @@ void main ()
         }
 
         // 环境光/ambient（环境光不受距离衰减影响，但强度应该较小）
-        vec3 ambient = lampColor * uParams.ambient * diffuseTexColor.rgb * 0.1;
+        vec3 ambient = lampColor * uParams.ambient * diffuseTexColor.rgb * ambientIntensity;
+        if (uDebug.floatParam[0] == 1.0){
+            ambient *= attenuation;
+        }
         
         // 漫反射/diffuse
         float diff = max(dot(norm, lightDir), 0.0);

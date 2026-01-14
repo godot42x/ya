@@ -15,7 +15,7 @@
 
 #include "Core/UI/UIManager.h"
 
-#include "Math/Geometry.h"
+#include "Core/Math/Geometry.h"
 
 #include "Render/Material/LitMaterial.h"
 #include "Render/Material/MaterialFactory.h"

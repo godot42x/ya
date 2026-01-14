@@ -2,7 +2,7 @@
 #pragma once
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Math/GLM.h"
+#include "Core/Math/Math.h"
 
 
 namespace ya
@@ -56,6 +56,17 @@ struct TransformComponent : public IComponent
                         rotation *
                         glm::scale(glm::mat4(1.0f), _scale);
         bDirty = false;
+    }
+
+    glm::vec3 getForward()
+    {
+        calcMatrix();
+        if constexpr (FMath::Vector::IsRightHanded) {
+            return _cachedMatrix * glm::vec4(FMath::Vector::WorldForward, 0.0f);
+        }
+        else {
+            return _cachedMatrix * -glm::vec4(FMath::Vector::WorldForward, 0.0f);
+        }
     }
 
 
