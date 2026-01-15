@@ -6,6 +6,7 @@
 #include <string>
 #include <typeinfo>
 #include <unordered_map>
+#include <variant>
 
 
 
@@ -14,21 +15,54 @@ struct Metadata
     std::string name;
     uint32_t    flags = 0;
 
-    // 额外的元数据
-    std::unordered_map<std::string, std::any> metadata;
+    // Simple metadata storage using variant for common types (fast path)
+    using MetaValue = std::variant<std::monostate, bool, int, float, double, std::string>;
+    std::unordered_map<std::string, MetaValue> metadata;
 
-    // 便捷方法
+    // Extended metadata storage using std::any for complex types (e.g., shared_ptr)
+    std::unordered_map<std::string, std::any> anyMetadata;
+
+    // Set simple types (stored in variant)
     template <typename T>
+        requires(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
+                 std::is_same_v<T, double> || std::is_same_v<T, std::string>)
     void set(const std::string &key, const T &value)
     {
         metadata[key] = value;
     }
 
+    // Set complex types (stored in std::any)
     template <typename T>
+        requires(!(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
+                   std::is_same_v<T, double> || std::is_same_v<T, std::string>))
+    void set(const std::string &key, const T &value)
+    {
+        anyMetadata[key] = value;
+    }
+
+    // Get simple types (from variant)
+    template <typename T>
+        requires(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
+                 std::is_same_v<T, double> || std::is_same_v<T, std::string>)
     T get(const std::string &key, const T &defaultValue = T{}) const
     {
         auto it = metadata.find(key);
         if (it != metadata.end()) {
+            if (auto *val = std::get_if<T>(&it->second)) {
+                return *val;
+            }
+        }
+        return defaultValue;
+    }
+
+    // Get complex types (from std::any)
+    template <typename T>
+        requires(!(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
+                   std::is_same_v<T, double> || std::is_same_v<T, std::string>))
+    T get(const std::string &key, const T &defaultValue = T{}) const
+    {
+        auto it = anyMetadata.find(key);
+        if (it != anyMetadata.end()) {
             try {
                 return std::any_cast<T>(it->second);
             }
@@ -41,13 +75,13 @@ struct Metadata
 
     bool hasMeta(const std::string &key) const
     {
-        return metadata.find(key) != metadata.end();
+        return metadata.find(key) != metadata.end() || anyMetadata.find(key) != anyMetadata.end();
     }
 
-    // 检查是否有任何元数据（用于判断是否需要注册）
+    // Check if any metadata exists (used to determine if registration is needed)
     bool hasAnyMetadata() const
     {
-        return flags != 0 || !metadata.empty();
+        return flags != 0 || !metadata.empty() || !anyMetadata.empty();
     }
 
     bool hasFlag(uint32_t flag) const
@@ -65,24 +99,24 @@ struct Metadata
 
 
 // ============================================================================
-// Field - Base for Property and Function (包含元数据支持)
+// Field - Base for Property and Function (includes metadata support)
 // ============================================================================
 
 enum class FieldFlags : uint32_t
 {
     None               = 0,
-    EditAnywhere       = 1 << 0, // 可在编辑器中编辑
-    EditReadOnly       = 1 << 1, // 只读
-    NotSerialized      = 1 << 2, // 不序列化
-    Transient          = 1 << 3, // 临时变量（不保存）
-    Category           = 1 << 4, // 分类
-    Replicated         = 1 << 5, // 网络复制
+    EditAnywhere       = 1 << 0, // Editable in editor
+    EditReadOnly       = 1 << 1, // Read-only
+    NotSerialized      = 1 << 2, // Don't serialize
+    Transient          = 1 << 3, // Temporary variable (not saved)
+    Category           = 1 << 4, // Category
+    Replicated         = 1 << 5, // Network replication
     BlueprintReadOnly  = 1 << 6,
     BlueprintReadWrite = 1 << 7,
-    // Function 特定的标记
-    BlueprintCallable = 1 << 8,  // 可从蓝图调用
-    BlueprintPure     = 1 << 9,  // 纯函数（无副作用）
-    Exec              = 1 << 10, // 执行函数
+    // Function-specific flags
+    BlueprintCallable = 1 << 8,  // Can be called from Blueprint
+    BlueprintPure     = 1 << 9,  // Pure function (no side effects)
+    Exec              = 1 << 10, // Execution function
 };
 
 inline FieldFlags operator|(FieldFlags a, FieldFlags b)
@@ -100,7 +134,7 @@ struct Field
     Metadata    metadata;
 
     // ============================================================================
-    // 元数据支持 - Property 和 Function 共享
+    // Metadata support - shared by Property and Function
     // ============================================================================
 
     Metadata &getMetadata()
@@ -116,58 +150,69 @@ struct Field
 // ============================================================================
 struct Property : public Field
 {
-    std::any    value; // 存储成员指针或静态变量指针
     bool        bConst    = false;
     bool        bStatic   = false;
     uint32_t    typeIndex = 0;
     std::string typeName;
 
-
-
     // ============================================================================
-    // 反射运行时功能
+    // Runtime Reflection - Pointer-based access (no std::any)
     // ============================================================================
 
-    // 用于从对象实例读取属性值
-    std::function<std::any(void *)> getter;
-
-    // 用于获取属性在对象中的地址（支持复杂类型递归序列化）
-    // 返回指向成员的指针；对静态属性该值可为空。
+    // Get const pointer to the property's address in an object
+    // For static properties, obj can be nullptr
     std::function<const void *(const void *)> addressGetter;
 
-    // 用于获取属性在对象中的可写地址（用于反序列化递归写回）
-    // 仅对非 const 的普通成员有效；静态/const 成员可为空。
+    // Get mutable pointer to the property's address in an object
+    // Only valid for non-const members; nullptr for static/const members
     std::function<void *(void *)> addressGetterMutable;
 
-    // 用于向对象实例写入属性值
-    std::function<void(void *, const std::any &)> setter;
-
-    // 获取类型名称（仅用于调试）
+    // Get type name (for debugging only)
     std::string getTypeName() const
     {
         return typeName;
     }
 
-    // 获取属性值（从对象实例）
+    // Get property value (typed access via pointer)
     template <typename T>
-    T getValue(void *obj) const
+    T getValue(const void *obj) const
     {
-        if (!getter) {
-            throw std::runtime_error("No getter available for property: " + name);
+        if (!addressGetter) {
+            throw std::runtime_error("No addressGetter available for property: " + name);
         }
-        return std::any_cast<T>(getter(obj));
+        const void *addr = addressGetter(obj);
+        if (!addr) {
+            throw std::runtime_error("addressGetter returned null for property: " + name);
+        }
+        return *static_cast<const T *>(addr);
     }
 
-    // 设置属性值（到对象实例）
+    // Set property value (typed access via pointer)
     template <typename T>
     void setValue(void *obj, const T &val)
     {
         if (bConst) {
             throw std::runtime_error("Cannot set const property: " + name);
         }
-        if (!setter) {
-            throw std::runtime_error("No setter available for property: " + name);
+        if (!addressGetterMutable) {
+            throw std::runtime_error("No addressGetterMutable available for property: " + name);
         }
-        setter(obj, std::any(val));
+        void *addr = addressGetterMutable(obj);
+        if (!addr) {
+            throw std::runtime_error("addressGetterMutable returned null for property: " + name);
+        }
+        *static_cast<T *>(addr) = val;
+    }
+
+    // Get raw const pointer to property
+    const void *getAddress(const void *obj) const
+    {
+        return addressGetter ? addressGetter(obj) : nullptr;
+    }
+
+    // Get raw mutable pointer to property
+    void *getMutableAddress(void *obj) const
+    {
+        return addressGetterMutable ? addressGetterMutable(obj) : nullptr;
     }
 };

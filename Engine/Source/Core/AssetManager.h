@@ -4,11 +4,9 @@
 #include <string>
 #include <unordered_map>
 
-
-
+#include "Core/ResourceRegistry.h"
 #include "Render/Core/Texture.h"
 #include "Render/Model.h"
-// #include "Render/Texture.h"
 
 namespace Assimp
 {
@@ -37,7 +35,7 @@ struct Resource
 
 
 
-class AssetManager
+class AssetManager : public IResourceCache
 {
   private:
 
@@ -50,13 +48,15 @@ class AssetManager
 
   public:
     static AssetManager *get();
-    void                 cleanup();
+    
+    // IResourceCache interface
+    void clearCache() override;
+    const char* getCacheName() const override { return "AssetManager"; }
 
     AssetManager();
     ~AssetManager()
     {
-        YA_CORE_INFO("AssetManager cleanup");
-        cleanup();
+        YA_CORE_INFO("AssetManager destructor");
     }
 
     std::shared_ptr<Model> loadModel(const std::string &filepath);

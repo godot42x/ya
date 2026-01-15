@@ -4,20 +4,9 @@
 namespace ya
 {
 
-// Static member initialization
-std::shared_ptr<Texture> TextureLibrary::s_whiteTexture;
-std::shared_ptr<Texture> TextureLibrary::s_blackTexture;
-std::shared_ptr<Texture> TextureLibrary::s_multiPixelTexture;
-
-std::shared_ptr<Sampler> TextureLibrary::s_defaultSampler;
-std::shared_ptr<Sampler> TextureLibrary::s_linearSampler;
-std::shared_ptr<Sampler> TextureLibrary::s_nearestSampler;
-
-bool TextureLibrary::s_initialized = false;
-
 void TextureLibrary::init()
 {
-    if (s_initialized) {
+    if (_initialized) {
         YA_CORE_WARN("TextureLibrary already initialized");
         return;
     }
@@ -25,33 +14,33 @@ void TextureLibrary::init()
     createSamplers();
     createTextures();
 
-    s_initialized = true;
+    _initialized = true;
     YA_CORE_INFO("TextureLibrary initialized");
 }
 
-void TextureLibrary::destroy()
+void TextureLibrary::clearCache()
 {
-    if (!s_initialized) {
+    if (!_initialized) {
         return;
     }
 
     // Cleanup textures
-    s_whiteTexture.reset();
-    s_blackTexture.reset();
-    s_multiPixelTexture.reset();
+    _whiteTexture.reset();
+    _blackTexture.reset();
+    _multiPixelTexture.reset();
 
     // Cleanup samplers
-    s_defaultSampler.reset();
-    s_linearSampler.reset();
-    s_nearestSampler.reset();
+    _defaultSampler.reset();
+    _linearSampler.reset();
+    _nearestSampler.reset();
 
-    s_initialized = false;
-    YA_CORE_INFO("TextureLibrary destroyed");
+    _initialized = false;
+    YA_CORE_INFO("TextureLibrary cleared");
 }
 
 void TextureLibrary::createSamplers()
 {
-    s_linearSampler = Sampler::create(
+    _linearSampler = Sampler::create(
         SamplerDesc{
             .label         = "linear",
             .minFilter     = EFilter::Linear,
@@ -64,7 +53,7 @@ void TextureLibrary::createSamplers()
             .maxAnisotropy = 1.0f,
         });
 
-    s_nearestSampler = Sampler::create(
+    _nearestSampler = Sampler::create(
         SamplerDesc{
             .label         = "nearest",
             .minFilter     = EFilter::Nearest,
@@ -77,7 +66,7 @@ void TextureLibrary::createSamplers()
             .maxAnisotropy = 1.0f,
         });
 
-    s_defaultSampler = s_linearSampler;
+    _defaultSampler = _linearSampler;
 }
 
 void TextureLibrary::createTextures()
@@ -89,55 +78,55 @@ void TextureLibrary::createTextures()
     color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
 
     // Create 1x1 white texture
-    s_whiteTexture = makeShared<Texture>(1, 1, std::vector<color_t>{white});
-    s_whiteTexture->setLabel("white");
+    _whiteTexture = makeShared<Texture>(1, 1, std::vector<color_t>{white});
+    _whiteTexture->setLabel("white");
 
     // Create 1x1 black texture
-    s_blackTexture = makeShared<Texture>(1, 1, std::vector<color_t>{black});
-    s_blackTexture->setLabel("black");
+    _blackTexture = makeShared<Texture>(1, 1, std::vector<color_t>{black});
+    _blackTexture->setLabel("black");
 
     // Create 2x2 multi-pixel texture with pattern: white, blue, blue, white
-    s_multiPixelTexture = makeShared<Texture>(2, 2, std::vector<color_t>{
+    _multiPixelTexture = makeShared<Texture>(2, 2, std::vector<color_t>{
         white, blue,
         blue, white,
     });
-    s_multiPixelTexture->setLabel("multi-pixel");
+    _multiPixelTexture->setLabel("multi-pixel");
 }
 
 std::shared_ptr<Texture> TextureLibrary::getWhiteTexture()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_whiteTexture;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _whiteTexture;
 }
 
 std::shared_ptr<Texture> TextureLibrary::getBlackTexture()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_blackTexture;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _blackTexture;
 }
 
 std::shared_ptr<Texture> TextureLibrary::getMultiPixelTexture()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_multiPixelTexture;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _multiPixelTexture;
 }
 
 std::shared_ptr<Sampler> TextureLibrary::getDefaultSampler()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_defaultSampler;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _defaultSampler;
 }
 
 std::shared_ptr<Sampler> TextureLibrary::getLinearSampler()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_linearSampler;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _linearSampler;
 }
 
 std::shared_ptr<Sampler> TextureLibrary::getNearestSampler()
 {
-    YA_CORE_ASSERT(s_initialized, "TextureLibrary not initialized");
-    return s_nearestSampler;
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return _nearestSampler;
 }
 
 } // namespace ya

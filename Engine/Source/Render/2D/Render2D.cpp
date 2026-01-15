@@ -350,8 +350,8 @@ void FQuadRender::begin()
     _textureLabel2Idx.clear();
     _textureViews.push_back(
         TextureView{
-            .texture = TextureLibrary::getWhiteTexture(),
-            .sampler = TextureLibrary::getDefaultSampler(),
+            .texture = TextureLibrary::get().getWhiteTexture(),
+            .sampler = TextureLibrary::get().getDefaultSampler(),
         });
 
 
@@ -487,8 +487,8 @@ void FQuadRender::updateResources()
     // TODO: let font atlas/icon atlas always on gpu not update every frame
     std::vector<DescriptorImageInfo> imageInfos;
 
-    auto defaultSampler = TextureLibrary::getDefaultSampler();
-    auto whiteTexture   = TextureLibrary::getWhiteTexture();
+    auto defaultSampler = TextureLibrary::get().getDefaultSampler();
+    auto whiteTexture   = TextureLibrary::get().getWhiteTexture();
 
     // make empty slot to be updated
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {

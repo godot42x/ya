@@ -1,0 +1,168 @@
+#pragma once
+
+#include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
+#include <memory>
+#include <string>
+
+
+namespace ya
+{
+
+// Forward declarations
+class Texture;
+class Model;
+class Mesh;
+
+/**
+ * @brief Asset type enumeration
+ */
+enum class EAssetType : uint8_t
+{
+    Unknown = 0,
+    Texture,
+    Model,
+    Mesh,
+    // Extensible for future asset types
+};
+
+/**
+ * @brief Type-safe asset reference with automatic loading
+ *
+ * Design Features:
+ * - Only stores path during serialization
+ * - Automatically loads via AssetManager during deserialization
+ * - Provides type-safe pointer access at runtime
+ *
+ * Usage:
+ * @code
+ * struct MyComponent {
+ *     YA_REFLECT_BEGIN(MyComponent)
+ *     YA_REFLECT_FIELD(textureRef)
+ *     YA_REFLECT_END()
+ *
+ *     TextureRef textureRef;
+ * };
+ *
+ * // Access loaded resource:
+ * Texture* tex = myComp.textureRef.get();
+ * @endcode
+ */
+template <typename T>
+struct TAssetRef
+{
+    YA_REFLECT_BEGIN(TAssetRef)
+    YA_REFLECT_FIELD(_path) // Only serialize path
+    YA_REFLECT_END()
+
+    std::string        _path;      // Serialized data: asset path
+    std::shared_ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
+
+    // Constructors
+    TAssetRef() = default;
+    explicit TAssetRef(const std::string &path) : _path(path) {}
+    TAssetRef(const std::string &path, std::shared_ptr<T> ptr)
+        : _path(path), _cachedPtr(std::move(ptr))
+    {}
+
+    // Copy and move
+    TAssetRef(const TAssetRef &other)                = default;
+    TAssetRef(TAssetRef &&other) noexcept            = default;
+    TAssetRef &operator=(const TAssetRef &other)     = default;
+    TAssetRef &operator=(TAssetRef &&other) noexcept = default;
+
+    // Access interface
+    T       *get() const { return _cachedPtr.get(); }
+    T       *operator->() const { return get(); }
+    T       &operator*() const { return *_cachedPtr; }
+    explicit operator bool() const { return _cachedPtr != nullptr; }
+
+    bool isLoaded() const { return _cachedPtr != nullptr; }
+    bool hasPath() const { return !_path.empty(); }
+
+    const std::string &getPath() const { return _path; }
+    std::shared_ptr<T> getShared() const { return _cachedPtr; }
+
+    /**
+     * @brief Resolve (load) the asset from path
+     * Called by serialization system after deserialization
+     * @return true if successfully loaded, false otherwise
+     */
+    bool resolve();
+
+    /**
+     * @brief Set resource with path (updates both path and cached pointer)
+     */
+    void set(const std::string &path, std::shared_ptr<T> ptr)
+    {
+        _path      = path;
+        _cachedPtr = std::move(ptr);
+    }
+
+    /**
+     * @brief Set resource from loaded asset (extracts path from asset if possible)
+     */
+    void setFromAsset(std::shared_ptr<T> ptr)
+    {
+        _cachedPtr = std::move(ptr);
+        // Path should be set separately or extracted from asset metadata
+    }
+
+    /**
+     * @brief Clear the reference
+     */
+    void clear()
+    {
+        _path.clear();
+        _cachedPtr.reset();
+    }
+
+    /**
+     * @brief Check equality (by path)
+     */
+    bool operator==(const TAssetRef &other) const { return _path == other._path; }
+    bool operator!=(const TAssetRef &other) const { return _path != other._path; }
+};
+
+// Common type aliases
+using TextureRef = TAssetRef<Texture>;
+using ModelRef   = TAssetRef<Model>;
+using MeshRef    = TAssetRef<Mesh>;
+
+// ============================================================================
+// Asset Reference Resolution Interface
+// ============================================================================
+
+/**
+ * @brief Interface for resolving asset references
+ * Used by ReflectionSerializer to resolve TAssetRef types after deserialization
+ */
+struct IAssetRefResolver
+{
+    virtual ~IAssetRefResolver() = default;
+
+    /**
+     * @brief Check if a type index represents an asset reference type
+     */
+    virtual bool isAssetRefType(uint32_t typeIndex) const = 0;
+
+    /**
+     * @brief Resolve an asset reference (load the asset from path)
+     * @param typeIndex Type index of the TAssetRef<T>
+     * @param assetRefPtr Pointer to the TAssetRef instance
+     */
+    virtual void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const = 0;
+};
+
+/**
+ * @brief Default asset reference resolver implementation
+ */
+struct DefaultAssetRefResolver : public IAssetRefResolver
+{
+    static DefaultAssetRefResolver &instance();
+
+    bool isAssetRefType(uint32_t typeIndex) const override;
+    void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const override;
+};
+
+} // namespace ya

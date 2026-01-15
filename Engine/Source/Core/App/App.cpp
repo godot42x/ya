@@ -16,6 +16,7 @@
 
 // Managers/System
 #include "Core/Manager/Facade.h"
+#include "Core/ResourceRegistry.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
@@ -25,7 +26,6 @@
 
 // ECS
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -41,6 +41,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
+#include "Render/PrimitiveMeshCache.h"
 
 
 
@@ -406,8 +407,15 @@ void App::init(AppDesc ci)
     }
 
 
-    // ===== Initialize TextureLibrary =====
-    TextureLibrary::init();
+    // ===== Initialize TextureLibrary and Register Resource Caches =====
+    TextureLibrary::get().init();
+
+    // Register all resource caches with ResourceRegistry for unified cleanup
+    // Priority order: higher = cleared first (GPU resources before CPU resources)
+    ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
+    ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
+    ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
+    ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
 
     // ===== Initialize SceneManager =====
     _sceneManager = new SceneManager();
@@ -639,9 +647,8 @@ void ya::App::quit()
     _renderpass.reset();
     _viewportRenderPass.reset();
 
-    TextureLibrary::destroy();
-    FontManager::get()->cleanup();
-    AssetManager::get()->cleanup();
+    // Unified cleanup of all resource caches in priority order
+    ResourceRegistry::get().clearAll();
 
     if (_render) {
         _render->waitIdle();

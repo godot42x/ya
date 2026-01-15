@@ -2,12 +2,73 @@
 
 #include "Core/Base.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Render/Core/Texture.h"
 
 
 
 namespace ya
 {
+
+
+/**
+ * @brief Serializable texture slot for material serialization
+ * Stores texture path and UV transform parameters
+ */
+struct TextureSlot
+{
+    YA_REFLECT_BEGIN(TextureSlot)
+    YA_REFLECT_FIELD(textureRef)
+    YA_REFLECT_FIELD(uvScale)
+    YA_REFLECT_FIELD(uvOffset)
+    YA_REFLECT_FIELD(uvRotation)
+    YA_REFLECT_FIELD(bEnable)
+    YA_REFLECT_END()
+
+    TextureRef textureRef; // Serialized as path, auto-loaded on deserialize
+    glm::vec2  uvScale{1.0f};
+    glm::vec2  uvOffset{0.0f};
+    float      uvRotation = 0.0f;
+    bool       bEnable    = true;
+
+    TextureSlot() = default;
+    explicit TextureSlot(const std::string &path)
+        : textureRef(path)
+    {}
+
+    /**
+     * @brief Convert to runtime TextureView
+     * @param defaultSampler Sampler to use (texture provides image, sampler is shared)
+     */
+    TextureView toTextureView(Sampler *defaultSampler) const
+    {
+        TextureView tv;
+        tv.texture       = textureRef.getShared();
+        tv.sampler       = stdptr<Sampler>(defaultSampler, [](Sampler *) {}); // non-owning
+        tv.uvScale       = uvScale;
+        tv.uvTranslation = uvOffset;
+        tv.uvRotation    = uvRotation;
+        tv.bEnable       = bEnable;
+        return tv;
+    }
+
+    /**
+     * @brief Populate from an existing TextureView (for editor use)
+     */
+    void fromTextureView(const TextureView &tv, const std::string &texturePath)
+    {
+        textureRef._path      = texturePath;
+        textureRef._cachedPtr = tv.texture;
+        uvScale               = tv.uvScale;
+        uvOffset              = tv.uvTranslation;
+        uvRotation            = tv.uvRotation;
+        bEnable               = tv.bEnable;
+    }
+
+    bool resolve() { return textureRef.resolve(); }
+    bool isLoaded() const { return textureRef.isLoaded(); }
+};
+
 
 
 //  MARK: Material

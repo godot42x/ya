@@ -270,6 +270,31 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
     auto scene = getActiveScene();
     YA_CORE_ASSERT(scene, "LitMaterialSystem::onUpdate - Scene is null");
 
+    // Phase 1: Resolve all unresolved components (resource loading)
+    // This must happen BEFORE rendering to ensure all materials/meshes are ready
+    {
+        YA_PROFILE_SCOPE("LitMaterial::ResolvePhase");
+        auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, TransformComponent>();
+        for (entt::entity entity : view)
+        {
+            auto &lmc = view.get<LitMaterialComponent>(entity);
+            if (!lmc.isResolved() && (lmc._modelRef.hasPath() || lmc._primitiveGeometry != EPrimitiveGeometry::None)) {
+                lmc.resolve();
+            }
+        }
+    }
+
+    // Phase 2: Check and expand descriptor pool capacity AFTER all resolves
+    // This prevents descriptor set invalidation during the render loop
+    {
+        uint32_t materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
+        if (materialCount > _lastMaterialDSCount) {
+            YA_PROFILE_SCOPE("LitMaterial::RecreateMaterialDescPool");
+            recreateMaterialDescPool(materialCount);
+            _bShouldForceUpdateMaterial = true;
+        }
+    }
+
     // Reset point light count
     uLight.numPointLights = 0;
 
@@ -359,20 +384,16 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         updateFrameDS(rt);
     }
 
-    bool     bShouldForceUpdateMaterial = false;
-    uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<LitMaterial>();
-    if (materialCount > _lastMaterialDSCount) {
-        YA_PROFILE_SCOPE("LitMaterial::RecreateMaterialDescPool");
-        recreateMaterialDescPool(materialCount);
-        bShouldForceUpdateMaterial = true;
-    }
-
+    // Material tracking for this frame
+    uint32_t materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
     std::vector<int> updatedMaterial(materialCount, 0);
 
+    // Phase 3: Render loop
     YA_PROFILE_SCOPE("LitMaterial::EntityLoop");
     for (entt::entity entity : view)
     {
         const auto &[tag, lmc, tc] = view.get(entity);
+
         for (const auto &[material, meshIDs] : lmc.getMaterial2MeshIDs()) {
 
             _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
@@ -388,13 +409,13 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
             // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
             if (!updatedMaterial[materialInstanceIndex]) {
-                if (bShouldForceUpdateMaterial || material->isResourceDirty())
+                if (_bShouldForceUpdateMaterial || material->isResourceDirty())
                 {
                     YA_PROFILE_SCOPE("LitMaterial::UpdateResourceDS");
                     updateMaterialResourceDS(resourceDS, material);
                     material->setResourceDirty(false);
                 }
-                if (bShouldForceUpdateMaterial || material->isParamDirty())
+                if (_bShouldForceUpdateMaterial || material->isParamDirty())
                 {
                     YA_PROFILE_SCOPE("LitMaterial::UpdateParamDS");
                     updateMaterialParamDS(paramDS, material);
@@ -441,6 +462,9 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
             }
         }
     }
+
+    // Reset force update flag after rendering
+    _bShouldForceUpdateMaterial = false;
 }
 
 void LitMaterialSystem::onRenderGUI()
@@ -646,8 +670,8 @@ DescriptorImageInfo LitMaterialSystem::getDescriptorImageInfo(TextureView const 
     SamplerHandle   samplerHandle;
     ImageViewHandle imageViewHandle;
     if (!tv) {
-        samplerHandle   = TextureLibrary::getDefaultSampler()->getHandle();
-        imageViewHandle = TextureLibrary::getWhiteTexture()->getImageViewHandle();
+        samplerHandle   = TextureLibrary::get().getDefaultSampler()->getHandle();
+        imageViewHandle = TextureLibrary::get().getWhiteTexture()->getImageViewHandle();
     }
     else {
         samplerHandle   = SamplerHandle(tv->sampler->getHandle());

@@ -662,6 +662,78 @@ struct InstrumentationTimerConditional
 };
 
 //=============================================================================
+// InstrumentationTimerConsoleOnly - RAII timer that only prints to console
+//=============================================================================
+
+/**
+ * @brief RAII timer that ONLY prints to console (no file output)
+ *
+ * This timer does not interact with the Instrumentor at all.
+ * It simply measures time and prints to console on destruction.
+ * Works in all profile modes including YA_PROFILE_DISABLED.
+ */
+struct InstrumentationTimerConsoleOnly
+{
+    using clock_t = std::chrono::steady_clock;
+
+  private:
+    std::string                      m_Name;
+    std::string                      m_File;
+    int                              m_Line;
+    std::chrono::time_point<clock_t> m_StartTime;
+    bool                             m_Stopped = false;
+
+  public:
+    explicit InstrumentationTimerConsoleOnly(const std::string   &name,
+                                             std::source_location loc = std::source_location::current())
+        : InstrumentationTimerConsoleOnly(name.c_str(), loc)
+    {
+    }
+
+    explicit InstrumentationTimerConsoleOnly(const char          *name,
+                                             std::source_location loc = std::source_location::current())
+        : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), m_StartTime(clock_t::now())
+    {
+    }
+
+    ~InstrumentationTimerConsoleOnly()
+    {
+        if (!m_Stopped) {
+            Stop();
+        }
+    }
+
+    // Prevent copying/moving
+    InstrumentationTimerConsoleOnly(const InstrumentationTimerConsoleOnly &)            = delete;
+    InstrumentationTimerConsoleOnly &operator=(const InstrumentationTimerConsoleOnly &) = delete;
+    InstrumentationTimerConsoleOnly(InstrumentationTimerConsoleOnly &&)                 = delete;
+    InstrumentationTimerConsoleOnly &operator=(InstrumentationTimerConsoleOnly &&)      = delete;
+
+    void Stop()
+    {
+        if (m_Stopped) {
+            return;
+        }
+
+        auto      now        = clock_t::now();
+        auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_StartTime);
+        long long durationNs = duration.count();
+
+        // Build display name with source location
+        std::string displayName = std::format("{}:{} ({})",
+                                              std::filesystem::path(m_File).filename().string(),
+                                              m_Line,
+                                              m_Name);
+
+        // Print to console only (no file output)
+        float ms = static_cast<float>(durationNs) / 1000000.0f;
+        YA_CORE_DEBUG("[Profile] {}: {:.3f}ms ({} ns)", displayName, ms, durationNs);
+
+        m_Stopped = true;
+    }
+};
+
+//=============================================================================
 // Legacy ProfileResult structure (for backward compatibility)
 //=============================================================================
 
@@ -722,7 +794,7 @@ struct InstrumentationSession
     #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)
     #define YA_PROFILE_END_SESSION_IMPL()
     #define YA_PROFILE_SCOPE_IMPL(name)
-    #define YA_PROFILE_SCOPE_LOG_IMPL(name)
+
     #define YA_PROFILE_SET_ENABLED(enabled)
     #define YA_PROFILE_IS_ENABLED() (false)
 
@@ -753,9 +825,6 @@ inline bool g_ProfileEnabled = false;
     #define YA_PROFILE_SCOPE_IMPL(name) \
         ::ya::InstrumentationTimerConditional YA_CONCAT(ya_timer_, __LINE__)(::ya::g_ProfileEnabled, name)
 
-    #define YA_PROFILE_SCOPE_LOG_IMPL(name) \
-        ::ya::InstrumentationTimerLog YA_CONCAT(ya_timer_log_, __LINE__)(name)
-
 //-----------------------------------------------------------------------------
 // Mode 3: YA_PROFILE_ENABLED - Always active (default)
 //-----------------------------------------------------------------------------
@@ -773,10 +842,13 @@ inline bool g_ProfileEnabled = false;
     #define YA_PROFILE_SCOPE_IMPL(name) \
         ::ya::InstrumentationTimer YA_CONCAT(ya_timer_, __LINE__)(name);
 
-    #define YA_PROFILE_SCOPE_LOG_IMPL(name) \
-        ::ya::InstrumentationTimerLog YA_CONCAT(ya_timer_log_, __LINE__)(name);
-
 #endif
+
+//=============================================================================
+// Console-only logging macro (always available, independent of profile mode)
+//=============================================================================
+#define YA_PROFILE_SCOPE_LOG_IMPL(name) \
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
 
 //=============================================================================
 // Public API Macros (unified interface, only modify here)

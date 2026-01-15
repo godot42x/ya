@@ -1,14 +1,25 @@
 #pragma once
 
+#include "Core/Common/AssetRef.h"
+#include "Core/Reflection/Reflection.h"
 #include "Material.h"
+
 
 namespace ya
 {
+
 
 struct LitMaterial : public Material
 {
     struct ParamUBO
     {
+        YA_REFLECT_BEGIN(ParamUBO)
+        YA_REFLECT_FIELD(ambient)
+        YA_REFLECT_FIELD(diffuse)
+        YA_REFLECT_FIELD(specular)
+        YA_REFLECT_FIELD(shininess, .range(1.0f, 256.0f))
+        YA_REFLECT_END()
+
         alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);

@@ -350,13 +350,17 @@ inline void test_lsp()
 // ============================================================================
 struct EnumRegistry
 {
-    std::unordered_map<std::string, Enum> enums;
+    std::unordered_map<std::string, Enum>   enums;
+    std::unordered_map<uint32_t, Enum *>    typeIdMap;  // typeIndex -> Enum*
 
     static EnumRegistry &instance();
 
-    void registerEnum(const std::string &enumName, const Enum &enumInfo)
+    void registerEnum(const std::string &enumName, const Enum &enumInfo, uint32_t typeIndex = 0)
     {
         enums[enumName] = enumInfo;
+        if (typeIndex != 0) {
+            typeIdMap[typeIndex] = &enums[enumName];
+        }
     }
 
     Enum *getEnum(const std::string &enumName)
@@ -365,9 +369,20 @@ struct EnumRegistry
         return it != enums.end() ? &it->second : nullptr;
     }
 
+    Enum *getEnum(uint32_t typeIndex)
+    {
+        auto it = typeIdMap.find(typeIndex);
+        return it != typeIdMap.end() ? it->second : nullptr;
+    }
+
     bool hasEnum(const std::string &enumName) const
     {
         return enums.find(enumName) != enums.end();
+    }
+
+    bool hasEnum(uint32_t typeIndex) const
+    {
+        return typeIdMap.find(typeIndex) != typeIdMap.end();
     }
 };
 
@@ -377,12 +392,15 @@ struct EnumRegistry
 template <typename EnumType>
 struct RegisterEnum
 {
-    Enum enumInfo;
+    Enum     enumInfo;
+    uint32_t typeIndex = 0;
 
-    RegisterEnum(const std::string &enumName)
+    RegisterEnum(const std::string &enumName, uint32_t inTypeIndex = 0)
     {
         static_assert(std::is_enum_v<EnumType>, "T must be an enum type");
         enumInfo.name = enumName;
+        enumInfo.underlyingSize = sizeof(std::underlying_type_t<EnumType>);
+        typeIndex     = inTypeIndex;
     }
 
     RegisterEnum &value(const std::string &valueName, EnumType val)
@@ -393,6 +411,6 @@ struct RegisterEnum
 
     ~RegisterEnum()
     {
-        EnumRegistry::instance().registerEnum(enumInfo.name, enumInfo);
+        EnumRegistry::instance().registerEnum(enumInfo.name, enumInfo, typeIndex);
     }
 };

@@ -122,7 +122,8 @@ struct LitMaterialSystem : public IMaterialSystem
 
 
     // material ubo's, dynamically extend
-    uint32_t                         _lastMaterialDSCount = 0;
+    uint32_t                         _lastMaterialDSCount        = 0;
+    bool                             _bShouldForceUpdateMaterial = false;
     std::shared_ptr<IDescriptorPool> _materialDSP;
 
     // object ubo

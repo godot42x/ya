@@ -179,7 +179,7 @@ struct App
     int  processEvent(SDL_Event &event);
 
     template <typename T>
-    int dispatchEvent(const T &event);
+    int  dispatchEvent(const T &event);
     void renderGUI(float dt);
 
     void requestQuit()

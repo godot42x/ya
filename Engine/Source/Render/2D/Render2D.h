@@ -140,7 +140,7 @@ struct FQuadRender
                 // TODO: different sampler?
                 _textureViews.push_back(TextureView{
                     .texture = texture,
-                    .sampler = TextureLibrary::getDefaultSampler(),
+                    .sampler = TextureLibrary::get().getDefaultSampler(),
                 });
                 auto idx                               = static_cast<uint32_t>(_textureViews.size() - 1);
                 _textureLabel2Idx[texture->getLabel()] = idx;

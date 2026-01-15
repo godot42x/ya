@@ -17,6 +17,8 @@ struct IComponent
 
     void                  setOwner(Entity *entity) { _owner = entity; }
     [[nodiscard]] Entity *getOwner() const { return _owner; }
+
+    virtual void onPostSerialize() {}
 };
 
 // Basic component for entity identification
@@ -59,21 +61,6 @@ struct SpriteRendererComponent : public IComponent
     SpriteRendererComponent()                                = default;
     SpriteRendererComponent(const SpriteRendererComponent &) = default;
     SpriteRendererComponent(const glm::vec4 &color) : _color(color) {}
-};
-
-
-// Mesh renderer component for 3D rendering
-struct MeshRendererComponent : public IComponent
-{
-    uint32_t _meshID         = 0;
-    uint32_t _materialID     = 0;
-    bool     _castShadows    = true;
-    bool     _receiveShadows = true;
-
-    MeshRendererComponent()                              = default;
-    MeshRendererComponent(const MeshRendererComponent &) = default;
-    MeshRendererComponent(uint32_t meshId, uint32_t materialId)
-        : _meshID(meshId), _materialID(materialId) {}
 };
 
 

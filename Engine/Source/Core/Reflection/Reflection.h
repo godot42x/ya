@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "Core/Common/FWD-std.h"
@@ -248,6 +247,62 @@ void registerECSType(const std::string &typeName)
     } /* close ya::reflection::detail */ \
     // clang-format on
 
+
+// ============================================================================
+// 枚举反射宏 (YA_REFLECT_ENUM_*)
+// ============================================================================
+
+/**
+ * @brief 开始枚举反射定义
+ * @param EnumType 枚举类型（支持 enum class 和普通 enum）
+ *
+ * 用法:
+ * YA_REFLECT_ENUM_BEGIN(ya::EPrimitiveGeometry)
+ *     YA_REFLECT_ENUM_VALUE(None)
+ *     YA_REFLECT_ENUM_VALUE(Cube)
+ *     YA_REFLECT_ENUM_VALUE(Sphere)
+ * YA_REFLECT_ENUM_END()
+ *
+ * NOTE: Uses delayed initialization via addPostStaticInitializer to ensure
+ *       type_index_v<EnumType> is properly initialized (not 0).
+ */
+#define YA_REFLECT_ENUM_BEGIN(EnumType)                                                 \
+    namespace                                                                           \
+    {                                                                                   \
+    struct _YA_ENUM_REFLECT_STRUCT_##__LINE__                                           \
+    {                                                                                   \
+        using _EnumType = EnumType;                                                     \
+        _YA_ENUM_REFLECT_STRUCT_##__LINE__()                                            \
+        {                                                                               \
+            ClassRegistry::instance().addPostStaticInitializer([]() {                   \
+                RegisterEnum<_EnumType> reg(#EnumType, ::ya::type_index_v<_EnumType>);  \
+                reg
+
+/**
+ * @brief 注册枚举值（自动使用枚举成员名称）
+ * @param ValueName 枚举值名称（不需要带枚举前缀）
+ */
+#define YA_REFLECT_ENUM_VALUE(ValueName) \
+    .value(#ValueName, _EnumType::ValueName)
+
+/**
+ * @brief 注册枚举值（自定义显示名称）
+ * @param ValueName 枚举值名称
+ * @param DisplayName 自定义显示名称字符串
+ */
+#define YA_REFLECT_ENUM_VALUE_NAMED(ValueName, DisplayName) \
+    .value(DisplayName, _EnumType::ValueName)
+
+/**
+ * @brief 结束枚举反射定义
+ */
+#define YA_REFLECT_ENUM_END()                                                           \
+                ;                                                                       \
+            });                                                                         \
+        }                                                                               \
+    };                                                                                  \
+    static _YA_ENUM_REFLECT_STRUCT_##__LINE__ _g_ya_enum_reflect_instance_##__LINE__;   \
+    }
 
 
 /*

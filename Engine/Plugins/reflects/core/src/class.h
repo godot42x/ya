@@ -89,13 +89,12 @@ struct Class
     }
 
   public:
-    // 注册普通成员变量（可读写）
+    // Register normal member variable (read-write)
     template <typename ClassType, typename T>
     Property &property(const std::string &inName, T ClassType::*member)
     {
         Property prop;
         initPropertyBase<T>(prop, inName, false, false);
-        prop.value = member;
 
         prop.addressGetter = [member](const void *obj) -> const void * {
             return &(static_cast<const ClassType *>(obj)->*member);
@@ -105,24 +104,15 @@ struct Class
             return &(static_cast<ClassType *>(obj)->*member);
         };
 
-        prop.getter = [member](void *obj) -> std::any {
-            return std::any(static_cast<ClassType *>(obj)->*member);
-        };
-
-        prop.setter = [member](void *obj, const std::any &val) {
-            static_cast<ClassType *>(obj)->*member = std::any_cast<T>(val);
-        };
-
         return insertProperty(inName, std::move(prop));
     }
 
-    // 注册const成员变量（只读）
+    // Register const member variable (read-only)
     template <typename ClassType, typename T>
     Property &property(const std::string &inName, const T ClassType::*member)
     {
         Property prop;
         initPropertyBase<T>(prop, inName, true, false);
-        prop.value = member;
 
         prop.addressGetter = [member](const void *obj) -> const void * {
             return &(static_cast<const ClassType *>(obj)->*member);
@@ -130,46 +120,37 @@ struct Class
 
         prop.addressGetterMutable = nullptr;
 
-        prop.getter = [member](void *obj) -> std::any {
-            return std::any(static_cast<const ClassType *>(obj)->*member);
-        };
-
-        prop.setter = nullptr;
-
         return insertProperty(inName, std::move(prop));
     }
 
-    // 注册静态变量（可读写）
+    // Register static variable (read-write)
     template <typename T>
     Property &staticProperty(const std::string &inName, T *staticVar)
     {
         Property prop;
         initPropertyBase<T>(prop, inName, false, true);
 
-        prop.value  = staticVar;
-        prop.getter = [staticVar](void * /*obj*/) -> std::any {
-            return std::any(*staticVar);
+        prop.addressGetter = [staticVar](const void * /*obj*/) -> const void * {
+            return staticVar;
         };
-        prop.setter = [staticVar](void * /*obj*/, const std::any &val) {
-            *staticVar = std::any_cast<T>(val);
+        prop.addressGetterMutable = [staticVar](void * /*obj*/) -> void * {
+            return staticVar;
         };
 
         return insertProperty(inName, std::move(prop));
     }
 
-    // 注册const静态变量（只读）
+    // Register const static variable (read-only)
     template <typename T>
     Property &staticProperty(const std::string &inName, const T *staticVar)
     {
         Property prop;
         initPropertyBase<T>(prop, inName, true, true);
-        prop.value = staticVar;
 
-        prop.getter = [staticVar](void * /*obj*/) -> std::any {
-            return std::any(*staticVar);
+        prop.addressGetter = [staticVar](const void * /*obj*/) -> const void * {
+            return staticVar;
         };
-
-        prop.setter = nullptr;
+        prop.addressGetterMutable = nullptr;
 
         return insertProperty(inName, std::move(prop));
     }

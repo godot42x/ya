@@ -1,8 +1,8 @@
-
 #pragma once
 
 #include "Core/Base.h"
 #include "Core/FName.h"
+#include "Core/ResourceRegistry.h"
 #include "Render/Core/Texture.h"
 
 namespace ya
@@ -68,7 +68,7 @@ struct Font
     }
 };
 
-struct FontManager
+struct FontManager : public IResourceCache
 {
 
   private:
@@ -77,11 +77,10 @@ struct FontManager
 
   public:
     static FontManager *get();
-    void                cleanup()
-    {
-        YA_CORE_INFO("FontManager cleanup");
-        clearCache();
-    }
+    
+    // IResourceCache interface
+    void clearCache() override;
+    const char* getCacheName() const override { return "FontManager"; }
 
     /**
      * @brief Load a font with specific size
@@ -95,7 +94,6 @@ struct FontManager
     std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize);
 
     void unloadFont(const FName &fontName, uint32_t fontSize);
-    void clearCache();
 
     /**
      * @brief Get or load font with size adapted to window height

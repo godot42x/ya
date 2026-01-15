@@ -21,6 +21,7 @@ struct Enum
     std::vector<EnumValue>                   values;
     std::unordered_map<std::string, int64_t> nameToValue;
     std::unordered_map<int64_t, std::string> valueToName;
+    size_t                                   underlyingSize = sizeof(int); // Size of underlying type in bytes
 
     Enum() = default;
     explicit Enum(const std::string &inName) : name(inName) {}
@@ -71,4 +72,3 @@ struct Enum
         return values;
     }
 };
-

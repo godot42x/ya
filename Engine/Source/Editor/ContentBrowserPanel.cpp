@@ -102,7 +102,7 @@ void ContentBrowserPanel::init()
     auto am            = AssetManager::get();
     auto fileTexture   = am->loadTexture("file", "Engine/Content/TestTextures/editor/file.png").get();
     auto folderTexture = am->loadTexture("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
-    auto sampler       = TextureLibrary::getDefaultSampler();
+    auto sampler       = TextureLibrary::get().getDefaultSampler();
 
     fileIcon   = _owner->getOrCreateImGuiTextureID(fileTexture->getImageView(), sampler);
     folderIcon = _owner->getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler);

@@ -113,7 +113,7 @@ AssetManager *AssetManager::get()
     return &instance;
 }
 
-void AssetManager::cleanup()
+void AssetManager::clearCache()
 {
     YA_PROFILE_FUNCTION_LOG();
     modelCache.clear();
@@ -122,6 +122,7 @@ void AssetManager::cleanup()
         delete _importer;
         _importer = nullptr;
     }
+    YA_CORE_INFO("AssetManager cleared");
 }
 
 AssetManager::AssetManager()

@@ -22,7 +22,7 @@ struct TransformComponent : public IComponent
     glm::vec3 _scale        = {1.0f, 1.0f, 1.0f};
 
 
-    bool bDirty = false;
+    bool bDirty = true;
 
 
   public:
@@ -77,5 +77,7 @@ struct TransformComponent : public IComponent
         calcMatrix();
         return _cachedMatrix;
     }
+
+    void onPostSerialize() override { bDirty = true; }
 };
 } // namespace ya

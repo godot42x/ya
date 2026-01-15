@@ -98,7 +98,7 @@ class VectorProperty : public IContainerProperty
             return currentIndex < container->size() ? &(*container)[currentIndex] : nullptr;
         }
 
-uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -132,7 +132,7 @@ uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
         return nullptr; // Vector 不支持 key 访问
     }
 
-uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -186,14 +186,14 @@ class MapProperty : public IContainerProperty
             return current != container->end() ? &current->second : nullptr;
         }
 
-uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+        uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
         void *getKeyPtr() override
         {
             return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
         }
 
-uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+        uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
     };
 
   public:
@@ -253,8 +253,8 @@ uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
         return it != map->end() ? &it->second : nullptr;
     }
 
-uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
-uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+    uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+    uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {

@@ -1,10 +1,43 @@
 
+
+
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <glm/glm.hpp>
 
+
+namespace ya
+{
+
+/**
+ * @brief Primitive geometry types for built-in mesh generation
+ */
+enum class EPrimitiveGeometry : uint8_t
+{
+    None = 0, // No primitive (use _modelRef instead)
+    Cube,     // Unit cube
+    Sphere,   // UV sphere
+    Plane,    // XZ plane
+    Cylinder, // Cylinder
+    Cone,     // Cone
+    Quad,     // Fullscreen quad
+};
+
+} // namespace ya
+
+// Register EPrimitiveGeometry enum for reflection
+YA_REFLECT_ENUM_BEGIN(ya::EPrimitiveGeometry)
+YA_REFLECT_ENUM_VALUE(None)
+YA_REFLECT_ENUM_VALUE(Cube)
+YA_REFLECT_ENUM_VALUE(Sphere)
+YA_REFLECT_ENUM_VALUE(Plane)
+YA_REFLECT_ENUM_VALUE(Cylinder)
+YA_REFLECT_ENUM_VALUE(Cone)
+YA_REFLECT_ENUM_VALUE(Quad)
+YA_REFLECT_ENUM_END()
 
 namespace ya
 {

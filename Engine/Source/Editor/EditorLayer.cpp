@@ -514,7 +514,7 @@ const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView>
         return nullptr;
     }
     if (!sampler) {
-        sampler = TextureLibrary::getDefaultSampler();
+        sampler = TextureLibrary::get().getDefaultSampler();
     }
 
     ImGuiImageEntry entry{
@@ -597,6 +597,9 @@ void EditorLayer::renderGizmo()
     ImGuizmo::Enable(true);
 
     // Get transform component
+    if (!selectedEntity->hasComponent<TransformComponent>()) {
+        return;
+    }
     auto *tc = selectedEntity->getComponent<TransformComponent>();
     if (!tc) {
         return; // No transform component
