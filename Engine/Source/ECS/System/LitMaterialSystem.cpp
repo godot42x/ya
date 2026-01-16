@@ -6,6 +6,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
+#include "Editor/TypeRenderer.h"
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
@@ -324,7 +325,7 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
 
         // Fill point light data
         uLight.pointLights[uLight.numPointLights] = PointLightData{
-            .type      = plc._type,
+            .type      = (float)plc._type,
             .constant  = plc._constant,
             .linear    = plc._linear,
             .quadratic = plc._quadratic,
@@ -479,7 +480,7 @@ void LitMaterialSystem::onRenderGUI()
     ImGui::Text("Directional Light");
     ImGui::Indent();
     {
-        DetailsView::renderReflectedType("DirectionalLight", ya::type_index_v<LitMaterialSystem::DirectionalLightData>, &uLight.dirLight);
+        ya::renderReflectedType("DirectionalLight", ya::type_index_v<LitMaterialSystem::DirectionalLightData>, &uLight.dirLight);
     }
     ImGui::Unindent();
     ImGui::Separator();

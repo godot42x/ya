@@ -97,6 +97,7 @@ struct FName
     operator index_t() const noexcept { return _index; }
     operator std::string_view() const noexcept { return _data; }
     operator const char *() const noexcept { return _data.data(); }
+    operator std::string() const noexcept { return std::string(_data); }
 
     bool operator==(const FName &other) const noexcept { return _index == other._index; }
     bool operator!=(const FName &other) const noexcept { return _index != other._index; }

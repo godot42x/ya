@@ -41,22 +41,16 @@ struct LitMaterialSystem : public IMaterialSystem
 
     struct alignas(16) DirectionalLightData
     {
-        YA_REFLECT_BEGIN(DirectionalLightData)
-        YA_REFLECT_FIELD(direction)
-        YA_REFLECT_FIELD(ambient, .color())
-        YA_REFLECT_FIELD(diffuse, .color())
-        YA_REFLECT_FIELD(specular, .color())
-        YA_REFLECT_END()
-
         alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        alignas(16) glm::vec3 ambient   = glm::vec3(0.1f);
-        alignas(16) glm::vec3 diffuse   = glm::vec3(0.5f);
-        alignas(16) glm::vec3 specular  = glm::vec3(1.0f);
+        alignas(16) glm::vec3 ambient   = glm::vec3(0.05f);
+        alignas(16) glm::vec3 diffuse   = glm::vec3(0.24f);
+        alignas(16) glm::vec3 specular  = glm::vec3(0.12f);
     };
+
 
     struct alignas(16) PointLightData
     {
-        int type = 0;
+        float type = 0;
         // attenuation factors
         float constant  = 1.0f;
         float linear    = 0.09f;
@@ -69,9 +63,9 @@ struct LitMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
 
         // spot light
-        glm::vec3 spotDir;
-        float     innerCutOff;
-        float     outerCutOff;
+        alignas(16) glm::vec3 spotDir;
+        float innerCutOff;
+        float outerCutOff;
     };
 
     static constexpr uint32_t MAX_POINT_LIGHTS = 4;
@@ -83,9 +77,9 @@ struct LitMaterialSystem : public IMaterialSystem
     // - 数组元素按最大成员对齐（vec3数组元素按16字节）
     struct alignas(16) LightUBO
     {
-        DirectionalLightData dirLight;
-        PointLightData       pointLights[MAX_POINT_LIGHTS];
-        uint32_t             numPointLights = 0;
+        alignas(16) DirectionalLightData dirLight;
+        alignas(16) uint32_t numPointLights = 0;
+        alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
     } uLight;
 
     struct DebugUBO
@@ -155,3 +149,11 @@ struct LitMaterialSystem : public IMaterialSystem
 
 
 } // namespace ya
+
+// 存在额外的字段，导致不符合 std140 布局规则, 或者占用了别的数据
+YA_REFLECT_EXTERNAL_BEGIN(ya::LitMaterialSystem::DirectionalLightData)
+YA_REFLECT_FIELD(direction)
+YA_REFLECT_FIELD(ambient, .color())
+YA_REFLECT_FIELD(diffuse, .color())
+YA_REFLECT_FIELD(specular, .color())
+YA_REFLECT_EXTERNAL_END()

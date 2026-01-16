@@ -62,20 +62,19 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
+layout(std140)
 struct DirectionalLight {
     vec3  direction;    // 光源方向
-
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
-
 };
 
 
+layout(std140)
 struct PointLight {
-    int   type; // 0 point, 1 spot
-
     // attenuation factors
+    float   type; // 0 point, 1 spot
     float constant;
     float linear;
     float quadratic;
@@ -86,25 +85,20 @@ struct PointLight {
     vec3  diffuse;
     vec3  specular;
 
-
     // spot light
     vec3  spotDir;
     // float innerAngle;
     // float outerAngle;
     float innerCutoff; // cos(innerAngle)
     float outerCutoff; // cos(outerAngle)
-
-
 };
 
 #define MAX_POINT_LIGHTS 4
 
 layout(set =0, binding =1, std140) uniform LightUBO {
     DirectionalLight dirLight;
-
-    PointLight pointLights[MAX_POINT_LIGHTS];
     uint numPointLights;   // collect from scene
-
+    PointLight pointLights[MAX_POINT_LIGHTS];
 } uLit;
 
 
@@ -138,7 +132,6 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
         vec3 halfwayDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
     #else
-        // 修正：使用正确的反射方向（反射入射光线）
         vec3 reflectDir = reflect(-lightDir, norm);
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
     #endif
@@ -148,15 +141,14 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
 vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor) 
 {
     vec3 lightDir = normalize(-dirLight.direction);
-
     float diff = max(dot(norm, lightDir), 0.0);
 
     // float reflectDir = reflect(-lightDir, norm);
     float spec =  calculateSpec(norm, lightDir, viewDir, uParams.shininess);
 
-    vec3 ambient = dirLight.ambient *  diffuseTexColor;
-    vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor;
-    vec3 specular = dirLight.specular * spec * specularTexColor;
+    vec3 ambient = dirLight.ambient *  diffuseTexColor *  uParams.ambient;
+    vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
+    vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
     return ambient + diffuse + specular;
 }
 
@@ -168,9 +160,9 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
     // float reflectDir = reflect(-lightDir, norm);
     float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
 
-    vec3 ambient = pointLight.ambient *  diffuseTexColor;
-    vec3 diffuse = pointLight.diffuse * diff *   diffuseTexColor;
-    vec3 specular = pointLight.specular * spec * specularTexColor;
+    vec3 ambient = pointLight.ambient *  diffuseTexColor * uParams.ambient;
+    vec3 diffuse = pointLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
+    vec3 specular = pointLight.specular * spec * specularTexColor * uParams.specular;
 
     // spot light process
     if (pointLight.type == 1){
@@ -215,6 +207,16 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
     return (ambient + diffuse + specular) * attenuation;
 }
 
+bool drawDebugFrag(vec2 pos, vec2 size, vec4 color)
+{
+    vec2 fragPos = gl_FragCoord.xy;
+    if (fragPos.x >= pos.x && fragPos.x <= pos.x + size.x && fragPos.y >= pos.y && fragPos.y <= pos.y + size.y){
+        fColor = color;
+        return true;
+    }
+    return false;
+}
+
 
 // MARK: Fragment Main
 void main ()
@@ -222,22 +224,25 @@ void main ()
     vec3 norm = normalize(vNormal);
     vec3 viewDir = normalize(uFrame.cameraPos - vPos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
+
+    vec4 debugColor = vec4(uLit.pointLights[0].type, 0, 0, 1);
+    if (drawDebugFrag(vec2(100,100), vec2(30,30), debugColor)){
+        return;
+    }
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
         return;
     }
-    // if(uLit.numPointLights == 0 ){
-    //     fColor = vec4(0,0,1,1);
-    //     return;
-    // }
+    if(uLit.numPointLights == 0 ){
+        fColor = vec4(0,0,1,1);
+        return;
+    }
 
     vec4 diffuseTexColor = texture(uTexDiffuse, vTexcoord);
     vec4 specularTexColor = texture(uTexSpecular, vTexcoord);
     // lib: 尝试在片段着色器中反转镜面光贴图的颜色值，让木头显示镜面高光而钢制边缘不反光（由于钢制边缘中有一些裂缝，边缘仍会显示一些镜面高光，虽然强度会小很多
     // specularTexColor  = vec4(1.0) -specularTexColor;
-    
-    
     
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
@@ -250,6 +255,5 @@ void main ()
         lighting += calculatePointLight(uLit.pointLights[i], vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
     }
     
-    // 限制输出范围，避免过曝导致的视觉错误
-    fColor = vec4(lighting, 0.0);
+    fColor = vec4(lighting, 1.0);
 }
