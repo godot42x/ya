@@ -64,29 +64,37 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 struct DirectionalLight {
     vec3  direction;    // 光源方向
-    float intensity;    // 光照强度
-    vec3  color;       // 光源颜色
-    float padding;      // 填充以保持对齐
-    vec3  ambient;
 
-    // attenuation factors
-    float constant;
-    float linear;
-    float quadratic;
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+
 };
 
 
 struct PointLight {
     int   type; // 0 point, 1 spot
+
+    // attenuation factors
+    float constant;
+    float linear;
+    float quadratic;
+
     vec3  position;      // 光源位置
-    float intensity;    // 光照强度
-    vec3  color;         // 光源颜色
-    float radius;       // 光照范围（用于衰减计算）
+
+    vec3  ambient;
+    vec3  diffuse;
+    vec3  specular;
+
+
+    // spot light
     vec3  spotDir;
     // float innerAngle;
     // float outerAngle;
     float innerCutoff; // cos(innerAngle)
     float outerCutoff; // cos(outerAngle)
+
+
 };
 
 #define MAX_POINT_LIGHTS 4
@@ -96,6 +104,7 @@ layout(set =0, binding =1, std140) uniform LightUBO {
 
     PointLight pointLights[MAX_POINT_LIGHTS];
     uint numPointLights;   // collect from scene
+
 } uLit;
 
 
@@ -123,45 +132,105 @@ layout(location = 2) in vec3 vNormal;
 
 layout(location = 0) out vec4 fColor;
 
-// 计算点光源的衰减
-float calculateAttenuation(float distance) {
-    // 使用物理衰减：1 / (distance^2)
-
-    float attenuation = 1.0 / (
-        uLit.dirLight.constant +
-        uLit.dirLight.linear * distance +
-        uLit.dirLight.quadratic * (distance * distance)
-    );
-
-    return attenuation;
-
-    // float attenuation = 1.0 / (1.0 + distance * distance);
-    // // 平滑过渡到边缘
-    // float smoothFactor = 1.0 - pow(distance / radius, 4.0);
-    // return attenuation * smoothFactor;
+float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
+{
+    #if BLING_PHONG_HALFWAY
+        vec3 halfwayDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
+    #else
+        // 修正：使用正确的反射方向（反射入射光线）
+        vec3 reflectDir = reflect(-lightDir, norm);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
+    #endif
+    return spec;
 }
 
+vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor) 
+{
+    vec3 lightDir = normalize(-dirLight.direction);
+
+    float diff = max(dot(norm, lightDir), 0.0);
+
+    // float reflectDir = reflect(-lightDir, norm);
+    float spec =  calculateSpec(norm, lightDir, viewDir, uParams.shininess);
+
+    vec3 ambient = dirLight.ambient *  diffuseTexColor;
+    vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor;
+    vec3 specular = dirLight.specular * spec * specularTexColor;
+    return ambient + diffuse + specular;
+}
+
+vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor)
+{
+    vec3 lightDir = normalize(pointLight.position - fragPos);
+
+    float diff = max(dot(norm, lightDir), 0.0);
+    // float reflectDir = reflect(-lightDir, norm);
+    float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
+
+    vec3 ambient = pointLight.ambient *  diffuseTexColor;
+    vec3 diffuse = pointLight.diffuse * diff *   diffuseTexColor;
+    vec3 specular = pointLight.specular * spec * specularTexColor;
+
+    // spot light process
+    if (pointLight.type == 1){
+        // 
+        float theta = dot(lightDir, normalize(-pointLight.spotDir));
+        float epsilon = pointLight.innerCutoff - pointLight.outerCutoff;
+        // see LearnOpenGL 2.5
+        /* LearnOpenGL 2.5. Michael Qiao:
+            边缘平滑公式可以这样理解:
+            x 的范围是 1 - 10 - 12 , 则边缘平滑公式为: clamp(12 - x / (12-10) , 0, 1)
+            1. x在1 - 10范围内公式大于1 clamp为1, 对应的就是内光切的聚光范围
+            2. x在10 - 12范围内公式小于1 且 12 - x / (12-10) 越来越小,对应的就是外光切的光越来越弱.
+            3. 如果x>12,公式小于0, clamp为(0).
+            其实就是从内光切到外光切求1到0的插值
+        */
+        float intensity =   clamp( (theta - pointLight.outerCutoff) / epsilon, 0.0, 1.0);
+
+        //  这样不求边缘的衰减
+        // innerCutOff = cos(innerConeAngle)
+        // fag->light 在 spotDir 的投影 长度 大于 innerCutoff 
+        // if (theta > light.innerCutoff){
+        //     // do normal calculation
+        // }else{
+        //     // only ambient
+        //     lighting += lampColor * uParams.ambient * diffuseTexColor.rgb * ambientIntensity;
+        //     continue;
+        // }
+
+        diffuse *= intensity;
+        specular *= intensity;
+    }
+
+    // 计算衰减
+    float distance = length(pointLight.position - fragPos);
+    float attenuation = 1.0 / (
+        pointLight.constant +
+        pointLight.linear * distance +
+        pointLight.quadratic * (distance * distance)
+    );
+
+
+    return (ambient + diffuse + specular) * attenuation;
+}
 
 
 // MARK: Fragment Main
 void main ()
 {
     vec3 norm = normalize(vNormal);
-    // from fragment to camera(eye)
-    vec3 viewDir = normalize(uFrame.cameraPos - vPos);
+    vec3 viewDir = normalize(uFrame.cameraPos - vPos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
-
-    vec3 lightDir = normalize(-uLit.dirLight.direction);
-    float ambientIntensity = 0.1;
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
         return;
     }
-    if(uLit.numPointLights == 0){
-        fColor = vec4(0,0,1,1);
-        return;
-    }
+    // if(uLit.numPointLights == 0 ){
+    //     fColor = vec4(0,0,1,1);
+    //     return;
+    // }
 
     vec4 diffuseTexColor = texture(uTexDiffuse, vTexcoord);
     vec4 specularTexColor = texture(uTexSpecular, vTexcoord);
@@ -172,79 +241,15 @@ void main ()
     
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
+
+    lighting += calculateDirLight(uLit.dirLight, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
     
-    for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) {
-
-        PointLight light = uLit.pointLights[i];
-
-        // 修正：lightDir 应该是从片段指向光源的方向
-        vec3 lightDir  = normalize(light.position - vPos);
-        float distance = length(light.position - vPos);
-        vec3 lampColor = light.color * light.intensity;
-
-     
-
-        // 环境光/ambient（环境光不受距离衰减影响，但强度应该较小）
-        vec3 ambient = lampColor * uParams.ambient * diffuseTexColor.rgb * ambientIntensity;
-        
-        // 漫反射/diffuse
-        float diff = max(dot(norm, lightDir), 0.0);
-        vec3 diffuse = lampColor*    (diff * uParams.diffuse) * diffuseTexColor.rgb;
-        
-        // 高光/specular
-    #if BLING_PHONG_HALFWAY
-        vec3 halfwayDir = normalize(lightDir + viewDir);
-        float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
-    #else
-        // 修正：使用正确的反射方向（反射入射光线）
-        vec3 reflectDir = reflect(-lightDir, norm);
-        float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-    #endif
-        vec3 specular = lampColor * spec * uParams.specular * specularTexColor.rgb;
-
-
-        // spot light process
-        if (light.type == 1){
-            // 
-            float theta = dot(lightDir, normalize(-light.spotDir));
-            float epsilon = light.innerCutoff - light.outerCutoff;
-            // see LearnOpenGL 2.5
-            /* LearnOpenGL 2.5. Michael Qiao:
-             边缘平滑公式可以这样理解:
-                x 的范围是 1 - 10 - 12 , 则边缘平滑公式为: clamp(12 - x / (12-10) , 0, 1)
-                1. x在1 - 10范围内公式大于1 clamp为1, 对应的就是内光切的聚光范围
-                2. x在10 - 12范围内公式小于1 且 12 - x / (12-10) 越来越小,对应的就是外光切的光越来越弱.
-                3. 如果x>12,公式小于0, clamp为(0).
-                其实就是从内光切到外光切求1到0的插值
-            */
-            float intensity =   clamp( (theta - light.outerCutoff) / epsilon, 0.0, 1.0);
-
-            //  这样不求边缘的衰减
-            // innerCutOff = cos(innerConeAngle)
-            // fag->light 在 spotDir 的投影 长度 大于 innerCutoff 
-            // if (theta > light.innerCutoff){
-            //     // do normal calculation
-            // }else{
-            //     // only ambient
-            //     lighting += lampColor * uParams.ambient * diffuseTexColor.rgb * ambientIntensity;
-            //     continue;
-            // }
-
-            diffuse *= intensity;
-            specular *= intensity;
-        }
-
-        // 计算衰减
-        float attenuation = calculateAttenuation(distance/*, light.radius*/);
-        ambient*= attenuation;
-        diffuse*= attenuation;
-        specular*= attenuation;
-        
-        
-        // 累加光照
-        lighting += (ambient + diffuse + specular);
+    // TODO: need this numPointLights? or make a const to do simd optimization?
+    for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) 
+    {
+        lighting += calculatePointLight(uLit.pointLights[i], vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
     }
     
     // 限制输出范围，避免过曝导致的视觉错误
-    fColor = vec4(clamp(lighting, 0.0, 1.0), 1.0);
+    fColor = vec4(lighting, 0.0);
 }

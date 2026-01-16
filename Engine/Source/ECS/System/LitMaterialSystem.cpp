@@ -323,16 +323,21 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
         const auto &[plc, tc] = scene->getRegistry().get<PointLightComponent, TransformComponent>(entity);
 
         // Fill point light data
-        auto &lightData       = uLight.pointLights[uLight.numPointLights];
-        lightData.type        = plc._type;
-        lightData.position    = tc.getPosition();
-        lightData.intensity   = plc._intensity;
-        lightData.color       = plc._color;
-        lightData.radius      = plc._range;
-        lightData.spotDir     = tc.getForward();
-        lightData.innerCutOff = glm::cos(glm::radians(plc._innerConeAngle));
-        lightData.outerCutOff = glm::cos(glm::radians(plc._outerConeAngle));
+        uLight.pointLights[uLight.numPointLights] = PointLightData{
+            .type      = plc._type,
+            .constant  = plc._constant,
+            .linear    = plc._linear,
+            .quadratic = plc._quadratic,
+            .position  = tc._position,
 
+            .ambient  = plc._ambient,
+            .diffuse  = plc._diffuse,
+            .specular = plc._specular,
+
+            .spotDir     = tc.getForward(),
+            .innerCutOff = glm::cos(glm::radians(plc._innerConeAngle)),
+            .outerCutOff = glm::cos(glm::radians(plc._outerConeAngle)),
+        };
         // YA_CORE_INFO("  Light {}: pos=({:.2f},{:.2f},{:.2f}), intensity={:.2f}, radius={:.2f}",
         //              uLight.numPointLights,
         //              lightData.position.x, lightData.position.y, lightData.position.z,
@@ -386,7 +391,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 
     // Material tracking for this frame
-    uint32_t materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
+    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
     std::vector<int> updatedMaterial(materialCount, 0);
 
     // Phase 3: Render loop
@@ -474,15 +479,7 @@ void LitMaterialSystem::onRenderGUI()
     ImGui::Text("Directional Light");
     ImGui::Indent();
     {
-        ImGui::PushID("1");
-        ImGui::DragFloat3("Direction", glm::value_ptr(uLight.dirLight.direction), 0.1f);
-        ImGui::ColorEdit3("Color", glm::value_ptr(uLight.dirLight.color));
-        ImGui::SliderFloat("Intensity", &uLight.dirLight.intensity, 0.0f, 10.0f);
-        ImGui::ColorEdit3("Ambient", glm::value_ptr(uLight.dirLight.ambient));
-        ImGui::DragFloat("Constant", &uLight.dirLight.constant, 0.01f, 0.0f, 10.0f);
-        ImGui::DragFloat("Linear", &uLight.dirLight.linear, 0.001f, 0.0f, 1.0f);
-        ImGui::DragFloat("Quadratic", &uLight.dirLight.quadratic, 0.001f, 0.0f, 1.0f);
-        ImGui::PopID();
+        DetailsView::renderReflectedType("DirectionalLight", ya::type_index_v<LitMaterialSystem::DirectionalLightData>, &uLight.dirLight);
     }
     ImGui::Unindent();
     ImGui::Separator();

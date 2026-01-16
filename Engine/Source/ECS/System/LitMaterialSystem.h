@@ -39,44 +39,43 @@ struct LitMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 cameraPos; // 相机世界空间位置
     };
 
-    // 点光源结构体（对应 shader 中的 PointLight）
-    // 严格按照 std140 布局规则对齐
+    struct alignas(16) DirectionalLightData
+    {
+        YA_REFLECT_BEGIN(DirectionalLightData)
+        YA_REFLECT_FIELD(direction)
+        YA_REFLECT_FIELD(ambient, .color())
+        YA_REFLECT_FIELD(diffuse, .color())
+        YA_REFLECT_FIELD(specular, .color())
+        YA_REFLECT_END()
+
+        alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
+        alignas(16) glm::vec3 ambient   = glm::vec3(0.1f);
+        alignas(16) glm::vec3 diffuse   = glm::vec3(0.5f);
+        alignas(16) glm::vec3 specular  = glm::vec3(1.0f);
+    };
+
     struct alignas(16) PointLightData
     {
-        int   type = 0; // offset 0
-        float padding[3];
+        int type = 0;
+        // attenuation factors
+        float constant  = 1.0f;
+        float linear    = 0.09f;
+        float quadratic = 0.032f;
 
-        glm::vec3 position;  // offset 16 (光源位置)
-        float     intensity; // offset 28 (光照强度)
+        alignas(16) glm::vec3 position;
 
-        glm::vec3 color;  // offset 32 (光源颜色, 自动对齐到 16)
-        float     radius; // offset 44 (光照半径)
+        alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
+        alignas(16) glm::vec3 diffuse  = glm::vec3(0.5f);
+        alignas(16) glm::vec3 specular = glm::vec3(1.0f);
 
         // spot light
         glm::vec3 spotDir;
         float     innerCutOff;
         float     outerCutOff;
-        float     padding2[2];
     };
 
     static constexpr uint32_t MAX_POINT_LIGHTS = 4;
 
-    // 对应 shader 中的 DirectionalLight 结构
-    struct alignas(16) DirectionalLightData
-    {
-        glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        float     intensity = 1.0f;
-
-        glm::vec3 color   = glm::vec3(1.0f);
-        float     padding = 0.0f;
-
-        glm::vec3 ambient = glm::vec3(0.1f);
-
-        // attenuation factors
-        float constant  = 1.0f;
-        float linear    = 0.09f;
-        float quadratic = 0.032f;
-    };
 
     // std140 布局规则（GLSL）：
     // - vec3 自身占12字节，但按16字节对齐（下一个变量从16字节边界开始）

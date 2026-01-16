@@ -10,11 +10,16 @@ struct PointLightComponent : public IComponent
 {
     YA_REFLECT_BEGIN(PointLightComponent)
     YA_REFLECT_FIELD(_type)
-    YA_REFLECT_FIELD(_color)
-    YA_REFLECT_FIELD(_intensity)
-    YA_REFLECT_FIELD(_range)
-    YA_REFLECT_FIELD(_innerConeAngle)
-    YA_REFLECT_FIELD(_outerConeAngle)
+    YA_REFLECT_FIELD(_constant)
+    YA_REFLECT_FIELD(_linear)
+    YA_REFLECT_FIELD(_quadratic)
+
+    YA_REFLECT_FIELD(_ambient, .color())
+    YA_REFLECT_FIELD(_diffuse, .color())
+    YA_REFLECT_FIELD(_specular, .color())
+
+    YA_REFLECT_FIELD(_innerConeAngle, .manipulate(0.0f, 90.0f, 0.1f, ya::reflection::ManipulatorType::Slider))
+    YA_REFLECT_FIELD(_outerConeAngle, .manipulate(0.0f, 90.0f, 0.1f, ya::reflection::ManipulatorType::Slider))
     YA_REFLECT_END()
   private:
   public:
@@ -27,9 +32,14 @@ struct PointLightComponent : public IComponent
     // TODO: reflect draw the enum in imgui
     int _type = Type::Point;
 
-    glm::vec3 _color     = {1.0f, 1.0f, 1.0f};
-    float     _intensity = 1.0f;
-    float     _range     = 50.0f; // For point and spot lights
+    // attenuation factors
+    float _constant  = 1.0f;
+    float _linear    = 0.09f;
+    float _quadratic = 0.032f;
+
+    glm::vec3 _ambient  = {1.0f, 1.0f, 1.0f};
+    glm::vec3 _diffuse  = {1.0f, 1.0f, 1.0f};
+    glm::vec3 _specular = {1.0f, 1.0f, 1.0f};
 
     float _innerConeAngle = 30.0f; // For spot lights
     float _outerConeAngle = 45.0f; // For spot lights
