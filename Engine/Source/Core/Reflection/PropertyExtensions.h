@@ -94,7 +94,7 @@ class PropertyContainerHelper
     /**
      * @brief 获取容器访问器
      */
-    static IContainerProperty *getContainerAccessor(Property &prop)
+    static IContainerProperty *getContainerAccessor(const Property &prop)
     {
         auto *ext = getContainerExtension(prop);
         // return ext ? ext->containerAccessor.get() : nullptr;

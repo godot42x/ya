@@ -21,7 +21,7 @@ struct PlayerComponent
 
     YA_REFLECT_BEGIN(PlayerComponent)
     YA_REFLECT_FIELD(name, .tooltip("Player's name").category("Basic Info"))
-    YA_REFLECT_FIELD(health, .range(0, 100).category("Stats"))
+    YA_REFLECT_FIELD(health, .manipulate(0, 100).category("Stats"))
     YA_REFLECT_FIELD(speed, .tooltip("Movement speed").category("Stats"))
     YA_REFLECT_END()
 };
@@ -46,7 +46,7 @@ struct LargeComponent
 
     YA_REFLECT_BEGIN(LargeComponent)
     YA_REFLECT_FIELD(field1, .tooltip("Field 1"))
-    YA_REFLECT_FIELD(field2, .range(0, 100))
+    YA_REFLECT_FIELD(field2, .manipulate(0, 100))
     YA_REFLECT_FIELD(field3, .transient())
     YA_REFLECT_FIELD(field4, )
     YA_REFLECT_FIELD(field5, )

@@ -1,62 +1,53 @@
 #pragma once
 
+#include "Core/FName.h"
 #include <any>
 #include <reflects-core/lib.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include <glm/fwd.hpp>
+
+
 
 namespace ya::reflection
 {
-
-/**
- * @brief 属性元数据 - 类似 UE 的 UPROPERTY
- *
- * 支持的方案对比：
- *
- * 1. **纯宏方案**（当前实现）
- *    - 优点：无需外部工具，编译期完成
- *    - 缺点：语法稍显复杂
- *
- * 2. **代码生成器方案**（如 UE UHT）
- *    - 优点：最灵活，语法最优雅
- *    - 缺点：需要额外构建步骤，增加复杂度
- *
- * 3. **混合方案**（推荐）
- *    - 宏定义 metadata
- *    - 模板元编程处理
- *    - 运行时可查询
- */
-
-// ============================================================================
-// 方案1: 简单的元数据标记（编译期）
-// ============================================================================
-
-/**
- * @brief 属性元数据标记
- *
- * 使用示例：
- * ```cpp
- * struct MyComponent {
- *     YA_REFLECT_WITH_META(MyComponent,
- *         (health, Meta(EditAnywhere, Range(0, 100), Tooltip("生命值"))),
- *         (speed, Meta(EditAnywhere, Range(0, 10))),
- *         (cachedValue, Meta(NotSerialized))
- *     )
- *
- *     float health = 100.0f;
- *     float speed = 5.0f;
- *     float cachedValue;  // 不序列化
- * };
- * ```
- */
 
 
 
 // ============================================================================
 // 元数据构建器
 // ============================================================================
+
+struct Meta
+{
+    static inline FName const Color       = "color";
+    static inline FName const Tooltip     = "tooltip";
+    static inline FName const Category    = "category";
+    static inline FName const DisplayName = "display_name";
+
+    struct ManipulateSpec
+    {
+        enum Type
+        {
+            None,
+            Slider,
+            Drag,
+            Input
+        };
+
+        Type  type = None;
+        float min  = 0.0f;
+        float max  = 1.0f;
+        float step = 0.1f;
+
+        static inline FName const name = "manipulator_spec";
+    };
+};
+
+using ManipulatorType = Meta::ManipulateSpec::Type;
+
 
 /**
  * @brief 元数据构建器
@@ -73,47 +64,43 @@ struct MetaBuilder
         return *this;
     }
 
-    MetaBuilder &range(float min, float max)
+
+    MetaBuilder &manipulate(float min, float max, float step = 0.1f, Meta::ManipulateSpec::Type type = Meta::ManipulateSpec::Slider)
         requires std::is_arithmetic_v<T>
     {
-        // TODO: check is a number type
-        meta.set("range_min", min);
-        meta.set("range_max", max);
+        meta.set(Meta::ManipulateSpec::name,
+                 Meta::ManipulateSpec{
+                     .type = type,
+                     .min  = min,
+                     .max  = max,
+                     .step = step,
+                 });
         return *this;
     }
 
-    MetaBuilder &uiModifiedStep(float step)
-        requires std::is_arithmetic_v<T>
+    MetaBuilder &color()
+        requires std::is_same_v<T, glm::vec3> || std::is_same_v<T, glm::vec4>
     {
-        meta.set("ui_modified_step", step);
+        meta.set(Meta::Color, true);
         return *this;
     }
 
-    // float -> drag float, input float
-    // int -> drag int, input int
-    // vec -> drag vec, input vec, color vec
-    MetaBuilder &manipulatorSpec(const std::string &spec)
-        requires std::is_arithmetic_v<T>
-    {
-        meta.set("manipulator_spec", spec);
-        return *this;
-    }
 
     MetaBuilder &tooltip(const std::string &text)
     {
-        meta.set("tooltip", text);
+        meta.set(Meta::Tooltip, text);
         return *this;
     }
 
     MetaBuilder &category(const std::string &category)
     {
-        meta.set("category", category);
+        meta.set(Meta::Category, category);
         return *this;
     }
 
     MetaBuilder &displayName(const std::string &name)
     {
-        meta.set("display_name", name);
+        meta.set(Meta::DisplayName, name);
         return *this;
     }
     MetaBuilder &transient()
@@ -121,7 +108,6 @@ struct MetaBuilder
         addFlag(FieldFlags::Transient);
         return *this;
     }
-
 
     operator Metadata() const { return meta; }
 };

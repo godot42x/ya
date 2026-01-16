@@ -17,7 +17,7 @@ struct LitMaterial : public Material
         YA_REFLECT_FIELD(ambient)
         YA_REFLECT_FIELD(diffuse)
         YA_REFLECT_FIELD(specular)
-        YA_REFLECT_FIELD(shininess, .range(1.0f, 256.0f))
+        YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
         YA_REFLECT_END()
 
         alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);

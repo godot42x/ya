@@ -142,7 +142,18 @@ void VulkanPipeline::createPipelineInternal()
     auto shaderStorage = ya::App::get()->getShaderStorage();
     auto stage2Spirv   = shaderStorage->getCache(_ci.shaderDesc.shaderName);
     if (!stage2Spirv) {
-        stage2Spirv = shaderStorage->load(_ci.shaderDesc);
+        try {
+
+            stage2Spirv = shaderStorage->load(_ci.shaderDesc);
+        }
+        catch (const std::exception &e) {
+            YA_CORE_ERROR("Failed to load shader: {}", e.what());
+            return;
+        }
+        if (!stage2Spirv) {
+            YA_CORE_ERROR("Failed to load shader: {}", _ci.shaderDesc.shaderName);
+            return;
+        }
     }
     YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderDesc.shaderName);
 

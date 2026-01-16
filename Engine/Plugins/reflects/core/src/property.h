@@ -15,73 +15,35 @@ struct Metadata
     std::string name;
     uint32_t    flags = 0;
 
-    // Simple metadata storage using variant for common types (fast path)
-    using MetaValue = std::variant<std::monostate, bool, int, float, double, std::string>;
-    std::unordered_map<std::string, MetaValue> metadata;
-
-    // Extended metadata storage using std::any for complex types (e.g., shared_ptr)
-    std::unordered_map<std::string, std::any> anyMetadata;
+    std::unordered_map<std::string, std::any> metas;
 
     // Set simple types (stored in variant)
     template <typename T>
-        requires(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
-                 std::is_same_v<T, double> || std::is_same_v<T, std::string>)
     void set(const std::string &key, const T &value)
     {
-        metadata[key] = value;
-    }
-
-    // Set complex types (stored in std::any)
-    template <typename T>
-        requires(!(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
-                   std::is_same_v<T, double> || std::is_same_v<T, std::string>))
-    void set(const std::string &key, const T &value)
-    {
-        anyMetadata[key] = value;
-    }
-
-    // Get simple types (from variant)
-    template <typename T>
-        requires(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
-                 std::is_same_v<T, double> || std::is_same_v<T, std::string>)
-    T get(const std::string &key, const T &defaultValue = T{}) const
-    {
-        auto it = metadata.find(key);
-        if (it != metadata.end()) {
-            if (auto *val = std::get_if<T>(&it->second)) {
-                return *val;
-            }
-        }
-        return defaultValue;
+        metas[key] = value;
     }
 
     // Get complex types (from std::any)
     template <typename T>
-        requires(!(std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, float> ||
-                   std::is_same_v<T, double> || std::is_same_v<T, std::string>))
-    T get(const std::string &key, const T &defaultValue = T{}) const
+    T get(const std::string &key) const
     {
-        auto it = anyMetadata.find(key);
-        if (it != anyMetadata.end()) {
-            try {
-                return std::any_cast<T>(it->second);
-            }
-            catch (...) {
-                return defaultValue;
-            }
+        auto it = metas.find(key);
+        if (it != metas.end()) {
+            return std::any_cast<T>(it->second);
         }
-        return defaultValue;
+        throw std::runtime_error("Metadata key not found: " + key);
     }
 
     bool hasMeta(const std::string &key) const
     {
-        return metadata.find(key) != metadata.end() || anyMetadata.find(key) != anyMetadata.end();
+        return metas.find(key) != metas.end();
     }
 
     // Check if any metadata exists (used to determine if registration is needed)
     bool hasAnyMetadata() const
     {
-        return flags != 0 || !metadata.empty() || !anyMetadata.empty();
+        return flags != 0 || !metas.empty();
     }
 
     bool hasFlag(uint32_t flag) const
@@ -138,6 +100,10 @@ struct Field
     // ============================================================================
 
     Metadata &getMetadata()
+    {
+        return metadata;
+    }
+    const Metadata &getMetadata() const
     {
         return metadata;
     }

@@ -266,14 +266,14 @@ void registerECSType(const std::string &typeName)
  * NOTE: Uses delayed initialization via addPostStaticInitializer to ensure
  *       type_index_v<EnumType> is properly initialized (not 0).
  */
-#define YA_REFLECT_ENUM_BEGIN(EnumType)                                                 \
-    namespace                                                                           \
-    {                                                                                   \
-    struct _YA_ENUM_REFLECT_STRUCT_##__LINE__                                           \
-    {                                                                                   \
-        using _EnumType = EnumType;                                                     \
-        _YA_ENUM_REFLECT_STRUCT_##__LINE__()                                            \
-        {                                                                               \
+#define YA_REFLECT_ENUM_BEGIN(EnumType)       \
+    namespace                                 \
+    {                                         \
+    struct _YA_ENUM_REFLECT_STRUCT_##__LINE__ \
+    {                                         \
+        using _EnumType = EnumType;           \
+        _YA_ENUM_REFLECT_STRUCT_##__LINE__()  \
+        {                                     \
             ClassRegistry::instance().addPostStaticInitializer([]() {                   \
                 RegisterEnum<_EnumType> reg(#EnumType, ::ya::type_index_v<_EnumType>);  \
                 reg
@@ -296,6 +296,7 @@ void registerECSType(const std::string &typeName)
 /**
  * @brief 结束枚举反射定义
  */
+// clang-format off
 #define YA_REFLECT_ENUM_END()                                                           \
                 ;                                                                       \
             });                                                                         \
@@ -303,6 +304,7 @@ void registerECSType(const std::string &typeName)
     };                                                                                  \
     static _YA_ENUM_REFLECT_STRUCT_##__LINE__ _g_ya_enum_reflect_instance_##__LINE__;   \
     }
+  // clang-format on
 
 
 /*

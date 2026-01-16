@@ -3,16 +3,14 @@
 #include "ContainerPropertyRenderer.h"
 #include "ECS/Entity.h"
 #include "FilePicker.h"
+#include "ReflectionCache.h"
+#include "TypeRenderer.h"
 #include <imgui.h>
 #include <memory>
 #include <sol/sol.hpp>
-#include <unordered_map>
 
 #include "Core/Debug/Instrumentor.h"
 
-
-struct Class;
-struct Property;
 namespace ya
 {
 
@@ -23,23 +21,9 @@ struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
 
-struct ReflectionCache
-{
-    Class   *componentClassPtr;
-    size_t   propertyCount = 0;
-    uint32_t typeIndex     = 0;
-
-    // 缓存容器属性信息，避免每帧查询
-    struct PropertyCache
-    {
-        bool                            isContainer       = false;
-        reflection::IContainerProperty *containerAccessor = nullptr;
-        std::string                     prettyName;
-    };
-    std::unordered_map<std::string, PropertyCache> propertyCache;
-
-    bool isValid(uint32_t ti) const { return ti == typeIndex && componentClassPtr != nullptr; }
-};
+// ============================================================================
+// MARK: Details View
+// ============================================================================
 
 struct DetailsView
 {
@@ -53,20 +37,6 @@ struct DetailsView
     // 文件选择器
     FilePicker _filePicker;
 
-    // 反射缓存
-    std::unordered_map<size_t, ReflectionCache> _reflectionCache;
-    struct PropRenderContext
-    {
-        const std::string &name;
-    };
-    struct PropRender
-    {
-        using t = bool (*)(void *instance, const PropRenderContext &ctx);
-        std::string typeName;
-        t           func;
-    };
-    std::unordered_map<uint32_t, PropRender> _typeRender;
-
     // 递归深度追踪（防止无限递归）
     int                  _recursionDepth     = 0;
     static constexpr int MAX_RECURSION_DEPTH = 10;
@@ -78,14 +48,9 @@ struct DetailsView
 
   private:
     void drawComponents(Entity &entity);
-    void drawAddComponentButton(Entity &entity);  // Add component popup
+    void drawAddComponentButton(Entity &entity); // Add component popup
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
-
-    // 递归反射属性渲染
-    bool             renderReflectedType(const std::string &name, uint32_t typeIndex, void *instance, int depth = 0);
-    ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex);
-
 
     template <typename T, typename Fn>
     void componentWrapper(const std::string &name, Entity &entity, Fn impl)
@@ -145,7 +110,7 @@ struct DetailsView
             if (!cls) {
                 return;
             }
-            bool bComponentDirty = renderReflectedType(name, typeIndex, component, 0);
+            bool bComponentDirty = ya::renderReflectedType(name, typeIndex, component, 0);
             if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *>) {
                 if (bComponentDirty) {
                     onComponentDirty(component);
@@ -154,12 +119,6 @@ struct DetailsView
         });
     }
 
-    // void drawReflectedComponentByTypeIndex(const std::string &name, uint32_t typeIndex, Entity &entity, void *componentInstance)
-    // {
-    //     componentWrapper<void>(name, entity, [this, typeIndex, &name](void *component) {
-    //         renderReflectedType(name, typeIndex, component, 0);
-    //     });
-    // }
 
     template <typename T, typename UIFunction>
     void drawComponent(const std::string &name, Entity entity, UIFunction uiFunc)

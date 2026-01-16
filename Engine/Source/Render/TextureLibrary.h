@@ -23,11 +23,7 @@ namespace ya
 class TextureLibrary : public IResourceCache
 {
 public:
-    static TextureLibrary& get()
-    {
-        static TextureLibrary instance;
-        return instance;
-    }
+    static TextureLibrary& get();
 
     /**
      * @brief Initialize the texture library

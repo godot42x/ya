@@ -4,6 +4,12 @@
 namespace ya
 {
 
+TextureLibrary& TextureLibrary::get()
+{
+    static TextureLibrary instance;
+    return instance;
+}
+
 void TextureLibrary::init()
 {
     if (_initialized) {

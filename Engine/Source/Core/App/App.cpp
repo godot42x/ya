@@ -9,8 +9,8 @@
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
-#include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"
+#include "Core/System/VirtualFileSystem.h"
 
 
 
@@ -441,6 +441,9 @@ void App::init(AppDesc ci)
     _editorLayer->onViewportResized.set([this](Rect2D rect) {
         onSceneViewportResized(rect);
     });
+
+    // see TypeRenderer.h
+    ya::registerBuiltinTypeRenderers();
 
     // _viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
     //     YA_CORE_INFO("EditorLayer: viewport RT recreated, cleaning up ImGui texture cache");
