@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Core/Base.h"
 #include "Core/Reflection/Reflection.h"
 #include <memory>
 #include <string>
@@ -164,5 +163,62 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
     bool isAssetRefType(uint32_t typeIndex) const override;
     void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const override;
 };
+
+} // namespace ya
+
+// ============================================================================
+// TAssetRef<T>::resolve() Inline Implementations
+// Include necessary headers for inline implementations
+// ============================================================================
+#include "Core/AssetManager.h"
+#include "Core/Log.h"
+
+namespace ya
+{
+
+template <>
+inline bool TAssetRef<Texture>::resolve()
+{
+    if (_path.empty()) {
+        return false;
+    }
+    if (_cachedPtr) {
+        return true; // Already loaded
+    }
+
+    _cachedPtr = AssetManager::get()->loadTexture(_path);
+    if (!_cachedPtr) {
+        YA_CORE_WARN("TAssetRef<Texture>: Failed to load texture from path '{}'", _path);
+        return false;
+    }
+    return true;
+}
+
+template <>
+inline bool TAssetRef<Model>::resolve()
+{
+    if (_path.empty()) {
+        return false;
+    }
+    if (_cachedPtr) {
+        return true; // Already loaded
+    }
+
+    _cachedPtr = AssetManager::get()->loadModel(_path);
+    if (!_cachedPtr) {
+        YA_CORE_WARN("TAssetRef<Model>: Failed to load model from path '{}'", _path);
+        return false;
+    }
+    // char a = "🫡";
+    return true;
+}
+
+template <>
+inline bool TAssetRef<Mesh>::resolve()
+{
+    // Mesh loading not implemented yet
+    UNIMPLEMENTED();
+    return true;
+}
 
 } // namespace ya

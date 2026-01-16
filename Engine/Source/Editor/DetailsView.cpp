@@ -1,6 +1,6 @@
 #include "DetailsView.h"
 #include "Core/Debug/Instrumentor.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Editor/ContainerPropertyRenderer.h"
 
 #include "ECS/Component.h"
@@ -474,6 +474,82 @@ void DetailsView::drawComponents(Entity &entity)
             lsc->scripts.erase(lsc->scripts.begin() + indexToRemove);
         }
     });
+
+    // Add Component button at the bottom
+    drawAddComponentButton(entity);
+}
+
+void DetailsView::drawAddComponentButton(Entity &entity)
+{
+    ImGui::Separator();
+
+    // Center the button
+    float buttonWidth = 200.0f;
+    float windowWidth = ImGui::GetContentRegionAvail().x;
+    float cursorPosX  = (windowWidth - buttonWidth) * 0.5f;
+    if (cursorPosX > 0) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cursorPosX);
+    }
+
+    if (ImGui::Button("Add Component", ImVec2(buttonWidth, 0))) {
+        ImGui::OpenPopup("AddComponentPopup");
+    }
+
+    if (ImGui::BeginPopup("AddComponentPopup")) {
+        // Get all registered components from ECSRegistry
+        auto &ecsRegistry = ECSRegistry::get();
+
+        // Filter input
+        static char searchFilter[128] = "";
+        ImGui::InputTextWithHint("##ComponentSearch", "Search...", searchFilter, sizeof(searchFilter));
+        ImGui::Separator();
+
+        std::string filterStr = searchFilter;
+        std::ranges::transform(filterStr, filterStr.begin(), ::tolower);
+
+        // static std::
+
+        for (auto &[fname, typeIndex] : ecsRegistry._typeIndexCache) {
+            std::string componentName = fname.toString();
+
+            // Apply search filter
+            if (!filterStr.empty()) {
+                std::string lowerName = componentName;
+                std::ranges::transform(lowerName, lowerName.begin(), ::tolower);
+                if (lowerName.find(filterStr) == std::string::npos) {
+                    continue;
+                }
+            }
+
+            // Check if entity already has this component
+            auto it = ecsRegistry._componentGetters.find(typeIndex);
+            if (it != ecsRegistry._componentGetters.end()) {
+                auto &registry          = entity.getScene()->getRegistry();
+                void *existingComponent = it->second(registry, entity.getHandle());
+
+                if (existingComponent != nullptr) {
+                    // Already has this component, show disabled
+                    ImGui::BeginDisabled();
+                    ImGui::MenuItem(componentName.c_str());
+                    ImGui::EndDisabled();
+                }
+                else {
+                    // Can add this component
+                    if (ImGui::MenuItem(componentName.c_str())) {
+                        // Create the component
+                        auto creatorIt = ecsRegistry._componentCreators.find(typeIndex);
+                        if (creatorIt != ecsRegistry._componentCreators.end()) {
+                            creatorIt->second(registry, entity.getHandle());
+                            YA_CORE_INFO("Added component '{}' to entity '{}'", componentName, entity.getName());
+                        }
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            }
+        }
+
+        ImGui::EndPopup();
+    }
 }
 
 void DetailsView::renderScriptProperty(void *propPtr, void *scriptInstancePtr)
@@ -618,7 +694,7 @@ void DetailsView::tryLoadScriptForEditor(void *scriptPtr)
 
     // 加载脚本文件
     std::string scriptContent;
-    if (!FileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
+    if (!VirtualFileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
         YA_CORE_ERROR("[Editor Preview] Failed to read file: {}", script.scriptPath);
         // 文件读取失败时清空旧数据，不再重试（直到路径被修改）
         script.bEditorPreviewAttempted = true;

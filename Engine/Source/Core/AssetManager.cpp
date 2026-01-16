@@ -10,7 +10,7 @@
 
 
 #include "Core/Log.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 
 #include <algorithm>
@@ -147,15 +147,15 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
     size_t      lastSlash = filepath.find_last_of("/\\");
     std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
 
-    // Check if file exists using FileSystem
-    if (!FileSystem::get()->isFileExists(filepath)) {
+    // Check if file exists using VirtualFileSystem
+    if (!VirtualFileSystem::get()->isFileExists(filepath)) {
         YA_CORE_ERROR("Model file does not exist: {}", filepath);
         return nullptr;
     }
 
-    // Read the file using FileSystem
+    // Read the file using VirtualFileSystem
     std::string fileContent;
-    if (!FileSystem::get()->readFileToString(filepath, fileContent)) {
+    if (!VirtualFileSystem::get()->readFileToString(filepath, fileContent)) {
         YA_CORE_ERROR("Failed to read model file: {}", filepath);
         return nullptr;
     }
@@ -274,15 +274,15 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, Coor
     size_t      lastSlash = filepath.find_last_of("/\\");
     std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
 
-    // Check if file exists using FileSystem
-    if (!FileSystem::get()->isFileExists(filepath)) {
+    // Check if file exists using VirtualFileSystem
+    if (!VirtualFileSystem::get()->isFileExists(filepath)) {
         YA_CORE_ERROR("Model file does not exist: {}", filepath);
         return nullptr;
     }
 
-    // Read the file using FileSystem
+    // Read the file using VirtualFileSystem
     std::string fileContent;
-    if (!FileSystem::get()->readFileToString(filepath, fileContent)) {
+    if (!VirtualFileSystem::get()->readFileToString(filepath, fileContent)) {
         YA_CORE_ERROR("Failed to read model file: {}", filepath);
         return nullptr;
     }

@@ -4,10 +4,13 @@
 #include <vulkan/vulkan.h>
 
 #define IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+#include <imgui_freetype.h>
 #include <imgui_impl_vulkan.h>
+
 
 #include "Core/Log.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+
 
 
 namespace ya
@@ -22,6 +25,36 @@ void ImGuiManager::initImGuiCore()
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     ImGui::StyleColorsDark();
+
+    // Load main font (JetBrains Mono)
+    ImFont *mainFont = nullptr;
+    {
+        ImFontConfig fontConfig;
+        fontConfig.OversampleH = 2;
+        fontConfig.OversampleV = 2;
+
+        mainFont = io->Fonts->AddFontFromFileTTF(
+            "Engine/Content/Fonts/JetBrainsMono-Medium.ttf",
+            16.0f,
+            &fontConfig);
+    }
+    if (!mainFont)
+    {
+        YA_CORE_ERROR("Failed to load main font");
+        mainFont = io->Fonts->AddFontDefault();
+    }
+
+    static ImFontConfig cfg;
+    static ImWchar      ranges[] = {0x1, 0x1FFFF, 0};
+
+    cfg.MergeMode = true;
+    cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
+    io->Fonts->AddFontFromFileTTF("Engine/Content/Fonts/seguiemj.ttf", 16.0f, &cfg /*, ranges*/);
+
+
+
+    // io->Fonts->AddFontDefault();
+
 
     ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
 

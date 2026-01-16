@@ -28,7 +28,7 @@
 
 #include "Scene/SceneManager.h"
 
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 
 void HelloMaterial::createCubeMesh()
@@ -119,7 +119,7 @@ void HelloMaterial::createMaterials()
 
     _pongMaterialNames.clear();
     std::string jsonContent;
-    if (FileSystem::get()->readFileToString("Example/HelloMaterial/Content/PhongSamples.json", jsonContent)) {
+    if (VirtualFileSystem::get()->readFileToString("Example/HelloMaterial/Content/PhongSamples.json", jsonContent)) {
         nlohmann::json j = nlohmann::json::parse(jsonContent);
         for (auto it : j["materials"]) {
             auto name = it["name"].get<std::string>();

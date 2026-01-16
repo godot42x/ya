@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/App/App.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Editor/EditorLayer.h"
 #include "Render/Mesh.h"
 #include "Scene/SceneManager.h"
@@ -28,7 +28,7 @@ struct HelloMaterial : public ya::App
 
         createCubeMesh();
         loadResources();
-        FileSystem::get()->setGameRoot("Example/HelloMaterial");
+        VirtualFileSystem::get()->setGameRoot("Example/HelloMaterial");
     }
 
     void onPostInit() override

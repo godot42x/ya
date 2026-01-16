@@ -1,6 +1,6 @@
 #include "FontManager.h"
 #include "Core/Debug/Instrumentor.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 
 #include "Core/AssetManager.h"
@@ -54,7 +54,7 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         YA_CORE_ERROR("Failed to initialize FreeType library");
         return nullptr;
     }
-    // FileSystem::get().get
+    // VirtualFileSystem::get().get
     // FT_New_Face()
 
     FT_Face face{};

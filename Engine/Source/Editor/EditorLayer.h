@@ -2,69 +2,19 @@
 
 #include "ContentBrowserPanel.h"
 #include "Core/Debug/Instrumentor.h"
+#include "Core/Delegate.h"
 #include "Core/Event.h"
 #include "DetailsView.h"
-#include "Render/Core/DescriptorSet.h"
+#include "FilePicker.h"
+#include "Render/Core/Image.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
 
+#include "Editor/EditorCommon.h"
+
 #include <ImGuizmo.h>
-#include <memory>
-#include <unordered_map>
 
 
-
-namespace ya
-{
-
-struct ImGuiImageEntry
-{
-    stdptr<IImageView>  imageView;
-    stdptr<Sampler>     sampler;
-    DescriptorSetHandle ds;
-
-    bool operator==(const ImGuiImageEntry &other) const
-    {
-        return imageView == other.imageView && sampler == other.sampler;
-    }
-    bool operator<(const ImGuiImageEntry &other) const
-    {
-        if (imageView != other.imageView)
-            return imageView < other.imageView;
-        return sampler < other.sampler;
-    }
-    operator bool() const
-    {
-        return imageView != nullptr && sampler != nullptr && ds != nullptr;
-    }
-
-    bool isValid() const
-    {
-        return this->operator bool();
-    }
-
-    operator ImTextureRef() const
-    {
-        return (ImTextureRef)ds.ptr;
-    }
-};
-
-} // namespace ya
-
-// Provide std::hash specialization for unordered_set support
-namespace std
-{
-template <>
-struct hash<ya::ImGuiImageEntry>
-{
-    size_t operator()(const ya::ImGuiImageEntry &entry) const noexcept
-    {
-        size_t h1 = hash<void *>{}(entry.sampler.get());
-        size_t h2 = hash<void *>{}(entry.imageView.get());
-        return h1 ^ (h2 << 1);
-    }
-};
-} // namespace std
 
 namespace ya
 {
@@ -121,6 +71,10 @@ struct EditorLayer
     void *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
 
     uint32_t _resizeTimerHandle = 0;
+
+    // File picker for save/load dialogs
+    FilePicker  _filePicker;
+    std::string _currentScenePath; // Current scene file path
 
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
@@ -182,6 +136,9 @@ struct EditorLayer
         _sceneHierarchyPanel.onImGuiRender();
         _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
+
+        // Render file picker dialog
+        _filePicker.render();
 
         // Render windows
         // settingsWindow();

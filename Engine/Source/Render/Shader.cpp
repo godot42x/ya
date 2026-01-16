@@ -24,7 +24,7 @@
 #include <SDL3/SDL_gpu.h>
 
 
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 
 static const char *eolFlag =
@@ -493,7 +493,7 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
 
     std::string contentStr;
 
-    if (!FileSystem::get()->readFileToString(filepath.string(), contentStr))
+    if (!VirtualFileSystem::get()->readFileToString(filepath.string(), contentStr))
     {
         YA_CORE_ERROR("Failed to read shader file: {}", filepath.string());
         return {};
@@ -554,7 +554,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
     std::vector<ir_t> vertSpv;
     std::string       vertFileStr;
-    if (!FileSystem::get()->readFileToString(vertFile, vertFileStr))
+    if (!VirtualFileSystem::get()->readFileToString(vertFile, vertFileStr))
     {
         YA_CORE_WARN("Failed to read cached vertex shader file: {}", vertFile);
         return false;
@@ -567,7 +567,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
     std::vector<ir_t> fragSpv;
     std::string       fragFileStr;
-    if (!FileSystem::get()->readFileToString(fragFile, fragFileStr))
+    if (!VirtualFileSystem::get()->readFileToString(fragFile, fragFileStr))
     {
         YA_CORE_ERROR("Failed to read cached fragment shader file: {}", fragFile);
         return false;
@@ -630,7 +630,7 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
     // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
     // auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
     // auto fragFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Fragment));
-    // if (FileSystem::get()->isFileExists(vertFile) && FileSystem::get()->isFileExists(fragFile))
+    // if (VirtualFileSystem::get()->isFileExists(vertFile) && VirtualFileSystem::get()->isFileExists(fragFile))
     // {
     //     if (processSpvFiles(vertFile, fragFile, ret)) {
     //         return std::move(ret);

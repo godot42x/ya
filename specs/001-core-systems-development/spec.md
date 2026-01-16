@@ -176,7 +176,7 @@ Editor (Application subclass)
 ## Dependencies
 
 ### Internal Dependencies
-- **Core**: Base, Log, Event, FileSystem
+- **Core**: Base, Log, Event, VirtualFileSystem
 - **ECS**: Entity, Component, System
 - **Render**: All render abstractions (Buffer, Texture, Pipeline, etc.)
 - **Platform**: Vulkan backend (initially)

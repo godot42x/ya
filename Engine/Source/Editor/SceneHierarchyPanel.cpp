@@ -2,7 +2,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "EditorLayer.h"
 
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/LitMaterialComponent.h"
@@ -51,9 +51,69 @@ void SceneHierarchyPanel::sceneTree()
                 drawEntityNode(*ent);
             }
         }
+
+        // Right-click on blank space - create entity menu
+        if (ImGui::BeginPopupContextWindow("SceneHierarchyContextMenu", ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight))
+        {
+            if (ImGui::MenuItem("Create Empty Entity"))
+            {
+                Entity *newEntity = _context->createEntity("New Entity");
+                if (newEntity) {
+                    newEntity->addComponent<TransformComponent>();
+                    setSelection(newEntity);
+                }
+            }
+            
+            if (ImGui::BeginMenu("Create 3D Object"))
+            {
+                if (ImGui::MenuItem("Cube"))
+                {
+                    Entity *newEntity = _context->createEntity("Cube");
+                    if (newEntity) {
+                        auto tc = newEntity->addComponent<TransformComponent>();
+                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
+                        lmc->_primitiveGeometry = EPrimitiveGeometry::Cube;
+                        setSelection(newEntity);
+                    }
+                }
+                if (ImGui::MenuItem("Sphere"))
+                {
+                    Entity *newEntity = _context->createEntity("Sphere");
+                    if (newEntity) {
+                        auto tc = newEntity->addComponent<TransformComponent>();
+                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
+                        lmc->_primitiveGeometry = EPrimitiveGeometry::Sphere;
+                        setSelection(newEntity);
+                    }
+                }
+                if (ImGui::MenuItem("Plane"))
+                {
+                    Entity *newEntity = _context->createEntity("Plane");
+                    if (newEntity) {
+                        auto tc = newEntity->addComponent<TransformComponent>();
+                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
+                        lmc->_primitiveGeometry = EPrimitiveGeometry::Quad;
+                        setSelection(newEntity);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            
+            if (ImGui::MenuItem("Create Point Light"))
+            {
+                Entity *newEntity = _context->createEntity("Point Light");
+                if (newEntity) {
+                    newEntity->addComponent<TransformComponent>();
+                    newEntity->addComponent<PointLightComponent>();
+                    setSelection(newEntity);
+                }
+            }
+            
+            ImGui::EndPopup();
+        }
     }
 
-    // Right-click on blank space to deselect
+    // Left-click on blank space to deselect
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows))
     {
         if (!ImGui::IsAnyItemHovered())
@@ -90,9 +150,38 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
         setSelection(&entity);
     }
 
+    // Right-click context menu for entity
+    bool bEntityDeleted = false;
+    if (ImGui::BeginPopupContextItem())
+    {
+        if (ImGui::MenuItem("Duplicate"))
+        {
+            // TODO: Implement entity duplication
+            YA_CORE_INFO("Duplicate entity: {}", entity.getName());
+        }
+        
+        ImGui::Separator();
+        
+        if (ImGui::MenuItem("Delete"))
+        {
+            bEntityDeleted = true;
+        }
+        
+        ImGui::EndPopup();
+    }
+
     if (opened)
     {
         ImGui::TreePop();
+    }
+
+    // Delete entity after UI rendering to avoid invalidating iterators
+    if (bEntityDeleted)
+    {
+        if (_selection == &entity) {
+            setSelection(nullptr);
+        }
+        _context->destroyEntity(&entity);
     }
 }
 

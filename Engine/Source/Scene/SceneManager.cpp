@@ -1,7 +1,7 @@
 #include "SceneManager.h"
 #include "Core/Log.h"
 #include "Core/Serialization/SceneSerializer.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
 
 
@@ -21,7 +21,7 @@ bool SceneManager::loadScene(const std::string &path)
         unloadScene();
     }
 
-    // FileSystem::get()->getGameRoot()
+    // VirtualFileSystem::get()->getGameRoot()
 
     // Create new scene
     _editorScene = makeShared<Scene>();

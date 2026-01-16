@@ -263,6 +263,7 @@ void LitMaterialSystem::onDestroy()
 {
 }
 
+// MARK: grab resources
 void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();

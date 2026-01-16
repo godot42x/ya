@@ -1,7 +1,6 @@
 #include "Texture.h"
 
 #include "Core/App/App.h"
-#include "Core/System/FileSystem.h"
 #include "stb/stb_image.h"
 
 #include <cstddef>
@@ -28,7 +27,6 @@ Texture::Texture(const std::string &filepath)
     int   texWidth = -1, texHeight = -1, texChannels = -1;
     void *pixels = nullptr;
 
-    // FileSystem::get()->getPluginRoots()
     pixels = stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     if (!pixels) {
         YA_CORE_ERROR("failed to load texture image! {}", filepath.data());

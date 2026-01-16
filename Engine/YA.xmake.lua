@@ -46,6 +46,8 @@ local imgui_configs = {
     vulkan = true,
     debug = is_mode("debug"),
     docking = true,
+    freetype = true, -- enable freetype support
+    wchar32 = true,  -- enable wchar32 support -> emoji
 }
 add_requires(imgui_version_str, {
     debug = is_mode("debug"),
@@ -107,9 +109,11 @@ do
         add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
-        -- add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
+        add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
+        add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
     end
-    add_files("./Source/**.cpp")
+    -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
+    add_files("./Source/*.cpp")
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source//FWD.h")
@@ -164,11 +168,13 @@ do
     if is_plat("windows") then
         add_ldflags("/subsystem:console")
         add_defines("NOMINMAX") -- Disable min and max macros
+        add_cxxflags("/utf-8")  -- Enable UTF-8 source code support for Unicode characters
         --  fatal error C1202: recursive type or function dependency context too complex
         -- add_cxxflags(
         --     "/Zm1000"   -- the memory allocation for compiler increased to 1000MB
         --     , "/bigobj" -- allow to generate big obj for big module
         -- )
+        add_ldflags("/ignore:4099") -- warning LNK4099, eg: PDB 'ya.pdb' was not found with 'ya.exe'
     end
 
     before_run(function(target)

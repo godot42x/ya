@@ -2,7 +2,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "ECS/Entity.h"
 
 
@@ -23,7 +23,7 @@ bool SceneSerializer::saveToFile(const std::string &filepath)
     YA_PROFILE_FUNCTION_LOG();
     try {
         nlohmann::json j = serialize();
-        FileSystem::get()->saveToFile(filepath, j.dump(4));
+        VirtualFileSystem::get()->saveToFile(filepath, j.dump(4));
         YA_CORE_INFO("Scene saved to: {}", filepath);
         return true;
     }
@@ -38,7 +38,7 @@ bool SceneSerializer::loadFromFile(const std::string &filepath)
     YA_PROFILE_FUNCTION_LOG();
     try {
         std::string content;
-        FileSystem::get()->readFileToString(filepath, content);
+        VirtualFileSystem::get()->readFileToString(filepath, content);
 
         nlohmann::json j;
         j = nlohmann::json::parse(content);

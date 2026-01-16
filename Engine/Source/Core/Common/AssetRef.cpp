@@ -10,61 +10,6 @@
 namespace ya
 {
 
-// ============================================================================
-// TAssetRef<T>::resolve() Specializations
-// ============================================================================
-
-template <>
-bool TAssetRef<Texture>::resolve()
-{
-    if (_path.empty()) {
-        return false;
-    }
-    if (_cachedPtr) {
-        return true; // Already loaded
-    }
-
-    _cachedPtr = AssetManager::get()->loadTexture(_path);
-    if (!_cachedPtr) {
-        YA_CORE_WARN("TAssetRef<Texture>: Failed to load texture from path '{}'", _path);
-        return false;
-    }
-    return true;
-}
-
-template <>
-bool TAssetRef<Model>::resolve()
-{
-    if (_path.empty()) {
-        return false;
-    }
-    if (_cachedPtr) {
-        return true; // Already loaded
-    }
-
-    _cachedPtr = AssetManager::get()->loadModel(_path);
-    if (!_cachedPtr) {
-        YA_CORE_WARN("TAssetRef<Model>: Failed to load model from path '{}'", _path);
-        return false;
-    }
-    return true;
-}
-
-template <>
-bool TAssetRef<Mesh>::resolve()
-{
-    if (_path.empty()) {
-        return false;
-    }
-    if (_cachedPtr) {
-        return true; // Already loaded
-    }
-
-    // Mesh loading typically comes from Model, need special handling
-    // For now, log warning - may need to implement mesh-specific loading
-    YA_CORE_WARN("TAssetRef<Mesh>: Direct mesh loading not implemented. Path: '{}'", _path);
-    return false;
-}
 
 // ============================================================================
 // DefaultAssetRefResolver Implementation

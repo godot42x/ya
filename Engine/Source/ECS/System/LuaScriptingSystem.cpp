@@ -1,7 +1,7 @@
 #include "LuaScriptingSystem.h"
 #include "Core/App/App.h"
 #include "Core/Reflection/MetadataSupport.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
@@ -125,7 +125,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
             // 首次加载脚本
             if (!script.bLoaded && !script.scriptPath.empty()) {
                 std::string scriptContent;
-                if (FileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
+                if (VirtualFileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
                     try {
                         // 【重要】不再使用独立环境，改为共享全局环境
                         // 原因：
@@ -294,7 +294,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 
             // 重新加载脚本
             std::string scriptContent;
-            if (FileSystem::get()->readFileToString(scriptPath, scriptContent)) {
+            if (VirtualFileSystem::get()->readFileToString(scriptPath, scriptContent)) {
                 try {
                     sol::table scriptTable = _lua.script(scriptContent);
 

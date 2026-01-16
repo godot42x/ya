@@ -8,12 +8,15 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
 
+#define IMGUI_ENABLE_FREETYPE
+#define IMGUI_USE_WCHAR32
 #include <ImGui.h>
 #include <imgui_impl_sdl3.h>
 
+#include <ImGuizmo.h>
 #include <imgui_impl_sdlgpu3.h>
 #include <imgui_impl_vulkan.h>
-#include <ImGuizmo.h>
+
 
 
 #include "Core/Event.h"
@@ -147,12 +150,11 @@ struct ImGuiManager
      * @return true if the gizmo was used and matrix was modified
      */
     static bool manipulate(
-        const float *view,
-        const float *projection,
+        const float        *view,
+        const float        *projection,
         ImGuizmo::OPERATION operation,
-        ImGuizmo::MODE mode,
-        float *matrix
-    );
+        ImGuizmo::MODE      mode,
+        float              *matrix);
 
     /**
      * @brief Set ImGuizmo rect for the current viewport

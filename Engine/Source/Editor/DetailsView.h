@@ -78,6 +78,7 @@ struct DetailsView
 
   private:
     void drawComponents(Entity &entity);
+    void drawAddComponentButton(Entity &entity);  // Add component popup
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
 

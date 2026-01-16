@@ -9,7 +9,7 @@
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
-#include "Core/System/FileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"
 
 
@@ -197,7 +197,7 @@ void App::init(AppDesc ci)
             profiling::StaticInitProfiler::recordEnd();
         }
         Logger::init();
-        FileSystem::init();
+        VirtualFileSystem::init();
         FileWatcher::init();
         // 反射系统已通过静态初始化自动注册（YA_REFLECT 宏）
         MaterialFactory::init();
