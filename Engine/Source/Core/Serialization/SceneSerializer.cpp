@@ -145,7 +145,7 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
             continue;
         }
 
-        auto getterIt = reg._componentGetters.find(typeIndex);
+        // auto getterIt = reg._componentGetters.find(typeIndex);
         // if (getterIt == reg._componentGetters.end()) {
         //     YA_CORE_WARN("No getter found for component type: {}", name.toString());
         //     continue;
@@ -153,11 +153,12 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
         // bool bTagComponent = registry.all_of<TagComponent>(handle);
         // YA_CORE_INFO("Checking component: {} (typeIndex: {}) - has component: {}", name.toString(), typeIndex, bTagComponent);
 
-        auto getter = getterIt->second;
+        // auto getter = getterIt->second;
         // YA_CORE_TRACE("Checking component: {} for entity: {}", name.toString(), entity->_name);
 
-        void *componentPtr = getter(registry, handle);
+        // void *componentPtr = getter(registry, handle);
         // YA_CORE_TRACE("  -> componentPtr: {}", (void *)componentPtr);
+        void *componentPtr = reg.getComponent(name, registry, handle);
 
         if (componentPtr) {
             components[name.toString()] = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, name.toString());
@@ -190,21 +191,18 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
 
         auto &registry = _scene->getRegistry();
 
+        auto &reg = ECSRegistry::get();
         for (auto &[typeName, componentJ] : components.items()) {
             if (ignoredComponents.contains(FName(typeName))) {
                 continue;
             }
-
-            std::unordered_map<FName, uint32_t>::const_iterator typeIndexIt = ECSRegistry::get()._typeIndexCache.find(FName(typeName));
-            if (typeIndexIt != ECSRegistry::get()._typeIndexCache.end()) {
-
-                auto  typeIndex    = typeIndexIt->second;
-                void *componentPtr = ECSRegistry::get()._componentCreators[typeIndex](registry, entity->getHandle());
-
-                auto cls = ClassRegistry::instance().getClass(typeIndex);
+            auto typeIndex = reg.getTypeIndex(FName(typeName));
+            if (typeIndex) {
+                auto  id           = *typeIndex;
+                void *componentPtr = reg.addComponent(FName(typeName), registry, entity->getHandle());
+                auto  cls          = ClassRegistry::instance().getClass(id);
                 if (cls) {
-                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, typeIndex, componentJ, cls->_name);
-                    // static_cast<IComponent *>(componentPtr)->onPostSerialize();
+                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->_name);
                 }
             }
         }

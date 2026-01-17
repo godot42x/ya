@@ -85,22 +85,23 @@ void registerECSType(const std::string &typeName)
     // inline static const uint32_t typeIndex = ya::type_index_v<Type>; always be 0 at static init time?
     // -> put after static init
 
+    ::ya::ECSRegistry::get().registerComponent<Type>(typeName);
 
-    if constexpr (std::derived_from<Type, ::ya::IComponent>) {
-        ::ya::ECSRegistry::get().registerComponent<Type>(
-            typeName,
-            // Serializer: 优先使用 Registry 模式
-            [](::entt::registry &registry, ::entt::entity entity) -> void * {
-                if (registry.all_of<Type>(entity)) {
-                    return &registry.get<Type>(entity);
-                }
-                return nullptr;
-            },
-            [](::entt::registry &registry, ::entt::entity entity) -> void * {
-                // 使用 emplace_or_replace 避免重复添加崩溃
-                return &registry.emplace<Type>(entity);
-            });
-    }
+    // if constexpr (std::derived_from<Type, ::ya::IComponent>) {
+    //     ::ya::ECSRegistry::get().registerComponent<Type>(
+    //         typeName,
+    //         // Serializer: 优先使用 Registry 模式
+    //         [](::entt::registry &registry, ::entt::entity entity) -> void * {
+    //             if (registry.all_of<Type>(entity)) {
+    //                 return &registry.get<Type>(entity);
+    //             }
+    //             return nullptr;
+    //         },
+    //         [](::entt::registry &registry, ::entt::entity entity) -> void * {
+    //             // 使用 emplace_or_replace 避免重复添加崩溃
+    //             return &registry.emplace<Type>(entity);
+    //         });
+    // }
 }
 
 

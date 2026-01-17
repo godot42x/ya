@@ -5,6 +5,9 @@
 namespace ya
 {
 
+using type_index_t = uint32_t;
+
+
 #if NOT_USE_REFLECTS
 
 extern uint32_t _index_counter;
