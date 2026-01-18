@@ -72,14 +72,6 @@ struct TextureSlot
 
 
 //  MARK: Material
-/**
- * 一个 Material 表示一种材质类型 (如 UnlitMaterial, LitMaterial 等等) 的一个实例 (instance)。
- * Material 包含该材质类型所需的各种资源的引用 (如纹理等)，以及一些标识信息 (如标签、索引等)。
- * Material 实例由 MaterialFactory 进行创建和管理。
- * Material 和 Material Instance 的区别:
- * - Material: 表示一种材质类型的一个实例，包含该材质类型所需的资源引用和标识信息。
- * - Material Instance: 通常指同一种材质类型的不同实例，它们可能共享相同的资源 (如纹理)，但可以有不同的参数设置 (如颜色、混合值等)。
- */
 struct Material
 {
 
@@ -89,6 +81,7 @@ struct Material
     std::string _label         = "MaterialNone";
     int32_t     _instanceIndex = -1;
     uint32_t    _typeID        = 0;
+    std::string _sourcePath    = "";
 
     std::string getLabel() const { return _label; }
     void        setLabel(const std::string &label) { _label = label; }

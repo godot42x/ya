@@ -20,8 +20,9 @@ int main()
     std::cout << "=== 新反射系统测试 ===" << std::endl;
 
     // 测试1: 类型名称
-    std::cout << "类型名称: " << TestComponent::getTypeName() << std::endl;
-    assert(std::string(TestComponent::getTypeName()) == "TestComponent");
+    auto cls = ClassRegistry::instance().getClass(ya::type_index_v<TestComponent>);
+    std::cout << "类型名称: " << cls->getName() << std::endl;
+    assert(std::string(cls->getName()) == "TestComponent");
 
     // 测试2: 属性遍历
     int           propCount = 0;
