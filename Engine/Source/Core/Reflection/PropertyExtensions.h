@@ -41,14 +41,13 @@ class PropertyContainerHelper
     static void tryRegisterContainer(Property &prop)
     {
         if constexpr (is_container_v<FieldType>) {
-            auto extension               = std::make_unique<ContainerPropertyExtension>();
+            auto extension               = std::make_shared<ContainerPropertyExtension>();
             extension->isContainer       = true;
             extension->containerType     = ContainerTraits<FieldType>::Type;
             extension->containerAccessor = createContainerProperty<FieldType>();
 
             // 存储到 Property::metadata
-            prop.metadata.set("__container_extension",
-                              std::shared_ptr<ContainerPropertyExtension>(std::move(extension)));
+            prop.metadata.set("__container_extension", extension);
         }
     }
 
@@ -123,7 +122,7 @@ class PropertyContainerHelper
             void    *elementPtr       = iterator->getElementPtr();
             uint32_t elementTypeIndex = iterator->getElementTypeIndex();
 
-            visitor(index, elementPtr, elementTypeIndex);
+            std::forward<Visitor>(visitor)(index, elementPtr, elementTypeIndex);
 
             iterator->next();
             ++index;
@@ -153,7 +152,7 @@ class PropertyContainerHelper
             void    *valuePtr       = iterator->getElementPtr();
             uint32_t valueTypeIndex = iterator->getElementTypeIndex();
 
-            visitor(keyPtr, keyTypeIndex, valuePtr, valueTypeIndex);
+            std::forward<Visitor>(visitor)(keyPtr, keyTypeIndex, valuePtr, valueTypeIndex);
 
             iterator->next();
         }

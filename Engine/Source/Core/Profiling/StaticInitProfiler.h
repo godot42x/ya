@@ -18,7 +18,7 @@ namespace ya::profiling
 
 namespace detail
 {
-extern void refMStartSVC();
+extern void refMStartMSVC();
 extern void refEndMSVC();
 } // namespace detail
 
@@ -38,7 +38,7 @@ class StaticInitProfiler
     static void refOBJ()
     {
 #ifdef _MSC_VER
-        detail::refMStartSVC();
+        detail::refMStartMSVC();
         detail::refEndMSVC();
 #endif
     }

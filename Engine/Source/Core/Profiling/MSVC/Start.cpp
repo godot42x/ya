@@ -7,7 +7,7 @@
 namespace ya::profiling::detail
 {
 // 导出一个函数来强制链接这个翻译单元
-void refMStartSVC()
+void refMStartMSVC()
 {
     // 空函数，只是为了让链接器不要优化掉这个文件
     volatile int dummy = 0;

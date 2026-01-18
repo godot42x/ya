@@ -3,8 +3,11 @@
 #include "class.h"
 #include "enum.h"
 #include "lib.h"
+#include "type_index.h"
 
 
+
+#include <algorithm>
 #include <any>
 #include <memory>
 #include <stdexcept>
@@ -14,10 +17,14 @@
 
 // namespace refl
 
+// MARK: ClassRegistry
 struct ClassRegistry
 {
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
     std::unordered_map<uint32_t, std::shared_ptr<Class>>    typeIdMap;
+
+    // parent -> childrens
+    std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
 
     std::vector<std::function<void()>> postStaticInitializers;
 
@@ -28,7 +35,7 @@ struct ClassRegistry
     {
         auto ptr      = std::shared_ptr<Class>(classInfo);
         classes[name] = ptr;
-        auto id       = TYPE_ID(T);
+        auto id       = refl::type_index_v<T>;
         typeIdMap[id] = ptr;
         printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), (uint64_t)id);
 
@@ -68,6 +75,23 @@ struct ClassRegistry
         cls->destroyInstance(obj);
     }
 
+    // MARK: Inheritance
+    void registerInheritance(uint32_t childTypeId, uint32_t parentTypeId)
+    {
+        parentToChildren[parentTypeId].push_back(childTypeId);
+    }
+
+    bool isDerivedFrom(uint32_t childTypeId, uint32_t parentTypeId)
+    {
+        auto it = parentToChildren.find(parentTypeId);
+        if (it != parentToChildren.end()) {
+            const auto &children = it->second;
+            return std::ranges::find(children, childTypeId) != children.end();
+        }
+        return false;
+    }
+
+
     // 检查类是否已注册
     bool hasClass(const std::string &name) const
     {
@@ -92,7 +116,7 @@ struct ClassRegistry
 };
 
 // ============================================================================
-// Register - Auto-registration helper
+// MARK: Register(Class)
 // ============================================================================
 template <typename T>
 struct Register
@@ -105,6 +129,22 @@ struct Register
         // 自动注册到全局注册表
         classInfo = new Class(className);
         classInfo = ClassRegistry::instance().registerClass<T>(className, classInfo).get();
+    }
+
+    template <typename ParentType>
+    constexpr Register &parentClass()
+    {
+        static_assert(std::is_base_of_v<ParentType, T>, "ParentType must be base of T");
+
+        refl::type_index_t parentTypeId = refl::type_index_v<ParentType>;
+        refl::type_index_t childTypeId  = refl::type_index_v<T>;
+
+        // 注册继承关系到全局注册表
+        ClassRegistry::instance().registerInheritance(childTypeId, parentTypeId);
+        // 注册到 Class 信息中
+        classInfo->registerParent<T, ParentType>();
+
+        return *this;
     }
 
     // virtual ~Register() {}
@@ -177,181 +217,14 @@ struct Register
     }
 };
 
-#if 0
-// ============================================================================
-// Test Example
-// ============================================================================
-namespace test
-{
-inline void test_lsp()
-{
-    struct Person
-    {
-        std::string name;
-        int         age;
-
-        // 普通成员函数
-        int display(int arg1)
-        {
-            printf("Person: %s, age: %d, arg1: %d\n", name.c_str(), age, arg1);
-            return age + arg1;
-        }
-
-        // void 返回值函数
-        void setInfo(const std::string &n, int a)
-        {
-            name = n;
-            age  = a;
-        }
-
-        // const 成员函数
-        std::string getName() const { return name; }
-
-        int getAge() const { return age; }
-
-        // 静态成员函数
-        static int multiply(int a, int b) { return a * b; }
-
-        static void printMessage(const std::string &msg)
-        {
-            printf("Message: %s\n", msg.c_str());
-        }
-    };
-
-    // 静态变量用于测试
-    static int       staticCounter    = 100;
-    static const int staticConstValue = 42;
-
-    // 使用Register进行自动注册 - 统一的property API
-    Register<Person>("Person")
-        .property("name", &Person::name)           // 普通成员变量
-        .property("age", &Person::age)             // 普通成员变量
-        .property("counter", &staticCounter)       // 静态变量
-        .property("constValue", &staticConstValue) // const静态变量
-        .function("display", &Person::display)
-        .function("setInfo", &Person::setInfo)
-        .function("getName", &Person::getName)
-        .function("getAge", &Person::getAge);
-
-    // 创建反射类
-    Class personClass;
-
-    // 注册成员函数
-    personClass.function("display", &Person::display);
-    personClass.function("setInfo", &Person::setInfo);
-    personClass.function("getName", &Person::getName);
-    personClass.function("getAge", &Person::getAge);
-
-    // 注册静态函数
-    personClass.staticFunction("multiply", &Person::multiply);
-    personClass.staticFunction("printMessage", &Person::printMessage);
-
-    printf("=== Reflection Test ===\n\n");
-
-    // 创建测试对象
-    Person alice{"Alice", 30};
-
-    // 测试1：调用成员函数 - 使用底层 invoke
-    printf("Test 1: invoke with ArgumentList\n");
-    auto args1  = ArgumentList::make(5);
-    auto result = personClass.invoke("display", &alice, args1);
-    printf("Result: %d\n\n", std::any_cast<int>(result));
-
-    // 测试2：调用成员函数 - 使用高层 call（推荐）
-    printf("Test 2: call<int>\n");
-    int ret = personClass.call<int>("display", &alice, 10);
-    printf("Result: %d\n\n", ret);
-
-    // 测试3：调用 void 返回值的函数
-    printf("Test 3: call<void>\n");
-    personClass.call<void>("setInfo", &alice, std::string("Bob"), 25);
-    printf("Name changed to: %s, age: %d\n\n", alice.name.c_str(), alice.age);
-
-    // 测试4：调用 const 成员函数
-    printf("Test 4: const member function\n");
-    std::string name = personClass.call<std::string>("getName", &alice);
-    int         age  = personClass.call<int>("getAge", &alice);
-    printf("Name: %s, Age: %d\n\n", name.c_str(), age);
-
-    // 测试5：调用静态函数
-    printf("Test 5: static function\n");
-    int product = personClass.callStatic<int>("multiply", 6, 7);
-    printf("6 * 7 = %d\n", product);
-    personClass.callStatic<void>("printMessage", std::string("Hello Reflection!"));
-    printf("\n");
-
-    // 测试6：查询函数信息
-    printf("Test 6: function introspection\n");
-    if (personClass.hasFunction("display")) {
-        const Function *f = personClass.getFunction("display");
-        printf("Function 'display': args=%zu, return=%s\n", f->argCount, f->returnTypeName.c_str());
-    }
-
-    // 测试7：通过Register访问属性
-    printf("\nTest 7: property access via Register\n");
-    auto *registeredClass = ClassRegistry::instance().getClass("Person");
-    if (registeredClass) {
-        Person testPerson{"Charlie", 35};
-
-        // 读取成员属性
-        if (registeredClass->hasProperty("name")) {
-            const Property *nameProp = registeredClass->getProperty("name");
-            std::string     nameVal  = nameProp->getValue<std::string>(&testPerson);
-            printf("name: %s (type: %s, const: %d, static: %d)\n",
-                   nameVal.c_str(),
-                   nameProp->getTypeName().c_str(),
-                   nameProp->bConst,
-                   nameProp->bStatic);
-        }
-
-        if (registeredClass->hasProperty("age")) {
-            const Property *ageProp = registeredClass->getProperty("age");
-            int             ageVal  = ageProp->getValue<int>(&testPerson);
-            printf("age: %d (type: %s, const: %d, static: %d)\n",
-                   ageVal,
-                   ageProp->getTypeName().c_str(),
-                   ageProp->bConst,
-                   ageProp->bStatic);
-        }
-
-        // 写入成员属性
-        if (registeredClass->hasProperty("name")) {
-            Property *nameProp = registeredClass->getProperty("name");
-            nameProp->setValue(&testPerson, std::string("David"));
-            printf("After setting name: %s\n", testPerson.name.c_str());
-        }
-
-        // 读取静态属性
-        if (registeredClass->hasProperty("counter")) {
-            const Property *counterProp = registeredClass->getProperty("counter");
-            int             counterVal  = counterProp->getValue<int>(nullptr); // 静态属性不需要对象实例
-            printf("counter: %d (static: %d)\n", counterVal, counterProp->bStatic);
-        }
-
-        // 读取const静态属性
-        if (registeredClass->hasProperty("constValue")) {
-            const Property *constProp = registeredClass->getProperty("constValue");
-            int             constVal  = constProp->getValue<int>(nullptr);
-            printf("constValue: %d (const: %d, static: %d)\n",
-                   constVal,
-                   constProp->bConst,
-                   constProp->bStatic);
-        }
-    }
-
-    printf("\n=== All Tests Passed ===\n");
-}
-} // namespace test
-#endif
-
 
 // ============================================================================
-// EnumRegistry - 全局枚举注册表
+// MARK: EnumRegistry - 全局枚举注册表
 // ============================================================================
 struct EnumRegistry
 {
-    std::unordered_map<std::string, Enum>   enums;
-    std::unordered_map<uint32_t, Enum *>    typeIdMap;  // typeIndex -> Enum*
+    std::unordered_map<std::string, Enum> enums;
+    std::unordered_map<uint32_t, Enum *>  typeIdMap; // typeIndex -> Enum*
 
     static EnumRegistry &instance();
 
@@ -387,7 +260,7 @@ struct EnumRegistry
 };
 
 // ============================================================================
-// RegisterEnum - 枚举注册辅助类
+// MARK: RegisterEnum
 // ============================================================================
 template <typename EnumType>
 struct RegisterEnum
@@ -398,9 +271,9 @@ struct RegisterEnum
     RegisterEnum(const std::string &enumName, uint32_t inTypeIndex = 0)
     {
         static_assert(std::is_enum_v<EnumType>, "T must be an enum type");
-        enumInfo.name = enumName;
+        enumInfo.name           = enumName;
         enumInfo.underlyingSize = sizeof(std::underlying_type_t<EnumType>);
-        typeIndex     = inTypeIndex;
+        typeIndex               = inTypeIndex;
     }
 
     RegisterEnum &value(const std::string &valueName, EnumType val)

@@ -59,6 +59,14 @@ struct Class
     // key: 类型签名字符串（如 "int,float,string"），value: 构造函数描述符
     std::unordered_map<std::string, Constructor> constructors;
 
+    std::vector<refl::type_index_t>                   parents;
+    std::unordered_map<refl::type_index_t, ptrdiff_t> parentOffsets; // 父类指针偏移量（支持负偏移）
+
+    // 虚继承转换器（fallback 方案）
+    // 说明：虚继承（virtual public）在实际项目中极少用到，绝大多数场景只需支持普通继承和接口继承。
+    //       本转换器仅为演示/兼容保留，推荐实际项目不处理虚继承，避免运行时性能损耗。
+    std::unordered_map<refl::type_index_t, std::function<void *(void *)>> virtualParentConverters;
+
     // 析构函数 - 用于释放动态创建的实例
     std::function<void(void *)> destructor;
 
@@ -67,9 +75,118 @@ struct Class
     virtual ~Class() = default;
 
 
+
+  public:
+#pragma region Inheritance
+
+    template <typename T, typename Parent>
+    constexpr Class &registerParent()
+    {
+        refl::type_index_t parentTypeId = refl::type_index_v<Parent>;
+
+        // 检测是否为虚继承
+        // constexpr bool bVirtualInheritance = detectVirtualInheritance<T, Parent>();
+        constexpr bool bVirtualInheritance = false;
+
+        // 虚继承 fallback 仅为演示/兼容保留，实际项目可直接 static_assert(!isVirtual)
+        if constexpr (bVirtualInheritance) {
+            // [不推荐] 虚继承：使用动态转换器（编译器会生成正确的虚基表查找）
+            // 建议实际项目直接 static_assert(!isVirtual, "虚继承不被支持");
+            virtualParentConverters[parentTypeId] = [](void *childPtr) -> void * {
+                T      *child  = static_cast<T *>(childPtr);
+                Parent *parent = static_cast<Parent *>(child); // 编译器处理虚基表
+                return static_cast<void *>(parent);
+            };
+        }
+        else {
+            // 普通继承：计算静态偏移量
+            auto calcOffset = []() {
+                alignas(T) char buffer[sizeof(T)];
+                T              *child  = reinterpret_cast<T *>(buffer);
+                Parent         *parent = static_cast<Parent *>(child);
+                return reinterpret_cast<char *>(parent) - reinterpret_cast<char *>(child);
+            };
+
+            ptrdiff_t offset            = calcOffset();
+            parentOffsets[parentTypeId] = offset;
+        }
+
+        parents.push_back(parentTypeId);
+        return *this;
+    }
+
+
+    // 检测虚继承（使用 SFINAE 和类型萃取）
+    template <typename T, typename Parent>
+    static constexpr bool detectVirtualInheritance()
+    {
+#if defined(__GNUC__) || defined(__clang__)
+        // GCC/Clang: 直接返回布尔值
+        return __is_virtual_base_of<typename std::remove_cv<T>::type, typename std::remove_cv<Parent>::type>() != 0;
+#elif defined(_MSC_VER) && _MSC_VER >= 1900
+        // MSVC: 保守策略 - 暂时禁用虚继承检测，统一使用动态转换
+        // 原因: __is_virtual_base_of 在 constexpr 上下文中有兼容性问题
+        return false; // 改为 false 以使用静态偏移，虚继承需手动标记
+#else
+        // 其他编译器：保守策略
+        return false;
+#endif
+    }
+
+  public:
+
+    // 获取父类子对象指针（自动处理虚继承和非虚继承）
+    void *getParentPointer(void *childPtr, refl::type_index_t parentTypeId) const
+    {
+        // 1. 优先尝试静态偏移（高效，适用于普通继承和多重继承）
+        auto offsetIt = parentOffsets.find(parentTypeId);
+        if (offsetIt != parentOffsets.end()) {
+            return static_cast<char *>(childPtr) + offsetIt->second;
+        }
+
+        // 2. Fallback 到动态转换器（虚继承、菱形继承）
+        auto converterIt = virtualParentConverters.find(parentTypeId);
+        if (converterIt != virtualParentConverters.end()) {
+            return converterIt->second(childPtr);
+        }
+
+        // 3. 未注册的父类
+        return nullptr;
+    }
+
+
+    Class *getClassByTypeId(refl::type_index_t typeId) const;
+
+    // 访问所有属性（可选递归访问父类）
+    template <typename VisitorFunc>
+    void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive = true) const
+    {
+        if (recursive) {
+
+            for (auto parentTypeId : parents) {
+                // 从注册表获取父类 Class
+                Class *parentClass = getClassByTypeId(parentTypeId);
+                if (parentClass) {
+                    void *parentObj = getParentPointer(obj, parentTypeId);
+                    if (parentObj) {
+                        parentClass->visitAllProperties(parentObj, std::forward<VisitorFunc>(visitor), true);
+                    }
+                }
+            }
+        }
+
+        // 2. 访问当前类的属性
+        for (const auto &[name, prop] : properties) {
+            std::forward<VisitorFunc>(visitor)(name, prop, obj);
+        }
+    }
+#pragma endregion
+
+// ------------------------------------------------------------------------
+// 字段注册接口全部 public，便于 Register 调用
 #pragma region Field-Register
 
-  private:
+  public:
     // 提取共用逻辑：初始化 Property 的基础字段
     template <typename T>
     static void initPropertyBase(Property &prop, const std::string &inName, bool isConst, bool isStatic)
@@ -77,7 +194,7 @@ struct Class
         prop.name      = inName;
         prop.bConst    = isConst;
         prop.bStatic   = isStatic;
-        prop.typeIndex = TYPE_ID(T);
+        prop.typeIndex = refl::type_index_v<T>;
         prop.typeName  = detail::getTypeName<T>();
     }
 
@@ -88,7 +205,6 @@ struct Class
         return it.first->second;
     }
 
-  public:
     // Register normal member variable (read-write)
     template <typename ClassType, typename T>
     Property &property(const std::string &inName, T ClassType::*member)
@@ -310,12 +426,9 @@ struct Class
             return std::any_cast<Ret>(result);
         }
     }
-#pragma endregion
 
-    // MARK:  Query
-    // ------------------------------------------------------------------------
-    // 查询函数信息
-    // ------------------------------------------------------------------------
+#pragma region Query
+
     bool hasFunction(const std::string &inName) const
     {
         return functions.find(inName) != functions.end();
@@ -346,6 +459,7 @@ struct Class
         auto it = properties.find(inName);
         return it != properties.end() ? &it->second : nullptr;
     }
+#pragma endregion
 
 #pragma region getter-setter
     // ------------------------------------------------------------------------
@@ -442,9 +556,10 @@ struct Class
         prop.setValue<T>(nullptr, value);
     }
 
-    // ========================================================================
-    // Constructor Registration and Instance Creation
-    // ========================================================================
+    const std::string &getName() const { return _name; }
+#pragma endregion
+
+#pragma region Constructor Registration
 
     // 注册构造函数（支持0个或多个参数）
     template <typename T, typename... Args>
@@ -523,19 +638,6 @@ struct Class
         return it->second.factory(argList);
     }
 
-
-    // 销毁实例
-    void destroyInstance(void *obj) const
-    {
-        if (!destructor) {
-            throw std::runtime_error("No destructor registered for class: " + _name);
-        }
-        if (!obj) {
-            throw std::runtime_error("Cannot destroy null object");
-        }
-        destructor(obj);
-    }
-
     // 检查是否可以创建实例（是否有任何构造函数）
     bool canCreateInstance() const
     {
@@ -548,6 +650,19 @@ struct Class
     {
         std::string sig = detail::makeSignature<Args...>();
         return constructors.find(sig) != constructors.end();
+    }
+
+  public:
+    // 销毁实例
+    void destroyInstance(void *obj) const
+    {
+        if (!destructor) {
+            throw std::runtime_error("No destructor registered for class: " + _name);
+        }
+        if (!obj) {
+            throw std::runtime_error("Cannot destroy null object");
+        }
+        destructor(obj);
     }
 
     // 获取所有已注册构造函数的参数数量列表

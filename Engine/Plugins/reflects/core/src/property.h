@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <variant>
 
+#include "type_index.h"
+
 
 
 struct Metadata
@@ -180,5 +182,11 @@ struct Property : public Field
     void *getMutableAddress(void *obj) const
     {
         return addressGetterMutable ? addressGetterMutable(obj) : nullptr;
+    }
+
+    template <typename T>
+    bool isType() const
+    {
+        return typeIndex == refl::type_index_v<T>;
     }
 };

@@ -1,31 +1,3 @@
-/**
- * @file VariadicMacros.h
- * @brief 通用可变参宏工具 - 支持对可变参数列表进行批量操作
- *
- * 这是一个通用的宏工具库，可用于各种需要对可变参数进行批量处理的场景。
- * 例如：反射系统、序列化、代码生成等。
- *
- * 使用方式：
- * 1. 定义操作宏（接受两个参数：Context, Item）
- * 2. 使用 YA_FOREACH(operation, Context, ...) 对所有参数执行操作
- *
- * 示例：
- *     #define PRINT_VAR(Type, var) std::cout << #var << " = " << var << "\n";
- *     YA_FOREACH(PRINT_VAR, MyClass, x, y, z)
- *
- * 当前限制：
- * - 最多支持 16 个参数（可根据需要扩展到 32/64/128）
- * - 宏展开开销随参数增加而增大
- *
- * 未来方向：
- * - 对于需要反射 100+ 成员的复杂类型，建议使用代码生成器（generator）
- * - 配合注解（attribute）系统，生成反射代码
- * - 示例工具：clang libTooling、C++20 reflection (TS)、自定义 AST 解析器
- *
- * @note 如果你的类有超过 16 个成员需要反射，这是设计的坏味道（God Object）
- *       建议重构为多个小类，或使用代码生成工具
- */
-
 #pragma once
 
 // ============================================================================
@@ -53,9 +25,12 @@
 
 #define YA_VA_NARGS_IMPL(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
 
-/// 根据参数数量选择对应的宏（1-16）
-#define YA_SELECT_MACRO_BY_COUNT(basename, ...) \
-    YA_EXPAND(YA_CONCAT(basename, YA_VA_NARGS(__VA_ARGS__)))
+// 选择对应数量的宏
+// 例如：YA_CALL_MACRO_N(MACRO_, a, b, c) -> MACRO_3(a, b, c)
+#define YA_CALL_MACRO_N(macro_name, ...) \
+    YA_EXPAND(YA_CONCAT(macro_name, YA_VA_NARGS(__VA_ARGS__)))
+
+
 
 // ============================================================================
 // 通用 FOREACH 宏系统 - 对每个参数执行指定操作
@@ -140,7 +115,7 @@
 
 // 通用接口 - 自动选择对应数量的宏
 #define YA_FOREACH(operation, context, ...) \
-    YA_EXPAND(YA_SELECT_MACRO_BY_COUNT(YA_FOREACH_, __VA_ARGS__)(operation, context, __VA_ARGS__))
+    YA_EXPAND(YA_CALL_MACRO_N(YA_FOREACH_, __VA_ARGS__)(operation, context, __VA_ARGS__))
 
 // ============================================================================
 // 辅助宏：参数选择器（兼容旧版本）

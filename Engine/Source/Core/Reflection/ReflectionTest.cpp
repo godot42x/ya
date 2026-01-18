@@ -207,4 +207,21 @@ void testUnifiedReflection()
     YA_CORE_INFO("  - Both share the same metadata system\n");
 }
 
+
+struct A
+{
+};
+
+
+struct B : public A
+{
+
+    YA_REFLECT_BEGIN(B, A)
+    YA_REFLECT_FIELD(a, .category("Nothing"))
+    YA_REFLECT_END()
+
+
+    int a;
+};
+
 } // namespace ya::test

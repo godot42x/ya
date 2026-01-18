@@ -51,55 +51,6 @@ struct TagComponent : public IComponent
 };
 
 
-
-struct SpriteRendererComponent : public IComponent
-{
-    glm::vec4 _color{1.0f, 1.0f, 1.0f, 1.0f};
-    uint32_t  _textureID    = 0;
-    float     _tilingFactor = 1.0f;
-
-    SpriteRendererComponent()                                = default;
-    SpriteRendererComponent(const SpriteRendererComponent &) = default;
-    SpriteRendererComponent(const glm::vec4 &color) : _color(color) {}
-};
-
-
-
-// Physics body component (placeholder for future physics integration)
-struct RigidBodyComponent : public IComponent
-{
-    enum class BodyType
-    {
-        Static,
-        Kinematic,
-        Dynamic
-    };
-
-    BodyType  _type            = BodyType::Dynamic;
-    bool      _fixedRotation   = false;
-    float     _mass            = 1.0f;
-    float     _linearDrag      = 0.0f;
-    float     _angularDrag     = 0.05f;
-    glm::vec3 _velocity        = {0.0f, 0.0f, 0.0f};
-    glm::vec3 _angularVelocity = {0.0f, 0.0f, 0.0f};
-
-    RigidBodyComponent()                           = default;
-    RigidBodyComponent(const RigidBodyComponent &) = default;
-    RigidBodyComponent(BodyType type) : _type(type) {}
-};
-
-// Box collider component
-struct BoxColliderComponent : public IComponent
-{
-    glm::vec3 _offset    = {0.0f, 0.0f, 0.0f};
-    glm::vec3 _size      = {1.0f, 1.0f, 1.0f};
-    bool      _isTrigger = false;
-
-    BoxColliderComponent()                             = default;
-    BoxColliderComponent(const BoxColliderComponent &) = default;
-    BoxColliderComponent(const glm::vec3 &size) : _size(size) {}
-};
-
 // Audio source component
 struct AudioSourceComponent : public IComponent
 {

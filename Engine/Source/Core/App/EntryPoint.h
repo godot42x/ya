@@ -2,14 +2,13 @@
 
 #pragma once
 
-#include "Core/Profiling/StaticInitProfiler.h"
-
 #include "Core/App/App.h"
 
 extern ya::App *createApp();
 
 
 #if defined YA_ENTRY_POINT
+#include "Core/Profiling/StaticInitProfiler.h"
 
 int main(int argc, char **argv)
 {
