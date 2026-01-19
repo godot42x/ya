@@ -4,11 +4,14 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include <algorithm>
 
+#include "Core/Reflection/ECSRegistry.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "reflects-core/lib.h"
 
 #include "Core/UUID.h"
@@ -171,6 +174,15 @@ std::vector<Entity> Scene::findEntitiesByTag(const std::string &tag)
     return entities;
 }
 
+stdptr<Scene> Scene::clone()
+{
+    YA_PROFILE_FUNCTION_LOG();
+
+    return Scene::cloneScene(this);
+    // TODO: 暂时不支持 ScriptComponent、Container Property的克隆
+    // return Scene::cloneSceneByReflection(this);
+}
+
 template <class Component>
 static void copyComponent(const entt::registry &src, entt::registry &dst, const std::unordered_map<UUID, entt::entity> &entityMap)
 {
@@ -182,6 +194,50 @@ static void copyComponent(const entt::registry &src, entt::registry &dst, const 
 
         auto &srcComponent = src.get<Component>(e);
         dst.emplace_or_replace<Component>(dstEnttID, srcComponent);
+    }
+}
+
+// Helper function to copy a component from source to destination entity using reflection
+static void copyComponentByReflection(
+    const entt::registry &srcRegistry,
+    entt::registry       &dstRegistry,
+    entt::entity          srcEntity,
+    entt::entity          dstEntity,
+    const std::string    &componentName,
+    uint32_t              componentTypeIndex)
+{
+    auto &classRegistry = ClassRegistry::instance();
+    auto &ecsRegistry   = ya::ECSRegistry::get();
+
+    auto *cls = classRegistry.getClass(componentName);
+    if (!cls) {
+        YA_CORE_WARN("Component class {} not found in class registry", componentName);
+        return;
+    }
+
+
+    void *srcComponent = ecsRegistry.getComponent(componentName, srcRegistry, srcEntity);
+    if (!srcComponent) {
+        YA_CORE_WARN("Failed to get component {} for entity", componentName);
+        return;
+    }
+
+    void *dstComponent = ecsRegistry.addComponent(componentName, dstRegistry, dstEntity);
+    if (!dstComponent) {
+        YA_CORE_WARN("Failed to create component {} for entity", componentName);
+        return;
+    }
+
+    // data -> json -> data
+    // TODO: iterate properties?
+    try {
+        // Serialize source component to JSON
+        auto json =
+            ya::ReflectionSerializer::serializeByRuntimeReflection(srcComponent, componentTypeIndex, cls->getName());
+        ya::ReflectionSerializer::deserializeByRuntimeReflection(dstComponent, componentTypeIndex, json, cls->getName());
+    }
+    catch (const std::exception &e) {
+        YA_CORE_ERROR("Failed to copy component {}: {}", componentName, e.what());
     }
 }
 
@@ -203,6 +259,7 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
         entityMap.insert({id, newEntity});
     }
 
+    // LACK: need to manually list all components to copy
     using components_to_copy = refl::type_list<
         IDComponent,
         TagComponent,
@@ -211,7 +268,8 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
         UnlitMaterialComponent,
         LitMaterialComponent,
         LuaScriptComponent,
-        PointLightComponent>;
+        PointLightComponent,
+        MeshComponent>;
 
     refl::foreach_in_typelist<components_to_copy>([&](const auto &T) {
         copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
@@ -219,6 +277,53 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
     // refl::foreach_types(components_to_copy{}, [&](const auto &T) {
     //     copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
     // });
+
+    return newScene;
+}
+
+stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
+{
+    stdptr<Scene> newScene = makeShared<Scene>();
+
+    std::unordered_map<UUID, entt::entity> srcEntityMap;
+    std::unordered_map<UUID, entt::entity> dstEntityMap;
+
+    const auto &srcRegistry = scene->getRegistry();
+    auto       &dstRegistry = newScene->getRegistry();
+
+
+    srcRegistry.view<IDComponent, TagComponent>().each([&](auto entity, const IDComponent &id, const TagComponent &tag) {
+        entt::entity newEntity = newScene->createEntityWithUUID(id._id, tag._tag)->getHandle();
+        srcEntityMap.insert({id._id, entity});
+        dstEntityMap.insert({id._id, newEntity});
+    });
+
+    // Step 2: Use ECSRegistry to automatically discover and copy ALL registered component types
+    auto &ecsRegistry = ya::ECSRegistry::get();
+
+    for (const auto &[fName, typeIndex] : ecsRegistry._typeIndexCache)
+    {
+        std::string componentName = fName.toString();
+
+        // Skip IDComponent and TagComponent as they are already handled
+        if (componentName == "IDComponent" ||
+            componentName == "TagComponent") {
+            continue;
+        }
+
+
+        for (auto &[uuid, dstEntity] : dstEntityMap)
+        {
+            entt::entity srcEntity = srcEntityMap[uuid];
+            if (srcEntity == entt::null) {
+                continue;
+            }
+            if (!ecsRegistry.hasComponent(fName, srcRegistry, srcEntity)) {
+                continue;
+            }
+            copyComponentByReflection(srcRegistry, dstRegistry, srcEntity, dstEntity, componentName, typeIndex);
+        }
+    }
 
     return newScene;
 }

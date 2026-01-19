@@ -109,6 +109,12 @@ struct MetaBuilder
         return *this;
     }
 
+    MetaBuilder &notSerialized()
+    {
+        addFlag(FieldFlags::NotSerialized);
+        return *this;
+    }
+
     operator Metadata() const { return meta; }
 };
 

@@ -108,7 +108,7 @@ class PropertyContainerHelper
      * @param visitor 访问器函数 (size_t index, void* elementPtr, uint32_t elementTypeIndex)
      */
     template <typename Visitor>
-    static void iterateContainer(Property &prop, void *containerPtr, Visitor &&visitor)
+    static void iterateContainer(const Property &prop, void *containerPtr, Visitor &&visitor)
     {
         auto *accessor = getContainerAccessor(prop);
         if (!accessor) {
@@ -137,7 +137,7 @@ class PropertyContainerHelper
      * @param visitor 访问器函数 (void* keyPtr, uint32_t keyTypeIndex, void* valuePtr, uint32_t valueTypeIndex)
      */
     template <typename Visitor>
-    static void iterateMapContainer(Property &prop, void *containerPtr, Visitor &&visitor)
+    static void iterateMapContainer(const Property &prop, void *containerPtr, Visitor &&visitor)
     {
         auto *accessor = getContainerAccessor(prop);
         if (!accessor || !accessor->isMapLike()) {

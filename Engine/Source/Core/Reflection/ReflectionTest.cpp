@@ -94,14 +94,14 @@ struct Matrix4x4
 } // namespace ya::test
 
 // 在类外部注册反射和元数据（必须在全局作用域）
-YA_REFLECT_EXTERNAL_BEGIN(ya::test::ThirdParty::Vector3)
+YA_REFLECT_BEGIN_EXTERNAL(ya::test::ThirdParty::Vector3)
 YA_REFLECT_EXTERNAL_FIELD(x, .tooltip("X coordinate").category("Position"))
 YA_REFLECT_EXTERNAL_FIELD(y, .tooltip("Y coordinate").category("Position"))
 YA_REFLECT_EXTERNAL_FIELD(z, .tooltip("Z coordinate").category("Position"))
-YA_REFLECT_EXTERNAL_END()
+YA_REFLECT_END_EXTERNAL()
 
 // 使用 BEGIN/END 版本进行外部反射（演示支持更多字段）
-YA_REFLECT_EXTERNAL_BEGIN(ya::test::ThirdParty::Matrix4x4)
+YA_REFLECT_BEGIN_EXTERNAL(ya::test::ThirdParty::Matrix4x4)
 YA_REFLECT_EXTERNAL_FIELD(m00, .tooltip("Element [0,0]"))
 YA_REFLECT_EXTERNAL_FIELD(m01, .tooltip("Element [0,1]"))
 YA_REFLECT_EXTERNAL_FIELD(m02, .tooltip("Element [0,2]"))
@@ -118,7 +118,7 @@ YA_REFLECT_EXTERNAL_FIELD(m30, .tooltip("Element [3,0]"))
 YA_REFLECT_EXTERNAL_FIELD(m31, .tooltip("Element [3,1]"))
 YA_REFLECT_EXTERNAL_FIELD(m32, .tooltip("Element [3,2]"))
 YA_REFLECT_EXTERNAL_FIELD(m33, .tooltip("Element [3,3]"))
-YA_REFLECT_EXTERNAL_END()
+YA_REFLECT_END_EXTERNAL()
 
 namespace ya::test
 {

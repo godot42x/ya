@@ -11,6 +11,7 @@ Diagnostics:
         Add: [cppcoreguidelines-*, bugprone-*, misc-unused-*, modernize-*]
         Remove: [
                 bugprone-easily-swappable-parameters,
+                bugprone-reserved-identifier,
                 #
                 cppcoreguidelines-non-private-member-variables-in-classes,
                 cppcoreguidelines-prefer-member-initializer,

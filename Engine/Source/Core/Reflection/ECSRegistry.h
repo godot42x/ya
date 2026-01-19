@@ -21,7 +21,7 @@ struct ECSRegistry
     static ECSRegistry &get();
 
 
-    using component_getter  = std::function<void *(entt::registry &, entt::entity)>;
+    using component_getter  = std::function<void *(const entt::registry &, entt::entity)>;
     using component_creator = std::function<void *(entt::registry &, entt::entity)>;
 
     std::unordered_map<FName, uint32_t>             _typeIndexCache;
@@ -33,9 +33,9 @@ struct ECSRegistry
     {
         if constexpr (std::derived_from<T, ::ya::IComponent>) {
             uint32_t typeIndex           = ya::TypeIndex<T>::value();
-            _componentGetters[typeIndex] = [](entt::registry &registry, entt::entity entity) -> void * {
+            _componentGetters[typeIndex] = [](const entt::registry &registry, entt::entity entity) -> void * {
                 if (registry.all_of<T>(entity)) {
-                    return &registry.get<T>(entity);
+                    return (void *)&registry.get<T>(entity);
                 }
             };
             _componentCreators[typeIndex] = [](entt::registry &registry, entt::entity entity) -> void * {
@@ -57,8 +57,18 @@ struct ECSRegistry
     {
         return _typeIndexCache.find(name) != _typeIndexCache.end();
     }
+    bool hasComponent(FName name, const entt::registry &registry, entt::entity entity)
+    {
+        // TODO: optimize it for not to  get?
+        if (auto typeIndex = getTypeIndex(name); typeIndex.has_value()) {
+            if (auto getterIt = _componentGetters.find(typeIndex.value()); getterIt != _componentGetters.end()) {
+                return getterIt->second(registry, entity) != nullptr;
+            }
+        }
+        return false;
+    }
 
-    auto getComponent(FName name, entt::registry &registry, entt::entity entity) -> void *
+    void *getComponent(FName name, const entt::registry &registry, entt::entity entity)
     {
         auto typeIndexIt = _typeIndexCache.find(name);
         if (typeIndexIt != _typeIndexCache.end()) {
@@ -68,7 +78,7 @@ struct ECSRegistry
         }
         return nullptr;
     }
-    auto addComponent(FName name, entt::registry &registry, entt::entity entity) -> void *
+    void *addComponent(FName name, entt::registry &registry, entt::entity entity)
     {
         auto typeIndexIt = _typeIndexCache.find(name);
         if (typeIndexIt != _typeIndexCache.end()) {

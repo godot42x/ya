@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Debug/Instrumentor.h"
 #include "Node.h"
 #include <entt/entt.hpp>
 #include <string>
@@ -87,8 +88,9 @@ struct [[refl]] Scene
         _rootNode->addChild(node.get());
     }
 
-    stdptr<Scene>        clone() { return Scene::cloneScene(this); }
+    stdptr<Scene> clone();
     static stdptr<Scene> cloneScene(const Scene *scene);
+    static stdptr<Scene> cloneSceneByReflection(const Scene *scene);
 
   private:
 

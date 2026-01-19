@@ -86,12 +86,12 @@ struct Visitor<void>
 // - Invoked inside a scope where `class_t` and `type_name` exist.
 // - Keep extensions (profiling, ECS serializer, custom registry hooks) here.
 #ifndef YA_REFLECT_EXTENSION
-    #define YA_REFLECT_EXTENSION(type_name) \
+    #define ___YA_REFLECT_EXTENSION(type_name) \
         ::ya::ECSRegistry::get().registerComponent<type_name>(#type_name);
 #endif
 
 
-#define YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                            \
+#define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                         \
   private:                                                                                                     \
     struct reflection_detail;                                                                                  \
     using _reflect_helper_class = reflection_detail;                                                           \
@@ -122,7 +122,7 @@ struct Visitor<void>
                         }                                                                                      \
                     }                                                                                          \
                 });                                                                                            \
-                YA_REFLECT_EXTENSION(ClassName)                                                                \
+                ___YA_REFLECT_EXTENSION(ClassName)                                                             \
             });                                                                                                \
         }                                                                                                      \
                                                                                                                \
@@ -145,13 +145,13 @@ struct Visitor<void>
 
 // 支持 1 个参数（无父类）或 2 个参数（有父类）
 #define YA_REFLECT_BEGIN(...) \
-    YA_EXPAND(YA_CALL_MACRO_N(YA_REFLECT_BEGIN_, __VA_ARGS__)(__VA_ARGS__))
+    YA_EXPAND(YA_CALL_MACRO_N(___YA_REFLECT_BEGIN_, __VA_ARGS__)(__VA_ARGS__))
 
-#define YA_REFLECT_BEGIN_1(ClassName) \
-    YA_REFLECT_BEGIN_IMPL(ClassName, void)
+#define ___YA_REFLECT_BEGIN_1(ClassName) \
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, void)
 
-#define YA_REFLECT_BEGIN_2(ClassName, BaseClass) \
-    YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)
+#define ___YA_REFLECT_BEGIN_2(ClassName, BaseClass) \
+    ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)
 
 // YA_REFLECT_FIELD: collect compile-time field list (+ metadata)
 #define YA_REFLECT_FIELD(FieldName, ...) \
@@ -239,18 +239,18 @@ struct Visitor<void>
 
 
 
-#define YA_REFLECT_EXTERNAL_BEGIN(ClassName)                  \
+#define YA_REFLECT_BEGIN_EXTERNAL(ClassName)                  \
     namespace ya::reflection::detail                          \
     {                                                         \
     template <>                                               \
     struct ExternalReflect<ClassName>                         \
     {                                                         \
         static constexpr bool has_external_reflection = true; \
-        YA_REFLECT_BEGIN_IMPL(ClassName, void)
+        ___YA_REFLECT_BEGIN_IMPL(ClassName, void)
 
 
 // clang-format off
-#define YA_REFLECT_EXTERNAL_END()             \
+#define YA_REFLECT_END_EXTERNAL()             \
         YA_REFLECT_END()                      \
     };                                        \
     } /* close ya::reflection::detail */
