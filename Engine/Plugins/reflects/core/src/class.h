@@ -47,7 +47,8 @@ std::shared_ptr<T> makePtr(Args &&...args)
 
 struct Class
 {
-    std::string _name;
+    std::string        _name;
+    refl::type_index_t typeIndex = 0; // 类型索引，用于快速查找和父类指针转换
 
     // TODO: 使用一个field 来存所有-> 省内存
     // std::unordered_map<std::string, std::shared_ptr<Field>> fields;
@@ -157,9 +158,16 @@ struct Class
 
     Class *getClassByTypeId(refl::type_index_t typeId) const;
 
-    // 访问所有属性（可选递归访问父类）
+    // 访问所有属性（可选递归访问父类）- 非 const 版本（用于修改操作）
     template <typename VisitorFunc>
-    void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive = true) const
+    void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive = false) const
+    {
+        return visitAllProperties(const_cast<const void *>(obj), std::forward<VisitorFunc>(visitor), recursive);
+    }
+
+    // 访问所有属性（可选递归访问父类）- const 版本（用于只读操作，如序列化）
+    template <typename VisitorFunc>
+    void visitAllProperties(const void *obj, VisitorFunc &&visitor, bool recursive = false) const
     {
         if (recursive) {
 
@@ -167,7 +175,7 @@ struct Class
                 // 从注册表获取父类 Class
                 Class *parentClass = getClassByTypeId(parentTypeId);
                 if (parentClass) {
-                    void *parentObj = getParentPointer(obj, parentTypeId);
+                    const void *parentObj = getParentPointer(const_cast<void *>(obj), parentTypeId);
                     if (parentObj) {
                         parentClass->visitAllProperties(parentObj, std::forward<VisitorFunc>(visitor), true);
                     }
@@ -179,6 +187,37 @@ struct Class
         for (const auto &[name, prop] : properties) {
             std::forward<VisitorFunc>(visitor)(name, prop, obj);
         }
+    }
+
+    // 按类分组访问属性（用于序列化等需要区分类层次的场景）
+    // visitor 签名: void(const Class* classPtr, const std::string& propName, const Property& prop, const void* propObj)
+    template <typename VisitorFunc>
+    void visitPropertiesByClass(const void *obj, VisitorFunc &&visitor, bool recursive = true) const
+    {
+        if (recursive) {
+            // 1. 递归访问父类
+            for (auto parentTypeId : parents) {
+                Class *parentClass = getClassByTypeId(parentTypeId);
+                if (parentClass) {
+                    const void *parentObj = getParentPointer(const_cast<void *>(obj), parentTypeId);
+                    if (parentObj) {
+                        parentClass->visitPropertiesByClass(parentObj, std::forward<VisitorFunc>(visitor), true);
+                    }
+                }
+            }
+        }
+
+        // 2. 访问当前类的属性，传递 Class 指针
+        for (const auto &[name, prop] : properties) {
+            std::forward<VisitorFunc>(visitor)(this, name, prop, obj);
+        }
+    }
+
+    // 非 const 版本
+    template <typename VisitorFunc>
+    void visitPropertiesByClass(void *obj, VisitorFunc &&visitor, bool recursive = true) const
+    {
+        return visitPropertiesByClass(const_cast<const void *>(obj), std::forward<VisitorFunc>(visitor), recursive);
     }
 #pragma endregion
 
@@ -458,6 +497,68 @@ struct Class
     {
         auto it = properties.find(inName);
         return it != properties.end() ? &it->second : nullptr;
+    }
+
+    // 递归查找属性（包括父类属性）
+    const Property *findPropertyRecursive(const std::string &inName) const
+    {
+        // 1. 先查找当前类的属性
+        auto it = properties.find(inName);
+        if (it != properties.end()) {
+            return &it->second;
+        }
+
+        // 2. 递归查找父类的属性
+        for (auto parentTypeId : parents) {
+            Class *parentClass = getClassByTypeId(parentTypeId);
+            if (parentClass) {
+                const Property *prop = parentClass->findPropertyRecursive(inName);
+                if (prop) {
+                    return prop;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
+    // 递归查找属性（包括父类属性）- 非 const 版本
+    Property *findPropertyRecursive(const std::string &inName)
+    {
+        // 复用 const 版本的实现
+        return const_cast<Property *>(
+            static_cast<const Class *>(this)->findPropertyRecursive(inName));
+    }
+
+    // 查找属性并返回其所属的类和类型索引（用于反序列化等需要知道属性归属的场景）
+    // 返回: tuple<Property*, Class*, typeIndex>，如果未找到则返回 {nullptr, nullptr, 0}
+    std::tuple<const Property *, const Class *, refl::type_index_t> findPropertyWithOwner(const std::string &inName, refl::type_index_t currentTypeId = 0) const
+    {
+        // 1. 先查找当前类的属性
+        auto it = properties.find(inName);
+        if (it != properties.end()) {
+            return {&it->second, this, currentTypeId};
+        }
+
+        // 2. 递归查找父类的属性
+        for (auto parentTypeId : parents) {
+            Class *parentClass = getClassByTypeId(parentTypeId);
+            if (parentClass) {
+                auto [prop, owner, ownerTypeId] = parentClass->findPropertyWithOwner(inName, parentTypeId);
+                if (prop) {
+                    return {prop, owner, ownerTypeId};
+                }
+            }
+        }
+
+        return {nullptr, nullptr, 0};
+    }
+
+    // 非 const 版本
+    std::tuple<Property *, Class *, refl::type_index_t> findPropertyWithOwner(const std::string &inName, refl::type_index_t currentTypeId = 0)
+    {
+        auto [prop, owner, ownerTypeId] = static_cast<const Class *>(this)->findPropertyWithOwner(inName, currentTypeId);
+        return {const_cast<Property *>(prop), const_cast<Class *>(owner), ownerTypeId};
     }
 #pragma endregion
 

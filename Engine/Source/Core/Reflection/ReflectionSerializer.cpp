@@ -3,20 +3,123 @@
 namespace ya
 {
 
+// ========================================================================
+// Helper: Serialize base classes
+// ========================================================================
+nlohmann::json ReflectionSerializer::serializeBaseClasses(const Class *classPtr, const void *obj)
+{
+    nlohmann::json baseJson;
+
+    for (auto parentTypeId : classPtr->parents) {
+        Class *parentClass = classPtr->getClassByTypeId(parentTypeId);
+        if (parentClass) {
+            const void *parentObj = classPtr->getParentPointer(const_cast<void *>(obj), parentTypeId);
+            if (parentObj) {
+                nlohmann::json parentJson;
+
+                // 1. 递归序列化父类的父类（保持层级结构）
+                nlohmann::json parentBaseJson = serializeBaseClasses(parentClass, parentObj);
+                if (!parentBaseJson.empty()) {
+                    parentJson["__base__"] = parentBaseJson;
+                }
+
+                // 2. 序列化父类自己的属性（不递归，只访问当前类）
+                parentClass->visitAllProperties(
+                    parentObj,
+                    [&parentJson](const std::string &propName, const Property &prop, const void *propObj) {
+                        if (prop.metadata.hasFlag(FieldFlags::NotSerialized)) {
+                            return;
+                        }
+                        try {
+                            parentJson[propName] = serializeProperty(propObj, prop);
+                        }
+                        catch (const std::exception &e) {
+                            YA_CORE_WARN("ReflectionSerializer: Failed to serialize base property '{}': {}", propName, e.what());
+                        }
+                    },
+                    false // recursive = false，只访问当前类属性
+                );
+
+                if (!parentJson.empty()) {
+                    baseJson[parentClass->_name] = parentJson;
+                }
+            }
+        }
+    }
+
+    return baseJson;
+}
+
+// ========================================================================
+// Helper: Deserialize base classes
+// ========================================================================
+void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *obj, const nlohmann::json &j)
+{
+    if (!j.contains("__base__") || !j["__base__"].is_object()) {
+        return;
+    }
+
+    const auto &baseJson = j["__base__"];
+
+    for (auto parentTypeId : classPtr->parents) {
+        Class *parentClass = classPtr->getClassByTypeId(parentTypeId);
+        if (parentClass) {
+            void *parentObj = classPtr->getParentPointer(obj, parentTypeId);
+            if (parentObj) {
+                if (baseJson.contains(parentClass->_name) && baseJson[parentClass->_name].is_object()) {
+                    const auto &parentJson = baseJson[parentClass->_name];
+
+                    for (auto it = parentJson.begin(); it != parentJson.end(); ++it) {
+                        const std::string &jsonKey   = it.key();
+                        const auto        &jsonValue = it.value();
+
+                        auto *prop = parentClass->findPropertyRecursive(jsonKey);
+                        if (!prop) {
+                            YA_CORE_WARN("ReflectionSerializer: Base property '{}.{}' not found", parentClass->_name, jsonKey);
+                            continue;
+                        }
+
+                        try {
+                            if (is_scalar_type(*prop)) {
+                                deserializeScalarValue(*prop, parentObj, jsonValue);
+                            }
+                            else {
+                                deserializeProperty(*prop, parentObj, jsonValue);
+                            }
+                        }
+                        catch (const std::exception &e) {
+                            YA_CORE_WARN("ReflectionSerializer: Failed to deserialize base property '{}.{}': {}",
+                                         parentClass->_name,
+                                         jsonKey,
+                                         e.what());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *obj, uint32_t typeIndex, const std::string &typeName)
 {
-    nlohmann::json j;
-
     auto &registry = ClassRegistry::instance();
     auto *classPtr = registry.getClass(typeIndex);
 
     if (!classPtr) {
         YA_CORE_WARN("ReflectionSerializer: Class '{}:{}' not found in registry", typeIndex, typeName);
         classPtr = registry.getClass(typeName);
+        if (!classPtr) {
+            return {};
+        }
     }
 
-    for (const auto &[propName, prop] : classPtr->properties) {
+    nlohmann::json j;
 
+    // 1. 序列化父类属性到 __base__ 对象
+    nlohmann::json baseJson = serializeBaseClasses(classPtr, obj);
+
+    // 2. 遍历当前类的属性（不包括父类）
+    for (const auto &[propName, prop] : classPtr->properties) {
         if (prop.metadata.hasFlag(FieldFlags::NotSerialized)) {
             continue;
         }
@@ -30,6 +133,11 @@ nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *ob
                          propName,
                          e.what());
         }
+    }
+
+    // 3. 如果有父类属性，添加 __base__ 字段
+    if (!baseJson.empty()) {
+        j["__base__"] = baseJson;
     }
 
     return j;
@@ -67,9 +175,11 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
     // For nested objects, valuePtr is already the pointer to the nested object
     const void *nestedObjPtr = valuePtr;
 
-    // Iterate over all properties of nested object
+    // 1. 序列化父类属性到 __base__ 对象
+    nlohmann::json baseJson = serializeBaseClasses(classPtr, nestedObjPtr);
+
+    // 2. 遍历当前类的属性（不包括父类）
     for (const auto &[propName, subProp] : classPtr->properties) {
-        // Skip properties marked as NotSerialized
         if (subProp.metadata.hasFlag(FieldFlags::NotSerialized)) {
             continue;
         }
@@ -88,11 +198,16 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
             }
         }
         catch (const std::exception &e) {
-            YA_CORE_WARN("ReflectionSerializer: Failed to serialize property '{}.{}': {}",
+            YA_CORE_WARN("ReflectionSerializer: Failed to serialize nested property '{}.{}': {}",
                          classPtr->_name,
                          propName,
                          e.what());
         }
+    }
+
+    // 3. 如果有父类属性，添加 __base__ 字段
+    if (!baseJson.empty()) {
+        j["__base__"] = baseJson;
     }
 
     return j;
@@ -109,11 +224,21 @@ void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t ty
         return;
     }
 
-    // Iterate over all fields in JSON
-    for (auto it = j.begin(); it != j.end(); ++it) {
-        const std::string &jsonKey   = it.key();
-        const auto        &jsonValue = it.value();
+    // 1. 先反序列化父类属性（从 __base__ 对象）
+    deserializeBaseClasses(classPtr, obj, j);
 
+    // 2. 反序列化当前类的属性
+    for (auto it = j.begin(); it != j.end(); ++it) {
+        const std::string &jsonKey = it.key();
+
+        // 跳过 __base__ 字段（已处理）
+        if (jsonKey == "__base__") {
+            continue;
+        }
+
+        const auto &jsonValue = it.value();
+
+        // 只查找当前类的属性（不递归查找父类）
         auto *prop = classPtr->getProperty(jsonKey);
         if (!prop) {
             YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", className, jsonKey);
@@ -131,7 +256,6 @@ void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t ty
         }
     }
 }
-
 void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, const nlohmann::json &j)
 {
     if (is_scalar_type(prop))
@@ -154,11 +278,21 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         return;
     }
 
-    // Iterate over all fields in JSON
-    for (auto it = j.begin(); it != j.end(); ++it) {
-        const std::string &jsonKey   = it.key();
-        const auto        &jsonValue = it.value();
+    // 1. 先反序列化父类属性（从 __base__ 对象）
+    deserializeBaseClasses(classPtr, nestedObjPtr, j);
 
+    // 2. 反序列化当前类的属性
+    for (auto it = j.begin(); it != j.end(); ++it) {
+        const std::string &jsonKey = it.key();
+
+        // 跳过 __base__ 字段（已处理）
+        if (jsonKey == "__base__") {
+            continue;
+        }
+
+        const auto &jsonValue = it.value();
+
+        // 只查找当前类的属性（不递归查找父类）
         auto *subProp = classPtr->getProperty(jsonKey);
         if (!subProp) {
             YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", classPtr->_name, jsonKey);

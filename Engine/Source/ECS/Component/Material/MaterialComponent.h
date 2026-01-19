@@ -30,6 +30,12 @@ struct MaterialComponent : public IComponent
     std::vector<Mesh *>                                   _meshes;
     std::unordered_map<Material *, std::vector<uint32_t>> _material2meshes;
 
+    int test;
+
+    YA_REFLECT_BEGIN(MaterialComponent)
+    YA_REFLECT_FIELD(test)
+    YA_REFLECT_END()
+
   public:
     MaterialComponent() : IComponent() {}
 

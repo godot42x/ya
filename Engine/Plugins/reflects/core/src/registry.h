@@ -34,8 +34,12 @@ struct ClassRegistry
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
         auto ptr      = std::shared_ptr<Class>(classInfo);
-        classes[name] = ptr;
         auto id       = refl::type_index_v<T>;
+        
+        // 设置类型索引
+        ptr->typeIndex = id;
+        
+        classes[name] = ptr;
         typeIdMap[id] = ptr;
         printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), (uint64_t)id);
 
@@ -134,15 +138,18 @@ struct Register
     template <typename ParentType>
     constexpr Register &parentClass()
     {
-        static_assert(std::is_base_of_v<ParentType, T>, "ParentType must be base of T");
+        // 如果 ParentType 是 void，则跳过（用于无父类的情况）
+        if constexpr (!std::is_same_v<ParentType, void>) {
+            static_assert(std::is_base_of_v<ParentType, T>, "ParentType must be base of T");
 
-        refl::type_index_t parentTypeId = refl::type_index_v<ParentType>;
-        refl::type_index_t childTypeId  = refl::type_index_v<T>;
+            refl::type_index_t parentTypeId = refl::type_index_v<ParentType>;
+            refl::type_index_t childTypeId  = refl::type_index_v<T>;
 
-        // 注册继承关系到全局注册表
-        ClassRegistry::instance().registerInheritance(childTypeId, parentTypeId);
-        // 注册到 Class 信息中
-        classInfo->registerParent<T, ParentType>();
+            // 注册继承关系到全局注册表
+            ClassRegistry::instance().registerInheritance(childTypeId, parentTypeId);
+            // 注册到 Class 信息中
+            classInfo->registerParent<T, ParentType>();
+        }
 
         return *this;
     }

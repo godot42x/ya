@@ -107,6 +107,7 @@ struct Visitor<void>
                 YA_PROFILE_STATIC_INIT(#ClassName);                                                            \
                 ::Register<class_t> reg(#ClassName);                                                           \
                 if constexpr (has_base_class) {                                                                \
+                    reg.parentClass<base_t>();                                                                 \
                 }                                                                                              \
                                                                                                                \
                 visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                       \

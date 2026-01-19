@@ -44,9 +44,9 @@ namespace ya
  */
 struct LitMaterialComponent : public MaterialComponent<LitMaterial>
 {
-    YA_REFLECT_BEGIN(LitMaterialComponent)
+    YA_REFLECT_BEGIN(LitMaterialComponent, MaterialComponent<LitMaterial>)
     YA_REFLECT_FIELD(_primitiveGeometry) // Built-in primitive type (serialized)
-    YA_REFLECT_FIELD(_modelRef)      // External model path (serialized)
+    YA_REFLECT_FIELD(_modelRef)          // External model path (serialized)
     YA_REFLECT_FIELD(_params)
     YA_REFLECT_FIELD(_diffuseSlot)
     YA_REFLECT_FIELD(_specularSlot)
@@ -57,10 +57,10 @@ struct LitMaterialComponent : public MaterialComponent<LitMaterial>
     // ========================================
 
     EPrimitiveGeometry    _primitiveGeometry = EPrimitiveGeometry::None; // Built-in primitive type
-    ModelRef              _modelRef;                                 // Model path (serialized, auto-loaded)
-    LitMaterial::ParamUBO _params;                                   // Material parameters (serialized)
-    TextureSlot           _diffuseSlot;                              // Diffuse texture slot (serialized)
-    TextureSlot           _specularSlot;                             // Specular texture slot (serialized)
+    ModelRef              _modelRef;                                     // Model path (serialized, auto-loaded)
+    LitMaterial::ParamUBO _params;                                       // Material parameters (serialized)
+    TextureSlot           _diffuseSlot;                                  // Diffuse texture slot (serialized)
+    TextureSlot           _specularSlot;                                 // Specular texture slot (serialized)
 
     // ========================================
     // Runtime Cache (Not Serialized)

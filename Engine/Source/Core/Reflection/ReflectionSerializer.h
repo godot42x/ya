@@ -58,6 +58,22 @@ struct ReflectionSerializer
     // ========================================================================
 
     /**
+     * Serialize base classes properties to __base__ JSON object
+     * @param classPtr Current class metadata
+     * @param obj Object instance
+     * @return JSON object containing base classes properties
+     */
+    static nlohmann::json serializeBaseClasses(const Class *classPtr, const void *obj);
+
+    /**
+     * Deserialize base classes properties from __base__ JSON object
+     * @param classPtr Current class metadata
+     * @param obj Object instance
+     * @param j JSON object containing __base__ field
+     */
+    static void deserializeBaseClasses(const Class *classPtr, void *obj, const nlohmann::json &j);
+
+    /**
      * Serialize a scalar value (basic type or enum) to JSON
      * @param valuePtr Pointer to the value
      * @param prop Property metadata
