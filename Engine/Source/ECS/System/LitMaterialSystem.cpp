@@ -3,6 +3,7 @@
 #include "Core/Debug/Instrumentor.h"
 
 #include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
@@ -274,17 +275,25 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
 
     // Phase 1: Resolve all unresolved components (resource loading)
     // This must happen BEFORE rendering to ensure all materials/meshes are ready
-    {
-        YA_PROFILE_SCOPE("LitMaterial::ResolvePhase");
-        auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, TransformComponent>();
-        for (entt::entity entity : view)
-        {
-            auto &lmc = view.get<LitMaterialComponent>(entity);
-            if (!lmc.isResolved() && (lmc._modelRef.hasPath() || lmc._primitiveGeometry != EPrimitiveGeometry::None)) {
-                lmc.resolve();
-            }
-        }
-    }
+    // {
+    //     YA_PROFILE_SCOPE("LitMaterial::ResolvePhase");
+    //     auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
+    //     for (entt::entity entity : view)
+    //     {
+    //         auto &lmc = view.get<LitMaterialComponent>(entity);
+    //         auto &mc  = view.get<MeshComponent>(entity);
+
+    //         // Resolve mesh component
+    //         if (!mc.isResolved() && mc.hasMeshSource()) {
+    //             mc.resolve();
+    //         }
+
+    //         // Resolve material component
+    //         if (!lmc.isResolved()) {
+    //             lmc.resolve();
+    //         }
+    //     }
+    // }
 
     // Phase 2: Check and expand descriptor pool capacity AFTER all resolves
     // This prevents descriptor set invalidation during the render loop
@@ -358,7 +367,8 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, TransformComponent>();
+    // Query entities with both LitMaterialComponent and MeshComponent
+    auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -399,72 +409,71 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     YA_PROFILE_SCOPE("LitMaterial::EntityLoop");
     for (entt::entity entity : view)
     {
-        const auto &[tag, lmc, tc] = view.get(entity);
+        const auto &[tag, lmc, meshComp, tc] = view.get(entity);
 
-        for (const auto &[material, meshIDs] : lmc.getMaterial2MeshIDs()) {
+        // Get runtime material from component
+        LitMaterial *material = lmc.getRuntimeMaterial();
+        if (!material || material->getIndex() < 0) {
+            YA_CORE_WARN("LitMaterialSystem: Entity '{}' has no valid material", tag.getTag());
+            continue;
+        }
 
-            _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
-            if (!material || material->getIndex() < 0) {
-                YA_CORE_WARN("default material for none or error material");
-                continue;
-            }
+        _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
 
-            // update each material instance's descriptor set if dirty
-            uint32_t            materialInstanceIndex = material->getIndex();
-            DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
-            DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
+        // update each material instance's descriptor set if dirty
+        uint32_t            materialInstanceIndex = material->getIndex();
+        DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
+        DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
 
-            // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
-            if (!updatedMaterial[materialInstanceIndex]) {
-                if (_bShouldForceUpdateMaterial || material->isResourceDirty())
-                {
-                    YA_PROFILE_SCOPE("LitMaterial::UpdateResourceDS");
-                    updateMaterialResourceDS(resourceDS, material);
-                    material->setResourceDirty(false);
-                }
-                if (_bShouldForceUpdateMaterial || material->isParamDirty())
-                {
-                    YA_PROFILE_SCOPE("LitMaterial::UpdateParamDS");
-                    updateMaterialParamDS(paramDS, material);
-                    material->setParamDirty(false);
-                }
-
-                updatedMaterial[materialInstanceIndex] = true;
-            }
-
-            // bind descriptor set
+        // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
+        if (!updatedMaterial[materialInstanceIndex]) {
+            if (_bShouldForceUpdateMaterial || material->isResourceDirty())
             {
-                YA_PROFILE_SCOPE("LitMaterial::BindDescriptorSets");
-                std::vector<DescriptorSetHandle> descSets = {
-                    _frameDS,
-                    resourceDS,
-                    paramDS,
-                };
-                cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+                YA_PROFILE_SCOPE("LitMaterial::UpdateResourceDS");
+                updateMaterialResourceDS(resourceDS, material);
+                material->setResourceDirty(false);
+            }
+            if (_bShouldForceUpdateMaterial || material->isParamDirty())
+            {
+                YA_PROFILE_SCOPE("LitMaterial::UpdateParamDS");
+                updateMaterialParamDS(paramDS, material);
+                material->setParamDirty(false);
             }
 
-            // update push constant
-            {
-                YA_PROFILE_SCOPE("LitMaterial::PushConstants");
-                LitMaterialSystem::ModelPushConstant pushConst{
-                    .modelMat = tc.getTransform(),
-                };
-                cmdBuf->pushConstants(_pipelineLayout.get(),
-                                      EShaderStage::Vertex,
-                                      0,
-                                      sizeof(LitMaterialSystem::ModelPushConstant),
-                                      &pushConst);
-            }
+            updatedMaterial[materialInstanceIndex] = true;
+        }
 
-            // draw each mesh
+        // bind descriptor set
+        {
+            YA_PROFILE_SCOPE("LitMaterial::BindDescriptorSets");
+            std::vector<DescriptorSetHandle> descSets = {
+                _frameDS,
+                resourceDS,
+                paramDS,
+            };
+            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+        }
+
+        // update push constant
+        {
+            YA_PROFILE_SCOPE("LitMaterial::PushConstants");
+            LitMaterialSystem::ModelPushConstant pushConst{
+                .modelMat = tc.getTransform(),
+            };
+            cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  EShaderStage::Vertex,
+                                  0,
+                                  sizeof(LitMaterialSystem::ModelPushConstant),
+                                  &pushConst);
+        }
+
+        // draw each mesh from MeshComponent
+        {
+            YA_PROFILE_SCOPE("LitMaterial::DrawMeshes");
+            for (Mesh *mesh : meshComp.getMeshes())
             {
-                YA_PROFILE_SCOPE("LitMaterial::DrawMeshes");
-                for (const auto &meshIndex : meshIDs)
-                {
-                    auto mesh = lmc.getMesh(meshIndex);
-                    if (mesh) {
-                        mesh->draw(cmdBuf);
-                    }
+                if (mesh) {
+                    mesh->draw(cmdBuf);
                 }
             }
         }

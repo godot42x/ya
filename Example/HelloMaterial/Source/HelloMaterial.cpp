@@ -6,6 +6,7 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -33,10 +34,8 @@
 
 void HelloMaterial::createCubeMesh()
 {
-    std::vector<ya::Vertex> vertices;
-    std::vector<uint32_t>   indices;
-    ya::PrimitiveGeometry::createCube(glm::vec3(1.0f), vertices, indices);
-    cubeMesh = makeShared<ya::Mesh>(vertices, indices, "cube");
+    // No longer needed - use PrimitiveMeshCache instead
+    // cubeMesh is now managed by PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube)
 }
 
 void HelloMaterial::loadResources()
@@ -171,10 +170,12 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
 
-        auto lmc             = plane->addComponent<ya::LitMaterialComponent>();
-        lmc->_primitiveGeometry  = ya::EPrimitiveGeometry::Cube; // Use built-in cube
-        lmc->_params.diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
-        lmc->resolve(); // Auto-create material and mesh
+        // Mesh and Material are now separate components
+        auto mc = plane->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
+        auto lmc                    = plane->addComponent<ya::LitMaterialComponent>();
+        lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     }
 
 
@@ -204,6 +205,10 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                     float scale = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc->setScale(glm::vec3(scale));
 
+                    // Add mesh component (shared primitive)
+                    auto mc = cube->addComponent<ya::MeshComponent>();
+                    mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
                     // random material
                     uint32_t materialIndex = index % maxMaterialIndex;
                     ++index;
@@ -212,14 +217,14 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                         auto bmc = cube->addComponent<ya::SimpleMaterialComponent>();
                         auto mat = simpleMaterials[materialIndex];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        bmc->addMesh(cubeMesh.get(), mat->as<ya::SimpleMaterial>());
+                        bmc->setRuntimeMaterial(mat->as<ya::SimpleMaterial>());
                     }
                     else {
                         // use unlit material
                         auto umc = cube->addComponent<ya::UnlitMaterialComponent>();
                         auto mat = unlitMaterials[materialIndex % unlitMaterials.size()];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        umc->addMesh(cubeMesh.get(), mat->as<ya::UnlitMaterial>());
+                        umc->setRuntimeMaterial(mat->as<ya::UnlitMaterial>());
                     }
                 }
                 // YA_CORE_DEBUG("1.2 {} {} {}", i, j, k);
@@ -234,41 +239,44 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         tc->setScale(glm::vec3(3.0f));
         _litTestEntity = LitTestCube0;
 
-        // New reflection-based approach with serializable texture slots
-        auto lmc            = LitTestCube0->addComponent<ya::LitMaterialComponent>();
-        lmc->_primitiveGeometry = ya::EPrimitiveGeometry::Cube; // Use built-in cube
-        lmc->_diffuseSlot   = ya::TextureSlot("Engine/Content/TestTextures/LearnOpenGL/container2.png");
-        lmc->_specularSlot  = ya::TextureSlot("Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
-        lmc->_params        = ya::LitMaterial::ParamUBO{
-                   .ambient   = glm::vec3(0.1f),
-                   .diffuse   = glm::vec3(1.0f),
-                   .specular  = glm::vec3(1.0f),
-                   .shininess = 32.0f,
-        };
-        lmc->resolve(); // Auto-create material, load textures, and create mesh
+        // Mesh component (separate from material)
+        auto mc = LitTestCube0->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-        // 添加 Lua 旋转脚本（新 API�?
+        // Material component with serializable texture slots
+        auto lmc = LitTestCube0->addComponent<ya::LitMaterialComponent>();
+        lmc->setTextureSlot(ya::LitMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
+        lmc->setTextureSlot(ya::LitMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
+        lmc->_params = ya::LitMaterial::ParamUBO{
+            .ambient   = glm::vec3(0.1f),
+            .diffuse   = glm::vec3(1.0f),
+            .specular  = glm::vec3(1.0f),
+            .shininess = 32.0f,
+        };
+
+        // 添加 Lua 旋转脚本（新 API）
         auto lsc = LitTestCube0->addComponent<ya::LuaScriptComponent>();
-        // 可以添加多个脚本，类�?Unity
+        // 可以添加多个脚本，类似Unity
         // lsc->addScript("Content/Scripts/Health.lua");
         // lsc->addScript("Content/Scripts/Inventory.lua");
     }
-
     if (auto *suzanne = scene->createEntity("Suzanne")) {
         auto tc = suzanne->addComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(2.0f));
 
-        // New reflection-based approach with model path
-        auto lmc       = suzanne->addComponent<ya::LitMaterialComponent>();
-        lmc->_modelRef = ya::ModelRef("Engine/Content/Misc/Monkey.obj"); // External model path
-        lmc->_params   = ya::LitMaterial::ParamUBO{
-              .ambient   = glm::vec3(0.1f),
-              .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
-              .specular  = glm::vec3(0.5f),
-              .shininess = 16.0f,
+        // Mesh component with external model
+        auto mc = suzanne->addComponent<ya::MeshComponent>();
+        mc->setModelPath("Engine/Content/Misc/Monkey.obj");
+
+        // Material component
+        auto lmc     = suzanne->addComponent<ya::LitMaterialComponent>();
+        lmc->_params = ya::LitMaterial::ParamUBO{
+            .ambient   = glm::vec3(0.1f),
+            .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
+            .specular  = glm::vec3(0.5f),
+            .shininess = 16.0f,
         };
-        lmc->resolve(); // Auto-load model and create material
     }
 
     if (auto *pointLt = scene->createEntity("Point Light")) {
@@ -276,20 +284,22 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
         _pointLightEntity = pointLt;
 
+        // Mesh component
+        auto mc = pointLt->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-
+        // Material component
         auto plc = pointLt->addComponent<ya::PointLightComponent>();
-        auto lmc = pointLt->addComponent<ya::UnlitMaterialComponent>();
+        auto umc = pointLt->addComponent<ya::UnlitMaterialComponent>();
 
         auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
+        umc->setRuntimeMaterial(pointLightMat);
+        // umc.add
 
-        lmc->addMesh(cubeMesh.get(), pointLightMat);
-
-        // 添加 Lua 圆周运动脚本（新 API�?
+        // 添加 Lua 圆周运动脚本（新 API）
         auto lsc = pointLt->addComponent<ya::LuaScriptComponent>();
         lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
     }
-
 
     // Create Phong sample cubes using new reflection-based approach
     glm::vec3 startPos(-10.0f, -20.0f, -20.0f);
@@ -301,14 +311,16 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         float z      = startPos.z + (i / 5) * spacing;
         tc->setPosition(glm::vec3(x, 0.0f, z));
 
+        // Mesh component
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
         // Get pre-created material params from factory (loaded from JSON)
         auto existingMat = ya::MaterialFactory::get()->getMaterialByName(_pongMaterialNames[i])->as<ya::LitMaterial>();
 
-        // New reflection-based approach
-        auto lmc            = entity->addComponent<ya::LitMaterialComponent>();
-        lmc->_primitiveGeometry = ya::EPrimitiveGeometry::Cube; // Use built-in cube
-        lmc->_params        = existingMat->uParams;     // Copy params from pre-loaded material
-        lmc->resolve();
+        // Material component
+        auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
+        lmc->_params = existingMat->_params; // Copy params from pre-loaded material
 
         // TODO: implement the 3D UI system to show material name
         // auto wc          = entity->addComponent<ya::WidgetComponent>();

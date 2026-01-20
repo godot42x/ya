@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/FName.h"
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -26,6 +27,10 @@ struct IResourceCache
      * @brief Get the name of this cache for debugging
      */
     virtual const char *getCacheName() const = 0;
+
+    // path or asset name
+    // TODO: replace all to FName
+    virtual void invalidate(const std::string &assetName) {}
 };
 
 /**

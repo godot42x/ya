@@ -50,9 +50,11 @@ enum class EAssetType : uint8_t
 template <typename T>
 struct TAssetRef
 {
-    YA_REFLECT_BEGIN(TAssetRef)
+    // TODO: Add reflection support for template classes
+    YA_REFLECT_BEGIN(TAssetRef<T>)
     YA_REFLECT_FIELD(_path) // Only serialize path
     YA_REFLECT_END()
+
 
     std::string        _path;      // Serialized data: asset path
     std::shared_ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
@@ -62,7 +64,8 @@ struct TAssetRef
     explicit TAssetRef(const std::string &path) : _path(path) {}
     TAssetRef(const std::string &path, std::shared_ptr<T> ptr)
         : _path(path), _cachedPtr(std::move(ptr))
-    {}
+    {
+    }
 
     // Copy and move
     TAssetRef(const TAssetRef &other)                = default;
@@ -96,6 +99,11 @@ struct TAssetRef
     {
         _path      = path;
         _cachedPtr = std::move(ptr);
+    }
+
+    void invalidate()
+    {
+        _cachedPtr.reset();
     }
 
     /**

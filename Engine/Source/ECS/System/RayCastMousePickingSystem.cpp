@@ -3,6 +3,7 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Render/Model.h"
@@ -21,14 +22,14 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
     std::optional<RaycastHit> closestHit;
     float                     closestDistance = std::numeric_limits<float>::max();
 
-    // Helper lambda to test material component
-    auto testMaterialComponent = [&](entt::entity entityHandle, TransformComponent &tc, const auto &materialComp) {
-        // Get first mesh for picking (简化版本)
-        if (materialComp._meshes.empty()) {
+    // Helper lambda to test mesh component
+    auto testMeshComponent = [&](entt::entity entityHandle, TransformComponent &tc, MeshComponent &meshComp) {
+        const auto &meshes = meshComp.getMeshes();
+        if (meshes.empty()) {
             return;
         }
 
-        for (auto *mesh : materialComp._meshes) {
+        for (auto *mesh : meshes) {
             if (!mesh) {
                 continue;
             }
@@ -56,20 +57,12 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
         }
     };
 
-    // Check all material component types
-    scene->getRegistry().view<SimpleMaterialComponent, TransformComponent>().each(
-        [&](entt::entity handle, SimpleMaterialComponent &smc, TransformComponent &tc) {
-            testMaterialComponent(handle, tc, smc);
-        });
-
-    scene->getRegistry().view<UnlitMaterialComponent, TransformComponent>().each(
-        [&](entt::entity handle, UnlitMaterialComponent &umc, TransformComponent &tc) {
-            testMaterialComponent(handle, tc, umc);
-        });
-
-    scene->getRegistry().view<LitMaterialComponent, TransformComponent>().each(
-        [&](entt::entity handle, LitMaterialComponent &lmc, TransformComponent &tc) {
-            testMaterialComponent(handle, tc, lmc);
+    // TODO: how to apply material's logic transform to the mesh in the world?
+    //      经过材质处理，mesh的实际大小位置可能发生变化
+    // Check all entities with MeshComponent
+    scene->getRegistry().view<MeshComponent, TransformComponent>().each(
+        [&](entt::entity handle, MeshComponent &mc, TransformComponent &tc) {
+            testMeshComponent(handle, tc, mc);
         });
 
     return closestHit;

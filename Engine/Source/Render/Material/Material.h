@@ -5,11 +5,10 @@
 #include "Core/Common/AssetRef.h"
 #include "Render/Core/Texture.h"
 
-
+#include <unordered_map>
 
 namespace ya
 {
-
 
 /**
  * @brief Serializable texture slot for material serialization
@@ -67,22 +66,57 @@ struct TextureSlot
 
     bool resolve() { return textureRef.resolve(); }
     bool isLoaded() const { return textureRef.isLoaded(); }
+
+    void invalidate() { textureRef.invalidate(); }
 };
 
+/// Texture slot map type: maps resource enum (as int) to TextureSlot
+using TextureSlotMap = std::unordered_map<int, TextureSlot>;
 
 
 //  MARK: Material
+/**
+ * @brief Material base class - Serializable material data
+ *
+ * Design:
+ * - Component layer holds Material reference (serializable path/params)
+ * - Material class is the actual data storage
+ * - ResourceResolveSystem handles all resource loading
+ *
+ * Derived classes should:
+ * 1. Define their EResource enum for texture slots
+ * 2. Define ParamUBO struct for uniform parameters
+ * 3. Override getTextureSlotName() for serialization
+ */
 struct Material
 {
+    YA_REFLECT_BEGIN(Material)
+    YA_REFLECT_FIELD(_label)
+    YA_REFLECT_FIELD(_instanceIndex)
+    YA_REFLECT_FIELD(_typeID)
+    YA_REFLECT_FIELD(_sourcePath)
+    YA_REFLECT_END()
 
-    // index: 该类型材质的第n个instance, 从0开始, 由MaterialFactory维护
-    // TODO: 区分 material 和 material instance, 当前逻辑不够清楚
-    // 如果要删除了一个 material instance呢?
+    // ========================================
+    // Serializable Data
+    // ========================================
     std::string _label         = "MaterialNone";
-    int32_t     _instanceIndex = -1;
     uint32_t    _typeID        = 0;
     std::string _sourcePath    = "";
+    int32_t     _instanceIndex = -1;
 
+
+
+    // ========================================
+    // Runtime State (Not Serialized)
+    // ========================================
+    bool _bParamDirty    = true; ///< Material parameters changed
+    bool _bResourceDirty = true; ///< Texture resources changed
+
+    std::unordered_map<int, TextureView> _textureViews;
+    // ========================================
+    // Basic Accessors
+    // ========================================
     std::string getLabel() const { return _label; }
     void        setLabel(const std::string &label) { _label = label; }
 
@@ -92,7 +126,44 @@ struct Material
     [[nodiscard]] uint32_t getTypeID() const { return _typeID; }
     void                   setTypeID(const uint32_t &typeID) { _typeID = typeID; }
 
+    // ========================================
+    // Dirty Flags (Unified Interface)
+    // ========================================
+    void               setParamDirty(bool bInDirty = true) { _bParamDirty = bInDirty; }
+    [[nodiscard]] bool isParamDirty() const { return _bParamDirty; }
 
+    void               setResourceDirty(bool bInDirty = true) { _bResourceDirty = bInDirty; }
+    [[nodiscard]] bool isResourceDirty() const { return _bResourceDirty; }
+
+    // ========================================
+    // Virtual Interface for Derived Classes
+    // ========================================
+
+    /**
+     * @brief Get texture slot name for serialization
+     * @param resourceEnum The resource enum value (e.g., EResource::DiffuseTexture)
+     * @return Human-readable name for JSON keys
+     */
+    virtual const char *getTextureSlotName(int resourceEnum) const { return "unknown"; }
+
+    /**
+     * @brief Get resource enum from slot name (for deserialization)
+     * @param name The slot name from JSON
+     * @return Resource enum value, or -1 if not found
+     */
+    virtual int getTextureSlotEnum(const std::string &name) const { return -1; }
+
+    /**
+     * @brief Resolve all texture resources
+     * @return true if all resources resolved successfully
+     */
+    virtual bool resolveTextures() { return true; }
+
+    virtual ~Material() = default;
+
+    // ========================================
+    // Type Casting Helper
+    // ========================================
     template <typename T>
     T *as()
     {
@@ -100,6 +171,5 @@ struct Material
         return static_cast<T *>(this);
     }
 };
-
 
 } // namespace ya

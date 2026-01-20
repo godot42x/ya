@@ -6,6 +6,7 @@
  * - 职责单一：只负责网格数据的引用和加载
  * - 支持两种来源：内置几何体 / 外部模型文件
  * - 运行时缓存自动解析
+ * - 与 MaterialComponent 分离，由 System 组织关系
  */
 #pragma once
 
@@ -36,6 +37,7 @@ struct MeshComponent : public IComponent
     YA_REFLECT_BEGIN(MeshComponent)
     YA_REFLECT_FIELD(_primitiveGeometry)
     YA_REFLECT_FIELD(_modelRef)
+    YA_REFLECT_FIELD(_materialIndex)
     YA_REFLECT_END()
 
     // ========================================
@@ -43,45 +45,27 @@ struct MeshComponent : public IComponent
     // ========================================
     EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::None; ///< 内置几何体类型
     ModelRef           _modelRef;                                     ///< 外部模型路径
+    uint32_t           _materialIndex = 0;
 
     // ========================================
     // 运行时缓存（不序列化）
     // ========================================
-    std::vector<stdptr<Mesh>> _cachedMeshes; ///< 已加载的网格列表（多 SubMesh 支持）
-    bool                      _bResolved = false;
+    std::vector<Mesh *> _cachedMeshes; ///< 已加载的网格指针列表（指向 Model 或 PrimitiveCache）
+    bool                _bResolved = false;
+
+    // ========================================
+    // 资源解析
+    // ========================================
 
     /**
-     * @brief 解析网格资源（从路径加载或生成内置几何体）
+     * @brief 解析网格资源
+     * Called by ResourceResolveSystem
      * @return true 如果成功加载
      */
-    bool resolve()
-    {
-        if (_bResolved) return true;
-
-        _cachedMeshes.clear();
-
-        // 优先使用内置几何体
-        if (_primitiveGeometry != EPrimitiveGeometry::None) {
-            // TODO: 实现 Mesh::createPrimitive 工厂方法
-            // auto mesh = Mesh::createPrimitive(_primitiveGeometry);
-            YA_CORE_ERROR("Primitive geometry not yet implemented: {}", (int)_primitiveGeometry);
-            return false;
-        }
-
-        // 尝试加载外部模型
-        if (_modelRef.hasPath()) {
-            // TODO: 实现 AssetManager::loadMeshes
-            // auto loadedMeshes = AssetManager::get()->loadMeshes(_modelRef.getPath());
-            YA_CORE_ERROR("Model loading not yet implemented: {}", _modelRef.getPath());
-            return false;
-        }
-
-        YA_CORE_WARN("MeshComponent has no geometry source");
-        return false;
-    }
+    bool resolve();
 
     /**
-     * @brief 强制重新解析（当路径或几何体类型变更时调用）
+     * @brief 强制重新解析
      */
     void invalidate()
     {
@@ -94,17 +78,58 @@ struct MeshComponent : public IComponent
      */
     bool isResolved() const { return _bResolved; }
 
-    /**
-     * @brief 获取网格列表（可能包含多个 SubMesh）
-     */
-    const std::vector<stdptr<Mesh>> &getMeshes() const { return _cachedMeshes; }
+    // ========================================
+    // 网格访问
+    // ========================================
 
     /**
-     * @brief 获取第一个网格（便捷接口，适用于单网格对象）
+     * @brief 获取网格列表
+     */
+    const std::vector<Mesh *> &getMeshes() const { return _cachedMeshes; }
+
+    /**
+     * @brief 获取第一个网格（便捷接口）
      */
     Mesh *getFirstMesh() const
     {
-        return _cachedMeshes.empty() ? nullptr : _cachedMeshes[0].get();
+        return _cachedMeshes.empty() ? nullptr : _cachedMeshes[0];
+    }
+
+    /**
+     * @brief 获取网格数量
+     */
+    size_t getMeshCount() const { return _cachedMeshes.size(); }
+
+    // ========================================
+    // 设置接口
+    // ========================================
+
+    /**
+     * @brief 设置为内置几何体
+     */
+    void setPrimitiveGeometry(EPrimitiveGeometry type)
+    {
+        _primitiveGeometry = type;
+        _modelRef          = ModelRef(); // Clear model ref
+        invalidate();
+    }
+
+    /**
+     * @brief 设置为外部模型
+     */
+    void setModelPath(const std::string &path)
+    {
+        _modelRef          = ModelRef(path);
+        _primitiveGeometry = EPrimitiveGeometry::None;
+        invalidate();
+    }
+
+    /**
+     * @brief 检查是否有有效的网格来源
+     */
+    bool hasMeshSource() const
+    {
+        return _primitiveGeometry != EPrimitiveGeometry::None || _modelRef.hasPath();
     }
 };
 

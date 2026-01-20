@@ -48,10 +48,10 @@ class AssetManager : public IResourceCache
 
   public:
     static AssetManager *get();
-    
+
     // IResourceCache interface
-    void clearCache() override;
-    const char* getCacheName() const override { return "AssetManager"; }
+    void        clearCache() override;
+    const char *getCacheName() const override { return "AssetManager"; }
 
     AssetManager();
     ~AssetManager()
@@ -93,6 +93,18 @@ class AssetManager : public IResourceCache
             YA_CORE_WARN("Texture with name '{}' already registered. Overwriting.", name);
         }
         _textureViews.insert({name, texture});
+    }
+
+    void invalidate(const std::string &filepath) override
+    {
+        if (isModelLoaded(filepath))
+        {
+            modelCache.erase(filepath);
+        }
+        if (isTextureLoaded(filepath))
+        {
+            _textureViews.erase(filepath);
+        }
     }
 };
 

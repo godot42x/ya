@@ -17,6 +17,7 @@
 // Managers/System
 #include "Core/Manager/Facade.h"
 #include "Core/ResourceRegistry.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
@@ -727,7 +728,6 @@ int ya::App::iterate(float dt)
 void App::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION()
-    inputManager.preUpdate();
     Facade.timerManager.onUpdate(dt);
 
     // 文件监视器轮询（检测文件变化）
@@ -736,6 +736,7 @@ void App::onUpdate(float dt)
     }
 
 
+    inputManager.preUpdate();
     // Update Editor camera (FreeCamera)
     cameraController.update(camera, inputManager, dt);
 
@@ -785,6 +786,14 @@ void App::onUpdate(float dt)
     _viewportRT->setColorClearValue(colorClearValue);
     _viewportRT->setDepthStencilClearValue(depthClearValue);
 
+    static ResourceResolveSystem *resourceResolveSystem = []() {
+        auto sys = new ResourceResolveSystem();
+        std::atexit([]() { delete resourceResolveSystem; });
+        sys->init();
+        return sys;
+    }();
+
+    resourceResolveSystem->onUpdate(dt);
     _viewportRT->onUpdate(dt);
     _screenRT->onUpdate(dt);
 

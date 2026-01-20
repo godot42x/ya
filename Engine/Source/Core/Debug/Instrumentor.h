@@ -3,6 +3,7 @@
 // Extended for speedscope JSON format support
 //
 
+
 #pragma once
 
 #include <atomic>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "Core/Log.h"
+#include "Core/Macro/VariadicMacros.h"
 
 namespace ya
 {
@@ -682,18 +684,24 @@ struct InstrumentationTimerConsoleOnly
     int                              m_Line;
     std::chrono::time_point<clock_t> m_StartTime;
     bool                             m_Stopped = false;
+    bool                             bEnable   = false;
 
   public:
     explicit InstrumentationTimerConsoleOnly(const std::string   &name,
-                                             std::source_location loc = std::source_location::current())
-        : InstrumentationTimerConsoleOnly(name.c_str(), loc)
+                                             std::source_location loc     = std::source_location::current(),
+                                             bool                 bEnable = true)
+        : InstrumentationTimerConsoleOnly(name.c_str(), loc, bEnable)
     {
     }
 
     explicit InstrumentationTimerConsoleOnly(const char          *name,
-                                             std::source_location loc = std::source_location::current())
-        : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), m_StartTime(clock_t::now())
+                                             std::source_location loc     = std::source_location::current(),
+                                             bool                 bEnable = true)
+        : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), bEnable(bEnable)
     {
+        if (bEnable) {
+            m_StartTime = clock_t::now();
+        }
     }
 
     ~InstrumentationTimerConsoleOnly()
@@ -711,7 +719,7 @@ struct InstrumentationTimerConsoleOnly
 
     void Stop()
     {
-        if (m_Stopped) {
+        if (m_Stopped || !bEnable) {
             return;
         }
 
@@ -848,6 +856,13 @@ inline bool g_ProfileEnabled = false;
 // Console-only logging macro (always available, independent of profile mode)
 //=============================================================================
 #define YA_PROFILE_SCOPE_LOG_IMPL(name) \
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
+  // YA_CALL_MACRO_N(__YA_PROFILE_SCOPE_LOG_IMPL_, __VA_ARGS__)
+
+#define __YA_PROFILE_SCOPE_LOG_IMPL_1(name) \
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
+
+#define __YA_PROFILE_SCOPE_LOG_IMPL_2(name, bEnable) \
     ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
 
 //=============================================================================

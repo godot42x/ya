@@ -9,23 +9,31 @@ namespace ya
 {
 
 
+/**
+ * @brief LitMaterial - Phong-based lit material for rendering
+ *
+ * Design:
+ * - Component (LitMaterialComponent) holds serializable data (params + texture slots)
+ * - Material (LitMaterial) manages runtime rendering state (texture views)
+ * - Data sync happens automatically during resolve()
+ *
+ * Memory: ~48 bytes (only texture views cache, no duplicate params)
+ */
 struct LitMaterial : public Material
 {
+    // ========================================
+    // Nested Types
+    // ========================================
+
+    /// GPU-aligned parameter UBO (defined in Component, reused here)
     struct ParamUBO
     {
-        YA_REFLECT_BEGIN(ParamUBO)
-        YA_REFLECT_FIELD(ambient)
-        YA_REFLECT_FIELD(diffuse)
-        YA_REFLECT_FIELD(specular)
-        YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
-        YA_REFLECT_END()
-
         alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
         alignas(4) float shininess     = 32.0f;
 
-        ParamUBO normalize()
+        ParamUBO normalize() const
         {
             return ParamUBO{
                 .ambient   = glm::normalize(ambient),
@@ -34,77 +42,141 @@ struct LitMaterial : public Material
                 .shininess = shininess,
             };
         }
-    } uParams;
+    };
 
-
-    enum EResource
+    /// Texture resource enum
+    enum EResource : int
     {
         DiffuseTexture  = 0,
         SpecularTexture = 1,
+        // Extend here for normal map, etc.
     };
 
-    std::unordered_map<LitMaterial::EResource, TextureView> _textureViews;
+    // ========================================
+    // Reflection Registration
+    // ========================================
+    YA_REFLECT_BEGIN(LitMaterial, Material)
+    YA_REFLECT_FIELD(_params)
+    YA_REFLECT_END()
 
-    bool bParamDirty    = true;
-    bool bResourceDirty = true;
-
+    // ========================================
+    // Runtime State (Not Serialized)
+    // ========================================
+    ParamUBO _params;
 
   public:
+    // ========================================
+    // Parameter Accessors
+    // ========================================
+    [[nodiscard]] const ParamUBO &getParams() const { return _params; }
+    ParamUBO                     &getParamsMut() { return _params; }
 
-    [[nodiscard]] const ParamUBO &getParams() { return uParams; }
-    ParamUBO                     &getParamsMut() { return uParams; }
-
-    void               setParamDirty(bool bInDirty = true) { bParamDirty = bInDirty; }
-    [[nodiscard]] bool isParamDirty() const { return bParamDirty; }
-
-    void               setResourceDirty(bool bInDirty = true) { bResourceDirty = bInDirty; }
-    [[nodiscard]] bool isResourceDirty() const { return bResourceDirty; }
-
-    // resource
-    [[nodiscard]] TextureView *getTextureView(EResource type)
-    {
-        auto it = _textureViews.find(type);
-        if (it != _textureViews.end())
-        {
-            return &it->second;
-        }
-        return nullptr;
-    }
-    TextureView *setTextureView(EResource type, const TextureView &tv)
-    {
-        _textureViews[type] = tv;
-        setResourceDirty();
-        return &_textureViews[type];
-    }
-
+    /**
+     * @brief Set all Phong parameters (synced from Component)
+     */
     void setPhongParam(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess)
     {
-        uParams.ambient   = ambient;
-        uParams.diffuse   = diffuse;
-        uParams.specular  = specular;
-        uParams.shininess = shininess;
+        _params.ambient   = ambient;
+        _params.diffuse   = diffuse;
+        _params.specular  = specular;
+        _params.shininess = shininess;
         setParamDirty();
     }
+
+    /**
+     * @brief Set diffuse parameter (synced from Component)
+     */
     void setDiffuseParam(const glm::vec3 &diffuse)
     {
-        uParams.diffuse = diffuse;
+        _params.diffuse = diffuse;
         setParamDirty();
     }
-    [[deprecated("Not use")]]
-    void setObjectColor(const glm::vec3 &color)
-    {
-        setDiffuseParam(color);
-    }
+
+    /**
+     * @brief Set specular parameter (synced from Component)
+     */
     void setSpecularParam(const glm::vec3 &specular)
     {
-        uParams.specular = specular;
+        _params.specular = specular;
         setParamDirty();
     }
+
+    /**
+     * @brief Set shininess parameter (synced from Component)
+     */
     void setShininess(float shininess)
     {
-        uParams.shininess = shininess;
+        _params.shininess = shininess;
         setParamDirty();
     }
+
+    // ========================================
+    // Runtime TextureView Access (For Rendering)
+    // ========================================
+
+    /**
+     * @brief Get resolved texture view for rendering
+     */
+    [[nodiscard]] TextureView *getTextureView(EResource type)
+    {
+        auto it = _textureViews.find(static_cast<int>(type));
+        return it != _textureViews.end() ? &it->second : nullptr;
+    }
+
+    /**
+     * @brief Set texture view directly (called by Component/Resolver)
+     */
+    TextureView *setTextureView(EResource type, const TextureView &tv)
+    {
+        _textureViews[static_cast<int>(type)] = tv;
+        setResourceDirty();
+        return &_textureViews[static_cast<int>(type)];
+    }
+
+    /**
+     * @brief Clear texture views (called on re-resolve)
+     */
+    void clearTextureViews()
+    {
+        _textureViews.clear();
+        setResourceDirty();
+    }
+
+    // ========================================
+    // Virtual Interface Implementation
+    // ========================================
+
+    const char *getTextureSlotName(int resourceEnum) const override
+    {
+        switch (static_cast<EResource>(resourceEnum)) {
+        case DiffuseTexture:
+            return "diffuse";
+        case SpecularTexture:
+            return "specular";
+        default:
+            return "unknown";
+        }
+    }
+
+    int getTextureSlotEnum(const std::string &name) const override
+    {
+        if (name == "diffuse") return DiffuseTexture;
+        if (name == "specular") return SpecularTexture;
+        return -1;
+    }
+
+
+
+    bool resolveTextures() override { return true; /* Needs sampler, use overload */ }
 };
 
+
 } // namespace ya
+
+// Reflection for ParamUBO (cannot be inside class due to memory layout)
+YA_REFLECT_BEGIN_EXTERNAL(ya::LitMaterial::ParamUBO)
+YA_REFLECT_FIELD(ambient)
+YA_REFLECT_FIELD(diffuse)
+YA_REFLECT_FIELD(specular)
+YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
+YA_REFLECT_END_EXTERNAL()

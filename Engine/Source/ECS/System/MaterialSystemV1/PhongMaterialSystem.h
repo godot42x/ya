@@ -17,14 +17,8 @@ struct VulkanBuffer;
 namespace ya
 {
 
-struct LitMaterial;
 
-static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
-static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
-
-
-
-struct LitMaterialSystem : public IMaterialSystem
+struct PhongMaterialSystem : public IMaterialSystem
 {
 
     using material_param_t = LitMaterial::ParamUBO;
@@ -151,7 +145,7 @@ struct LitMaterialSystem : public IMaterialSystem
 } // namespace ya
 
 // 存在额外的字段，导致不符合 std140 布局规则, 或者占用了别的数据
-YA_REFLECT_BEGIN_EXTERNAL(ya::LitMaterialSystem::DirectionalLightData)
+YA_REFLECT_BEGIN_EXTERNAL(ya::PhongMaterialSystem::DirectionalLightData)
 YA_REFLECT_FIELD(direction)
 YA_REFLECT_FIELD(ambient, .color())
 YA_REFLECT_FIELD(diffuse, .color())

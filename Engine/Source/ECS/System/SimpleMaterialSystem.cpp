@@ -6,6 +6,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/MeshComponent.h"
 
 #include "Core/Math/Geometry.h"
 #include "Render/Core/IRenderTarget.h"
@@ -170,7 +171,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    const auto &view = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent>();
+    const auto &view = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent, MeshComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -214,41 +215,38 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     pc.projection      = camCtx.projection;
 
     for (const auto entity : view) {
-        const auto &[tc, bmc] = view.get(entity);
+        const auto &[tc, smc, meshComp] = view.get(entity);
         // TODO: culling works
 
-        const auto &material2MeshIds = bmc.getMaterial2MeshIDs();
-        for (const auto &[material, meshIds] : material2MeshIds) {
-            if (!material) {
+        SimpleMaterial *material = smc.getRuntimeMaterial();
+        if (!material) {
+            continue;
+        }
+
+        pc.model     = tc.getTransform();
+        pc.colorType = material->colorType;
+
+        // pc.colorType = sin(TimeManager::get()->now().time_since_epoch().count() * 0.001);
+
+        cmdBuf->pushConstants(_pipelineLayout.get(),
+                              EShaderStage::Vertex,
+                              0,
+                              sizeof(PushConstant),
+                              &pc);
+
+        for (Mesh *mesh : meshComp.getMeshes()) {
+            if (!mesh || !mesh->getVertexBuffer() || !mesh->getIndexBuffer()) {
                 continue;
             }
+            // ++totalCount;
 
-            pc.model     = tc.getTransform();
-            pc.colorType = material->colorType;
+            VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandleAs<::VkBuffer>()};
+            // current no need to support subbuffer
+            VkDeviceSize offsets[] = {0};
 
-            // pc.colorType = sin(TimeManager::get()->now().time_since_epoch().count() * 0.001);
-
-            cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex,
-                                  0,
-                                  sizeof(PushConstant),
-                                  &pc);
-
-            for (const auto &idx : meshIds) {
-                auto mesh = bmc.getMesh(idx);
-                if (!mesh || !mesh->getVertexBuffer() || !mesh->getIndexBuffer()) {
-                    continue;
-                }
-                // ++totalCount;
-
-                VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandleAs<::VkBuffer>()};
-                // current no need to support subbuffer
-                VkDeviceSize offsets[] = {0};
-
-                cmdBuf->bindVertexBuffer(0, mesh->getVertexBufferMut(), 0);
-                cmdBuf->bindIndexBuffer(mesh->getIndexBufferMut(), 0, false);
-                cmdBuf->drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
-            }
+            cmdBuf->bindVertexBuffer(0, mesh->getVertexBufferMut(), 0);
+            cmdBuf->bindIndexBuffer(mesh->getIndexBufferMut(), 0, false);
+            cmdBuf->drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
         }
     }
 }

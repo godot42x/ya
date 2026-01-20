@@ -1,6 +1,7 @@
 #include "UnlitMaterialSystem.h"
 #include "Core/Math/Geometry.h"
 #include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/MeshComponent.h"
 
 
 #include "Core/App/App.h"
@@ -242,7 +243,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    auto view = scene->getRegistry().view<TagComponent, UnlitMaterialComponent, TransformComponent>();
+    auto view = scene->getRegistry().view<TagComponent, UnlitMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -280,64 +281,64 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     for (entt::entity entity : view)
     {
-        const auto &[tag, umc, tc] = view.get(entity);
-        for (const auto &[material, meshIDs] : umc.getMaterial2MeshIDs()) {
+        const auto &[tag, umc, meshComp, tc] = view.get(entity);
 
-            _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
-            if (!material || material->getIndex() < 0) {
-                YA_CORE_WARN("default material for none or error material");
-                continue;
-            }
+        // Get runtime material from component
+        UnlitMaterial *material = umc.getRuntimeMaterial();
+        if (!material || material->getIndex() < 0) {
+            YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material", tag._tag);
+            continue;
+        }
 
-            // update each material instance's descriptor set if dirty
-            uint32_t            materialInstanceIndex = material->getIndex();
-            DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
-            DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
+        _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
 
-            // update the resource set when:
-            // 1. this has updated, multiple entity using the same material(not material instance?)
-            // 2. material count changed
-            // 3. this material's resources(such as texture) changed(dirty)
-            if (!updatedMaterial[materialInstanceIndex]) {
-                if (bShouldForceUpdateMaterial || material->isParamDirty())
-                {
-                    updateMaterialParamDS(paramDS, material);
-                    material->setParamDirty(false);
-                }
-                {}
-                if (bShouldForceUpdateMaterial || material->isResourceDirty())
-                {
-                    updateMaterialResourceDS(resourceDS, material);
-                    material->setResourceDirty(false);
-                }
-                updatedMaterial[materialInstanceIndex] = true;
-            }
+        // update each material instance's descriptor set if dirty
+        uint32_t            materialInstanceIndex = material->getIndex();
+        DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
+        DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
 
-            // bind descriptor set
-            std::vector<DescriptorSetHandle> descSets{
-                _frameDS,
-                _materialParamDSs[materialInstanceIndex],
-                _materialResourceDSs[materialInstanceIndex],
-            };
-            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
-
-            // update push constant
-            UnlitMaterialSystem::PushConstant pushConst{
-                .modelMatrix = tc.getTransform(),
-            };
-            cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex,
-                                  0,
-                                  sizeof(UnlitMaterialSystem::PushConstant),
-                                  &pushConst);
-
-            // draw each mesh
-            for (const auto &meshIndex : meshIDs)
+        // update the resource set when:
+        // 1. this has updated, multiple entity using the same material(not material instance?)
+        // 2. material count changed
+        // 3. this material's resources(such as texture) changed(dirty)
+        if (!updatedMaterial[materialInstanceIndex]) {
+            if (bShouldForceUpdateMaterial || material->isParamDirty())
             {
-                auto mesh = umc.getMesh(meshIndex);
-                if (mesh) {
-                    mesh->draw(cmdBuf);
-                }
+                updateMaterialParamDS(paramDS, material);
+                material->setParamDirty(false);
+            }
+            {}
+            if (bShouldForceUpdateMaterial || material->isResourceDirty())
+            {
+                updateMaterialResourceDS(resourceDS, material);
+                material->setResourceDirty(false);
+            }
+            updatedMaterial[materialInstanceIndex] = true;
+        }
+
+        // bind descriptor set
+        std::vector<DescriptorSetHandle> descSets{
+            _frameDS,
+            _materialParamDSs[materialInstanceIndex],
+            _materialResourceDSs[materialInstanceIndex],
+        };
+        cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+
+        // update push constant
+        UnlitMaterialSystem::PushConstant pushConst{
+            .modelMatrix = tc.getTransform(),
+        };
+        cmdBuf->pushConstants(_pipelineLayout.get(),
+                              EShaderStage::Vertex,
+                              0,
+                              sizeof(UnlitMaterialSystem::PushConstant),
+                              &pushConst);
+
+        // draw each mesh from MeshComponent
+        for (Mesh *mesh : meshComp.getMeshes())
+        {
+            if (mesh) {
+                mesh->draw(cmdBuf);
             }
         }
     }
