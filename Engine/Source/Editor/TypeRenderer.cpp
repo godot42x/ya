@@ -86,12 +86,34 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
     }
 
     bool bModified = false;
+    if (!cache) {
+        ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
+        return false;
+    }
 
-    if (cache && cache->componentClassPtr && cache->propertyCount > 0) {
+    // 枚举类型
+    if (cache->bEnum && cache->enumMisc.enumPtr) {
+        int64_t currentValue = cache->enumMisc.enumPtr->getValue(instancePtr);
+        int     currentIndex = cache->enumMisc.valueToPosition[currentValue];
+
+        if (ImGui::Combo(ctx->prettyName.c_str(),
+                         &currentIndex,
+                         cache->enumMisc.imguiComboString.c_str(),
+                         (int)cache->enumMisc.positionToValue.size())) {
+            // int64_t newVal = values[static_cast<size_t>(selected)].value;
+            int64_t newVal = cache->enumMisc.positionToValue[currentIndex];
+            cache->enumMisc.enumPtr->setValue(instancePtr, newVal);
+            return true;
+        }
+        return false;
+    }
+
+
+    if (cache->classPtr && cache->propertyCount > 0) {
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
 
         auto iterateChildren = [&]() {
-            for (auto &[propName, prop] : cache->componentClassPtr->properties) {
+            for (auto &[propName, prop] : cache->classPtr->properties) {
                 auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
 
                 // 从缓存获取属性渲染上下文
@@ -137,9 +159,7 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
             }
         }
     }
-    else {
-        ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
-    }
+
 
     return bModified;
 }

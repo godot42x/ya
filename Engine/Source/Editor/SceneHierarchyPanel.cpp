@@ -8,6 +8,7 @@
 #include "ECS/Component/Material/LitMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Scene.h"
@@ -63,7 +64,7 @@ void SceneHierarchyPanel::sceneTree()
                     setSelection(newEntity);
                 }
             }
-            
+
             if (ImGui::BeginMenu("Create 3D Object"))
             {
                 if (ImGui::MenuItem("Cube"))
@@ -71,8 +72,9 @@ void SceneHierarchyPanel::sceneTree()
                     Entity *newEntity = _context->createEntity("Cube");
                     if (newEntity) {
                         auto tc = newEntity->addComponent<TransformComponent>();
-                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
-                        lmc->_primitiveGeometry = EPrimitiveGeometry::Cube;
+                        auto mc = newEntity->addComponent<MeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+                        newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }
@@ -81,8 +83,9 @@ void SceneHierarchyPanel::sceneTree()
                     Entity *newEntity = _context->createEntity("Sphere");
                     if (newEntity) {
                         auto tc = newEntity->addComponent<TransformComponent>();
-                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
-                        lmc->_primitiveGeometry = EPrimitiveGeometry::Sphere;
+                        auto mc = newEntity->addComponent<MeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
+                        newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }
@@ -91,14 +94,15 @@ void SceneHierarchyPanel::sceneTree()
                     Entity *newEntity = _context->createEntity("Plane");
                     if (newEntity) {
                         auto tc = newEntity->addComponent<TransformComponent>();
-                        auto lmc = newEntity->addComponent<LitMaterialComponent>();
-                        lmc->_primitiveGeometry = EPrimitiveGeometry::Quad;
+                        auto mc = newEntity->addComponent<MeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
+                        newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }
                 ImGui::EndMenu();
             }
-            
+
             if (ImGui::MenuItem("Create Point Light"))
             {
                 Entity *newEntity = _context->createEntity("Point Light");
@@ -108,7 +112,7 @@ void SceneHierarchyPanel::sceneTree()
                     setSelection(newEntity);
                 }
             }
-            
+
             ImGui::EndPopup();
         }
     }
@@ -159,14 +163,14 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
             // TODO: Implement entity duplication
             YA_CORE_INFO("Duplicate entity: {}", entity.getName());
         }
-        
+
         ImGui::Separator();
-        
+
         if (ImGui::MenuItem("Delete"))
         {
             bEntityDeleted = true;
         }
-        
+
         ImGui::EndPopup();
     }
 

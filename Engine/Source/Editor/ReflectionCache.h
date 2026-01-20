@@ -23,14 +23,25 @@ namespace ya
  */
 struct ReflectionCache
 {
-    Class   *componentClassPtr = nullptr;
-    size_t   propertyCount     = 0;
-    uint32_t typeIndex         = 0;
+    Class   *classPtr      = nullptr;
+    size_t   propertyCount = 0;
+    uint32_t typeIndex     = 0;
+
+    bool bEnum = false;
+    struct EnumMisc
+    {
+        Enum                            *enumPtr = nullptr;
+        std::unordered_map<int64_t, int> valueToPosition;
+        std::unordered_map<int, int64_t> positionToValue;
+        std::vector<std::string>         names;
+        std::string                      imguiComboString;
+    } enumMisc;
+
 
     // 属性渲染上下文缓存（按属性名索引）
     std::unordered_map<std::string, PropertyRenderContext> propertyContexts;
 
-    bool isValid(uint32_t ti) const { return ti == typeIndex && componentClassPtr != nullptr; }
+    bool isValid(uint32_t ti) const { return ti == typeIndex && (classPtr != nullptr || enumMisc.enumPtr != nullptr); }
 };
 
 /**

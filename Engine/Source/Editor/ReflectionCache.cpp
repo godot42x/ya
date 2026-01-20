@@ -3,7 +3,9 @@
 #include "Core/Debug/Instrumentor.h"
 #include "reflects-core/lib.h"
 
+#include "utility.cc/ranges.h"
 #include <unordered_map>
+
 
 namespace ya
 {
@@ -26,19 +28,46 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
             return &it->second;
         }
     }
-
-    auto            cls = ClassRegistry::instance().getClass(typeIndex);
     ReflectionCache cache;
-    cache.componentClassPtr = cls;
-    cache.propertyCount     = cls ? cls->properties.size() : 0;
-    cache.typeIndex         = typeIndex;
+    cache.typeIndex = typeIndex;
 
-    // 预填充属性渲染上下文
-    if (cls) {
+    if (Class *cls = ClassRegistry::instance().getClass(typeIndex)) {
+        cache.classPtr      = cls;
+        cache.propertyCount = cls->properties.size();
+        // 预填充属性渲染上下文
         for (auto &[propName, prop] : cls->properties) {
             cache.propertyContexts[propName] = PropertyRenderContext::createFrom(prop, propName);
         }
     }
+    else if (Enum *e = EnumRegistry::instance().getEnum(typeIndex)) {
+        cache.bEnum = true;
+
+        auto                             values = e->getValues();
+        std::unordered_map<int64_t, int> valueToPosition;
+        std::unordered_map<int, int64_t> positionToValue;
+        std::vector<std::string>         names;
+        std::string                      imguiComboString;
+
+
+        for (const auto &[idx, values] : values | ut::enumerate) {
+            const auto &n = values.name;
+            const auto &v = values.value;
+            names.push_back(n);
+            imguiComboString.append(n);
+            imguiComboString.push_back('\0');
+            valueToPosition[v]                     = static_cast<int>(idx);
+            positionToValue[static_cast<int>(idx)] = v;
+        }
+
+        cache.enumMisc = ReflectionCache::EnumMisc{
+            .enumPtr          = e,
+            .valueToPosition  = valueToPosition,
+            .positionToValue  = positionToValue,
+            .names            = names,
+            .imguiComboString = imguiComboString,
+        };
+    }
+
 
     return &(_reflectionCache[typeIndex] = cache);
 }

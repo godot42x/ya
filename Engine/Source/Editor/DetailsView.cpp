@@ -1,6 +1,7 @@
 #include "DetailsView.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "ECS/Component/MeshComponent.h"
 #include "ReflectionCache.h"
 #include "TypeRenderer.h"
 
@@ -65,85 +66,101 @@ void DetailsView::drawComponents(Entity &entity)
     drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
         tc->bDirty = true;
     });
+    drawReflectedComponent<MeshComponent>("Mesh", entity, [](MeshComponent *mc) {
+        mc->invalidate();
+    });
 
     // 其他组件保持原有的自定义渲染逻辑
     drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent *smc) {
-        for (auto [material, meshId] : smc->getMaterial2MeshIDs()) {
-            auto simpleMat = material->as<SimpleMaterial>();
-            bool bDirty    = false;
-            int  colorType = static_cast<int>(simpleMat->colorType);
-            if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
-                simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
-            }
+        auto *simpleMat = smc->getRuntimeMaterial();
+        if (!simpleMat) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
+            return;
+        }
+        int colorType = static_cast<int>(simpleMat->colorType);
+        if (ImGui::Combo("Color Type", &colorType, "Normal\0Texcoord\0\0")) {
+            simpleMat->colorType = static_cast<SimpleMaterial::EColor>(colorType);
         }
     });
 
     drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent *umc) {
-        for (auto [mat, meshIndex] : umc->getMaterial2MeshIDs()) {
-            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Indent();
+        auto *unlitMat = umc->getRuntimeMaterial();
+        if (!unlitMat) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
+            return;
+        }
 
-                auto unlitMat = mat->as<UnlitMaterial>();
-                bool bDirty   = false;
-                bDirty |= ImGui::ColorEdit3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0));
-                bDirty |= ImGui::ColorEdit3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1));
-                bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
-                for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
-                    // if (ImGui::CollapsingHeader(std::format("Texture{}", i).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    auto &tv    = unlitMat->_textureViews[i];
-                    auto  label = tv.texture->getLabel();
-                    if (label.empty()) {
-                        label = tv.texture->getFilepath();
-                    }
-                    ImGui::Text("Texture %d: %s", i, label.c_str());
-                    bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
-                    bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
-                    bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
-                    static constexpr const auto pi = glm::pi<float>();
-                    bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
+        if (ImGui::CollapsingHeader(unlitMat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Indent();
+
+            bool bDirty = false;
+            bDirty |= ImGui::ColorEdit3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0));
+            bDirty |= ImGui::ColorEdit3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1));
+            bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
+
+            // Render texture views
+            for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
+                auto &tv = unlitMat->_textureViews[i];
+                if (!tv.texture) continue;
+
+                auto label = tv.texture->getLabel();
+                if (label.empty()) {
+                    label = tv.texture->getFilepath();
                 }
-                if (bDirty) {
-                    unlitMat->setParamDirty(true);
-                }
-                ImGui::Unindent();
+                ImGui::Text("Texture %d: %s", i, label.c_str());
+                bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
+                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+                static constexpr const auto pi = glm::pi<float>();
+                bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
             }
+
+            if (bDirty) {
+                unlitMat->setParamDirty(true);
+            }
+            ImGui::Unindent();
         }
     });
 
     drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
-        for (auto [mat, meshIndex] : lmc->getMaterial2MeshIDs()) {
-            if (ImGui::CollapsingHeader(mat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Indent();
-                ImGui::PushID(mat->getLabel().c_str());
+        auto *litMat = lmc->getRuntimeMaterial();
+        if (!litMat) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
+            return;
+        }
+        ya::renderReflectedType("LitMaterial", ya::type_index_v<LitMaterialComponent>, lmc);
 
-                auto litMat = mat->as<LitMaterial>();
-                bool bDirty = false;
-                // bDirty |= ImGui::ColorEdit3("Object Color", glm::value_ptr(litMat->uParams.objectColor));
-                // bDirty |= ImGui::DragFloat3("Base Color", glm::value_ptr(litMat->uMaterial.baseColor), 0.1f);
-                bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->uParams.ambient));
-                bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->uParams.diffuse));
-                bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->uParams.specular));
-                bDirty |= ImGui::SliderFloat("Shininess", &litMat->uParams.shininess, 0.0f, 256.f);
-                // for (uint32_t i = 0; i < litMat->_textureViews.size(); i++) {
-                //     auto &tv    = litMat->_textureViews[i];
-                //     auto  label = tv.texture->getLabel();
-                //     if (label.empty()) {
-                //         label = tv.texture->getFilepath();
-                //     }
-                //     ImGui::Text("Texture %d: %s", i, label.c_str());
-                //     bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
-                //     bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(),
-                // glm::value_ptr(tv.uvTranslation), 0.01f);
-                //     bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(),
-                // glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
-                // }
-                if (bDirty) {
-                    litMat->setParamDirty(true);
+        if (ImGui::CollapsingHeader(litMat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Indent();
+            ImGui::PushID(litMat->getLabel().c_str());
+
+            bool bDirty = false;
+            bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->_params.ambient));
+            bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->_params.diffuse));
+            bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->_params.specular));
+            bDirty |= ImGui::SliderFloat("Shininess", &litMat->_params.shininess, 0.0f, 256.f);
+
+            // Render texture slots
+            for (auto &[key, tv] : litMat->_textureViews) {
+                if (!tv.texture) continue;
+
+                const char *slotName = litMat->getTextureSlotName(key);
+                auto        label    = tv.texture->getLabel();
+                if (label.empty()) {
+                    label = tv.texture->getFilepath();
                 }
-
-                ImGui::PopID();
-                ImGui::Unindent();
+                ImGui::Text("%s: %s", slotName, label.c_str());
+                bDirty |= ImGui::Checkbox(std::format("Enable##{}", key).c_str(), &tv.bEnable);
+                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", key).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
+                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", key).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
             }
+
+            if (bDirty) {
+                litMat->setParamDirty(true);
+            }
+
+            ImGui::PopID();
+            ImGui::Unindent();
         }
     });
 
