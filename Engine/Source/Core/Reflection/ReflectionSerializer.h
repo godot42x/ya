@@ -1,10 +1,10 @@
 
 #pragma once
 
+#include "ContainerProperty.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Log.h"
 #include "Core/TypeIndex.h"
-#include "ContainerProperty.h"
 #include "reflects-core/lib.h"
 #include <nlohmann/json.hpp>
 #include <unordered_set>
@@ -132,8 +132,8 @@ struct ReflectionSerializer
      * @param elementTypeIndex Type index of the element
      * @param elementJson JSON data for the element
      */
-    static void deserializeComplexElement(ya::reflection::IContainerProperty *accessor, void *containerPtr, 
-                                        uint32_t elementTypeIndex, const nlohmann::json &elementJson);
+    static void deserializeComplexElement(ya::reflection::IContainerProperty *accessor, void *containerPtr,
+                                          uint32_t elementTypeIndex, const nlohmann::json &elementJson);
 
     /**
      * Deserialize Map-like container from JSON object
@@ -141,8 +141,8 @@ struct ReflectionSerializer
      * @param containerPtr Pointer to the container
      * @param jsonObject JSON object containing map data
      */
-    static void deserializeMapContainer(ya::reflection::IContainerProperty *accessor, void *containerPtr, 
-                                      const nlohmann::json &jsonObject);
+    static void deserializeMapContainer(ya::reflection::IContainerProperty *accessor, void *containerPtr,
+                                        const nlohmann::json &jsonObject);
 
     /**
      * Insert basic type element into map container
@@ -153,7 +153,7 @@ struct ReflectionSerializer
      * @param jsonValue JSON value to deserialize
      */
     static void insertBasicMapElement(ya::reflection::IContainerProperty *accessor, void *containerPtr,
-                                    void *keyPtr, uint32_t valueTypeIndex, const nlohmann::json &jsonValue);
+                                      void *keyPtr, uint32_t valueTypeIndex, const nlohmann::json &jsonValue);
 
     /**
      * Check if a property should be serialized as a scalar value (base type or enum)
@@ -170,8 +170,10 @@ struct ReflectionSerializer
             ya::type_index_v<float>,
             ya::type_index_v<double>,
             ya::type_index_v<bool>,
+            ya::type_index_v<unsigned int>,
             ya::type_index_v<std::string>,
         };
+
 
         return baseTypes.contains(typeIdx);
     }

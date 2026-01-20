@@ -8,6 +8,7 @@
 
 #include "Core/Reflection/MetadataSupport.h"
 
+#include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/PropertyExtensions.h"
 
 
@@ -25,7 +26,38 @@ namespace ya::reflection::detail
 // 前向声明 ExternalReflect
 template <typename T>
 struct ExternalReflect;
+
+// Constructor registration traits
+template <typename T, typename... Args>
+struct RegisterConstructorBase
+{
+    using type                            = T;
+    using construct_args                  = refl::type_list<Args...>;
+    static constexpr bool has_custom_ctor = true;
+};
+
+// Default trait - no custom constructor
+template <typename T>
+struct RegisterConstructor
+{
+    // Empty - indicates no custom constructor
+    static constexpr bool has_custom_ctor = false;
+};
+
+// Type trait to check if a type has custom constructor registration
+// Check if RegisterConstructor<T> has been specialized to inherit from RegisterConstructorBase
+template <typename T>
+inline constexpr bool has_custom_constructor_v = RegisterConstructor<T>::has_custom_ctor;
+
 } // namespace ya::reflection::detail
+
+// Convenience namespace alias
+namespace ya::reflection
+{
+using detail::has_custom_constructor_v;
+using detail::RegisterConstructor;
+using detail::RegisterConstructorBase;
+} // namespace ya::reflection
 
 namespace ya
 {
@@ -91,57 +123,98 @@ struct Visitor<void>
 #endif
 
 
-#define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                         \
-  private:                                                                                                     \
-    struct reflection_detail;                                                                                  \
-    using _reflect_helper_class = reflection_detail;                                                           \
-    struct reflection_detail                                                                                   \
-    {                                                                                                          \
-        using class_t                        = ClassName;                                                      \
-        using base_t                         = BaseClass;                                                      \
-        static constexpr bool has_base_class = !std::is_same_v<base_t, void>;                                  \
-                                                                                                               \
-        reflection_detail()                                                                                    \
-        {                                                                                                      \
-            ClassRegistry::instance().addPostStaticInitializer([]() {                                          \
-                YA_PROFILE_STATIC_INIT(#ClassName);                                                            \
-                ::Register<class_t> reg(#ClassName);                                                           \
-                if constexpr (has_base_class) {                                                                \
-                    reg.parentClass<base_t>();                                                                 \
-                }                                                                                              \
-                                                                                                               \
-                visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                       \
-                    reg.property(name, fieldPtr, meta);                                                        \
-                                                                                                               \
-                    /* TODO: Move into reflects-core*/                                                         \
-                    using FieldType = std::decay_t<decltype(std::declval<class_t>().*fieldPtr)>;               \
-                    auto &registry  = ClassRegistry::instance();                                               \
-                    if (auto *cls = registry.getClass(ya::type_index_v<class_t>)) {                            \
-                        if (auto *prop = cls->getProperty(name)) {                                             \
-                            ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop); \
-                        }                                                                                      \
-                    }                                                                                          \
-                });                                                                                            \
-                ___YA_REFLECT_EXTENSION(ClassName)                                                             \
-            });                                                                                                \
-        }                                                                                                      \
-                                                                                                               \
-        template <typename Visitor>                                                                            \
-        static void visit_fields(void *obj, Visitor &&visitor)                                                 \
-        {                                                                                                      \
-            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto /*meta*/) {             \
-                using ClassType     = class_t;                                                                 \
-                using FieldType     = std::decay_t<decltype(std::declval<ClassType &>().*fieldPtr)>;           \
-                FieldType &fieldRef = static_cast<ClassType *>(obj)->*fieldPtr;                                \
-                std::forward<Visitor>(visitor)(name, fieldRef);                                                \
-            });                                                                                                \
-        }                                                                                                      \
-                                                                                                               \
-        template <typename Visitor>                                                                            \
-        static void visit_static_fields(Visitor &&visitor)                                                     \
+#define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
+  private:                                                                                                                                        \
+    struct reflection_detail;                                                                                                                     \
+    using _reflect_helper_class = reflection_detail;                                                                                              \
+    struct reflection_detail                                                                                                                      \
+    {                                                                                                                                             \
+        using class_t                        = ClassName;                                                                                         \
+        using base_t                         = BaseClass;                                                                                         \
+        static constexpr bool has_base_class = !std::is_same_v<base_t, void>;                                                                     \
+                                                                                                                                                  \
+        reflection_detail()                                                                                                                       \
+        {                                                                                                                                         \
+            ClassRegistry::instance().addPostStaticInitializer([]() { reflection_detail::real_init(); });                                         \
+        }                                                                                                                                         \
+        static void real_init()                                                                                                                   \
+        {                                                                                                                                         \
+            /* after instantiate*/                                                                                                                \
+            auto real_name = typeid(ClassName).name();                                                                                            \
+            YA_PROFILE_STATIC_INIT(real_name);                                                                                                    \
+            constexpr std::string_view macroName = #ClassName;                                                                                    \
+                                                                                                                                                  \
+            /* For template classes, use real type name; otherwise use macro name */                                                              \
+            std::unique_ptr<::Register<class_t>> reg = nullptr;                                                                                   \
+            if constexpr (macroName.find('<') != std::string_view::npos) {                                                                        \
+                reg = std::make_unique<::Register<class_t>>(real_name);                                                                           \
+            }                                                                                                                                     \
+            else {                                                                                                                                \
+                reg = std::make_unique<::Register<class_t>>(#ClassName);                                                                          \
+            }                                                                                                                                     \
+                                                                                                                                                  \
+            if constexpr (has_base_class) {                                                                                                       \
+                reg->template parentClass<base_t>();                                                                                              \
+            }                                                                                                                                     \
+                                                                                                                                                  \
+            visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                                                              \
+                reg->property(name, fieldPtr, meta);                                                                                              \
+                                                                                                                                                  \
+                /* TODO: Move into reflects-core*/                                                                                                \
+                using FieldType = std::decay_t<decltype(std::declval<class_t>().*fieldPtr)>;                                                      \
+                auto &registry  = ClassRegistry::instance();                                                                                      \
+                if (auto *cls = registry.getClass(ya::type_index_v<class_t>)) {                                                                   \
+                    if (auto *prop = cls->getProperty(name)) {                                                                                    \
+                        ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop);                                        \
+                    }                                                                                                                             \
+                }                                                                                                                                 \
+            });                                                                                                                                   \
+                                                                                                                                                  \
+            /* Register constructors */                                                                                                           \
+            register_constructors(*reg);                                                                                                          \
+                                                                                                                                                  \
+            ___YA_REFLECT_EXTENSION(ClassName)                                                                                                    \
+        }                                                                                                                                         \
+        template <typename Visitor>                                                                                                               \
+        static void visit_fields(void *obj, Visitor &&visitor)                                                                                    \
+        {                                                                                                                                         \
+            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto /*meta*/) {                                                \
+                using ClassType     = class_t;                                                                                                    \
+                using FieldType     = std::decay_t<decltype(std::declval<ClassType &>().*fieldPtr)>;                                              \
+                FieldType &fieldRef = static_cast<ClassType *>(obj)->*fieldPtr;                                                                   \
+                std::forward<Visitor>(visitor)(name, fieldRef);                                                                                   \
+            });                                                                                                                                   \
+        }                                                                                                                                         \
+                                                                                                                                                  \
+        /* Constructor registration using trait-based approach */                                                                                 \
+        template <typename RegType>                                                                                                               \
+        static void register_constructors(RegType &reg)                                                                                           \
+        {                                                                                                                                         \
+            register_constructors_impl(reg);                                                                                                      \
+        }                                                                                                                                         \
+                                                                                                                                                  \
+        template <typename RegType>                                                                                                               \
+        static void register_constructors_impl(RegType &reg)                                                                                      \
+        {                                                                                                                                         \
+            using ConstructorTrait = ::ya::reflection::detail::RegisterConstructor<class_t>;                                                      \
+            if constexpr (ConstructorTrait::has_custom_ctor) {                                                                                    \
+                /* Use custom constructor from trait in your code for extension */                                                                \
+                register_constructor_from_trait(reg, ConstructorTrait{});                                                                         \
+            }                                                                                                                                     \
+            /* register default constructor if could */                                                                                           \
+            if constexpr (std::is_default_constructible_v<class_t>) {                                                                             \
+                reg.template constructor<>();                                                                                                     \
+            }                                                                                                                                     \
+        }                                                                                                                                         \
+                                                                                                                                                  \
+        template <typename RegType, typename ConstructClassType, typename... Args>                                                                \
+        static void register_constructor_from_trait(RegType &reg, ::ya::reflection::detail::RegisterConstructorBase<ConstructClassType, Args...>) \
+        {                                                                                                                                         \
+            reg.template constructor<Args...>();                                                                                                  \
+        }                                                                                                                                         \
+        template <typename Visitor>                                                                                                               \
+        static void visit_static_fields(Visitor &&visitor)                                                                                        \
         {
-
-#include "Core/Macro/VariadicMacros.h"
 
 // 支持 1 个参数（无父类）或 2 个参数（有父类）
 #define YA_REFLECT_BEGIN(...) \
@@ -156,6 +229,17 @@ struct Visitor<void>
 // YA_REFLECT_FIELD: collect compile-time field list (+ metadata)
 #define YA_REFLECT_FIELD(FieldName, ...) \
     std::forward<Visitor>(visitor)(#FieldName, &class_t::FieldName, ::ya::reflection::MetaBuilder<decltype(class_t::FieldName)>() __VA_ARGS__);
+
+// Macro for easy constructor registration
+// Usage: YA_REGISTER_CONSTRUCTOR(MyClass, int, float)
+//        YA_REGISTER_CONSTRUCTOR(MyClass)  // for default constructor (explicit)
+#define YA_REGISTER_CONSTRUCTOR(ClassName, ...)                                             \
+    namespace ya::reflection::detail                                                        \
+    {                                                                                       \
+    template <>                                                                             \
+    struct RegisterConstructor<ClassName> : RegisterConstructorBase<ClassName, __VA_ARGS__> \
+    {};                                                                                     \
+    }
 
 // clang-format off
 #define YA_REFLECT_END()                                                                               \

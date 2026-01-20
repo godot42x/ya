@@ -33,12 +33,12 @@ struct ClassRegistry
     template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
-        auto ptr      = std::shared_ptr<Class>(classInfo);
-        auto id       = refl::type_index_v<T>;
-        
+        auto ptr = std::shared_ptr<Class>(classInfo);
+        auto id  = refl::type_index_v<T>;
+
         // 设置类型索引
         ptr->typeIndex = id;
-        
+
         classes[name] = ptr;
         typeIdMap[id] = ptr;
         printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), (uint64_t)id);
@@ -135,6 +135,9 @@ struct Register
         classInfo = ClassRegistry::instance().registerClass<T>(className, classInfo).get();
     }
 
+
+    // 注册父类继承关系
+    // 对于模板类作为父类，传入完整实例化类型，如 parentClass<TAssetRef<Texture>>()
     template <typename ParentType>
     constexpr Register &parentClass()
     {
@@ -148,7 +151,7 @@ struct Register
             // 注册继承关系到全局注册表
             ClassRegistry::instance().registerInheritance(childTypeId, parentTypeId);
             // 注册到 Class 信息中
-            classInfo->registerParent<T, ParentType>();
+            classInfo->template registerParent<T, ParentType>();
         }
 
         return *this;

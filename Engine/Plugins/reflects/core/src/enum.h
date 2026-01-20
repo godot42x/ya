@@ -29,7 +29,7 @@ struct Enum
     // 添加枚举值
     void addValue(const std::string &valueName, int64_t val)
     {
-        values.push_back({valueName, val});
+        values.push_back({.name = valueName, .value = val});
         nameToValue[valueName] = val;
         valueToName[val]       = valueName;
     }
@@ -70,5 +70,14 @@ struct Enum
     const std::vector<EnumValue> &getValues() const
     {
         return values;
+    }
+
+    int64_t getValue(void *ptr) const
+    {
+        return *reinterpret_cast<int64_t *>(ptr);
+    }
+    void setValue(void *ptr, int64_t val) const
+    {
+        *reinterpret_cast<int64_t *>(ptr) = val;
     }
 };

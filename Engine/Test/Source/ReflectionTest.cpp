@@ -224,4 +224,76 @@ struct B : public A
     int a;
 };
 
-} // namespace ya::test
+template <typename Ty>
+struct TestT
+{
+  private:
+    struct reflection_detail;
+    using _reflect_helper_class = reflection_detail;
+    struct reflection_detail
+    {
+        using class_t                        = TestT<Ty>;
+        using base_t                         = void;
+        static constexpr bool has_base_class = !std ::is_same_v<base_t, void>;
+        reflection_detail()
+        {
+            ClassRegistry ::instance().addPostStaticInitializer([]() { reflection_detail ::real_init(); });
+        }
+        static void real_init()
+        {
+            ya ::profiling ::StaticInitTimer __static_init_timer___LINE__("TestT<Ty>");
+            auto                             realTypeName = typeid(TestT<Ty>).name();
+            constexpr std::string_view       name         = "TestT<Ty>";
+
+            std::unique_ptr<::Register<class_t>> reg = nullptr;
+            if constexpr (name.find_last_of("<") != std::string_view::npos) {
+                reg = std::make_unique<::Register<class_t>>(name);
+            }
+            else {
+                reg = std::make_unique<::Register<class_t>>("TestT<Ty>");
+            }
+            if constexpr (has_base_class) {
+                reg->template parentClass<base_t>();
+            }
+            visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {
+                reg->property(name, fieldPtr, meta);
+                using FieldType = std ::decay_t<decltype(std ::declval<class_t>().*fieldPtr)>;
+                auto &registry  = ClassRegistry ::instance();
+                if (auto *cls = registry.getClass(ya ::type_index_v<class_t>)) {
+                    if (auto *prop = cls->getProperty(name)) {
+                        ::ya ::reflection ::PropertyContainerHelper ::tryRegisterContainer<FieldType>(*prop);
+                    }
+                } });
+            register_constructors(reg.get());
+            ::ya ::ECSRegistry ::get().registerComponent<TestT<Ty>>("TestT<Ty>");
+        }
+        template <typename Visitor>
+        static void visit_fields(void *obj, Visitor &&visitor)
+        {
+            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto) { using ClassType = class_t ; using FieldType = std :: decay_t < decltype ( std :: declval < ClassType & > ( ) .* fieldPtr ) > ; FieldType & fieldRef = static_cast < ClassType * > ( obj ) ->* fieldPtr ; std :: forward < Visitor > ( visitor ) ( name , fieldRef ) ; });
+        }
+        template <typename RegType>
+        static void register_constructors(RegType &reg) { register_constructors_impl(reg); }
+        template <typename RegType>
+        static void register_constructors_impl(RegType &reg)
+        {
+            using ConstructorTrait = ::ya ::reflection ::detail ::RegisterConstructor<class_t>;
+            if constexpr (ConstructorTrait ::has_custom_ctor) {
+                register_constructor_from_trait(reg, ConstructorTrait{});
+            }
+            else if constexpr (std ::is_default_constructible_v<class_t>) {
+                reg.template constructor<>();
+            }
+        }
+        template <typename RegType, typename ConstructClassType, typename... Args>
+        static void register_constructor_from_trait(RegType &reg, ::ya ::reflection ::detail ::RegisterConstructorBase<ConstructClassType, Args...>) { reg.template constructor<Args...>(); }
+        template <typename Visitor>
+        static void visit_static_fields(Visitor &&visitor)
+        {
+            YA_REFLECT_FIELD(v)
+            YA_REFLECT_END()
+
+            int v;
+        };
+
+    } // namespace ya::test
