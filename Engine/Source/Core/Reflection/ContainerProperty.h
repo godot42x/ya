@@ -146,10 +146,11 @@ class VectorProperty : public IContainerProperty
     {
         auto *vec = static_cast<ContainerType *>(containerPtr);
         if (elementPtr) {
-            vec->push_back(*static_cast<T *>(elementPtr));
+            // 使用拷贝构造函数创建新元素
+            vec->emplace_back(*static_cast<const T *>(elementPtr));
         }
         else {
-            vec->push_back(T{}); // 默认构造
+            vec->emplace_back(); // 默认构造
         }
     }
 

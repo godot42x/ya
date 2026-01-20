@@ -1,12 +1,13 @@
 #include <gtest/gtest.h>
+#include "reflects-core/lib.h"
 
 // Main 函数
 int main(int argc, char **argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
 
-    // 初始化 NameRegistry
-    // 假设 NameRegistry 有静态初始化，否则需要在这里初始化
+    // 初始化 ClassRegistry - 执行所有延迟的静态初始化
+    ClassRegistry::instance().executeAllPostStaticInitializers();
 
     return RUN_ALL_TESTS();
 }

@@ -1,7 +1,300 @@
 #include "ReflectionSerializer.h"
+#include "PropertyExtensions.h"
 
 namespace ya
 {
+
+// ========================================================================
+// Helper: Common serialization utilities
+// ========================================================================
+
+/**
+ * Serialize any value (scalar or complex) to JSON
+ */
+nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t typeIndex)
+{
+    // Handle basic types first for performance
+    if (typeIndex == ya::type_index_v<int>) {
+        return *static_cast<int *>(valuePtr);
+    }
+    if (typeIndex == ya::type_index_v<float>) {
+        return *static_cast<float *>(valuePtr);
+    }
+    if (typeIndex == ya::type_index_v<double>) {
+        return *static_cast<double *>(valuePtr);
+    }
+    if (typeIndex == ya::type_index_v<bool>) {
+        return *static_cast<bool *>(valuePtr);
+    }
+    if (typeIndex == ya::type_index_v<std::string>) {
+        return *static_cast<std::string *>(valuePtr);
+    }
+    
+    // Handle enums
+    if (is_enum_type(typeIndex)) {
+        Enum *enumInfo = EnumRegistry::instance().getEnum(typeIndex);
+        if (enumInfo) {
+            int64_t enumValue = 0;
+            switch (enumInfo->underlyingSize) {
+            case 1: enumValue = *static_cast<const uint8_t *>(valuePtr); break;
+            case 2: enumValue = *static_cast<const uint16_t *>(valuePtr); break;
+            case 4: enumValue = *static_cast<const int32_t *>(valuePtr); break;
+            case 8: enumValue = *static_cast<const int64_t *>(valuePtr); break;
+            default: enumValue = *static_cast<const int *>(valuePtr); break;
+            }
+            return enumInfo->getName(enumValue);
+        }
+        return static_cast<int>(*static_cast<const int *>(valuePtr));
+    }
+    
+    // Handle complex objects via reflection
+    auto &registry = ClassRegistry::instance();
+    auto *classPtr = registry.getClass(typeIndex);
+    if (classPtr) {
+        return serializeByRuntimeReflection(valuePtr, typeIndex, classPtr->_name);
+    }
+    
+    YA_CORE_WARN("ReflectionSerializer: Unknown type for serialization (typeIndex: {})", typeIndex);
+    return nullptr;
+}
+
+/**
+ * Deserialize JSON value to any type (scalar or complex)
+ */
+void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeIndex, const nlohmann::json &jsonValue)
+{
+    // Handle basic types first for performance
+    if (typeIndex == ya::type_index_v<int>) {
+        *static_cast<int *>(valuePtr) = jsonValue.get<int>();
+        return;
+    }
+    if (typeIndex == ya::type_index_v<float>) {
+        *static_cast<float *>(valuePtr) = jsonValue.get<float>();
+        return;
+    }
+    if (typeIndex == ya::type_index_v<double>) {
+        *static_cast<double *>(valuePtr) = jsonValue.get<double>();
+        return;
+    }
+    if (typeIndex == ya::type_index_v<bool>) {
+        *static_cast<bool *>(valuePtr) = jsonValue.get<bool>();
+        return;
+    }
+    if (typeIndex == ya::type_index_v<std::string>) {
+        *static_cast<std::string *>(valuePtr) = jsonValue.get<std::string>();
+        return;
+    }
+    
+    // Handle enums
+    if (is_enum_type(typeIndex)) {
+        Enum *enumInfo = EnumRegistry::instance().getEnum(typeIndex);
+        if (enumInfo) {
+            int64_t enumValue = 0;
+            if (jsonValue.is_string()) {
+                try {
+                    enumValue = enumInfo->getValue(jsonValue.get<std::string>());
+                } catch (const std::exception &e) {
+                    YA_CORE_WARN("ReflectionSerializer: Invalid enum name '{}': {}", jsonValue.get<std::string>(), e.what());
+                    return;
+                }
+            } else if (jsonValue.is_number_integer()) {
+                enumValue = jsonValue.get<int64_t>();
+            } else {
+                YA_CORE_WARN("ReflectionSerializer: Invalid JSON type for enum");
+                return;
+            }
+            
+            switch (enumInfo->underlyingSize) {
+            case 1: *static_cast<uint8_t *>(valuePtr) = static_cast<uint8_t>(enumValue); break;
+            case 2: *static_cast<uint16_t *>(valuePtr) = static_cast<uint16_t>(enumValue); break;
+            case 4: *static_cast<int32_t *>(valuePtr) = static_cast<int32_t>(enumValue); break;
+            case 8: *static_cast<int64_t *>(valuePtr) = enumValue; break;
+            default: *static_cast<int *>(valuePtr) = static_cast<int>(enumValue); break;
+            }
+        }
+        return;
+    }
+    
+    // Handle complex objects via reflection
+    auto &registry = ClassRegistry::instance();
+    auto *classPtr = registry.getClass(typeIndex);
+    if (classPtr) {
+        Property tempProp;
+        tempProp.typeIndex = typeIndex;
+        tempProp.typeName = classPtr->_name;
+        tempProp.addressGetterMutable = [](void *ptr) -> void * { return ptr; };
+        deserializeProperty(tempProp, valuePtr, jsonValue);
+        return;
+    }
+    
+    YA_CORE_WARN("ReflectionSerializer: Unknown type for deserialization (typeIndex: {})", typeIndex);
+}
+
+/**
+ * Convert map key to string for JSON serialization
+ */
+std::string ReflectionSerializer::convertKeyToString(void *keyPtr, uint32_t keyTypeIndex)
+{
+    if (keyTypeIndex == ya::type_index_v<int>) {
+        return std::to_string(*static_cast<int *>(keyPtr));
+    }
+    if (keyTypeIndex == ya::type_index_v<std::string>) {
+        return *static_cast<std::string *>(keyPtr);
+    }
+    throw std::runtime_error("Unsupported map key type for JSON serialization");
+}
+
+/**
+ * Convert string key from JSON to actual key type
+ */
+void ReflectionSerializer::convertStringToKey(const std::string &jsonKey, void *keyPtr, uint32_t keyTypeIndex)
+{
+    if (keyTypeIndex == ya::type_index_v<std::string>) {
+        *static_cast<std::string *>(keyPtr) = jsonKey;
+    }
+    else if (keyTypeIndex == ya::type_index_v<int>) {
+        try {
+            *static_cast<int *>(keyPtr) = std::stoi(jsonKey);
+        } catch (const std::exception &e) {
+            throw std::runtime_error("Invalid integer key: " + jsonKey);
+        }
+    }
+    else {
+        throw std::runtime_error("Unsupported map key type for JSON deserialization");
+    }
+}
+
+/**
+ * Create, deserialize and add complex object to container
+ */
+void ReflectionSerializer::deserializeComplexElement(ya::reflection::IContainerProperty *accessor, void *containerPtr, 
+                                                    uint32_t elementTypeIndex, const nlohmann::json &elementJson)
+{
+    auto &registry = ClassRegistry::instance();
+    auto *elementClass = registry.getClass(elementTypeIndex);
+    if (!elementClass) {
+        YA_CORE_WARN("ReflectionSerializer: Container element type '{}' not found in registry", elementTypeIndex);
+        return;
+    }
+    
+    if (!elementClass->canCreateInstance()) {
+        YA_CORE_WARN("ReflectionSerializer: Cannot create instance of type '{}'", elementClass->_name);
+        return;
+    }
+    
+    void *elementPtr = nullptr;
+    try {
+        elementPtr = elementClass->createInstance();
+        
+        Property elementProp;
+        elementProp.typeIndex = elementTypeIndex;
+        elementProp.typeName = elementClass->_name;
+        elementProp.addressGetter = nullptr;
+        elementProp.addressGetterMutable = [](void *ptr) -> void * { return ptr; };
+        
+        deserializeProperty(elementProp, elementPtr, elementJson);
+        accessor->addElement(containerPtr, elementPtr);
+        elementClass->destroyInstance(elementPtr);
+    }
+    catch (const std::exception &e) {
+        YA_CORE_WARN("ReflectionSerializer: Failed to deserialize complex element: {}", e.what());
+        if (elementPtr && elementClass->canCreateInstance()) {
+            elementClass->destroyInstance(elementPtr);
+        }
+    }
+}
+
+/**
+ * Deserialize Map-like container from JSON object
+ */
+void ReflectionSerializer::deserializeMapContainer(ya::reflection::IContainerProperty *accessor, void *containerPtr, 
+                                                  const nlohmann::json &jsonObject)
+{
+    if (!jsonObject.is_object()) {
+        YA_CORE_WARN("ReflectionSerializer: Expected JSON object for map container");
+        return;
+    }
+
+    uint32_t keyTypeIndex   = accessor->getKeyTypeIndex();
+    uint32_t valueTypeIndex = accessor->getElementTypeIndex();
+
+    for (auto it = jsonObject.begin(); it != jsonObject.end(); ++it) {
+        const std::string &jsonKey   = it.key();
+        const auto        &jsonValue = it.value();
+
+        try {
+            // Handle different key-value type combinations
+            if (is_base_type(valueTypeIndex)) {
+                // For basic value types, create temporary storage
+                if (keyTypeIndex == ya::type_index_v<std::string>) {
+                    std::string key = jsonKey;
+                    insertBasicMapElement(accessor, containerPtr, &key, valueTypeIndex, jsonValue);
+                } else if (keyTypeIndex == ya::type_index_v<int>) {
+                    int key = std::stoi(jsonKey);
+                    insertBasicMapElement(accessor, containerPtr, &key, valueTypeIndex, jsonValue);
+                } else {
+                    YA_CORE_WARN("ReflectionSerializer: Unsupported map key type (typeIndex: {})", keyTypeIndex);
+                }
+            } else {
+                // For complex value types
+                auto &registry = ClassRegistry::instance();
+                auto *valueClass = registry.getClass(valueTypeIndex);
+                if (valueClass && valueClass->canCreateInstance()) {
+                    void *valuePtr = valueClass->createInstance();
+                    try {
+                        deserializeAnyValue(valuePtr, valueTypeIndex, jsonValue);
+                        
+                        if (keyTypeIndex == ya::type_index_v<std::string>) {
+                            std::string key = jsonKey;
+                            accessor->insertElement(containerPtr, &key, valuePtr);
+                        } else if (keyTypeIndex == ya::type_index_v<int>) {
+                            int key = std::stoi(jsonKey);
+                            accessor->insertElement(containerPtr, &key, valuePtr);
+                        }
+                        
+                        valueClass->destroyInstance(valuePtr);
+                    } catch (const std::exception &e) {
+                        valueClass->destroyInstance(valuePtr);
+                        throw;
+                    }
+                }
+            }
+        } catch (const std::exception &e) {
+            YA_CORE_WARN("ReflectionSerializer: Failed to deserialize map entry '{}': {}", jsonKey, e.what());
+        }
+    }
+}
+
+/**
+ * Insert basic type element into map container
+ */
+void ReflectionSerializer::insertBasicMapElement(ya::reflection::IContainerProperty *accessor, void *containerPtr,
+                                               void *keyPtr, uint32_t valueTypeIndex, const nlohmann::json &jsonValue)
+{
+    if (valueTypeIndex == ya::type_index_v<int>) {
+        int value = jsonValue.get<int>();
+        accessor->insertElement(containerPtr, keyPtr, &value);
+    }
+    else if (valueTypeIndex == ya::type_index_v<float>) {
+        float value = jsonValue.get<float>();
+        accessor->insertElement(containerPtr, keyPtr, &value);
+    }
+    else if (valueTypeIndex == ya::type_index_v<double>) {
+        double value = jsonValue.get<double>();
+        accessor->insertElement(containerPtr, keyPtr, &value);
+    }
+    else if (valueTypeIndex == ya::type_index_v<bool>) {
+        bool value = jsonValue.get<bool>();
+        accessor->insertElement(containerPtr, keyPtr, &value);
+    }
+    else if (valueTypeIndex == ya::type_index_v<std::string>) {
+        std::string value = jsonValue.get<std::string>();
+        accessor->insertElement(containerPtr, keyPtr, &value);
+    }
+    else {
+        YA_CORE_WARN("ReflectionSerializer: Unsupported basic value type (typeIndex: {})", valueTypeIndex);
+    }
+}
 
 // ========================================================================
 // Helper: Serialize base classes
@@ -163,6 +456,35 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
         return j;
     }
 
+    // ★ NEW: Check if it's a container type
+    if (::ya::reflection::PropertyContainerHelper::isContainer(prop)) {
+        auto *accessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
+        if (accessor && accessor->isMapLike()) {
+            // Serialize Map-like containers - 初始化为空对象
+            j = nlohmann::json::object();
+            ::ya::reflection::PropertyContainerHelper::iterateMapContainer(
+                (prop),
+                const_cast<void *>(valuePtr),
+                [&j, &prop](void *keyPtr, uint32_t keyTypeIndex, void *valuePtr, uint32_t valueTypeIndex) {
+                    // Convert key to string and serialize value using unified helpers
+                    std::string keyStr = convertKeyToString(keyPtr, keyTypeIndex);
+                    j[keyStr] = serializeAnyValue(valuePtr, valueTypeIndex);
+                });
+        }
+        else {
+            // Serialize Vector/Set-like containers
+            j = nlohmann::json::array();
+            ::ya::reflection::PropertyContainerHelper::iterateContainer(
+                const_cast<Property &>(prop),
+                const_cast<void *>(valuePtr),
+                [&j, &prop](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
+                    // Serialize container element using unified helper
+                    j.push_back(serializeAnyValue(elementPtr, elementTypeIndex));
+                });
+        }
+        return j;
+    }
+
     auto &registry = ClassRegistry::instance();
     auto *classPtr = registry.getClass(prop.typeIndex);
 
@@ -258,6 +580,73 @@ void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t ty
 }
 void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, const nlohmann::json &j)
 {
+    // ★ NEW: Check if it's a container type
+    if (::ya::reflection::PropertyContainerHelper::isContainer(prop)) {
+        auto *accessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
+        if (!accessor) {
+            YA_CORE_WARN("ReflectionSerializer: Container accessor not found for property '{}'", prop.name);
+            return;
+        }
+
+        void *containerPtr = prop.getMutableAddress(obj);
+        if (!containerPtr) {
+            YA_CORE_WARN("ReflectionSerializer: Cannot get mutable address for container '{}'", prop.name);
+            return;
+        }
+
+        // Clear existing content before deserializing
+        accessor->clear(containerPtr);
+
+        if (accessor->isMapLike()) {
+            // Deserialize Map-like containers (std::map, std::unordered_map)
+            deserializeMapContainer(accessor, containerPtr, j);
+        }
+        else {
+            // Deserialize Vector/Set-like containers (std::vector, std::set, std::unordered_set)
+            if (j.is_array()) {
+                uint32_t elementTypeIndex = accessor->getElementTypeIndex();
+
+                for (size_t i = 0; i < j.size(); ++i) {
+                    const auto &elementJson = j[i];
+
+                    // Create a temporary Property for the element
+                    Property elementProp;
+                    elementProp.typeIndex            = elementTypeIndex;
+                    elementProp.addressGetterMutable = [](void *ptr) -> void * { return ptr; };
+
+                    // Deserialize container element using unified helpers
+                    if (is_scalar_type(elementProp)) {
+                        // For scalar types, handle each type specifically to avoid storage issues
+                        if (elementTypeIndex == ya::type_index_v<int>) {
+                            int value = elementJson.get<int>();
+                            accessor->addElement(containerPtr, &value);
+                        }
+                        else if (elementTypeIndex == ya::type_index_v<float>) {
+                            float value = elementJson.get<float>();
+                            accessor->addElement(containerPtr, &value);
+                        }
+                        else if (elementTypeIndex == ya::type_index_v<double>) {
+                            double value = elementJson.get<double>();
+                            accessor->addElement(containerPtr, &value);
+                        }
+                        else if (elementTypeIndex == ya::type_index_v<bool>) {
+                            bool value = elementJson.get<bool>();
+                            accessor->addElement(containerPtr, &value);
+                        }
+                        else if (elementTypeIndex == ya::type_index_v<std::string>) {
+                            std::string value = elementJson.get<std::string>();
+                            accessor->addElement(containerPtr, &value);
+                        }
+                    } else {
+                        // For complex types, use the unified complex element deserializer
+                        deserializeComplexElement(accessor, containerPtr, elementTypeIndex, elementJson);
+                    }
+                }
+            }
+        }
+        return;
+    }
+
     if (is_scalar_type(prop))
     {
         deserializeScalarValue(prop, obj, j);
@@ -330,58 +719,8 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
  */
 nlohmann::json ReflectionSerializer::serializeScalarValue(const void *valuePtr, const Property &prop)
 {
-    auto typeIdx = prop.typeIndex;
-
-    // Basic types - direct pointer dereference
-    if (typeIdx == ya::TypeIndex<int>::value()) {
-        return *static_cast<const int *>(valuePtr);
-    }
-    if (typeIdx == ya::TypeIndex<float>::value()) {
-        return *static_cast<const float *>(valuePtr);
-    }
-    if (typeIdx == ya::TypeIndex<double>::value()) {
-        return *static_cast<const double *>(valuePtr);
-    }
-    if (typeIdx == ya::TypeIndex<bool>::value()) {
-        return *static_cast<const bool *>(valuePtr);
-    }
-    if (typeIdx == ya::TypeIndex<std::string>::value()) {
-        return *static_cast<const std::string *>(valuePtr);
-    }
-
-    // Check if it's an enum type by typeIndex
-    Enum *enumInfo = EnumRegistry::instance().getEnum(typeIdx);
-    if (enumInfo) {
-        // Get enum value based on underlying type size
-        // We read the raw memory and interpret it as int64_t
-        int64_t enumValue = 0;
-
-        // Most enums use int as underlying type, but enum class can use uint8_t etc.
-        // We'll read based on common sizes
-        switch (enumInfo->underlyingSize) {
-        case 1:
-            enumValue = *static_cast<const uint8_t *>(valuePtr);
-            break;
-        case 2:
-            enumValue = *static_cast<const uint16_t *>(valuePtr);
-            break;
-        case 4:
-            enumValue = *static_cast<const int32_t *>(valuePtr);
-            break;
-        case 8:
-            enumValue = *static_cast<const int64_t *>(valuePtr);
-            break;
-        default:
-            // Fallback to int
-            enumValue = *static_cast<const int *>(valuePtr);
-            break;
-        }
-
-        return enumInfo->getName(enumValue);
-    }
-
-    YA_CORE_WARN("ReflectionSerializer: Unsupported type for property (typeIndex: {})", typeIdx);
-    return {};
+    // Delegate to the more general serializeAnyValue function
+    return serializeAnyValue(const_cast<void*>(valuePtr), prop.typeIndex);
 }
 
 /**
@@ -395,84 +734,8 @@ void ReflectionSerializer::deserializeScalarValue(const Property &prop, void *ob
         return;
     }
 
-    auto        typeIdx        = prop.typeIndex;
-    static auto intTypeIndx    = ya::type_index_v<int>;
-    static auto floatTypeIndx  = ya::type_index_v<float>;
-    static auto doubleTypeIndx = ya::type_index_v<double>;
-    static auto boolTypeIndx   = ya::type_index_v<bool>;
-    static auto stringTypeIndx = ya::type_index_v<std::string>;
-
-    // Basic types - direct pointer write
-    if (typeIdx == intTypeIndx) {
-        *static_cast<int *>(valuePtr) = plainValue.get<int>();
-        return;
-    }
-    if (typeIdx == floatTypeIndx) {
-        *static_cast<float *>(valuePtr) = plainValue.get<float>();
-        return;
-    }
-    if (typeIdx == doubleTypeIndx) {
-        *static_cast<double *>(valuePtr) = plainValue.get<double>();
-        return;
-    }
-    if (typeIdx == boolTypeIndx) {
-        *static_cast<bool *>(valuePtr) = plainValue.get<bool>();
-        return;
-    }
-    if (typeIdx == stringTypeIndx) {
-        *static_cast<std::string *>(valuePtr) = plainValue.get<std::string>();
-        return;
-    }
-
-    // Check if it's an enum type by typeIndex
-    Enum *enumInfo = EnumRegistry::instance().getEnum(typeIdx);
-    if (enumInfo) {
-        int64_t enumValue = 0;
-
-        if (plainValue.is_string()) {
-            // Deserialize from enum name string
-            try {
-                enumValue = enumInfo->getValue(plainValue.get<std::string>());
-            }
-            catch (const std::exception &e) {
-                YA_CORE_WARN("ReflectionSerializer: Invalid enum name '{}' for enum '{}': {}",
-                             plainValue.get<std::string>(),
-                             enumInfo->name,
-                             e.what());
-                return;
-            }
-        }
-        else if (plainValue.is_number_integer()) {
-            // Deserialize from integer
-            enumValue = plainValue.get<int64_t>();
-        }
-        else {
-            YA_CORE_WARN("ReflectionSerializer: Invalid JSON type for enum '{}'", enumInfo->name);
-            return;
-        }
-
-        // Write enum value based on underlying type size
-        switch (enumInfo->underlyingSize) {
-        case 1:
-            *static_cast<uint8_t *>(valuePtr) = static_cast<uint8_t>(enumValue);
-            break;
-        case 2:
-            *static_cast<uint16_t *>(valuePtr) = static_cast<uint16_t>(enumValue);
-            break;
-        case 4:
-            *static_cast<int32_t *>(valuePtr) = static_cast<int32_t>(enumValue);
-            break;
-        case 8:
-            *static_cast<int64_t *>(valuePtr) = enumValue;
-            break;
-        default:
-            *static_cast<int *>(valuePtr) = static_cast<int>(enumValue);
-            break;
-        }
-        return;
-    }
-
-    YA_CORE_WARN("ReflectionSerializer: Unsupported type for property (typeIndex: {})", typeIdx);
+    // Delegate to the more general deserializeAnyValue function
+    deserializeAnyValue(valuePtr, prop.typeIndex, plainValue);
 }
 
 } // namespace ya

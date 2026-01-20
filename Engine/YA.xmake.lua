@@ -172,9 +172,12 @@ do
         --  fatal error C1202: recursive type or function dependency context too complex
         -- add_cxxflags(
         --     "/Zm1000"   -- the memory allocation for compiler increased to 1000MB
-        --     , "/bigobj" -- allow to generate big obj for big module
         -- )
         add_ldflags("/ignore:4099") -- warning LNK4099, eg: PDB 'ya.pdb' was not found with 'ya.exe'
+
+        if bEnableUnity then
+            add_cxxflags("/bigobj") -- allow to generate big obj for big module
+        end
     end
 
     before_run(function(target)

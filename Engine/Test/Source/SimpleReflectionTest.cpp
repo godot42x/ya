@@ -1,7 +1,7 @@
 // 简单测试新反射系统
 #include "Core/Reflection/Reflection.h"
+#include <gtest/gtest.h>
 #include <cassert>
-#include <iostream>
 
 
 struct TestComponent
@@ -15,30 +15,29 @@ struct TestComponent
     YA_REFLECT_END()
 };
 
-int main()
+class SimpleReflectionTest : public ::testing::Test
 {
-    std::cout << "=== 新反射系统测试 ===" << std::endl;
+  protected:
+    void SetUp() override {}
+    void TearDown() override {}
+};
 
-    // 测试1: 类型名称
+// 测试1: 类型名称
+TEST_F(SimpleReflectionTest, TypeName)
+{
     auto cls = ClassRegistry::instance().getClass(ya::type_index_v<TestComponent>);
-    std::cout << "类型名称: " << cls->getName() << std::endl;
-    assert(std::string(cls->getName()) == "TestComponent");
+    ASSERT_NE(cls, nullptr);
+    EXPECT_EQ(std::string(cls->getName()), "TestComponent");
+}
 
-    // 测试2: 属性遍历
-    int           propCount = 0;
+// 测试2: 属性遍历
+TEST_F(SimpleReflectionTest, PropertyIteration)
+{
     TestComponent p;
+    int propCount = 0;
     p.__visit_properties([&](const char *name, auto &value) {
-        std::cout << "  属性: " << name << std::endl;
         propCount++;
     });
-    // TestComponent::__visit_properties([&](const char *name, auto ptr) {
-    //     std::cout << "  属性: " << name << std::endl;
-    //     propCount++;
-    // });
 
-    assert(propCount == 2); // value, name
-    std::cout << "✅ 找到 " << propCount << " 个属性" << std::endl;
-
-    std::cout << "\n=== 所有测试通过 ===" << std::endl;
-    return 0;
+    EXPECT_EQ(propCount, 2); // value, name
 }

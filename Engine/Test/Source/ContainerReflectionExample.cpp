@@ -7,6 +7,7 @@
 
 #include "Core/Reflection/Reflection.h"
 #include "Editor/ContainerPropertyRenderer.h"
+#include <gtest/gtest.h>
 #include <iostream>
 
 using namespace ya;
@@ -48,10 +49,16 @@ struct PlayerInventory
 // 测试函数
 // ============================================================================
 
-void testContainerIteration()
+class ContainerReflectionTest : public ::testing::Test
 {
-    std::cout << "\n=== Container Iteration Test ===" << std::endl;
+  protected:
+    void SetUp() override {}
+    void TearDown() override {}
+};
 
+// 测试1: 容器迭代
+TEST_F(ContainerReflectionTest, ContainerIteration)
+{
     PlayerInventory inventory;
     inventory.items = {
         {1, "Sword", 1},
@@ -62,126 +69,66 @@ void testContainerIteration()
         {"Weapon", 1},
         {"Armor", 3}};
 
-    // 使用反射迭代容器
     auto &registry = ClassRegistry::instance();
     auto *cls      = registry.getClass(ya::type_index_v<PlayerInventory>);
 
-    if (cls) {
-        auto *itemsProp = cls->getProperty("items");
-        if (itemsProp) {
-            std::cout << "Items in inventory:" << std::endl;
+    ASSERT_NE(cls, nullptr);
 
-            void *containerPtr = itemsProp->addressGetterMutable(&inventory);
+    auto *itemsProp = cls->getProperty("items");
+    ASSERT_NE(itemsProp, nullptr);
 
-            PropertyContainerHelper::iterateContainer(
-                *itemsProp,
-                containerPtr,
-                [](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
-                    // 访问 Item 属性
-                    auto *item = static_cast<Item *>(elementPtr);
-                    std::cout << "  [" << index << "] " << item->name
-                              << " (count: " << item->count << ")" << std::endl;
-                });
-        }
+    size_t itemCount = 0;
+    void *containerPtr = itemsProp->addressGetterMutable(&inventory);
 
-        auto *slotsProp = cls->getProperty("equipSlots");
-        if (slotsProp) {
-            std::cout << "\nEquipment slots:" << std::endl;
+    PropertyContainerHelper::iterateContainer(
+        *itemsProp,
+        containerPtr,
+        [&itemCount](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
+            auto *item = static_cast<Item *>(elementPtr);
+            itemCount++;
+        });
 
-            void *containerPtr = slotsProp->addressGetterMutable(&inventory);
+    EXPECT_EQ(itemCount, 3);
 
-            PropertyContainerHelper::iterateContainer(
-                *slotsProp,
-                containerPtr,
-                [](const std::string &key, void *valuePtr, uint32_t valueTypeIndex) {
-                    int *itemId = static_cast<int *>(valuePtr);
-                    std::cout << "  " << key << " = " << *itemId << std::endl;
-                });
-        }
-    }
+    auto *slotsProp = cls->getProperty("equipSlots");
+    ASSERT_NE(slotsProp, nullptr);
+
+    size_t slotCount = 0;
+    containerPtr = slotsProp->addressGetterMutable(&inventory);
+
+    PropertyContainerHelper::iterateMapContainer(
+        *slotsProp,
+        containerPtr,
+        [&slotCount](void *keyPtr, uint32_t keyTypeIndex, void *valuePtr, uint32_t valueTypeIndex) {
+            slotCount++;
+        });
+
+    EXPECT_EQ(slotCount, 2);
 }
 
-void testContainerManipulation()
+// 测试2: 容器操作
+TEST_F(ContainerReflectionTest, ContainerManipulation)
 {
-    std::cout << "\n=== Container Manipulation Test ===" << std::endl;
-
     PlayerInventory inventory;
 
     auto &registry = ClassRegistry::instance();
     auto *cls      = registry.getClass(ya::type_index_v<PlayerInventory>);
     auto *itemsProp = cls->getProperty("items");
 
-    if (itemsProp) {
-        void *containerPtr = itemsProp->addressGetterMutable(&inventory);
-        auto *accessor     = PropertyContainerHelper::getContainerAccessor(*itemsProp);
+    ASSERT_NE(itemsProp, nullptr);
 
-        if (accessor) {
-            // 添加元素
-            Item newItem{99, "Magic Scroll", 1};
-            accessor->addElement(containerPtr, &newItem);
+    void *containerPtr = itemsProp->addressGetterMutable(&inventory);
+    auto *accessor     = PropertyContainerHelper::getContainerAccessor(*itemsProp);
 
-            std::cout << "After adding item, size = " << accessor->getSize(containerPtr) << std::endl;
+    ASSERT_NE(accessor, nullptr);
 
-            // 再次迭代
-            PropertyContainerHelper::iterateContainer(
-                *itemsProp,
-                containerPtr,
-                [](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
-                    auto *item = static_cast<Item *>(elementPtr);
-                    std::cout << "  [" << index << "] " << item->name << std::endl;
-                });
+    // 添加元素
+    Item newItem{99, "Magic Scroll", 1};
+    accessor->addElement(containerPtr, &newItem);
 
-            // 清空
-            accessor->clear(containerPtr);
-            std::cout << "After clear, size = " << accessor->getSize(containerPtr) << std::endl;
-        }
-    }
-}
+    EXPECT_EQ(accessor->getSize(containerPtr), 1);
 
-void testImGuiIntegration()
-{
-    std::cout << "\n=== ImGui Integration Example ===" << std::endl;
-    std::cout << "在 DetailsView::renderReflectedType 中，容器会自动渲染为：" << std::endl;
-    std::cout << R"(
-    items (Size: 3) [+] [-] [Clear]
-    ├─ [0]
-    │  ├─ id: 1
-    │  ├─ name: "Sword"
-    │  └─ count: 1      [X]
-    ├─ [1]
-    │  ├─ id: 2
-    │  ├─ name: "Potion"
-    │  └─ count: 5      [X]
-    └─ [2]
-       ├─ id: 3
-       ├─ name: "Shield"
-       └─ count: 1      [X]
-    
-    equipSlots (Size: 2) [+]
-    ├─ [Weapon]: 1
-    └─ [Armor]: 3
-    )" << std::endl;
-}
-
-// ============================================================================
-// Main
-// ============================================================================
-
-int main()
-{
-    std::cout << "=== Unified Container Reflection System ===" << std::endl;
-
-    testContainerIteration();
-    testContainerManipulation();
-    testImGuiIntegration();
-
-    std::cout << "\n=== All Tests Passed! ===" << std::endl;
-    std::cout << "\n关键特性：" << std::endl;
-    std::cout << "✅ 统一的迭代接口（无需单独序列化代码）" << std::endl;
-    std::cout << "✅ 自动检测容器类型" << std::endl;
-    std::cout << "✅ 支持嵌套容器和复杂元素" << std::endl;
-    std::cout << "✅ 集成到编辑器UI（DetailsView）" << std::endl;
-    std::cout << "✅ 类型安全的编译期检查" << std::endl;
-
-    return 0;
+    // 清空
+    accessor->clear(containerPtr);
+    EXPECT_EQ(accessor->getSize(containerPtr), 0);
 }
