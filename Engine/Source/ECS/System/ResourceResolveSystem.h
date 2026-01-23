@@ -16,6 +16,7 @@ struct Entity;
 struct Model;
 struct EmbeddedMaterial;
 struct Node;
+class LitMaterial;
 
 /**
  * @brief ResourceResolveSystem - Unified resource loading system
@@ -65,15 +66,26 @@ struct ResourceResolveSystem : public ISystem
      * @param parentEntity The parent entity with ModelComponent
      * @param model The loaded Model
      * @param meshIndex Index of the mesh in Model
-     * @param useEmbeddedMaterial Whether to use embedded material from Model
+     * @param modelComp The ModelComponent (contains cached shared materials)
      * @return Created Node pointer
      */
     Node *createMeshNode(
-        Scene   *scene,
-        Entity  *parentEntity,
-        Model   *model,
-        uint32_t meshIndex,
-        bool     useEmbeddedMaterial);
+        Scene          *scene,
+        Entity         *parentEntity,
+        Model          *model,
+        uint32_t        meshIndex,
+        ModelComponent &modelComp);
+
+    /**
+     * @brief Initialize a shared LitMaterial from embedded material data
+     * @param material The runtime material to initialize
+     * @param embeddedMat The embedded material data
+     * @param modelDirectory The model's directory for resolving texture paths
+     */
+    void initSharedMaterial(
+        LitMaterial            *material,
+        const EmbeddedMaterial *embeddedMat,
+        const std::string      &modelDirectory);
 
     /**
      * @brief Initialize LitMaterialComponent from embedded material data

@@ -21,8 +21,12 @@
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
 
+#include <unordered_map>
+
 namespace ya
 {
+
+class LitMaterial;
 
 struct Node;
 
@@ -79,6 +83,14 @@ struct ModelComponent : public IComponent
      * @note Stores Node pointers for hierarchical management
      */
     std::vector<Node *> _childNodes;
+
+    /**
+     * @brief Cached runtime materials for this Model (one per embedded material)
+     * Key: material index in Model's embeddedMaterials
+     * Value: runtime LitMaterial pointer (managed by MaterialFactory)
+     * This allows multiple meshes to share the same material instance
+     */
+    std::unordered_map<int32_t, LitMaterial *> _cachedMaterials;
 
     // ========================================
     // Interface

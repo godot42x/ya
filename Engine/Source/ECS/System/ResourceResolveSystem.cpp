@@ -10,7 +10,10 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Render/Model.h"
+#include "Render/TextureLibrary.h"
+
 
 
 namespace ya
@@ -86,10 +89,27 @@ void ResourceResolveSystem::resolveModelComponent(Scene *scene, Entity *entity, 
     // Get parent node for hierarchy
     Node *parentNode = scene->getNodeByEntity(entity);
     YA_CORE_ASSERT(parentNode != nullptr, "Parent entity has no Node");
-    // if (!parentNode) {
-    //     YA_CORE_WARN("ResourceResolveSystem: Parent entity has no Node, creating one");
-    //     parentNode = scene->createNodeForEntity(entity);
-    // }
+
+    // Pre-create shared materials for each unique embedded material
+    // This ensures meshes with the same material index share the same runtime material
+    if (modelComp._useEmbeddedMaterials) {
+        const auto &embeddedMaterials = model->getEmbeddedMaterials();
+        for (size_t matIndex = 0; matIndex < embeddedMaterials.size(); ++matIndex) {
+            // Create material with model name + material index as label
+            std::string matLabel = model->getName() + "_Mat_" + std::to_string(matIndex);
+            auto       *litMat   = MaterialFactory::get()->createMaterial<LitMaterial>(matLabel);
+
+            if (litMat) {
+                // Initialize material from embedded data
+                const auto &embeddedMat = embeddedMaterials[matIndex];
+                initSharedMaterial(litMat, &embeddedMat, model->getDirectory());
+                modelComp._cachedMaterials[static_cast<int32_t>(matIndex)] = litMat;
+                YA_CORE_TRACE("ResourceResolveSystem: Created shared material '{}' for model '{}'",
+                              matLabel,
+                              model->getName());
+            }
+        }
+    }
 
     // Create child nodes for each mesh
     for (uint32_t i = 0; i < model->getMeshCount(); ++i) {
@@ -98,7 +118,7 @@ void ResourceResolveSystem::resolveModelComponent(Scene *scene, Entity *entity, 
             entity,
             model,
             i,
-            modelComp._useEmbeddedMaterials);
+            modelComp);
 
         if (childNode) {
             // Establish parent-child relationship
@@ -107,19 +127,20 @@ void ResourceResolveSystem::resolveModelComponent(Scene *scene, Entity *entity, 
         }
     }
 
-    YA_CORE_INFO("ResourceResolveSystem: Created {} child nodes for model '{}'",
+    YA_CORE_INFO("ResourceResolveSystem: Created {} child nodes with {} shared materials for model '{}'",
                  model->getMeshCount(),
+                 modelComp._cachedMaterials.size(),
                  modelComp._modelRef.getPath());
 
     modelComp._bResolved = true;
 }
 
 Node *ResourceResolveSystem::createMeshNode(
-    Scene   *scene,
-    Entity  *parentEntity,
-    Model   *model,
-    uint32_t meshIndex,
-    bool     useEmbeddedMaterial)
+    Scene          *scene,
+    Entity         *parentEntity,
+    Model          *model,
+    uint32_t        meshIndex,
+    ModelComponent &modelComp)
 {
     // Generate name for child node
     std::string meshName = model->getMesh(meshIndex)->getName();
@@ -160,14 +181,86 @@ Node *ResourceResolveSystem::createMeshNode(
     // Add LitMaterialComponent
     auto *matComp = childEntity->addComponent<LitMaterialComponent>();
 
-    if (useEmbeddedMaterial) {
-        const EmbeddedMaterial *embeddedMat = model->getMaterialForMesh(meshIndex);
-        initMaterialFromEmbedded(*matComp, embeddedMat, model->getDirectory());
+    if (modelComp._useEmbeddedMaterials) {
+        // Get material index for this mesh
+        int32_t matIndex = model->getMaterialIndex(meshIndex);
+
+        // Try to use shared material from cache
+        auto it = modelComp._cachedMaterials.find(matIndex);
+        if (it != modelComp._cachedMaterials.end() && it->second != nullptr) {
+            // Use shared material
+            matComp->setSharedMaterial(it->second);
+            matComp->_bResolved = true; // Already resolved
+            YA_CORE_TRACE("ResourceResolveSystem: Mesh {} using shared material index {}",
+                          meshIndex,
+                          matIndex);
+        }
+        else {
+            // No cached material, initialize from embedded (will create own material on resolve)
+            const EmbeddedMaterial *embeddedMat = model->getMaterialForMesh(meshIndex);
+            initMaterialFromEmbedded(*matComp, embeddedMat, model->getDirectory());
+        }
     }
-    // If no embedded material or useEmbeddedMaterial is false,
+    // If no embedded material or useEmbeddedMaterials is false,
     // matComp uses default values (which is fine)
 
     return childNode;
+}
+
+void ResourceResolveSystem::initSharedMaterial(
+    LitMaterial            *material,
+    const EmbeddedMaterial *embeddedMat,
+    const std::string      &modelDirectory)
+{
+    if (!material || !embeddedMat) {
+        return;
+    }
+
+    // Set material parameters
+    auto &params     = material->getParamsMut();
+    params.ambient   = embeddedMat->ambient;
+    params.diffuse   = glm::vec3(embeddedMat->baseColor);
+    params.specular  = embeddedMat->specular;
+    params.shininess = embeddedMat->shininess;
+    material->setParamDirty();
+
+    // Helper to resolve texture path
+    auto resolvePath = [&modelDirectory](const std::string &texPath) -> std::string {
+        if (texPath.empty()) {
+            return "";
+        }
+        if (texPath.find(':') != std::string::npos || texPath[0] == '/') {
+            return texPath;
+        }
+        return modelDirectory + texPath;
+    };
+
+    // Load and set textures
+    auto defaultSampler = TextureLibrary::get().getDefaultSampler();
+
+    // Diffuse texture
+    if (!embeddedMat->diffuseTexturePath.empty()) {
+        std::string path    = resolvePath(embeddedMat->diffuseTexturePath);
+        auto        texture = AssetManager::get()->loadTexture(path);
+        if (texture) {
+            TextureView tv;
+            tv.texture = texture;
+            tv.sampler = defaultSampler;
+            material->setTextureView(LitMaterial::DiffuseTexture, tv);
+        }
+    }
+
+    // Specular texture
+    if (!embeddedMat->specularTexturePath.empty()) {
+        std::string path    = resolvePath(embeddedMat->specularTexturePath);
+        auto        texture = AssetManager::get()->loadTexture(path);
+        if (texture) {
+            TextureView tv;
+            tv.texture = texture;
+            tv.sampler = defaultSampler;
+            material->setTextureView(LitMaterial::SpecularTexture, tv);
+        }
+    }
 }
 
 void ResourceResolveSystem::initMaterialFromEmbedded(
@@ -216,6 +309,15 @@ void ResourceResolveSystem::initMaterialFromEmbedded(
 
 void ResourceResolveSystem::cleanupChildEntities(Scene *scene, ModelComponent &modelComp)
 {
+    // Destroy cached shared materials
+    for (auto &[matIndex, material] : modelComp._cachedMaterials) {
+        if (material) {
+            MaterialFactory::get()->destroyMaterial(material);
+        }
+    }
+    modelComp._cachedMaterials.clear();
+
+    // Destroy child nodes
     for (Node *childNode : modelComp._childNodes) {
         if (childNode) {
             scene->destroyNode(childNode);

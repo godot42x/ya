@@ -15,10 +15,11 @@ bool LitMaterialComponent::resolve()
 
     bool success = true;
 
-    // 1. Create runtime material if not exists
+    // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
         std::string matLabel = "LitMat_" + std::to_string(reinterpret_cast<uintptr_t>(this));
         _material            = MaterialFactory::get()->createMaterial<LitMaterial>(matLabel);
+        _bSharedMaterial     = false; // Created our own material
 
         if (!_material) {
             YA_CORE_ERROR("LitMaterialComponent: Failed to create runtime material");

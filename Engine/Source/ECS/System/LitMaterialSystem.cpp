@@ -532,6 +532,10 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
         .cameraPos  = camCtx.cameraPos,
     };
 
+    // TODO: handle the rotation  of radians in shader
+    // auto light               = uLight;
+    // light.dirLight.direction = glm::radians(light.dirLight.direction);
+
     _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
     _lightUBO->writeData(&uLight, sizeof(LightUBO), 0);
     _debugUBO->writeData(&uDebug, sizeof(DebugUBO), 0);

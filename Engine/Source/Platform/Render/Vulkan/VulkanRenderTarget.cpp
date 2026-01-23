@@ -146,9 +146,11 @@ void VulkanRenderTarget::onRenderGUI()
 {
     ImGui::PushID(label.c_str());
     if (ImGui::CollapsingHeader(label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent();
         for (auto &system : _materialSystems) {
             system->renderGUI();
         }
+        ImGui::Unindent();
     }
     ImGui::PopID();
 }

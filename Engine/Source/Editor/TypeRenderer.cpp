@@ -258,6 +258,30 @@ void registerBuiltinTypeRenderers()
             },
         });
 
+    registry.registerRenderer(
+        ya::type_index_v<uint64_t>,
+        TypeRenderer{
+            .typeName   = "uint64_t",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                auto &value    = *static_cast<uint64_t *>(instance);
+                int   temp     = static_cast<int>(value);
+                bool  modified = integerRenderFunc(temp, ctx);
+                if (modified) {
+                    value = static_cast<uint64_t>(temp);
+                }
+                return modified;
+            },
+        });
+    // bool
+    registry.registerRenderer(
+        ya::type_index_v<bool>,
+        TypeRenderer{
+            .typeName   = "bool",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                return ImGui::Checkbox(ctx.prettyName.c_str(), static_cast<bool *>(instance));
+            },
+        });
+
     // float 类型渲染器
     registry.registerRenderer(
         ya::type_index_v<float>,
