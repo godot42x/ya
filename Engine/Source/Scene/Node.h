@@ -75,7 +75,7 @@ struct Node : public disable_copy
 
     [[nodiscard]] Entity       *getEntity() { return _entity; }
     [[nodiscard]] const Entity *getEntity() const { return _entity; }
-    void                        setEntity(Entity *entity) { _entity = entity; }
+    // void                        setEntity(Entity *entity) { _entity = entity; }
 
     /**
      * @brief Called when this node's parent changes

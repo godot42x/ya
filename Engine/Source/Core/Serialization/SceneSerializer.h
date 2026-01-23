@@ -41,6 +41,11 @@ struct SceneSerializer
     nlohmann::json serializeEntity(Entity *entity);
     Entity        *deserializeEntity(const nlohmann::json &j);
 
+    // NodeTree 序列化 - 树状结构（只存引用）
+    nlohmann::json serializeNodeTree(Node *node);
+    void           deserializeNodeTree(const nlohmann::json &j, Node *parent, 
+                                       const std::unordered_map<uint64_t, Entity*> &entityMap);
+
     // Component 序列化 - 通过反射自动处理
     template <typename ComponentType>
     nlohmann::json serializeComponent(const ComponentType &component);

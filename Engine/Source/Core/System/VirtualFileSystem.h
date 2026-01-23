@@ -108,6 +108,27 @@ struct VirtualFileSystem
         mountPoints.erase(mountName);
     }
 
+    // from abs path to VFS mounted path?
+    // stdpath resolvePath(std::string_view absPath) const
+    // {
+    //     auto abs = stdpath(absPath);
+    //     if (abs.is_absolute() == false) {
+    //         return abs;
+    //     }
+
+    //     if (abs.string().starts_with(projectRoot.string())) {
+    //         return abs.relative_path();
+    //     }
+
+    //     return abs;
+    // }
+
+    auto relativeTo(std::string_view path, stdpath to) const
+    {
+        auto p = stdpath(path);
+        return std::filesystem::relative(p, to);
+    }
+
     stdpath translatePath(std::string_view virtualPath) const
     {
         auto index = virtualPath.find_first_of(":");
@@ -126,6 +147,7 @@ struct VirtualFileSystem
         }
         return it->second / physicalPath;
     }
+
 
     std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
     bool                 readFileToString(std::string_view filepath, std::string &output) const;

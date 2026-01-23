@@ -32,6 +32,7 @@ Scene::~Scene()
 }
 
 
+
 Entity *Scene::createEntity(const std::string &name)
 {
     return createEntityWithUUID(UUID{}, name);
@@ -64,6 +65,24 @@ void Scene::createRootNode()
     entity->addComponent<TransformComponent>();
     auto node = makeShared<Node3D>(entity, "scene_root");
     _rootNode = node;
+    
+    // ★ 将 rootNode 添加到 _nodeMap 中（这样 createNode 检查时才能发现）
+    _nodeMap[entity->getHandle()] = node;
+}
+
+void Scene::onNodeCreated(stdptr<Node> node, Node *parent)
+{
+    if (!node) {
+        return;
+    }
+    _nodeMap[node->getEntity()->getHandle()] = node;
+
+    if (parent) {
+        parent->addChild(node.get());
+    }
+    else {
+        addToScene(node.get());
+    }
 }
 
 void Scene::destroyEntity(Entity *entity)
@@ -88,44 +107,54 @@ void Scene::destroyEntity(Entity *entity)
     }
 }
 
-Node *Scene::createNode(const std::string &name, Node *parent)
+Node *Scene::createNode(const std::string &name, Node *parent, Entity *entity)
 {
-    Entity *entity = createEntity(name);
-    if (!entity) {
-        return nullptr;
+    // ★ 如果 Entity 已经有关联的 Node，直接返回（避免重复创建）
+    if (entity) {
+        auto it = _nodeMap.find(entity->getHandle());
+        if (it != _nodeMap.end()) {
+            YA_CORE_WARN("Entity '{}' already has an associated Node, returning existing one", entity->name);
+            return it->second.get();
+        }
     }
-    auto node                     = makeShared<Node>(name, entity);
-    _nodeMap[entity->getHandle()] = node;
 
-    if (parent) {
-        parent->addChild(node.get());
+    if (!entity) {
+        entity = createEntity(name);
     }
-    else {
-        createRootNode();
-        _rootNode->addChild(node.get());
+    YA_CORE_ASSERT(entity, "entity is none");
+    if (entity->hasComponent<TransformComponent>()) {
+        return createNode3D(name, parent, entity);
     }
+
+    auto node = makeShared<Node>(name, entity);
+    onNodeCreated(node, parent);
+
+    return node.get();
 }
 
-
-Node3D *Scene::createNode3D(const std::string &name, Node *parent)
+Node3D *Scene::createNode3D(const std::string &name, Node *parent, Entity *entity)
 {
-    // Create the Entity
-    Entity *entity = createEntity(name);
-    if (!entity) {
-        return nullptr;
+    // ★ 如果 Entity 已经有关联的 Node，直接返回（避免重复创建）
+    if (entity) {
+        auto it = _nodeMap.find(entity->getHandle());
+        if (it != _nodeMap.end()) {
+            YA_CORE_WARN("Entity '{}' already has an associated Node3D, returning existing one", entity->name);
+            return static_cast<Node3D *>(it->second.get());
+        }
     }
-    entity->addComponent<TransformComponent>();
+
+    // Create the Entity
+    if (!entity) {
+        entity = createEntity(name);
+    }
+    YA_CORE_ASSERT(entity, "entity is none");
+    if (!entity->hasComponent<TransformComponent>()) {
+        entity->addComponent<TransformComponent>();
+    }
 
     // Create and associate Node
     auto node = makeShared<Node3D>(entity, name);
-    if (parent) {
-        parent->addChild(node.get());
-    }
-    else {
-        createRootNode();
-        _rootNode->addChild(node.get());
-    }
-    _nodeMap[entity->getHandle()] = node;
+    onNodeCreated(node, parent);
 
     return static_cast<Node3D *>(_nodeMap[entity->getHandle()].get());
 }
@@ -208,6 +237,8 @@ void Scene::clear()
 {
     _registry.clear();
     _entityMap.clear();
+    _nodeMap.clear();
+    _rootNode.reset();
     _entityCounter = 0;
 }
 
@@ -420,9 +451,9 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
 
 
     srcRegistry.view<IDComponent>().each([&](auto entity, const IDComponent &id) {
-        const Entity *srcEntity = scene->getEntityByEnttID(entity);
-        const std::string name = srcEntity ? srcEntity->name : "Entity";
-        entt::entity newEntity = newScene->createEntityWithUUID(id._id, name)->getHandle();
+        const Entity     *srcEntity = scene->getEntityByEnttID(entity);
+        const std::string name      = srcEntity ? srcEntity->name : "Entity";
+        entt::entity      newEntity = newScene->createEntityWithUUID(id._id, name)->getHandle();
         srcEntityMap.insert({id._id, entity});
         dstEntityMap.insert({id._id, newEntity});
     });

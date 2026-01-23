@@ -279,6 +279,7 @@ void SceneHierarchyPanel::drawFlatEntity(Entity &entity)
 
 const std::string &SceneHierarchyPanel::getNodeName(Node *node)
 {
+    // ★ 优先使用 Node 的名字（树状结构中的名字）
     return node->getName();
 }
 

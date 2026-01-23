@@ -38,7 +38,10 @@ struct AssetRefBase
     AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(path) {}
 
-    virtual bool resolve()    = 0;
+    virtual bool resolve() = 0;
+    // {
+    // resolve path from abs to engine?
+    // }
     virtual void invalidate() = 0;
 };
 
@@ -224,17 +227,17 @@ inline bool TAssetRef<Mesh>::resolve()
 
 
 
-struct AssetBase
-{
-    stdpath _path;
-};
+// struct AssetBase
+// {
+//     stdpath _path;
+// };
 
 
-// a light asset: only has path
-struct LightAsset : public AssetBase
-{
-    LightAsset() = default;
-    LightAsset(const stdpath &path) { _path = path; }
-};
+// // a light asset: only has path
+// struct LightAsset : public AssetBase
+// {
+//     LightAsset() = default;
+//     LightAsset(const stdpath &path) { _path = path; }
+// };
 
 } // namespace ya

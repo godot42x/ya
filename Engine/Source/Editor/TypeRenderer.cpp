@@ -4,9 +4,11 @@
 #include "Core/App/App.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Debug/Instrumentor.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"
 #include "reflects-core/lib.h"
+
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -354,10 +356,13 @@ void registerBuiltinTypeRenderers()
                 if (ImGui::Button(("Browse##" + ctx.prettyName).c_str())) {
                     if (auto *app = App::get()) {
                         if (auto *editorLayer = app->_editorLayer) {
-                            editorLayer->_filePicker.openModelPicker(assetRef._path, [&assetRef](const std::string &newPath) {
-                                assetRef._path = newPath;
-                                assetRef.invalidate();
-                            });
+                            editorLayer->_filePicker.openModelPicker(
+                                assetRef._path,
+                                [&assetRef](const std::string &newPath) {
+                                    auto p         = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
+                                    assetRef._path = p;
+                                    assetRef.invalidate();
+                                });
                         }
                     }
                 }

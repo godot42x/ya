@@ -41,8 +41,9 @@ struct [[refl]] Scene
     Scene &operator=(Scene &&) = default;
 
     // === Public Node API (Application Layer) ===
-    Node   *createNode(const std::string &name = "Entity", Node *parent = nullptr);
-    Node3D *createNode3D(const std::string &name = "Entity", Node *parent = nullptr);
+    Node   *createNode(const std::string &name = "Entity", Node *parent = nullptr, Entity *entity = nullptr);
+    Node3D *createNode3D(const std::string &name = "Entity", Node *parent = nullptr, Entity *entity = nullptr);
+
 
     /**
      * @brief Destroy a Node and its underlying Entity
@@ -64,8 +65,12 @@ struct [[refl]] Scene
     /**
      * @brief Get root node of scene hierarchy
      */
-    Node *getRootNode() { return _rootNode.get(); }
-    bool  isValidEntity(const Entity *entity) const;
+    Node *getRootNode()
+    {
+        createRootNode();
+        return _rootNode.get();
+    }
+    bool isValidEntity(const Entity *entity) const;
 
     // Check if Scene pointer is safe to access
     bool isValid() const
@@ -74,9 +79,9 @@ struct [[refl]] Scene
         return _magic == SCENE_MAGIC;
     }
 
-    Entity *getEntityByEnttID(entt::entity id);
+    Entity       *getEntityByEnttID(entt::entity id);
     const Entity *getEntityByEnttID(entt::entity id) const;
-    Entity *getEntityByID(uint32_t id)
+    Entity       *getEntityByID(uint32_t id)
     {
         return getEntityByEnttID(static_cast<entt::entity>(id));
     }
@@ -102,12 +107,12 @@ struct [[refl]] Scene
     Entity              findEntityByName(const std::string &name);
     std::vector<Entity> findEntitiesByTag(const std::string &tag);
 
-    void addToScene(stdptr<Node> node)
+    void addToScene(Node *node)
     {
         if (!_rootNode) {
             createRootNode();
         }
-        _rootNode->addChild(node.get());
+        _rootNode->addChild(node);
     }
 
     stdptr<Scene>        clone();
@@ -128,6 +133,8 @@ struct [[refl]] Scene
     void createEntityImpl(Entity &entity);
 
     void createRootNode();
+
+    void onNodeCreated(stdptr<Node> node, Node *parent);
 
     // Allow internal systems to access createEntity
     friend class SceneSerializer;
