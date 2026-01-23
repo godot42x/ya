@@ -24,35 +24,29 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
 
     // Helper lambda to test mesh component
     auto testMeshComponent = [&](entt::entity entityHandle, TransformComponent &tc, MeshComponent &meshComp) {
-        const auto &meshes = meshComp.getMeshes();
-        if (meshes.empty()) {
+        Mesh* mesh = meshComp.getMesh();
+        if (!mesh) {
             return;
         }
 
-        for (auto *mesh : meshes) {
-            if (!mesh) {
-                continue;
-            }
+        // Get world transform
+        glm::mat4 worldTransform = tc.getTransform();
 
-            // Get world transform
-            glm::mat4 worldTransform = tc.getTransform();
+        auto worldAABB = mesh->boundingBox.transformed(worldTransform);
 
-            auto worldAABB = mesh->boundingBox.transformed(worldTransform);
-
-            // Test ray-AABB intersection
-            float distance = 0.0f;
-            if (ray.intersects(worldAABB, &distance))
+        // Test ray-AABB intersection
+        float distance = 0.0f;
+        if (ray.intersects(worldAABB, &distance))
+        {
+            // Check if this is the closest hit
+            if (distance < closestDistance)
             {
-                // Check if this is the closest hit
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestHit      = RaycastHit{
-                             .entity   = scene->getEntityByEnttID(entityHandle),
-                             .distance = distance,
-                             .point    = ray.origin + ray.direction * distance,
-                    };
-                }
+                closestDistance = distance;
+                closestHit      = RaycastHit{
+                         .entity   = scene->getEntityByEnttID(entityHandle),
+                         .distance = distance,
+                         .point    = ray.origin + ray.direction * distance,
+                };
             }
         }
     };

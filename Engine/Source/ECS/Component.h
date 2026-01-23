@@ -32,24 +32,6 @@ struct IDComponent : public IComponent
     IDComponent(uint64_t id) : _id(id) {}
 };
 
-struct TagComponent : public IComponent
-{
-    YA_REFLECT_BEGIN(TagComponent)
-    YA_REFLECT_FIELD(_tag)
-    YA_REFLECT_END()
-
-    std::string _tag;
-
-    TagComponent()                     = default;
-    TagComponent(const TagComponent &) = default;
-    TagComponent(std::string tag) : _tag(std::move(tag)) {}
-
-  public:
-
-    std::string getTag() const { return _tag; }
-    void        setTag(const std::string &tag) { _tag = tag; }
-};
-
 
 // Audio source component
 struct AudioSourceComponent : public IComponent

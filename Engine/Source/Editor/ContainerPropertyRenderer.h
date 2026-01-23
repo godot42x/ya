@@ -317,7 +317,7 @@ class ContainerPropertyRenderer
         if (typeIndex == kStringTypeIdx) {
             auto &str = *static_cast<std::string *>(elementPtr);
             char  buf[256];
-            strncpy(buf, str.c_str(), sizeof(buf) - 1);
+            std::memcpy(buf, str.c_str(), std::min(str.size() + 1, sizeof(buf)));
             buf[sizeof(buf) - 1] = '\0';
 
             if (ImGui::InputText(label, buf, sizeof(buf))) {

@@ -7,6 +7,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
+#include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
@@ -694,9 +695,10 @@ void EditorLayer::renderGizmo()
         _viewportBounds[0].y,
         _viewportSize.x,
         _viewportSize.y);
+    // Get parent world matrix for hierarchy transform calculations
 
-    // a copy for manipulation
-    glm::mat4 transform = tc->getTransform();
+    // Use WORLD matrix for gizmo display (so gizmo appears at actual world position)
+    glm::mat4 worldTransform = tc->getTransform();
 
     // Snap settings (can be toggled with Ctrl key)
     float snap[3] = {0.0f, 0.0f, 0.0f};     // No snap by default
@@ -719,35 +721,38 @@ void EditorLayer::renderGizmo()
         }
     }
 
-    // Manipulate transform with gizmo
+    // Manipulate transform with gizmo (using world matrix)
     if (ImGuizmo::Manipulate(
             glm::value_ptr(view),
             glm::value_ptr(proj),
             _gizmoOperation,
             _gizmoMode,
-            glm::value_ptr(transform),
+            glm::value_ptr(worldTransform),
             nullptr,
             useSnap ? snap : nullptr))
     {
-        // Gizmo was used, decompose matrix back to position/rotation/scale
-        glm::vec3 position, rotation, scale;
-        ImGuizmo::DecomposeMatrixToComponents(
-            glm::value_ptr(transform),
-            glm::value_ptr(position),
-            glm::value_ptr(rotation),
-            glm::value_ptr(scale));
 
-        // Update transform component
-        tc->_position = position;
-        tc->_rotation = glm::radians(rotation); // ImGuizmo uses degrees
-        tc->_scale    = scale;
-        tc->bDirty    = true;
-        // tc->setPosition(position);
-        // tc->setRotation(glm::radians(rotation)); // ImGuizmo uses degrees
-        // tc->setScale(scale);
+        // Gizmo was used - worldTransform now contains the NEW world matrix after manipulation
+        // Use TransformSystem to update transform (ensures proper computation and propagation)
+        TransformSystem::setWorldTransform(tc, worldTransform);
 
+        // Decompose LOCAL matrix back to position/rotation/scale
+        // glm::vec3 position, rotation, scale;
+        // ImGuizmo::DecomposeMatrixToComponents(
+        //     glm::value_ptr(newLocalMatrix),
+        //     glm::value_ptr(position),
+        //     glm::value_ptr(rotation),
+        //     glm::value_ptr(scale));
 
-        // YA_CORE_TRACE("Gizmo manipulated: pos({}, {}, {})", position.x, position.y, position.z);
+        // // Update transform component with LOCAL values
+        // // Use setters to properly propagate dirty flags to children
+        // tc->_position   = position;
+        // tc->_rotation   = rotation;
+        // tc->_scale      = scale;
+        // tc->_localDirty = true;
+        // tc->markWorldDirty();
+
+        // YA_CORE_TRACE("Gizmo manipulated: local pos({}, {}, {})", position.x, position.y, position.z);
     }
 }
 

@@ -2,6 +2,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/ModelComponent.h"
 #include "ReflectionCache.h"
 #include "TypeRenderer.h"
 
@@ -13,10 +14,12 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "EditorLayer.h"
+#include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
+
 
 namespace ya
 {
@@ -62,9 +65,41 @@ void DetailsView::drawComponents(Entity &entity)
     ImGui::Text("Entity ID: %u", entity.getId());
     ImGui::Separator();
 
-    drawReflectedComponent<TagComponent>("Tag", entity, nullptr);
+    // ★ 自定义名字编辑器：优先使用 Node 的名字
+    Scene *scene = entity.getScene();
+    Node  *node  = scene ? scene->getNodeByEntity(&entity) : nullptr;
+
+    ImGui::PushID("Name");
+    if (node) {
+        // 使用 Node 的名字
+        char        buffer[256];
+        std::string name = node->getName();
+        strncpy_s(buffer, name.c_str(), sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
+
+        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+            node->setName(buffer);
+        }
+    }
+    else {
+        // Fallback: 使用 Entity::name（兼容 flat entity）
+        char buffer[256];
+        strncpy_s(buffer, entity.name.c_str(), sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
+
+        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+            entity.name = buffer;
+        }
+    }
+    ImGui::PopID();
+
     drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
-        tc->bDirty = true;
+        // Mark both local and world as dirty, then propagate to children
+        tc->markLocalDirty();
+        tc->propagateWorldDirtyToChildren();
+    });
+    drawReflectedComponent<ModelComponent>("Model", entity, [](ModelComponent *mc) {
+        mc->invalidate();
     });
     drawReflectedComponent<MeshComponent>("Mesh", entity, [](MeshComponent *mc) {
         mc->invalidate();

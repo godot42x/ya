@@ -51,6 +51,8 @@ struct Mesh
     [[nodiscard]] IBuffer       *getIndexBufferMut() const { return _indexBuffer.get(); }
 
     void draw(ICommandBuffer *cmdBuf) const;
+
+    const std::string &getName() const { return _name; }
 };
 
 } // namespace ya

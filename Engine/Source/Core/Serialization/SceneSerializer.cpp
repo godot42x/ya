@@ -109,9 +109,16 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
 {
     nlohmann::json j;
 
-    // Entity ID and name
-    j["id"]   = entity->getComponents<IDComponent>()._id.value; // uuid
-    j["name"] = entity->_name;
+    // Entity ID
+    j["id"] = entity->getComponents<IDComponent>()._id.value; // uuid
+
+    // ★ 优先从 Node 读取名字，如果没有 Node 则从 Entity 读取
+    Node* node = _scene->getNodeByEntity(entity);
+    if (node) {
+        j["name"] = node->getName();
+    } else {
+        j["name"] = entity->name.empty() ? "Entity" : entity->name;
+    }
 
     // Serialize components
     j["components"] = nlohmann::json::object();
@@ -122,20 +129,6 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
 
     auto &reg = ECSRegistry::get();
 
-    // YA_CORE_INFO("=== Serializing entity: {} (handle: {}) ===", entity->_name, (uint32_t)handle);
-    // YA_CORE_INFO("Registry address: {}", (void *)&registry);
-
-    // 直接检查 TagComponent
-    // bool hasTag = registry.all_of<TagComponent>(handle);
-    // YA_CORE_INFO("Entity has TagComponent (direct check): {}", hasTag);
-    // if (hasTag) {
-    //     auto *tagPtr = &registry.get<TagComponent>(handle);
-    //     YA_CORE_INFO("TagComponent address: {}", (void *)tagPtr);
-    // }
-
-    // TODO: loop Entity::_components instead, now this field is not implemented
-    //      so that we don't need to check the component_ptr or loop every component
-
     static std::unordered_set<FName> ignoredComponents = {
         FName("IDComponent"),
     };
@@ -145,19 +138,6 @@ nlohmann::json SceneSerializer::serializeEntity(Entity *entity)
             continue;
         }
 
-        // auto getterIt = reg._componentGetters.find(typeIndex);
-        // if (getterIt == reg._componentGetters.end()) {
-        //     YA_CORE_WARN("No getter found for component type: {}", name.toString());
-        //     continue;
-        // }
-        // bool bTagComponent = registry.all_of<TagComponent>(handle);
-        // YA_CORE_INFO("Checking component: {} (typeIndex: {}) - has component: {}", name.toString(), typeIndex, bTagComponent);
-
-        // auto getter = getterIt->second;
-        // YA_CORE_TRACE("Checking component: {} for entity: {}", name.toString(), entity->_name);
-
-        // void *componentPtr = getter(registry, handle);
-        // YA_CORE_TRACE("  -> componentPtr: {}", (void *)componentPtr);
         void *componentPtr = reg.getComponent(name, registry, handle);
 
         if (componentPtr) {
@@ -174,11 +154,32 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
     std::string name = j["name"].get<std::string>();
     uint64_t    uuid = j["id"].get<uint64_t>();
 
-    Entity                          *entity            = uuid ? _scene->createEntityWithUUID(uuid, name)
-                                                              : _scene->createEntity(name);
+    // ★ 改用 createNode 创建（自动创建 Node + Entity + TransformComponent）
+    Node* node = _scene->createNode3D(name);
+    if (!node) {
+        YA_CORE_ERROR("Failed to create node for entity '{}'", name);
+        return nullptr;
+    }
+
+    // ★ 设置 Node 的名字
+    node->setName(name);
+
+    // Cast to Node3D to access Entity
+    auto *node3D = dynamic_cast<Node3D *>(node);
+    Entity* entity = node3D ? node3D->getEntity() : nullptr;
+    if (!entity) {
+        YA_CORE_ERROR("Failed to get entity from node '{}'", name);
+        return nullptr;
+    }
+
+    // 设置 UUID（覆盖自动生成的）
+    if (auto idComp = entity->getComponent<IDComponent>()) {
+        idComp->_id = UUID(uuid);
+    }
+
     static std::unordered_set<FName> ignoredComponents = {
         FName("IDComponent"),
-        FName("TagComponent"),
+        FName("TransformComponent"), // ★ 跳过 TransformComponent，因为 createNode 已经创建了
     };
 
     // 反序列化组件
@@ -203,6 +204,17 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
                 auto  cls          = ClassRegistry::instance().getClass(id);
                 if (cls) {
                     ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->_name);
+                }
+            }
+        }
+
+        // ★ 特殊处理：如果 JSON 中有 TransformComponent，需要反序列化到已存在的组件
+        if (components.contains("TransformComponent")) {
+            if (auto tc = entity->getComponent<TransformComponent>()) {
+                auto typeIndex = reg.getTypeIndex(FName("TransformComponent"));
+                if (typeIndex) {
+                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(
+                        tc, *typeIndex, components["TransformComponent"], "TransformComponent");
                 }
             }
         }

@@ -20,7 +20,7 @@ struct Entity
     Scene       *_scene        = nullptr;
 
   public:
-    std::string        _name = "Entity";
+    std::string        name;
     std::vector<FName> _components;
 
   public:
@@ -93,7 +93,8 @@ struct Entity
     bool operator==(const Entity &other) const { return _entityHandle == other._entityHandle && _scene == other._scene; }
     bool operator!=(const Entity &other) const { return !(*this == other); }
 
-    const std::string &getName() const { return _name; }
+    const std::string &getName() const { return name; }
+    void setName(const std::string &newName) { name = newName; }
 };
 
 } // namespace ya

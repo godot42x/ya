@@ -256,17 +256,17 @@ struct MaterialSystemV1Template : public IMaterialSystem
      */
     template <typename TPushConstant>
     void renderImpl(
-        ICommandBuffer                                                                                      *cmdBuf,
-        IRenderTarget                                                                                       *rt,
-        std::function<TPushConstant(const TransformComponent &tc)>                                           pushConstantUpdater,
-        std::function<void(const TagComponent &, const MaterialComponentType &, const TransformComponent &)> preDrawCallback = nullptr)
+        ICommandBuffer                                                                 *cmdBuf,
+        IRenderTarget                                                                  *rt,
+        std::function<TPushConstant(const TransformComponent &tc)>                      pushConstantUpdater,
+        std::function<void(const MaterialComponentType &, const TransformComponent &)> preDrawCallback = nullptr)
     {
         Scene *scene = getActiveScene();
         if (!scene) {
             return;
         }
 
-        auto view = scene->getRegistry().view<TagComponent, MaterialComponentType, TransformComponent>();
+        auto view = scene->getRegistry().view<MaterialComponentType, TransformComponent>();
         if (view.begin() == view.end()) {
             return;
         }
@@ -292,16 +292,16 @@ struct MaterialSystemV1Template : public IMaterialSystem
 
         // 遍历所有实体
         for (entt::entity entity : view) {
-            const auto &[tag, materialComp, tc] = view.get(entity);
+            const auto &[name, materialComp, tc] = view.get(entity);
 
             // 预绘制回调
             if (preDrawCallback) {
-                preDrawCallback(tag, materialComp, tc);
+                preDrawCallback(name, materialComp, tc);
             }
 
             // 遍历材质和 mesh
             for (const auto &[material, meshIDs] : materialComp.getMaterial2MeshIDs()) {
-                _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
+                _ctxEntityDebugStr = std::format("{} (Mat: {})", name.getName(), material->getLabel());
 
                 if (!material || material->getIndex() < 0) {
                     YA_CORE_WARN("default material for none or error material");

@@ -25,45 +25,38 @@ enum class EAssetType : uint8_t
     // Extensible for future asset types
 };
 
-/**
- * @brief Type-safe asset reference with automatic loading
- *
- * Design Features:
- * - Only stores path during serialization
- * - Automatically loads via AssetManager during deserialization
- * - Provides type-safe pointer access at runtime
- *
- * Usage:
- * @code
- * struct MyComponent {
- *     YA_REFLECT_BEGIN(MyComponent)
- *     YA_REFLECT_FIELD(textureRef)
- *     YA_REFLECT_END()
- *
- *     TextureRef textureRef;
- * };
- *
- * // Access loaded resource:
- * Texture* tex = myComp.textureRef.get();
- * @endcode
- */
-template <typename T>
-struct TAssetRef
+struct AssetRefBase
 {
-    // TODO: Add reflection support for template classes
-    YA_REFLECT_BEGIN(TAssetRef<T>)
+    YA_REFLECT_BEGIN(AssetRefBase)
     YA_REFLECT_FIELD(_path) // Only serialize path
     YA_REFLECT_END()
 
 
-    std::string        _path;      // Serialized data: asset path
+    std::string _path; // Serialized data: asset path
+    // bool bValid= false;  // cannot be loaded?
+
+    AssetRefBase() = default;
+    explicit AssetRefBase(const std::string &path) : _path(path) {}
+
+    virtual bool resolve()    = 0;
+    virtual void invalidate() = 0;
+};
+
+
+template <typename T>
+struct TAssetRef : public AssetRefBase
+{
+    YA_REFLECT_BEGIN(TAssetRef<T>, AssetRefBase)
+    YA_REFLECT_END()
+
+    // TODO: Add reflection support for template classes
     std::shared_ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
 
     // Constructors
     TAssetRef() = default;
-    explicit TAssetRef(const std::string &path) : _path(path) {}
+    explicit TAssetRef(const std::string &path) : AssetRefBase(path) {}
     TAssetRef(const std::string &path, std::shared_ptr<T> ptr)
-        : _path(path), _cachedPtr(std::move(ptr))
+        : AssetRefBase(path), _cachedPtr(std::move(ptr))
     {
     }
 
@@ -74,9 +67,9 @@ struct TAssetRef
     TAssetRef &operator=(TAssetRef &&other) noexcept = default;
 
     // Access interface
-    T       *get() const { return _cachedPtr.get(); }
-    T       *operator->() const { return get(); }
-    T       &operator*() const { return *_cachedPtr; }
+    T *get() const { return _cachedPtr.get(); }
+    // T       *operator->() const { return get(); }
+    // T       &operator*() const { return *_cachedPtr; }
     explicit operator bool() const { return _cachedPtr != nullptr; }
 
     bool isLoaded() const { return _cachedPtr != nullptr; }
@@ -90,7 +83,12 @@ struct TAssetRef
      * Called by serialization system after deserialization
      * @return true if successfully loaded, false otherwise
      */
-    bool resolve();
+    bool resolve() override;
+
+    void invalidate() override
+    {
+        _cachedPtr.reset();
+    }
 
     /**
      * @brief Set resource with path (updates both path and cached pointer)
@@ -99,11 +97,6 @@ struct TAssetRef
     {
         _path      = path;
         _cachedPtr = std::move(ptr);
-    }
-
-    void invalidate()
-    {
-        _cachedPtr.reset();
     }
 
     /**
@@ -228,5 +221,20 @@ inline bool TAssetRef<Mesh>::resolve()
     UNIMPLEMENTED();
     return true;
 }
+
+
+
+struct AssetBase
+{
+    stdpath _path;
+};
+
+
+// a light asset: only has path
+struct LightAsset : public AssetBase
+{
+    LightAsset() = default;
+    LightAsset(const stdpath &path) { _path = path; }
+};
 
 } // namespace ya

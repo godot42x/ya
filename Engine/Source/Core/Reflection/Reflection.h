@@ -106,6 +106,10 @@ struct Visitor<void>
     static void visit_properties(auto &obj, auto &&visitor) {}
 };
 
+inline type_index_t getRuntimeObjectType(const void *obj)
+{
+    // return ::ya::ECSRegistry::get().getRuntimeObjectType(obj);
+}
 
 } // namespace reflection
 
@@ -126,7 +130,7 @@ struct Visitor<void>
 #define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
   private:                                                                                                                                        \
     struct reflection_detail;                                                                                                                     \
-    using _reflect_helper_class = reflection_detail;                                                                                              \
+    using _reflect_helper_class = reflection_detail; /* const std::string ge*/                                                                    \
     struct reflection_detail                                                                                                                      \
     {                                                                                                                                             \
         using class_t                        = ClassName;                                                                                         \

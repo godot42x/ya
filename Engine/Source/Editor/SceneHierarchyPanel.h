@@ -15,6 +15,7 @@ constexpr size_t SCRIPT_INPUT_BUFFER_SIZE = 256;
 struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
+struct Node;
 
 struct SceneHierarchyPanel
 {
@@ -43,7 +44,12 @@ struct SceneHierarchyPanel
 
     void sceneTree();
 
-    void drawEntityNode(Entity &entity);
+    // Node hierarchy rendering
+    void drawNodeRecursive(Node *node);
+    void renderStandaloneEntities();
+
+    void               drawFlatEntity(Entity &entity);
+    const std::string &getNodeName(Node *node);
 };
 
 } // namespace ya

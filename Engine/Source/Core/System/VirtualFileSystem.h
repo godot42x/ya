@@ -132,11 +132,11 @@ struct VirtualFileSystem
 
     bool isFileExists(const std::string &filepath) const
     {
-        return std::filesystem::exists(projectRoot / filepath);
+        return std::filesystem::exists(translatePath(filepath));
     }
     bool isDirectoryExists(const std::string &filepath) const
     {
-        return std::filesystem::is_directory(projectRoot / filepath);
+        return std::filesystem::is_directory(translatePath(filepath));
     }
 
     void saveToFile(std::string_view filepath, const std::string &data) const

@@ -118,19 +118,79 @@ void AssetManager::clearCache()
     YA_PROFILE_FUNCTION_LOG();
     modelCache.clear();
     _textureViews.clear();
-    if (_importer) {
-        delete _importer;
-        _importer = nullptr;
-    }
+
     YA_CORE_INFO("AssetManager cleared");
 }
 
 AssetManager::AssetManager()
 {
-    _importer = new Assimp::Importer();
 }
 
 std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
+{
+    return loadModelImpl(filepath, "");
+}
+
+
+
+std::shared_ptr<Model> AssetManager::loadModel(const std::string &name, const std::string &filepath)
+{
+    auto model = loadModelImpl(filepath, name);
+    if (model) {
+        _modalName2Path[name] = filepath;
+    }
+    return model;
+}
+
+
+
+bool AssetManager::isModelLoaded(const std::string &filepath) const
+{
+    return modelCache.find(filepath) != modelCache.end();
+}
+
+std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
+{
+    if (isModelLoaded(filepath)) {
+        return modelCache.at(filepath);
+    }
+    return nullptr;
+}
+
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
+{
+    if (isTextureLoaded(filepath)) {
+        return _textureViews.find(filepath)->second;
+    }
+
+    auto texture = makeShared<Texture>(filepath);
+    if (!texture) {
+        YA_CORE_WARN("Failed to create texture: {}", filepath);
+    }
+    else {
+        _textureViews[filepath] = texture;
+    }
+    return texture;
+}
+
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, const std::string &filepath)
+{
+    if (isTextureLoaded(name)) {
+        return _textureViews.find(name)->second;
+    }
+
+    auto texture = makeShared<Texture>(filepath);
+    texture->setLabel(name);
+    if (!texture) {
+        YA_CORE_WARN("Failed to create texture: {}", filepath);
+    }
+
+    _textureViews[filepath] = texture;
+    _textureName2Path[name] = filepath;
+    return texture;
+}
+
+std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, const std::string &identifier)
 {
     // Check if the model is already loaded
     if (isModelLoaded(filepath)) {
@@ -173,10 +233,80 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
         return nullptr;
     }
 
-    // Process all meshes in the scene
-    for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh *mesh = scene->mMeshes[i];
+    // Storage for processed data
+    std::vector<stdptr<Mesh>> meshes;
 
+    // Material data per mesh (indexed by mesh index)
+    std::vector<EmbeddedMaterial> embeddedMaterials;
+    std::vector<int32_t>          meshMaterialIndices;
+
+    // Process all materials first
+    auto processMaterial = [&directory](const aiScene *scene, aiMaterial *material) -> EmbeddedMaterial {
+        EmbeddedMaterial embeddedMat;
+
+        if (!material) {
+            return embeddedMat; // Return default material
+        }
+
+        // Get material name
+        aiString matName;
+        if (material->Get(AI_MATKEY_NAME, matName) == AI_SUCCESS) {
+            embeddedMat.name = matName.C_Str();
+        }
+
+        // Get colors
+        aiColor4D color;
+        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
+            embeddedMat.baseColor = glm::vec4(color.r, color.g, color.b, color.a);
+        }
+        if (material->Get(AI_MATKEY_COLOR_AMBIENT, color) == AI_SUCCESS) {
+            embeddedMat.ambient = glm::vec3(color.r, color.g, color.b);
+        }
+        if (material->Get(AI_MATKEY_COLOR_SPECULAR, color) == AI_SUCCESS) {
+            embeddedMat.specular = glm::vec3(color.r, color.g, color.b);
+        }
+        if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
+            embeddedMat.emissive = glm::vec3(color.r, color.g, color.b);
+        }
+
+        // Get shininess
+        float shininess;
+        if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {
+            embeddedMat.shininess = shininess;
+        }
+
+        // Get opacity
+        float opacity;
+        if (material->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
+            embeddedMat.opacity = opacity;
+        }
+
+        // Get textures (store relative paths)
+        auto getTexturePath = [](aiMaterial *mat, aiTextureType type) -> std::string {
+            if (mat->GetTextureCount(type) > 0) {
+                aiString path;
+                if (mat->GetTexture(type, 0, &path) == AI_SUCCESS) {
+                    return path.C_Str();
+                }
+            }
+            return "";
+        };
+
+        // TODO: refactor
+        embeddedMat.diffuseTexturePath  = getTexturePath(material, aiTextureType_DIFFUSE);
+        embeddedMat.specularTexturePath = getTexturePath(material, aiTextureType_SPECULAR);
+        embeddedMat.normalTexturePath   = getTexturePath(material, aiTextureType_NORMALS);
+        embeddedMat.emissiveTexturePath = getTexturePath(material, aiTextureType_EMISSIVE);
+
+        return embeddedMat;
+    };
+
+    // Process all materials in the scene
+    for (uint32_t i = 0; i < scene->mNumMaterials; ++i) {
+        embeddedMaterials.push_back(processMaterial(scene, scene->mMaterials[i]));
+    }
+
+    auto processMesh = [&filepath, &meshes, &meshMaterialIndices](const aiScene *scene, aiMesh *mesh) {
         // Get mesh name
         std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
 
@@ -184,8 +314,7 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
         CoordinateSystem sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
 
         // Temporary storage for vertex data
-        std::vector<ModelVertex> modelVertices;
-        std::vector<uint32_t>    indices;
+        MeshData meshData;
 
         // Process vertices
         for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
@@ -223,31 +352,53 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
                 vertex.color = glm::vec4(1.0f);
             }
 
-            modelVertices.push_back(std::move(vertex));
+            // if(mesh.texture)
+
+            meshData.vertices.push_back(std::move(vertex));
         }
 
         // Process indices
         for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
             aiFace face = mesh->mFaces[j];
             for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                indices.push_back(face.mIndices[k]);
+                meshData.indices.push_back(face.mIndices[k]);
             }
         }
 
-        // Convert ModelVertex to engine Vertex format
-        std::vector<ya::Vertex> vertices;
-        for (const auto &v : modelVertices) {
-            ya::Vertex vertex;
-            vertex.position  = v.position;
-            vertex.normal    = v.normal;
-            vertex.texCoord0 = v.texCoord;
-            vertices.push_back(vertex);
-        }
+        auto newMesh = meshData.createMesh(meshName, sourceCoordSystem);
+        meshes.push_back(std::move(newMesh));
 
-        // Create Mesh GPU resource directly
-        auto newMesh = makeShared<Mesh>(vertices, indices, meshName, sourceCoordSystem);
-        model->getMeshes().push_back(newMesh);
-    }
+        // Record material index for this mesh
+        if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < static_cast<int32_t>(scene->mNumMaterials)) {
+            meshMaterialIndices.push_back(static_cast<int32_t>(mesh->mMaterialIndex));
+        }
+        else {
+            meshMaterialIndices.push_back(-1); // No material
+        }
+    };
+
+    std::function<void(const aiScene *, aiNode *)> processNode;
+    processNode = [&processMesh, &processNode](const aiScene *scene, aiNode *node) {
+        for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+            aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
+            processMesh(scene, mesh);
+        }
+        for (unsigned int i = 0; i < node->mNumChildren; i++) {
+            processNode(scene, node->mChildren[i]);
+        }
+    };
+
+    processNode(scene, scene->mRootNode);
+
+    // Assign processed data to model
+    model->meshes              = std::move(meshes);
+    model->embeddedMaterials   = std::move(embeddedMaterials);
+    model->meshMaterialIndices = std::move(meshMaterialIndices);
+
+    YA_CORE_INFO("Loaded model '{}': {} meshes, {} materials",
+                 filepath,
+                 model->meshes.size(),
+                 model->embeddedMaterials.size());
 
     model->setIsLoaded(true);
     model->setDirectory(directory);
@@ -256,170 +407,6 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
     modelCache[filepath] = model;
 
     return model;
-}
-
-std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath, CoordinateSystem coordSystem)
-{
-    // Check if the model is already loaded
-    if (isModelLoaded(filepath)) {
-        return modelCache[filepath];
-    }
-
-    // Create a new model
-    auto model = makeShared<Model>();
-
-    Assimp::Importer importer;
-
-    // Get directory path for texture loading
-    size_t      lastSlash = filepath.find_last_of("/\\");
-    std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
-
-    // Check if file exists using VirtualFileSystem
-    if (!VirtualFileSystem::get()->isFileExists(filepath)) {
-        YA_CORE_ERROR("Model file does not exist: {}", filepath);
-        return nullptr;
-    }
-
-    // Read the file using VirtualFileSystem
-    std::string fileContent;
-    if (!VirtualFileSystem::get()->readFileToString(filepath, fileContent)) {
-        YA_CORE_ERROR("Failed to read model file: {}", filepath);
-        return nullptr;
-    }
-
-    // Load the model using Assimp
-    const aiScene *scene = importer.ReadFileFromMemory(
-        fileContent.data(),
-        fileContent.size(),
-        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-
-
-    // Check for errors
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        YA_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
-        return nullptr;
-    }
-
-    // Process all meshes in the scene
-    for (unsigned int i = 0; i < scene->mNumMeshes; i++) {
-        aiMesh *mesh = scene->mMeshes[i];
-
-        // Get mesh name
-        std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
-
-        YA_CORE_INFO("Loading mesh '{}' with explicit coordinate system: {}",
-                     meshName,
-                     coordSystem == CoordinateSystem::LeftHanded ? "LeftHanded" : "RightHanded");
-
-        // Temporary storage
-        std::vector<ModelVertex> modelVertices;
-        std::vector<uint32_t>    indices;
-
-        // Process vertices
-        for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
-            ModelVertex vertex;
-            vertex.position = {mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z};
-
-            // Check if the mesh has normals
-            if (mesh->HasNormals()) {
-                vertex.normal = {mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z};
-            }
-
-            // Check if the mesh has texture coordinates
-            if (mesh->mTextureCoords[0]) {
-                vertex.texCoord = {mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y};
-            }
-
-            modelVertices.push_back(vertex);
-        }
-
-        // Process indices
-        for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
-            aiFace face = mesh->mFaces[j];
-            for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                indices.push_back(face.mIndices[k]);
-            }
-        }
-
-        // Convert to engine Vertex format
-        std::vector<ya::Vertex> vertices;
-        for (const auto &v : modelVertices) {
-            ya::Vertex vertex;
-            vertex.position  = v.position;
-            vertex.normal    = v.normal;
-            vertex.texCoord0 = v.texCoord;
-            vertices.push_back(vertex);
-        }
-
-        // Create Mesh with explicit coordinate system
-        auto newMesh = makeShared<Mesh>(vertices, indices, meshName, coordSystem);
-        model->getMeshes().push_back(newMesh);
-    }
-
-    model->setIsLoaded(true);
-    model->setDirectory(directory);
-
-    // Cache the model
-    modelCache[filepath] = model;
-
-    return model;
-}
-
-std::shared_ptr<Model> AssetManager::loadModel(const std::string &name, const std::string &filepath)
-{
-    auto model = loadModel(filepath);
-    if (model) {
-        _name2path[name] = filepath;
-    }
-    return model;
-}
-
-
-
-bool AssetManager::isModelLoaded(const std::string &filepath) const
-{
-    return modelCache.find(filepath) != modelCache.end();
-}
-
-std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
-{
-    if (isModelLoaded(filepath)) {
-        return modelCache.at(filepath);
-    }
-    return nullptr;
-}
-
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
-{
-    if (isTextureLoaded(filepath)) {
-        return _textureViews.find(filepath)->second;
-    }
-
-    auto texture = std::make_shared<Texture>(filepath);
-    if (!texture) {
-        YA_CORE_WARN("Failed to create texture: {}", filepath);
-    }
-    else {
-        _textureViews[filepath] = texture;
-    }
-    return texture;
-}
-
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, const std::string &filepath)
-{
-    if (isTextureLoaded(name)) {
-        return _textureViews.find(name)->second;
-    }
-
-    auto texture = std::make_shared<Texture>(filepath);
-    texture->setLabel(name);
-    if (!texture) {
-        YA_CORE_WARN("Failed to create texture: {}", filepath);
-    }
-    else {
-        _textureViews[name] = texture;
-    }
-    return texture;
 }
 
 } // namespace ya

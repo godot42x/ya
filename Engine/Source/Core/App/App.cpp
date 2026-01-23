@@ -18,6 +18,7 @@
 #include "Core/Manager/Facade.h"
 #include "Core/ResourceRegistry.h"
 #include "ECS/System/ResourceResolveSystem.h"
+#include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
 #include "Render/TextureLibrary.h"
@@ -788,12 +789,25 @@ void App::onUpdate(float dt)
 
     static ResourceResolveSystem *resourceResolveSystem = []() {
         auto sys = new ResourceResolveSystem();
-        std::atexit([]() { delete resourceResolveSystem; });
+        std::atexit([]() {
+            resourceResolveSystem->destroy();
+            delete resourceResolveSystem;
+        });
+        sys->init();
+        return sys;
+    }();
+    static TransformSystem *transformSystem = []() {
+        auto sys = new TransformSystem();
+        std::atexit([]() {
+            transformSystem->destroy();
+            delete transformSystem;
+        });
         sys->init();
         return sys;
     }();
 
     resourceResolveSystem->onUpdate(dt);
+    transformSystem->onUpdate(dt);
     _viewportRT->onUpdate(dt);
     _screenRT->onUpdate(dt);
 

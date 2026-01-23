@@ -85,6 +85,7 @@ struct LitMaterialSystem : public IMaterialSystem
     struct DebugUBO
     {
         alignas(4) bool bDebugNormal = false;
+        alignas(4) bool bDebugDepth  = false;
         glm::vec4 floatParam         = glm::vec4(0.0f);
     } uDebug;
 

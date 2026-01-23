@@ -104,6 +104,7 @@ layout(set =0, binding =1, std140) uniform LightUBO {
 
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
+    bool bDebugDepth;
     vec4 floatParam;
 } uDebug;
 
@@ -233,6 +234,9 @@ void main ()
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
         return;
+    }
+    if(uDebug.bDebugDepth){
+        fColor = vec4(vec3(gl_FragCoord.z), 1.0);
     }
     if(uLit.numPointLights == 0 ){
         fColor = vec4(0,0,1,1);

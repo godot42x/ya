@@ -37,6 +37,7 @@ struct ECSRegistry
                 if (registry.all_of<T>(entity)) {
                     return (void *)&registry.get<T>(entity);
                 }
+                return nullptr;
             };
             _componentCreators[typeIndex] = [](entt::registry &registry, entt::entity entity) -> void * {
                 return &registry.emplace<T>(entity);

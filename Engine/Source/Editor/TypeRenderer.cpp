@@ -1,6 +1,8 @@
 #include "TypeRenderer.h"
 
 #include "ContainerPropertyRenderer.h"
+#include "Core/App/App.h"
+#include "Core/Common/AssetRef.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"
@@ -109,58 +111,85 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
     }
 
 
-    if (cache->classPtr && cache->propertyCount > 0) {
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
+    if (cache->classPtr) {
 
-        auto iterateChildren = [&]() {
-            for (auto &[propName, prop] : cache->classPtr->properties) {
-                auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
-
-                // 从缓存获取属性渲染上下文
-                const auto &propCtx     = cache->propertyContexts[propName];
-                const bool  isContainer = propCtx.isContainer;
-                const auto &prettyName  = propCtx.prettyName;
-
-                if (isContainer) {
-                    // 容器属性：使用容器渲染器
-                    bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
-                        prettyName,
-                        prop,
-                        subPropInstancePtr,
-                        [depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
-                            return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
-                        });
-                    if (containerModified) {
-                        bModified = true;
-                    }
-                }
-                else {
-                    // 普通属性：直接传递 PropertyRenderContext
-                    if (renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, depth + 1, &propCtx)) {
-                        bModified = true;
-                    }
-                }
-            }
-        };
-
-        if (depth == 0)
+        if (cache->propertyCount > 0 || cache->classPtr->parents.size() > 0)
         {
-            iterateChildren();
-        }
-        else {
-            // 优化：depth > 1 时默认折叠，减少渲染开销
-            ImGuiTreeNodeFlags nodeFlags = (depth > 1) ? flags & ~ImGuiTreeNodeFlags_DefaultOpen : flags;
-            bool               isOpen    = ImGui::TreeNodeEx(name.c_str(), nodeFlags, "%s", name.c_str());
-            if (isOpen) {
-                ImGui::Indent();
-                iterateChildren();
-                ImGui::Unindent();
-                ImGui::TreePop();
+
+            auto iterateAll = [&]() {
+                // 首先递归渲染父类的属性
+                auto &registry = ClassRegistry::instance();
+                for (auto parentTypeId : cache->classPtr->parents) {
+                    // 获取父类指针
+                    void *parentPtr = cache->classPtr->getParentPointer(instancePtr, parentTypeId);
+                    if (!parentPtr) {
+                        continue;
+                    }
+
+                    // 获取父类的 Class 信息
+                    if (auto *parentClass = registry.getClass(parentTypeId)) {
+                        // 递归渲染父类（使用父类的 typeIndex 和指针）
+                        if (renderReflectedType(parentClass->getName(), parentTypeId, parentPtr, depth + 1, nullptr)) {
+                            bModified = true;
+                        }
+                    }
+                }
+
+                // 然后渲染当前类的属性
+                for (auto &[propName, prop] : cache->classPtr->properties) {
+                    auto subPropInstancePtr = prop.addressGetterMutable(instancePtr);
+
+                    // 从缓存获取属性渲染上下文
+                    const auto &propCtx     = cache->propertyContexts[propName];
+                    const bool  isContainer = propCtx.isContainer;
+                    const auto &prettyName  = propCtx.prettyName;
+
+                    if (isContainer) {
+                        // 容器属性：使用容器渲染器
+                        bool containerModified = ya::editor::ContainerPropertyRenderer::renderContainer(
+                            prettyName,
+                            prop,
+                            subPropInstancePtr,
+                            [depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
+                                return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
+                            });
+                        if (containerModified) {
+                            bModified = true;
+                        }
+                    }
+                    else {
+                        // 普通属性：直接传递 PropertyRenderContext
+                        if (renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, depth + 1, &propCtx)) {
+                            bModified = true;
+                        }
+                    }
+                }
+            };
+
+            if (depth == 0)
+            {
+                iterateAll();
+                return bModified;
+            }
+            else {
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
+                if (depth > 1) {
+                    flags = flags & ~ImGuiTreeNodeFlags_DefaultOpen;
+                }
+                // 优化：depth > 1 时默认折叠，减少渲染开销
+                bool isOpen = ImGui::TreeNodeEx(name.c_str(), flags, "%s", name.c_str());
+                if (isOpen) {
+                    ImGui::Indent();
+                    iterateAll();
+                    ImGui::Unindent();
+                    ImGui::TreePop();
+                }
+                return bModified;
             }
         }
     }
 
-
+    ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
     return bModified;
 }
 
@@ -168,9 +197,26 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
 // Builtin Type Renderers Registration
 // ============================================================================
 
+
+
 void registerBuiltinTypeRenderers()
 {
     auto &registry = TypeRenderRegistry::instance();
+
+    static auto integerRenderFunc = [](int &value, const PropertyRenderContext &ctx) -> bool {
+        const auto &spec = ctx.manipulateSpec;
+        switch (spec.type) {
+        case ya::reflection::Meta::ManipulateSpec::Slider:
+            return ImGui::SliderInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.min), static_cast<int>(spec.max));
+        case ya::reflection::Meta::ManipulateSpec::Drag:
+            return ImGui::DragInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step));
+        case ya::reflection::Meta::ManipulateSpec::Input:
+            return ImGui::InputInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step));
+        case ya::reflection::Meta::ManipulateSpec::None:
+            return ImGui::InputInt(ctx.prettyName.c_str(), &value);
+        }
+        return false;
+    };
 
     // int 类型渲染器
     registry.registerRenderer(
@@ -178,19 +224,35 @@ void registerBuiltinTypeRenderers()
         TypeRenderer{
             .typeName   = "int",
             .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
-                const auto &spec = ctx.manipulateSpec;
-                auto        ptr  = static_cast<int *>(instance);
-                switch (spec.type) {
-                case ya::reflection::Meta::ManipulateSpec::Slider:
-                    return ImGui::SliderInt(ctx.prettyName.c_str(), ptr, static_cast<int>(spec.min), static_cast<int>(spec.max));
-                case ya::reflection::Meta::ManipulateSpec::Drag:
-                    return ImGui::DragInt(ctx.prettyName.c_str(), ptr, static_cast<int>(spec.step));
-                case ya::reflection::Meta::ManipulateSpec::Input:
-                    return ImGui::InputInt(ctx.prettyName.c_str(), ptr, static_cast<int>(spec.step));
-                case ya::reflection::Meta::ManipulateSpec::None:
-                    return ImGui::InputInt(ctx.prettyName.c_str(), ptr);
+                return integerRenderFunc(*static_cast<int *>(instance), ctx);
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<uint32_t>,
+        TypeRenderer{
+            .typeName   = "uint32_t",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                auto &value    = *static_cast<uint32_t *>(instance);
+                int   temp     = static_cast<int>(value);
+                bool  modified = integerRenderFunc(temp, ctx);
+                if (modified) {
+                    value = static_cast<uint32_t>(temp);
                 }
-                return false;
+                return modified;
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<int32_t>,
+        TypeRenderer{
+            .typeName   = "int32_t",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                auto &value    = *static_cast<int32_t *>(instance);
+                int   temp     = static_cast<int>(value);
+                bool  modified = integerRenderFunc(temp, ctx);
+                if (modified) {
+                    value = static_cast<int32_t>(temp);
+                }
+                return modified;
             },
         });
 
@@ -260,6 +322,47 @@ void registerBuiltinTypeRenderers()
                     return ImGui::ColorEdit4(ctx.prettyName.c_str(), val);
                 }
                 return ImGui::DragFloat4(ctx.prettyName.c_str(), val);
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<AssetRefBase>,
+        TypeRenderer{
+            .typeName   = "AssetRefBase",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                auto &assetRef = *static_cast<AssetRefBase *>(instance);
+                bool  modified = false;
+
+                // Display current path
+                std::string displayPath = assetRef._path.empty() ? "[No Model]" : assetRef._path;
+
+                // Path input field (read-only display)
+                ImGui::Text("%s:", ctx.prettyName.c_str());
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(-80); // Leave space for button
+
+                char buffer[256];
+                strncpy(buffer, displayPath.c_str(), sizeof(buffer) - 1);
+                buffer[sizeof(buffer) - 1] = '\0';
+
+                if (ImGui::InputText(("##" + ctx.prettyName).c_str(), buffer, sizeof(buffer))) {
+                    assetRef._path = buffer;
+                    modified       = true;
+                }
+
+                // Browse button - access FilePicker through App::get()->_editorLayer
+                ImGui::SameLine();
+                if (ImGui::Button(("Browse##" + ctx.prettyName).c_str())) {
+                    if (auto *app = App::get()) {
+                        if (auto *editorLayer = app->_editorLayer) {
+                            editorLayer->_filePicker.openModelPicker(assetRef._path, [&assetRef](const std::string &newPath) {
+                                assetRef._path = newPath;
+                                assetRef.invalidate();
+                            });
+                        }
+                    }
+                }
+
+                return modified;
             },
         });
 }

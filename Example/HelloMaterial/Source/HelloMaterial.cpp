@@ -7,6 +7,7 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -165,16 +166,17 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     auto unlitMaterials  = ya::MaterialFactory::get()->getMaterials<ya::UnlitMaterial>();
 
     // Create ground plane - using new reflection-based approach
-    if (auto plane = scene->createEntity("Plane")) {
-        auto tc = plane->addComponent<ya::TransformComponent>();
+    if (auto plane = scene->createNode3D("Plane")) {
+        ya::Entity* entity = plane->getEntity();
+        auto tc = entity->getComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
 
         // Mesh and Material are now separate components
-        auto mc = plane->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-        auto lmc                    = plane->addComponent<ya::LitMaterialComponent>();
+        auto lmc                    = entity->addComponent<ya::LitMaterialComponent>();
         lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     }
 
@@ -197,16 +199,17 @@ void HelloMaterial::createEntities(ya::Scene *scene)
             for (int k = 0; k < alpha; ++k) {
 
                 // YA_CORE_DEBUG("1.1 {} {} {}", i, j, k);
-                auto cube = scene->createEntity(std::format("Cube_{}_{}_{}", i, j, k));
+                auto cube = scene->createNode(std::format("Cube_{}_{}_{}", i, j, k));
+                ya::Entity* entity = cube->getEntity();
                 {
                     auto v  = glm::vec3(i, j, k);
-                    auto tc = cube->addComponent<ya::TransformComponent>();
+                    auto tc = entity->getComponent<ya::TransformComponent>();
                     tc->setPosition(offset * v);
                     float scale = std::sin(glm::radians(15.f * (float)(i + j + k)));
                     tc->setScale(glm::vec3(scale));
 
                     // Add mesh component (shared primitive)
-                    auto mc = cube->addComponent<ya::MeshComponent>();
+                    auto mc = entity->addComponent<ya::MeshComponent>();
                     mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
                     // random material
@@ -214,14 +217,14 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                     ++index;
                     if (materialIndex < simpleMaterialCount) {
                         // use base material
-                        auto bmc = cube->addComponent<ya::SimpleMaterialComponent>();
+                        auto bmc = entity->addComponent<ya::SimpleMaterialComponent>();
                         auto mat = simpleMaterials[materialIndex];
                         YA_CORE_ASSERT(mat, "Material is null");
                         bmc->setRuntimeMaterial(mat->as<ya::SimpleMaterial>());
                     }
                     else {
                         // use unlit material
-                        auto umc = cube->addComponent<ya::UnlitMaterialComponent>();
+                        auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
                         auto mat = unlitMaterials[materialIndex % unlitMaterials.size()];
                         YA_CORE_ASSERT(mat, "Material is null");
                         umc->setRuntimeMaterial(mat->as<ya::UnlitMaterial>());
@@ -233,18 +236,19 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     }
 #endif
 
-    if (auto *LitTestCube0 = scene->createEntity("Lit Test")) {
-        auto tc = LitTestCube0->addComponent<ya::TransformComponent>();
+    if (auto *LitTestCube0 = scene->createNode3D("Lit Test")) {
+        ya::Entity* entity = LitTestCube0->getEntity();
+        auto tc = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(3.0f));
-        _litTestEntity = LitTestCube0;
+        _litTestEntity = entity;
 
         // Mesh component (separate from material)
-        auto mc = LitTestCube0->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component with serializable texture slots
-        auto lmc = LitTestCube0->addComponent<ya::LitMaterialComponent>();
+        auto lmc = entity->addComponent<ya::LitMaterialComponent>();
         lmc->setTextureSlot(ya::LitMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
         lmc->setTextureSlot(ya::LitMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
         lmc->_params = ya::LitMaterial::ParamUBO{
@@ -255,22 +259,24 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         };
 
         // 添加 Lua 旋转脚本（新 API）
-        auto lsc = LitTestCube0->addComponent<ya::LuaScriptComponent>();
+        auto lsc = entity->addComponent<ya::LuaScriptComponent>();
         // 可以添加多个脚本，类似Unity
         // lsc->addScript("Content/Scripts/Health.lua");
         // lsc->addScript("Content/Scripts/Inventory.lua");
     }
-    if (auto *suzanne = scene->createEntity("Suzanne")) {
-        auto tc = suzanne->addComponent<ya::TransformComponent>();
+    if (auto *suzanne = scene->createNode3D("Suzanne")) {
+        ya::Entity* entity = suzanne->getEntity();
+        auto tc = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(2.0f));
 
         // Mesh component with external model
-        auto mc = suzanne->addComponent<ya::MeshComponent>();
+        // auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::ModelComponent>();
         mc->setModelPath("Engine/Content/Misc/Monkey.obj");
 
         // Material component
-        auto lmc     = suzanne->addComponent<ya::LitMaterialComponent>();
+        auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
         lmc->_params = ya::LitMaterial::ParamUBO{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
@@ -279,25 +285,26 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         };
     }
 
-    if (auto *pointLt = scene->createEntity("Point Light")) {
-        auto tc = pointLt->addComponent<ya::TransformComponent>();
+    if (auto *pointLt = scene->createNode3D("Point Light")) {
+        ya::Entity* entity = pointLt->getEntity();
+        auto tc = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
-        _pointLightEntity = pointLt;
+        _pointLightEntity = entity;
 
         // Mesh component
-        auto mc = pointLt->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component
-        auto plc = pointLt->addComponent<ya::PointLightComponent>();
-        auto umc = pointLt->addComponent<ya::UnlitMaterialComponent>();
+        auto plc = entity->addComponent<ya::PointLightComponent>();
+        auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
         auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
         umc->setRuntimeMaterial(pointLightMat);
         // umc.add
 
         // 添加 Lua 圆周运动脚本（新 API）
-        auto lsc = pointLt->addComponent<ya::LuaScriptComponent>();
+        auto lsc = entity->addComponent<ya::LuaScriptComponent>();
         lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
     }
 
@@ -305,8 +312,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     glm::vec3 startPos(-10.0f, -20.0f, -20.0f);
     float     spacing = 3.0f;
     for (size_t i = 0; i < _pongMaterialNames.size(); ++i) {
-        auto *entity = scene->createEntity(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
-        auto  tc     = entity->addComponent<ya::TransformComponent>();
+        auto *node = scene->createNode3D(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
+        ya::Entity* entity = node->getEntity();
+        auto  tc     = entity->getComponent<ya::TransformComponent>();
         float x      = startPos.x + (i % 5) * spacing;
         float z      = startPos.z + (i / 5) * spacing;
         tc->setPosition(glm::vec3(x, 0.0f, z));
@@ -349,24 +357,24 @@ void HelloMaterial::onEnterRuntime()
     auto scene = ya::App::get()->getSceneManager()->getActiveScene();
     YA_CORE_ASSERT(scene, "Scene is null");
 
-    if (auto player = scene->createEntity("Player"))
+    if (auto player = scene->createNode3D("Player"))
     {
-        player->addComponent<ya::PlayerComponent>();
-        player->addComponent<ya::TransformComponent>();
-        player->addComponent<ya::CameraComponent>();
-        player->addComponent<ya::SimpleMaterialComponent>();
-        player->addComponent<ya::LuaScriptComponent>();
-        if (auto spot = player->addComponent<ya::PointLightComponent>()) {
+        ya::Entity* entity = player->getEntity();
+        entity->addComponent<ya::PlayerComponent>();
+        entity->addComponent<ya::CameraComponent>();
+        entity->addComponent<ya::SimpleMaterialComponent>();
+        entity->addComponent<ya::LuaScriptComponent>();
+        if (auto spot = entity->addComponent<ya::PointLightComponent>()) {
             spot->_type           = ya::PointLightComponent::Spot;
             spot->_innerConeAngle = 10.0f;
             spot->_outerConeAngle = 30.0f;
         }
 
-        YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(player->getHandle()), "Camera component not found");
-        YA_CORE_ASSERT(player->hasComponent<ya::CameraComponent>(), "Camera component not attached");
+        YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(entity->getHandle()), "Camera component not found");
+        YA_CORE_ASSERT(entity->hasComponent<ya::CameraComponent>(), "Camera component not attached");
 
-        auto cc    = player->getComponent<ya::CameraComponent>();
+        auto cc    = entity->getComponent<ya::CameraComponent>();
         auto owner = cc->getOwner();
-        YA_CORE_ASSERT(owner == player, "Camera component owner mismatch");
+        YA_CORE_ASSERT(owner == entity, "Camera component owner mismatch");
     }
 }

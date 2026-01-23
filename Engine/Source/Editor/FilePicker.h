@@ -85,6 +85,11 @@ class FilePicker
     void openTexturePicker(const std::string &currentPath, Callback onConfirm);
 
     /**
+     * @brief 打开模型选择器
+     */
+    void openModelPicker(const std::string &currentPath, Callback onConfirm);
+
+    /**
      * @brief 打开目录选择器
      */
     void openDirectoryPicker(const std::string &currentPath,

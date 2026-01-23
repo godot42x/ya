@@ -30,7 +30,8 @@ void FreeCameraController::update(TransformComponent &tc, CameraComponent &cc, c
         tcDirty = true;
     }
     if (tcDirty) {
-        tc.bDirty = true;
+        tc._localDirty = true;
+        tc._worldDirty = true;
     }
 
     if (extent.height > 0) {

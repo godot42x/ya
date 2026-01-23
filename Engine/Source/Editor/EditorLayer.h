@@ -72,12 +72,12 @@ struct EditorLayer
 
     uint32_t _resizeTimerHandle = 0;
 
-    // File picker for save/load dialogs
-    FilePicker  _filePicker;
-    std::string _currentScenePath; // Current scene file path
-
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
+
+    // File picker for save/load dialogs and asset selection
+    FilePicker  _filePicker;
+    std::string _currentScenePath; // Current scene file path
 
   public:
     EditorLayer(App *app);

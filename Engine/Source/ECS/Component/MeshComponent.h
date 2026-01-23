@@ -1,12 +1,12 @@
 /**
  * @file MeshComponent.h
- * @brief 通用网格组件 - 纯数据，可序列化
+ * @brief Mesh Component - Pure geometry data reference
  *
- * 设计原则：
- * - 职责单一：只负责网格数据的引用和加载
- * - 支持两种来源：内置几何体 / 外部模型文件
- * - 运行时缓存自动解析
- * - 与 MaterialComponent 分离，由 System 组织关系
+ * Design:
+ * - MeshComponent holds a single Mesh reference (not a Model!)
+ * - Can be sourced from: primitive geometry OR Model's mesh by index
+ * - For Model loading, use ModelComponent which creates child entities with MeshComponent
+ * - This component is data-only, resolved by ResourceResolveSystem
  */
 #pragma once
 
@@ -20,14 +20,27 @@ namespace ya
 {
 
 /**
- * @brief 网格组件 - 管理 Entity 的几何网格数据
+ * @brief MeshComponent - Single mesh geometry reference
  *
- * 序列化格式：
+ * Two usage modes:
+ * 1. Primitive geometry (built-in shapes)
+ * 2. Mesh from Model (set by ResourceResolveSystem when processing ModelComponent)
+ *
+ * Serialization format:
  * @code
  * {
  *   "MeshComponent": {
- *     "_primitiveGeometry": "Cube",  // 或
- *     "_modelRef": { "_path": "Content/Models/character.fbx" }
+ *     "_primitiveGeometry": "Cube"  // Built-in primitive
+ *   }
+ * }
+ * @endcode
+ *
+ * When created from ModelComponent:
+ * @code
+ * {
+ *   "MeshComponent": {
+ *     "_sourceModelPath": "Content/Models/character.fbx",
+ *     "_meshIndex": 0
  *   }
  * }
  * @endcode
@@ -36,100 +49,108 @@ struct MeshComponent : public IComponent
 {
     YA_REFLECT_BEGIN(MeshComponent)
     YA_REFLECT_FIELD(_primitiveGeometry)
-    YA_REFLECT_FIELD(_modelRef)
-    YA_REFLECT_FIELD(_materialIndex)
+    YA_REFLECT_FIELD(_sourceModelPath)
+    YA_REFLECT_FIELD(_meshIndex)
     YA_REFLECT_END()
 
     // ========================================
-    // 可序列化数据
+    // Serializable Data - Primitive Geometry Mode
     // ========================================
-    EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::None; ///< 内置几何体类型
-    ModelRef           _modelRef;                                     ///< 外部模型路径
-    uint32_t           _materialIndex = 0;
+
+    EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::None; ///< Built-in geometry type
 
     // ========================================
-    // 运行时缓存（不序列化）
-    // ========================================
-    std::vector<Mesh *> _cachedMeshes; ///< 已加载的网格指针列表（指向 Model 或 PrimitiveCache）
-    bool                _bResolved = false;
-
-    // ========================================
-    // 资源解析
+    // Serializable Data - Model Mesh Mode
     // ========================================
 
     /**
-     * @brief 解析网格资源
+     * @brief Path to the source Model (for serialization)
+     * When this Entity is created from ModelComponent, this stores the Model path
+     * so the mesh can be re-resolved after deserialization
+     */
+    std::string _sourceModelPath;
+
+    /**
+     * @brief Index of the mesh within the Model
+     * Used together with _sourceModelPath to identify which mesh this component represents
+     */
+    uint32_t _meshIndex = 0;
+
+    // ========================================
+    // Runtime State (Not Serialized)
+    // ========================================
+
+    Mesh* _cachedMesh = nullptr; ///< Resolved mesh pointer
+    bool  _bResolved  = false;
+
+    // ========================================
+    // Resource Resolution
+    // ========================================
+
+    /**
+     * @brief Resolve the mesh resource
      * Called by ResourceResolveSystem
-     * @return true 如果成功加载
+     * @return true if successfully resolved
      */
     bool resolve();
 
     /**
-     * @brief 强制重新解析
+     * @brief Force re-resolve
      */
     void invalidate()
     {
-        _bResolved = false;
-        _cachedMeshes.clear();
+        _bResolved  = false;
+        _cachedMesh = nullptr;
     }
 
     /**
-     * @brief 检查是否已解析
+     * @brief Check if resolved
      */
     bool isResolved() const { return _bResolved; }
 
     // ========================================
-    // 网格访问
+    // Mesh Access
     // ========================================
 
     /**
-     * @brief 获取网格列表
+     * @brief Get the resolved mesh
      */
-    const std::vector<Mesh *> &getMeshes() const { return _cachedMeshes; }
+    Mesh* getMesh() const { return _cachedMesh; }
 
     /**
-     * @brief 获取第一个网格（便捷接口）
+     * @brief Check if this component has a valid mesh source
      */
-    Mesh *getFirstMesh() const
+    bool hasMeshSource() const
     {
-        return _cachedMeshes.empty() ? nullptr : _cachedMeshes[0];
+        return _primitiveGeometry != EPrimitiveGeometry::None || !_sourceModelPath.empty();
     }
 
-    /**
-     * @brief 获取网格数量
-     */
-    size_t getMeshCount() const { return _cachedMeshes.size(); }
-
     // ========================================
-    // 设置接口
+    // Setup Interface
     // ========================================
 
     /**
-     * @brief 设置为内置几何体
+     * @brief Set to built-in primitive geometry
      */
     void setPrimitiveGeometry(EPrimitiveGeometry type)
     {
         _primitiveGeometry = type;
-        _modelRef          = ModelRef(); // Clear model ref
+        _sourceModelPath.clear();
+        _meshIndex = 0;
         invalidate();
     }
 
     /**
-     * @brief 设置为外部模型
+     * @brief Set to mesh from Model
+     * Called by ResourceResolveSystem when creating child entities from ModelComponent
      */
-    void setModelPath(const std::string &path)
+    void setFromModel(const std::string& modelPath, uint32_t meshIndex, Mesh* mesh)
     {
-        _modelRef          = ModelRef(path);
         _primitiveGeometry = EPrimitiveGeometry::None;
-        invalidate();
-    }
-
-    /**
-     * @brief 检查是否有有效的网格来源
-     */
-    bool hasMeshSource() const
-    {
-        return _primitiveGeometry != EPrimitiveGeometry::None || _modelRef.hasPath();
+        _sourceModelPath   = modelPath;
+        _meshIndex         = meshIndex;
+        _cachedMesh        = mesh;
+        _bResolved         = (mesh != nullptr);
     }
 };
 

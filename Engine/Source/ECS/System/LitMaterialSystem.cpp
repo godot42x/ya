@@ -277,7 +277,7 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
     // This must happen BEFORE rendering to ensure all materials/meshes are ready
     // {
     //     YA_PROFILE_SCOPE("LitMaterial::ResolvePhase");
-    //     auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
+    //     auto view = scene->getRegistry().view<NameComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
     //     for (entt::entity entity : view)
     //     {
     //         auto &lmc = view.get<LitMaterialComponent>(entity);
@@ -368,7 +368,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         return;
     }
     // Query entities with both LitMaterialComponent and MeshComponent
-    auto view = scene->getRegistry().view<TagComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
+    auto view = scene->getRegistry().view<LitMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -409,16 +409,22 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     YA_PROFILE_SCOPE("LitMaterial::EntityLoop");
     for (entt::entity entity : view)
     {
-        const auto &[tag, lmc, meshComp, tc] = view.get(entity);
+        const auto &[lmc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
         LitMaterial *material = lmc.getRuntimeMaterial();
         if (!material || material->getIndex() < 0) {
-            YA_CORE_WARN("LitMaterialSystem: Entity '{}' has no valid material", tag.getTag());
+            // Get entity name for warning (optional, can be removed if not needed)
+            Entity *entityPtr = scene->getEntityByEnttID(entity);
+            YA_CORE_WARN("LitMaterialSystem: Entity '{}' has no valid material",
+                         entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
 
-        _ctxEntityDebugStr = std::format("{} (Mat: {})", tag.getTag(), material->getLabel());
+        Entity *entityPtr  = scene->getEntityByEnttID(entity);
+        _ctxEntityDebugStr = std::format("{} (Mat: {})",
+                                         entityPtr ? entityPtr->getName() : "Unknown",
+                                         material->getLabel());
 
         // update each material instance's descriptor set if dirty
         uint32_t            materialInstanceIndex = material->getIndex();
@@ -467,14 +473,12 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
                                   &pushConst);
         }
 
-        // draw each mesh from MeshComponent
+        // draw mesh from MeshComponent (single mesh per component)
         {
-            YA_PROFILE_SCOPE("LitMaterial::DrawMeshes");
-            for (Mesh *mesh : meshComp.getMeshes())
-            {
-                if (mesh) {
-                    mesh->draw(cmdBuf);
-                }
+            YA_PROFILE_SCOPE("LitMaterial::DrawMesh");
+            Mesh *mesh = meshComp.getMesh();
+            if (mesh) {
+                mesh->draw(cmdBuf);
             }
         }
     }
@@ -498,6 +502,7 @@ void LitMaterialSystem::onRenderGUI()
     if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
         ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
+        ImGui::Checkbox("Debug Depth", &uDebug.bDebugDepth);
         ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
         ImGui::Unindent();
     }

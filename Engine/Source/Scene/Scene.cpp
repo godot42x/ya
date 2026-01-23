@@ -5,6 +5,7 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -39,14 +40,13 @@ Entity *Scene::createEntity(const std::string &name)
 Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 {
     Entity entity = {_registry.create(), this};
-    entity._name  = name;
 
     // Add basic components with specific UUID
     auto idComponent = entity.addComponent<IDComponent>();
     idComponent->_id = UUID(uuid);
 
-    auto tagComponent  = entity.addComponent<TagComponent>();
-    tagComponent->_tag = name.empty() ? "Entity" : name;
+    // Set entity name directly
+    entity.name = name.empty() ? "Entity" : name;
 
     auto it = _entityMap.insert({entity.getHandle(), std::move(entity)});
     YA_CORE_ASSERT(it.second, "Entity ID collision!");
@@ -54,15 +54,115 @@ Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
     return &it.first->second;
 }
 
+void Scene::createRootNode()
+{
+    if (_rootNode) {
+        return;
+    }
+
+    Entity *entity = createEntity("scene_root");
+    entity->addComponent<TransformComponent>();
+    auto node = makeShared<Node3D>(entity, "scene_root");
+    _rootNode = node;
+}
+
 void Scene::destroyEntity(Entity *entity)
 {
     if (isValidEntity(entity))
     {
         auto handle = entity->getHandle();
+
+        // Clean up associated Node if exists
+        auto nodeIt = _nodeMap.find(handle);
+        if (nodeIt != _nodeMap.end()) {
+            auto *node = nodeIt->second.get();
+            // Remove from parent
+            node->removeFromParent();
+            // Clear children (they become orphans)
+            node->clearChildren();
+            _nodeMap.erase(nodeIt);
+        }
+
         _registry.destroy(handle);
-        _entityMap.erase(handle); // 清理 _entityMap，防止悬空指针
+        _entityMap.erase(handle);
     }
 }
+
+Node *Scene::createNode(const std::string &name, Node *parent)
+{
+    Entity *entity = createEntity(name);
+    if (!entity) {
+        return nullptr;
+    }
+    auto node                     = makeShared<Node>(name, entity);
+    _nodeMap[entity->getHandle()] = node;
+
+    if (parent) {
+        parent->addChild(node.get());
+    }
+    else {
+        createRootNode();
+        _rootNode->addChild(node.get());
+    }
+}
+
+
+Node3D *Scene::createNode3D(const std::string &name, Node *parent)
+{
+    // Create the Entity
+    Entity *entity = createEntity(name);
+    if (!entity) {
+        return nullptr;
+    }
+    entity->addComponent<TransformComponent>();
+
+    // Create and associate Node
+    auto node = makeShared<Node3D>(entity, name);
+    if (parent) {
+        parent->addChild(node.get());
+    }
+    else {
+        createRootNode();
+        _rootNode->addChild(node.get());
+    }
+    _nodeMap[entity->getHandle()] = node;
+
+    return static_cast<Node3D *>(_nodeMap[entity->getHandle()].get());
+}
+
+void Scene::destroyNode(Node *node)
+{
+    if (!node) {
+        return;
+    }
+
+    // Cast to Node3D to access Entity
+    auto entity = node->getEntity();
+    if (entity) {
+        destroyEntity(entity);
+    }
+}
+
+
+
+Node *Scene::getNodeByEntity(Entity *entity)
+{
+    if (!entity) {
+        return nullptr;
+    }
+    return getNodeByEntity(entity->getHandle());
+}
+
+Node *Scene::getNodeByEntity(entt::entity handle)
+{
+    auto it = _nodeMap.find(handle);
+    if (it != _nodeMap.end()) {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+
 
 bool Scene::isValidEntity(const Entity *entity) const
 {
@@ -82,17 +182,23 @@ Entity *Scene::getEntityByEnttID(entt::entity id)
     return nullptr;
 }
 
+const Entity *Scene::getEntityByEnttID(entt::entity id) const
+{
+    auto it = _entityMap.find(id);
+    if (it != _entityMap.end())
+    {
+        return &it->second;
+    }
+    return nullptr;
+}
+
 Entity *Scene::getEntityByName(const std::string &name)
 {
     for (auto &[id, entity] : _entityMap)
     {
-        if (entity.hasComponent<TagComponent>())
+        if (entity.name == name)
         {
-            auto tag = entity.getComponent<TagComponent>();
-            if (tag->getTag() == name)
-            {
-                return &entity;
-            }
+            return &entity;
         }
     }
     return nullptr;
@@ -145,13 +251,11 @@ void Scene::onRenderEditor()
 
 Entity Scene::findEntityByName(const std::string &name)
 {
-    auto view = _registry.view<TagComponent>();
-    for (auto entity : view)
+    for (auto &[id, entity] : _entityMap)
     {
-        const TagComponent &tag = view.get<TagComponent>(entity);
-        if (tag._tag == name)
+        if (entity.name == name)
         {
-            return Entity{entity, this};
+            return entity;
         }
     }
     return Entity{};
@@ -160,17 +264,13 @@ Entity Scene::findEntityByName(const std::string &name)
 std::vector<Entity> Scene::findEntitiesByTag(const std::string &tag)
 {
     std::vector<Entity> entities;
-    auto                view = _registry.view<TagComponent>();
-
-    for (auto entity : view)
+    for (auto &[id, entity] : _entityMap)
     {
-        const TagComponent &tagComponent = view.get<TagComponent>(entity);
-        if (tagComponent._tag == tag)
+        if (entity.name == tag)
         {
-            entities.emplace_back(entity, this);
+            entities.push_back(entity);
         }
     }
-
     return entities;
 }
 
@@ -246,6 +346,7 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
     stdptr<Scene> newScene = makeShared<Scene>();
 
     std::unordered_map<UUID, entt::entity> entityMap;
+    std::unordered_map<UUID, Node *>       nodeMap; // ★ 新增：UUID -> Node 映射
 
     const auto &srcRegistry = scene->getRegistry();
     auto       &dstRegistry = newScene->getRegistry();
@@ -253,30 +354,56 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
     auto idView = srcRegistry.view<IDComponent>();
     for (auto entity : idView)
     {
-        auto         id        = srcRegistry.get<IDComponent>(entity)._id;
-        const auto  &name      = srcRegistry.get<TagComponent>(entity)._tag;
-        entt::entity newEntity = newScene->createEntityWithUUID(id, name)->getHandle();
-        entityMap.insert({id, newEntity});
+        auto              id        = srcRegistry.get<IDComponent>(entity)._id;
+        const Entity     *srcEntity = scene->getEntityByEnttID(entity);
+        const std::string name      = srcEntity ? srcEntity->name : "Entity";
+
+        // ★ 改用 createNode 创建（而非 createEntityWithUUID）
+        Node *newNode = newScene->createNode3D(name);
+        if (!newNode) {
+            YA_CORE_ERROR("Failed to create node during clone for entity '{}'", name);
+            continue;
+        }
+
+        // ★ 设置 Node 的名字
+        newNode->setName(name);
+
+        // Cast to Node3D to access Entity
+        auto   *newNode3D = dynamic_cast<Node3D *>(newNode);
+        Entity *newEntity = newNode3D ? newNode3D->getEntity() : nullptr;
+        if (!newEntity) {
+            YA_CORE_ERROR("Failed to get entity from node during clone");
+            continue;
+        }
+
+        // 设置正确的 UUID
+        if (auto idComp = newEntity->getComponent<IDComponent>()) {
+            idComp->_id = id;
+        }
+
+        entityMap.insert({id, newEntity->getHandle()});
+        nodeMap.insert({id, newNode}); // ★ 记录 Node 映射
     }
 
     // LACK: need to manually list all components to copy
     using components_to_copy = refl::type_list<
         IDComponent,
-        TagComponent,
         TransformComponent,
         SimpleMaterialComponent,
         UnlitMaterialComponent,
         LitMaterialComponent,
         LuaScriptComponent,
         PointLightComponent,
-        MeshComponent>;
+        MeshComponent,
+        ModelComponent>;
 
     refl::foreach_in_typelist<components_to_copy>([&](const auto &T) {
         copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
     });
-    // refl::foreach_types(components_to_copy{}, [&](const auto &T) {
-    //     copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
-    // });
+
+    // ★ TODO: 克隆 Node 层级关系
+    // 当前所有 Node 都是 root 的子节点
+    // 未来需要遍历源场景的 Node 树，重建父子关系
 
     return newScene;
 }
@@ -292,8 +419,10 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
     auto       &dstRegistry = newScene->getRegistry();
 
 
-    srcRegistry.view<IDComponent, TagComponent>().each([&](auto entity, const IDComponent &id, const TagComponent &tag) {
-        entt::entity newEntity = newScene->createEntityWithUUID(id._id, tag._tag)->getHandle();
+    srcRegistry.view<IDComponent>().each([&](auto entity, const IDComponent &id) {
+        const Entity *srcEntity = scene->getEntityByEnttID(entity);
+        const std::string name = srcEntity ? srcEntity->name : "Entity";
+        entt::entity newEntity = newScene->createEntityWithUUID(id._id, name)->getHandle();
         srcEntityMap.insert({id._id, entity});
         dstEntityMap.insert({id._id, newEntity});
     });
@@ -305,9 +434,8 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
     {
         std::string componentName = fName.toString();
 
-        // Skip IDComponent and TagComponent as they are already handled
-        if (componentName == "IDComponent" ||
-            componentName == "TagComponent") {
+        // Skip IDComponent as it is already handled
+        if (componentName == "IDComponent") {
             continue;
         }
 

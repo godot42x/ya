@@ -243,7 +243,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    auto view = scene->getRegistry().view<TagComponent, UnlitMaterialComponent, MeshComponent, TransformComponent>();
+    auto view = scene->getRegistry().view<UnlitMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
@@ -281,16 +281,21 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     for (entt::entity entity : view)
     {
-        const auto &[tag, umc, meshComp, tc] = view.get(entity);
+        const auto &[umc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
         UnlitMaterial *material = umc.getRuntimeMaterial();
         if (!material || material->getIndex() < 0) {
-            YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material", tag._tag);
+            Entity *entityPtr = scene->getEntityByEnttID(entity);
+            YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material", 
+                         entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
 
-        _ctxEntityDebugStr = std::format("{} (Mat: {})", tag._tag, material->getLabel());
+        Entity *entityPtr = scene->getEntityByEnttID(entity);
+        _ctxEntityDebugStr = std::format("{} (Mat: {})", 
+                                         entityPtr ? entityPtr->getName() : "Unknown", 
+                                         material->getLabel());
 
         // update each material instance's descriptor set if dirty
         uint32_t            materialInstanceIndex = material->getIndex();
@@ -334,12 +339,10 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
                               sizeof(UnlitMaterialSystem::PushConstant),
                               &pushConst);
 
-        // draw each mesh from MeshComponent
-        for (Mesh *mesh : meshComp.getMeshes())
-        {
-            if (mesh) {
-                mesh->draw(cmdBuf);
-            }
+        // draw mesh from MeshComponent (single mesh per component)
+        Mesh *mesh = meshComp.getMesh();
+        if (mesh) {
+            mesh->draw(cmdBuf);
         }
     }
 }

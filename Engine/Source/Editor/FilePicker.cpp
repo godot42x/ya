@@ -27,6 +27,8 @@ void FilePicker::open(const std::string              &title,
                       const std::vector<std::string> &extensions,
                       Callback                        onConfirm)
 {
+    YA_CORE_ASSERT(_isOpen == false, "FilePicker is already open");
+
     _isOpen         = true;
     _pendingClose   = false;
     _bSceneSaveMode = false;
@@ -109,6 +111,11 @@ void FilePicker::openMaterialPicker(const std::string &currentPath, Callback onC
 void FilePicker::openTexturePicker(const std::string &currentPath, Callback onConfirm)
 {
     open("Select Texture", currentPath, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr"}, onConfirm);
+}
+
+void FilePicker::openModelPicker(const std::string &currentPath, Callback onConfirm)
+{
+    open("Select Model", currentPath, {".obj", ".fbx", ".gltf", ".glb", ".dae"}, onConfirm);
 }
 
 void FilePicker::openDirectoryPicker(const std::string &currentPath,

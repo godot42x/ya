@@ -234,12 +234,9 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
                               sizeof(PushConstant),
                               &pc);
 
-        for (Mesh *mesh : meshComp.getMeshes()) {
-            if (!mesh || !mesh->getVertexBuffer() || !mesh->getIndexBuffer()) {
-                continue;
-            }
-            // ++totalCount;
-
+        // Draw single mesh from MeshComponent
+        Mesh *mesh = meshComp.getMesh();
+        if (mesh && mesh->getVertexBuffer() && mesh->getIndexBuffer()) {
             VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandleAs<::VkBuffer>()};
             // current no need to support subbuffer
             VkDeviceSize offsets[] = {0};

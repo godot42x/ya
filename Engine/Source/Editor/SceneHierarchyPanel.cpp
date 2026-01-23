@@ -11,10 +11,12 @@
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <imgui.h>
+
 
 namespace ya
 {
@@ -43,25 +45,31 @@ void SceneHierarchyPanel::sceneTree()
 
     if (_context)
     {
-        auto view = _context->getRegistry().view<TransformComponent>();
-        for (auto entity : view)
+        // Render Node hierarchy tree
+        Node *rootNode = _context->getRootNode();
+        if (rootNode && rootNode->hasChildren())
         {
-            Entity *ent = _context->getEntityByEnttID(entity);
-            if (ent)
+            // Recursively render all children of root node
+            for (Node *child : rootNode->getChildren())
             {
-                drawEntityNode(*ent);
+                drawNodeRecursive(child);
             }
         }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("Standalone Entities:");
+        // Render standalone entities (entities without Node hierarchy)
+        // These are entities created with createEntity() instead of createNodeEntity()
+        renderStandaloneEntities();
 
         // Right-click on blank space - create entity menu
         if (ImGui::BeginPopupContextWindow("SceneHierarchyContextMenu", ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight))
         {
-            if (ImGui::MenuItem("Create Empty Entity"))
+            if (ImGui::MenuItem("Create Empty Node"))
             {
-                Entity *newEntity = _context->createEntity("New Entity");
-                if (newEntity) {
-                    newEntity->addComponent<TransformComponent>();
-                    setSelection(newEntity);
+                Node *newNode = _context->createNode3D("New Node");
+                if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                    setSelection(node3D->getEntity());
                 }
             }
 
@@ -69,10 +77,10 @@ void SceneHierarchyPanel::sceneTree()
             {
                 if (ImGui::MenuItem("Cube"))
                 {
-                    Entity *newEntity = _context->createEntity("Cube");
-                    if (newEntity) {
-                        auto tc = newEntity->addComponent<TransformComponent>();
-                        auto mc = newEntity->addComponent<MeshComponent>();
+                    Node *newNode = _context->createNode3D("Cube");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        Entity *newEntity = node3D->getEntity();
+                        auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
                         newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
@@ -80,10 +88,10 @@ void SceneHierarchyPanel::sceneTree()
                 }
                 if (ImGui::MenuItem("Sphere"))
                 {
-                    Entity *newEntity = _context->createEntity("Sphere");
-                    if (newEntity) {
-                        auto tc = newEntity->addComponent<TransformComponent>();
-                        auto mc = newEntity->addComponent<MeshComponent>();
+                    Node *newNode = _context->createNode3D("Sphere");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        Entity *newEntity = node3D->getEntity();
+                        auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
                         newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
@@ -91,10 +99,10 @@ void SceneHierarchyPanel::sceneTree()
                 }
                 if (ImGui::MenuItem("Plane"))
                 {
-                    Entity *newEntity = _context->createEntity("Plane");
-                    if (newEntity) {
-                        auto tc = newEntity->addComponent<TransformComponent>();
-                        auto mc = newEntity->addComponent<MeshComponent>();
+                    Node *newNode = _context->createNode3D("Plane");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        Entity *newEntity = node3D->getEntity();
+                        auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
                         newEntity->addComponent<LitMaterialComponent>();
                         setSelection(newEntity);
@@ -105,9 +113,9 @@ void SceneHierarchyPanel::sceneTree()
 
             if (ImGui::MenuItem("Create Point Light"))
             {
-                Entity *newEntity = _context->createEntity("Point Light");
-                if (newEntity) {
-                    newEntity->addComponent<TransformComponent>();
+                Node *newNode = _context->createNode3D("Point Light");
+                if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                    Entity *newEntity = node3D->getEntity();
                     newEntity->addComponent<PointLightComponent>();
                     setSelection(newEntity);
                 }
@@ -129,8 +137,88 @@ void SceneHierarchyPanel::sceneTree()
     ImGui::End();
 }
 
+void SceneHierarchyPanel::drawNodeRecursive(Node *node)
+{
+    if (!node) {
+        return;
+    }
 
-void SceneHierarchyPanel::drawEntityNode(Entity &entity)
+    // Cast to Node3D to access Entity
+    auto   *node3D = dynamic_cast<Node3D *>(node);
+    Entity *entity = node3D ? node3D->getEntity() : nullptr;
+    if (!entity) {
+        return;
+    }
+
+    auto &name     = getNodeName(node);
+    bool  selected = (entity == _selection);
+
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+    // If node has children, allow expanding
+    if (!node->hasChildren()) {
+        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    }
+
+    if (selected) {
+        flags |= ImGuiTreeNodeFlags_Selected;
+    }
+
+    bool opened = ImGui::TreeNodeEx((void *)(intptr_t)entity->getId(), flags, "%s", name.c_str());
+
+    if (ImGui::IsItemClicked()) {
+        setSelection(entity);
+    }
+
+    // Right-click context menu for node
+    bool bEntityDeleted = false;
+    if (ImGui::BeginPopupContextItem()) {
+        if (ImGui::MenuItem("Duplicate")) {
+            // TODO: Implement entity duplication with hierarchy
+            YA_CORE_INFO("Duplicate entity: {}", name.c_str());
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Delete")) {
+            bEntityDeleted = true;
+        }
+
+        ImGui::EndPopup();
+    }
+
+    if (opened && node->hasChildren()) {
+        // Recursively render children
+        for (Node *child : node->getChildren()) {
+            drawNodeRecursive(child);
+        }
+        ImGui::TreePop();
+    }
+
+    // Delete entity after UI rendering
+    if (bEntityDeleted) {
+        if (_selection == entity) {
+            setSelection(nullptr);
+        }
+        _context->destroyEntity(entity);
+    }
+}
+
+void SceneHierarchyPanel::renderStandaloneEntities()
+{
+    // Find entities that are not managed by any Node
+    // These are entities created with createEntity() instead of createNodeEntity()
+    auto view = _context->getRegistry().view<TransformComponent>();
+    for (auto entityHandle : view) {
+        Entity *entity = _context->getEntityByEnttID(entityHandle);
+        if (entity && !_context->getNodeByEntity(entityHandle)) {
+            // This entity is not managed by Node hierarchy, render as standalone
+            drawFlatEntity(*entity);
+        }
+    }
+}
+
+void SceneHierarchyPanel::drawFlatEntity(Entity &entity)
 {
     if (!entity)
     {
@@ -188,6 +276,12 @@ void SceneHierarchyPanel::drawEntityNode(Entity &entity)
         _context->destroyEntity(&entity);
     }
 }
+
+const std::string &SceneHierarchyPanel::getNodeName(Node *node)
+{
+    return node->getName();
+}
+
 
 
 } // namespace ya

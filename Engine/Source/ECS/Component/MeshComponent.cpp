@@ -1,7 +1,9 @@
 #include "MeshComponent.h"
 
 #include "Core/AssetManager.h"
+#include "ECS/Entity.h"
 #include "Render/PrimitiveMeshCache.h"
+
 
 namespace ya
 {
@@ -12,14 +14,14 @@ bool MeshComponent::resolve()
         return true;
     }
 
-    _cachedMeshes.clear();
+    _cachedMesh = nullptr;
 
     // Priority 1: Built-in primitive geometry
     if (_primitiveGeometry != EPrimitiveGeometry::None) {
         auto mesh = PrimitiveMeshCache::get().getMesh(_primitiveGeometry);
         if (mesh) {
-            _cachedMeshes.push_back(mesh.get());
-            _bResolved = true;
+            _cachedMesh = mesh.get();
+            _bResolved  = true;
             return true;
         }
         else {
@@ -28,22 +30,23 @@ bool MeshComponent::resolve()
         }
     }
 
-    // Priority 2: External model file
-    if (_modelRef.hasPath()) {
-        if (!_modelRef.isLoaded()) {
-            if (!_modelRef.resolve()) {
-                YA_CORE_WARN("MeshComponent: Failed to resolve model '{}'", _modelRef.getPath());
-                return false;
-            }
+    // Priority 2: Mesh from Model by path and index
+    if (!_sourceModelPath.empty()) {
+        auto model = AssetManager::get()->getModel(_sourceModelPath);
+        if (!model) {
+            // Try to load the model
+            model = AssetManager::get()->loadModel(_sourceModelPath);
         }
 
-        Model *model = _modelRef.get();
-        if (model) {
-            for (const auto &mesh : model->getMeshes()) {
-                _cachedMeshes.push_back(mesh.get());
-            }
-            _bResolved = true;
+        if (model && _meshIndex < model->getMeshCount()) {
+            _cachedMesh = model->getMesh(_meshIndex).get();
+            _bResolved  = true;
             return true;
+        }
+        else {
+            YA_CORE_WARN("MeshComponent: Failed to get mesh[{}] from model '{}'",
+                         _meshIndex, _sourceModelPath);
+            return false;
         }
     }
 
