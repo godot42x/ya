@@ -167,8 +167,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
     // Create ground plane - using new reflection-based approach
     if (auto plane = scene->createNode3D("Plane")) {
-        ya::Entity* entity = plane->getEntity();
-        auto tc = entity->getComponent<ya::TransformComponent>();
+        ya::Entity *entity = plane->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
 
@@ -199,8 +199,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
             for (int k = 0; k < alpha; ++k) {
 
                 // YA_CORE_DEBUG("1.1 {} {} {}", i, j, k);
-                auto cube = scene->createNode(std::format("Cube_{}_{}_{}", i, j, k));
-                ya::Entity* entity = cube->getEntity();
+                auto        cube   = scene->createNode(std::format("Cube_{}_{}_{}", i, j, k));
+                ya::Entity *entity = cube->getEntity();
                 {
                     auto v  = glm::vec3(i, j, k);
                     auto tc = entity->getComponent<ya::TransformComponent>();
@@ -237,8 +237,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 #endif
 
     if (auto *LitTestCube0 = scene->createNode3D("Lit Test")) {
-        ya::Entity* entity = LitTestCube0->getEntity();
-        auto tc = entity->getComponent<ya::TransformComponent>();
+        ya::Entity *entity = LitTestCube0->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(3.0f));
         _litTestEntity = entity;
@@ -265,8 +265,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // lsc->addScript("Content/Scripts/Inventory.lua");
     }
     if (auto *suzanne = scene->createNode3D("Suzanne")) {
-        ya::Entity* entity = suzanne->getEntity();
-        auto tc = entity->getComponent<ya::TransformComponent>();
+        ya::Entity *entity = suzanne->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(2.0f));
 
@@ -285,9 +285,28 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         };
     }
 
+    if (auto *backpack = scene->createNode3D("Backpack")) {
+        ya::Entity *entity = backpack->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-5.0f, 0.f, 0.f));
+
+        // Mesh component with external model
+        auto mc = entity->addComponent<ya::ModelComponent>();
+        mc->setModelPath("Engine/Content/Assets/backpack/backpack.obj");
+
+        // Material component
+        // auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
+        // lmc->_params = ya::LitMaterial::ParamUBO{
+        //     .ambient   = glm::vec3(0.1f),
+        //     .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
+        //     .specular  = glm::vec3(0.5f),
+        //     .shininess = 16.0f,
+        // };
+    }
+
     if (auto *pointLt = scene->createNode3D("Point Light")) {
-        ya::Entity* entity = pointLt->getEntity();
-        auto tc = entity->getComponent<ya::TransformComponent>();
+        ya::Entity *entity = pointLt->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
         _pointLightEntity = entity;
 
@@ -312,11 +331,11 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     glm::vec3 startPos(-10.0f, -20.0f, -20.0f);
     float     spacing = 3.0f;
     for (size_t i = 0; i < _pongMaterialNames.size(); ++i) {
-        auto *node = scene->createNode3D(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
-        ya::Entity* entity = node->getEntity();
-        auto  tc     = entity->getComponent<ya::TransformComponent>();
-        float x      = startPos.x + (i % 5) * spacing;
-        float z      = startPos.z + (i / 5) * spacing;
+        auto       *node   = scene->createNode3D(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
+        ya::Entity *entity = node->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        float       x      = startPos.x + (i % 5) * spacing;
+        float       z      = startPos.z + (i / 5) * spacing;
         tc->setPosition(glm::vec3(x, 0.0f, z));
 
         // Mesh component
@@ -359,7 +378,7 @@ void HelloMaterial::onEnterRuntime()
 
     if (auto player = scene->createNode3D("Player"))
     {
-        ya::Entity* entity = player->getEntity();
+        ya::Entity *entity = player->getEntity();
         entity->addComponent<ya::PlayerComponent>();
         entity->addComponent<ya::CameraComponent>();
         entity->addComponent<ya::SimpleMaterialComponent>();

@@ -32,6 +32,7 @@ struct LitMaterial : public Material
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
         alignas(4) float shininess     = 32.0f;
+        // alignas(8) glm::vec2 uvs
 
         ParamUBO normalize() const
         {

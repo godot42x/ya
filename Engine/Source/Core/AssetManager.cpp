@@ -1,7 +1,8 @@
 #include "AssetManager.h"
 
-
 #include "Core/Debug/Instrumentor.h"
+#include "assimp/IOStream.hpp"
+#include "assimp/IOSystem.hpp"
 #include "assimp/Importer.hpp"
 #include "assimp/ObjMaterial.h"
 #include "assimp/mesh.h"
@@ -12,15 +13,219 @@
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 
-
 #include <algorithm>
 #include <cctype>
+#include <cstring>
+#include <memory>
 
 namespace ya
 {
 
 namespace
 {
+
+// ============================================================================
+// Custom Assimp IOSystem to bridge VirtualFileSystem
+// ============================================================================
+
+/**
+ * @brief Custom IOStream implementation for VirtualFileSystem
+ *        Wraps a string buffer for read-only access
+ */
+class VFSIOStream : public Assimp::IOStream
+{
+  public:
+    VFSIOStream(const std::string &path, std::string content)
+        : _path(path), _content(std::move(content)), _position(0)
+    {
+    }
+
+    ~VFSIOStream() override = default;
+
+    // Read operations
+    size_t Read(void *pvBuffer, size_t pSize, size_t pCount) override
+    {
+        size_t bytesToRead = pSize * pCount;
+        size_t available   = _content.size() - _position;
+        size_t actualRead  = (bytesToRead < available) ? bytesToRead : available;
+
+        if (actualRead > 0) {
+            std::memcpy(pvBuffer, _content.data() + _position, actualRead);
+            _position += actualRead;
+        }
+
+        return actualRead / pSize; // Return number of elements read
+    }
+
+    // Write operations (not supported for read-only stream)
+    size_t Write(const void *pvBuffer, size_t pSize, size_t pCount) override
+    {
+        // Read-only stream
+        return 0;
+    }
+
+    // Seek operations
+    aiReturn Seek(size_t pOffset, aiOrigin pOrigin) override
+    {
+        size_t newPos = _position;
+
+        switch (pOrigin) {
+        case aiOrigin_SET:
+            newPos = pOffset;
+            break;
+        case aiOrigin_CUR:
+            newPos = _position + pOffset;
+            break;
+        case aiOrigin_END:
+            newPos = _content.size() + pOffset;
+            break;
+        default:
+            return aiReturn_FAILURE;
+        }
+
+        if (newPos > _content.size()) {
+            return aiReturn_FAILURE;
+        }
+
+        _position = newPos;
+        return aiReturn_SUCCESS;
+    }
+
+    size_t Tell() const override { return _position; }
+
+    size_t FileSize() const override { return _content.size(); }
+
+    void Flush() override
+    {
+        // No-op for read-only stream
+    }
+
+  private:
+    std::string _path;
+    std::string _content;
+    size_t      _position;
+};
+
+/**
+ * @brief Custom IOSystem implementation for VirtualFileSystem
+ *        Bridges Assimp's file I/O to VirtualFileSystem
+ */
+class VFSIOSystem : public Assimp::IOSystem
+{
+  public:
+    explicit VFSIOSystem(const std::string &baseDir) : _baseDir(baseDir)
+    {
+        // Normalize base directory path
+        if (!_baseDir.empty() && _baseDir.back() != '/' && _baseDir.back() != '\\') {
+            _baseDir += '/';
+        }
+        std::replace(_baseDir.begin(), _baseDir.end(), '\\', '/');
+    }
+
+    ~VFSIOSystem() override = default;
+
+    /**
+     * @brief Check if a file exists in VirtualFileSystem
+     */
+    bool Exists(const char *pFile) const override
+    {
+        if (!pFile) {
+            return false;
+        }
+
+        std::string fullPath = resolvePath(pFile);
+        return VirtualFileSystem::get()->isFileExists(fullPath);
+    }
+
+    /**
+     * @brief Get the OS-specific path separator
+     */
+    char getOsSeparator() const override { return '/'; }
+
+    /**
+     * @brief Open a file through VirtualFileSystem
+     */
+    Assimp::IOStream *Open(const char *pFile, const char *pMode = "rb") override
+    {
+        if (!pFile) {
+            YA_CORE_ERROR("VFSIOSystem: Attempted to open null file path");
+            return nullptr;
+        }
+
+        std::string fullPath = resolvePath(pFile);
+
+        // Read file content through VFS
+        std::string content;
+        if (!VirtualFileSystem::get()->readFileToString(fullPath, content)) {
+            YA_CORE_ERROR("VFSIOSystem: Failed to read file: {}", fullPath);
+            return nullptr;
+        }
+
+        YA_CORE_TRACE("VFSIOSystem: Opened file: {} (size: {} bytes)", fullPath, content.size());
+
+        return new VFSIOStream(fullPath, std::move(content));
+    }
+
+    /**
+     * @brief Close an open IOStream
+     */
+    void Close(Assimp::IOStream *pFile) override
+    {
+        if (pFile) {
+            delete pFile;
+        }
+    }
+
+    /**
+     * @brief Compare two paths (for file system operations)
+     */
+    bool ComparePaths(const char *first, const char *second) const override
+    {
+        std::string firstNormalized  = normalizePath(first);
+        std::string secondNormalized = normalizePath(second);
+
+        return firstNormalized == secondNormalized;
+    }
+
+  private:
+    std::string _baseDir;
+
+    /**
+     * @brief Resolve a relative path to an absolute path based on base directory
+     */
+    std::string resolvePath(const char *pFile) const
+    {
+        if (!pFile) {
+            return "";
+        }
+
+        std::string path = pFile;
+
+        // If absolute path, use as-is (but normalize separators)
+        if (!path.empty() && (path[0] == '/' || (path.size() > 1 && path[1] == ':'))) {
+            return normalizePath(path);
+        }
+
+        // Relative path: combine with base directory
+        if (_baseDir.empty()) {
+            return normalizePath(path);
+        }
+
+        return normalizePath(_baseDir + path);
+    }
+
+    /**
+     * @brief Normalize path separators to '/'
+     */
+    static std::string normalizePath(const std::string &path)
+    {
+        std::string normalized = path;
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        return normalized;
+    }
+};
+
+// ============================================================================
 
 /**
  * @brief Infer coordinate system from file path and scene metadata
@@ -213,19 +418,34 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
         return nullptr;
     }
 
-    // Read the file using VirtualFileSystem
+    // Read the main model file content
     std::string fileContent;
     if (!VirtualFileSystem::get()->readFileToString(filepath, fileContent)) {
         YA_CORE_ERROR("Failed to read model file: {}", filepath);
         return nullptr;
     }
 
-    // Load the model using Assimp
+    // Extract file extension as format hint for Assimp
+    std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    // Set custom IOSystem to bridge VirtualFileSystem
+    // This allows Assimp to load MTL files and textures through VFS
+    auto vfsIOSystem = std::make_unique<VFSIOSystem>(directory);
+    importer.SetIOHandler(vfsIOSystem.release()); // Transfer ownership to Assimp
+
+    YA_CORE_INFO("Loading model '{}' with VFSIOSystem (base directory: '{}')", filepath, directory);
+
+    // Load the model using Assimp with content and format hint
+    // The custom IOSystem will handle loading MTL and textures
     const aiScene *scene = importer.ReadFileFromMemory(
         fileContent.data(),
         fileContent.size(),
-        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-
+        aiProcess_Triangulate |
+            aiProcess_GenSmoothNormals |
+            // aiProcess_FlipUVs |
+            aiProcess_CalcTangentSpace,
+        ext.c_str()); // Format hint (e.g., "obj", "fbx")
 
     // Check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
@@ -282,6 +502,7 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
         }
 
         // Get textures (store relative paths)
+        // Note: In MTL files, map_Bump is mapped to aiTextureType_HEIGHT, not NORMALS
         auto getTexturePath = [](aiMaterial *mat, aiTextureType type) -> std::string {
             if (mat->GetTextureCount(type) > 0) {
                 aiString path;
@@ -292,11 +513,29 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
             return "";
         };
 
+        // Debug: Log texture counts for this material
+        YA_CORE_TRACE("Material '{}': Diffuse={}, Specular={}, Height={}, Emissive={}",
+                      embeddedMat.name,
+                      material->GetTextureCount(aiTextureType_DIFFUSE),
+                      material->GetTextureCount(aiTextureType_SPECULAR),
+                      material->GetTextureCount(aiTextureType_HEIGHT),
+                      material->GetTextureCount(aiTextureType_EMISSIVE));
+
         // TODO: refactor
         embeddedMat.diffuseTexturePath  = getTexturePath(material, aiTextureType_DIFFUSE);
         embeddedMat.specularTexturePath = getTexturePath(material, aiTextureType_SPECULAR);
-        embeddedMat.normalTexturePath   = getTexturePath(material, aiTextureType_NORMALS);
+        embeddedMat.normalTexturePath   = getTexturePath(material, aiTextureType_HEIGHT); // map_Bump -> HEIGHT
         embeddedMat.emissiveTexturePath = getTexturePath(material, aiTextureType_EMISSIVE);
+
+        // Debug: Log loaded texture paths
+        if (!embeddedMat.diffuseTexturePath.empty())
+            YA_CORE_TRACE("  -> Diffuse: {}", embeddedMat.diffuseTexturePath);
+        if (!embeddedMat.specularTexturePath.empty())
+            YA_CORE_TRACE("  -> Specular: {}", embeddedMat.specularTexturePath);
+        if (!embeddedMat.normalTexturePath.empty())
+            YA_CORE_TRACE("  -> Normal: {}", embeddedMat.normalTexturePath);
+        if (!embeddedMat.emissiveTexturePath.empty())
+            YA_CORE_TRACE("  -> Emissive: {}", embeddedMat.emissiveTexturePath);
 
         return embeddedMat;
     };

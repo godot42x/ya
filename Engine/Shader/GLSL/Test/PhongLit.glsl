@@ -93,8 +93,16 @@ struct PointLight {
     float outerCutoff; // cos(outerAngle)
 };
 
+struct TextureParam{
+    bool bEnable;
+    float uvRotation;
+    vec4  uvTransform; // x,y: scale, z,w: translate
+};
+
+
 #define MAX_POINT_LIGHTS 4
 
+// MARK: frag uniform
 layout(set =0, binding =1, std140) uniform LightUBO {
     DirectionalLight dirLight;
     uint numPointLights;   // collect from scene
@@ -118,9 +126,13 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 diffuse;
     vec3 specular;
     float shininess;
+
+    // TextureParam diffuseTexParam;
+    // TextureParam specularTexParam;
 } uParams;
 
 
+// MARK: frag i/o
 layout(location = 0) in vec3 vPos;
 layout(location = 1) in vec2 vTexcoord;
 layout(location = 2) in vec3 vNormal;
@@ -236,7 +248,14 @@ void main ()
         return;
     }
     if(uDebug.bDebugDepth){
-        fColor = vec4(vec3(gl_FragCoord.z), 1.0);
+        const float near = 0.1;
+        const float far = 100.0;
+        float d = gl_FragCoord.z;
+        d = d * 2.0 - 1.0;          // 窗口深度[0,1]→NDC深度[-1,1]
+        d = (2.0 * near * far) / ( (far+near) - d * (far-near) ); // 还原线性深度[0.1,100]
+        d = (d - near) / (far - near); // 关键：归一化到[0,1]颜色有效范围
+        fColor = vec4(vec3(d), 1.0);
+        return;
     }
     if(uLit.numPointLights == 0 ){
         fColor = vec4(0,0,1,1);
