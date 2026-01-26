@@ -1,7 +1,7 @@
 #include "Scene.h"
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -422,7 +422,7 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
         TransformComponent,
         SimpleMaterialComponent,
         UnlitMaterialComponent,
-        LitMaterialComponent,
+        PhongMaterialComponent,
         LuaScriptComponent,
         PointLightComponent,
         MeshComponent,

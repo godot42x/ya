@@ -5,7 +5,7 @@
 #include "Scene/SceneManager.h"
 
 
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -45,8 +45,8 @@ void ResourceResolveSystem::onUpdate(float dt)
         }
     });
 
-    // 3. Resolve LitMaterialComponents
-    registry.view<LitMaterialComponent>().each([&](auto entity, LitMaterialComponent &materialComponent) {
+    // 3. Resolve PhongMaterialComponents
+    registry.view<PhongMaterialComponent>().each([&](auto entity, PhongMaterialComponent &materialComponent) {
         if (!materialComponent.isResolved()) {
             materialComponent.resolve();
         }
@@ -97,7 +97,7 @@ void ResourceResolveSystem::resolveModelComponent(Scene *scene, Entity *entity, 
         for (size_t matIndex = 0; matIndex < embeddedMaterials.size(); ++matIndex) {
             // Create material with model name + material index as label
             std::string matLabel = model->getName() + "_Mat_" + std::to_string(matIndex);
-            auto       *litMat   = MaterialFactory::get()->createMaterial<LitMaterial>(matLabel);
+            auto       *litMat   = MaterialFactory::get()->createMaterial<PhongMaterial>(matLabel);
 
             if (litMat) {
                 // Initialize material from embedded data
@@ -178,8 +178,8 @@ Node *ResourceResolveSystem::createMeshNode(
         meshIndex,
         model->getMesh(meshIndex).get());
 
-    // Add LitMaterialComponent
-    auto *matComp = childEntity->addComponent<LitMaterialComponent>();
+    // Add PhongMaterialComponent
+    auto *matComp = childEntity->addComponent<PhongMaterialComponent>();
 
     if (modelComp._useEmbeddedMaterials) {
         // Get material index for this mesh
@@ -208,7 +208,7 @@ Node *ResourceResolveSystem::createMeshNode(
 }
 
 void ResourceResolveSystem::initSharedMaterial(
-    LitMaterial            *material,
+    PhongMaterial            *material,
     const EmbeddedMaterial *embeddedMat,
     const std::string      &modelDirectory)
 {
@@ -246,7 +246,7 @@ void ResourceResolveSystem::initSharedMaterial(
             TextureView tv;
             tv.texture = texture;
             tv.sampler = defaultSampler;
-            material->setTextureView(LitMaterial::DiffuseTexture, tv);
+            material->setTextureView(PhongMaterial::DiffuseTexture, tv);
         }
     }
 
@@ -258,13 +258,13 @@ void ResourceResolveSystem::initSharedMaterial(
             TextureView tv;
             tv.texture = texture;
             tv.sampler = defaultSampler;
-            material->setTextureView(LitMaterial::SpecularTexture, tv);
+            material->setTextureView(PhongMaterial::SpecularTexture, tv);
         }
     }
 }
 
 void ResourceResolveSystem::initMaterialFromEmbedded(
-    LitMaterialComponent   &matComp,
+    PhongMaterialComponent   &matComp,
     const EmbeddedMaterial *embeddedMat,
     const std::string      &modelDirectory)
 {
@@ -294,13 +294,13 @@ void ResourceResolveSystem::initMaterialFromEmbedded(
     // Diffuse texture
     if (!embeddedMat->diffuseTexturePath.empty()) {
         std::string path = resolvePath(embeddedMat->diffuseTexturePath);
-        matComp.setTextureSlot(LitMaterial::DiffuseTexture, path);
+        matComp.setTextureSlot(PhongMaterial::DiffuseTexture, path);
     }
 
     // Specular texture
     if (!embeddedMat->specularTexturePath.empty()) {
         std::string path = resolvePath(embeddedMat->specularTexturePath);
-        matComp.setTextureSlot(LitMaterial::SpecularTexture, path);
+        matComp.setTextureSlot(PhongMaterial::SpecularTexture, path);
     }
 
     // Mark as needing resolve

@@ -1,4 +1,4 @@
-#include "LitMaterialComponent.h"
+#include "PhongMaterialComponent.h"
 
 #include "Core/AssetManager.h"
 #include "Render/Material/MaterialFactory.h"
@@ -7,7 +7,7 @@
 namespace ya
 {
 
-bool LitMaterialComponent::resolve()
+bool PhongMaterialComponent::resolve()
 {
     if (_bResolved) {
         return true;
@@ -17,12 +17,12 @@ bool LitMaterialComponent::resolve()
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
-        std::string matLabel = "LitMat_" + std::to_string(reinterpret_cast<uintptr_t>(this));
-        _material            = MaterialFactory::get()->createMaterial<LitMaterial>(matLabel);
+        std::string matLabel = "PhongMat_" + std::to_string(reinterpret_cast<uintptr_t>(this));
+        _material            = MaterialFactory::get()->createMaterial<PhongMaterial>(matLabel);
         _bSharedMaterial     = false; // Created our own material
 
         if (!_material) {
-            YA_CORE_ERROR("LitMaterialComponent: Failed to create runtime material");
+            YA_CORE_ERROR("PhongMaterialComponent: Failed to create runtime material");
             return false;
         }
     }
@@ -35,7 +35,7 @@ bool LitMaterialComponent::resolve()
     for (auto &[key, slot] : _textureSlots) {
         if (slot.textureRef.hasPath() && !slot.isLoaded()) {
             if (!slot.resolve()) {
-                YA_CORE_WARN("LitMaterialComponent: Failed to resolve texture slot {} ({})",
+                YA_CORE_WARN("PhongMaterialComponent: Failed to resolve texture slot {} ({})",
                              getRuntimeMaterial()->getTextureSlotName(key),
                              slot.textureRef.getPath());
                 success = false;
@@ -51,19 +51,19 @@ bool LitMaterialComponent::resolve()
     return success;
 }
 
-void LitMaterialComponent::syncParams()
+void PhongMaterialComponent::syncParams()
 {
     _material->getParamsMut() = _params;
     _material->setParamDirty();
 }
 
-void LitMaterialComponent::syncTextureSlots()
+void PhongMaterialComponent::syncTextureSlots()
 {
     Sampler *defaultSampler = TextureLibrary::get().getDefaultSampler().get();
     for (auto &[key, slot] : _textureSlots) {
         if (slot.isLoaded()) {
             TextureView tv = slot.toTextureView(defaultSampler);
-            getRuntimeMaterial()->setTextureView(static_cast<LitMaterial::EResource>(key), tv);
+            getRuntimeMaterial()->setTextureView(static_cast<PhongMaterial::EResource>(key), tv);
         }
     }
 }

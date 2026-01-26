@@ -1,6 +1,7 @@
 #include "DetailsView.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ReflectionCache.h"
@@ -8,7 +9,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -157,13 +158,13 @@ void DetailsView::drawComponents(Entity &entity)
         }
     });
 
-    drawComponent<LitMaterialComponent>("Lit Material", entity, [](LitMaterialComponent *lmc) {
-        auto *litMat = lmc->getRuntimeMaterial();
+    drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent *pmc) {
+        auto *litMat = pmc->getRuntimeMaterial();
         if (!litMat) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
         }
-        ya::renderReflectedType("LitMaterial", ya::type_index_v<LitMaterialComponent>, lmc);
+        ya::renderReflectedType("PhongMaterial", ya::type_index_v<PhongMaterialComponent>, pmc);
 
         if (ImGui::CollapsingHeader(litMat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Indent();

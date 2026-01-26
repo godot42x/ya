@@ -101,7 +101,7 @@ IMaterial (interface)
   │   ├── Properties (name-value map)
   │   ├── Shader (IShader*)
   │   └── Descriptor Sets
-  └── Subclasses: UnlitMaterial, LitMaterial, PBRMaterial
+  └── Subclasses: UnlitMaterial, PhongMaterial, PBRMaterial
 
 MaterialSystem (ECS)
   ├── Material Database

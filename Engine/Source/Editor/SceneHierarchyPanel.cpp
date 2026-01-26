@@ -5,7 +5,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -82,7 +82,7 @@ void SceneHierarchyPanel::sceneTree()
                         Entity *newEntity = node3D->getEntity();
                         auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
-                        newEntity->addComponent<LitMaterialComponent>();
+                        newEntity->addComponent<PhongMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }
@@ -93,7 +93,7 @@ void SceneHierarchyPanel::sceneTree()
                         Entity *newEntity = node3D->getEntity();
                         auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
-                        newEntity->addComponent<LitMaterialComponent>();
+                        newEntity->addComponent<PhongMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }
@@ -104,7 +104,7 @@ void SceneHierarchyPanel::sceneTree()
                         Entity *newEntity = node3D->getEntity();
                         auto    mc        = newEntity->addComponent<MeshComponent>();
                         mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
-                        newEntity->addComponent<LitMaterialComponent>();
+                        newEntity->addComponent<PhongMaterialComponent>();
                         setSelection(newEntity);
                     }
                 }

@@ -5,7 +5,7 @@
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Material/LitMaterial.h"
+#include "Render/Material/PhongMaterial.h"
 #include "Render/RenderDefines.h"
 
 
@@ -17,11 +17,17 @@ struct VulkanBuffer;
 namespace ya
 {
 
+struct PhongMaterial;
+
+static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
+static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
+
+
 
 struct PhongMaterialSystem : public IMaterialSystem
 {
 
-    using material_param_t = LitMaterial::ParamUBO;
+    using material_param_t = PhongMaterial::ParamUBO;
 
     struct FrameUBO
     {
@@ -36,9 +42,9 @@ struct PhongMaterialSystem : public IMaterialSystem
     struct alignas(16) DirectionalLightData
     {
         alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        alignas(16) glm::vec3 ambient   = glm::vec3(0.05f);
-        alignas(16) glm::vec3 diffuse   = glm::vec3(0.24f);
-        alignas(16) glm::vec3 specular  = glm::vec3(0.12f);
+        alignas(16) glm::vec3 ambient   = glm::vec3(97 / 256.0);
+        alignas(16) glm::vec3 diffuse   = glm::vec3(122 / 256.0);
+        alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
     };
 
 
@@ -79,6 +85,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     struct DebugUBO
     {
         alignas(4) bool bDebugNormal = false;
+        alignas(4) bool bDebugDepth  = false;
         glm::vec4 floatParam         = glm::vec4(0.0f);
     } uDebug;
 
@@ -131,8 +138,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     // void recreateMaterialDescPool(uint32_t count);
 
     void updateFrameDS(IRenderTarget *rt);
-    void updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material);
-    void updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material);
+    void updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material);
+    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material);
 
 
     void recreateMaterialDescPool(uint32_t _materialCount);

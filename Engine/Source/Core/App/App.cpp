@@ -31,7 +31,7 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/LitMaterialSystem.h"
+#include "ECS/System/PhongMaterialSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
@@ -385,7 +385,7 @@ void App::init(AppDesc ci)
 #if !ONLY_2D
     _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
     _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
-    _viewportRT->addMaterialSystem<LitMaterialSystem>();
+    _viewportRT->addMaterialSystem<PhongMaterialSystem>();
 #endif
 
     // Create UI RenderTarget (swapchain for ImGui)

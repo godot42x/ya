@@ -3,7 +3,7 @@
 
 #include "Core/UI/UITextBlock.h"
 #include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -13,7 +13,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Component/WidgetComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/LitMaterialSystem.h"
+#include "ECS/System/PhongMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 
 
@@ -21,12 +21,13 @@
 
 #include "Core/Math/Geometry.h"
 
-#include "Render/Material/LitMaterial.h"
 #include "Render/Material/MaterialFactory.h"
+#include "Render/Material/PhongMaterial.h"
 #include "Render/Mesh.h"
 #include "Render/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include <format>
+
 
 #include "Scene/SceneManager.h"
 
@@ -124,7 +125,7 @@ void HelloMaterial::createMaterials()
         for (auto it : j["materials"]) {
             auto name = it["name"].get<std::string>();
             _pongMaterialNames.push_back(name);
-            auto *mat       = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>(name);
+            auto *mat       = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>(name);
             auto  ambient   = it["ambient"].get<std::vector<float>>();
             auto  diff      = it["diffuse"].get<std::vector<float>>();
             auto  specular  = it["specular"].get<std::vector<float>>();
@@ -138,8 +139,8 @@ void HelloMaterial::createMaterials()
         }
     }
 
-    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit0");
-    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::LitMaterial>("lit1_WorldBasic");
+    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit0");
+    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit1_WorldBasic");
 
     auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
     pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
@@ -176,7 +177,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-        auto lmc                    = entity->addComponent<ya::LitMaterialComponent>();
+        auto lmc                    = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     }
 
@@ -248,10 +249,10 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component with serializable texture slots
-        auto lmc = entity->addComponent<ya::LitMaterialComponent>();
-        lmc->setTextureSlot(ya::LitMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
-        lmc->setTextureSlot(ya::LitMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
-        lmc->_params = ya::LitMaterial::ParamUBO{
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
+        lmc->setTextureSlot(ya::PhongMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
+        lmc->_params = ya::PhongMaterial::ParamUBO{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(1.0f),
             .specular  = glm::vec3(1.0f),
@@ -276,8 +277,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         mc->setModelPath("Engine/Content/Misc/Monkey.obj");
 
         // Material component
-        auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
-        lmc->_params = ya::LitMaterial::ParamUBO{
+        auto lmc     = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->_params = ya::PhongMaterial::ParamUBO{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
             .specular  = glm::vec3(0.5f),
@@ -295,8 +296,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         mc->setModelPath("Engine/Content/Assets/backpack/backpack.obj");
 
         // Material component
-        // auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
-        // lmc->_params = ya::LitMaterial::ParamUBO{
+        // auto lmc     = entity->addComponent<ya::PhongMaterialComponent>();
+        // lmc->_params = ya::PhongMaterial::ParamUBO{
         //     .ambient   = glm::vec3(0.1f),
         //     .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
         //     .specular  = glm::vec3(0.5f),
@@ -343,10 +344,10 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Get pre-created material params from factory (loaded from JSON)
-        auto existingMat = ya::MaterialFactory::get()->getMaterialByName(_pongMaterialNames[i])->as<ya::LitMaterial>();
+        auto existingMat = ya::MaterialFactory::get()->getMaterialByName(_pongMaterialNames[i])->as<ya::PhongMaterial>();
 
         // Material component
-        auto lmc     = entity->addComponent<ya::LitMaterialComponent>();
+        auto lmc     = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->_params = existingMat->_params; // Copy params from pre-loaded material
 
         // TODO: implement the 3D UI system to show material name

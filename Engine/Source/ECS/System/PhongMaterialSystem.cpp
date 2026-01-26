@@ -1,8 +1,8 @@
-#include "LitMaterialSystem.h"
+#include "PhongMaterialSystem.h"
 #include "Core/App/App.h"
 #include "Core/Debug/Instrumentor.h"
 
-#include "ECS/Component/Material/LitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -26,28 +26,28 @@
 namespace ya
 {
 
-void LitMaterialSystem::onInit(IRenderPass *renderPass)
+void PhongMaterialSystem::onInit(IRenderPass *renderPass)
 {
     YA_PROFILE_FUNCTION();
 
-    _label                = "LitMaterialSystem";
+    _label                = "PhongMaterialSystem";
     IRender *render       = getRender();
     auto     _sampleCount = ESampleCount::Sample_1;
 
     // MARK: layout
     PipelineDesc pipelineLayout{
-        .label         = "LitMaterialSystem_PipelineLayout",
+        .label         = "PhongMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
-                .size       = sizeof(LitMaterialSystem::ModelPushConstant),
+                .size       = sizeof(PhongMaterialSystem::ModelPushConstant),
                 .stageFlags = EShaderStage::Vertex,
             },
         },
         .descriptorSetLayouts = {
             // per frame
             DescriptorSetLayout{
-                .label    = "LitMaterial_Frame_DSL",
+                .label    = "PhongMaterial_Frame_DSL",
                 .set      = 0,
                 .bindings = {
                     // Frame UBO
@@ -74,7 +74,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                 },
             },
             DescriptorSetLayout{
-                .label    = "LitMaterial_Resource_DSL",
+                .label    = "PhongMaterial_Resource_DSL",
                 .set      = 1,
                 .bindings = {
                     DescriptorSetLayoutBinding{
@@ -92,7 +92,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
                 },
             },
             DescriptorSetLayout{
-                .label    = "LitMaterial_Param_DSL",
+                .label    = "PhongMaterial_Param_DSL",
                 .set      = 2,
                 .bindings = {
                     DescriptorSetLayoutBinding{
@@ -239,7 +239,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         ya::BufferCreateInfo{
             .label         = "Lit_Frame_UBO",
             .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(LitMaterialSystem::FrameUBO),
+            .size          = sizeof(PhongMaterialSystem::FrameUBO),
             .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
 
         });
@@ -248,7 +248,7 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         ya::BufferCreateInfo{
             .label         = "Lit_Light_UBO",
             .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(LitMaterialSystem::LightUBO),
+            .size          = sizeof(PhongMaterialSystem::LightUBO),
             .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
         });
     _debugUBO = IBuffer::create(
@@ -256,31 +256,31 @@ void LitMaterialSystem::onInit(IRenderPass *renderPass)
         ya::BufferCreateInfo{
             .label         = "Lit_Debug_UBO",
             .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(LitMaterialSystem::DebugUBO),
+            .size          = sizeof(PhongMaterialSystem::DebugUBO),
             .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
         });
 }
 
-void LitMaterialSystem::onDestroy()
+void PhongMaterialSystem::onDestroy()
 {
 }
 
 // MARK: grab resources
-void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt)
+void PhongMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();
 
     auto scene = getActiveScene();
-    YA_CORE_ASSERT(scene, "LitMaterialSystem::onUpdate - Scene is null");
+    YA_CORE_ASSERT(scene, "PhongMaterialSystem::onUpdate - Scene is null");
 
     // Phase 1: Resolve all unresolved components (resource loading)
     // This must happen BEFORE rendering to ensure all materials/meshes are ready
     // {
-    //     YA_PROFILE_SCOPE("LitMaterial::ResolvePhase");
-    //     auto view = scene->getRegistry().view<NameComponent, LitMaterialComponent, MeshComponent, TransformComponent>();
+    //     YA_PROFILE_SCOPE("PhongMaterial::ResolvePhase");
+    //     auto view = scene->getRegistry().view<NameComponent, PhongMaterialComponent, MeshComponent, TransformComponent>();
     //     for (entt::entity entity : view)
     //     {
-    //         auto &lmc = view.get<LitMaterialComponent>(entity);
+    //         auto &lmc = view.get<PhongMaterialComponent>(entity);
     //         auto &mc  = view.get<MeshComponent>(entity);
 
     //         // Resolve mesh component
@@ -298,9 +298,9 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
     // Phase 2: Check and expand descriptor pool capacity AFTER all resolves
     // This prevents descriptor set invalidation during the render loop
     {
-        uint32_t materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
+        uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
         if (materialCount > _lastMaterialDSCount) {
-            YA_PROFILE_SCOPE("LitMaterial::RecreateMaterialDescPool");
+            YA_PROFILE_SCOPE("PhongMaterial::RecreateMaterialDescPool");
             recreateMaterialDescPool(materialCount);
             _bShouldForceUpdateMaterial = true;
         }
@@ -317,10 +317,10 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
     }
 
     if (entityCount == 0) {
-        // YA_CORE_WARN("LitMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
+        // YA_CORE_WARN("PhongMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
     }
     else if (entityCount > MAX_POINT_LIGHTS) {
-        YA_CORE_WARN("LitMaterialSystem::onUpdate - Found {} entities with PointLightComponent, but only {} are supported", entityCount, MAX_POINT_LIGHTS);
+        YA_CORE_WARN("PhongMaterialSystem::onUpdate - Found {} entities with PointLightComponent, but only {} are supported", entityCount, MAX_POINT_LIGHTS);
     }
 
     // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
@@ -356,10 +356,10 @@ void LitMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *r
         uLight.numPointLights++;
     }
 
-    // YA_CORE_INFO("LitMaterialSystem::onUpdate - Final numPointLights = {}", uLight.numPointLights);
+    // YA_CORE_INFO("PhongMaterialSystem::onUpdate - Final numPointLights = {}", uLight.numPointLights);
 }
 
-void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();
 
@@ -367,15 +367,15 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
-    // Query entities with both LitMaterialComponent and MeshComponent
-    auto view = scene->getRegistry().view<LitMaterialComponent, MeshComponent, TransformComponent>();
+    // Query entities with both PhongMaterialComponent and MeshComponent
+    auto view = scene->getRegistry().view<PhongMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
 
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
     {
-        YA_PROFILE_SCOPE("LitMaterial::BindPipeline");
+        YA_PROFILE_SCOPE("PhongMaterial::BindPipeline");
         cmdBuf->bindPipeline(_pipeline.get());
     }
 
@@ -390,33 +390,33 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     }
 
     {
-        YA_PROFILE_SCOPE("LitMaterial::SetViewportScissorCull");
+        YA_PROFILE_SCOPE("PhongMaterial::SetViewportScissorCull");
         cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
         cmdBuf->setScissor(0, 0, width, height);
         cmdBuf->setCullMode(_cullMode);
     }
 
     {
-        YA_PROFILE_SCOPE("LitMaterial::UpdateFrameDS");
+        YA_PROFILE_SCOPE("PhongMaterial::UpdateFrameDS");
         updateFrameDS(rt);
     }
 
     // Material tracking for this frame
-    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<LitMaterial>();
+    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
     std::vector<int> updatedMaterial(materialCount, 0);
 
     // Phase 3: Render loop
-    YA_PROFILE_SCOPE("LitMaterial::EntityLoop");
+    YA_PROFILE_SCOPE("PhongMaterial::EntityLoop");
     for (entt::entity entity : view)
     {
         const auto &[lmc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
-        LitMaterial *material = lmc.getRuntimeMaterial();
+        PhongMaterial *material = lmc.getRuntimeMaterial();
         if (!material || material->getIndex() < 0) {
             // Get entity name for warning (optional, can be removed if not needed)
             Entity *entityPtr = scene->getEntityByEnttID(entity);
-            YA_CORE_WARN("LitMaterialSystem: Entity '{}' has no valid material",
+            YA_CORE_WARN("PhongMaterialSystem: Entity '{}' has no valid material",
                          entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
@@ -435,13 +435,13 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         if (!updatedMaterial[materialInstanceIndex]) {
             if (_bShouldForceUpdateMaterial || material->isResourceDirty())
             {
-                YA_PROFILE_SCOPE("LitMaterial::UpdateResourceDS");
+                YA_PROFILE_SCOPE("PhongMaterial::UpdateResourceDS");
                 updateMaterialResourceDS(resourceDS, material);
                 material->setResourceDirty(false);
             }
             if (_bShouldForceUpdateMaterial || material->isParamDirty())
             {
-                YA_PROFILE_SCOPE("LitMaterial::UpdateParamDS");
+                YA_PROFILE_SCOPE("PhongMaterial::UpdateParamDS");
                 updateMaterialParamDS(paramDS, material);
                 material->setParamDirty(false);
             }
@@ -451,7 +451,7 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
         // bind descriptor set
         {
-            YA_PROFILE_SCOPE("LitMaterial::BindDescriptorSets");
+            YA_PROFILE_SCOPE("PhongMaterial::BindDescriptorSets");
             std::vector<DescriptorSetHandle> descSets = {
                 _frameDS,
                 resourceDS,
@@ -462,20 +462,20 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
         // update push constant
         {
-            YA_PROFILE_SCOPE("LitMaterial::PushConstants");
-            LitMaterialSystem::ModelPushConstant pushConst{
+            YA_PROFILE_SCOPE("PhongMaterial::PushConstants");
+            PhongMaterialSystem::ModelPushConstant pushConst{
                 .modelMat = tc.getTransform(),
             };
             cmdBuf->pushConstants(_pipelineLayout.get(),
                                   EShaderStage::Vertex,
                                   0,
-                                  sizeof(LitMaterialSystem::ModelPushConstant),
+                                  sizeof(PhongMaterialSystem::ModelPushConstant),
                                   &pushConst);
         }
 
         // draw mesh from MeshComponent (single mesh per component)
         {
-            YA_PROFILE_SCOPE("LitMaterial::DrawMesh");
+            YA_PROFILE_SCOPE("PhongMaterial::DrawMesh");
             Mesh *mesh = meshComp.getMesh();
             if (mesh) {
                 mesh->draw(cmdBuf);
@@ -487,13 +487,13 @@ void LitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     _bShouldForceUpdateMaterial = false;
 }
 
-void LitMaterialSystem::onRenderGUI()
+void PhongMaterialSystem::onRenderGUI()
 {
     IMaterialSystem::onRenderGUI();
     ImGui::Text("Directional Light");
     ImGui::Indent();
     {
-        ya::renderReflectedType("DirectionalLight", ya::type_index_v<LitMaterialSystem::DirectionalLightData>, &uLight.dirLight);
+        ya::renderReflectedType("DirectionalLight", ya::type_index_v<PhongMaterialSystem::DirectionalLightData>, &uLight.dirLight);
     }
     ImGui::Unindent();
     ImGui::Separator();
@@ -510,7 +510,7 @@ void LitMaterialSystem::onRenderGUI()
 
 
 // TODO: descriptor set can be shared if they use same layout and data
-void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
+void PhongMaterialSystem::updateFrameDS(IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();
 
@@ -552,7 +552,7 @@ void LitMaterialSystem::updateFrameDS(IRenderTarget *rt)
             {});
 }
 
-void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMaterial *material)
+void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material)
 {
     YA_PROFILE_FUNCTION();
 
@@ -566,7 +566,7 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
     // if (tv0) {
     //     Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
     // }
-    // const TextureView *tv1 = material->getTextureView(LitMaterial::BaseColor1);
+    // const TextureView *tv1 = material->getTextureView(PhongMaterial::BaseColor1);
     // if (tv1) {
     //     Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
     // }
@@ -590,7 +590,7 @@ void LitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, LitMateria
             {});
 }
 
-void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMaterial *material)
+void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material)
 {
     YA_PROFILE_FUNCTION();
 
@@ -598,8 +598,8 @@ void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMate
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
-    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(material->getTextureView(LitMaterial::EResource::DiffuseTexture));
-    DescriptorImageInfo specularTexture = getDescriptorImageInfo(material->getTextureView(LitMaterial::EResource::SpecularTexture));
+    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(material->getTextureView(PhongMaterial::EResource::DiffuseTexture));
+    DescriptorImageInfo specularTexture = getDescriptorImageInfo(material->getTextureView(PhongMaterial::EResource::SpecularTexture));
 
     render
         ->getDescriptorHelper()
@@ -611,7 +611,7 @@ void LitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, LitMate
             {});
 }
 
-void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
+void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 {
     YA_PROFILE_FUNCTION();
 
@@ -670,7 +670,7 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
         auto buffer = ya::IBuffer::create(
             render,
             ya::BufferCreateInfo{
-                .label         = "LitMaterial_Param_UBO",
+                .label         = "PhongMaterial_Param_UBO",
                 .usage         = ya::EBufferUsage::UniformBuffer,
                 .size          = sizeof(material_param_t),
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
@@ -682,7 +682,7 @@ void LitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     _lastMaterialDSCount = newDescriptorSetCount;
 }
 
-DescriptorImageInfo LitMaterialSystem::getDescriptorImageInfo(TextureView const *tv)
+DescriptorImageInfo PhongMaterialSystem::getDescriptorImageInfo(TextureView const *tv)
 {
     SamplerHandle   samplerHandle;
     ImageViewHandle imageViewHandle;

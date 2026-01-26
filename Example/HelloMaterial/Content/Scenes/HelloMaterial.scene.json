@@ -2,14 +2,37 @@
     "entities": [
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_23_yellow rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 0.6000000238418579
+                        },
+                        "shininess": 0.0,
+                        "specular": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 1,
+                    "_primitiveGeometry": "None",
+                    "_sourceModelPath": "Engine/Content/Misc/Monkey.obj"
                 },
                 "TransformComponent": {
                     "_position": {
-                        "x": -1.0,
+                        "x": 0.0,
                         "y": 0.0,
-                        "z": 2.0
+                        "z": 0.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -23,19 +46,140 @@
                     }
                 }
             },
-            "id": 8883538581297339395,
+            "id": 12470258456266520013,
+            "name": "Suzanne_Suzanne"
+        },
+        {
+            "components": {
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 0.6000000238418579
+                        },
+                        "shininess": 0.0,
+                        "specular": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "None",
+                    "_sourceModelPath": "Engine/Content/Misc/Monkey.obj"
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 4056257558639185303,
+            "name": "Suzanne_Cube.001"
+        },
+        {
+            "components": {
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.05000000074505806,
+                            "y": 0.05000000074505806,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.5,
+                            "y": 0.5,
+                            "z": 0.4000000059604645
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.699999988079071,
+                            "y": 0.699999988079071,
+                            "z": 0.03999999910593033
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
+                },
+                "TransformComponent": {
+                    "_position": {
+                        "x": -1.0,
+                        "y": 0.0,
+                        "z": -8.0
+                    },
+                    "_rotation": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "_scale": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    }
+                }
+            },
+            "id": 4794811665385977902,
             "name": "PhongSample_23_yellow rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_22_white rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.05000000074505806,
+                            "y": 0.05000000074505806,
+                            "z": 0.05000000074505806
+                        },
+                        "diffuse": {
+                            "x": 0.5,
+                            "y": 0.5,
+                            "z": 0.5
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.699999988079071,
+                            "y": 0.699999988079071,
+                            "z": 0.699999988079071
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -4.0,
                         "y": 0.0,
-                        "z": 2.0
+                        "z": -8.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -49,19 +193,42 @@
                     }
                 }
             },
-            "id": 9004462414715915253,
+            "id": 10754920037953886751,
             "name": "PhongSample_22_white rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_21_red rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.05000000074505806,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.5,
+                            "y": 0.4000000059604645,
+                            "z": 0.4000000059604645
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.699999988079071,
+                            "y": 0.03999999910593033,
+                            "z": 0.03999999910593033
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -7.0,
                         "y": 0.0,
-                        "z": 2.0
+                        "z": -8.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -75,19 +242,42 @@
                     }
                 }
             },
-            "id": 8039905024388097255,
+            "id": 15947469546880092231,
             "name": "PhongSample_21_red rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_20_green rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.05000000074505806,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.4000000059604645,
+                            "y": 0.5,
+                            "z": 0.4000000059604645
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.03999999910593033,
+                            "y": 0.699999988079071,
+                            "z": 0.03999999910593033
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -10.0,
                         "y": 0.0,
-                        "z": 2.0
+                        "z": -8.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -101,19 +291,42 @@
                     }
                 }
             },
-            "id": 4962435383852926578,
+            "id": 17250262429812530800,
             "name": "PhongSample_20_green rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_19_cyan rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.05000000074505806,
+                            "z": 0.05000000074505806
+                        },
+                        "diffuse": {
+                            "x": 0.4000000059604645,
+                            "y": 0.5,
+                            "z": 0.5
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.03999999910593033,
+                            "y": 0.699999988079071,
+                            "z": 0.699999988079071
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": 2.0,
                         "y": 0.0,
-                        "z": -1.0
+                        "z": -11.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -127,19 +340,42 @@
                     }
                 }
             },
-            "id": 7128146487035762736,
+            "id": 13114296819301140995,
             "name": "PhongSample_19_cyan rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_18_black rubber"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.019999999552965164,
+                            "y": 0.019999999552965164,
+                            "z": 0.019999999552965164
+                        },
+                        "diffuse": {
+                            "x": 0.009999999776482582,
+                            "y": 0.009999999776482582,
+                            "z": 0.009999999776482582
+                        },
+                        "shininess": 0.078125,
+                        "specular": {
+                            "x": 0.4000000059604645,
+                            "y": 0.4000000059604645,
+                            "z": 0.4000000059604645
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -1.0,
                         "y": 0.0,
-                        "z": -1.0
+                        "z": -11.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -153,19 +389,42 @@
                     }
                 }
             },
-            "id": 12002520401660074010,
+            "id": 8767805357085755191,
             "name": "PhongSample_18_black rubber"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_17_yellow plastic"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.5,
+                            "y": 0.5,
+                            "z": 0.0
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.6000000238418579,
+                            "y": 0.6000000238418579,
+                            "z": 0.5
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -4.0,
                         "y": 0.0,
-                        "z": -1.0
+                        "z": -11.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -179,19 +438,42 @@
                     }
                 }
             },
-            "id": 10426566167733772296,
+            "id": 4696624736504592939,
             "name": "PhongSample_17_yellow plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "123"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.550000011920929,
+                            "y": 0.550000011920929,
+                            "z": 0.550000011920929
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.699999988079071,
+                            "y": 0.699999988079071,
+                            "z": 0.699999988079071
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -7.0,
                         "y": 0.0,
-                        "z": -1.0
+                        "z": -11.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -205,19 +487,42 @@
                     }
                 }
             },
-            "id": 5284541492806449678,
+            "id": 8019984882173647138,
             "name": "PhongSample_16_white plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_15_red plastic"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.5,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.699999988079071,
+                            "y": 0.6000000238418579,
+                            "z": 0.6000000238418579
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -10.0,
                         "y": 0.0,
-                        "z": -1.0
+                        "z": -11.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -231,19 +536,42 @@
                     }
                 }
             },
-            "id": 6552717436101918727,
+            "id": 15402762425104382223,
             "name": "PhongSample_15_red plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_14_green plastic"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.10000000149011612,
+                            "y": 0.3499999940395355,
+                            "z": 0.10000000149011612
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.44999998807907104,
+                            "y": 0.550000011920929,
+                            "z": 0.44999998807907104
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": 2.0,
                         "y": 0.0,
-                        "z": -4.0
+                        "z": -14.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -257,19 +585,42 @@
                     }
                 }
             },
-            "id": 5535804421876285179,
+            "id": 8884125904803531579,
             "name": "PhongSample_14_green plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_13_cyan plastic"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.10000000149011612,
+                            "z": 0.05999999865889549
+                        },
+                        "diffuse": {
+                            "x": 0.0,
+                            "y": 0.5098038911819458,
+                            "z": 0.5098038911819458
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.5019607543945313,
+                            "y": 0.5019607543945313,
+                            "z": 0.5019607543945313
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -1.0,
                         "y": 0.0,
-                        "z": -4.0
+                        "z": -14.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -283,19 +634,42 @@
                     }
                 }
             },
-            "id": 9485194683111781597,
+            "id": 5890011239638190969,
             "name": "PhongSample_13_cyan plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_12_black plastic"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "diffuse": {
+                            "x": 0.009999999776482582,
+                            "y": 0.009999999776482582,
+                            "z": 0.009999999776482582
+                        },
+                        "shininess": 0.25,
+                        "specular": {
+                            "x": 0.5,
+                            "y": 0.5,
+                            "z": 0.5
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -4.0,
                         "y": 0.0,
-                        "z": -4.0
+                        "z": -14.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -309,19 +683,42 @@
                     }
                 }
             },
-            "id": 4296206860141459626,
+            "id": 8201729693979585910,
             "name": "PhongSample_12_black plastic"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_11_silver"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.19224999845027924,
+                            "y": 0.19224999845027924,
+                            "z": 0.19224999845027924
+                        },
+                        "diffuse": {
+                            "x": 0.5075399875640869,
+                            "y": 0.5075399875640869,
+                            "z": 0.5075399875640869
+                        },
+                        "shininess": 0.4000000059604645,
+                        "specular": {
+                            "x": 0.5082730054855347,
+                            "y": 0.5082730054855347,
+                            "z": 0.5082730054855347
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -7.0,
                         "y": 0.0,
-                        "z": -4.0
+                        "z": -14.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -335,19 +732,42 @@
                     }
                 }
             },
-            "id": 17723315657466315622,
+            "id": 3363798370780921928,
             "name": "PhongSample_11_silver"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_10_gold"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.2472500056028366,
+                            "y": 0.19949999451637268,
+                            "z": 0.07450000196695328
+                        },
+                        "diffuse": {
+                            "x": 0.7516400218009949,
+                            "y": 0.6064800024032593,
+                            "z": 0.22648000717163086
+                        },
+                        "shininess": 0.4000000059604645,
+                        "specular": {
+                            "x": 0.6282809972763062,
+                            "y": 0.5558019876480103,
+                            "z": 0.36606499552726746
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -10.0,
                         "y": 0.0,
-                        "z": -4.0
+                        "z": -14.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -361,19 +781,42 @@
                     }
                 }
             },
-            "id": 2896895071022113206,
+            "id": 8934299034690113039,
             "name": "PhongSample_10_gold"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_9_copper"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.1912499964237213,
+                            "y": 0.07349999994039536,
+                            "z": 0.02250000089406967
+                        },
+                        "diffuse": {
+                            "x": 0.7038000226020813,
+                            "y": 0.2704800069332123,
+                            "z": 0.0828000009059906
+                        },
+                        "shininess": 0.10000000149011612,
+                        "specular": {
+                            "x": 0.25677698850631714,
+                            "y": 0.13762199878692627,
+                            "z": 0.08601400256156921
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": 2.0,
                         "y": 0.0,
-                        "z": -7.0
+                        "z": -17.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -387,19 +830,42 @@
                     }
                 }
             },
-            "id": 11682760464546473035,
+            "id": 16612500910055056371,
             "name": "PhongSample_9_copper"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_8_chrome"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.25,
+                            "y": 0.25,
+                            "z": 0.25
+                        },
+                        "diffuse": {
+                            "x": 0.4000000059604645,
+                            "y": 0.4000000059604645,
+                            "z": 0.4000000059604645
+                        },
+                        "shininess": 0.6000000238418579,
+                        "specular": {
+                            "x": 0.7745969891548157,
+                            "y": 0.7745969891548157,
+                            "z": 0.7745969891548157
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -1.0,
                         "y": 0.0,
-                        "z": -7.0
+                        "z": -17.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -413,19 +879,42 @@
                     }
                 }
             },
-            "id": 15280444441748125097,
+            "id": 10538289199553506464,
             "name": "PhongSample_8_chrome"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_7_bronze"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.21250000596046448,
+                            "y": 0.1274999976158142,
+                            "z": 0.05400000140070915
+                        },
+                        "diffuse": {
+                            "x": 0.7139999866485596,
+                            "y": 0.4284000098705292,
+                            "z": 0.18143999576568604
+                        },
+                        "shininess": 0.20000000298023224,
+                        "specular": {
+                            "x": 0.39354801177978516,
+                            "y": 0.2719059884548187,
+                            "z": 0.16672100126743317
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -4.0,
                         "y": 0.0,
-                        "z": -7.0
+                        "z": -17.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -439,19 +928,42 @@
                     }
                 }
             },
-            "id": 14013635615973535538,
+            "id": 1246446515474512132,
             "name": "PhongSample_7_bronze"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_6_brass"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.3294120132923126,
+                            "y": 0.22352899610996246,
+                            "z": 0.02745099924504757
+                        },
+                        "diffuse": {
+                            "x": 0.7803919911384583,
+                            "y": 0.5686269998550415,
+                            "z": 0.11372499912977219
+                        },
+                        "shininess": 0.21794871985912323,
+                        "specular": {
+                            "x": 0.992156982421875,
+                            "y": 0.9411759972572327,
+                            "z": 0.807843029499054
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -7.0,
                         "y": 0.0,
-                        "z": -7.0
+                        "z": -17.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -465,19 +977,42 @@
                     }
                 }
             },
-            "id": 15243711666806391463,
+            "id": 13519871948425498455,
             "name": "PhongSample_6_brass"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_5_turquoise"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.10000000149011612,
+                            "y": 0.18725000321865082,
+                            "z": 0.1745000034570694
+                        },
+                        "diffuse": {
+                            "x": 0.3959999978542328,
+                            "y": 0.7415099740028381,
+                            "z": 0.6910200119018555
+                        },
+                        "shininess": 0.10000000149011612,
+                        "specular": {
+                            "x": 0.2972539961338043,
+                            "y": 0.3082900047302246,
+                            "z": 0.30667799711227417
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -10.0,
                         "y": 0.0,
-                        "z": -7.0
+                        "z": -17.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -491,19 +1026,42 @@
                     }
                 }
             },
-            "id": 14547280783442164365,
+            "id": 612316731088285542,
             "name": "PhongSample_5_turquoise"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "314314"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.1745000034570694,
+                            "y": 0.011749999597668648,
+                            "z": 0.011749999597668648
+                        },
+                        "diffuse": {
+                            "x": 0.6142399907112122,
+                            "y": 0.041359998285770416,
+                            "z": 0.041359998285770416
+                        },
+                        "shininess": 0.6000000238418579,
+                        "specular": {
+                            "x": 0.7278109788894653,
+                            "y": 0.6269590258598328,
+                            "z": 0.6269590258598328
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": 2.0,
                         "y": 0.0,
-                        "z": -10.0
+                        "z": -20.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -517,19 +1075,42 @@
                     }
                 }
             },
-            "id": 2551729806117107221,
+            "id": 4970895640970765908,
             "name": "PhongSample_4_ruby"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_3_pearl"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.25,
+                            "y": 0.20724999904632568,
+                            "z": 0.20724999904632568
+                        },
+                        "diffuse": {
+                            "x": 1.0,
+                            "y": 0.8289999961853027,
+                            "z": 0.8289999961853027
+                        },
+                        "shininess": 0.08799999952316284,
+                        "specular": {
+                            "x": 0.2966479957103729,
+                            "y": 0.2966479957103729,
+                            "z": 0.2966479957103729
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -1.0,
                         "y": 0.0,
-                        "z": -10.0
+                        "z": -20.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -543,19 +1124,42 @@
                     }
                 }
             },
-            "id": 15177686935762154365,
+            "id": 9753139472444452616,
             "name": "PhongSample_3_pearl"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "314314"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.05375000089406967,
+                            "y": 0.05000000074505806,
+                            "z": 0.06624999642372131
+                        },
+                        "diffuse": {
+                            "x": 0.18275000154972076,
+                            "y": 0.17000000178813934,
+                            "z": 0.2252500057220459
+                        },
+                        "shininess": 0.30000001192092896,
+                        "specular": {
+                            "x": 0.33274099230766296,
+                            "y": 0.32863399386405945,
+                            "z": 0.346435010433197
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -4.0,
                         "y": 0.0,
-                        "z": -10.0
+                        "z": -20.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -569,19 +1173,42 @@
                     }
                 }
             },
-            "id": 15591133686207559413,
+            "id": 6382379802058186164,
             "name": "PhongSample_2_obsidian"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_1_jade"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.13500000536441803,
+                            "y": 0.2224999964237213,
+                            "z": 0.1574999988079071
+                        },
+                        "diffuse": {
+                            "x": 0.5400000214576721,
+                            "y": 0.8899999856948853,
+                            "z": 0.6299999952316284
+                        },
+                        "shininess": 0.10000000149011612,
+                        "specular": {
+                            "x": 0.3162280023097992,
+                            "y": 0.3162280023097992,
+                            "z": 0.3162280023097992
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -7.0,
                         "y": 0.0,
-                        "z": -10.0
+                        "z": -20.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -595,19 +1222,42 @@
                     }
                 }
             },
-            "id": 14360858328111415468,
+            "id": 14671663787744825518,
             "name": "PhongSample_1_jade"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "PhongSample_0_emerald"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.0215000007301569,
+                            "y": 0.1745000034570694,
+                            "z": 0.0215000007301569
+                        },
+                        "diffuse": {
+                            "x": 0.07568000257015228,
+                            "y": 0.6142399907112122,
+                            "z": 0.07568000257015228
+                        },
+                        "shininess": 0.6000000238418579,
+                        "specular": {
+                            "x": 0.6330000162124634,
+                            "y": 0.7278109788894653,
+                            "z": 0.6330000162124634
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": -10.0,
                         "y": 0.0,
-                        "z": -10.0
+                        "z": -20.0
                     },
                     "_rotation": {
                         "x": 0.0,
@@ -621,22 +1271,38 @@
                     }
                 }
             },
-            "id": 1932015200346841884,
+            "id": 10900212982571716020,
             "name": "PhongSample_0_emerald"
         },
         {
             "components": {
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
+                },
                 "PointLightComponent": {
-                    "_color": {
+                    "_ambient": {
                         "x": 1.0,
                         "y": 1.0,
                         "z": 1.0
                     },
-                    "_intensity": 1.0,
-                    "_range": 50.0
-                },
-                "TagComponent": {
-                    "_tag": "Point Light"
+                    "_constant": 1.0,
+                    "_diffuse": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "_innerConeAngle": 30.0,
+                    "_linear": 0.09000000357627869,
+                    "_outerConeAngle": 45.0,
+                    "_quadratic": 0.03200000151991844,
+                    "_specular": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "_type": 0
                 },
                 "TransformComponent": {
                     "_position": {
@@ -656,13 +1322,42 @@
                     }
                 }
             },
-            "id": 14983789323799311173,
+            "id": 17666999131928557396,
             "name": "Point Light"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "Suzanne"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.10000000149011612,
+                            "y": 0.10000000149011612,
+                            "z": 0.10000000149011612
+                        },
+                        "diffuse": {
+                            "x": 0.6000000238418579,
+                            "y": 0.4000000059604645,
+                            "z": 0.20000000298023224
+                        },
+                        "shininess": 16.0,
+                        "specular": {
+                            "x": 0.5,
+                            "y": 0.5,
+                            "z": 0.5
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "ModelComponent": {
+                    "_autoCreateChildEntities": true,
+                    "_modelRef": {
+                        "__base__": {
+                            "AssetRefBase": {
+                                "_path": "Engine/Content/Misc/Monkey.obj"
+                            }
+                        }
+                    },
+                    "_useEmbeddedMaterials": true
                 },
                 "TransformComponent": {
                     "_position": {
@@ -682,13 +1377,75 @@
                     }
                 }
             },
-            "id": 10773199692636592383,
+            "id": 3618146072128032042,
             "name": "Suzanne"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "Lit Test"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.10000000149011612,
+                            "y": 0.10000000149011612,
+                            "z": 0.10000000149011612
+                        },
+                        "diffuse": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "shininess": 32.0,
+                        "specular": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    },
+                    "_textureSlots": {
+                        "0": {
+                            "bEnable": true,
+                            "textureRef": {
+                                "__base__": {
+                                    "AssetRefBase": {
+                                        "_path": "Engine/Content/TestTextures/LearnOpenGL/container2.png"
+                                    }
+                                }
+                            },
+                            "uvOffset": {
+                                "x": 0.0,
+                                "y": 0.0
+                            },
+                            "uvRotation": 0.0,
+                            "uvScale": {
+                                "x": 1.0,
+                                "y": 1.0
+                            }
+                        },
+                        "1": {
+                            "bEnable": true,
+                            "textureRef": {
+                                "__base__": {
+                                    "AssetRefBase": {
+                                        "_path": "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png"
+                                    }
+                                }
+                            },
+                            "uvOffset": {
+                                "x": 0.0,
+                                "y": 0.0
+                            },
+                            "uvRotation": 0.0,
+                            "uvScale": {
+                                "x": 1.0,
+                                "y": 1.0
+                            }
+                        }
+                    }
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
@@ -708,18 +1465,41 @@
                     }
                 }
             },
-            "id": 11908155440383359348,
+            "id": 16074433079374978398,
             "name": "Lit Test"
         },
         {
             "components": {
-                "TagComponent": {
-                    "_tag": "Plane"
+                "PhongMaterialComponent": {
+                    "_params": {
+                        "ambient": {
+                            "x": 0.10000000149011612,
+                            "y": 0.10000000149011612,
+                            "z": 0.10000000149011612
+                        },
+                        "diffuse": {
+                            "x": 0.800000011920929,
+                            "y": 0.800000011920929,
+                            "z": 0.800000011920929
+                        },
+                        "shininess": 32.0,
+                        "specular": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    },
+                    "_textureSlots": {}
+                },
+                "MeshComponent": {
+                    "_meshIndex": 0,
+                    "_primitiveGeometry": "Cube",
+                    "_sourceModelPath": ""
                 },
                 "TransformComponent": {
                     "_position": {
                         "x": 0.0,
-                        "y": -20.0,
+                        "y": -30.0,
                         "z": 0.0
                     },
                     "_rotation": {
@@ -734,50 +1514,137 @@
                     }
                 }
             },
-            "id": 15756693455455422739,
+            "id": 7838053355816880313,
             "name": "Plane"
-        },
-        {
-            "components": {
-                "CameraComponent": {
-                    "_aspectRatio": 0.5737265348434448,
-                    "_distance": 14.333333969116211,
-                    "_farClip": 1000.0,
-                    "_fixedAspectRatio": false,
-                    "_focusPoint": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "_fov": 45.0,
-                    "_nearClip": 0.10000000149011612,
-                    "_primary": true
-                },
-                "TagComponent": {
-                    "_tag": "Camera"
-                },
-                "TransformComponent": {
-                    "_position": {
-                        "x": 0.0,
-                        "y": 0.0,
-                        "z": 0.0
-                    },
-                    "_rotation": {
-                        "x": 1.8652448654174805,
-                        "y": -14.182395935058594,
-                        "z": 0.0
-                    },
-                    "_scale": {
-                        "x": 1.0,
-                        "y": 1.0,
-                        "z": 1.0
-                    }
-                }
-            },
-            "id": 8218765353068757636,
-            "name": "Camera"
         }
     ],
     "name": "Untitled Scene",
+    "nodeTree": {
+        "children": [
+            {
+                "entityRef": 7838053355816880313,
+                "name": "Plane"
+            },
+            {
+                "entityRef": 16074433079374978398,
+                "name": "Lit Test"
+            },
+            {
+                "children": [
+                    {
+                        "entityRef": 4056257558639185303,
+                        "name": "Suzanne_Cube.001"
+                    },
+                    {
+                        "entityRef": 12470258456266520013,
+                        "name": "Suzanne_Suzanne"
+                    }
+                ],
+                "entityRef": 3618146072128032042,
+                "name": "Suzanne"
+            },
+            {
+                "entityRef": 17666999131928557396,
+                "name": "Point Light"
+            },
+            {
+                "entityRef": 10900212982571716020,
+                "name": "PhongSample_0_emerald"
+            },
+            {
+                "entityRef": 14671663787744825518,
+                "name": "PhongSample_1_jade"
+            },
+            {
+                "entityRef": 6382379802058186164,
+                "name": "PhongSample_2_obsidian"
+            },
+            {
+                "entityRef": 9753139472444452616,
+                "name": "PhongSample_3_pearl"
+            },
+            {
+                "entityRef": 4970895640970765908,
+                "name": "PhongSample_4_ruby"
+            },
+            {
+                "entityRef": 612316731088285542,
+                "name": "PhongSample_5_turquoise"
+            },
+            {
+                "entityRef": 13519871948425498455,
+                "name": "PhongSample_6_brass"
+            },
+            {
+                "entityRef": 1246446515474512132,
+                "name": "PhongSample_7_bronze"
+            },
+            {
+                "entityRef": 10538289199553506464,
+                "name": "PhongSample_8_chrome"
+            },
+            {
+                "entityRef": 16612500910055056371,
+                "name": "PhongSample_9_copper"
+            },
+            {
+                "entityRef": 8934299034690113039,
+                "name": "PhongSample_10_gold"
+            },
+            {
+                "entityRef": 3363798370780921928,
+                "name": "PhongSample_11_silver"
+            },
+            {
+                "entityRef": 8201729693979585910,
+                "name": "PhongSample_12_black plastic"
+            },
+            {
+                "entityRef": 5890011239638190969,
+                "name": "PhongSample_13_cyan plastic"
+            },
+            {
+                "entityRef": 8884125904803531579,
+                "name": "PhongSample_14_green plastic"
+            },
+            {
+                "entityRef": 15402762425104382223,
+                "name": "PhongSample_15_red plastic"
+            },
+            {
+                "entityRef": 8019984882173647138,
+                "name": "PhongSample_16_white plastic"
+            },
+            {
+                "entityRef": 4696624736504592939,
+                "name": "PhongSample_17_yellow plastic"
+            },
+            {
+                "entityRef": 8767805357085755191,
+                "name": "PhongSample_18_black rubber"
+            },
+            {
+                "entityRef": 13114296819301140995,
+                "name": "PhongSample_19_cyan rubber"
+            },
+            {
+                "entityRef": 17250262429812530800,
+                "name": "PhongSample_20_green rubber"
+            },
+            {
+                "entityRef": 15947469546880092231,
+                "name": "PhongSample_21_red rubber"
+            },
+            {
+                "entityRef": 10754920037953886751,
+                "name": "PhongSample_22_white rubber"
+            },
+            {
+                "entityRef": 4794811665385977902,
+                "name": "PhongSample_23_yellow rubber"
+            }
+        ],
+        "name": "scene_root"
+    },
     "version": "1.0"
 }

@@ -5,7 +5,7 @@
  * Design:
  * - ModelComponent is the "source" component that references a Model asset
  * - When resolved, it triggers creation of child entities for each mesh
- * - Each child entity gets: MeshComponent + LitMaterialComponent
+ * - Each child entity gets: MeshComponent + PhongMaterialComponent
  * - This separates concerns: Model loading vs Mesh/Material rendering
  *
  * Data Flow:
@@ -26,7 +26,7 @@
 namespace ya
 {
 
-class LitMaterial;
+class PhongMaterial;
 
 struct Node;
 
@@ -87,10 +87,10 @@ struct ModelComponent : public IComponent
     /**
      * @brief Cached runtime materials for this Model (one per embedded material)
      * Key: material index in Model's embeddedMaterials
-     * Value: runtime LitMaterial pointer (managed by MaterialFactory)
+     * Value: runtime PhongMaterial pointer (managed by MaterialFactory)
      * This allows multiple meshes to share the same material instance
      */
-    std::unordered_map<int32_t, LitMaterial *> _cachedMaterials;
+    std::unordered_map<int32_t, PhongMaterial *> _cachedMaterials;
 
     // ========================================
     // Interface

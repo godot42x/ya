@@ -10,13 +10,13 @@ namespace ya
 // Forward declarations
 struct ModelComponent;
 struct MeshComponent;
-struct LitMaterialComponent;
+struct PhongMaterialComponent;
 struct Scene;
 struct Entity;
 struct Model;
 struct EmbeddedMaterial;
 struct Node;
-class LitMaterial;
+class PhongMaterial;
 
 /**
  * @brief ResourceResolveSystem - Unified resource loading system
@@ -37,7 +37,7 @@ class LitMaterial;
  * 2. For each mesh in Model:
  *    a. Create a child Entity
  *    b. Add MeshComponent (single mesh reference)
- *    c. Add LitMaterialComponent (from embedded material or default)
+ *    c. Add PhongMaterialComponent (from embedded material or default)
  *    d. Copy TransformComponent from parent
  * 3. Store child entity IDs in ModelComponent for cleanup
  */
@@ -77,21 +77,21 @@ struct ResourceResolveSystem : public ISystem
         ModelComponent &modelComp);
 
     /**
-     * @brief Initialize a shared LitMaterial from embedded material data
+     * @brief Initialize a shared PhongMaterial from embedded material data
      * @param material The runtime material to initialize
      * @param embeddedMat The embedded material data
      * @param modelDirectory The model's directory for resolving texture paths
      */
     void initSharedMaterial(
-        LitMaterial            *material,
+        PhongMaterial            *material,
         const EmbeddedMaterial *embeddedMat,
         const std::string      &modelDirectory);
 
     /**
-     * @brief Initialize LitMaterialComponent from embedded material data
+     * @brief Initialize PhongMaterialComponent from embedded material data
      */
     void initMaterialFromEmbedded(
-        LitMaterialComponent   &matComp,
+        PhongMaterialComponent   &matComp,
         const EmbeddedMaterial *embeddedMat,
         const std::string      &modelDirectory);
 

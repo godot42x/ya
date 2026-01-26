@@ -179,7 +179,7 @@ do
             add_cxxflags("/bigobj") -- allow to generate big obj for big module
         end
         if is_mode("debug") then
-            add_ldflags("/ignore:4324") -- eg:  warning C4324: 'ya::LitMaterialSystem::PointLightData': structure was padded due to alignment specifier
+            add_ldflags("/ignore:4324") -- eg:  warning C4324: 'ya::PhongMaterialSystem::PointLightData': structure was padded due to alignment specifier
             add_cxxflags("/O0")         -- disable optimization
         end
     end

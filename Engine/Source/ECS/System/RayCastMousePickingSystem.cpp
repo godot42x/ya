@@ -1,8 +1,5 @@
 #include "RayCastMousePickingSystem.h"
 #include "Core/Camera/Camera.h"
-#include "ECS/Component/Material/LitMaterialComponent.h"
-#include "ECS/Component/Material/SimpleMaterialComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"

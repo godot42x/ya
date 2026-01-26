@@ -10,7 +10,7 @@
 
 using namespace ya;
 
-// 测试结构体，模拟 LitMaterialComponent 的 _textureSlots 字段
+// 测试结构体，模拟 PhongMaterialComponent 的 _textureSlots 字段
 struct TestTextureSlotContainer
 {
     YA_REFLECT_BEGIN(TestTextureSlotContainer)

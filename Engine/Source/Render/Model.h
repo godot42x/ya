@@ -35,7 +35,7 @@ struct ModalTexture
  * @brief Embedded material data extracted from model file
  * 
  * Stores material information from the model file (e.g., FBX, glTF)
- * Used to initialize LitMaterialComponent on child entities
+ * Used to initialize PhongMaterialComponent on child entities
  */
 struct EmbeddedMaterial
 {
