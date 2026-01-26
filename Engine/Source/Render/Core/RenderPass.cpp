@@ -9,7 +9,7 @@ namespace ya
 {
 
 
-std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render)
+std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render, const RenderPassCreateInfo &ci)
 {
     if (!render)
         return nullptr;
@@ -19,6 +19,7 @@ std::shared_ptr<IRenderPass> IRenderPass::create(IRender *render)
     case ERenderAPI::Vulkan:
     {
         auto ret = makeShared<VulkanRenderPass>(render->as<VulkanRender>());
+        ret->recreate(ci);
         return ret;
     }
     default:

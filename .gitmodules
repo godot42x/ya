@@ -4,3 +4,9 @@
 [submodule "Engine/Plugins/utility.cc"]
 	path = Engine/Plugins/utility.cc
 	url = git@github.com:godotc/utility.cc.git
+[submodule "Engine/ThirdParty/Vulkan-Samples-Assets"]
+	path = Engine/ThirdParty/Vulkan-Samples-Assets
+	url = git@github.com:KhronosGroup/Vulkan-Samples-Assets.git
+[submodule "Engine/ThirdParty/LearnOpenGL"]
+	path = Engine/ThirdParty/LearnOpenGL
+	url = git@github.com:JoeyDeVries/LearnOpenGL.git

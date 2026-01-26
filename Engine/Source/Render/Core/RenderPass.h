@@ -83,7 +83,7 @@ struct IRenderPass : public plat_base<IRenderPass>
     /**
      * @brief Factory method to create render pass
      */
-    static std::shared_ptr<IRenderPass> create(IRender *render);
+    static std::shared_ptr<IRenderPass> create(IRender *render, const RenderPassCreateInfo &ci);
 };
 
 } // namespace ya

@@ -665,10 +665,10 @@ struct RenderPassCreateInfo
     struct SubpassInfo
     {
         uint32_t                    subpassIndex = 0;
-        std ::vector<AttachmentRef> inputAttachments;  // Single color attachment for now
-        std::vector<AttachmentRef>  colorAttachments;  // Single color attachment for now
-        AttachmentRef               depthAttachment;   // Single depth attachment for now
-        AttachmentRef               resolveAttachment; // Single depth attachment for now
+        std ::vector<AttachmentRef> inputAttachments;       // Single color attachment for now
+        std::vector<AttachmentRef>  colorAttachments;       // Single color attachment for now
+        AttachmentRef               depthAttachment   = {}; // optional, Single depth attachment for now
+        AttachmentRef               resolveAttachment = {}; // optional, Single resolve attachment for now
     };
 
     std::string       label         = "None";

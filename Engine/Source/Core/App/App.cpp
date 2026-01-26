@@ -31,8 +31,8 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/PhongMaterialSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
+#include "ECS/System/PhongMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
 
@@ -76,7 +76,6 @@
 
 std::vector<glm::vec2> clicked;
 
-#define ONLY_2D 0
 
 
 namespace ya
@@ -257,61 +256,166 @@ void App::init(AppDesc ci)
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
 
-    _viewportRenderPass = IRenderPass::create(_render);
-    _viewportRenderPass->recreate(RenderPassCreateInfo{
-        .label       = "Viewport RenderPass",
-        .attachments = {
-            // Color attachment (will be sampled by ImGui)
-            AttachmentDescription{
-                .index          = 0,
-                .format         = EFormat::R8G8B8A8_UNORM,
-                .samples        = _sampleCount,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::Undefined,
-                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
-                .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    // MARK: Viewport pass
+    _viewportRenderPass = IRenderPass::create(
+        _render,
+        RenderPassCreateInfo{
+            .label       = "Viewport RenderPass",
+            .attachments = {
+                // Color attachment (will be sampled by ImGui)
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = EFormat::R8G8B8A8_UNORM,
+                    .samples        = _sampleCount,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+                // Depth attachment
+                AttachmentDescription{
+                    .index          = 1,
+                    .format         = DEPTH_FORMAT,
+                    .samples        = _sampleCount,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                    .usage          = EImageUsage::DepthStencilAttachment,
+                },
             },
-            // Depth attachment
-            AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = _sampleCount,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::Undefined,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
+            .subpasses = {
+                RenderPassCreateInfo::SubpassInfo{
+                    .subpassIndex     = 0,
+                    .inputAttachments = {},
+                    .colorAttachments = {
+                        RenderPassCreateInfo::AttachmentRef{
+                            .ref    = 0,
+                            .layout = EImageLayout::ColorAttachmentOptimal,
+                        },
+                    },
+                    .depthAttachment = RenderPassCreateInfo::AttachmentRef{
+                        .ref    = 1,
+                        .layout = EImageLayout::DepthStencilAttachmentOptimal,
+                    },
+                    .resolveAttachment = {},
+                },
             },
-        },
-        .subpasses = {
-            RenderPassCreateInfo::SubpassInfo{
-                .subpassIndex     = 0,
-                .inputAttachments = {},
-                .colorAttachments = {
-                    RenderPassCreateInfo::AttachmentRef{
-                        .ref    = 0,
-                        .layout = EImageLayout::ColorAttachmentOptimal,
+            .dependencies = {
+                RenderPassCreateInfo::SubpassDependency{
+                    .bSrcExternal = true,
+                    .srcSubpass   = 0,
+                    .dstSubpass   = 0,
+                },
+            },
+        });
+    // Create Scene RenderTarget (offscreen for 3D scene)
+    _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Viewport RenderTarget",
+        .bSwapChainTarget = false,
+        .renderPass       = _viewportRenderPass.get(),
+        .frameBufferCount = 1,
+        .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
+    });
+    _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
+    _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
+
+
+    // MARK: Postprocessing pass
+    auto _postprocessingRenderPass = IRenderPass::create(
+        _render,
+        RenderPassCreateInfo{
+            .label       = "Postprocessing RenderPass",
+            .attachments = {
+                // Color attachment (will be sampled by ImGui)
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = EFormat::R8G8B8A8_UNORM,
+                    .samples        = _sampleCount,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+            },
+            .subpasses = {
+                RenderPassCreateInfo::SubpassInfo{
+                    .subpassIndex     = 0,
+                    .inputAttachments = {},
+                    .colorAttachments = {
+                        RenderPassCreateInfo::AttachmentRef{
+                            .ref    = 0,
+                            .layout = EImageLayout::ColorAttachmentOptimal,
+                        },
                     },
                 },
-                .depthAttachment = RenderPassCreateInfo::AttachmentRef{
-                    .ref    = 1,
-                    .layout = EImageLayout::DepthStencilAttachmentOptimal,
+            },
+            .dependencies = {
+                RenderPassCreateInfo::SubpassDependency{
+                    .bSrcExternal = true,
+                    .srcSubpass   = 0,
+                    .dstSubpass   = 0,
                 },
-                .resolveAttachment = {},
             },
-        },
-        .dependencies = {
-            RenderPassCreateInfo::SubpassDependency{
-                .bSrcExternal = true,
-                .srcSubpass   = 0,
-                .dstSubpass   = 0,
+        });
+
+
+    // MARK: Screen pass
+    _renderpass = IRenderPass::create(
+        _render,
+        RenderPassCreateInfo{
+            .label       = "Final RenderPass",
+            .attachments = {
+                // color to present (swapchain)
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
+                    .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::PresentSrcKHR,
+                    .usage          = EImageUsage::ColorAttachment,
+                },
             },
-        },
+            .subpasses = {
+                RenderPassCreateInfo::SubpassInfo{
+                    .subpassIndex     = 0,
+                    .inputAttachments = {},
+                    .colorAttachments = {
+                        RenderPassCreateInfo::AttachmentRef{
+                            .ref    = 0, // color attachment
+                            .layout = EImageLayout::ColorAttachmentOptimal,
+                        },
+                    },
+                    .depthAttachment   = {},
+                    .resolveAttachment = {},
+                },
+            },
+            .dependencies = {
+                RenderPassCreateInfo::SubpassDependency{
+                    .bSrcExternal = true,
+                    .srcSubpass   = 0,
+                    .dstSubpass   = 0,
+                },
+            },
+        });
+
+    // Create UI RenderTarget (swapchain for ImGui)
+    _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Final RenderTarget",
+        .bSwapChainTarget = true,
+        .renderPass       = _renderpass.get(),
     });
 
     _render->getSwapchain()->onRecreate.addLambda(
@@ -323,77 +427,24 @@ void App::init(AppDesc ci)
             };
 
             if (bImageRecreated) {
+                // _viewportRT->setExtent(newExtent); // see App::onSceneViewportResized
                 _screenRT->setExtent(newExtent);
             }
             if ((now.extent.width != old.extent.width ||
                  now.extent.height != old.extent.height ||
                  old.presentMode != now.presentMode))
             {
+                // _viewportRT->setExtent(newExtent); // see App::onSceneViewportResized
                 _screenRT->setExtent(newExtent);
             }
         });
 
-    _renderpass = IRenderPass::create(_render);
-    _renderpass->recreate(RenderPassCreateInfo{
-        .label       = "Final RenderPass",
-        .attachments = {
-            // color to present (swapchain)
-            AttachmentDescription{
-                .index          = 0,
-                .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
-                .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::Undefined,
-                .finalLayout    = EImageLayout::PresentSrcKHR,
-                .usage          = EImageUsage::ColorAttachment,
-            },
-        },
-        .subpasses = {
-            RenderPassCreateInfo::SubpassInfo{
-                .subpassIndex     = 0,
-                .inputAttachments = {},
-                .colorAttachments = {
-                    RenderPassCreateInfo::AttachmentRef{
-                        .ref    = 0, // color attachment
-                        .layout = EImageLayout::ColorAttachmentOptimal,
-                    },
-                },
-                .depthAttachment   = {},
-                .resolveAttachment = {},
-            },
-        },
-        .dependencies = {
-            RenderPassCreateInfo::SubpassDependency{
-                .bSrcExternal = true,
-                .srcSubpass   = 0,
-                .dstSubpass   = 0,
-            },
-        },
-    });
 
-    // Create Scene RenderTarget (offscreen for 3D scene)
-    _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
-        .bSwapChainTarget = false,
-        .renderPass       = _viewportRenderPass.get(),
-        .frameBufferCount = 1,
-        .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
-    });
-#if !ONLY_2D
-    _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
-    _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
-    _viewportRT->addMaterialSystem<PhongMaterialSystem>();
-#endif
 
-    // Create UI RenderTarget (swapchain for ImGui)
-    _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Final RenderTarget",
-        .bSwapChainTarget = true,
-        .renderPass       = _renderpass.get(),
-    });
+    // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
+    // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
+    // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
+    Render2D::init(_render, _viewportRenderPass.get());
 
 #pragma region ImGui Init
     // Initialize ImGui Manager
@@ -425,10 +476,6 @@ void App::init(AppDesc ci)
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene *scene) { this->onSceneDestroy(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene *scene) { this->onSceneActivated(scene); });
 
-    // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
-    // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
-    Render2D::init(_render, _viewportRenderPass.get());
     // wait something done
     _render->waitIdle();
 
@@ -478,7 +525,7 @@ void App::renderGUI(float dt)
     });
 }
 
-// MARK: INIT
+// MARK: on init
 void App::onInit(AppDesc ci)
 {
     // auto &bus = *MessageBus::get();
