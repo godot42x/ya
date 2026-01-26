@@ -111,6 +111,26 @@ inline type_index_t getRuntimeObjectType(const void *obj)
     // return ::ya::ECSRegistry::get().getRuntimeObjectType(obj);
 }
 
+
+// inline void make_pretty_type_name(std::string_view &name)
+// {
+//     printf("name: %s\n", std::string(name).c_str());
+//     if (name.starts_with("struct")) {
+//         name.remove_prefix(6);
+//     }
+//     if (name.starts_with("class")) {
+//         name.remove_prefix(5);
+//     }
+//     // trim leading spaces
+//     while (*name.begin() == ' ') {
+//         name.remove_prefix(1);
+//     }
+//     while (*name.rbegin() == ' ') {
+//         name.remove_suffix(1);
+//     }
+//     printf("name': %s\n", std::string(name).c_str());
+// }
+
 } // namespace reflection
 
 
@@ -125,6 +145,26 @@ inline type_index_t getRuntimeObjectType(const void *obj)
     #define ___YA_REFLECT_EXTENSION(type_name) \
         ::ya::ECSRegistry::get().registerComponent<type_name>(#type_name);
 #endif
+
+// #define ___YA_CREATE_REGISTER(ClassName)                   \
+//     std::string_view real_name = typeid(ClassName).name(); \
+//     ::ya::reflection::make_pretty_type_name(real_name);    \
+//     auto name = std::string(real_name);                    \
+//     YA_PROFILE_STATIC_INIT(name.c_str());                  \
+//     std::unique_ptr<::Register<class_t>> reg = std::make_unique<::Register<class_t>>(name);
+
+#define ___YA_CREATE_REGISTER_2(ClassName)                         \
+    auto real_name = typeid(ClassName).name();                     \
+    YA_PROFILE_STATIC_INIT(real_name);                             \
+                                                                   \
+    constexpr std::string_view           macroName = #ClassName;   \
+    std::unique_ptr<::Register<class_t>> reg       = nullptr;      \
+    if constexpr (macroName.find('<') != std::string_view::npos) { \
+        reg = std::make_unique<::Register<class_t>>(real_name);    \
+    }                                                              \
+    else {                                                         \
+        reg = std::make_unique<::Register<class_t>>(#ClassName);   \
+    }
 
 
 #define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
@@ -143,24 +183,12 @@ inline type_index_t getRuntimeObjectType(const void *obj)
         }                                                                                                                                         \
         static void real_init()                                                                                                                   \
         {                                                                                                                                         \
-            /* after instantiate*/                                                                                                                \
-            auto real_name = typeid(ClassName).name();                                                                                            \
-            YA_PROFILE_STATIC_INIT(real_name);                                                                                                    \
-            constexpr std::string_view macroName = #ClassName;                                                                                    \
+            ___YA_CREATE_REGISTER_2(ClassName)                                                                                                    \
                                                                                                                                                   \
-            /* For template classes, use real type name; otherwise use macro name */                                                              \
-            std::unique_ptr<::Register<class_t>> reg = nullptr;                                                                                   \
-            if constexpr (macroName.find('<') != std::string_view::npos) {                                                                        \
-                reg = std::make_unique<::Register<class_t>>(real_name);                                                                           \
-            }                                                                                                                                     \
-            else {                                                                                                                                \
-                reg = std::make_unique<::Register<class_t>>(#ClassName);                                                                          \
-            }                                                                                                                                     \
-                                                                                                                                                  \
+            /* Register base class relationship if applicable */                                                                                  \
             if constexpr (has_base_class) {                                                                                                       \
                 reg->template parentClass<base_t>();                                                                                              \
-            }                                                                                                                                     \
-                                                                                                                                                  \
+            }                                                                                                                                                  \
             visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                                                              \
                 reg->property(name, fieldPtr, meta);                                                                                              \
                                                                                                                                                   \

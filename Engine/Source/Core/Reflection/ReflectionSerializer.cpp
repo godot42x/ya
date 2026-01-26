@@ -102,6 +102,22 @@ void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeInde
         return;
     }
 
+    // static const std::unordered_map<type_index_t, std::function<void(void *, const nlohmann::json &)>> mapping = {
+    //     {
+    //         ya::type_index_v<int>,
+    //         [](void *ptr, const nlohmann::json &jsonValue) {
+    //             *static_cast<int *>(ptr) = jsonValue.get<int>();
+    //         },
+    //     },
+    // };
+    // if (auto it = mapping.find(typeIndex); it != mapping.end())
+    // {
+    //     it->second(valuePtr, jsonValue);
+    //     return;
+    // }
+
+
+
     // Handle enums
     if (is_enum_type(typeIndex)) {
         Enum *enumInfo = EnumRegistry::instance().getEnum(typeIndex);
@@ -719,8 +735,8 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
 
         const auto &jsonValue = it.value();
 
-        // 只查找当前类的属性（不递归查找父类）
-        auto *subProp = classPtr->getProperty(jsonKey);
+        // 递归查找属性（包括父类），兼容没有 __base__ 的 JSON 格式
+        auto *subProp = classPtr->findPropertyRecursive(jsonKey);
         if (!subProp) {
             YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", classPtr->_name, jsonKey);
             continue;

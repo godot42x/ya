@@ -64,6 +64,7 @@ TEST_F(TextureSlotMapTest, SerializeTextureSlotMap)
     EXPECT_TRUE(slot0.contains("uvScale"));
     EXPECT_TRUE(slot0.contains("uvOffset"));
     EXPECT_TRUE(slot0.contains("uvRotation"));
+    EXPECT_TRUE(!slot0["textureRef"].is_null());
 }
 
 TEST_F(TextureSlotMapTest, DeserializeTextureSlotMap)
