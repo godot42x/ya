@@ -180,7 +180,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
         .colorBlendState = ColorBlendState{
             .attachments = {
                 ColorBlendAttachmentState{
-                    // 0 is the final present color attachment
+                    // index of the attachments in the render pass and the renderpass begin info
                     .index               = 0,
                     .bBlendEnable        = false,
                     .srcColorBlendFactor = EBlendFactor::SrcAlpha,
@@ -266,7 +266,7 @@ void PhongMaterialSystem::onDestroy()
 }
 
 // MARK: grab resources
-void PhongMaterialSystem::onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt)
+void PhongMaterialSystem::onUpdateByRenderTarget(float dt, IRenderTarget *rt)
 {
     YA_PROFILE_FUNCTION();
 

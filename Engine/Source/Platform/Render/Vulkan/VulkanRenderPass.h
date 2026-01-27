@@ -47,7 +47,7 @@ struct VulkanRenderPass : public ya::IRenderPass
 
     // IRenderPass interface
     void       begin(ya::ICommandBuffer            *commandBuffer,
-                     void                          *framebuffer,
+                     IFrameBuffer                  *framebuffer,
                      const Extent2D                &extent,
                      const std::vector<ClearValue> &clearValues) override;
     void       end(ya::ICommandBuffer *commandBuffer) override;

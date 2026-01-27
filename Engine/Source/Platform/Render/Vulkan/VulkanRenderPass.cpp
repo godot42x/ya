@@ -3,7 +3,9 @@
 #include "VulkanUtils.h"
 #include <array>
 
+#include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 #include <ranges>
+
 
 #include "VulkanRender.h"
 namespace ya
@@ -34,7 +36,7 @@ void VulkanRenderPass::cleanup()
 // IRenderPass interface implementation
 void VulkanRenderPass::begin(
     ya::ICommandBuffer            *commandBuffer,
-    void                          *framebuffer,
+    IFrameBuffer                  *framebuffer,
     const Extent2D                &extent,
     const std::vector<ClearValue> &clearValues)
 {
@@ -64,14 +66,14 @@ void VulkanRenderPass::begin(
     }
 
 
-    auto vkFramebuffer = static_cast<VkFramebuffer>(framebuffer);
-    auto vkCmdBuf      = commandBuffer->getHandleAs<VkCommandBuffer>();
+    auto vkFB     = framebuffer->getHandleAs<VkFramebuffer>();
+    auto vkCmdBuf = commandBuffer->getHandleAs<VkCommandBuffer>();
 
     VkRenderPassBeginInfo renderPassBI{
         .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext       = nullptr,
         .renderPass  = getVkHandle(),
-        .framebuffer = vkFramebuffer,
+        .framebuffer = vkFB,
         .renderArea  = {
              .offset = {0, 0},
              .extent = vkExtent,

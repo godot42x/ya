@@ -77,6 +77,7 @@ void VulkanRenderTarget::recreate()
         {
             {
                 // created by swapchain
+                // create by ourself: any color attachment, depth/stencil attachment image
                 if (bSwapChainTarget &&
                     attachment.finalLayout == EImageLayout::PresentSrcKHR &&
                     attachment.samples == ESampleCount::Sample_1)
@@ -87,8 +88,10 @@ void VulkanRenderTarget::recreate()
                                                  toVk(attachment.format),
                                                  toVk(attachment.usage));
                     fbAttachments.push_back(ptr);
+                    continue;
                 }
                 else {
+                    // create by ourself: any color attachment, depth/stencil attachment image
                     auto ptr = VulkanImage::create(
                         vkRender,
                         ImageCreateInfo{
@@ -107,24 +110,25 @@ void VulkanRenderTarget::recreate()
                         });
                     fbAttachments.push_back(ptr);
                 }
-                vkRender->setDebugObjectName(
-                    VK_OBJECT_TYPE_IMAGE,
-                    (fbAttachments.back())->getHandle(),
-                    std::format("RT_FrameBuffer_{}_{}_Attachment_{}", label, i, j).c_str());
+                vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE,
+                                             (fbAttachments.back())->getHandle(),
+                                             std::format("RT_FrameBuffer_{}_{}_Attachment_{}", label, i, j).c_str());
                 ++j;
             }
         }
 
-        auto fb = IFrameBuffer::create(render,
+        // frame buffer contains seral attachments images not only one?
+        auto fb          = IFrameBuffer::create(render,
                                        _renderPass,
                                        FrameBufferCreateInfo{
-                                           .width  = _extent.width,
-                                           .height = _extent.height,
-                                           .images = fbAttachments,
+                                                    .width  = _extent.width,
+                                                    .height = _extent.height,
+                                                    .images = fbAttachments,
                                        });
-        fb->recreate(fbAttachments, _extent.width, _extent.height);
         _frameBuffers[i] = fb;
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER, _frameBuffers[i]->getHandleAs<VkFramebuffer>(), std::format("RT_FrameBuffer_{}_{}", label, i));
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FRAMEBUFFER,
+                                     _frameBuffers[i]->getHandleAs<VkFramebuffer>(),
+                                     std::format("RT_FrameBuffer_{}_{}", label, i));
     }
 }
 
@@ -178,7 +182,7 @@ void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
     YA_CORE_ASSERT(getFrameBuffer(), "FrameBuffer is null in VulkanRenderTarget::begin");
 
     _renderPass->begin(cmdBuf,
-                       getFrameBuffer()->getHandle(),
+                       getFrameBuffer(),
                        {
                            .width  = static_cast<uint32_t>(_extent.width),
                            .height = static_cast<uint32_t>(_extent.height),

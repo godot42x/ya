@@ -10,6 +10,7 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
+struct IFrameBuffer;
 
 /**
  * @brief Generic render pass interface
@@ -40,7 +41,7 @@ struct IRenderPass : public plat_base<IRenderPass>
      */
     virtual void begin(
         ICommandBuffer                *commandBuffer,
-        void                          *framebuffer,
+        IFrameBuffer                  *framebuffer,
         const Extent2D                &extent,
         const std::vector<ClearValue> &clearValues) = 0;
 

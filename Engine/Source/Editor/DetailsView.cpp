@@ -5,7 +5,9 @@
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ReflectionCache.h"
+#include "Render/TextureLibrary.h"
 #include "TypeRenderer.h"
+
 
 #include "ECS/Component.h"
 #include "ECS/Component/LuaScriptComponent.h"
@@ -198,7 +200,17 @@ void DetailsView::drawComponents(Entity &entity)
                                 path,
                                 [mat](const std::string &path) {
                                     if (auto tex = AssetManager::get()->loadTexture(path); tex) {
-                                        mat->getTextureView(PhongMaterial::DiffuseTexture)->texture = tex;
+                                        if (auto tv = mat->getTextureView(PhongMaterial::DiffuseTexture); tv) {
+                                            tv->texture = tex;
+                                        }
+                                        else {
+                                            mat->setTextureView(
+                                                PhongMaterial::DiffuseTexture,
+                                                TextureView{
+                                                    .texture = tex,
+                                                    .sampler = TextureLibrary::get().getDefaultSampler(),
+                                                });
+                                        }
                                         mat->setResourceDirty();
                                     }
                                 });

@@ -18,7 +18,7 @@ stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, IRenderPass *renderPa
         auto vkRender     = static_cast<VulkanRender *>(render);
         auto vkRenderPass = static_cast<VulkanRenderPass *>(renderPass);
         auto fb           = makeShared<VulkanFrameBuffer>(vkRender, vkRenderPass, ci.width, ci.height);
-
+        fb->recreate(ci.images, ci.width, ci.height);
         return fb;
     }
     case ERenderAPI::DirectX12:
