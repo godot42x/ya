@@ -235,6 +235,23 @@ struct Class
         prop.bStatic   = isStatic;
         prop.typeIndex = refl::type_index_v<T>;
         prop.typeName  = detail::getTypeName<T>();
+
+        // Detect pointer types and set pointee type index
+        if constexpr (std::is_pointer_v<T>) {
+            prop.bPointer         = true;
+            using PointeeType     = std::remove_pointer_t<T>;
+            prop.pointeeTypeIndex = refl::type_index_v<PointeeType>;
+        }
+        // is std::shared_ptr
+        else if constexpr (requires(T t) { std::remove_cvref_t<T>::element_type; }) {
+            prop.bPointer         = true;
+            using PointeeType     = typename std::remove_cvref_t<T>::element_type;
+            prop.pointeeTypeIndex = refl::type_index_v<PointeeType>;
+        }
+        else {
+            prop.bPointer         = false;
+            prop.pointeeTypeIndex = 0;
+        }
     }
 
     // 共用逻辑：插入或更新 property 并返回引用

@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <imgui.h>
 namespace ya
 {
 
@@ -26,6 +27,8 @@ namespace ya
 struct PropertyRenderContext
 {
     bool                            isContainer       = false;
+    bool                            bPointer          = false; ///< True if property is a pointer type
+    uint32_t                        pointeeTypeIndex  = 0;     ///< Type index of pointee (if bPointer)
     reflection::IContainerProperty *containerAccessor = nullptr;
     std::string                     prettyName;
 
@@ -52,7 +55,8 @@ struct PropertyRenderContext
  */
 struct TypeRenderer
 {
-    using RenderFunc = bool (*)(void *instance, const PropertyRenderContext &ctx);
+    // using RenderFunc    = bool (*)(void *instance, const PropertyRenderContext &ctx);
+    using RenderFunc = std::function<bool(void *, const PropertyRenderContext &)>;
 
     std::string typeName;
     RenderFunc  renderFunc = nullptr;
@@ -117,5 +121,42 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
  * @brief 注册内置类型渲染器（int, float, string, vec3, vec4 等）
  */
 void registerBuiltinTypeRenderers();
+
+bool pathWrapper(void *instance, const PropertyRenderContext &ctx, auto internal);
+
+
+
+bool renderPathPicker(std::string path, const std::string &typeName, auto internal)
+{
+    bool modified = false;
+
+    // Display current path
+    std::string displayPath = path.empty() ? "[No Path]" : path;
+
+    // Path input field (read-only display)
+    ImGui::Text("%s:", typeName.c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-80); // Leave space for button
+
+    char buffer[256];
+    strncpy(buffer, displayPath.c_str(), sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    if (ImGui::InputText(("##" + typeName).c_str(), buffer, sizeof(buffer))) {
+        path     = buffer;
+        modified = true;
+    }
+
+    // Browse button - access FilePicker through App::get()->_editorLayer
+    ImGui::SameLine();
+    if (ImGui::Button(("Browse##" + typeName).c_str())) {
+        internal(path);
+    }
+
+    return modified;
+}
+
+struct EditorLayer *getEditor();
+struct FilePicker  *getFilePicker();
 
 } // namespace ya

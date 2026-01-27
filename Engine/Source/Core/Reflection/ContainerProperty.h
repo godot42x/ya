@@ -73,6 +73,9 @@ struct IContainerProperty
     virtual void removeElement(void *containerPtr, size_t index) {}                 // Vector::erase
     virtual void removeByKey(void *containerPtr, void *keyPtr) {}                   // Map::erase (keyPtr 指向实际的 key)
     virtual void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) {} // Map::insert
+
+    virtual void addEmptyEntry(void *containerPtr) {}                               // Map::emplace
+    virtual void popBack(void *containerPtr) {}                               // Map::emplace
 };
 
 // ============================================================================
@@ -288,6 +291,15 @@ class MapProperty : public IContainerProperty
         const K &key = *static_cast<K *>(keyPtr);
         map->erase(key);
     }
+
+    void addEmptyEntry(void *containerPtr) override
+    {
+        // TODO: reflection should only support string key?
+        //      or support a temp entry that did not added to the container
+        //      until user input a valid key?
+        auto *map = static_cast<ContainerType *>(containerPtr);
+        map->emplace(K{}, V{});
+    }
 };
 
 // ============================================================================
@@ -372,6 +384,12 @@ class SetProperty : public IContainerProperty
         auto    *set = static_cast<ContainerType *>(containerPtr);
         const T &key = *static_cast<T *>(keyPtr);
         set->erase(key);
+    }
+
+    void addEmptyEntry(void *containerPtr) override
+    {
+        auto *set = static_cast<ContainerType *>(containerPtr);
+        set->emplace(T{});
     }
 };
 
@@ -500,6 +518,15 @@ class UnorderedMapProperty : public IContainerProperty
         const K &key = *static_cast<K *>(keyPtr);
         map->erase(key);
     }
+
+    void addEmptyEntry(void *containerPtr) override
+    {
+        // TODO: reflection should only support string key?
+        //      or support a temp entry that did not added to the container
+        //      until user input a valid key?
+        auto *map = static_cast<ContainerType *>(containerPtr);
+        map->emplace(K{}, V{});
+    }
 };
 
 // ============================================================================
@@ -584,6 +611,12 @@ class UnorderedSetProperty : public IContainerProperty
         auto    *set = static_cast<ContainerType *>(containerPtr);
         const T &key = *static_cast<T *>(keyPtr);
         set->erase(key);
+    }
+
+    void addEmptyEntry(void *containerPtr) override
+    {
+        auto *set = static_cast<ContainerType *>(containerPtr);
+        set->emplace(T{});
     }
 };
 

@@ -21,11 +21,30 @@ struct ImGuiImageEntry;
  * - 模型 (.obj, .fbx, .gltf, etc.)
  * - 目录
  */
-class FilePicker
+struct FilePicker
 {
   public:
     using Callback     = std::function<void(const std::string &)>;
     using SaveCallback = std::function<void(const std::string &dir, const std::string &filename)>;
+
+  private:
+    bool        _isOpen       = false;
+    bool        _pendingClose = false;
+    std::string _title        = "Select File";
+
+    FileExplorer _fileExplorer;
+    Callback     _onConfirm;
+    SaveCallback _onSaveConfirm;
+
+    // Icons
+    FileExplorer::Icons    _icons;
+    FileExplorer::ViewMode _defaultViewMode = FileExplorer::ViewMode::Icon;
+
+    // Scene save mode
+    bool _bSceneSaveMode       = false;
+    char _sceneNameBuffer[128] = "NewScene";
+
+  public:
 
     FilePicker()  = default;
     ~FilePicker() = default;
@@ -101,22 +120,6 @@ class FilePicker
     void openSceneSavePicker(const std::string &defaultName,
                              SaveCallback       onConfirm);
 
-  private:
-    bool        _isOpen       = false;
-    bool        _pendingClose = false;
-    std::string _title        = "Select File";
-
-    FileExplorer _fileExplorer;
-    Callback     _onConfirm;
-    SaveCallback _onSaveConfirm;
-
-    // Icons
-    FileExplorer::Icons    _icons;
-    FileExplorer::ViewMode _defaultViewMode = FileExplorer::ViewMode::Icon;
-
-    // Scene save mode
-    bool _bSceneSaveMode       = false;
-    char _sceneNameBuffer[128] = "NewScene";
 
     void applyCommonSettings();
     void renderFileSelectContent();

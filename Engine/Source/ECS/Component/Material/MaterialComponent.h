@@ -25,11 +25,15 @@ struct MaterialComponent : public IComponent
     static_assert(std::is_base_of_v<Material, MaterialType>, "TMaterial must derive from Material");
 
     using material_t = MaterialType;
+    YA_REFLECT_BEGIN(MaterialComponent<MaterialType>, IComponent)
+    YA_REFLECT_FIELD(_materialPath)
+    YA_REFLECT_FIELD(_material)
+    YA_REFLECT_END()
 
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
-    MaterialType *_material      = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
+    MaterialType *_material        = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
     bool          _bSharedMaterial = false;   ///< If true, material is shared and should not be destroyed by this component
 
     std::string _materialPath;
@@ -55,29 +59,17 @@ struct MaterialComponent : public IComponent
      */
     void invalidate()
     {
-        _material        = nullptr;
-        _bSharedMaterial = false;
+        _material = nullptr;
     }
 
-    /**
-     * @brief Check if this component uses a shared material
-     */
-    bool isSharedMaterial() const { return _bSharedMaterial; }
 
     /**
      * @brief Set a shared material (will not be destroyed by this component)
      */
     void setSharedMaterial(MaterialType *material)
     {
-        _material        = material;
-        _bSharedMaterial = true;
+        setRuntimeMaterial(material);
     }
-
-
-    // ========================================
-    // Material Access
-    // ========================================
-
 
     MaterialType *getRuntimeMaterial() const { return _material; }
 

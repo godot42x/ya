@@ -53,12 +53,20 @@ void FileExplorer::initFromVFS()
         //     }
         // }
 
-        // Only add if the path exists
+        // add if the content path exists
         if (std::filesystem::exists(contentPath))
         {
             _mountPoints.push_back({
                 .name     = mountName,
                 .path     = contentPath,
+                .isActive = false,
+            });
+        }
+        else // or use the root path
+        {
+            _mountPoints.push_back({
+                .name     = mountName,
+                .path     = root,
                 .isActive = false,
             });
         }

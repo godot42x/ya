@@ -30,7 +30,8 @@ struct VirtualFileSystem
 
     stdpath projectRoot;
     stdpath engineRoot;
-    stdpath gameRoot; // Current game/example root
+    stdpath gameRoot;       // Current game/example root
+    stdpath thirdPartyRoot; // Engine/ThirdParty
 
 
     std::unordered_map<std::string, stdpath> mountPoints;  // Virtual path -> Physical path mapping
@@ -48,6 +49,8 @@ struct VirtualFileSystem
         projectRoot = std::filesystem::current_path();
         engineRoot  = projectRoot / "Engine";
         mount("Engine", engineRoot);
+        thirdPartyRoot = engineRoot / "ThirdParty";
+        mount("ThirdParty", thirdPartyRoot);
     }
 
     const stdpath &getEngineRoot() const { return engineRoot; }

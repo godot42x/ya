@@ -16,9 +16,14 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/Reflection/ContainerProperty.h"
 #include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ReflectionHelper.h"
+
+#include "TypeRenderer.h"
+#include "utility.cc/ranges.h"
 #include <imgui.h>
 #include <string>
 #include <unordered_map>
+
 
 
 namespace ya::editor
@@ -36,11 +41,10 @@ class ContainerPropertyRenderer
      * @param renderFn Element render callback: (label, elementPtr, typeIndex) -> bool
      * @return true if any modification was made
      */
-    template <typename RenderFn>
     static bool renderContainer(const std::string &name,
                                 Property          &prop,
                                 void              *containerPtr,
-                                RenderFn         &&renderFn)
+                                int                depth)
     {
         YA_PROFILE_SCOPE("ContainerPropertyRenderer::renderContainer");
         using namespace reflection;
@@ -55,29 +59,32 @@ class ContainerPropertyRenderer
 
         ImGui::PushID(containerPtr); // Use pointer as ID for better uniqueness
 
-        // Render collapsible header with size info
-        bModified |= renderHeader(name, size, accessor, containerPtr);
 
         // TreeNode with performance-optimized flags
         char headerLabel[128];
         snprintf(headerLabel, sizeof(headerLabel), "%s [%zu]", name.c_str(), size);
 
-        constexpr ImGuiTreeNodeFlags kTreeFlags = ImGuiTreeNodeFlags_FramePadding;
+        bool bNodeOpen = ImGui::TreeNodeEx(headerLabel);
 
-        if (ImGui::TreeNodeEx(headerLabel, kTreeFlags)) {
+        // Render collapsible header with size info
+        bModified |= renderButtons(name, size, accessor, containerPtr);
+
+        if (bNodeOpen) {
             // Only render contents when expanded - key performance optimization
             if (accessor->isMapLike()) {
                 bModified |= renderMapContainer(accessor,
                                                 containerPtr,
                                                 prop,
-                                                std::forward<RenderFn>(renderFn));
+                                                depth + 1);
             }
             else {
                 bModified |= renderSequenceContainer(accessor,
                                                      containerPtr,
                                                      prop,
-                                                     std::forward<RenderFn>(renderFn));
+                                                     depth + 1);
             }
+
+
             ImGui::TreePop();
         }
 
@@ -98,10 +105,14 @@ class ContainerPropertyRenderer
 
     struct MapEntry
     {
-        void    *keyPtr;
-        uint32_t keyTypeIndex;
-        void    *valuePtr;
-        uint32_t valueTypeIndex;
+        void       *keyPtr;
+        uint32_t    keyTypeIndex;
+        void       *valuePtr;
+        uint32_t    valueTypeIndex;
+        std::string keyStr;
+        std::string valueStr;
+        std::string typeStr;
+        bool        bModified = false;
     };
 
     struct CachedMapData
@@ -128,11 +139,10 @@ class ContainerPropertyRenderer
         return cache;
     }
 
-    template <typename RenderFn>
     static bool renderMapContainer(reflection::IContainerProperty *accessor,
                                    void                           *containerPtr,
                                    Property                       &prop,
-                                   RenderFn                      &&renderFn)
+                                   int                             depth)
     {
         bool   bModified   = false;
         size_t currentSize = accessor->getSize(containerPtr);
@@ -145,31 +155,57 @@ class ContainerPropertyRenderer
             rebuildMapCache(cache, containerPtr, prop, currentSize);
         }
 
+
         // Render entries and collect deletions
         static std::vector<void *> keysToDelete;
         keysToDelete.clear();
 
-        for (auto &entry : cache.entries) {
+        for (const auto &[idx, entry] : ut::enumerate(cache.entries)) {
             ImGui::PushID(entry.keyPtr);
 
-            // Key (read-only for maps)
-            ImGui::PushItemWidth(120);
-            bModified |= std::forward<RenderFn>(renderFn)("##key", entry.keyPtr, entry.keyTypeIndex);
-            ImGui::PopItemWidth();
+            // 1. key and value is a plat type(int, float, string, bool) : render as key:value
+            if (ReflectionHelper::isScalarType(entry.keyTypeIndex) && ReflectionHelper::isScalarType(entry.valueTypeIndex)) {
+                // Render as key:value
+                auto available = ImGui::GetContentRegionAvail();
+                ImGui::PushItemWidth(available.x * 0.4f);
 
-            ImGui::SameLine();
-            ImGui::TextUnformatted(":");
-            ImGui::SameLine();
+                bModified |= ya::renderReflectedType("##key", entry.keyTypeIndex, entry.valuePtr, depth + 1);
 
-            // Value (editable)
-            bModified |= std::forward<RenderFn>(renderFn)("##val", entry.valuePtr, entry.valueTypeIndex);
+                ImGui::PopItemWidth();
 
+                ImGui::SameLine();
+                ImGui::TextUnformatted(":");
+                ImGui::SameLine();
 
-            // Delete button
-            ImGui::SameLine();
-            if (ImGui::SmallButton("X")) {
-                keysToDelete.push_back(entry.keyPtr);
+                // Value (editable)
+                // bModified |= std::forward<RenderFn>(renderFn)("##val", entry.valuePtr, entry.valueTypeIndex);
+                bModified |= ya::renderReflectedType("##val", entry.valueTypeIndex, entry.valuePtr, depth + 1);
+
+                // Delete button
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X")) {
+                    keysToDelete.push_back(entry.keyPtr);
+                }
             }
+            // 2. render in one tree node key \n value
+            else {
+                bool bNodeOpen = ImGui::TreeNodeEx(std::format("{}", idx).c_str());
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X")) {
+                    keysToDelete.push_back(entry.keyPtr);
+                }
+                // Key (read-only for maps)
+                if (bNodeOpen) {
+                    bModified |= ya::renderReflectedType("##key", entry.keyTypeIndex, entry.keyPtr, depth + 1);
+                    bModified |= ya::renderReflectedType(entry.typeStr, entry.valueTypeIndex, entry.valuePtr, depth + 1);
+                    ImGui::TreePop();
+                }
+
+                ImGui::Separator();
+            }
+
+
 
             ImGui::PopID();
         }
@@ -201,6 +237,10 @@ class ContainerPropertyRenderer
                     .keyTypeIndex   = keyTypeIndex,
                     .valuePtr       = valuePtr,
                     .valueTypeIndex = valueTypeIndex,
+                    .keyStr         = toString(keyPtr, keyTypeIndex),
+                    .valueStr       = toString(valuePtr, valueTypeIndex),
+                    .typeStr        = getTypeName(valueTypeIndex),
+                    .bModified      = false,
                 });
             });
 
@@ -228,9 +268,10 @@ class ContainerPropertyRenderer
                 char label[32];
                 snprintf(label, sizeof(label), "[%zu]", index);
 
-                if (renderFn(label, elementPtr, elementTypeIndex)) {
-                    bModified = true;
-                }
+                bModified |= ya::renderReflectedType(label, elementTypeIndex, elementPtr);
+                // if (renderFn(label, elementPtr, elementTypeIndex)) {
+                //     bModified = true;
+                // }
 
                 // Delete button for sequence containers
                 if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {
@@ -254,32 +295,21 @@ class ContainerPropertyRenderer
 
     // ==================== Header Rendering ====================
 
-    static bool renderHeader(const std::string              &name,
-                             size_t                          size,
-                             reflection::IContainerProperty *accessor,
-                             void                           *containerPtr)
+    static bool renderButtons(const std::string              &name,
+                              size_t                          size,
+                              reflection::IContainerProperty *accessor,
+                              void                           *containerPtr)
     {
         bool bModified = false;
 
         // Add element button
         ImGui::SameLine();
         if (ImGui::SmallButton("+")) {
-            if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {
-                accessor->addElement(containerPtr, nullptr);
-                bModified = true;
-            }
+            accessor->addEmptyEntry(containerPtr);
+            bModified = true;
         }
 
         if (size > 0) {
-            // Remove last element button
-            ImGui::SameLine();
-            if (ImGui::SmallButton("-")) {
-                if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {
-                    accessor->removeElement(containerPtr, size - 1);
-                    bModified = true;
-                }
-            }
-
             // Clear all button
             ImGui::SameLine();
             if (ImGui::SmallButton("Clear")) {
@@ -339,6 +369,23 @@ class ContainerPropertyRenderer
     static bool renderBasicElement(const std::string &label, void *elementPtr, uint32_t typeIndex)
     {
         return renderBasicElement(label.c_str(), elementPtr, typeIndex);
+    }
+
+    static std::string toString(const void *ptr, uint32_t typeIndex)
+    {
+        if (typeIndex == ya::type_index_v<std::string>) {
+            return *static_cast<const std::string *>(ptr);
+        }
+        else {
+            return std::format("{} [unsupported type: {}]", uintptr_t(ptr), typeIndex);
+        }
+    }
+    static std::string getTypeName(uint32_t typeIndex)
+    {
+        if (auto cls = ClassRegistry::instance().getClass(typeIndex); cls) {
+            return cls->getName();
+        }
+        return std::format("unknown type: {}", typeIndex);
     }
 };
 

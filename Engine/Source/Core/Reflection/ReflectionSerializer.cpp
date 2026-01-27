@@ -503,6 +503,21 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
         return j;
     }
 
+    // ★ NEW: Handle pointer types - dereference and serialize pointee
+    if (prop.bPointer && prop.pointeeTypeIndex != 0) {
+        void * const *ptrLocation = static_cast<void * const *>(valuePtr);
+        void *pointee = ptrLocation ? *ptrLocation : nullptr;
+        
+        if (pointee) {
+            // Serialize the pointee object
+            j = serializeAnyValue(pointee, prop.pointeeTypeIndex);
+        } else {
+            // Null pointer - serialize as null
+            j = nullptr;
+        }
+        return j;
+    }
+
     if (is_scalar_type(prop))
     {
         j = serializeScalarValue(valuePtr, prop);
@@ -633,6 +648,66 @@ void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t ty
 }
 void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, const nlohmann::json &j)
 {
+    // ★ NEW: Handle pointer types - allocate and deserialize pointee
+    if (prop.bPointer && prop.pointeeTypeIndex != 0) {
+        void **ptrLocation = static_cast<void **>(prop.getMutableAddress(obj));
+        if (!ptrLocation) {
+            YA_CORE_WARN("ReflectionSerializer: Cannot get mutable address for pointer property '{}'", prop.name);
+            return;
+        }
+
+        // If JSON is null, set pointer to nullptr
+        if (j.is_null()) {
+            // Clean up existing pointee if any
+            if (*ptrLocation) {
+                auto &registry = ClassRegistry::instance();
+                auto *classPtr = registry.getClass(prop.pointeeTypeIndex);
+                if (classPtr && classPtr->canCreateInstance()) {
+                    classPtr->destroyInstance(*ptrLocation);
+                }
+            }
+            *ptrLocation = nullptr;
+            return;
+        }
+
+        // Allocate new instance for pointee
+        auto &registry = ClassRegistry::instance();
+        auto *classPtr = registry.getClass(prop.pointeeTypeIndex);
+        if (!classPtr) {
+            YA_CORE_WARN("ReflectionSerializer: Pointee class not found for pointer property '{}' (typeIndex: {})", 
+                         prop.name, prop.pointeeTypeIndex);
+            return;
+        }
+
+        if (!classPtr->canCreateInstance()) {
+            YA_CORE_WARN("ReflectionSerializer: Cannot create instance for pointee type '{}'", classPtr->_name);
+            return;
+        }
+
+        // Clean up old pointee if exists
+        if (*ptrLocation) {
+            classPtr->destroyInstance(*ptrLocation);
+        }
+
+        // Create new pointee instance
+        void *pointee = classPtr->createInstance();
+        if (!pointee) {
+            YA_CORE_WARN("ReflectionSerializer: Failed to create pointee instance for '{}'", prop.name);
+            return;
+        }
+
+        // Deserialize into the pointee
+        try {
+            deserializeAnyValue(pointee, prop.pointeeTypeIndex, j);
+            *ptrLocation = pointee;
+        } catch (const std::exception &e) {
+            YA_CORE_WARN("ReflectionSerializer: Failed to deserialize pointer property '{}': {}", prop.name, e.what());
+            classPtr->destroyInstance(pointee);
+            *ptrLocation = nullptr;
+        }
+        return;
+    }
+
     // ★ NEW: Check if it's a container type
     if (::ya::reflection::PropertyContainerHelper::isContainer(prop)) {
         auto *accessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);

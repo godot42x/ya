@@ -118,9 +118,11 @@ struct Field
 // ============================================================================
 struct Property : public Field
 {
-    bool        bConst    = false;
-    bool        bStatic   = false;
-    uint32_t    typeIndex = 0;
+    bool        bConst          = false;
+    bool        bStatic         = false;
+    bool        bPointer        = false; ///< True if the property type is a pointer (T*)
+    uint32_t    typeIndex       = 0;
+    uint32_t    pointeeTypeIndex = 0;    ///< If bPointer, the type index of the pointee type (T in T*)
     std::string typeName;
 
     // ============================================================================

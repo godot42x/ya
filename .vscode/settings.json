@@ -35,6 +35,7 @@
         "nlohmann",
         "Octree",
         "Phong",
+        "Pointee",
         "PRIMITIVETYPE",
         "projectdir",
         "Qiao",

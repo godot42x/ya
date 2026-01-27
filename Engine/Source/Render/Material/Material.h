@@ -73,6 +73,17 @@ struct TextureSlot
 /// Texture slot map type: maps resource enum (as int) to TextureSlot
 using TextureSlotMap = std::unordered_map<int, TextureSlot>;
 
+struct TextureSlotMap2
+{
+    YA_REFLECT_BEGIN(TextureSlotMap2)
+    YA_REFLECT_FIELD(textureSlots)
+    YA_REFLECT_END()
+
+    TextureSlotMap textureSlots;
+
+    std::function<void()> onTextureSlotChanged;
+};
+
 
 //  MARK: Material
 /**
@@ -95,6 +106,7 @@ struct Material
     YA_REFLECT_FIELD(_instanceIndex)
     YA_REFLECT_FIELD(_typeID)
     YA_REFLECT_FIELD(_sourcePath)
+    YA_REFLECT_FIELD(_textureViews, .notSerialized())
     YA_REFLECT_END()
 
     // ========================================

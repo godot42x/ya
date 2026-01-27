@@ -25,20 +25,26 @@ PropertyRenderContext PropertyRenderContext::createFrom(const Property &prop, co
 {
     PropertyRenderContext ctx;
 
-    // 检查是否为容器
-    ctx.isContainer = ::ya::reflection::PropertyContainerHelper::isContainer(prop);
-    if (ctx.isContainer) {
-        ctx.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
-    }
-    else {
-        // 提取元数据
-        auto metadata = prop.getMetadata();
-        if (metadata.hasMeta(ya::reflection::Meta::ManipulateSpec::name)) {
-            ctx.manipulateSpec =
-                metadata.get<ya::reflection::Meta::ManipulateSpec>(ya::reflection::Meta::ManipulateSpec::name);
+    // 检查是否为指针类型
+    ctx.bPointer         = prop.bPointer;
+    ctx.pointeeTypeIndex = prop.pointeeTypeIndex;
+
+    // 检查是否为容器（指针类型不检查容器）
+    if (!ctx.bPointer) {
+        ctx.isContainer = ::ya::reflection::PropertyContainerHelper::isContainer(prop);
+        if (ctx.isContainer) {
+            ctx.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
         }
-        if (metadata.hasMeta(ya::reflection::Meta::Color)) {
-            ctx.bColor = metadata.get<bool>(ya::reflection::Meta::Color);
+        else {
+            // 提取元数据
+            auto metadata = prop.getMetadata();
+            if (metadata.hasMeta(ya::reflection::Meta::ManipulateSpec::name)) {
+                ctx.manipulateSpec =
+                    metadata.get<ya::reflection::Meta::ManipulateSpec>(ya::reflection::Meta::ManipulateSpec::name);
+            }
+            if (metadata.hasMeta(ya::reflection::Meta::Color)) {
+                ctx.bColor = metadata.get<bool>(ya::reflection::Meta::Color);
+            }
         }
     }
 
@@ -113,8 +119,8 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
     }
 
 
-    if (cache->classPtr) {
-
+    if (cache->classPtr)
+    {
         if (cache->propertyCount > 0 || cache->classPtr->parents.size() > 0)
         {
 
@@ -144,6 +150,7 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
                     // 从缓存获取属性渲染上下文
                     const auto &propCtx     = cache->propertyContexts[propName];
                     const bool  isContainer = propCtx.isContainer;
+                    const bool  isPointer   = propCtx.bPointer;
                     const auto &prettyName  = propCtx.prettyName;
 
                     if (isContainer) {
@@ -152,11 +159,26 @@ bool renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
                             prettyName,
                             prop,
                             subPropInstancePtr,
-                            [depth](const std::string &label, void *elementPtr, uint32_t elementTypeIndex) -> bool {
-                                return renderReflectedType(label, elementTypeIndex, elementPtr, depth + 2);
-                            });
+                            depth + 2);
                         if (containerModified) {
                             bModified = true;
+                        }
+                    }
+                    else if (isPointer && propCtx.pointeeTypeIndex != 0) {
+                        // Pointer property: dereference and render pointee object
+                        void **ptrLocation = static_cast<void **>(subPropInstancePtr);
+                        void  *pointee     = ptrLocation ? *ptrLocation : nullptr;
+
+                        if (pointee) {
+                            // Has valid pointee - render it with indirection indicator
+                            std::string ptrLabel = prettyName + " (->)";
+                            if (renderReflectedType(ptrLabel, propCtx.pointeeTypeIndex, pointee, depth + 1, nullptr)) {
+                                bModified = true;
+                            }
+                        }
+                        else {
+                            // Null pointer - show placeholder
+                            ImGui::TextDisabled("%s: [null]", prettyName.c_str());
                         }
                     }
                     else {
@@ -207,15 +229,18 @@ void registerBuiltinTypeRenderers()
 
     static auto integerRenderFunc = [](int &value, const PropertyRenderContext &ctx) -> bool {
         const auto &spec = ctx.manipulateSpec;
+        // constexpr float step     = 1.0f;
+        // constexpr float stepFast = 10.0f;
+
         switch (spec.type) {
         case ya::reflection::Meta::ManipulateSpec::Slider:
             return ImGui::SliderInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.min), static_cast<int>(spec.max));
         case ya::reflection::Meta::ManipulateSpec::Drag:
-            return ImGui::DragInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step));
+            return ImGui::DragInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step), 100);
         case ya::reflection::Meta::ManipulateSpec::Input:
-            return ImGui::InputInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step));
+            return ImGui::InputInt(ctx.prettyName.c_str(), &value, static_cast<int>(spec.step), 100);
         case ya::reflection::Meta::ManipulateSpec::None:
-            return ImGui::InputInt(ctx.prettyName.c_str(), &value);
+            return ImGui::InputInt(ctx.prettyName.c_str(), &value, spec.step, 100);
         }
         return false;
     };
@@ -350,34 +375,16 @@ void registerBuiltinTypeRenderers()
                 return ImGui::DragFloat4(ctx.prettyName.c_str(), val);
             },
         });
+
+
+
     registry.registerRenderer(
-        ya::type_index_v<AssetRefBase>,
+        ya::type_index_v<ModelRef>,
         TypeRenderer{
-            .typeName   = "AssetRefBase",
+            .typeName   = "ModelRef",
             .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
-                auto &assetRef = *static_cast<AssetRefBase *>(instance);
-                bool  modified = false;
-
-                // Display current path
-                std::string displayPath = assetRef._path.empty() ? "[No Model]" : assetRef._path;
-
-                // Path input field (read-only display)
-                ImGui::Text("%s:", ctx.prettyName.c_str());
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(-80); // Leave space for button
-
-                char buffer[256];
-                strncpy(buffer, displayPath.c_str(), sizeof(buffer) - 1);
-                buffer[sizeof(buffer) - 1] = '\0';
-
-                if (ImGui::InputText(("##" + ctx.prettyName).c_str(), buffer, sizeof(buffer))) {
-                    assetRef._path = buffer;
-                    modified       = true;
-                }
-
-                // Browse button - access FilePicker through App::get()->_editorLayer
-                ImGui::SameLine();
-                if (ImGui::Button(("Browse##" + ctx.prettyName).c_str())) {
+                return pathWrapper(instance, ctx, [](void *instance, const PropertyRenderContext &ctx) {
+                    auto &assetRef = *static_cast<AssetRefBase *>(instance);
                     if (auto *app = App::get()) {
                         if (auto *editorLayer = app->_editorLayer) {
                             editorLayer->_filePicker.openModelPicker(
@@ -389,11 +396,80 @@ void registerBuiltinTypeRenderers()
                                 });
                         }
                     }
-                }
+                });
+            },
+        });
 
-                return modified;
+    registry.registerRenderer(
+        ya::type_index_v<TextureRef>,
+        TypeRenderer{
+            .typeName   = "TextureRef",
+            .renderFunc = [](void *instance, const PropertyRenderContext &ctx) -> bool {
+                return pathWrapper(instance, ctx, [](void *instance, const PropertyRenderContext &ctx) {
+                    auto &assetRef = *static_cast<AssetRefBase *>(instance);
+                    if (auto *app = App::get()) {
+                        if (auto *editorLayer = app->_editorLayer) {
+                            editorLayer->_filePicker.openTexturePicker(
+                                assetRef._path,
+                                [&assetRef](const std::string &newPath) {
+                                    auto p         = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
+                                    assetRef._path = p;
+                                    assetRef.invalidate();
+                                });
+                        }
+                    }
+                });
             },
         });
 }
+
+bool pathWrapper(void *instance, const PropertyRenderContext &ctx, auto internal)
+{
+    auto &assetRef = *static_cast<AssetRefBase *>(instance);
+    bool  modified = false;
+
+    // Display current path
+    std::string displayPath = assetRef._path.empty() ? "[No Path]" : assetRef._path;
+
+    // Path input field (read-only display)
+    ImGui::Text("%s:", ctx.prettyName.c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-80); // Leave space for button
+
+    char buffer[256];
+    strncpy(buffer, displayPath.c_str(), sizeof(buffer) - 1);
+    buffer[sizeof(buffer) - 1] = '\0';
+
+    if (ImGui::InputText(("##" + ctx.prettyName).c_str(), buffer, sizeof(buffer))) {
+        assetRef._path = buffer;
+        modified       = true;
+    }
+
+    // Browse button - access FilePicker through App::get()->_editorLayer
+    ImGui::SameLine();
+    if (ImGui::Button(("Browse##" + ctx.prettyName).c_str())) {
+        internal(instance, ctx);
+    }
+
+    return modified;
+};
+
+struct EditorLayer *getEditor()
+{
+    if (auto *app = App::get()) {
+        return app->_editorLayer;
+    }
+    return nullptr;
+}
+
+struct FilePicker *getFilePicker()
+{
+    if (auto *editor = getEditor()) {
+        return &editor->_filePicker;
+    }
+    return nullptr;
+}
+
+
 
 } // namespace ya

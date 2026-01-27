@@ -97,6 +97,15 @@ struct Texture
 
 struct TextureView
 {
+    YA_REFLECT_BEGIN(TextureView)
+    YA_REFLECT_FIELD(texture)
+    YA_REFLECT_FIELD(sampler)
+    YA_REFLECT_FIELD(bEnable)
+    YA_REFLECT_FIELD(uvTranslation)
+    YA_REFLECT_FIELD(uvScale)
+    YA_REFLECT_FIELD(uvRotation)
+    YA_REFLECT_END()
+
     stdptr<Texture> texture = nullptr;
     stdptr<Sampler> sampler = nullptr;
 

@@ -324,6 +324,7 @@ void App::init(AppDesc ci)
     });
     _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
     _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
+    _viewportRT->addMaterialSystem<PhongMaterialSystem>();
 
 
     // MARK: Postprocessing pass

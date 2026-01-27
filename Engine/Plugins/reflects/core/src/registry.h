@@ -184,8 +184,7 @@ struct Register
         // 检查是否是成员指针
         if constexpr (std::is_member_object_pointer_v<DecayedType>) {
             // 提取成员指针指向的类型
-            using MemberType = typename std::remove_reference_t<
-                decltype(std::declval<T>().*prop)>;
+            using MemberType = typename std::remove_reference_t<decltype(std::declval<T>().*prop)>;
 
             // 禁止引用类型的反射
             static_assert(!std::is_reference_v<MemberType>,

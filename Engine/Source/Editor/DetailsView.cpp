@@ -159,45 +159,57 @@ void DetailsView::drawComponents(Entity &entity)
     });
 
     drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent *pmc) {
-        auto *litMat = pmc->getRuntimeMaterial();
-        if (!litMat) {
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
+        auto *mat = pmc->getRuntimeMaterial();
+        ya::renderReflectedType(mat->getLabel(), ya::type_index_v<PhongMaterialComponent>, pmc, 1);
+
+        if (!mat) {
+            // ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
         }
-        ya::renderReflectedType("PhongMaterial", ya::type_index_v<PhongMaterialComponent>, pmc);
+        ImGui::PushID(mat->getLabel().c_str());
 
-        if (ImGui::CollapsingHeader(litMat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Render texture slots
+        if (ImGui::CollapsingHeader("Texture Slots", ImGuiTreeNodeFlags_DefaultOpen))
+        {
             ImGui::Indent();
-            ImGui::PushID(litMat->getLabel().c_str());
 
-            bool bDirty = false;
-            bDirty |= ImGui::ColorEdit3("Ambient", glm::value_ptr(litMat->_params.ambient));
-            bDirty |= ImGui::ColorEdit3("Diffuse", glm::value_ptr(litMat->_params.diffuse));
-            bDirty |= ImGui::ColorEdit3("Specular", glm::value_ptr(litMat->_params.specular));
-            bDirty |= ImGui::SliderFloat("Shininess", &litMat->_params.shininess, 0.0f, 256.f);
-
-            // Render texture slots
-            for (auto &[key, tv] : litMat->_textureViews) {
-                if (!tv.texture) continue;
-
-                const char *slotName = litMat->getTextureSlotName(key);
-                auto        label    = tv.texture->getLabel();
-                if (label.empty()) {
-                    label = tv.texture->getFilepath();
-                }
-                ImGui::Text("%s: %s", slotName, label.c_str());
-                bDirty |= ImGui::Checkbox(std::format("Enable##{}", key).c_str(), &tv.bEnable);
-                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", key).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
-                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", key).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+            if (TextureView *view = mat->getTextureView(PhongMaterial::DiffuseTexture); view && view->texture)
+            {
+                ya::renderPathPicker(view->texture->getFilepath(), "Texture", [mat](const std::string &path) {
+                    if (auto app = App::get(); app) {
+                        if (auto editor = app->_editorLayer) {
+                            editor->_filePicker.openTexturePicker(
+                                path,
+                                [mat](const std::string &path) {
+                                    if (auto tex = AssetManager::get()->loadTexture(path); tex) {
+                                        mat->getTextureView(PhongMaterial::DiffuseTexture)->texture = tex;
+                                        mat->setResourceDirty();
+                                    }
+                                });
+                        }
+                    }
+                });
+            }
+            else {
+                ya::renderPathPicker("", "Texture", [mat](const std::string &path) {
+                    if (auto app = App::get(); app) {
+                        if (auto editor = app->_editorLayer) {
+                            editor->_filePicker.openTexturePicker(
+                                path,
+                                [mat](const std::string &path) {
+                                    if (auto tex = AssetManager::get()->loadTexture(path); tex) {
+                                        mat->getTextureView(PhongMaterial::DiffuseTexture)->texture = tex;
+                                        mat->setResourceDirty();
+                                    }
+                                });
+                        }
+                    }
+                });
             }
 
-            if (bDirty) {
-                litMat->setParamDirty(true);
-            }
-
-            ImGui::PopID();
             ImGui::Unindent();
         }
+        ImGui::PopID();
     });
 
     drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {

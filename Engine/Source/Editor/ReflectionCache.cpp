@@ -49,7 +49,7 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
         std::string                      imguiComboString;
 
 
-        for (const auto &[idx, values] : values | ut::enumerate) {
+        for (const auto &[idx, values] : ut::enumerate(values)) {
             const auto &n = values.name;
             const auto &v = values.value;
             names.push_back(n);
