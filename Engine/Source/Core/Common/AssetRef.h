@@ -91,13 +91,23 @@ struct TAssetRef : public AssetRefBase
 
     // Copy and move
     TAssetRef(const TAssetRef &other)
+        : AssetRefBase(other), _cachedPtr(other._cachedPtr)
     {
-        YA_CORE_WARN("Copy constructor called for TAssetRef, and the delegate will be copied");
-        *this = other;
+        // Note: onModified delegate is NOT copied intentionally
+        // because it should not be shared between references
     }
+    
+    TAssetRef &operator=(const TAssetRef &other)
+    {
+        if (this != &other) {
+            AssetRefBase::operator=(other);
+            _cachedPtr = other._cachedPtr;
+        }
+        return *this;
+    }
+    
     TAssetRef(TAssetRef &&other) noexcept = default;
-    // TAssetRef &operator=(const TAssetRef &other)     = default;
-    // TAssetRef &operator=(TAssetRef &&other) noexcept = default;
+    TAssetRef &operator=(TAssetRef &&other) noexcept = default;
 
     // Access interface
     T                 *get() const { return _cachedPtr.get(); }

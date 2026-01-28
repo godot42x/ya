@@ -33,7 +33,19 @@ void ResourceResolveSystem::onUpdate(float dt)
         if (!modelComponent.isResolved() && modelComponent.hasModelSource()) {
             Entity *entity = scene->getEntityByEnttID(entityHandle);
             if (entity) {
-                resolveModelComponent(scene, entity, modelComponent);
+                try {
+                    resolveModelComponent(scene, entity, modelComponent);
+                }
+                catch (const std::exception &e) {
+                    YA_CORE_ERROR("ResourceResolveSystem: Failed to resolve model component: {}", e.what());
+                    // Mark as resolved to avoid retrying
+                    modelComponent._bResolved = true;
+                }
+                catch (...) {
+                    YA_CORE_ERROR("ResourceResolveSystem: Failed to resolve model component");
+                    // Mark as resolved to avoid retrying
+                    modelComponent._bResolved = true;
+                }
             }
         }
     });

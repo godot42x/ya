@@ -35,6 +35,7 @@ struct Texture
     uint32_t   _width    = 0;
     uint32_t   _height   = 0;
     uint32_t   _channels = 4; // RGBA by default
+    uint32_t   _mipLevels = 1; // Number of mip levels
 
     std::string _label;
     std::string _filepath;
@@ -87,8 +88,8 @@ struct Texture
     bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
 
   private:
-
-    void createImage(const void *pixels, uint32_t texWidth, uint32_t texHeight, EFormat::T format = EFormat::R8G8B8A8_UNORM);
+    void createImage(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format = EFormat::R8G8B8A8_UNORM, uint32_t mipLevels = 1);
+    void createFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
 
   private:

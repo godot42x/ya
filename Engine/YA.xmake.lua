@@ -14,6 +14,7 @@ add_requires(
     , "nlohmann_json v3.12.0"
     , "sol2"
     , "glad"
+    , "ktx"
 )
 add_requireconfs("freetype", {
     system = false,
@@ -146,6 +147,7 @@ do
     add_packages("imguizmo-local", { public = true })
     --add_packages("glad")
     add_packages("assimp")
+    add_packages("ktx")
 
     do
         --NOTICE: must before vulkansdk or it will cause error

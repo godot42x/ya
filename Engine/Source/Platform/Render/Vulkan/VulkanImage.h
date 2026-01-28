@@ -39,7 +39,11 @@ struct VulkanImage : public IImage
         ret->_render = render;
         ret->_ci     = ci;
 
-        YA_CORE_ASSERT(ret->allocate(), "Failed to create VulkanImage");
+        bool ok = ret->allocate();
+        if (!ok) {
+            YA_CORE_ERROR("Failed to allocate VulkanImage");
+            return nullptr;
+        }
 
         return ret;
     }
@@ -65,6 +69,8 @@ struct VulkanImage : public IImage
     [[nodiscard]] VkFormat getVkFormat() const { return _format; }
 
     void setDebugName(const std::string &name) override;
+
+    bool isValid() const { return _handle != VK_NULL_HANDLE && _imageMemory != VK_NULL_HANDLE; }
 
 
   public:

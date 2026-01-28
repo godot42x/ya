@@ -195,11 +195,52 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *im
     return true;
 }
 
+// Helper function to check if a format is supported by the device
+static bool isFormatSupported(VulkanRender *vkRender, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
+{
+    VkPhysicalDevice physicalDevice = vkRender->getPhysicalDevice();
+
+    VkImageFormatProperties2 formatProperties = {};
+    formatProperties.sType                    = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+
+    VkPhysicalDeviceImageFormatInfo2 formatInfo = {};
+    formatInfo.sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+    formatInfo.format                           = format;
+    formatInfo.type                             = VK_IMAGE_TYPE_2D;
+    formatInfo.tiling                           = tiling;
+    formatInfo.usage                            = usage;
+    formatInfo.flags                            = 0;
+
+    VkResult result = vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, &formatInfo, &formatProperties);
+    return result == VK_SUCCESS;
+}
 
 bool VulkanImage::allocate()
 {
     _format     = toVk(_ci.format);
     _usageFlags = toVk(_ci.usage);
+
+    // Check format support: prefer OPTIMAL tiling (better performance and wider support)
+    bool bSupportsOptimal = isFormatSupported(_render, _format, VK_IMAGE_TILING_OPTIMAL, _usageFlags);
+    bool bSupportsLinear  = false;
+    
+    VkImageTiling selectedTiling = VK_IMAGE_TILING_OPTIMAL;
+    
+    if (!bSupportsOptimal)
+    {
+        // Fallback to LINEAR if OPTIMAL is not supported
+        bSupportsLinear = isFormatSupported(_render, _format, VK_IMAGE_TILING_LINEAR, _usageFlags);
+        if (bSupportsLinear)
+        {
+            selectedTiling = VK_IMAGE_TILING_LINEAR;
+            YA_CORE_WARN("VulkanImage::allocate format {} does not support OPTIMAL tiling, using LINEAR", std::to_string(_format));
+        }
+        else
+        {
+            YA_CORE_ERROR("VulkanImage::allocate format {} is not supported by the device (neither OPTIMAL nor LINEAR)", std::to_string(_format));
+            return false;
+        }
+    }
 
     VkImageCreateInfo imageCreateInfo{
         .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -215,7 +256,7 @@ bool VulkanImage::allocate()
         .mipLevels             = _ci.mipLevels,
         .arrayLayers           = 1,
         .samples               = toVk(_ci.samples),
-        .tiling                = VK_IMAGE_TILING_OPTIMAL,
+        .tiling                = selectedTiling,
         .usage                 = _usageFlags,
         .sharingMode           = toVk(_ci.sharingMode),
         .queueFamilyIndexCount = _ci.queueFamilyIndexCount,
@@ -223,7 +264,7 @@ bool VulkanImage::allocate()
         .initialLayout         = toVk(_ci.initialLayout),
     };
 
-    VK_CALL(vkCreateImage(_render->getDevice(), &imageCreateInfo, nullptr, &_handle));
+    VK_CALL(vkCreateImage(_render->getDevice(), &imageCreateInfo, _render->getAllocator(), &_handle));
 
 
     // allocate memory
