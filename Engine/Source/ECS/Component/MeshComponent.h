@@ -69,18 +69,23 @@ struct MeshComponent : public IComponent
      * so the mesh can be re-resolved after deserialization
      */
     std::string _sourceModelPath;
-
     /**
      * @brief Index of the mesh within the Model
      * Used together with _sourceModelPath to identify which mesh this component represents
      */
     uint32_t _meshIndex = 0;
 
+    // TODO: make 3 state, can be only in one state at a time
+    // 1. Primitive geometry
+    // 2. Model mesh (from ModelComponent)
+    // 3. Static mesh
+    // std::string _staticMeshPath;
+
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
 
-    Mesh* _cachedMesh = nullptr; ///< Resolved mesh pointer
+    Mesh *_cachedMesh = nullptr; ///< Resolved mesh pointer
     bool  _bResolved  = false;
 
     // ========================================
@@ -115,7 +120,7 @@ struct MeshComponent : public IComponent
     /**
      * @brief Get the resolved mesh
      */
-    Mesh* getMesh() const { return _cachedMesh; }
+    Mesh *getMesh() const { return _cachedMesh; }
 
     /**
      * @brief Check if this component has a valid mesh source
@@ -144,7 +149,7 @@ struct MeshComponent : public IComponent
      * @brief Set to mesh from Model
      * Called by ResourceResolveSystem when creating child entities from ModelComponent
      */
-    void setFromModel(const std::string& modelPath, uint32_t meshIndex, Mesh* mesh)
+    void setFromModel(const std::string &modelPath, uint32_t meshIndex, Mesh *mesh)
     {
         _primitiveGeometry = EPrimitiveGeometry::None;
         _sourceModelPath   = modelPath;

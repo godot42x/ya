@@ -169,7 +169,9 @@ class ContainerPropertyRenderer
                 auto available = ImGui::GetContentRegionAvail();
                 ImGui::PushItemWidth(available.x * 0.4f);
 
-                bModified |= ya::renderReflectedType("##key", entry.keyTypeIndex, entry.valuePtr, depth + 1);
+                ya::RenderContext ctx;
+                ya::renderReflectedType("##key", entry.keyTypeIndex, entry.valuePtr, ctx, depth + 1);
+                bModified |= ctx.hasModifications();
 
                 ImGui::PopItemWidth();
 
@@ -178,8 +180,9 @@ class ContainerPropertyRenderer
                 ImGui::SameLine();
 
                 // Value (editable)
-                // bModified |= std::forward<RenderFn>(renderFn)("##val", entry.valuePtr, entry.valueTypeIndex);
-                bModified |= ya::renderReflectedType("##val", entry.valueTypeIndex, entry.valuePtr, depth + 1);
+                ya::RenderContext ctx2;
+                ya::renderReflectedType("##val", entry.valueTypeIndex, entry.valuePtr, ctx2, depth + 1);
+                bModified |= ctx2.hasModifications();
 
                 // Delete button
                 ImGui::SameLine();
@@ -197,8 +200,11 @@ class ContainerPropertyRenderer
                 }
                 // Key (read-only for maps)
                 if (bNodeOpen) {
-                    bModified |= ya::renderReflectedType("##key", entry.keyTypeIndex, entry.keyPtr, depth + 1);
-                    bModified |= ya::renderReflectedType(entry.typeStr, entry.valueTypeIndex, entry.valuePtr, depth + 1);
+                    ya::RenderContext ctx3;
+                    ya::renderReflectedType("##key", entry.keyTypeIndex, entry.keyPtr, ctx3, depth + 1);
+                    ya::RenderContext ctx4;
+                    ya::renderReflectedType(entry.typeStr, entry.valueTypeIndex, entry.valuePtr, ctx4, depth + 1);
+                    bModified |= ctx3.hasModifications() || ctx4.hasModifications();
                     ImGui::TreePop();
                 }
 
@@ -268,10 +274,9 @@ class ContainerPropertyRenderer
                 char label[32];
                 snprintf(label, sizeof(label), "[%zu]", index);
 
-                bModified |= ya::renderReflectedType(label, elementTypeIndex, elementPtr);
-                // if (renderFn(label, elementPtr, elementTypeIndex)) {
-                //     bModified = true;
-                // }
+                ya::RenderContext ctx;
+                ya::renderReflectedType(label, elementTypeIndex, elementPtr, ctx);
+                bModified |= ctx.hasModifications();
 
                 // Delete button for sequence containers
                 if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {

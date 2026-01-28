@@ -218,7 +218,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         const auto &[tc, smc, meshComp] = view.get(entity);
         // TODO: culling works
 
-        SimpleMaterial *material = smc.getRuntimeMaterial();
+        SimpleMaterial *material = smc.getMaterial();
         if (!material) {
             continue;
         }

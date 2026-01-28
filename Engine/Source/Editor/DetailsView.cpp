@@ -110,7 +110,7 @@ void DetailsView::drawComponents(Entity &entity)
 
     // 其他组件保持原有的自定义渲染逻辑
     drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent *smc) {
-        auto *simpleMat = smc->getRuntimeMaterial();
+        auto *simpleMat = smc->getMaterial();
         if (!simpleMat) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
@@ -122,7 +122,7 @@ void DetailsView::drawComponents(Entity &entity)
     });
 
     drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent *umc) {
-        auto *unlitMat = umc->getRuntimeMaterial();
+        auto *unlitMat = umc->getMaterial();
         if (!unlitMat) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
@@ -161,67 +161,19 @@ void DetailsView::drawComponents(Entity &entity)
     });
 
     drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent *pmc) {
-        auto *mat = pmc->getRuntimeMaterial();
-        ya::renderReflectedType(mat->getLabel(), ya::type_index_v<PhongMaterialComponent>, pmc, 1);
+        ya::RenderContext ctx;
+        ctx.beginInstance(pmc);
+        ya::renderReflectedType("PhongMaterialComponent", type_index_v<PhongMaterialComponent>, pmc, ctx, 0);
 
-        if (!mat) {
-            // ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
-            return;
-        }
-        ImGui::PushID(mat->getLabel().c_str());
-
-        // Render texture slots
-        if (ImGui::CollapsingHeader("Texture Slots", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            ImGui::Indent();
-
-            if (TextureView *view = mat->getTextureView(PhongMaterial::DiffuseTexture); view && view->texture)
-            {
-                ya::renderPathPicker(view->texture->getFilepath(), "Texture", [mat](const std::string &path) {
-                    if (auto app = App::get(); app) {
-                        if (auto editor = app->_editorLayer) {
-                            editor->_filePicker.openTexturePicker(
-                                path,
-                                [mat](const std::string &path) {
-                                    if (auto tex = AssetManager::get()->loadTexture(path); tex) {
-                                        mat->getTextureView(PhongMaterial::DiffuseTexture)->texture = tex;
-                                        mat->setResourceDirty();
-                                    }
-                                });
-                        }
-                    }
-                });
+        // Unified modification handling: both sync and async modifications
+        if (ctx.hasModifications()) {
+            if (ctx.isModifiedPrefix("_diffuseSlot") || ctx.isModifiedPrefix("_specularSlot")) {
+                pmc->invalidate();
             }
             else {
-                ya::renderPathPicker("", "Texture", [mat](const std::string &path) {
-                    if (auto app = App::get(); app) {
-                        if (auto editor = app->_editorLayer) {
-                            editor->_filePicker.openTexturePicker(
-                                path,
-                                [mat](const std::string &path) {
-                                    if (auto tex = AssetManager::get()->loadTexture(path); tex) {
-                                        if (auto tv = mat->getTextureView(PhongMaterial::DiffuseTexture); tv) {
-                                            tv->texture = tex;
-                                        }
-                                        else {
-                                            mat->setTextureView(
-                                                PhongMaterial::DiffuseTexture,
-                                                TextureView{
-                                                    .texture = tex,
-                                                    .sampler = TextureLibrary::get().getDefaultSampler(),
-                                                });
-                                        }
-                                        mat->setResourceDirty();
-                                    }
-                                });
-                        }
-                    }
-                });
+                pmc->getMaterial()->setParamDirty();
             }
-
-            ImGui::Unindent();
         }
-        ImGui::PopID();
     });
 
     drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {
@@ -634,6 +586,31 @@ void DetailsView::tryLoadScriptForEditor(void *scriptPtr)
         YA_CORE_ERROR("[Editor Preview] Unexpected error: {}", e.what());
         script.self = sol::lua_nil;
         script.properties.clear();
+    }
+}
+
+void DetailsView::testNewRenderInterface(Entity &entity)
+{
+    // 示例：使用新的renderReflectedType接口
+    if (auto *transform = entity.getComponent<TransformComponent>()) {
+        ya::RenderContext ctx;
+        ctx.beginInstance(transform); // Set current instance for PropertyId generation
+        ya::renderReflectedType("Transform", ya::type_index_v<TransformComponent>, transform, ctx, 0);
+
+        // 新的API用法：高效查询特定属性是否被修改
+        if (ctx.isModified("position")) {
+            YA_CORE_INFO("Position was modified!");
+        }
+        if (ctx.isModifiedPrefix("rotation")) {
+            YA_CORE_INFO("Some rotation property was modified!");
+        }
+
+        // 遍历所有修改
+        if (ctx.hasModifications()) {
+            for (const auto &mod : ctx.modifications) {
+                YA_CORE_INFO("Property {} was modified (path: {})", mod.propPath, mod.propId.id);
+            }
+        }
     }
 }
 

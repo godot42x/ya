@@ -284,7 +284,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         const auto &[umc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
-        UnlitMaterial *material = umc.getRuntimeMaterial();
+        UnlitMaterial *material = umc.getMaterial();
         if (!material || material->getIndex() < 0) {
             Entity *entityPtr = scene->getEntityByEnttID(entity);
             YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material", 

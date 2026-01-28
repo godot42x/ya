@@ -145,9 +145,9 @@ Node *ResourceResolveSystem::createMeshNode(
     // Generate name for child node
     std::string meshName = model->getMesh(meshIndex)->getName();
     if (meshName.empty()) {
-        meshName = "Mesh_" + std::to_string(meshIndex);
+        meshName = std::format("Mesh_{}", meshIndex);
     }
-    std::string nodeName = parentEntity->getName() + "_" + meshName;
+    std::string nodeName = std::format("{}_{}", parentEntity->getName(), meshName);
 
     // Get parent node for hierarchy
     Node *parentNode = scene->getNodeByEntity(parentEntity);
@@ -179,26 +179,25 @@ Node *ResourceResolveSystem::createMeshNode(
         model->getMesh(meshIndex).get());
 
     // Add PhongMaterialComponent
-    auto *matComp = childEntity->addComponent<PhongMaterialComponent>();
+    if (auto *matComp = childEntity->addComponent<PhongMaterialComponent>()) {
 
-    if (modelComp._useEmbeddedMaterials) {
-        // Get material index for this mesh
-        int32_t matIndex = model->getMaterialIndex(meshIndex);
+        if (modelComp._useEmbeddedMaterials) {
+            // Get material index for this mesh
+            int32_t matIndex = model->getMaterialIndex(meshIndex);
 
-        // Try to use shared material from cache
-        auto it = modelComp._cachedMaterials.find(matIndex);
-        if (it != modelComp._cachedMaterials.end() && it->second != nullptr) {
-            // Use shared material
-            matComp->setSharedMaterial(it->second);
-            matComp->_bResolved = true; // Already resolved
-            YA_CORE_TRACE("ResourceResolveSystem: Mesh {} using shared material index {}",
-                          meshIndex,
-                          matIndex);
-        }
-        else {
-            // No cached material, initialize from embedded (will create own material on resolve)
-            const EmbeddedMaterial *embeddedMat = model->getMaterialForMesh(meshIndex);
-            initMaterialFromEmbedded(*matComp, embeddedMat, model->getDirectory());
+            // Try to use shared material from cache
+            auto it = modelComp._cachedMaterials.find(matIndex);
+            if (it != modelComp._cachedMaterials.end() && it->second != nullptr) {
+                // Use shared material
+                matComp->setSharedMaterial(it->second);
+                matComp->_bResolved = true; // Already resolved
+                YA_CORE_TRACE("ResourceResolveSystem: Mesh {} using shared material index {}", meshIndex, matIndex);
+            }
+            else {
+                // No cached material, initialize from embedded (will create own material on resolve)
+                const EmbeddedMaterial *embeddedMat = model->getMaterialForMesh(meshIndex);
+                initMaterialFromEmbedded(*matComp, embeddedMat, model->getDirectory());
+            }
         }
     }
     // If no embedded material or useEmbeddedMaterials is false,
@@ -208,7 +207,7 @@ Node *ResourceResolveSystem::createMeshNode(
 }
 
 void ResourceResolveSystem::initSharedMaterial(
-    PhongMaterial            *material,
+    PhongMaterial          *material,
     const EmbeddedMaterial *embeddedMat,
     const std::string      &modelDirectory)
 {
@@ -264,19 +263,20 @@ void ResourceResolveSystem::initSharedMaterial(
 }
 
 void ResourceResolveSystem::initMaterialFromEmbedded(
-    PhongMaterialComponent   &matComp,
+    PhongMaterialComponent &matComp,
     const EmbeddedMaterial *embeddedMat,
     const std::string      &modelDirectory)
 {
     if (!embeddedMat) {
         return; // Use default material
     }
-
-    // Set material parameters
-    matComp._params.ambient   = embeddedMat->ambient;
-    matComp._params.diffuse   = glm::vec3(embeddedMat->baseColor);
-    matComp._params.specular  = embeddedMat->specular;
-    matComp._params.shininess = embeddedMat->shininess;
+    matComp.createDefaultMaterial();
+    auto &params     = matComp.getMaterial()->getParamsMut();
+    params.ambient   = embeddedMat->ambient;
+    params.diffuse   = glm::vec3(embeddedMat->baseColor);
+    params.specular  = embeddedMat->specular;
+    params.shininess = embeddedMat->shininess;
+    matComp.getMaterial()->setParamDirty();
 
     // Set texture paths (resolve relative to model directory)
     auto resolvePath = [&modelDirectory](const std::string &texPath) -> std::string {

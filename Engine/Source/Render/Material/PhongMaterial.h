@@ -176,8 +176,8 @@ struct PhongMaterial : public Material
 
 // Reflection for ParamUBO (cannot be inside class due to memory layout)
 YA_REFLECT_BEGIN_EXTERNAL(ya::PhongMaterial::ParamUBO)
-YA_REFLECT_FIELD(ambient)
-YA_REFLECT_FIELD(diffuse)
-YA_REFLECT_FIELD(specular)
+YA_REFLECT_FIELD(ambient, .color())
+YA_REFLECT_FIELD(diffuse, .color())
+YA_REFLECT_FIELD(specular, .color())
 YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
 YA_REFLECT_END_EXTERNAL()

@@ -62,23 +62,35 @@ struct MaterialComponent : public IComponent
         _material = nullptr;
     }
 
+    MaterialType *createDefaultMaterial();
+
 
     /**
      * @brief Set a shared material (will not be destroyed by this component)
      */
     void setSharedMaterial(MaterialType *material)
     {
-        setRuntimeMaterial(material);
+        setMaterial(material);
+        _bSharedMaterial = true;
     }
 
-    MaterialType *getRuntimeMaterial() const { return _material; }
+    MaterialType *getMaterial() const { return _material; }
+    MaterialType *getOrCreateMaterial() const
+    {
+        if (!_material)
+        {
+            createDefaultMaterial();
+        }
+        return _material;
+    }
 
 
-    void setRuntimeMaterial(MaterialType *material)
+    void setMaterial(MaterialType *material)
     {
         _material = material;
     }
 };
+
 
 
 } // namespace ya

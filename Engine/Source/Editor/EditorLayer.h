@@ -117,6 +117,7 @@ struct EditorLayer
     {
         YA_PROFILE_FUNCTION();
         updateWindowFlags();
+        // ya::DeferredModificationQueue::get().onFrameBegin();
 
         // Begin main dockspace window
         ImGui::Begin("MainEditor", nullptr, _windowFlags);

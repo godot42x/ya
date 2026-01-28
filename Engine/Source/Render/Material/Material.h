@@ -34,7 +34,7 @@ struct TextureSlot
     explicit TextureSlot(const std::string &path)
         : textureRef(path)
     {}
-
+    
     /**
      * @brief Convert to runtime TextureView
      * @param defaultSampler Sampler to use (texture provides image, sampler is shared)
@@ -56,16 +56,18 @@ struct TextureSlot
      */
     void fromTextureView(const TextureView &tv, const std::string &texturePath)
     {
-        textureRef._path      = texturePath;
-        textureRef._cachedPtr = tv.texture;
-        uvScale               = tv.uvScale;
-        uvOffset              = tv.uvTranslation;
-        uvRotation            = tv.uvRotation;
-        bEnable               = tv.bEnable;
+        // textureRef.setPath(texturePath);
+        // textureRef._cachedPtr = tv.texture;
+        textureRef.set(texturePath, tv.texture);
+        uvScale    = tv.uvScale;
+        uvOffset   = tv.uvTranslation;
+        uvRotation = tv.uvRotation;
+        bEnable    = tv.bEnable;
     }
 
     bool resolve() { return textureRef.resolve(); }
     bool isLoaded() const { return textureRef.isLoaded(); }
+    bool isValid() const { return textureRef.hasPath(); }
 
     void invalidate() { textureRef.invalidate(); }
 };
@@ -73,16 +75,16 @@ struct TextureSlot
 /// Texture slot map type: maps resource enum (as int) to TextureSlot
 using TextureSlotMap = std::unordered_map<int, TextureSlot>;
 
-struct TextureSlotMap2
-{
-    YA_REFLECT_BEGIN(TextureSlotMap2)
-    YA_REFLECT_FIELD(textureSlots)
-    YA_REFLECT_END()
+// struct TextureSlotMap2
+// {
+//     YA_REFLECT_BEGIN(TextureSlotMap2)
+//     YA_REFLECT_FIELD(textureSlots)
+//     YA_REFLECT_END()
 
-    TextureSlotMap textureSlots;
+//     TextureSlotMap textureSlots;
 
-    std::function<void()> onTextureSlotChanged;
-};
+//     std::function<void()> onTextureSlotChanged;
+// };
 
 
 //  MARK: Material

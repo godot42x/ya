@@ -177,8 +177,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-        auto lmc                    = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
+        lmc->getMaterial()->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
     }
 
 
@@ -221,14 +222,14 @@ void HelloMaterial::createEntities(ya::Scene *scene)
                         auto bmc = entity->addComponent<ya::SimpleMaterialComponent>();
                         auto mat = simpleMaterials[materialIndex];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        bmc->setRuntimeMaterial(mat->as<ya::SimpleMaterial>());
+                        bmc->setMaterial(mat->as<ya::SimpleMaterial>());
                     }
                     else {
                         // use unlit material
                         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
                         auto mat = unlitMaterials[materialIndex % unlitMaterials.size()];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        umc->setRuntimeMaterial(mat->as<ya::UnlitMaterial>());
+                        umc->setMaterial(mat->as<ya::UnlitMaterial>());
                     }
                 }
                 // YA_CORE_DEBUG("1.2 {} {} {}", i, j, k);
@@ -250,9 +251,10 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         // Material component with serializable texture slots
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
         lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
         lmc->setTextureSlot(ya::PhongMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
-        lmc->_params = ya::PhongMaterial::ParamUBO{
+        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(1.0f),
             .specular  = glm::vec3(1.0f),
@@ -277,8 +279,9 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         mc->setModelPath("Engine/Content/Misc/Monkey.obj");
 
         // Material component
-        auto lmc     = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->_params = ya::PhongMaterial::ParamUBO{
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
+        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
             .specular  = glm::vec3(0.5f),
@@ -320,7 +323,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
         auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
-        umc->setRuntimeMaterial(pointLightMat);
+        umc->setMaterial(pointLightMat);
         // umc.add
 
         // 添加 Lua 圆周运动脚本（新 API）
@@ -347,8 +350,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         auto existingMat = ya::MaterialFactory::get()->getMaterialByName(_pongMaterialNames[i])->as<ya::PhongMaterial>();
 
         // Material component
-        auto lmc     = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->_params = existingMat->_params; // Copy params from pre-loaded material
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->setMaterial(existingMat);
 
         // TODO: implement the 3D UI system to show material name
         // auto wc          = entity->addComponent<ya::WidgetComponent>();

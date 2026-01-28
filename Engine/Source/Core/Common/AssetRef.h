@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
 #include <memory>
 #include <string>
@@ -32,8 +33,14 @@ struct AssetRefBase
     YA_REFLECT_END()
 
 
+  protected:
     std::string _path; // Serialized data: asset path
+
+  public:
+    MulticastDelegate<void()> onModified;
     // bool bValid= false;  // cannot be loaded?
+
+
 
     AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(path) {}
@@ -43,6 +50,25 @@ struct AssetRefBase
     // resolve path from abs to engine?
     // }
     virtual void invalidate() = 0;
+
+    const std::string &getPath() const { return _path; }
+    bool               hasPath() const { return !_path.empty(); }
+    void               setPath(const std::string &path)
+    {
+        _path = path;
+        invalidate();
+        notifyModified();
+    }
+
+    /**
+     * @brief Notify that the asset was modified (enqueues to deferred queue)
+     * Called by editor UI after async file picker completes.
+     * The modification will be collected by RenderContext::beginInstance() on next frame.
+     */
+    void notifyModified()
+    {
+        onModified.broadcast();
+    }
 };
 
 
@@ -64,22 +90,24 @@ struct TAssetRef : public AssetRefBase
     }
 
     // Copy and move
-    TAssetRef(const TAssetRef &other)                = default;
-    TAssetRef(TAssetRef &&other) noexcept            = default;
-    TAssetRef &operator=(const TAssetRef &other)     = default;
-    TAssetRef &operator=(TAssetRef &&other) noexcept = default;
+    TAssetRef(const TAssetRef &other)
+    {
+        YA_CORE_WARN("Copy constructor called for TAssetRef, and the delegate will be copied");
+        *this = other;
+    }
+    TAssetRef(TAssetRef &&other) noexcept = default;
+    // TAssetRef &operator=(const TAssetRef &other)     = default;
+    // TAssetRef &operator=(TAssetRef &&other) noexcept = default;
 
     // Access interface
-    T *get() const { return _cachedPtr.get(); }
+    T                 *get() const { return _cachedPtr.get(); }
+    std::shared_ptr<T> getShared() const { return _cachedPtr; }
     // T       *operator->() const { return get(); }
     // T       &operator*() const { return *_cachedPtr; }
-    explicit operator bool() const { return _cachedPtr != nullptr; }
+    // explicit operator bool() const { return _cachedPtr != nullptr; }
 
     bool isLoaded() const { return _cachedPtr != nullptr; }
-    bool hasPath() const { return !_path.empty(); }
 
-    const std::string &getPath() const { return _path; }
-    std::shared_ptr<T> getShared() const { return _cachedPtr; }
 
     /**
      * @brief Resolve (load) the asset from path
@@ -105,27 +133,27 @@ struct TAssetRef : public AssetRefBase
     /**
      * @brief Set resource from loaded asset (extracts path from asset if possible)
      */
-    void setFromAsset(std::shared_ptr<T> ptr)
-    {
-        _cachedPtr = std::move(ptr);
-        // Path should be set separately or extracted from asset metadata
-    }
+    // void setFromAsset(std::shared_ptr<T> ptr)
+    // {
+    //     _cachedPtr = std::move(ptr);
+    //     // Path should be set separately or extracted from asset metadata
+    // }
 
     /**
      * @brief Clear the reference
      */
-    void clear()
-    {
-        _path.clear();
-        _cachedPtr.reset();
-    }
+    // void clear()
+    // {
+    //     _path.clear();
+    //     _cachedPtr.reset();
+    // }
 
     /**
      * @brief Check equality (by path)
      */
-    bool operator==(const TAssetRef &other) const { return _path == other._path; }
-    bool operator!=(const TAssetRef &other) const { return _path != other._path; }
-};
+    // bool operator==(const TAssetRef &other) const { return _path == other._path; }
+    // bool operator!=(const TAssetRef &other) const { return _path != other._path; }
+}; // namespace ya
 
 // Common type aliases
 using TextureRef = TAssetRef<Texture>;
@@ -183,7 +211,7 @@ namespace ya
 template <>
 inline bool TAssetRef<Texture>::resolve()
 {
-    if (_path.empty()) {
+    if (getPath().empty()) {
         return false;
     }
     if (_cachedPtr) {

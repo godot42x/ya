@@ -412,7 +412,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         const auto &[lmc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
-        PhongMaterial *material = lmc.getRuntimeMaterial();
+        PhongMaterial *material = lmc.getMaterial();
         if (!material || material->getIndex() < 0) {
             // Get entity name for warning (optional, can be removed if not needed)
             Entity *entityPtr = scene->getEntityByEnttID(entity);
@@ -493,7 +493,8 @@ void PhongMaterialSystem::onRenderGUI()
     ImGui::Text("Directional Light");
     ImGui::Indent();
     {
-        ya::renderReflectedType("DirectionalLight", ya::type_index_v<PhongMaterialSystem::DirectionalLightData>, &uLight.dirLight);
+        ya::RenderContext ctx;
+        ya::renderReflectedType("DirectionalLight", ya::type_index_v<PhongMaterialSystem::DirectionalLightData>, &uLight.dirLight, ctx);
     }
     ImGui::Unindent();
     ImGui::Separator();

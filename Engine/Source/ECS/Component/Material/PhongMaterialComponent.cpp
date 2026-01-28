@@ -17,9 +17,7 @@ bool PhongMaterialComponent::resolve()
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
-        std::string matLabel = "PhongMat_" + std::to_string(reinterpret_cast<uintptr_t>(this));
-        _material            = MaterialFactory::get()->createMaterial<PhongMaterial>(matLabel);
-        _bSharedMaterial     = false; // Created our own material
+        createDefaultMaterial();
 
         if (!_material) {
             YA_CORE_ERROR("PhongMaterialComponent: Failed to create runtime material");
@@ -32,39 +30,53 @@ bool PhongMaterialComponent::resolve()
     // 3. Resolve texture slots and build texture views
     _material->clearTextureViews();
 
-    for (auto &[key, slot] : _textureSlots) {
-        if (slot.textureRef.hasPath() && !slot.isLoaded()) {
-            if (!slot.resolve()) {
-                YA_CORE_WARN("PhongMaterialComponent: Failed to resolve texture slot {} ({})",
-                             getRuntimeMaterial()->getTextureSlotName(key),
-                             slot.textureRef.getPath());
-                success = false;
-                continue;
-            }
+    // for (auto &[key, slot] : _textureSlots) {
+    //     if (slot.textureRef.hasPath() && !slot.isLoaded()) {
+    //         if (!slot.resolve()) {
+    //             YA_CORE_WARN("PhongMaterialComponent: Failed to resolve texture slot {} ({})",
+    //                          getMaterial()->getTextureSlotName(key),
+    //                          slot.textureRef.getPath());
+    //             success = false;
+    //             continue;
+    //         }
+    //     }
+    // }
+    if (_diffuseSlot.isValid() && !_diffuseSlot.isLoaded()) {
+        if (!_diffuseSlot.resolve()) {
+            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve diffuse texture slot");
+            success = false;
+        }
+    }
+    if (_specularSlot.isValid() && !_specularSlot.isLoaded()) {
+        if (!_specularSlot.resolve()) {
+            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve specular texture slot");
+            success = false;
         }
     }
 
-    syncParams();
     syncTextureSlots();
 
     _bResolved = true;
     return success;
 }
 
-void PhongMaterialComponent::syncParams()
-{
-    _material->getParamsMut() = _params;
-    _material->setParamDirty();
-}
 
 void PhongMaterialComponent::syncTextureSlots()
 {
     Sampler *defaultSampler = TextureLibrary::get().getDefaultSampler().get();
-    for (auto &[key, slot] : _textureSlots) {
-        if (slot.isLoaded()) {
-            TextureView tv = slot.toTextureView(defaultSampler);
-            getRuntimeMaterial()->setTextureView(static_cast<PhongMaterial::EResource>(key), tv);
-        }
+    // for (auto &[key, slot] : _textureSlots) {
+    //     if (slot.isLoaded()) {
+    //         TextureView tv = slot.toTextureView(defaultSampler);
+    //         getMaterial()->setTextureView(static_cast<PhongMaterial::EResource>(key), tv);
+    //     }
+    // }
+    if (_diffuseSlot.isLoaded()) {
+        TextureView tv = _diffuseSlot.toTextureView(defaultSampler);
+        getMaterial()->setTextureView(PhongMaterial::EResource::DiffuseTexture, tv);
+    }
+    if (_specularSlot.isLoaded()) {
+        TextureView tv = _specularSlot.toTextureView(defaultSampler);
+        getMaterial()->setTextureView(PhongMaterial::EResource::SpecularTexture, tv);
     }
 }
 

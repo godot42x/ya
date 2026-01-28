@@ -1,14 +1,50 @@
 #pragma once
 
-#include "TypeRenderer.h"
+#include "Core/Reflection/Reflection.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
 
+
 struct Class;
+struct Enum;
 
 namespace ya
 {
+
+struct ReflectionCache;
+
+// ============================================================================
+// MARK: Property Render Context
+// ============================================================================
+
+/**
+ * @brief 属性渲染上下文 - 缓存属性的渲染相关信息
+ *
+ * 职责：
+ * - 缓存属性的元数据（manipulateSpec）
+ * - 缓存容器访问器
+ * - 提供格式化后的显示名称
+ */
+struct PropertyRenderContext
+{
+    ReflectionCache *owner = nullptr;
+
+    bool                            isContainer       = false;
+    bool                            bPointer          = false; ///< True if property is a pointer type
+    uint32_t                        pointeeTypeIndex  = 0;     ///< Type index of pointee (if bPointer)
+    reflection::IContainerProperty *containerAccessor = nullptr;
+    std::string                     prettyName;
+
+    // 元数据（仅对基础类型有效）
+    reflection::Meta::ManipulateSpec manipulateSpec;
+    bool                             bColor = false;
+
+    // 辅助方法：从 Property 提取元数据
+    static PropertyRenderContext createFrom(ReflectionCache *owner, const Property &prop, const std::string &propName);
+};
+
+
 
 // ============================================================================
 // MARK: Reflection Cache
@@ -50,5 +86,7 @@ struct ReflectionCache
  * @return 反射缓存指针
  */
 ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex);
+
+
 
 } // namespace ya

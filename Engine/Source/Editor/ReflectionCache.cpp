@@ -34,10 +34,6 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
     if (Class *cls = ClassRegistry::instance().getClass(typeIndex)) {
         cache.classPtr      = cls;
         cache.propertyCount = cls->properties.size();
-        // 预填充属性渲染上下文
-        for (auto &[propName, prop] : cls->properties) {
-            cache.propertyContexts[propName] = PropertyRenderContext::createFrom(prop, propName);
-        }
     }
     else if (Enum *e = EnumRegistry::instance().getEnum(typeIndex)) {
         cache.bEnum = true;
@@ -68,8 +64,63 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
         };
     }
 
+    _reflectionCache[typeIndex] = cache;
+    auto ret                    = &_reflectionCache[typeIndex];
 
-    return &(_reflectionCache[typeIndex] = cache);
+    // cache properties
+    if (ret->classPtr) {
+        for (auto &[propName, prop] : ret->classPtr->properties) {
+            ret->propertyContexts[propName] = PropertyRenderContext::createFrom(ret, prop, propName);
+        }
+    }
+
+    return ret;
+}
+
+
+// ============================================================================
+// PropertyRenderContext Implementation
+// ============================================================================
+
+PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache *owner, const Property &prop, const std::string &propName)
+{
+    PropertyRenderContext ctx;
+
+    // 检查是否为指针类型
+    ctx.owner            = owner;
+    ctx.bPointer         = prop.bPointer;
+    ctx.pointeeTypeIndex = prop.pointeeTypeIndex;
+
+    // 检查是否为容器（指针类型不检查容器）
+    if (!ctx.bPointer) {
+        ctx.isContainer = ::ya::reflection::PropertyContainerHelper::isContainer(prop);
+        if (ctx.isContainer) {
+            ctx.containerAccessor = ::ya::reflection::PropertyContainerHelper::getContainerAccessor(prop);
+        }
+        else {
+            // 提取元数据
+            auto metadata = prop.getMetadata();
+            if (metadata.hasMeta(ya::reflection::Meta::ManipulateSpec::name)) {
+                ctx.manipulateSpec =
+                    metadata.get<ya::reflection::Meta::ManipulateSpec>(ya::reflection::Meta::ManipulateSpec::name);
+            }
+            if (metadata.hasMeta(ya::reflection::Meta::Color)) {
+                ctx.bColor = metadata.get<bool>(ya::reflection::Meta::Color);
+            }
+        }
+    }
+
+    // 格式化显示名称（移除前缀 _ 和 m_）
+    auto sv = std::string_view(propName);
+    if (sv.starts_with("_")) {
+        sv.remove_prefix(1);
+    }
+    if (sv.starts_with("m_")) {
+        sv.remove_prefix(2);
+    }
+    ctx.prettyName = std::string(sv);
+
+    return ctx;
 }
 
 } // namespace ya

@@ -38,8 +38,7 @@ struct DetailsView
     FilePicker _filePicker;
 
     // 递归深度追踪（防止无限递归）
-    int                  _recursionDepth     = 0;
-    static constexpr int MAX_RECURSION_DEPTH = 10;
+    int _recursionDepth = 0;
 
   public:
     DetailsView(EditorLayer *owner);
@@ -51,6 +50,7 @@ struct DetailsView
     void drawAddComponentButton(Entity &entity); // Add component popup
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
+    void testNewRenderInterface(Entity &entity);
 
     template <typename T, typename Fn>
     void componentWrapper(const std::string &name, Entity &entity, Fn impl)
@@ -110,7 +110,10 @@ struct DetailsView
             if (!cls) {
                 return;
             }
-            bool bComponentDirty = ya::renderReflectedType(name, typeIndex, component, 0);
+            ya::RenderContext ctx;
+            ctx.beginInstance(component);
+            ya::renderReflectedType(name, typeIndex, component, ctx, 0);
+            bool bComponentDirty = ctx.hasModifications();
             if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *>) {
                 if (bComponentDirty) {
                     onComponentDirty(component);
