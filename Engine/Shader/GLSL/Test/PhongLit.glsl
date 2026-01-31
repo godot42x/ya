@@ -266,6 +266,9 @@ void main ()
     vec4 specularTexColor = texture(uTexSpecular, vTexcoord);
     // lib: 尝试在片段着色器中反转镜面光贴图的颜色值，让木头显示镜面高光而钢制边缘不反光（由于钢制边缘中有一些裂缝，边缘仍会显示一些镜面高光，虽然强度会小很多
     // specularTexColor  = vec4(1.0) -specularTexColor;
+    if (diffuseTexColor.a < 0.1){
+        discard;
+    }
     
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
@@ -277,6 +280,11 @@ void main ()
     {
         lighting += calculatePointLight(uLit.pointLights[i], vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
     }
+
+    float a = uDebug.floatParam.x > 0 ? uDebug.floatParam.x : diffuseTexColor.a;
+    // float a =  uDebug.floatParam.x ;
+
+    // a = uParams.specular.x; // use specular alpha to control overall alpha
     
-    fColor = vec4(lighting, 1.0);
+    fColor = vec4(lighting, a);
 }

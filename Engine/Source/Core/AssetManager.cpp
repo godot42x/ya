@@ -371,6 +371,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
     auto texture = makeShared<Texture>(filepath);
     if (!texture) {
         YA_CORE_WARN("Failed to create texture: {}", filepath);
+        return nullptr;
     }
     else {
         _textureViews[filepath] = texture;

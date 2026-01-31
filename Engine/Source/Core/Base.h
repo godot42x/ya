@@ -35,24 +35,6 @@
     #define FUNCTION_SIG
 #endif
 
-template <typename T>
-using stdptr = std::shared_ptr<T>;
-
-template <typename T, typename... Args>
-std::shared_ptr<T> makeShared(Args &&...args)
-    // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
-    requires std::is_constructible_v<T, Args...>
-{
-    return std::make_shared<T>(std::forward<Args>(args)...);
-}
-
-template <typename T, typename... Args>
-std::unique_ptr<T> makeUnique(Args &&...args)
-    requires std::is_constructible_v<T, Args...>
-{
-    return std::make_unique<T>(std::forward<Args>(args)...);
-}
-
 
 #define USE_VULKAN 1
 #define USE_STB_IMG 1
@@ -82,17 +64,3 @@ inline static DefaultAllocator defaultAllocator;
         return #x;
 
 
-namespace ya
-{
-
-using stdpath  = std::filesystem::path;
-using stdclock = std::chrono::steady_clock;
-using namespace std::string_literals;
-using namespace std::literals;
-
-#define NAMESPACE_BEGIN(name) \
-    namespace name            \
-    {
-#define NAMESPACE_END(name) }
-
-} // namespace ya

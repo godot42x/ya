@@ -28,10 +28,12 @@ struct GameInstanceSystem : public ISystem
 };
 
 
-struct RenderSystem : public EngineSystem
+struct RenderSystem
 {
-    virtual void onUpdate(float deltaTime) override = 0;
-    virtual void onRender()                         = 0;
+    virtual ~RenderSystem() = default;
+
+    virtual void onUpdate(float deltaTime) = 0;
+    virtual void onRender()                = 0;
 };
 
 

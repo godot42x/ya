@@ -102,4 +102,5 @@
     "Lua.diagnostics.globals": [
         "Vec3"
     ],
+    "path-intellisense.absolutePathToWorkspace": true,
 }

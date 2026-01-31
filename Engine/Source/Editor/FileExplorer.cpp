@@ -1,5 +1,6 @@
 #include "FileExplorer.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "ImGuiHelper.h"
 #include <algorithm>
 
 namespace ya
@@ -395,8 +396,9 @@ void FileExplorer::renderListView(SelectionCallback                             
 
         bool isSelected = (_selectedPath == path);
 
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              isSelected ? ImVec4(0.3f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.9f, 0.4f, 1.0f));
+        ya::ImGuiStyleScope style;
+        style.pushColor(ImGuiCol_Text,
+                        isSelected ? ImVec4(0.3f, 0.8f, 1.0f, 1.0f) : ImVec4(1.0f, 0.9f, 0.4f, 1.0f));
 
         if (ImGui::Selectable(displayName.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick))
         {

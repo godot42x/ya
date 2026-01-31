@@ -1,11 +1,12 @@
 #pragma once
 
 #include "ContentBrowserPanel.h"
-#include "Core/Debug/Instrumentor.h"
-#include "Core/Delegate.h"
+#include "Core/Base.h"
+
 #include "Core/Event.h"
 #include "DetailsView.h"
 #include "FilePicker.h"
+#include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
@@ -116,18 +117,16 @@ struct EditorLayer
     void onImGuiRender(auto content)
     {
         YA_PROFILE_FUNCTION();
-        updateWindowFlags();
         // ya::DeferredModificationQueue::get().onFrameBegin();
 
-        // Begin main dockspace window
-        ImGui::Begin("MainEditor", nullptr, _windowFlags);
+        {
+            ya::ImGuiStyleScope style;
+            updateWindowFlags(style);
 
-        if (bFullscreen) {
-            ImGui::PopStyleVar(2);
+            // Begin main dockspace window
+            ImGui::Begin("MainEditor", nullptr, _windowFlags);
         }
-        if (!bPadding) {
-            ImGui::PopStyleVar();
-        }
+
 
         setupDockspace();
         menuBar();
@@ -169,12 +168,12 @@ struct EditorLayer
      * @param sampler Platform sampler handle (e.g., VkSampler)
      * @return ImTextureID (VkDescriptorSet as void*)
      */
-    const ImGuiImageEntry *getOrCreateImGuiTextureID(stdptr<IImageView> imageView, stdptr<Sampler> sampler = nullptr);
+    const ImGuiImageEntry *getOrCreateImGuiTextureID(stdptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
 
 
   private:
     // UI Methods
-    void updateWindowFlags();
+    void updateWindowFlags(ya::ImGuiStyleScope &style);
     void menuBar();
     void toolbar();
     // void settingsWindow();

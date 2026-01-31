@@ -12,7 +12,7 @@
 #include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 
 #include "Core/System/System.h"
 
@@ -108,24 +108,29 @@ struct FQuadRender
     void updateResources();
 
   public:
-    void drawTexture(const glm::vec3         &position,
-                     const glm::vec2         &size,
-                     std::shared_ptr<Texture> texture = nullptr,
-                     const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                     const glm::vec2         &uvScale = {1.0f, 1.0f});
+    void drawTexture(const glm::vec3 &position,
+                     const glm::vec2 &size,
+                     ya::Ptr<Texture> texture = nullptr,
+                     const glm::vec4 &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                     const glm::vec2 &uvScale = {1.0f, 1.0f});
 
-    void drawSubTexture(const glm::vec3         &position,
-                        const glm::vec2         &size,
-                        std::shared_ptr<Texture> texture = nullptr,
-                        const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                        const glm::vec4         &uvRect  = glm::vec4(0.0f) // offset: xy , scale: zw
+    void drawTexture(const glm::mat4 &transform,
+                     ya::Ptr<Texture> texture = nullptr,
+                     const glm::vec4 &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                     const glm::vec2 &uvScale = {1.0f, 1.0f});
+
+    void drawSubTexture(const glm::vec3 &position,
+                        const glm::vec2 &size,
+                        ya::Ptr<Texture> texture = nullptr,
+                        const glm::vec4 &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                        const glm::vec4 &uvRect  = glm::vec4(0.0f) // offset: xy , scale: zw
     );
 
     void drawText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font);
 
   private:
 
-    uint32_t findOrAddTexture(stdptr<Texture> texture)
+    uint32_t findOrAddTexture(ya::Ptr<Texture> texture)
     {
         uint32_t textureIdx = 0; // white texture
         if (texture) {
@@ -199,13 +204,21 @@ struct Render2D
     }
 
     // Convenience wrappers - delegate to FQuadRender
-    static void makeSprite(const glm::vec3         &position,
-                           const glm::vec2         &size,
-                           std::shared_ptr<Texture> texture = nullptr,
-                           const glm::vec4         &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                           const glm::vec2         &uvScale = {1.0f, 1.0f})
+    static void makeSprite(const glm::vec3 &position,
+                           const glm::vec2 &size,
+                           ya::Ptr<Texture> texture = nullptr,
+                           const glm::vec4 &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                           const glm::vec2 &uvScale = {1.0f, 1.0f})
     {
         quadData->drawTexture(position, size, texture, tint, uvScale);
+    }
+
+    static void makeSprite(const glm::mat4 &transform,
+                           ya::Ptr<Texture> texture = nullptr,
+                           const glm::vec4 &tint    = {1.0f, 1.0f, 1.0f, 1.0f},
+                           const glm::vec2 &uvScale = {1.0f, 1.0f})
+    {
+        quadData->drawTexture(transform, texture, tint, uvScale);
     }
 
     static void makeText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font)

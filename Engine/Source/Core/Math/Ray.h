@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Core/Math/GLM.h"
 #include "Core/Math/AABB.h"
+#include "Core/Math/GLM.h"
+
 
 namespace ya
 {
@@ -32,14 +33,14 @@ struct Ray
     bool intersects(const AABB &aabb, float *outDistance = nullptr) const
     {
         glm::vec3 invDir = 1.0f / direction;
-        glm::vec3 t0 = (aabb.min - origin) * invDir;
-        glm::vec3 t1 = (aabb.max - origin) * invDir;
+        glm::vec3 t0     = (aabb.min - origin) * invDir;
+        glm::vec3 t1     = (aabb.max - origin) * invDir;
 
         glm::vec3 tmin = glm::min(t0, t1);
         glm::vec3 tmax = glm::max(t0, t1);
 
         float tNear = glm::max(glm::max(tmin.x, tmin.y), tmin.z);
-        float tFar = glm::min(glm::min(tmax.x, tmax.y), tmax.z);
+        float tFar  = glm::min(glm::min(tmax.x, tmax.y), tmax.z);
 
         if (tNear > tFar || tFar < 0.0f) {
             return false;
@@ -63,10 +64,10 @@ struct Ray
      * @return Ray in world space
      */
     static Ray fromScreen(
-        float screenX,
-        float screenY,
-        float viewportWidth,
-        float viewportHeight,
+        float            screenX,
+        float            screenY,
+        float            viewportWidth,
+        float            viewportHeight,
         const glm::mat4 &view,
         const glm::mat4 &projection)
     {
@@ -79,11 +80,11 @@ struct Ray
 
         // Clip to eye space
         glm::vec4 rayEye = glm::inverse(projection) * rayClip;
-        rayEye = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
+        rayEye           = glm::vec4(rayEye.x, rayEye.y, -1.0f, 0.0f);
 
         // Eye to world space
         glm::vec3 rayWorld = glm::vec3(glm::inverse(view) * rayEye);
-        rayWorld = glm::normalize(rayWorld);
+        rayWorld           = glm::normalize(rayWorld);
 
         // Get camera position from view matrix
         glm::vec3 cameraPos = glm::vec3(glm::inverse(view)[3]);

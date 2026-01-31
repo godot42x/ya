@@ -10,7 +10,7 @@ namespace ya
 struct ImGuiImageEntry
 {
     stdptr<IImageView>  imageView;
-    stdptr<Sampler>     sampler;
+    ya::Ptr<Sampler>    sampler;
     DescriptorSetHandle ds;
 
     bool operator==(const ImGuiImageEntry &other) const

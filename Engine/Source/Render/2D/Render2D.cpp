@@ -223,15 +223,17 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
                 },
             },
             .defines = {
-                "TEXTURE_SET_SIZE " + std::to_string(TEXTURE_SET_SIZE),
+                std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = static_cast<EPipelineDynamicFeature::T>(EPipelineDynamicFeature::Viewport | EPipelineDynamicFeature::Scissor
+        .dynamicFeatures = {
+            EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::Scissor,
 #if DYN_CULL
-                                                                   | EPipelineDynamicFeature::CullMode
+            EPipelineDynamicFeature::CullMode,
 #endif
-                                                                   ),
+        },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -240,8 +242,8 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
         },
         .multisampleState  = MultisampleState{},
         .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = false,
-            .bDepthWriteEnable      = false,
+            .bDepthTestEnable       = true,
+            .bDepthWriteEnable      = true,
             .depthCompareOp         = ECompareOp::Less,
             .bDepthBoundsTestEnable = false,
             .bStencilTestEnable     = false,
@@ -525,11 +527,11 @@ void FQuadRender::updateResources()
 
 
 // MARK: quad  interface
-void FQuadRender::drawTexture(const glm::vec3         &position,
-                              const glm::vec2         &size,
-                              std::shared_ptr<Texture> texture,
-                              const glm::vec4         &tint,
-                              const glm::vec2         &uvScale)
+void FQuadRender::drawTexture(const glm::vec3 &position,
+                              const glm::vec2 &size,
+                              ya::Ptr<Texture> texture,
+                              const glm::vec4 &tint,
+                              const glm::vec2 &uvScale)
 {
     if (shouldFlush()) {
         flush(Render2D::data.curCmdBuf);
@@ -556,11 +558,38 @@ void FQuadRender::drawTexture(const glm::vec3         &position,
     indexCount += 6;
 }
 
-void FQuadRender::drawSubTexture(const glm::vec3         &position,
-                                 const glm::vec2         &size,
-                                 std::shared_ptr<Texture> texture,
-                                 const glm::vec4         &tint,
-                                 const glm::vec4         &uvRect)
+void FQuadRender::drawTexture(const glm::mat4 &transform,
+                              ya::Ptr<Texture> texture,
+                              const glm::vec4 &tint,
+                              const glm::vec2 &uvScale)
+{
+
+    if (shouldFlush()) {
+        flush(Render2D::data.curCmdBuf);
+    }
+
+    uint32_t textureIdx = findOrAddTexture(texture);
+
+    for (int i = 0; i < 4; i++) {
+        // rotation -> scale -> offset
+        *vertexPtr = FQuadRender::Vertex{
+            .pos        = transform * FQuadRender::vertices[i],
+            .color      = tint,
+            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
+            .textureIdx = textureIdx,
+        };
+        ++vertexPtr;
+    }
+
+    vertexCount += 4;
+    indexCount += 6;
+}
+
+void FQuadRender::drawSubTexture(const glm::vec3 &position,
+                                 const glm::vec2 &size,
+                                 ya::Ptr<Texture> texture,
+                                 const glm::vec4 &tint,
+                                 const glm::vec4 &uvRect)
 {
     if (shouldFlush()) {
         flush(Render2D::data.curCmdBuf);
@@ -621,7 +650,7 @@ void FQuadRender::drawText(const std::string &text, const glm::vec3 &position, c
 
         glm::vec3 pos = glm::vec3(xpos, ypos, position.z);
 
-        stdptr<Texture> texture = font->atlasTexture;
+        ya::Ptr<Texture> texture = font->atlasTexture;
         if (!character.bInAtlas) {
             UNIMPLEMENTED();
         }

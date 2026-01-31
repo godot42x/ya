@@ -3,20 +3,17 @@
 #include "Core/AssetManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
-#include "Core/Manager/Facade.h"
-#include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
+#include "Resource/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include <ImGuizmo.h>
 #include <glm/gtc/type_ptr.hpp>
 
 
-
-#include "Render/TextureLibrary.h"
 
 #include "Core/Math/Math.h"
 
@@ -207,7 +204,7 @@ void EditorLayer::onEvent(const Event &event)
     }
 }
 
-void EditorLayer::updateWindowFlags()
+void EditorLayer::updateWindowFlags(ya::ImGuiStyleScope &style)
 {
     YA_PROFILE_FUNCTION();
     if (bFullscreen)
@@ -216,8 +213,8 @@ void EditorLayer::updateWindowFlags()
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        style.pushVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        style.pushVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
         _windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
@@ -235,7 +232,7 @@ void EditorLayer::updateWindowFlags()
 
     if (!bPadding)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        style.pushVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     }
 }
 
@@ -383,12 +380,13 @@ void EditorLayer::menuBar()
 void EditorLayer::toolbar()
 {
     YA_PROFILE_FUNCTION();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.3f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.6f, 0.6f, 0.5f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.5f));
+    ya::ImGuiStyleScope style;
+    style.pushVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
+    style.pushVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
+    style.pushColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.3f));
+    style.pushColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.6f, 0.6f, 0.5f));
+    style.pushColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.5f));
 
     if (!ImGui::Begin("##toolbar",
                       nullptr,
@@ -398,7 +396,6 @@ void EditorLayer::toolbar()
                           ImGuiWindowFlags_NoScrollWithMouse |
                           ImGuiWindowFlags_NoResize))
     {
-
         ImGui::End();
         return;
     }
@@ -427,8 +424,7 @@ void EditorLayer::toolbar()
         _app->stopRuntime();
     }
 
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(3);
+    // style RAII auto-pop
     ImGui::End();
 }
 
@@ -450,13 +446,13 @@ void EditorLayer::toolbar()
 void EditorLayer::viewportWindow()
 {
     YA_PROFILE_FUNCTION();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{460, 300});
+    ya::ImGuiStyleScope style;
+    style.pushVar(ImGuiStyleVar_WindowPadding, ImVec2{0, 0});
+    style.pushVar(ImGuiStyleVar_WindowMinSize, ImVec2{460, 300});
 
 
     if (!ImGui::Begin("Viewport"))
     {
-        ImGui::PopStyleVar(2);
         ImGui::End();
         return;
     }
@@ -573,11 +569,10 @@ void EditorLayer::viewportWindow()
     bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();
     ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
 
-    ImGui::PopStyleVar(2);
     ImGui::End();
 }
 
-const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView> imageView, stdptr<Sampler> sampler)
+const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
 {
     YA_PROFILE_FUNCTION();
     if (!imageView) {
