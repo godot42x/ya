@@ -119,6 +119,8 @@ struct [[refl]] Scene
     static stdptr<Scene> cloneScene(const Scene *scene);
     static stdptr<Scene> cloneSceneByReflection(const Scene *scene);
 
+    Node *duplicateNode(Node *node, Node *parent = nullptr);
+
   private:
     // === Internal ECS API (Engine Systems Only) ===
     /**

@@ -1,5 +1,6 @@
 #include "SceneHierarchyPanel.h"
 #include "Core/Debug/Instrumentor.h"
+#include "Core/Manager/Facade.h"
 #include "EditorLayer.h"
 
 #include "Core/System/VirtualFileSystem.h"
@@ -144,8 +145,7 @@ void SceneHierarchyPanel::drawNodeRecursive(Node *node)
     }
 
     // Cast to Node3D to access Entity
-    auto   *node3D = dynamic_cast<Node3D *>(node);
-    Entity *entity = node3D ? node3D->getEntity() : nullptr;
+    Entity *entity = node->getEntity();
     if (!entity) {
         return;
     }
@@ -175,7 +175,14 @@ void SceneHierarchyPanel::drawNodeRecursive(Node *node)
     if (ImGui::BeginPopupContextItem()) {
         if (ImGui::MenuItem("Duplicate")) {
             // TODO: Implement entity duplication with hierarchy
-            YA_CORE_INFO("Duplicate entity: {}", name.c_str());
+            if (auto newNode = _context->duplicateNode(node)) {
+                YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+                Facade.timerManager.delayCall(
+                    1,
+                    [this, newNode]() {
+                        setSelection(newNode->getEntity());
+                    });
+            }
         }
 
         ImGui::Separator();
@@ -249,7 +256,9 @@ void SceneHierarchyPanel::drawFlatEntity(Entity &entity)
         if (ImGui::MenuItem("Duplicate"))
         {
             // TODO: Implement entity duplication
-            YA_CORE_INFO("Duplicate entity: {}", entity.getName());
+            if (auto newNode = _context->duplicateNode(_context->getNodeByEntity(&entity))) {
+                YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+            }
         }
 
         ImGui::Separator();

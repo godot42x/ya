@@ -20,6 +20,18 @@
 
 namespace ya
 {
+// LACK: need to manually list all components to copy
+using components_to_copy = refl::type_list<
+    IDComponent,
+    TransformComponent,
+    SimpleMaterialComponent,
+    UnlitMaterialComponent,
+    PhongMaterialComponent,
+    LuaScriptComponent,
+    PointLightComponent,
+    MeshComponent,
+    ModelComponent>;
+
 Scene::Scene(const std::string &name)
     : _name(name)
 {
@@ -65,7 +77,7 @@ void Scene::createRootNode()
     entity->addComponent<TransformComponent>();
     auto node = makeShared<Node3D>(entity, "scene_root");
     _rootNode = node;
-    
+
     // ★ 将 rootNode 添加到 _nodeMap 中（这样 createNode 检查时才能发现）
     _nodeMap[entity->getHandle()] = node;
 }
@@ -112,6 +124,8 @@ Node *Scene::createNode(const std::string &name, Node *parent, Entity *entity)
     // ★ 如果 Entity 已经有关联的 Node，直接返回（避免重复创建）
     if (entity) {
         auto it = _nodeMap.find(entity->getHandle());
+        YA_CORE_ASSERT(it == _nodeMap.end(), "Entity '{}' already has an associated Node", entity->name);
+
         if (it != _nodeMap.end()) {
             YA_CORE_WARN("Entity '{}' already has an associated Node, returning existing one", entity->name);
             return it->second.get();
@@ -314,17 +328,23 @@ stdptr<Scene> Scene::clone()
     // return Scene::cloneSceneByReflection(this);
 }
 
-template <class Component>
-static void copyComponent(const entt::registry &src, entt::registry &dst, const std::unordered_map<UUID, entt::entity> &entityMap)
+template <typename Component>
+static void copyComponent(const entt::registry &srcReg, entt::entity srcEntity, entt::registry &dstReg, entt::entity dstEntity)
 {
-    for (auto e : src.view<Component>())
-    {
-        UUID uuid = src.get<IDComponent>(e)._id;
-        YA_CORE_ASSERT(entityMap.contains(uuid), "UUID not found in entity map");
-        auto dstEnttID = entityMap.at(uuid);
+    const Component &srcComponent = srcReg.get<Component>(srcEntity);
+    dstReg.emplace_or_replace<Component>(dstEntity, srcComponent);
+}
 
-        auto &srcComponent = src.get<Component>(e);
-        dst.emplace_or_replace<Component>(dstEnttID, srcComponent);
+template <class Component>
+static void copyComponents(const entt::registry &srcReg, entt::registry &dstReg, const std::unordered_map<UUID, entt::entity> &entityMap)
+{
+    for (auto srcEntity : srcReg.view<Component>())
+    {
+        UUID uuid = srcReg.get<IDComponent>(srcEntity)._id;
+        YA_CORE_ASSERT(entityMap.contains(uuid), "UUID not found in entity map");
+        auto dstEntity = entityMap.at(uuid);
+
+        copyComponent<Component>(srcReg, srcEntity, dstReg, dstEntity);
     }
 }
 
@@ -416,20 +436,10 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
         nodeMap.insert({id, newNode}); // ★ 记录 Node 映射
     }
 
-    // LACK: need to manually list all components to copy
-    using components_to_copy = refl::type_list<
-        IDComponent,
-        TransformComponent,
-        SimpleMaterialComponent,
-        UnlitMaterialComponent,
-        PhongMaterialComponent,
-        LuaScriptComponent,
-        PointLightComponent,
-        MeshComponent,
-        ModelComponent>;
+
 
     refl::foreach_in_typelist<components_to_copy>([&](const auto &T) {
-        copyComponent<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
+        copyComponents<std::decay_t<decltype(T)>>(srcRegistry, dstRegistry, entityMap);
     });
 
     // ★ TODO: 克隆 Node 层级关系
@@ -485,6 +495,36 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
     }
 
     return newScene;
+}
+
+Node *Scene::duplicateNode(Node *node, Node *parent)
+{
+    if (!node) {
+        return nullptr;
+    }
+    Node   *newNode   = nullptr;
+    Entity *newEntity = nullptr;
+
+    if (Entity *entity = node->getEntity())
+    {
+        newEntity = createEntity(entity->name + " Duplicate");
+
+        auto  srcEntt  = entity->getHandle();
+        auto  newEntt  = newEntity->getHandle();
+        auto &registry = getRegistry();
+
+
+        refl::foreach_in_typelist<components_to_copy>([&](const auto &T) {
+            using type = std::decay_t<decltype(T)>;
+            if (registry.all_of<type>(srcEntt)) {
+                copyComponent<type>(registry, srcEntt, registry, newEntt);
+            }
+        });
+    }
+
+    newNode = createNode(node->getName() + " Duplicate", parent, newEntity);
+
+    return newNode;
 }
 
 

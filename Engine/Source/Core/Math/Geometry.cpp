@@ -277,12 +277,13 @@ void PrimitiveGeometry::createFullscreenQuad(std::vector<Vertex> &outVertices, s
 {
     // NDC coordinates, suitable for post-processing
     outVertices = {
-        {{-1.0f, -1.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        {{1.0f, -1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-        {{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
-        {{-1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}}};
+        {.position = {-1.0f, -1.0f, 0.0f}, .texCoord0 = {0.0f, 0.0f}, .normal = {0.0f, 0.0f, 1.0f}},
+        {.position = {1.0f, -1.0f, 0.0f}, .texCoord0 = {1.0f, 0.0f}, .normal = {0.0f, 0.0f, 1.0f}},
+        {.position = {1.0f, 1.0f, 0.0f}, .texCoord0 = {1.0f, 1.0f}, .normal = {0.0f, 0.0f, 1.0f}},
+        {.position = {-1.0f, 1.0f, 0.0f}, .texCoord0 = {0.0f, 1.0f}, .normal = {0.0f, 0.0f, 1.0f}}};
 
     outIndices = {0, 1, 2, 2, 3, 0};
+    outIndices.insert(outIndices.end(), {0, 3, 2, 0, 2, 1}); // back face
 }
 
 
