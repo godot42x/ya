@@ -31,10 +31,10 @@ using ColorU8_t = ColorRGBA<uint8_t>;
  */
 struct Texture
 {
-    EFormat::T _format   = EFormat::R8G8B8A8_UNORM;
-    uint32_t   _width    = 0;
-    uint32_t   _height   = 0;
-    uint32_t   _channels = 4; // RGBA by default
+    EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
+    uint32_t   _width     = 0;
+    uint32_t   _height    = 0;
+    uint32_t   _channels  = 4; // RGBA by default
     uint32_t   _mipLevels = 1; // Number of mip levels
 
     std::string _label;
@@ -107,8 +107,8 @@ struct TextureView
     YA_REFLECT_FIELD(uvRotation)
     YA_REFLECT_END()
 
-    stdptr<Texture> texture = nullptr;
-    stdptr<Sampler> sampler = nullptr;
+    ya::Ptr<Texture> texture = nullptr;
+    ya::Ptr<Sampler> sampler = nullptr;
 
     bool      bEnable = true;
     glm::vec2 uvTranslation{0.f};

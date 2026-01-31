@@ -354,22 +354,25 @@ void VulkanPipeline::createPipelineInternal()
     };
 
     std::vector<VkDynamicState> dynamicStates = {};
-    // TODO: do not use bitmask enum
-    if (_ci.dynamicFeatures & EPipelineDynamicFeature::DepthTest) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE);
-    }
-    if (_ci.dynamicFeatures & EPipelineDynamicFeature::AlphaBlend) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_BLEND_CONSTANTS);
-    }
-    if (_ci.dynamicFeatures & EPipelineDynamicFeature::Viewport) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
-    }
-    if (_ci.dynamicFeatures & EPipelineDynamicFeature::Scissor) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
-    }
-    if (_ci.dynamicFeatures & EPipelineDynamicFeature::CullMode) {
-        dynamicStates.push_back(VK_DYNAMIC_STATE_CULL_MODE);
-    }
+    std::ranges::transform(
+        _ci.dynamicFeatures,
+        std::back_inserter(dynamicStates),
+        [](EPipelineDynamicFeature::T feature) {
+            switch (feature) {
+            case EPipelineDynamicFeature::DepthTest:
+                return VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE;
+            case EPipelineDynamicFeature::BlendConstants:
+                return VK_DYNAMIC_STATE_BLEND_CONSTANTS;
+            case EPipelineDynamicFeature::Viewport:
+                return VK_DYNAMIC_STATE_VIEWPORT;
+            case EPipelineDynamicFeature::Scissor:
+                return VK_DYNAMIC_STATE_SCISSOR;
+            case EPipelineDynamicFeature::CullMode:
+                return VK_DYNAMIC_STATE_CULL_MODE;
+            default:
+                return VK_DYNAMIC_STATE_MAX_ENUM; // Invalid, will be filtered out
+            }
+        });
 
     VkPipelineDynamicStateCreateInfo dynamicStateCI{
         .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,

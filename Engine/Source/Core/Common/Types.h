@@ -33,4 +33,73 @@ struct FSoftObjectReference
     void      *object;
 };
 
+
+template <typename T>
+concept CDefault = requires { { T::defaults() } -> std::same_as<T>; };
+
+template <typename T>
+using stdptr = std::shared_ptr<T>;
+
+
+template <typename T>
+struct Ptr
+{
+    // 2025/1/31 no sure to use shared ptr in some place? make a wrapper first
+
+    // using type = stdptr<T>;
+    using type = T *;
+
+    type v;
+
+    Ptr() : v(nullptr) {}
+
+    Ptr(T *p) : v(p) {}
+    Ptr(const stdptr<T> &p) : v(p.get()) {}
+
+    T *get() const { return v; }
+
+    type operator->() { return v; }
+    type operator->() const { return v; }
+
+    operator T *() const { return v; }
+
+    explicit operator bool() const { return v != nullptr; }
+    void     reset()
+    {
+        if constexpr (requires { type::reset(); }) {
+            v.reset();
+        }
+        else {
+            v = nullptr;
+        }
+    }
+};
+
+
+template <typename T, typename... Args>
+std::shared_ptr<T> makeShared(Args &&...args)
+    // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
+    requires std::is_constructible_v<T, Args...>
+{
+    return std::make_shared<T>(std::forward<Args>(args)...);
+}
+
+template <typename T, typename... Args>
+std::unique_ptr<T> makeUnique(Args &&...args)
+    requires std::is_constructible_v<T, Args...>
+{
+    return std::make_unique<T>(std::forward<Args>(args)...);
+}
+
+using stdpath  = std::filesystem::path;
+using stdclock = std::chrono::steady_clock;
+using namespace std::string_literals;
+using namespace std::literals;
+
+#define NAMESPACE_BEGIN(name) \
+    namespace name            \
+    {
+#define NAMESPACE_END(name) }
+
+
 } // namespace ya

@@ -2,7 +2,7 @@
 
 #include "Core/AssetManager.h"
 #include "Render/Material/MaterialFactory.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 
 namespace ya
 {
@@ -63,7 +63,7 @@ bool PhongMaterialComponent::resolve()
 
 void PhongMaterialComponent::syncTextureSlots()
 {
-    Sampler *defaultSampler = TextureLibrary::get().getDefaultSampler().get();
+    Sampler *defaultSampler = TextureLibrary::get().getDefaultSampler();
     // for (auto &[key, slot] : _textureSlots) {
     //     if (slot.isLoaded()) {
     //         TextureView tv = slot.toTextureView(defaultSampler);

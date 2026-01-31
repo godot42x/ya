@@ -1,6 +1,7 @@
 #include "ResourceResolveSystem.h"
 #include "Core/App/App.h"
 #include "Core/AssetManager.h"
+#include "ECS/Component/2D/UIComponent.h"
 #include "Scene/Node.h"
 #include "Scene/SceneManager.h"
 
@@ -12,7 +13,7 @@
 #include "ECS/Entity.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Model.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 
 
 
@@ -61,6 +62,13 @@ void ResourceResolveSystem::onUpdate(float dt)
     registry.view<PhongMaterialComponent>().each([&](auto entity, PhongMaterialComponent &materialComponent) {
         if (!materialComponent.isResolved()) {
             materialComponent.resolve();
+        }
+    });
+
+    registry.view<UIComponent>().each([&](auto entity, UIComponent &uiComponent) {
+        if (!uiComponent.view.textureRef.isLoaded() &&
+            uiComponent.view.textureRef.hasPath()) {
+            uiComponent.view.textureRef.resolve();
         }
     });
 

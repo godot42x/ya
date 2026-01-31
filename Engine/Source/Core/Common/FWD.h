@@ -2,8 +2,11 @@
 
 
 
-#include "Core/Trait.h"
 #include "reflects-core/lib.h"
+
+#include "Core/Delegate.h"
+#include "Core/Trait.h"
+
 
 
 #include "Core/Common/Types.h"

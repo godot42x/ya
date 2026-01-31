@@ -142,12 +142,13 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
-
+        .dynamicFeatures = {
+            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
 #if !NOT_DYN_CULL
-                           EPipelineDynamicFeature::CullMode |
+            EPipelineDynamicFeature::CullMode,
 #endif
-                           EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::Viewport
+        },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -419,7 +420,7 @@ void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
     auto render = getRender();
 
     // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getCameraContext();
+    const auto &camCtx = rt->getFrameContext();
 
     FrameUBO ubo{
         .projection = camCtx.projection,

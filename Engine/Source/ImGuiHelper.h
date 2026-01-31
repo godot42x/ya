@@ -169,4 +169,34 @@ struct ImGuiManager
 // Legacy alias for backward compatibility
 using ImguiState = ImGuiManager;
 
+
+// RAII helper for ImGui style/color stack
+struct ImGuiStyleScope
+{
+    int varCount      = 0;
+    int colorCount    = 0;
+    ImGuiStyleScope() = default;
+    ~ImGuiStyleScope()
+    {
+        if (varCount > 0) ImGui::PopStyleVar(varCount);
+        if (colorCount > 0) ImGui::PopStyleColor(colorCount);
+    }
+    void pushVar(ImGuiStyleVar idx, const ImVec2 &v)
+    {
+        ImGui::PushStyleVar(idx, v);
+        ++varCount;
+    }
+    void pushVar(ImGuiStyleVar idx, float v)
+    {
+        ImGui::PushStyleVar(idx, v);
+        ++varCount;
+    }
+    void pushColor(ImGuiCol idx, const ImVec4 &v)
+    {
+        ImGui::PushStyleColor(idx, v);
+        ++colorCount;
+    }
+};
+
+
 } // namespace ya

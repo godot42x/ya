@@ -4,7 +4,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ImGuiHelper.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 #include <imgui.h>
 
 namespace ya

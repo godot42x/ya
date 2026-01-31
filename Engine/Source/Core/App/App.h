@@ -11,7 +11,9 @@
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
+#include "Scene/SceneManager.h"
 #include <glm/glm.hpp>
+
 
 
 

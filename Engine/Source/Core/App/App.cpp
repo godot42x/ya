@@ -21,7 +21,7 @@
 #include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Render.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 #include "Scene/SceneManager.h"
 
 
@@ -31,6 +31,7 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/System/2D/UIComponentSytstem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/PhongMaterialSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
@@ -446,12 +447,23 @@ void App::init(AppDesc ci)
     // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
     // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
     Render2D::init(_render, _viewportRenderPass.get());
+    // Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
 
-#pragma region ImGui Init
-    // Initialize ImGui Manager
+    // MARK: Imgui
     auto &imManager = ImGuiManager::get();
     imManager.init(_render, _renderpass.get());
-#pragma endregion
+
+
+
+    // MARK: resource cache
+    TextureLibrary::get().init();
+
+    // Register all resource caches with ResourceRegistry for unified cleanup
+    // Priority order: higher = cleared first (GPU resources before CPU resources)
+    ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
+    ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
+    ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
+    ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
 
 
 
@@ -461,15 +473,6 @@ void App::init(AppDesc ci)
     }
 
 
-    // ===== Initialize TextureLibrary and Register Resource Caches =====
-    TextureLibrary::get().init();
-
-    // Register all resource caches with ResourceRegistry for unified cleanup
-    // Priority order: higher = cleared first (GPU resources before CPU resources)
-    ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
-    ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
-    ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
-    ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
 
     // ===== Initialize SceneManager =====
     _sceneManager = new SceneManager();
@@ -806,7 +809,7 @@ void App::onUpdate(float dt)
     // Compute and set camera context for viewport render target
     // App decides which camera to use based on app state
     {
-        FrameCameraContext ctx;
+        FrameContext ctx;
 
         bool bUseRuntimeCamera = (_appState == AppState::Runtime || _appState == AppState::Simulation) &&
                                  runtimeCamera && runtimeCamera->isValid() &&
@@ -828,7 +831,7 @@ void App::onUpdate(float dt)
         glm::mat4 invView = glm::inverse(ctx.view);
         ctx.cameraPos     = glm::vec3(invView[3]);
 
-        _viewportRT->setCameraContext(ctx);
+        _viewportRT->setFrameContext(ctx);
     }
 
     // Store real-time delta for editor
@@ -858,6 +861,8 @@ void App::onUpdate(float dt)
     transformSystem->onUpdate(dt);
     _viewportRT->onUpdate(dt);
     _screenRT->onUpdate(dt);
+
+    Render2D::onUpdate(dt);
 
     switch (_appState) {
 
@@ -930,6 +935,7 @@ void App::onRender(float dt)
                 // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
                 // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
 
+                Render2D::onRender(); // 2026/1/31: UIComponent?
                 UIManager::get()->render();
                 Render2D::onRenderGUI();
                 Render2D::end();

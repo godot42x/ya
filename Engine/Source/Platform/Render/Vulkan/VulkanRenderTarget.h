@@ -37,7 +37,7 @@ struct VulkanRenderTarget : public IRenderTarget
 
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
 
-    FrameCameraContext _cameraContext; // Cached camera data per-frame
+    FrameContext _cameraContext; // Cached camera data per-frame
 
   public:
 
@@ -74,8 +74,8 @@ struct VulkanRenderTarget : public IRenderTarget
     void renderMaterialSystems(ICommandBuffer *cmdBuf);
 
     // Frame camera context - set by App, used by MaterialSystems
-    void                      setCameraContext(const FrameCameraContext &ctx) override { _cameraContext = ctx; }
-    const FrameCameraContext &getCameraContext() const override { return _cameraContext; }
+    void                      setFrameContext(const FrameContext &ctx) override { _cameraContext = ctx; }
+    const FrameContext &getFrameContext() const override { return _cameraContext; }
 
   public:
     void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) override

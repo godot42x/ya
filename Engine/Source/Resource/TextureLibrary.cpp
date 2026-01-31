@@ -4,7 +4,7 @@
 namespace ya
 {
 
-TextureLibrary& TextureLibrary::get()
+TextureLibrary &TextureLibrary::get()
 {
     static TextureLibrary instance;
     return instance;
@@ -78,7 +78,7 @@ void TextureLibrary::createSamplers()
 void TextureLibrary::createTextures()
 {
     using color_t = ColorRGBA<uint8_t>;
-    
+
     color_t white{.r = 255, .g = 255, .b = 255, .a = 255};
     color_t black{.r = 0, .g = 0, .b = 0, .a = 255};
     color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
@@ -93,46 +93,48 @@ void TextureLibrary::createTextures()
 
     // Create 2x2 multi-pixel texture with pattern: white, blue, blue, white
     _multiPixelTexture = makeShared<Texture>(2, 2, std::vector<color_t>{
-        white, blue,
-        blue, white,
-    });
+                                                       white,
+                                                       blue,
+                                                       blue,
+                                                       white,
+                                                   });
     _multiPixelTexture->setLabel("multi-pixel");
 }
 
-std::shared_ptr<Texture> TextureLibrary::getWhiteTexture()
+ya::Ptr<Texture> TextureLibrary::getWhiteTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _whiteTexture;
+    return ya::Ptr<Texture>(_whiteTexture);
 }
 
-std::shared_ptr<Texture> TextureLibrary::getBlackTexture()
+ya::Ptr<Texture> TextureLibrary::getBlackTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _blackTexture;
+    return ya::Ptr<Texture>(_blackTexture);
 }
 
-std::shared_ptr<Texture> TextureLibrary::getMultiPixelTexture()
+ya::Ptr<Texture> TextureLibrary::getMultiPixelTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _multiPixelTexture;
+    return ya::Ptr<Texture>(_multiPixelTexture);
 }
 
-std::shared_ptr<Sampler> TextureLibrary::getDefaultSampler()
+ya::Ptr<Sampler> TextureLibrary::getDefaultSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _defaultSampler;
+    return ya::Ptr<Sampler>(_defaultSampler);
 }
 
-std::shared_ptr<Sampler> TextureLibrary::getLinearSampler()
+ya::Ptr<Sampler> TextureLibrary::getLinearSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _linearSampler;
+    return ya::Ptr<Sampler>(_linearSampler);
 }
 
-std::shared_ptr<Sampler> TextureLibrary::getNearestSampler()
+ya::Ptr<Sampler> TextureLibrary::getNearestSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return _nearestSampler;
+    return ya::Ptr<Sampler>(_nearestSampler);
 }
 
 } // namespace ya

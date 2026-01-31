@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 
+#include "Resource/TextureLibrary.h"
 namespace ya
 {
 
@@ -34,16 +35,16 @@ struct TextureSlot
     explicit TextureSlot(const std::string &path)
         : textureRef(path)
     {}
-    
+
     /**
      * @brief Convert to runtime TextureView
      * @param defaultSampler Sampler to use (texture provides image, sampler is shared)
      */
-    TextureView toTextureView(Sampler *defaultSampler) const
+    TextureView toTextureView(ya::Ptr<Sampler> sampler = nullptr) const
     {
         TextureView tv;
         tv.texture       = textureRef.getShared();
-        tv.sampler       = stdptr<Sampler>(defaultSampler, [](Sampler *) {}); // non-owning
+        tv.sampler       = sampler ? sampler : TextureLibrary::get().getDefaultSampler();
         tv.uvScale       = uvScale;
         tv.uvTranslation = uvOffset;
         tv.uvRotation    = uvRotation;

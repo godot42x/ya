@@ -1,6 +1,9 @@
 #include "PhongMaterialSystem.h"
+
 #include "Core/App/App.h"
 #include "Core/Debug/Instrumentor.h"
+#include <algorithm>
+
 
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -14,7 +17,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 
 
 #include "Scene/Scene.h"
@@ -155,11 +158,13 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
+        .dynamicFeatures = {
+            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
 #if !NOT_DYN_CULL
-                           EPipelineDynamicFeature::CullMode |
+            EPipelineDynamicFeature::CullMode,
 #endif
-                           EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::Viewport,
+        },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -182,12 +187,12 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
                 ColorBlendAttachmentState{
                     // index of the attachments in the render pass and the renderpass begin info
                     .index               = 0,
-                    .bBlendEnable        = false,
-                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                    .colorBlendOp        = EBlendOp::Add,
-                    .srcAlphaBlendFactor = EBlendFactor::One,
-                    .dstAlphaBlendFactor = EBlendFactor::Zero,
+                    .bBlendEnable        = true,
+                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,         // srcColor = srcColor * srcAlpha
+                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, // dstColor = dstColor * (1 - srcAlpha)
+                    .colorBlendOp        = EBlendOp::Add,                  // finalColor = srcColor + dstColor
+                    .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,         // use src alpha for alpha blending
+                    .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, // use dst alpha for alpha blending
                     .alphaBlendOp        = EBlendOp::Add,
                     .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                 },
@@ -367,13 +372,15 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     if (!scene) {
         return;
     }
+
+
     // Query entities with both PhongMaterialComponent and MeshComponent
     auto view = scene->getRegistry().view<PhongMaterialComponent, MeshComponent, TransformComponent>();
     if (view.begin() == view.end()) {
         return;
     }
+    // auto view2 = scene->getRegistry().view<UIComponent,TransformComponent>();
 
-    // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
     {
         YA_PROFILE_SCOPE("PhongMaterial::BindPipeline");
         cmdBuf->bindPipeline(_pipeline.get());
@@ -407,9 +414,26 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     // Phase 3: Render loop
     YA_PROFILE_SCOPE("PhongMaterial::EntityLoop");
-    for (entt::entity entity : view)
+
+    // sort by z to render farthest objects first
+    std::vector<std::pair<entt::entity, const TransformComponent *>> entries;
     {
-        const auto &[lmc, meshComp, tc] = view.get(entity);
+        YA_PROFILE_SCOPE("PhongMaterial::SortByZ");
+        view.each([&](entt::entity entity, PhongMaterialComponent &lmc, MeshComponent &meshComp, TransformComponent &tc) {
+            entries.push_back({entity, &tc});
+        });
+        std::ranges::sort(entries, [](const auto &a, const auto &b) {
+            // return a.second->getWorldPosition().z > b.second->getWorldPosition().z;
+            // world forward is -Z in right-hand system
+            return a.second->getWorldPosition().z < b.second->getWorldPosition().z;
+        });
+    }
+
+
+    for (auto &[entity, tc] : entries)
+    // for (entt::entity entity : view)
+    {
+        const auto &[lmc, meshComp, tc2] = view.get(entity);
 
         // Get runtime material from component
         PhongMaterial *material = lmc.getMaterial();
@@ -464,7 +488,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         {
             YA_PROFILE_SCOPE("PhongMaterial::PushConstants");
             PhongMaterialSystem::ModelPushConstant pushConst{
-                .modelMat = tc.getTransform(),
+                .modelMat = tc->getTransform(),
             };
             cmdBuf->pushConstants(_pipelineLayout.get(),
                                   EShaderStage::Vertex,
@@ -519,7 +543,7 @@ void PhongMaterialSystem::updateFrameDS(IRenderTarget *rt)
     auto render = getRender();
 
     // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getCameraContext();
+    const auto &camCtx = rt->getFrameContext();
 
     FrameUBO uFrame{
         .projection = camCtx.projection,

@@ -92,8 +92,10 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
         },
 
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures    = static_cast<EPipelineDynamicFeature::T>(EPipelineDynamicFeature::Scissor | // the imgui required this feature as I did not set the dynamical render feature
-                                                                   EPipelineDynamicFeature::Viewport),
+        .dynamicFeatures    = {
+            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+            EPipelineDynamicFeature::Viewport
+        },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -210,7 +212,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 #pragma endregion
 
     // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getCameraContext();
+    const auto &camCtx = rt->getFrameContext();
     pc.view            = camCtx.view;
     pc.projection      = camCtx.projection;
 

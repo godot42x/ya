@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Core/Common/Types.h"
 #include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
 #include <memory>
 #include <string>
+
 
 
 namespace ya
@@ -79,12 +81,12 @@ struct TAssetRef : public AssetRefBase
     YA_REFLECT_END()
 
     // TODO: Add reflection support for template classes
-    std::shared_ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
+    ya::Ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
 
     // Constructors
     TAssetRef() = default;
     explicit TAssetRef(const std::string &path) : AssetRefBase(path) {}
-    TAssetRef(const std::string &path, std::shared_ptr<T> ptr)
+    TAssetRef(const std::string &path, ya::Ptr<T> ptr)
         : AssetRefBase(path), _cachedPtr(std::move(ptr))
     {
     }
@@ -96,7 +98,7 @@ struct TAssetRef : public AssetRefBase
         // Note: onModified delegate is NOT copied intentionally
         // because it should not be shared between references
     }
-    
+
     TAssetRef &operator=(const TAssetRef &other)
     {
         if (this != &other) {
@@ -105,13 +107,13 @@ struct TAssetRef : public AssetRefBase
         }
         return *this;
     }
-    
-    TAssetRef(TAssetRef &&other) noexcept = default;
+
+    TAssetRef(TAssetRef &&other) noexcept            = default;
     TAssetRef &operator=(TAssetRef &&other) noexcept = default;
 
     // Access interface
     T                 *get() const { return _cachedPtr.get(); }
-    std::shared_ptr<T> getShared() const { return _cachedPtr; }
+    ya::Ptr<T> getShared() const { return _cachedPtr; }
     // T       *operator->() const { return get(); }
     // T       &operator*() const { return *_cachedPtr; }
     // explicit operator bool() const { return _cachedPtr != nullptr; }
@@ -134,7 +136,7 @@ struct TAssetRef : public AssetRefBase
     /**
      * @brief Set resource with path (updates both path and cached pointer)
      */
-    void set(const std::string &path, std::shared_ptr<T> ptr)
+    void set(const std::string &path, ya::Ptr<T> ptr)
     {
         _path      = path;
         _cachedPtr = std::move(ptr);

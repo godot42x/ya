@@ -1,29 +1,32 @@
 #pragma once
 
+#include "Core/Base.h"
 #include "Core/ResourceRegistry.h"
-#include "Render/Core/Texture.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Core/Texture.h"
 #include <memory>
+
+
 
 namespace ya
 {
 
 /**
  * @brief TextureLibrary - Manages common textures and samplers
- * 
+ *
  * Responsibilities:
  * - Provide standard textures (white, black, etc.)
  * - Manage common samplers (linear, nearest)
  * - Lazy initialization of resources
- * 
+ *
  * Usage:
  *   TextureLibrary::get().init();
  *   auto whiteTexture = TextureLibrary::get().getWhiteTexture();
  */
 class TextureLibrary : public IResourceCache
 {
-public:
-    static TextureLibrary& get();
+  public:
+    static TextureLibrary &get();
 
     /**
      * @brief Initialize the texture library
@@ -32,47 +35,47 @@ public:
     void init();
 
     // IResourceCache interface
-    void clearCache() override;
-    const char* getCacheName() const override { return "TextureLibrary"; }
+    void        clearCache() override;
+    const char *getCacheName() const override { return "TextureLibrary"; }
 
     /**
      * @brief Get a 1x1 white texture (RGBA: 255,255,255,255)
      */
-    std::shared_ptr<Texture> getWhiteTexture();
+    ya::Ptr<Texture> getWhiteTexture();
 
     /**
      * @brief Get a 1x1 black texture (RGBA: 0,0,0,255)
      */
-    std::shared_ptr<Texture> getBlackTexture();
+    ya::Ptr<Texture> getBlackTexture();
 
     /**
      * @brief Get a 2x2 multi-pixel test texture
      * Layout: white, blue, blue, white
      */
-    std::shared_ptr<Texture> getMultiPixelTexture();
+    ya::Ptr<Texture> getMultiPixelTexture();
 
     /**
      * @brief Get the default sampler (linear filtering)
      */
-    std::shared_ptr<Sampler> getDefaultSampler();
+    ya::Ptr<Sampler> getDefaultSampler();
 
     /**
      * @brief Get a linear filtering sampler
      */
-    std::shared_ptr<Sampler> getLinearSampler();
+    ya::Ptr<Sampler> getLinearSampler();
 
     /**
      * @brief Get a nearest filtering sampler
      */
-    std::shared_ptr<Sampler> getNearestSampler();
+    ya::Ptr<Sampler> getNearestSampler();
 
-private:
-    TextureLibrary() = default;
+  public:
+    TextureLibrary()  = default;
     ~TextureLibrary() = default;
-    
+
     // Non-copyable
-    TextureLibrary(const TextureLibrary&) = delete;
-    TextureLibrary& operator=(const TextureLibrary&) = delete;
+    TextureLibrary(const TextureLibrary &)            = delete;
+    TextureLibrary &operator=(const TextureLibrary &) = delete;
 
     void createSamplers();
     void createTextures();

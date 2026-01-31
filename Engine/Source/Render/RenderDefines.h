@@ -395,6 +395,7 @@ enum T
 
 } // namespace EColorComponent
 
+
 namespace EBlendFactor
 {
 enum T
@@ -518,7 +519,7 @@ struct DepthStencilState
 {
     bool          bDepthTestEnable       = false;
     bool          bDepthWriteEnable      = false;
-    ECompareOp::T depthCompareOp         = ECompareOp::Less;
+    ECompareOp::T depthCompareOp         = ECompareOp::Less; // a 0.5, b 1.0, a < b pass write a to depth buffer
     bool          bDepthBoundsTestEnable = false;
     bool          bStencilTestEnable     = false;
     float         minDepthBounds         = 0.0f;
@@ -601,11 +602,12 @@ namespace EPipelineDynamicFeature
 {
 enum T
 {
-    DepthTest  = 0x01,
-    AlphaBlend = 0x02,
-    Viewport   = 0x04,
-    Scissor    = 0x08,
-    CullMode   = 0x10,
+    DepthTest = 0,
+    BlendConstants,
+    Viewport,
+    Scissor,
+    CullMode,
+    Count
 };
 }
 
@@ -656,7 +658,6 @@ struct GraphicsPipelineCreateInfo
 {
 
 
-
     // different shader/pipeline can use same pipeline layout
     // PipelineDesc *pipelineLayout = nullptr;
 
@@ -667,19 +668,83 @@ struct GraphicsPipelineCreateInfo
     uint32_t subPassRef = 0;
 
     // Dynamic Rendering mode fields (ignored if renderingMode == Subpass)
-    std::vector<EFormat::T> colorAttachmentFormats;                       // Color attachment formats for dynamic rendering
+    std::vector<EFormat::T> colorAttachmentFormats  = {};                 // Color attachment formats for dynamic rendering
     EFormat::T              depthAttachmentFormat   = EFormat::Undefined; // Depth format
     EFormat::T              stencilAttachmentFormat = EFormat::Undefined; // Stencil format
 
-    ShaderDesc shaderDesc;
+    ShaderDesc                              shaderDesc;
+    std::vector<EPipelineDynamicFeature::T> dynamicFeatures = {};
+    EPrimitiveType::T                       primitiveType   = EPrimitiveType::TriangleList;
+    RasterizationState                      rasterizationState;
+    MultisampleState                        multisampleState{};
+    DepthStencilState                       depthStencilState;
+    ColorBlendState                         colorBlendState;
+    ViewportState                           viewportState;
 
-    EPipelineDynamicFeature::T dynamicFeatures = {};
-    EPrimitiveType::T          primitiveType   = EPrimitiveType::TriangleList;
-    RasterizationState         rasterizationState;
-    MultisampleState           multisampleState{};
-    DepthStencilState          depthStencilState;
-    ColorBlendState            colorBlendState;
-    ViewportState              viewportState;
+    GraphicsPipelineCreateInfo defaultWithDepthTest(ShaderDesc shaderDesc, Extent2D extent)
+    {
+        return GraphicsPipelineCreateInfo{
+            .subPassRef = 0,
+            .shaderDesc = shaderDesc,
+            // define what state need to dynamically modified in render pass execution
+            .dynamicFeatures = {
+                EPipelineDynamicFeature::Viewport,
+                EPipelineDynamicFeature::Scissor,
+#if DYN_CULL
+                EPipelineDynamicFeature::CullMode,
+#endif
+            },
+            .primitiveType      = EPrimitiveType::TriangleList,
+            .rasterizationState = RasterizationState{
+                .polygonMode = EPolygonMode::Fill,
+                .cullMode    = ECullMode::Back,
+                .frontFace   = EFrontFaceType::CounterClockWise,
+            },
+            .multisampleState  = MultisampleState{},
+            .depthStencilState = DepthStencilState{
+                .bDepthTestEnable       = false,
+                .bDepthWriteEnable      = false,
+                .depthCompareOp         = ECompareOp::Less,
+                .bDepthBoundsTestEnable = false,
+                .bStencilTestEnable     = false,
+                .minDepthBounds         = 0.0f,
+                .maxDepthBounds         = 1.0f,
+            },
+            .colorBlendState = ColorBlendState{
+                .bLogicOpEnable = false,
+                .attachments    = {
+                    ColorBlendAttachmentState{
+                           .index               = 0,
+                           .bBlendEnable        = false,
+                           .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                           .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                           .colorBlendOp        = EBlendOp::Add,
+                           .srcAlphaBlendFactor = EBlendFactor::One,
+                           .dstAlphaBlendFactor = EBlendFactor::Zero,
+                           .alphaBlendOp        = EBlendOp::Add,
+                           .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                    },
+
+                },
+            },
+            .viewportState = ViewportState{
+                .viewports = {Viewport{
+                    .x        = 0.0f,
+                    .y        = 0.0f,
+                    .width    = static_cast<float>(extent.width),
+                    .height   = static_cast<float>(extent.height),
+                    .minDepth = 0.0f,
+                    .maxDepth = 1.0f,
+                }},
+                .scissors  = {Scissor{
+                     .offsetX = 0,
+                     .offsetY = 0,
+                     .width   = extent.width,
+                     .height  = extent.height,
+                }},
+            },
+        };
+    };
 };
 
 struct RenderPassCreateInfo

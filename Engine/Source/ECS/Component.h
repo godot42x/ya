@@ -14,6 +14,7 @@ struct Entity;
 struct IComponent
 {
     Entity *_owner;
+    virtual ~IComponent() = default;
 
     void                  setOwner(Entity *entity) { _owner = entity; }
     [[nodiscard]] Entity *getOwner() const { return _owner; }

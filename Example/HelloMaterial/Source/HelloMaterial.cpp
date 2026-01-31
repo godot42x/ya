@@ -24,7 +24,7 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Mesh.h"
-#include "Render/TextureLibrary.h"
+#include "Resource/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include <format>
 
@@ -57,14 +57,16 @@ void HelloMaterial::createMaterials()
 
     // Create unlit materials
     auto *unlitMaterial0 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit0");
-    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor0, ya::TextureView{
-                                                                      .texture = ya::TextureLibrary::get().getWhiteTexture(),
-                                                                      .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                                                  });
-    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor1, ya::TextureView{
-                                                                      .texture = ya::TextureLibrary::get().getMultiPixelTexture(),
-                                                                      .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                                                  });
+    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor0,
+                                   ya::TextureView{
+                                       .texture = ya::TextureLibrary::get().getWhiteTexture(),
+                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
+                                   });
+    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor1,
+                                   ya::TextureView{
+                                       .texture = ya::TextureLibrary::get().getMultiPixelTexture(),
+                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
+                                   });
     unlitMaterial0->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
     unlitMaterial0->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial0->setMixValue(0.5);
@@ -306,6 +308,24 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         //     .specular  = glm::vec3(0.5f),
         //     .shininess = 16.0f,
         // };
+    }
+
+    if (auto *window = scene->createNode3D("Window"))
+    {
+        ya::Entity *entity = window->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(5.f, 0.f, 3.f));
+        tc->setScale(glm::vec3(1.0f, 1.0f, 0.1f));
+        tc->setRotation(glm::vec3(180.f, 0, 0));
+
+        // Mesh component
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Quad);
+
+        // Material component
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
+        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/window.png");
     }
 
     if (auto *pointLt = scene->createNode3D("Point Light")) {

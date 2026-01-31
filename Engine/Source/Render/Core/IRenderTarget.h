@@ -19,7 +19,7 @@ namespace ya
  * Computed once per frame in App::onUpdate, used by all MaterialSystems
  * This decouples camera data acquisition from rendering systems
  */
-struct FrameCameraContext
+struct FrameContext
 {
     glm::mat4 view       = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
@@ -122,8 +122,8 @@ struct IRenderTarget
 
     // Frame camera context methods
     // App is responsible for computing and setting camera context each frame
-    virtual void                                     setCameraContext(const FrameCameraContext &ctx) = 0;
-    [[nodiscard]] virtual const FrameCameraContext &getCameraContext() const                         = 0;
+    virtual void                                     setFrameContext(const FrameContext &ctx) = 0;
+    [[nodiscard]] virtual const FrameContext &getFrameContext() const                         = 0;
 
     /**
      * @brief Add a material system to this render target
