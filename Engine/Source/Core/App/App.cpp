@@ -447,7 +447,7 @@ void App::init(AppDesc ci)
     // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
     // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
     Render2D::init(_render, _viewportRenderPass.get());
-    // Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
+    Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
 
     // MARK: Imgui
     auto &imManager = ImGuiManager::get();
@@ -943,6 +943,8 @@ void App::onRender(float dt)
 
             _viewportRT->end(cmdBuf.get());
         }
+        // imgui use vkCmd* directly, so we need to execute early
+        cmdBuf->executeAll();
 
         {
             YA_PROFILE_SCOPE("Screen pass")
@@ -965,8 +967,8 @@ void App::onRender(float dt)
 
             _screenRT->end(cmdBuf.get());
         }
+        cmdBuf->executeAll();
     }
-
     cmdBuf->end();
 
     // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====

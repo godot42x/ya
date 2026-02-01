@@ -24,6 +24,7 @@ bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkComm
 {
     VkCommandBufferAllocateInfo allocInfo{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext              = nullptr,
         .commandPool        = _handle,
         .level              = level,
         .commandBufferCount = 1,
@@ -43,6 +44,7 @@ void VulkanCommandPool::cleanup()
 
 bool VulkanCommandBuffer::begin(bool oneTimeSubmit)
 {
+    recordedCommands.clear();
     VkCommandBufferBeginInfo beginInfo{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext            = nullptr,
@@ -74,14 +76,15 @@ void VulkanCommandBuffer::reset()
 {
     vkResetCommandBuffer(_commandBuffer, 0);
     _isRecording = false;
+    recordedCommands.clear();
 }
 
-void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline *pipeline)
+void VulkanCommandBuffer::executeBindPipeline(IGraphicsPipeline *pipeline)
 {
     pipeline->bind(getHandle());
 }
 
-void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset)
+void VulkanCommandBuffer::executeBindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset)
 {
     if (!buffer) return;
 
@@ -90,7 +93,7 @@ void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer *buff
     vkCmdBindVertexBuffers(_commandBuffer, binding, 1, &vkBuffer, &vkOffset);
 }
 
-void VulkanCommandBuffer::bindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices)
+void VulkanCommandBuffer::executeBindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices)
 {
     if (!buffer) return;
 
@@ -99,21 +102,21 @@ void VulkanCommandBuffer::bindIndexBuffer(IBuffer *buffer, uint64_t offset, bool
     vkCmdBindIndexBuffer(_commandBuffer, vkBuffer, offset, indexType);
 }
 
-void VulkanCommandBuffer::draw(uint32_t vertexCount, uint32_t instanceCount,
-                               uint32_t firstVertex, uint32_t firstInstance)
+void VulkanCommandBuffer::executeDraw(uint32_t vertexCount, uint32_t instanceCount,
+                                      uint32_t firstVertex, uint32_t firstInstance)
 {
     vkCmdDraw(_commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCount,
-                                      uint32_t firstIndex, int32_t vertexOffset,
-                                      uint32_t firstInstance)
+void VulkanCommandBuffer::executeDrawIndexed(uint32_t indexCount, uint32_t instanceCount,
+                                             uint32_t firstIndex, int32_t vertexOffset,
+                                             uint32_t firstInstance)
 {
     vkCmdDrawIndexed(_commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
-void VulkanCommandBuffer::setViewport(float x, float y, float width, float height,
-                                      float minDepth, float maxDepth)
+void VulkanCommandBuffer::executeSetViewport(float x, float y, float width, float height,
+                                             float minDepth, float maxDepth)
 {
     VkViewport viewport{
         .x        = x,
@@ -126,7 +129,7 @@ void VulkanCommandBuffer::setViewport(float x, float y, float width, float heigh
     vkCmdSetViewport(_commandBuffer, 0, 1, &viewport);
 }
 
-void VulkanCommandBuffer::setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)
+void VulkanCommandBuffer::executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)
 {
     VkRect2D scissor{
         .offset = {x, y},
@@ -135,15 +138,15 @@ void VulkanCommandBuffer::setScissor(int32_t x, int32_t y, uint32_t width, uint3
     vkCmdSetScissor(_commandBuffer, 0, 1, &scissor);
 }
 
-void VulkanCommandBuffer::setCullMode(ECullMode::T cullMode)
+void VulkanCommandBuffer::executeSetCullMode(ECullMode::T cullMode)
 {
     vkCmdSetCullMode(_commandBuffer, ECullMode::toVk(cullMode));
 }
 
-void VulkanCommandBuffer::bindDescriptorSets(IPipelineLayout                        *pipelineLayout,
-                                             uint32_t                                firstSet,
-                                             const std::vector<DescriptorSetHandle> &descriptorSets,
-                                             const std::vector<uint32_t>            &dynamicOffsets)
+void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout                        *pipelineLayout,
+                                                    uint32_t                                firstSet,
+                                                    const std::vector<DescriptorSetHandle> &descriptorSets,
+                                                    const std::vector<uint32_t>            &dynamicOffsets)
 {
     std::vector<VkDescriptorSet> vkDescriptorSets;
     vkDescriptorSets.reserve(descriptorSets.size());
@@ -164,11 +167,11 @@ void VulkanCommandBuffer::bindDescriptorSets(IPipelineLayout                    
         dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
 }
 
-void VulkanCommandBuffer::pushConstants(IPipelineLayout *pipelineLayout,
-                                        EShaderStage::T  stages,
-                                        uint32_t         offset,
-                                        uint32_t         size,
-                                        const void      *data)
+void VulkanCommandBuffer::executePushConstants(IPipelineLayout *pipelineLayout,
+                                               EShaderStage::T  stages,
+                                               uint32_t         offset,
+                                               uint32_t         size,
+                                               const void      *data)
 {
     VkShaderStageFlags vkStages = 0;
     if (stages & EShaderStage::Vertex) vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
@@ -185,8 +188,8 @@ void VulkanCommandBuffer::pushConstants(IPipelineLayout *pipelineLayout,
         data);
 }
 
-void VulkanCommandBuffer::copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
-                                     uint64_t srcOffset, uint64_t dstOffset)
+void VulkanCommandBuffer::executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
+                                            uint64_t srcOffset, uint64_t dstOffset)
 {
     if (!src || !dst) return;
 
@@ -202,6 +205,56 @@ void VulkanCommandBuffer::copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
         dst->getHandleAs<VkBuffer>(),
         1,
         &copyRegion);
+}
+
+void VulkanCommandBuffer::executeAll()
+{
+    for (const auto &cmd : recordedCommands) {
+        std::visit(
+            [&](auto &&arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, RenderCommand::BindPipeline>) {
+                    executeBindPipeline(arg.pipeline);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::BindVertexBuffer>) {
+                    executeBindVertexBuffer(arg.binding, arg.buffer, arg.offset);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::BindIndexBuffer>) {
+                    executeBindIndexBuffer(arg.buffer, arg.offset, arg.use16BitIndices);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::Draw>) {
+                    executeDraw(arg.vertexCount, arg.instanceCount, arg.firstVertex, arg.firstInstance);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::DrawIndexed>) {
+                    executeDrawIndexed(arg.indexCount, arg.instanceCount, arg.firstIndex, arg.vertexOffset, arg.firstInstance);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::SetViewPort>) {
+                    executeSetViewport(arg.x, arg.y, arg.width, arg.height, arg.minDepth, arg.maxDepth);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::SetScissor>) {
+                    executeSetScissor(arg.x, arg.y, arg.width, arg.height);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::SetCullMode>) {
+                    executeSetCullMode(arg.cullMode);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::BindDescriptorSets>) {
+                    executeBindDescriptorSets(arg.pipelineLayout, arg.firstSet, arg.descriptorSets, arg.dynamicOffsets);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::PushConstants>) {
+                    executePushConstants(arg.pipelineLayout, arg.stages, arg.offset, static_cast<uint32_t>(arg.data.size()), arg.data.data());
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::CopyBuffer>) {
+                    executeCopyBuffer(arg.src, arg.dst, arg.size, arg.srcOffset, arg.dstOffset);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::BeginRendering> ||
+                                   std::is_same_v<T, RenderCommand::EndRendering> ||
+                                   std::is_same_v<T, RenderCommand::TransitionImageLayout>) {
+                    (void)arg; // TODO: implement dynamic rendering/layout transitions
+                }
+            },
+            cmd.data);
+    }
+    ICommandBuffer::executeAll();
 }
 
 
