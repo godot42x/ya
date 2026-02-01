@@ -39,6 +39,71 @@ struct ImGuiImageEntry
     }
 };
 
+// Unified context menu interface
+class ContextMenu
+{
+  public:
+    enum class Type
+    {
+        BlankSpace,  // Right-click on empty area
+        EntityItem,  // Right-click on entity/item
+    };
+
+    ContextMenu(std::string_view id, Type type, ImGuiPopupFlags flags = 0)
+        : _id(id), _type(type), _flags(flags)
+    {
+    }
+
+    virtual ~ContextMenu() = default;
+
+    // Begin context menu rendering - returns true if menu should be rendered
+    bool begin()
+    {
+        if (_type == Type::BlankSpace) {
+            return ImGui::BeginPopupContextWindow(
+                _id.c_str(),
+                _flags | ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight);
+        }
+        else {
+            return ImGui::BeginPopupContextItem(_id.c_str(), ImGuiPopupFlags_MouseButtonRight);
+        }
+    }
+
+    // End context menu rendering
+    void end()
+    {
+        ImGui::EndPopup();
+    }
+
+    // Helper to render menu items with a callback
+    bool menuItem(std::string_view label, std::string_view shortcut = "", bool *selected = nullptr)
+    {
+        return ImGui::MenuItem(label.data(), shortcut.empty() ? nullptr : shortcut.data(), selected);
+    }
+
+    void separator()
+    {
+        ImGui::Separator();
+    }
+
+    bool beginMenu(std::string_view label)
+    {
+        return ImGui::BeginMenu(label.data());
+    }
+
+    void endMenu()
+    {
+        ImGui::EndMenu();
+    }
+
+    Type getType() const { return _type; }
+
+  private:
+    std::string _id;
+    Type        _type;
+    ImGuiPopupFlags _flags;
+};
+
 } // namespace ya
 
 // Provide std::hash specialization for unordered_set support

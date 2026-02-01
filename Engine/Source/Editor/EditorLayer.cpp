@@ -3,11 +3,17 @@
 #include "Core/AssetManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
+#include "Core/Manager/Facade.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/System/TransformSystem.h"
+#include "EditorCommon.h"
 #include "ImGuiHelper.h"
 #include "Resource/TextureLibrary.h"
+#include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include <ImGuizmo.h>
@@ -134,6 +140,42 @@ void EditorLayer::onEvent(const Event &event)
 {
     // Handle viewport-specific events when focused
     // Example: Camera controls, object picking, gizmo manipulation
+
+    // Track right mouse drag for camera rotation (to prevent context menu popup)
+    switch (event.getEventType()) {
+    case EEvent::MouseButtonPressed:
+    {
+        auto &mouseEvent = static_cast<const MouseButtonPressedEvent &>(event);
+        if (mouseEvent.GetMouseButton() == EMouse::Right && bViewportHovered) {
+            _rightMousePressPos  = _app->getLastMousePos();
+            _bRightMouseDragging = false; // Not dragging yet, just pressed
+        }
+    } break;
+    case EEvent::MouseMoved:
+    {
+        // If right mouse is held and we moved significantly, mark as dragging
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && bViewportHovered) {
+            glm::vec2 currentPos = _app->getLastMousePos();
+            float     dist       = glm::length(currentPos - _rightMousePressPos);
+            if (dist > 3.0f) { // Threshold to distinguish click from drag
+                _bRightMouseDragging = true;
+            }
+        }
+    } break;
+    case EEvent::MouseButtonReleased:
+    {
+        auto &mouseEvent = static_cast<const MouseButtonReleasedEvent &>(event);
+        if (mouseEvent.GetMouseButton() == EMouse::Right) {
+            // Reset drag state on release (after a short delay to let ImGui process)
+            // We keep the flag true briefly so context menu check can see it
+            Facade.timerManager.delayCall(50, [this]() {
+                _bRightMouseDragging = false;
+            });
+        }
+    } break;
+    default:
+        break;
+    }
 
     if (!bViewportFocused) {
         return; // Only process other events when viewport is focused
@@ -568,6 +610,110 @@ void EditorLayer::viewportWindow()
     // Block events only when viewport is NOT focused/hovered AND ImGuizmo is not using/over
     bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();
     ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
+
+    // Viewport context menu - right-click on blank space
+    // Only show if not dragging camera (right mouse drag)
+    if (!_bRightMouseDragging)
+    {
+        ContextMenu ctx("ViewportContextMenu", ContextMenu::Type::BlankSpace);
+        if (ctx.begin())
+        {
+            if (ctx.menuItem("Create Empty Node"))
+            {
+                if (auto scene = _app->getSceneManager()->getActiveScene())
+                {
+                    Node *newNode = scene->createNode3D("New Node");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        setSelectedEntity(node3D->getEntity());
+                    }
+                }
+            }
+
+            if (ctx.beginMenu("Create 3D Object"))
+            {
+                if (ctx.menuItem("Cube"))
+                {
+                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    {
+                        Node *newNode = scene->createNode3D("Cube");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelectedEntity(newEntity);
+                        }
+                    }
+                }
+                if (ctx.menuItem("Sphere"))
+                {
+                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    {
+                        Node *newNode = scene->createNode3D("Sphere");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelectedEntity(newEntity);
+                        }
+                    }
+                }
+                if (ctx.menuItem("Plane"))
+                {
+                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    {
+                        Node *newNode = scene->createNode3D("Plane");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelectedEntity(newEntity);
+                        }
+                    }
+                }
+                ctx.endMenu();
+            }
+
+            if (ctx.menuItem("Create Point Light"))
+            {
+                if (auto scene = _app->getSceneManager()->getActiveScene())
+                {
+                    Node *newNode = scene->createNode3D("Point Light");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        Entity *newEntity = node3D->getEntity();
+                        newEntity->addComponent<PointLightComponent>();
+                        setSelectedEntity(newEntity);
+                    }
+                }
+            }
+
+            ctx.separator();
+
+            // Duplicate selected entity
+            Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
+            if (selectedEntity && selectedEntity->isValid())
+            {
+                if (ctx.menuItem("Duplicate Selected"))
+                {
+                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    {
+                        if (auto newNode = scene->duplicateNode(scene->getNodeByEntity(selectedEntity))) {
+                            YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+                            Facade.timerManager.delayCall(
+                                1,
+                                [this, newNode]() {
+                                    setSelectedEntity(newNode->getEntity());
+                                });
+                        }
+                    }
+                }
+            }
+
+            ctx.end();
+        }
+    }
 
     ImGui::End();
 }

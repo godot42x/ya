@@ -47,8 +47,10 @@ struct EditorLayer
     glm::vec2 _viewportSize = {1280.f, 720.f};
     glm::vec2 _viewportBounds[2]; // Min and max bounds
     Rect2D    viewportRect;
-    bool      bViewportFocused = false;
-    bool      bViewportHovered = false;
+    bool      bViewportFocused       = false;
+    bool      bViewportHovered       = false;
+    bool      _bRightMouseDragging   = false; // Track right mouse drag for camera rotation
+    glm::vec2 _rightMousePressPos    = {};    // Position when right mouse was pressed
 
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
@@ -196,6 +198,7 @@ struct EditorLayer
     bool                         isViewportFocused() const { return bViewportFocused; }
     bool                         isViewportHovered() const { return bViewportHovered; }
     bool                         isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    bool                         isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity *> &getSelections() const { return _selections; }
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };

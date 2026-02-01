@@ -2,6 +2,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/Manager/Facade.h"
 #include "EditorLayer.h"
+#include "EditorCommon.h"
 
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
@@ -64,65 +65,68 @@ void SceneHierarchyPanel::sceneTree()
         renderStandaloneEntities();
 
         // Right-click on blank space - create entity menu
-        if (ImGui::BeginPopupContextWindow("SceneHierarchyContextMenu", ImGuiPopupFlags_NoOpenOverItems | ImGuiPopupFlags_MouseButtonRight))
         {
-            if (ImGui::MenuItem("Create Empty Node"))
+            ContextMenu ctx("SceneHierarchyContextMenu", ContextMenu::Type::BlankSpace);
+            if (ctx.begin())
             {
-                Node *newNode = _context->createNode3D("New Node");
-                if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                    setSelection(node3D->getEntity());
-                }
-            }
-
-            if (ImGui::BeginMenu("Create 3D Object"))
-            {
-                if (ImGui::MenuItem("Cube"))
+                if (ctx.menuItem("Create Empty Node"))
                 {
-                    Node *newNode = _context->createNode3D("Cube");
+                    Node *newNode = _context->createNode3D("New Node");
+                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                        setSelection(node3D->getEntity());
+                    }
+                }
+
+                if (ctx.beginMenu("Create 3D Object"))
+                {
+                    if (ctx.menuItem("Cube"))
+                    {
+                        Node *newNode = _context->createNode3D("Cube");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelection(newEntity);
+                        }
+                    }
+                    if (ctx.menuItem("Sphere"))
+                    {
+                        Node *newNode = _context->createNode3D("Sphere");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelection(newEntity);
+                        }
+                    }
+                    if (ctx.menuItem("Plane"))
+                    {
+                        Node *newNode = _context->createNode3D("Plane");
+                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                            Entity *newEntity = node3D->getEntity();
+                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelection(newEntity);
+                        }
+                    }
+                    ctx.endMenu();
+                }
+
+                if (ctx.menuItem("Create Point Light"))
+                {
+                    Node *newNode = _context->createNode3D("Point Light");
                     if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
                         Entity *newEntity = node3D->getEntity();
-                        auto    mc        = newEntity->addComponent<MeshComponent>();
-                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
-                        newEntity->addComponent<PhongMaterialComponent>();
+                        newEntity->addComponent<PointLightComponent>();
                         setSelection(newEntity);
                     }
                 }
-                if (ImGui::MenuItem("Sphere"))
-                {
-                    Node *newNode = _context->createNode3D("Sphere");
-                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                        Entity *newEntity = node3D->getEntity();
-                        auto    mc        = newEntity->addComponent<MeshComponent>();
-                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
-                        newEntity->addComponent<PhongMaterialComponent>();
-                        setSelection(newEntity);
-                    }
-                }
-                if (ImGui::MenuItem("Plane"))
-                {
-                    Node *newNode = _context->createNode3D("Plane");
-                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                        Entity *newEntity = node3D->getEntity();
-                        auto    mc        = newEntity->addComponent<MeshComponent>();
-                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
-                        newEntity->addComponent<PhongMaterialComponent>();
-                        setSelection(newEntity);
-                    }
-                }
-                ImGui::EndMenu();
-            }
 
-            if (ImGui::MenuItem("Create Point Light"))
-            {
-                Node *newNode = _context->createNode3D("Point Light");
-                if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                    Entity *newEntity = node3D->getEntity();
-                    newEntity->addComponent<PointLightComponent>();
-                    setSelection(newEntity);
-                }
+                ctx.end();
             }
-
-            ImGui::EndPopup();
         }
     }
 
@@ -172,26 +176,29 @@ void SceneHierarchyPanel::drawNodeRecursive(Node *node)
 
     // Right-click context menu for node
     bool bEntityDeleted = false;
-    if (ImGui::BeginPopupContextItem()) {
-        if (ImGui::MenuItem("Duplicate")) {
-            // TODO: Implement entity duplication with hierarchy
-            if (auto newNode = _context->duplicateNode(node)) {
-                YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
-                Facade.timerManager.delayCall(
-                    1,
-                    [this, newNode]() {
-                        setSelection(newNode->getEntity());
-                    });
+    {
+        ContextMenu ctx("NodeContextMenu##" + std::to_string(entity->getId()), ContextMenu::Type::EntityItem);
+        if (ctx.begin()) {
+            if (ctx.menuItem("Duplicate")) {
+                // TODO: Implement entity duplication with hierarchy
+                if (auto newNode = _context->duplicateNode(node)) {
+                    YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+                    Facade.timerManager.delayCall(
+                        1,
+                        [this, newNode]() {
+                            setSelection(newNode->getEntity());
+                        });
+                }
             }
+
+            ctx.separator();
+
+            if (ctx.menuItem("Delete")) {
+                bEntityDeleted = true;
+            }
+
+            ctx.end();
         }
-
-        ImGui::Separator();
-
-        if (ImGui::MenuItem("Delete")) {
-            bEntityDeleted = true;
-        }
-
-        ImGui::EndPopup();
     }
 
     if (opened && node->hasChildren()) {
@@ -251,24 +258,27 @@ void SceneHierarchyPanel::drawFlatEntity(Entity &entity)
 
     // Right-click context menu for entity
     bool bEntityDeleted = false;
-    if (ImGui::BeginPopupContextItem())
     {
-        if (ImGui::MenuItem("Duplicate"))
+        ContextMenu ctx("FlatEntityContextMenu##" + std::to_string(entity.getId()), ContextMenu::Type::EntityItem);
+        if (ctx.begin())
         {
-            // TODO: Implement entity duplication
-            if (auto newNode = _context->duplicateNode(_context->getNodeByEntity(&entity))) {
-                YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+            if (ctx.menuItem("Duplicate"))
+            {
+                // TODO: Implement entity duplication
+                if (auto newNode = _context->duplicateNode(_context->getNodeByEntity(&entity))) {
+                    YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+                }
             }
+
+            ctx.separator();
+
+            if (ctx.menuItem("Delete"))
+            {
+                bEntityDeleted = true;
+            }
+
+            ctx.end();
         }
-
-        ImGui::Separator();
-
-        if (ImGui::MenuItem("Delete"))
-        {
-            bEntityDeleted = true;
-        }
-
-        ImGui::EndPopup();
     }
 
     if (opened)
