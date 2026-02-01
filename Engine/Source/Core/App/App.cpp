@@ -777,6 +777,7 @@ int ya::App::iterate(float dt)
 }
 
 
+// MARK: update
 void App::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION()
@@ -943,7 +944,48 @@ void App::onRender(float dt)
 
             _viewportRT->end(cmdBuf.get());
         }
-        // Note: executeAll() is now called inside RenderTarget::end() before endRenderPass
+        {
+            YA_PROFILE_SCOPE("Postprocessing pass")
+            // TODO: make those effect in post-processing
+            // 1. Inversion 反向
+            // 2. Grayscale 灰度
+            // 3. Kernel_Sharpe
+            // 4. Kernel_Blur
+            // 5. Kernel_Edge-Detection
+            // 6. Tone Mapping
+            // 7. Pixel-Style/Retro 像素风/复古
+            // 
+            // 并且，editor 那边需要按需查看某些效果， 这里的 pass 也要按需执行，不能空耗
+            // 目前的 render target， render pass 不能符合？ 重构一下
+            // 指定input， output， 需要复用 SceneRT 的结果， 且存到不同 RT 之上
+            // 是否类似于 dynamical- render 了？ 或者可以采取一个 pass 重复执行 n 遍的实现
+
+            // --- MARK: PASS 1.5: Postprocessing Pass ---
+            // For simplicity, we do postprocessing in a separate render target and pass
+            // In a real engine, you might want to chain multiple postprocessing effects
+            // static auto postprocessMaterialSystem = makeShared<PostprocessMaterialSystem>();
+            // _postprocessingRT = ya::createRenderTarget(RenderTargetCreateInfo{
+            //     .label            = "Postprocessing RenderTarget",
+            //     .bSwapChainTarget = false,
+            //     .renderPass       = _postprocessingRenderPass.get(),
+            //     .frameBufferCount = 1,
+            //     .extent           = _viewportRT->getExtent(),
+            // });
+            // _postprocessingRT->addMaterialSystem<PostprocessMaterialSystem>(postprocessMaterialSystem);
+
+            // // Set input texture from viewport RT color attachment
+            // auto viewportColorView = _viewportRT->getFrameBuffer()->getImageView(0); // Color attachment index 0
+            // postprocessMaterialSystem->setInputTexture(viewportColorView);
+
+            // _postprocessingRT->begin(cmdBuf.get());
+            // _postprocessingRT->onRender(cmdBuf.get());
+            // _postprocessingRT->end(cmdBuf.get());
+
+            // // Cleanup temporary postprocessing RT
+            // _postprocessingRT->destroy();
+            // _postprocessingRT.reset();
+        }
+
 
         {
             YA_PROFILE_SCOPE("Screen pass")
