@@ -607,6 +607,7 @@ enum T
     Viewport,
     Scissor,
     CullMode,
+    PolygonMode,
     Count
 };
 }

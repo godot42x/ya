@@ -5,6 +5,9 @@
 namespace ya
 {
 
+// Define the static function pointer for VK_EXT_extended_dynamic_state3
+PFN_vkCmdSetPolygonModeEXT VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = nullptr;
+
 VulkanCommandPool::VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, VkCommandPoolCreateFlags flags)
 {
     _render = render;
@@ -143,6 +146,17 @@ void VulkanCommandBuffer::executeSetCullMode(ECullMode::T cullMode)
     vkCmdSetCullMode(_commandBuffer, ECullMode::toVk(cullMode));
 }
 
+void VulkanCommandBuffer::executeSetPolygonMode(EPolygonMode::T polygonMode)
+{
+    // Use function pointer if available (requires VK_EXT_extended_dynamic_state3)
+    if (s_vkCmdSetPolygonModeEXT != nullptr) {
+        s_vkCmdSetPolygonModeEXT(_commandBuffer, EPolygonMode::toVk(polygonMode));
+    }
+    else {
+        YA_CORE_WARN("vkCmdSetPolygonModeEXT not available - VK_EXT_extended_dynamic_state3 may not be enabled");
+    }
+}
+
 void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout                        *pipelineLayout,
                                                     uint32_t                                firstSet,
                                                     const std::vector<DescriptorSetHandle> &descriptorSets,
@@ -236,6 +250,9 @@ void VulkanCommandBuffer::executeAll()
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::SetCullMode>) {
                     executeSetCullMode(arg.cullMode);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::SetPolygonMode>) {
+                    executeSetPolygonMode(arg.polygonMode);
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::BindDescriptorSets>) {
                     executeBindDescriptorSets(arg.pipelineLayout, arg.firstSet, arg.descriptorSets, arg.dynamicOffsets);

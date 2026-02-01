@@ -127,6 +127,8 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     std::string _ctxEntityDebugStr;
 
+    EPolygonMode::T _polygonMode = EPolygonMode::Fill; // Polygon rendering mode (Fill, Line, Point)
+
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override;
     void onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt) override;

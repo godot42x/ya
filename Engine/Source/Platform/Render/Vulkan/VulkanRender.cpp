@@ -424,9 +424,16 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
     // physicalDeviceFeatures.shaderClipDistance = VK_TRUE; // Enable clip distance support
     // physicalDeviceFeatures.shaderCullDistance = VK_TRUE; // Enable cull distance support
 
+    // Enable VK_EXT_extended_dynamic_state3 features
+    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+        .pNext = nullptr,
+        .extendedDynamicState3PolygonMode = VK_TRUE,
+    };
+
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = nullptr,
+        .pNext                   = &extendedDynamicState3Features,
         .flags                   = 0,
         .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
         .pQueueCreateInfos       = deviceQueueCIs.data(),
@@ -506,6 +513,22 @@ void VulkanRender::createPipelineCache()
 IDescriptorSetHelper *VulkanRender::getDescriptorHelper()
 {
     return _descriptorHelper;
+}
+
+void VulkanRender::initExtensionFunctions()
+{
+    // Load VK_EXT_extended_dynamic_state3 extension function pointer
+    VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = 
+        (PFN_vkCmdSetPolygonModeEXT)vkGetDeviceProcAddr(
+            m_LogicalDevice, 
+            "vkCmdSetPolygonModeEXT"
+        );
+    
+    if (VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT != nullptr) {
+        YA_CORE_INFO("VK_EXT_extended_dynamic_state3 loaded successfully");
+    } else {
+        YA_CORE_WARN("vkCmdSetPolygonModeEXT not available - polygon mode control will be unavailable");
+    }
 }
 
 void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)

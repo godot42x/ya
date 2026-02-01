@@ -149,6 +149,23 @@ void OpenGLCommandBuffer::executeSetCullMode(ECullMode::T cullMode)
     }
 }
 
+void OpenGLCommandBuffer::executeSetPolygonMode(EPolygonMode::T polygonMode)
+{
+    GLenum glMode = GL_FILL;
+    switch (polygonMode) {
+    case EPolygonMode::Fill:
+        glMode = GL_FILL;
+        break;
+    case EPolygonMode::Line:
+        glMode = GL_LINE;
+        break;
+    case EPolygonMode::Point:
+        glMode = GL_POINT;
+        break;
+    }
+    glPolygonMode(GL_FRONT_AND_BACK, glMode);
+}
+
 void OpenGLCommandBuffer::executeBindDescriptorSets(
     IPipelineLayout                        *pipelineLayout,
     uint32_t                                firstSet,
@@ -230,6 +247,9 @@ void OpenGLCommandBuffer::executeAll()
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::SetCullMode>) {
                     executeSetCullMode(arg.cullMode);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::SetPolygonMode>) {
+                    executeSetPolygonMode(arg.polygonMode);
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::BindDescriptorSets>) {
                     executeBindDescriptorSets(arg.pipelineLayout, arg.firstSet, arg.descriptorSets, arg.dynamicOffsets);

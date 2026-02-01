@@ -40,6 +40,7 @@ class OpenGLCommandBuffer : public ICommandBuffer
                             float minDepth, float maxDepth);
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
     void executeSetCullMode(ECullMode::T cullMode);
+    void executeSetPolygonMode(EPolygonMode::T polygonMode);
     void executeBindDescriptorSets(
         IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,

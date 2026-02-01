@@ -55,14 +55,15 @@ struct VulkanRender : public IRender
         {.name = "VK_LAYER_KHRONOS_validation", .bRequired = true}, // "VK_LAYER_KHRONOS_validation"
     };
     const std::vector<ya::DeviceFeature> _instanceExtensions = {
-        {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_surface"
+        {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true},                   // "VK_KHR_surface"
     };
 
     const std::vector<ya::DeviceFeature> _deviceLayers = {
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
-        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_swapchain"
+        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},           // "VK_KHR_swapchain"
+        {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
 
@@ -246,6 +247,8 @@ struct VulkanRender : public IRender
             terminate();
         }
 
+        // Initialize VK_EXT_extended_dynamic_state3 function pointer
+        initExtensionFunctions();
 
         _swapChain = new VulkanSwapChain(this);
         _swapChain->as<VulkanSwapChain>()->recreate(ci.swapchainCI);
@@ -407,6 +410,7 @@ struct VulkanRender : public IRender
 
 
     bool createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount);
+    void initExtensionFunctions();
     bool createCommandPool();
 
     void createPipelineCache();

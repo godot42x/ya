@@ -3,6 +3,7 @@
 #include "Core/App/App.h"
 #include "Core/Log.h"
 #include "VulkanPipeline.h"
+#include "Render/RenderDefines.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
 
@@ -369,6 +370,8 @@ void VulkanPipeline::createPipelineInternal()
                 return VK_DYNAMIC_STATE_SCISSOR;
             case EPipelineDynamicFeature::CullMode:
                 return VK_DYNAMIC_STATE_CULL_MODE;
+            case EPipelineDynamicFeature::PolygonMode:
+                return VK_DYNAMIC_STATE_POLYGON_MODE_EXT;
             default:
                 return VK_DYNAMIC_STATE_MAX_ENUM; // Invalid, will be filtered out
             }

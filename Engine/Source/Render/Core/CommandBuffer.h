@@ -75,6 +75,10 @@ struct RenderCommand
     {
         ECullMode::T cullMode = ECullMode::Back;
     };
+    struct SetPolygonMode
+    {
+        EPolygonMode::T polygonMode = EPolygonMode::Fill;
+    };
     struct BindDescriptorSets
     {
         IPipelineLayout                 *pipelineLayout = nullptr;
@@ -121,6 +125,7 @@ struct RenderCommand
         SetViewPort,
         SetScissor,
         SetCullMode,
+        SetPolygonMode,
         BindDescriptorSets,
         PushConstants,
         CopyBuffer,
@@ -240,6 +245,14 @@ struct ICommandBuffer
     void setCullMode(ECullMode::T cullMode)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::SetCullMode{cullMode}});
+    }
+
+    /**
+     * @brief Set polygon mode (Fill, Line, Point)
+     */
+    void setPolygonMode(EPolygonMode::T polygonMode)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::SetPolygonMode{polygonMode}});
     }
 
     /**

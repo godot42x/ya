@@ -164,6 +164,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
             EPipelineDynamicFeature::CullMode,
 #endif
             EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::PolygonMode,
         },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
@@ -401,6 +402,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
         cmdBuf->setScissor(0, 0, width, height);
         cmdBuf->setCullMode(_cullMode);
+        cmdBuf->setPolygonMode(_polygonMode);
     }
 
     {
@@ -514,6 +516,26 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 void PhongMaterialSystem::onRenderGUI()
 {
     IMaterialSystem::onRenderGUI();
+
+    // Polygon Mode Control
+    int polygonMode = (int)(_polygonMode);
+    if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
+        switch (polygonMode) {
+        case 0:
+            _polygonMode = EPolygonMode::Fill;
+            break;
+        case 1:
+            _polygonMode = EPolygonMode::Line;
+            break;
+        case 2:
+            _polygonMode = EPolygonMode::Point;
+            break;
+        default:
+            _polygonMode = EPolygonMode::Fill;
+            break;
+        }
+    }
+
     ImGui::Text("Directional Light");
     ImGui::Indent();
     {

@@ -25,6 +25,11 @@ class VulkanCommandBuffer : public ICommandBuffer
     VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
     bool            _isRecording   = false;
 
+    // Static function pointer for VK_EXT_extended_dynamic_state3
+    static PFN_vkCmdSetPolygonModeEXT s_vkCmdSetPolygonModeEXT;
+
+    friend struct VulkanRender; // Allow VulkanRender to initialize the function pointer
+
     void executeBindPipeline(IGraphicsPipeline *pipeline);
     void executeBindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset);
     void executeBindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices);
@@ -37,6 +42,7 @@ class VulkanCommandBuffer : public ICommandBuffer
                             float minDepth, float maxDepth);
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
     void executeSetCullMode(ECullMode::T cullMode);
+    void executeSetPolygonMode(EPolygonMode::T polygonMode);
     void executeBindDescriptorSets(
         IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,
