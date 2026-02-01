@@ -193,7 +193,10 @@ void VulkanRenderTarget::begin(ICommandBuffer *cmdBuf)
 
 void VulkanRenderTarget::end(ICommandBuffer *cmdBuf)
 {
-    // YA_CORE_ASSERT(bBeginTarget, "Render target is not begun, cannot end");
+    // Execute all recorded commands BEFORE ending render pass
+    // This ensures draw calls happen inside the active render pass
+    cmdBuf->executeAll();
+    
     _renderPass->end(cmdBuf);
     bBeginTarget = false;
 }

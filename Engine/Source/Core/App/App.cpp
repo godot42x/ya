@@ -943,8 +943,7 @@ void App::onRender(float dt)
 
             _viewportRT->end(cmdBuf.get());
         }
-        // imgui use vkCmd* directly, so we need to execute early
-        cmdBuf->executeAll();
+        // Note: executeAll() is now called inside RenderTarget::end() before endRenderPass
 
         {
             YA_PROFILE_SCOPE("Screen pass")
@@ -967,7 +966,7 @@ void App::onRender(float dt)
 
             _screenRT->end(cmdBuf.get());
         }
-        cmdBuf->executeAll();
+        // Note: executeAll() is now called inside RenderTarget::end()
     }
     cmdBuf->end();
 

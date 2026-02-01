@@ -13,6 +13,8 @@ namespace ya
 
 void UIComponentSystem::onRender()
 {
+    return;
+
     auto app = App::get();
     auto rt  = app->_viewportRT;
     // auto rp    = rt->getRenderPass();
@@ -28,16 +30,19 @@ void UIComponentSystem::onRender()
     // 需要一个 quad mesh + transform + texture + 光照？
     // 放入 PhongMaterialSystem 之中实现
 
-    scene->getRegistry()
-        .view<UIComponent, TransformComponent>()
-        .each(
-            [&](auto /*entity*/, UIComponent &uc, TransformComponent &tc) {
-                auto mat = tc.getWorldMatrix();
-                mat[1] *= -1.0f; // Flip Y for screen space
-                Render2D::makeSprite(
-                    mat,
-                    uc.view.textureRef.getShared());
-            });
+    // 错误的， quad render 的 batch 内部有 view(identity) 和 proj(orthographic) 矩阵
+    // 不符合 3D 之中的透明物体渲染要求
+    // scene->getRegistry()
+    //     .view<UIComponent, TransformComponent>()
+    //     .each(
+    //         [&](auto /*entity*/, UIComponent &uc, TransformComponent &tc) {
+    //             auto mat = tc.getWorldMatrix();
+    //             // mat[1] *= -1.0f; // Flip Y for screen space
+    //             mat = ctx.projection * ctx.view * mat;
+    //             Render2D::makeSprite(
+    //                 mat,
+    //                 uc.view.textureRef.getShared());
+    //         });
 }
 
 } // namespace ya

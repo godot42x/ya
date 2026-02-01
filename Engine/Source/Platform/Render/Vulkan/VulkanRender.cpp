@@ -420,6 +420,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
     VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
     physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE; // Enable anisotropic filtering
+    physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE; // Enable LINE and POINT polygon modes
     // physicalDeviceFeatures.geometryShader    = VK_TRUE; // Enable geometry shader support
     // physicalDeviceFeatures.shaderClipDistance = VK_TRUE; // Enable clip distance support
     // physicalDeviceFeatures.shaderCullDistance = VK_TRUE; // Enable cull distance support

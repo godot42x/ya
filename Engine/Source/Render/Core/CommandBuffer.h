@@ -10,6 +10,14 @@
 #include <variant>
 #include <vector>
 
+// Command buffer execution mode:
+// 0 = Virtual function mode (direct vkCmd* calls through virtual functions)
+// 1 = Recording mode (record commands to vector, batch execute later)
+// Use this to profile and compare performance
+#ifndef YA_CMDBUF_RECORD_MODE
+    #define YA_CMDBUF_RECORD_MODE 0
+#endif
+
 
 
 namespace ya
@@ -22,6 +30,7 @@ struct IRenderPass;
 struct IBuffer;
 
 
+#if YA_CMDBUF_RECORD_MODE
 struct RenderCommand
 {
     struct BindPipeline
@@ -134,14 +143,21 @@ struct RenderCommand
         TransitionImageLayout>;
     type data;
 };
+#endif
 
 
 /**
  * @brief Generic command buffer interface for recording GPU commands
+ *
+ * Two execution modes controlled by YA_CMDBUF_RECORD_MODE:
+ * - Mode 0 (Virtual): Direct virtual function calls to backend (vkCmd*)
+ * - Mode 1 (Record): Record commands to vector, batch execute via executeAll()
  */
 struct ICommandBuffer
 {
+#if YA_CMDBUF_RECORD_MODE
     std::vector<RenderCommand> recordedCommands;
+#endif
 
   public:
     virtual ~ICommandBuffer() = default;
@@ -183,38 +199,35 @@ struct ICommandBuffer
      */
     virtual void reset() = 0;
 
+#if YA_CMDBUF_RECORD_MODE
+    // ========== Recording Mode: Push commands to vector ==========
     void bindPipeline(IGraphicsPipeline *pipeline)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindPipeline{pipeline}});
     }
-    /**
-     * @brief Bind a vertex buffer
-     */
+#else
+    // ========== Virtual Mode: Direct virtual function calls ==========
+    virtual void bindPipeline(IGraphicsPipeline *pipeline) = 0;
+#endif
+
+#if YA_CMDBUF_RECORD_MODE
+    // ========== Recording Mode Implementations ==========
     void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindVertexBuffer{binding, buffer, offset}});
     }
 
-    /**
-     * @brief Bind an index buffer
-     */
     void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindIndexBuffer{buffer, offset, use16BitIndices}});
     }
 
-    /**
-     * @brief Draw command
-     */
     void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
               uint32_t firstVertex = 0, uint32_t firstInstance = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::Draw{vertexCount, instanceCount, firstVertex, firstInstance}});
     }
 
-    /**
-     * @brief Draw indexed command
-     */
     void drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
                      uint32_t firstIndex = 0, int32_t vertexOffset = 0,
                      uint32_t firstInstance = 0)
@@ -222,26 +235,17 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndexed{indexCount, instanceCount, firstIndex, vertexOffset, firstInstance}});
     }
 
-    /**
-     * @brief Set viewport
-     */
     void setViewport(float x, float y, float width, float height,
                      float minDepth = 0.0f, float maxDepth = 1.0f)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::SetViewPort{x, y, width, height, minDepth, maxDepth}});
     }
 
-    /**
-     * @brief Set scissor rectangle
-     */
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::SetScissor{x, y, width, height}});
     }
 
-    /**
-     * @brief Set cull mode (for dynamic pipeline state)
-     */
     void setCullMode(ECullMode::T cullMode)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::SetCullMode{cullMode}});
@@ -255,9 +259,6 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::SetPolygonMode{polygonMode}});
     }
 
-    /**
-     * @brief Bind descriptor sets
-     */
     void bindDescriptorSets(
         IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,
@@ -273,9 +274,6 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{std::move(cmd)});
     }
 
-    /**
-     * @brief Push constants
-     */
     void pushConstants(
         IPipelineLayout *pipelineLayout,
         EShaderStage::T  stages,
@@ -294,46 +292,22 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{std::move(cmd)});
     }
 
-    /**
-     * @brief Copy buffer to buffer
-     */
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::CopyBuffer{src, dst, size, srcOffset, dstOffset}});
     }
 
-    // ========================================================================
-    // Dynamic Rendering Commands (Vulkan 1.3+ / VK_KHR_dynamic_rendering)
-    // ========================================================================
-
-    /**
-     * @brief Begin dynamic rendering
-     * @param info Dynamic rendering configuration
-     * @note Replaces render pass begin in dynamic rendering mode
-     */
     void beginRendering(const DynamicRenderingInfo &info)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
     }
 
-    /**
-     * @brief End dynamic rendering
-     * @note Replaces render pass end in dynamic rendering mode
-     */
     void endRendering()
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::EndRendering{}});
     }
 
-    /**
-     * @brief Transition image layout
-     * @param image Backend-specific image handle
-     * @param oldLayout Old image layout
-     * @param newLayout New image layout
-     * @param subresourceRange Subresource range to transition
-     * @note Required for manual layout transitions in dynamic rendering
-     */
     void transitionImageLayout(
         void                        *image,
         EImageLayout::T              oldLayout,
@@ -343,13 +317,49 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::TransitionImageLayout{image, oldLayout, newLayout, subresourceRange}});
     }
 
-
-    // TODO: backend override this method to execute recorded commands, batch call, but not virtual call each cmd
-    //      然后做个性能对比，暂时不做提前优化
     virtual void executeAll()
     {
         recordedCommands.clear();
     }
+
+#else
+    // ========== Virtual Mode Declarations ==========
+    virtual void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0)      = 0;
+    virtual void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false) = 0;
+    virtual void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
+                      uint32_t firstVertex = 0, uint32_t firstInstance = 0)                          = 0;
+    virtual void drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
+                             uint32_t firstIndex = 0, int32_t vertexOffset = 0,
+                             uint32_t firstInstance = 0)                                             = 0;
+    virtual void setViewport(float x, float y, float width, float height,
+                             float minDepth = 0.0f, float maxDepth = 1.0f)                           = 0;
+    virtual void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)                   = 0;
+    virtual void setCullMode(ECullMode::T cullMode)                                                  = 0;
+    virtual void setPolygonMode(EPolygonMode::T polygonMode)                                         = 0;
+    virtual void bindDescriptorSets(
+        IPipelineLayout                        *pipelineLayout,
+        uint32_t                                firstSet,
+        const std::vector<DescriptorSetHandle> &descriptorSets,
+        const std::vector<uint32_t>            &dynamicOffsets = {}) = 0;
+    virtual void pushConstants(
+        IPipelineLayout *pipelineLayout,
+        EShaderStage::T  stages,
+        uint32_t         offset,
+        uint32_t         size,
+        const void      *data)                                                   = 0;
+    virtual void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
+                            uint64_t srcOffset = 0, uint64_t dstOffset = 0) = 0;
+    virtual void beginRendering(const DynamicRenderingInfo &info)           = 0;
+    virtual void endRendering()                                             = 0;
+    virtual void transitionImageLayout(
+        void                        *image,
+        EImageLayout::T              oldLayout,
+        EImageLayout::T              newLayout,
+        const ImageSubresourceRange &subresourceRange) = 0;
+
+    // No-op in virtual mode - commands are executed immediately
+    virtual void executeAll() {}
+#endif
 };
 
 } // namespace ya
