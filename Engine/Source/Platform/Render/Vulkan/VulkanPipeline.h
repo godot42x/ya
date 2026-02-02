@@ -72,15 +72,14 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
-    VulkanRender                  *_render         = nullptr;
-    VulkanRenderPass              *_renderPass     = nullptr;
-    VulkanPipelineLayout          *_pipelineLayout = nullptr;
+
+    VulkanRender         *_render         = nullptr;
+    VulkanPipelineLayout *_pipelineLayout = nullptr;
 
   public:
-    VulkanPipeline(VulkanRender *render, VulkanRenderPass *renderPass, VulkanPipelineLayout *pipelineLayout)
+    VulkanPipeline(VulkanRender *render, VulkanPipelineLayout *pipelineLayout)
     {
         _render         = render;
-        _renderPass     = renderPass;
         _pipelineLayout = pipelineLayout;
         queryPhysicalDeviceLimits(); // maxTextureSlots
     }

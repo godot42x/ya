@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include "Render/Core/Image.h"
+#include "VulkanUtils.h"
 
 namespace ya
 {
@@ -15,9 +16,11 @@ struct VulkanImage;
 
 struct VulkanImageView : public IImageView
 {
-    VulkanRender      *_render = nullptr;
-    const VulkanImage *_image  = nullptr;
-    VkImageView        _handle = VK_NULL_HANDLE;
+    VulkanRender      *_render      = nullptr;
+    const VulkanImage *_image       = nullptr;
+    VkImageView        _handle      = VK_NULL_HANDLE;
+    VkFormat           _format      = VK_FORMAT_UNDEFINED;
+    VkImageAspectFlags _aspectFlags = 0;
 
     VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags);
     virtual ~VulkanImageView();
@@ -28,6 +31,11 @@ struct VulkanImageView : public IImageView
 
     // Vulkan-specific accessor
     VkImageView getVkImageView() const { return _handle; }
+
+    EFormat::T getFormat() const override
+    {
+        return EFormat::fromVk(_format);
+    }
 
     void setDebugName(const std::string &name);
 };

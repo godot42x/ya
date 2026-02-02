@@ -178,9 +178,10 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
     _pipelineLayout                                           = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
     _pipeline->recreate(GraphicsPipelineCreateInfo{
         .subPassRef = 0,
+        .renderPass = renderPass,
         .shaderDesc = ShaderDesc{
             .shaderName        = "Sprite2D.glsl",
             .bDeriveFromShader = false,

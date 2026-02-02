@@ -116,6 +116,7 @@ do
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
     add_files("./Source/*.cpp")
+    remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source//FWD.h")

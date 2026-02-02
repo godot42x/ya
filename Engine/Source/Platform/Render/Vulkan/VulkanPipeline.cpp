@@ -2,10 +2,11 @@
 
 #include "Core/App/App.h"
 #include "Core/Log.h"
-#include "VulkanPipeline.h"
 #include "Render/RenderDefines.h"
+#include "VulkanPipeline.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
+
 
 
 namespace ya
@@ -123,7 +124,13 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 {
     YA_PROFILE_FUNCTION_LOG();
     _ci = ci;
-    createPipelineInternal();
+    try {
+        createPipelineInternal();
+    }
+    catch (const std::exception &e) {
+        YA_CORE_ERROR("Failed to create pipeline: {}", e.what());
+        return false;
+    }
     return true;
 }
 
@@ -137,6 +144,9 @@ void VulkanPipeline::reloadShaders()
 
 void VulkanPipeline::createPipelineInternal()
 {
+
+    Deleter deleter;
+
     // Process shader
     _name = _ci.shaderDesc.shaderName;
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
@@ -161,6 +171,12 @@ void VulkanPipeline::createPipelineInternal()
     // Create shader modules
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
     auto fragShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Fragment));
+    deleter.push("", vertShaderModule, [this](void *handle) {
+        vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
+    });
+    deleter.push("", fragShaderModule, [this](void *handle) {
+        vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
+    });
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", _name.toString()).c_str());
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", _name.toString()).c_str());
@@ -385,9 +401,12 @@ void VulkanPipeline::createPipelineInternal()
         .pDynamicStates    = dynamicStates.data(),
     };
 
+
     // Create pipeline
-    VkGraphicsPipelineCreateInfo pipelineCreateInfo{
+    VkGraphicsPipelineCreateInfo gplCI{
         .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext               = nullptr,
+        .flags               = 0,
         .stageCount          = shaderStages.size(),
         .pStages             = shaderStages.data(),
         .pVertexInputState   = &vertexInputStateCI,
@@ -399,22 +418,71 @@ void VulkanPipeline::createPipelineInternal()
         .pColorBlendState    = &colorBlendingStateCI,
         .pDynamicState       = &dynamicStateCI,
         .layout              = _pipelineLayout->getVkHandle(),
-        .renderPass          = _renderPass->getVkHandle(),
-        .subpass             = _ci.subPassRef,
+        .renderPass          = VK_NULL_HANDLE,
+        .subpass             = 0,
         .basePipelineHandle  = VK_NULL_HANDLE,
     };
 
-    ::VkResult result = vkCreateGraphicsPipelines(_render->getDevice(),
-                                                  _render->getPipelineCache(),
-                                                  1,
-                                                  &pipelineCreateInfo,
-                                                  nullptr,
-                                                  &_pipeline);
-    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
+    switch (_ci.renderingMode) {
 
-    // Cleanup shader modules
-    vkDestroyShaderModule(_render->getDevice(), fragShaderModule, nullptr);
-    vkDestroyShaderModule(_render->getDevice(), vertShaderModule, nullptr);
+    case ERenderingMode::Subpass:
+    {
+        // 传统流程需设置 renderPass 和 subpass，动态渲染模式下这两个参数设为 VK_NULL_HANDLE 与 0
+        gplCI.renderPass = _ci.renderPass->getHandleAs<VkRenderPass>();
+        gplCI.subpass    = _ci.subPassRef;
+    } break;
+    case ERenderingMode::DynamicRendering:
+    {
+        // WHY DELETER? RAII will destruct outside this case, extend this life cycle until created pipeline done
+        auto colorAttachmentRef = deleter.push("", new std::vector<VkFormat>(), [](void *handle) {
+            if (handle) {
+                delete static_cast<std::vector<VkFormat> *>(handle);
+            }
+        });
+        std::ranges::transform(
+            _ci.pipelineRenderingInfo.colorAttachmentFormats,
+            std::back_inserter(*colorAttachmentRef),
+            [](EFormat::T format) {
+                return toVk(format);
+            });
+
+        // auto plRI = makeShared<VkPipelineRenderingCreateInfo>(VkPipelineRenderingCreateInfo{
+        auto plRI = new VkPipelineRenderingCreateInfo(VkPipelineRenderingCreateInfo{
+            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .pNext                   = nullptr,
+            .viewMask                = 0,
+            .colorAttachmentCount    = static_cast<uint32_t>(_ci.pipelineRenderingInfo.colorAttachmentFormats.size()),
+            .pColorAttachmentFormats = colorAttachmentRef->data(),
+            .depthAttachmentFormat   = toVk(_ci.pipelineRenderingInfo.depthAttachmentFormat),
+            .stencilAttachmentFormat = toVk(_ci.pipelineRenderingInfo.stencilAttachmentFormat),
+        });
+        // auto ref  = deleter.add(plRI, nullptr);
+        auto ref = deleter.push("", plRI, [](void *handle) {
+            delete static_cast<VkPipelineRenderingCreateInfo *>(handle);
+        });
+
+        // 关键：将动态渲染配置挂到 gplCI 的 pNext 上
+        gplCI.pNext = ref;
+        // gplCI.
+    } break;
+    case ERenderingMode::Auto:
+        UNREACHABLE();
+        break;
+    }
+
+
+    VkPipeline newPipeline = VK_NULL_HANDLE;
+
+    VkResult result = vkCreateGraphicsPipelines(_render->getDevice(),
+                                                _render->getPipelineCache(),
+                                                1,
+                                                &gplCI,
+                                                _render->getAllocator(),
+                                                &newPipeline);
+    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
+    YA_CORE_ASSERT(newPipeline != VK_NULL_HANDLE, "Failed to create graphics pipeline!");
+
+    _pipeline = newPipeline;
 
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
 

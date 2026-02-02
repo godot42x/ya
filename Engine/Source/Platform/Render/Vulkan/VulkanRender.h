@@ -55,14 +55,14 @@ struct VulkanRender : public IRender
         {.name = "VK_LAYER_KHRONOS_validation", .bRequired = true}, // "VK_LAYER_KHRONOS_validation"
     };
     const std::vector<ya::DeviceFeature> _instanceExtensions = {
-        {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true},                   // "VK_KHR_surface"
+        {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_surface"
     };
 
     const std::vector<ya::DeviceFeature> _deviceLayers = {
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
-        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},           // "VK_KHR_swapchain"
+        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
@@ -238,7 +238,7 @@ struct VulkanRender : public IRender
         if (m_EnableValidationLayers && bSupportDebugUtils)
         {
             _debugUtils = std::make_unique<VulkanDebugUtils>(this);
-            _debugUtils->init();
+            _debugUtils->initInstanceLevel();
             // preferred default validation layers callback
             // _debugUtils->create();
         }
@@ -249,6 +249,10 @@ struct VulkanRender : public IRender
 
         // Initialize VK_EXT_extended_dynamic_state3 function pointer
         initExtensionFunctions();
+        if(m_EnableValidationLayers && bSupportDebugUtils)
+        {
+            _debugUtils->initDeviceLevel();
+        }
 
         _swapChain = new VulkanSwapChain(this);
         _swapChain->as<VulkanSwapChain>()->recreate(ci.swapchainCI);
@@ -319,7 +323,7 @@ struct VulkanRender : public IRender
     template <typename T>
     [[nodiscard]] T *getSwapchain() const { return static_cast<T *>(_swapChain); }
 
-    [[nodiscard]] ::VkPipelineCache getPipelineCache() const { return _pipelineCache; }
+    [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
     [[nodiscard]] bool                      isGraphicsPresentSameQueueFamily() const { return _graphicsQueueFamily.queueFamilyIndex == _presentQueueFamily.queueFamilyIndex; }
     [[nodiscard]] const QueueFamilyIndices &getGraphicsQueueFamilyInfo() const { return _graphicsQueueFamily; }

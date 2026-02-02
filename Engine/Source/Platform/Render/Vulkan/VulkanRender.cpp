@@ -332,6 +332,8 @@ void VulkanRender::createSurface()
 
 bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
 {
+    Deleter deleter;
+
     if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount)
     {
         YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
@@ -418,6 +420,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return false;
     }
 
+    // MARK: device ci linklist
     VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
     physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE; // Enable anisotropic filtering
     physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE; // Enable LINE and POINT polygon modes
@@ -425,10 +428,34 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
     // physicalDeviceFeatures.shaderClipDistance = VK_TRUE; // Enable clip distance support
     // physicalDeviceFeatures.shaderCullDistance = VK_TRUE; // Enable cull distance support
 
+    {
+        VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+        dynamicRenderingFeatures.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+        dynamicRenderingFeatures.dynamicRendering = VK_TRUE; // 启用动态渲染
+
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &dynamicRenderingFeatures;
+
+        vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
+        if (!dynamicRenderingFeatures.dynamicRendering)
+        {
+            YA_CORE_ERROR("Dynamic rendering is not supported!");
+            return false;
+        }
+    }
+
+    // instructive link-list
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
+        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .pNext            = nullptr,
+        .dynamicRendering = VK_TRUE,
+    };
+
     // Enable VK_EXT_extended_dynamic_state3 features
     VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-        .pNext = nullptr,
+        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+        .pNext                            = &dynamicRenderingFeatures,
         .extendedDynamicState3PolygonMode = VK_TRUE,
     };
 
@@ -518,18 +545,22 @@ IDescriptorSetHelper *VulkanRender::getDescriptorHelper()
 
 void VulkanRender::initExtensionFunctions()
 {
-    // Load VK_EXT_extended_dynamic_state3 extension function pointer
-    VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = 
-        (PFN_vkCmdSetPolygonModeEXT)vkGetDeviceProcAddr(
-            m_LogicalDevice, 
-            "vkCmdSetPolygonModeEXT"
-        );
-    
-    if (VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT != nullptr) {
-        YA_CORE_INFO("VK_EXT_extended_dynamic_state3 loaded successfully");
-    } else {
-        YA_CORE_WARN("vkCmdSetPolygonModeEXT not available - polygon mode control will be unavailable");
+#define ASSIGN_VK_FUNCTION(v, func)                              \
+    v = (PFN_##func)vkGetDeviceProcAddr(m_LogicalDevice, #func); \
+    if (nullptr == (v)) {                                        \
+        YA_CORE_WARN(#func "not available");                     \
+    }                                                            \
+    else {                                                       \
+        YA_CORE_INFO(#func "loaded successfully");               \
     }
+
+    // Load VK_EXT_extended_dynamic_state3 extension function pointer
+    ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT, vkCmdSetPolygonModeEXT);
+    // ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdBeginRenderingKHR,  );
+
+    // TODO: low vulkan sdk?
+    VulkanCommandBuffer::s_vkCmdBeginRenderingKHR = vkCmdBeginRendering;
+    VulkanCommandBuffer::s_vkCmdEndRenderingKHR   = vkCmdEndRendering;
 }
 
 void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)

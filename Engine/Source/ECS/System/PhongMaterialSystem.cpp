@@ -67,12 +67,12 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
                     },
-                    // Debug UBO
+                    // Reserved binding = 2
                     DescriptorSetLayoutBinding{
                         .binding         = 2,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                     },
                 },
             },
@@ -124,6 +124,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
+        .renderPass = renderPass,
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/PhongLit.glsl",
             .bDeriveFromShader = false,
@@ -218,7 +219,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
             }},
         },
     };
-    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
     _pipeline->recreate(_pipelineDesc);
 
 

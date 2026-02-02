@@ -157,6 +157,7 @@ struct IRenderTarget
 struct RenderTargetCreateInfo
 {
     std::string  label;
+    // ERenderingMode::DynamicRendering
     bool         bSwapChainTarget;
     IRenderPass *renderPass       = nullptr;
     uint32_t     frameBufferCount = 1;

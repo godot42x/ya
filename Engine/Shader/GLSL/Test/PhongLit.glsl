@@ -14,7 +14,7 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
-layout(set = 0, binding =3, std140) uniform DebugUBO {
+layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
     vec4 floatParam;
 } uDebug;

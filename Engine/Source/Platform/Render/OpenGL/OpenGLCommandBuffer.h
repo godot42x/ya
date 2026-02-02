@@ -14,7 +14,7 @@ struct OpenGLPipeline;
 
 /**
  * @brief OpenGL implementation of ICommandBuffer
- * 
+ *
  * In OpenGL, commands are typically executed immediately.
  * This class provides a deferred command recording system
  * to match the Vulkan-like interface.
@@ -118,7 +118,6 @@ class OpenGLCommandBuffer : public ICommandBuffer
         EImageLayout::T              oldLayout,
         EImageLayout::T              newLayout,
         const ImageSubresourceRange &subresourceRange) override;
-    void executeAll() override {}
 #endif
 };
 

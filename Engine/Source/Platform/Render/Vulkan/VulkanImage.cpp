@@ -48,8 +48,9 @@ void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, Vulk
                            &copyRegion);
 }
 
-bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
-                                   VkImageLayout oldLayout, VkImageLayout newLayout)
+bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const image,
+                                   VkImageLayout oldLayout, VkImageLayout newLayout,
+                                   const VkImageSubresourceRange *subresourceRange)
 {
     if (image == VK_NULL_HANDLE) {
         YA_CORE_ERROR("VulkanImage::transitionImageLayout image is null");
@@ -77,8 +78,10 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *im
                .baseArrayLayer = 0,
                .layerCount     = 1,
         },
-
     };
+    if (subresourceRange) {
+        imb.subresourceRange = *subresourceRange;
+    }
 
     VkPipelineStageFlags srcStage  = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     VkPipelineStageFlags destStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
@@ -192,6 +195,9 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *im
                          1,
                          &imb);
 
+    // BUG: this real format changed later  after cmd execution, now it's invalid
+    image->_layout = newLayout;
+
     return true;
 }
 
@@ -223,9 +229,9 @@ bool VulkanImage::allocate()
     // Check format support: prefer OPTIMAL tiling (better performance and wider support)
     bool bSupportsOptimal = isFormatSupported(_render, _format, VK_IMAGE_TILING_OPTIMAL, _usageFlags);
     bool bSupportsLinear  = false;
-    
+
     VkImageTiling selectedTiling = VK_IMAGE_TILING_OPTIMAL;
-    
+
     if (!bSupportsOptimal)
     {
         // Fallback to LINEAR if OPTIMAL is not supported
@@ -280,7 +286,8 @@ bool VulkanImage::allocate()
     VK_CALL(vkAllocateMemory(_render->getDevice(), &allocInfo, nullptr, &_imageMemory));
     VK_CALL(vkBindImageMemory(_render->getDevice(), _handle, _imageMemory, 0));
 
-    bOwned = true;
+    _layout = imageCreateInfo.initialLayout;
+    bOwned  = true;
     return true;
 }
 

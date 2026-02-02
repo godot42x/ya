@@ -25,13 +25,16 @@ class VulkanCommandBuffer : public ICommandBuffer
     VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
     bool            _isRecording   = false;
 
+    // Static function pointers for VK_KHR_dynamic_rendering
+    static PFN_vkCmdBeginRenderingKHR s_vkCmdBeginRenderingKHR;
+    static PFN_vkCmdEndRenderingKHR   s_vkCmdEndRenderingKHR;
+
     // Static function pointer for VK_EXT_extended_dynamic_state3
     static PFN_vkCmdSetPolygonModeEXT s_vkCmdSetPolygonModeEXT;
 
-    friend struct VulkanRender; // Allow VulkanRender to initialize the function pointer
+    friend struct VulkanRender; // Allow VulkanRender to initialize the function pointers
 
-#if YA_CMDBUF_RECORD_MODE
-    // Internal execute methods for recording mode
+
     void executeBindPipeline(IGraphicsPipeline *pipeline);
     void executeBindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset);
     void executeBindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices);
@@ -45,20 +48,18 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
     void executeSetCullMode(ECullMode::T cullMode);
     void executeSetPolygonMode(EPolygonMode::T polygonMode);
-    void executeBindDescriptorSets(
-        IPipelineLayout                        *pipelineLayout,
-        uint32_t                                firstSet,
-        const std::vector<DescriptorSetHandle> &descriptorSets,
-        const std::vector<uint32_t>            &dynamicOffsets);
-    void executePushConstants(
-        IPipelineLayout *pipelineLayout,
-        EShaderStage::T  stages,
-        uint32_t         offset,
-        uint32_t         size,
-        const void      *data);
-    void executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
-                           uint64_t srcOffset, uint64_t dstOffset);
-#endif
+    void executeBeginRendering(const DynamicRenderingInfo &info);
+    void executeEndRendering();
+    void executeBindDescriptorSets(IPipelineLayout                        *pipelineLayout,
+                                   uint32_t                                firstSet,
+                                   const std::vector<DescriptorSetHandle> &descriptorSets,
+                                   const std::vector<uint32_t>            &dynamicOffsets);
+    void executePushConstants(IPipelineLayout *pipelineLayout,
+                              EShaderStage::T  stages,
+                              uint32_t         offset,
+                              uint32_t         size,
+                              const void      *data);
+    void executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset);
 
   public:
     VulkanCommandBuffer(VulkanRender *render, VkCommandBuffer commandBuffer)
@@ -87,7 +88,8 @@ class VulkanCommandBuffer : public ICommandBuffer
 
 #if YA_CMDBUF_RECORD_MODE
     void executeAll() override;
-#else
+#endif
+
     // Virtual mode: direct implementations
     void bindPipeline(IGraphicsPipeline *pipeline) override;
     void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0) override;
@@ -102,28 +104,23 @@ class VulkanCommandBuffer : public ICommandBuffer
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
     void setCullMode(ECullMode::T cullMode) override;
     void setPolygonMode(EPolygonMode::T polygonMode) override;
-    void bindDescriptorSets(
-        IPipelineLayout                        *pipelineLayout,
-        uint32_t                                firstSet,
-        const std::vector<DescriptorSetHandle> &descriptorSets,
-        const std::vector<uint32_t>            &dynamicOffsets = {}) override;
-    void pushConstants(
-        IPipelineLayout *pipelineLayout,
-        EShaderStage::T  stages,
-        uint32_t         offset,
-        uint32_t         size,
-        const void      *data) override;
+    void bindDescriptorSets(IPipelineLayout                        *pipelineLayout,
+                            uint32_t                                firstSet,
+                            const std::vector<DescriptorSetHandle> &descriptorSets,
+                            const std::vector<uint32_t>            &dynamicOffsets = {}) override;
+    void pushConstants(IPipelineLayout *pipelineLayout,
+                       EShaderStage::T  stages,
+                       uint32_t         offset,
+                       uint32_t         size,
+                       const void      *data) override;
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
     void beginRendering(const DynamicRenderingInfo &info) override;
     void endRendering() override;
-    void transitionImageLayout(
-        void                        *image,
-        EImageLayout::T              oldLayout,
-        EImageLayout::T              newLayout,
-        const ImageSubresourceRange &subresourceRange) override;
-    void executeAll() override {}
-#endif
+    void transitionImageLayout(IImage                *image,
+                               EImageLayout::T        oldLayout,
+                               EImageLayout::T        newLayout,
+                               const ImageSubresourceRange *subresourceRange) override;
 };
 
 

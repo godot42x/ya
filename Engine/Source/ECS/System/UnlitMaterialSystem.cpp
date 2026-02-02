@@ -107,6 +107,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef = 0,
+        .renderPass = renderPass,
         // .pipelineLayout   = pipelineLayout,
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/Unlit.glsl",
@@ -142,13 +143,11 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = {
-            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+        .dynamicFeatures = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
 #if !NOT_DYN_CULL
-            EPipelineDynamicFeature::CullMode,
+                            EPipelineDynamicFeature::CullMode,
 #endif
-            EPipelineDynamicFeature::Viewport
-        },
+                            EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -204,7 +203,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
     // _pipeline      = _pipelineOwner;
     _pipeline->recreate(_pipelineDesc);
 
@@ -288,14 +287,14 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         UnlitMaterial *material = umc.getMaterial();
         if (!material || material->getIndex() < 0) {
             Entity *entityPtr = scene->getEntityByEnttID(entity);
-            YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material", 
+            YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material",
                          entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
 
-        Entity *entityPtr = scene->getEntityByEnttID(entity);
-        _ctxEntityDebugStr = std::format("{} (Mat: {})", 
-                                         entityPtr ? entityPtr->getName() : "Unknown", 
+        Entity *entityPtr  = scene->getEntityByEnttID(entity);
+        _ctxEntityDebugStr = std::format("{} (Mat: {})",
+                                         entityPtr ? entityPtr->getName() : "Unknown",
                                          material->getLabel());
 
         // update each material instance's descriptor set if dirty

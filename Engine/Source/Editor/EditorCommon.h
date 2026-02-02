@@ -9,7 +9,7 @@ namespace ya
 
 struct ImGuiImageEntry
 {
-    stdptr<IImageView>  imageView;
+    ya::Ptr<IImageView> imageView;
     ya::Ptr<Sampler>    sampler;
     DescriptorSetHandle ds;
 
@@ -45,8 +45,8 @@ class ContextMenu
   public:
     enum class Type
     {
-        BlankSpace,  // Right-click on empty area
-        EntityItem,  // Right-click on entity/item
+        BlankSpace, // Right-click on empty area
+        EntityItem, // Right-click on entity/item
     };
 
     ContextMenu(std::string_view id, Type type, ImGuiPopupFlags flags = 0)
@@ -99,8 +99,8 @@ class ContextMenu
     Type getType() const { return _type; }
 
   private:
-    std::string _id;
-    Type        _type;
+    std::string     _id;
+    Type            _type;
     ImGuiPopupFlags _flags;
 };
 

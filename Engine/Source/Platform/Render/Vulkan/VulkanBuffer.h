@@ -47,7 +47,7 @@ struct VulkanBuffer : public ya::IBuffer
             createDefaultInternal(static_cast<uint32_t>(ci.size), vkMemProps);
         }
 
-        YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
+        // YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
         setupDebugName(name);
     }
     virtual ~VulkanBuffer();

@@ -188,7 +188,7 @@ inline type_index_t getRuntimeObjectType(const void *obj)
             /* Register base class relationship if applicable */                                                                                  \
             if constexpr (has_base_class) {                                                                                                       \
                 reg->template parentClass<base_t>();                                                                                              \
-            }                                                                                                                                                  \
+            }                                                                                                                                     \
             visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                                                              \
                 reg->property(name, fieldPtr, meta);                                                                                              \
                                                                                                                                                   \
@@ -356,7 +356,7 @@ inline type_index_t getRuntimeObjectType(const void *obj)
 
 
 #define YA_REFLECT_BEGIN_EXTERNAL(ClassName)                  \
-    namespace ya::reflection::detail                          \
+    namespace ya::reflection::detail                        \
     {                                                         \
     template <>                                               \
     struct ExternalReflect<ClassName>                         \

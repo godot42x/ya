@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Reflection/Reflection.h"
+#include "glm/glm.hpp"
 
 namespace ya
 {
@@ -10,6 +11,8 @@ struct Extent2D
 {
     uint32_t width{0};
     uint32_t height{0};
+
+    glm::vec2 toVec2() const { return glm::vec2(width, height); }
 };
 
 
@@ -67,7 +70,7 @@ struct Ptr
     void     reset()
     {
         if constexpr (requires { type::reset(); }) {
-            v.reset();
+            v->reset();
         }
         else {
             v = nullptr;

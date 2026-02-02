@@ -8,7 +8,7 @@ struct Handle
     void *ptr = nullptr;
 
     Handle() = default;
-    explicit Handle(void *p) : ptr(p) {}
+    Handle(void *p) : ptr(p) {}
 
     // Allow assignment from void*
     Handle &operator=(void *p)

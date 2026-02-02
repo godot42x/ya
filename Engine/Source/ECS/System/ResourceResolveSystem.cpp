@@ -124,9 +124,9 @@ void ResourceResolveSystem::resolveModelComponent(Scene *scene, Entity *entity, 
                 const auto &embeddedMat = embeddedMaterials[matIndex];
                 initSharedMaterial(litMat, &embeddedMat, model->getDirectory());
                 modelComp._cachedMaterials[static_cast<int32_t>(matIndex)] = litMat;
-                YA_CORE_TRACE("ResourceResolveSystem: Created shared material '{}' for model '{}'",
-                              matLabel,
-                              model->getName());
+                // YA_CORE_TRACE("ResourceResolveSystem: Created shared material '{}' for model '{}'",
+                //               matLabel,
+                //               model->getName());
             }
         }
     }
@@ -211,7 +211,7 @@ Node *ResourceResolveSystem::createMeshNode(
                 // Use shared material
                 matComp->setSharedMaterial(it->second);
                 matComp->_bResolved = true; // Already resolved
-                YA_CORE_TRACE("ResourceResolveSystem: Mesh {} using shared material index {}", meshIndex, matIndex);
+                // YA_CORE_TRACE("ResourceResolveSystem: Mesh {} using shared material index {}", meshIndex, matIndex);
             }
             else {
                 // No cached material, initialize from embedded (will create own material on resolve)

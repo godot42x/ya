@@ -195,8 +195,10 @@ void VulkanRenderTarget::end(ICommandBuffer *cmdBuf)
 {
     // Execute all recorded commands BEFORE ending render pass
     // This ensures draw calls happen inside the active render pass
+#if YA_CMDBUF_RECORD_MODE
     cmdBuf->executeAll();
-    
+#endif
+
     _renderPass->end(cmdBuf);
     bBeginTarget = false;
 }

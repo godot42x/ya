@@ -55,6 +55,8 @@ struct IImageView : public plat_base<IImageView>
      */
     virtual const IImage *getImage() const = 0;
 
+    virtual EFormat::T getFormat() const { return EFormat::Undefined; }
+
     virtual void setDebugName(const std::string &name) = 0;
 };
 

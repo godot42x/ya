@@ -9,11 +9,11 @@
 #include "Editor/EditorLayer.h"
 
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/Image.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Scene/SceneManager.h"
 #include <glm/glm.hpp>
-
 
 
 
@@ -111,6 +111,8 @@ struct App
 {
     static App *_instance;
 
+    Deleter _deleter;
+
     // Core subsystems
     IRender      *_render       = nullptr;
     SceneManager *_sceneManager = nullptr;
@@ -118,7 +120,8 @@ struct App
     std::shared_ptr<IRenderPass>                 _renderpass;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
 
-    std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
+    std::shared_ptr<ShaderStorage>                                    _shaderStorage = nullptr;
+    std::vector<std::pair<std::string /*name*/, IGraphicsPipeline *>> _monitorPipelines;
 
     // Runtime state
     bool          bRunning         = true;
@@ -158,6 +161,18 @@ struct App
     std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
     std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui + viewport
+
+    // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
+    std::shared_ptr<IImage>     _postprocessImage     = nullptr;
+    std::shared_ptr<IImageView> _postprocessImageView = nullptr;
+
+    struct PostProcessor
+    {
+        bool bInversion = false;
+    } _postProcessor;
+
+
+    IImageView *_viewportImageView = nullptr;
 
     EditorLayer *_editorLayer;
 

@@ -47,10 +47,10 @@ struct EditorLayer
     glm::vec2 _viewportSize = {1280.f, 720.f};
     glm::vec2 _viewportBounds[2]; // Min and max bounds
     Rect2D    viewportRect;
-    bool      bViewportFocused       = false;
-    bool      bViewportHovered       = false;
-    bool      _bRightMouseDragging   = false; // Track right mouse drag for camera rotation
-    glm::vec2 _rightMousePressPos    = {};    // Position when right mouse was pressed
+    bool      bViewportFocused     = false;
+    bool      bViewportHovered     = false;
+    bool      _bRightMouseDragging = false; // Track right mouse drag for camera rotation
+    glm::vec2 _rightMousePressPos  = {};    // Position when right mouse was pressed
 
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
@@ -74,6 +74,8 @@ struct EditorLayer
     void *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
 
     uint32_t _resizeTimerHandle = 0;
+    Rect2D   _pendingViewportRect;    // Pending resize event to be processed in next frame
+    bool     _bViewportResizePending = false;
 
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
@@ -112,6 +114,17 @@ struct EditorLayer
      * @return true if viewport is focused and should receive events
      */
     bool shouldCaptureInput() const { return bViewportFocused; }
+
+    // Get and clear pending viewport resize - called from App before render
+    bool getPendingViewportResize(Rect2D &outRect)
+    {
+        if (_bViewportResizePending) {
+            outRect = _pendingViewportRect;
+            _bViewportResizePending = false;
+            return true;
+        }
+        return false;
+    }
 
     bool screenToViewport(float screenX, float screenY, float &outX, float &outY) const;
     bool screenToViewport(const glm::vec2 in, glm::vec2 &out) const;
@@ -170,7 +183,7 @@ struct EditorLayer
      * @param sampler Platform sampler handle (e.g., VkSampler)
      * @return ImTextureID (VkDescriptorSet as void*)
      */
-    const ImGuiImageEntry *getOrCreateImGuiTextureID(stdptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
+    const ImGuiImageEntry *getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
 
 
   private:

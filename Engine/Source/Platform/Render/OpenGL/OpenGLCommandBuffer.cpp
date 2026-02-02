@@ -468,6 +468,7 @@ void OpenGLCommandBuffer::transitionImageLayout(
     EImageLayout::T              newLayout,
     const ImageSubresourceRange &subresourceRange)
 {
+
     (void)image;
     (void)oldLayout;
     (void)newLayout;

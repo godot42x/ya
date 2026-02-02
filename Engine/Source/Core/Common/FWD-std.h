@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -19,3 +20,4 @@
 #include <string_view>
 #include <type_traits>
 #include <vector>
+

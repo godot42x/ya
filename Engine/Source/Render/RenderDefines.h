@@ -562,7 +562,11 @@ struct Scissor
 
 struct Rect2D
 {
-    glm::vec2 pos;
+    union
+    {
+        glm::vec2 pos;
+        glm::vec2 offset;
+    };
     glm::vec2 extent;
 };
 
@@ -650,29 +654,100 @@ struct DescriptorPoolSize
 
 struct DescriptorPoolCreateInfo
 {
+    std::string                     label   = "None";
     uint32_t                        maxSets = 0;
     std::vector<DescriptorPoolSize> poolSizes;
 };
 
 
+struct IImageView;
+struct IRenderPass;
+
+#pragma region Dynamic Rendering Structures
+
+/**
+ * @brief Attachment info for dynamic rendering
+ * Used to specify color/depth/stencil attachments dynamically
+ */
+struct RenderingAttachmentInfo
+{
+    // TODO: use iamge view ptr, or image view handle, or image view shared_ptr in defines?
+    // ImageViewHandle imageView;;
+    IImageView *imageView = nullptr; // Backend-specific image view (VkImageView, OpenGL texture, etc.)
+
+    EImageLayout::T imageLayout = EImageLayout::ColorAttachmentOptimal; // Image layout during rendering
+
+    EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Load;   // Load operation
+    EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
+
+    ClearValue clearValue;
+
+    // MSAA resolve (optional)
+    void           *resolveImageView = nullptr;                              // Resolve target (for MSAA)
+    EImageLayout::T resolveLayout    = EImageLayout::ColorAttachmentOptimal; // Resolve target layout
+    EResolveMode::T resolveMode      = EResolveMode::None;                   // Resolve mode
+};
+
+/**
+ * @brief Dynamic rendering configuration
+ * Replaces VkRenderPassBeginInfo + VkFramebuffer in dynamic rendering
+ */
+// TODO: use a better name to avoid the dynamic rendering concept in vk, or if vulkan not support this by low level api or vulkan version
+//      implement this by renderpass and framebuffer
+struct DynamicRenderingInfo
+{
+    std::string label = "None";
+    Rect2D      renderArea;     // Render area (offset + extent)
+    uint32_t    layerCount = 1; // Number of layers to render (for layered rendering)
+
+    // Color attachments (can have multiple for MRT)
+    std::vector<RenderingAttachmentInfo> colorAttachments;
+
+    // Depth attachment (optional)
+    RenderingAttachmentInfo *pDepthAttachment = nullptr;
+
+    // Stencil attachment (optional, can be same as depth)
+    RenderingAttachmentInfo *pStencilAttachment = nullptr;
+
+    // resolve attachment
+    // std:
+};
+struct PipelineRenderingInfo
+{
+    std::string label    = "None";
+    uint32_t    viewMask = 0; // View mask for multiview rendering
+
+    // Color attachments (can have multiple for MRT)
+    std::vector<EFormat::T> colorAttachmentFormats;
+
+    // Depth attachment (optional)
+    EFormat::T depthAttachmentFormat = EFormat::Undefined;
+
+    // Stencil attachment (optional, can be same as depth)
+    EFormat::T stencilAttachmentFormat = EFormat::Undefined;
+};
+#pragma endregion
+
 struct GraphicsPipelineCreateInfo
 {
-
-
     // different shader/pipeline can use same pipeline layout
     // PipelineDesc *pipelineLayout = nullptr;
 
+
+
     // Rendering mode
+    // TODO: remove this, use cmdBuf.beginRendering to process renderpass verb and dynamical rendering verb
     ERenderingMode::T renderingMode = ERenderingMode::Subpass;
 
     // Subpass mode fields
-    uint32_t subPassRef = 0;
+    uint32_t     subPassRef;
+    IRenderPass *renderPass;
 
     // Dynamic Rendering mode fields (ignored if renderingMode == Subpass)
-    std::vector<EFormat::T> colorAttachmentFormats  = {};                 // Color attachment formats for dynamic rendering
-    EFormat::T              depthAttachmentFormat   = EFormat::Undefined; // Depth format
-    EFormat::T              stencilAttachmentFormat = EFormat::Undefined; // Stencil format
+    PipelineRenderingInfo pipelineRenderingInfo;
 
+
+    // common payloads
     ShaderDesc                              shaderDesc;
     std::vector<EPipelineDynamicFeature::T> dynamicFeatures = {};
     EPrimitiveType::T                       primitiveType   = EPrimitiveType::TriangleList;
@@ -681,71 +756,6 @@ struct GraphicsPipelineCreateInfo
     DepthStencilState                       depthStencilState;
     ColorBlendState                         colorBlendState;
     ViewportState                           viewportState;
-
-    GraphicsPipelineCreateInfo defaultWithDepthTest(ShaderDesc shaderDesc, Extent2D extent)
-    {
-        return GraphicsPipelineCreateInfo{
-            .subPassRef = 0,
-            .shaderDesc = shaderDesc,
-            // define what state need to dynamically modified in render pass execution
-            .dynamicFeatures = {
-                EPipelineDynamicFeature::Viewport,
-                EPipelineDynamicFeature::Scissor,
-#if DYN_CULL
-                EPipelineDynamicFeature::CullMode,
-#endif
-            },
-            .primitiveType      = EPrimitiveType::TriangleList,
-            .rasterizationState = RasterizationState{
-                .polygonMode = EPolygonMode::Fill,
-                .cullMode    = ECullMode::Back,
-                .frontFace   = EFrontFaceType::CounterClockWise,
-            },
-            .multisampleState  = MultisampleState{},
-            .depthStencilState = DepthStencilState{
-                .bDepthTestEnable       = false,
-                .bDepthWriteEnable      = false,
-                .depthCompareOp         = ECompareOp::Less,
-                .bDepthBoundsTestEnable = false,
-                .bStencilTestEnable     = false,
-                .minDepthBounds         = 0.0f,
-                .maxDepthBounds         = 1.0f,
-            },
-            .colorBlendState = ColorBlendState{
-                .bLogicOpEnable = false,
-                .attachments    = {
-                    ColorBlendAttachmentState{
-                           .index               = 0,
-                           .bBlendEnable        = false,
-                           .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                           .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                           .colorBlendOp        = EBlendOp::Add,
-                           .srcAlphaBlendFactor = EBlendFactor::One,
-                           .dstAlphaBlendFactor = EBlendFactor::Zero,
-                           .alphaBlendOp        = EBlendOp::Add,
-                           .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
-                    },
-
-                },
-            },
-            .viewportState = ViewportState{
-                .viewports = {Viewport{
-                    .x        = 0.0f,
-                    .y        = 0.0f,
-                    .width    = static_cast<float>(extent.width),
-                    .height   = static_cast<float>(extent.height),
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                }},
-                .scissors  = {Scissor{
-                     .offsetX = 0,
-                     .offsetY = 0,
-                     .width   = extent.width,
-                     .height  = extent.height,
-                }},
-            },
-        };
-    };
 };
 
 struct RenderPassCreateInfo
@@ -785,49 +795,7 @@ struct RenderPassCreateInfo
     [[nodiscard]] bool     isValidSubpassIndex(uint32_t index) const { return index < subpasses.size(); }
 };
 
-// ============================================================================
-// Dynamic Rendering Structures
-// ============================================================================
 
-/**
- * @brief Attachment info for dynamic rendering
- * Used to specify color/depth/stencil attachments dynamically
- */
-struct RenderingAttachmentInfo
-{
-    void *imageView = nullptr; // Backend-specific image view (VkImageView, OpenGL texture, etc.)
-
-    EImageLayout::T imageLayout = EImageLayout::ColorAttachmentOptimal; // Image layout during rendering
-
-    EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Load;   // Load operation
-    EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
-
-    ClearValue clearValue; // Clear value (used if loadOp is Clear)
-
-    // MSAA resolve (optional)
-    void           *resolveImageView = nullptr;                              // Resolve target (for MSAA)
-    EImageLayout::T resolveLayout    = EImageLayout::ColorAttachmentOptimal; // Resolve target layout
-    EResolveMode::T resolveMode      = EResolveMode::None;                   // Resolve mode
-};
-
-/**
- * @brief Dynamic rendering configuration
- * Replaces VkRenderPassBeginInfo + VkFramebuffer in dynamic rendering
- */
-struct DynamicRenderingInfo
-{
-    Extent2D renderArea;     // Render area (offset + extent)
-    uint32_t layerCount = 1; // Number of layers to render (for layered rendering)
-
-    // Color attachments (can have multiple for MRT)
-    std::vector<RenderingAttachmentInfo> colorAttachments;
-
-    // Depth attachment (optional)
-    RenderingAttachmentInfo *pDepthAttachment = nullptr;
-
-    // Stencil attachment (optional, can be same as depth)
-    RenderingAttachmentInfo *pStencilAttachment = nullptr;
-};
 
 /**
  * @brief Image subresource range for layout transitions

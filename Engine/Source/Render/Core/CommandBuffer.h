@@ -28,6 +28,7 @@ namespace ya
 struct IGraphicsPipeline;
 struct IRenderPass;
 struct IBuffer;
+struct IImage;
 
 
 #if YA_CMDBUF_RECORD_MODE
@@ -352,13 +353,15 @@ struct ICommandBuffer
     virtual void beginRendering(const DynamicRenderingInfo &info)           = 0;
     virtual void endRendering()                                             = 0;
     virtual void transitionImageLayout(
-        void                        *image,
+        IImage                      *image,
         EImageLayout::T              oldLayout,
         EImageLayout::T              newLayout,
-        const ImageSubresourceRange &subresourceRange) = 0;
+        const ImageSubresourceRange *subresourceRange = nullptr) = 0;
 
+    #if YA_CMDBUF_RECORD_MODE
     // No-op in virtual mode - commands are executed immediately
-    virtual void executeAll() {}
+    virtual void executeAll() { recordedCommands.clear(); }
+    #endif
 #endif
 };
 

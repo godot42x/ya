@@ -6,13 +6,15 @@ namespace ya
 
 VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags)
 {
-    _render = render;
-    _image  = image;
+    _render      = render;
+    _image       = image;
+    _format      = image->getVkFormat();
+    _aspectFlags = aspectFlags;
     VkImageViewCreateInfo ci{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image      = image->getVkImage(),
         .viewType   = VK_IMAGE_VIEW_TYPE_2D,
-        .format     = image->getVkFormat(),
+        .format     = _format,
         .components = {
             .r = VK_COMPONENT_SWIZZLE_IDENTITY,
             .g = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -20,7 +22,7 @@ VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image,
             .a = VK_COMPONENT_SWIZZLE_IDENTITY,
         },
         .subresourceRange = {
-            .aspectMask     = aspectFlags,
+            .aspectMask     = _aspectFlags,
             .baseMipLevel   = 0,
             .levelCount     = 1,
             .baseArrayLayer = 0,

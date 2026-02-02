@@ -56,6 +56,7 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
 
     GraphicsPipelineCreateInfo pipelineCI{
         .subPassRef = 0,
+        .renderPass = renderPass,
         // .pipelineLayout   = pipelineLayout,
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/SimpleMaterial.glsl",
@@ -92,10 +93,8 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
         },
 
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures    = {
-            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
-            EPipelineDynamicFeature::Viewport
-        },
+        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+                               EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -150,7 +149,7 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, renderPass, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
     _pipeline->recreate(pipelineCI);
 }
 

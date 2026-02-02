@@ -24,6 +24,7 @@ struct VulkanImage : public IImage
     VkFormat          _format      = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags _usageFlags  = 0;
     bool              bOwned       = false;
+    VkImageLayout     _layout      = VK_IMAGE_LAYOUT_UNDEFINED;
 
     ya::ImageCreateInfo _ci;
 
@@ -75,8 +76,9 @@ struct VulkanImage : public IImage
 
   public:
     static void transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage);
-    static bool transitionLayout(VkCommandBuffer cmdBuf, const VulkanImage *image,
-                                 VkImageLayout oldLayout, VkImageLayout newLayout);
+    static bool transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const image,
+                                 VkImageLayout oldLayout, VkImageLayout newLayout,
+                                 const VkImageSubresourceRange *subresourceRange = nullptr);
 
 
   protected:

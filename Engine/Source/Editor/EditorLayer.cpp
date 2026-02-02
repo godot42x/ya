@@ -81,19 +81,19 @@ void EditorLayer::onAttach()
     _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
 
     // Subscribe to viewport framebuffer recreation to cleanup stale ImGui textures
-    if (_app->_viewportRT) {
-        _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
-            YA_CORE_INFO("EditorLayer: Viewport framebuffer recreated, cleaning up cached viewport image");
-            // Clear the cached viewport image since the old ImageView/DescriptorSet is now invalid
-            if (_viewportImage && _viewportImage->ds) {
-                removeImGuiTexture(_viewportImage);
-                _viewportImage              = nullptr;
-                _currentViewportImageHandle = nullptr;
-            }
-        });
+    // if (_app->_viewportRT) {
+        // _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
+        //     YA_CORE_INFO("EditorLayer: Viewport framebuffer recreated, cleaning up cached viewport image");
+        //     // Clear the cached viewport image since the old ImageView/DescriptorSet is now invalid
+        //     if (_viewportImage && _viewportImage->ds) {
+        //         removeImGuiTexture(_viewportImage);
+        //         _viewportImage              = nullptr;
+        //         _currentViewportImageHandle = nullptr;
+        //     }
+        // });
 
-        YA_CORE_INFO("EditorLayer attached successfully");
-    }
+    //     YA_CORE_INFO("EditorLayer attached successfully");
+    // }
 }
 
 void EditorLayer::onDetach()
@@ -534,62 +534,47 @@ void EditorLayer::viewportWindow()
         // Always update size immediately for correct display
         _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
 
-        // Rect2D rect = {
-        //     .pos    = {_viewportBounds[0].x, _viewportBounds[0].y},
-        //     .extent = {viewportPanelSize.x, viewportPanelSize.y},
-        // };
-
-        // _resizeTimerHandle = Facade.timerManager.delayCall(
-        //     300,
-        //     [this]() {
-        // Facade.timerManager.cancelTimer(_resizeTimerHandle);
-        // _resizeTimerHandle = 0;
-        onViewportResized.executeIfBound(
-            Rect2D{
-                .pos    = _viewportBounds[0],
-                .extent = {viewportPanelSize.x, viewportPanelSize.y},
-            });
-        YA_CORE_INFO("Viewport resized to: {} x {} (framebuffer rebuilt)", _viewportSize.x, _viewportSize.y);
-        //         });
-        // }
+        // Queue the viewport resize event to be processed in next frame before render
+        _pendingViewportRect = Rect2D{
+            .pos    = _viewportBounds[0],
+            .extent = {viewportPanelSize.x, viewportPanelSize.y},
+        };
+        _bViewportResizePending = true;
+        YA_CORE_INFO("Viewport resize queued: {} x {} (will be processed before render)", _viewportSize.x, _viewportSize.y);
     }
 
     // Display the render texture from editor render target
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        auto *viewportRT = App::get()->_viewportRT.get();
-        if (viewportRT && viewportRT->getFrameBuffer())
+        auto imageView = App::get()->_viewportImageView;
+        if (imageView)
         {
-            auto imageView = viewportRT->getFrameBuffer()->getImageView(0);
-            if (imageView)
+            ImageViewHandle currentHandle = imageView->getHandle();
+
+
+            // Check if ImageView changed (framebuffer was recreated)
+            if (_currentViewportImageHandle != currentHandle)
             {
-                ImageViewHandle currentHandle  = imageView->getHandle();
-                uint32_t        curFrameBuffer = viewportRT->getFrameBufferIndex();
+                // YA_CORE_TRACE("Viewport ImageView changed, refreshing ImGui texture: {}", App::get()->_frameIndex);
 
-
-                // Check if ImageView changed (framebuffer was recreated)
-                if (_currentViewportImageHandle != currentHandle)
-                {
-                    // YA_CORE_TRACE("Viewport ImageView changed, refreshing ImGui texture: {}", App::get()->_frameIndex);
-
-                    // Cleanup old cached texture if exists
-                    if (_viewportImage && _viewportImage->ds) {
-                        removeImGuiTexture(_viewportImage);
-                    }
-
-                    // Create new descriptor set for new ImageView
-                    _viewportImage              = getOrCreateImGuiTextureID(imageView);
-                    _currentViewportImageHandle = currentHandle;
+                // Cleanup old cached texture if exists
+                if (_viewportImage && _viewportImage->ds) {
+                    removeImGuiTexture(_viewportImage);
+                    YA_CORE_INFO("Removed old viewport ImGui texture");
                 }
 
-                // Render viewport image
-                if (_viewportImage && _viewportImage->isValid())
-                {
-                    ImGui::Image(*_viewportImage, viewportPanelSize, ImVec2(0, 0), ImVec2(1, 1));
+                // Create new descriptor set for new ImageView
+                _viewportImage              = getOrCreateImGuiTextureID(imageView);
+                _currentViewportImageHandle = currentHandle;
+            }
 
-                    // Render gizmo overlay
-                    renderGizmo();
-                }
+            // Render viewport image
+            if (_viewportImage && _viewportImage->isValid())
+            {
+                ImGui::Image(*_viewportImage, viewportPanelSize, ImVec2(0, 0), ImVec2(1, 1));
+
+                // Render gizmo overlay
+                renderGizmo();
             }
         }
     }
@@ -718,7 +703,7 @@ void EditorLayer::viewportWindow()
     ImGui::End();
 }
 
-const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(stdptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
+const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
 {
     YA_PROFILE_FUNCTION();
     if (!imageView) {

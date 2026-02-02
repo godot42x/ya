@@ -53,6 +53,10 @@ struct VulkanFrameBuffer : public IFrameBuffer
     {
         return _imageViews[attachmentIdx];
     }
+    IImage *getImage(uint32_t attachmentIdx) override
+    {
+        return _images[attachmentIdx].get();
+    }
 };
 
 } // namespace ya

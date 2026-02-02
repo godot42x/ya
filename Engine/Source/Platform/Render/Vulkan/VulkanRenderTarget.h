@@ -74,7 +74,7 @@ struct VulkanRenderTarget : public IRenderTarget
     void renderMaterialSystems(ICommandBuffer *cmdBuf);
 
     // Frame camera context - set by App, used by MaterialSystems
-    void                      setFrameContext(const FrameContext &ctx) override { _cameraContext = ctx; }
+    void                setFrameContext(const FrameContext &ctx) override { _cameraContext = ctx; }
     const FrameContext &getFrameContext() const override { return _cameraContext; }
 
   public:

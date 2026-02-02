@@ -14,3 +14,4 @@
 #include "Core/Math/Math.h"
 #include "Core/Reflection/Reflection.h"
 #include "Core/TypeIndex.h"
+#include "Core/Common/Helper.h"

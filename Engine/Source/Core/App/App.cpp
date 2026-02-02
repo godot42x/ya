@@ -20,7 +20,6 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
-#include "Render/Render.h"
 #include "Resource/TextureLibrary.h"
 #include "Scene/SceneManager.h"
 
@@ -40,11 +39,16 @@
 
 
 // Render
+#include "Platform/Render/Vulkan//VulkanRender.h"
+#include "Platform/Render/Vulkan/VulkanImage.h"
+#include "Platform/Render/Vulkan/VulkanImageView.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
+#include "Render/Pipelines/InversionPipeline.h"
 #include "Render/PrimitiveMeshCache.h"
+#include "Render/Render.h"
 
 
 
@@ -92,10 +96,51 @@ void App::onSceneViewportResized(Rect2D rect)
     viewportRect      = rect;
     float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
     camera.setAspectRatio(aspectRatio);
-    _viewportRT->setExtent(Extent2D{
+
+    Extent2D newExtent{
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
-    });
+    };
+
+    _viewportRT->setExtent(newExtent);
+
+    // TODO: this should just be a framebuffer?
+    //      but framebuffer depend on the renderpass
+    // Recreate postprocess image when viewport size changes
+    if (_render && newExtent.width > 0 && newExtent.height > 0) {
+        auto vkRender = _render->as<VulkanRender>();
+
+        // Wait for GPU to finish using old resources before destroying them
+        if (_postprocessImage) {
+            _render->waitIdle();
+        }
+
+        // Release old resources
+        _postprocessImageView.reset();
+        _postprocessImage.reset();
+
+        // Create new postprocess image
+        ImageCreateInfo imageCI{
+            .label  = "PostprocessImage",
+            .format = EFormat::R8G8B8A8_UNORM,
+            .extent = {
+                .width  = newExtent.width,
+                .height = newExtent.height,
+                .depth  = 1,
+            },
+            .usage = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
+        _postprocessImage = VulkanImage::create(vkRender, imageCI);
+
+        if (_postprocessImage) {
+            auto vkImage          = std::static_pointer_cast<VulkanImage>(_postprocessImage);
+            _postprocessImageView = std::make_shared<VulkanImageView>(
+                vkRender,
+                vkImage.get(),
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            _postprocessImageView->setDebugName("PostprocessImageView");
+        }
+    }
 }
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
@@ -226,6 +271,9 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{
         .shaderName = "Test/PhongLit.glsl", // 使用新版带 type 和 cutOff 的 shader
     });
+    _shaderStorage->load(ShaderDesc{
+        .shaderName = "PostProcessing/Inversion.glsl", // 使用新版带 type 和 cutOff 的 shader
+    });
 
 
     // ===== Initialize Render =====
@@ -327,48 +375,34 @@ void App::init(AppDesc ci)
     _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
     _viewportRT->addMaterialSystem<PhongMaterialSystem>();
 
+    // Create postprocess intermediate image (for dynamic rendering)
+    {
+        auto            vkRender = _render->as<VulkanRender>();
+        ImageCreateInfo imageCI{
+            .label  = "PostprocessImage",
+            .format = EFormat::R8G8B8A8_UNORM,
+            .extent = {
+                .width  = static_cast<uint32_t>(winW),
+                .height = static_cast<uint32_t>(winH),
+                .depth  = 1,
+            },
+            .usage = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
+        _postprocessImage = VulkanImage::create(vkRender, imageCI);
 
-    // MARK: Postprocessing pass
-    auto _postprocessingRenderPass = IRenderPass::create(
-        _render,
-        RenderPassCreateInfo{
-            .label       = "Postprocessing RenderPass",
-            .attachments = {
-                // Color attachment (will be sampled by ImGui)
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = EFormat::R8G8B8A8_UNORM,
-                    .samples        = _sampleCount,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-            .subpasses = {
-                RenderPassCreateInfo::SubpassInfo{
-                    .subpassIndex     = 0,
-                    .inputAttachments = {},
-                    .colorAttachments = {
-                        RenderPassCreateInfo::AttachmentRef{
-                            .ref    = 0,
-                            .layout = EImageLayout::ColorAttachmentOptimal,
-                        },
-                    },
-                },
-            },
-            .dependencies = {
-                RenderPassCreateInfo::SubpassDependency{
-                    .bSrcExternal = true,
-                    .srcSubpass   = 0,
-                    .dstSubpass   = 0,
-                },
-            },
+        if (_postprocessImage) {
+            auto vkImage          = std::static_pointer_cast<VulkanImage>(_postprocessImage);
+            _postprocessImageView = std::make_shared<VulkanImageView>(
+                vkRender,
+                vkImage.get(),
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            _postprocessImageView->setDebugName("PostprocessImageView");
+        }
+        _deleter.push("PostprocessImage", [this](void *) {
+            _postprocessImageView.reset();
+            _postprocessImage.reset();
         });
-
+    }
 
     // MARK: Screen pass
     _renderpass = IRenderPass::create(
@@ -491,9 +525,9 @@ void App::init(AppDesc ci)
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
     // todo: use ref
-    _editorLayer->onViewportResized.set([this](Rect2D rect) {
-        onSceneViewportResized(rect);
-    });
+    // _editorLayer->onViewportResized.set([this](Rect2D rect) {
+    //     onSceneViewportResized(rect);
+    // });
 
     // see TypeRenderer.h
     ya::registerBuiltinTypeRenderers();
@@ -703,6 +737,7 @@ void ya::App::quit()
     _renderpass.reset();
     _viewportRenderPass.reset();
 
+    _deleter.clear();
     // Unified cleanup of all resource caches in priority order
     ResourceRegistry::get().clearAll();
 
@@ -887,6 +922,16 @@ void App::onRender(float dt)
     YA_PROFILE_FUNCTION()
     auto render = getRender();
 
+    // Process pending viewport resize before rendering
+    if (_editorLayer) {
+        Rect2D pendingRect;
+        if (_editorLayer->getPendingViewportResize(pendingRect)) {
+            onSceneViewportResized(pendingRect);
+        }
+    }
+    // TODO: optimize the image recreation
+    render->waitIdle();
+
     if (_windowSize.x <= 0 || _windowSize.y <= 0) {
         YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
         return;
@@ -905,111 +950,150 @@ void App::onRender(float dt)
 
     // ===== Single CommandBuffer for both Scene and UI Passes =====
     auto cmdBuf = _commandBuffers[imageIndex];
+    cmdBuf->reset();
+    cmdBuf->begin();
+
+    // --- MARK:1: Render 3D Scene to Offscreen RT ---
     {
-        cmdBuf->reset();
-        cmdBuf->begin();
+        YA_PROFILE_SCOPE("ViewPort pass")
+        _viewportRT->begin(cmdBuf.get());
+        _viewportRT->onRender(cmdBuf.get());
 
-        // --- MARK: PASS 1: Render 3D Scene to Offscreen RT ---
         {
-            YA_PROFILE_SCOPE("ViewPort pass")
-            _viewportRT->begin(cmdBuf.get());
-            _viewportRT->onRender(cmdBuf.get());
+            YA_PROFILE_SCOPE("Render2D");
+            // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
+            Render2D::begin(cmdBuf.get());
+            static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
 
-            {
-                YA_PROFILE_SCOPE("Render2D");
-                // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
-                Render2D::begin(cmdBuf.get());
-                static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
-
-                if (_appMode == AppMode::Drawing) {
-                    for (const auto &&[idx, p] : ut::enumerate(clicked))
-                    {
-                        auto tex = idx % 2 == 0
-                                     ? AssetManager::get()->getTextureByName("uv1")
-                                     : AssetManager::get()->getTextureByName("face");
-                        YA_CORE_ASSERT(tex, "Texture not found");
-                        glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
-                        Render2D::makeSprite(pos, {50, 50}, tex);
-                    }
+            if (_appMode == AppMode::Drawing) {
+                for (const auto &&[idx, p] : ut::enumerate(clicked))
+                {
+                    auto tex = idx % 2 == 0
+                                 ? AssetManager::get()->getTextureByName("uv1")
+                                 : AssetManager::get()->getTextureByName("face");
+                    YA_CORE_ASSERT(tex, "Texture not found");
+                    glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
+                    Render2D::makeSprite(pos, {50, 50}, tex);
                 }
-
-                // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-                // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
-
-                Render2D::onRender(); // 2026/1/31: UIComponent?
-                UIManager::get()->render();
-                Render2D::onRenderGUI();
-                Render2D::end();
             }
 
-            _viewportRT->end(cmdBuf.get());
-        }
-        {
-            YA_PROFILE_SCOPE("Postprocessing pass")
-            // TODO: make those effect in post-processing
-            // 1. Inversion 反向
-            // 2. Grayscale 灰度
-            // 3. Kernel_Sharpe
-            // 4. Kernel_Blur
-            // 5. Kernel_Edge-Detection
-            // 6. Tone Mapping
-            // 7. Pixel-Style/Retro 像素风/复古
-            // 
-            // 并且，editor 那边需要按需查看某些效果， 这里的 pass 也要按需执行，不能空耗
-            // 目前的 render target， render pass 不能符合？ 重构一下
-            // 指定input， output， 需要复用 SceneRT 的结果， 且存到不同 RT 之上
-            // 是否类似于 dynamical- render 了？ 或者可以采取一个 pass 重复执行 n 遍的实现
+            // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
+            // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
 
-            // --- MARK: PASS 1.5: Postprocessing Pass ---
-            // For simplicity, we do postprocessing in a separate render target and pass
-            // In a real engine, you might want to chain multiple postprocessing effects
-            // static auto postprocessMaterialSystem = makeShared<PostprocessMaterialSystem>();
-            // _postprocessingRT = ya::createRenderTarget(RenderTargetCreateInfo{
-            //     .label            = "Postprocessing RenderTarget",
-            //     .bSwapChainTarget = false,
-            //     .renderPass       = _postprocessingRenderPass.get(),
-            //     .frameBufferCount = 1,
-            //     .extent           = _viewportRT->getExtent(),
-            // });
-            // _postprocessingRT->addMaterialSystem<PostprocessMaterialSystem>(postprocessMaterialSystem);
-
-            // // Set input texture from viewport RT color attachment
-            // auto viewportColorView = _viewportRT->getFrameBuffer()->getImageView(0); // Color attachment index 0
-            // postprocessMaterialSystem->setInputTexture(viewportColorView);
-
-            // _postprocessingRT->begin(cmdBuf.get());
-            // _postprocessingRT->onRender(cmdBuf.get());
-            // _postprocessingRT->end(cmdBuf.get());
-
-            // // Cleanup temporary postprocessing RT
-            // _postprocessingRT->destroy();
-            // _postprocessingRT.reset();
+            Render2D::onRender(); // 2026/1/31: UIComponent?
+            UIManager::get()->render();
+            Render2D::onRenderGUI();
+            Render2D::end();
         }
 
-
-        {
-            YA_PROFILE_SCOPE("Screen pass")
-            // --- MARK: PASS 2: Render UI to Swapchain RT ---
-            _screenRT->begin(cmdBuf.get());
-
-            // Render ImGui
-            auto &imManager = ImGuiManager::get();
-            imManager.beginFrame();
-
-            this->renderGUI(dt);
-
-            // imcDrawMaterials();
-            imManager.endFrame();
-            imManager.render();
-
-            if (render->getAPI() == ERenderAPI::Vulkan) {
-                imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
-            }
-
-            _screenRT->end(cmdBuf.get());
-        }
-        // Note: executeAll() is now called inside RenderTarget::end()
+        _viewportRT->end(cmdBuf.get());
     }
+
+    // --- MARK: Postprocessing
+    if (_postProcessor.bInversion)
+    {
+        YA_PROFILE_SCOPE("Postprocessing pass")
+        // TODO: make those effect in post-processing
+        // 1. Inversion 反向
+        auto vkRender = render->as<VulkanRender>();
+
+        vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
+
+        // Input: _viewportRT color attachment (already in ShaderReadOnlyOptimal after viewport pass)
+        auto inputImageView = _viewportRT->getFrameBuffer()->getImageView(0);
+
+        // Output: _postprocessImage
+        // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
+        auto vkPostprocessImage = _postprocessImage;
+        cmdBuf->transitionImageLayout(vkPostprocessImage.get(),
+                                      vkPostprocessImage->as<VulkanImage>()->_layout == VK_IMAGE_LAYOUT_UNDEFINED
+                                          ? EImageLayout::Undefined
+                                          : EImageLayout::ShaderReadOnlyOptimal,
+                                      EImageLayout::ColorAttachmentOptimal);
+
+        DynamicRenderingInfo ri{
+            .label      = "Inversion",
+            .renderArea = Rect2D{
+                .pos    = {0, 0},
+                .extent = _viewportRT->getExtent().toVec2(),
+            },
+            .layerCount = 1,
+            // Render output to _postprocessImage (separate from input)
+            .colorAttachments = {
+                RenderingAttachmentInfo{
+                    // where to drawing
+                    .imageView   = _postprocessImageView.get(),
+                    .imageLayout = EImageLayout::ColorAttachmentOptimal,
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                },
+            },
+        };
+        cmdBuf->beginRendering(ri);
+        static auto inversionPipeline = [&]() {
+            auto pl = new InversionPipeline();
+            pl->init(&ri);
+            _monitorPipelines.push_back({pl->_pipeline->getName(), pl->_pipeline.get()});
+
+            _deleter.push(" inversion pipeline", [pl](void *) { // Use value capture instead of reference
+                delete pl;
+            });
+
+            return pl;
+        }();
+        // Pass input imageView and output extent to render
+        inversionPipeline->render(cmdBuf.get(), inputImageView.get(), _viewportRT->getExtent());
+        cmdBuf->endRendering();
+
+        // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling
+        cmdBuf->transitionImageLayout(vkPostprocessImage.get(),
+                                      EImageLayout::ColorAttachmentOptimal,
+                                      EImageLayout::ShaderReadOnlyOptimal);
+
+        vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
+
+        // 2. Grayscale 灰度
+        // 3. Kernel_Sharpe
+        // 4. Kernel_Blur
+        // 5. Kernel_Edge-Detection
+        // 6. Tone Mapping
+        // 7. Pixel-Style/Retro 像素风/复古
+        //
+        // 并且，editor 那边需要按需查看某些效果， 这里的 pass 也要按需执行，不能空耗
+        // 目前的 render target， render pass 不能符合？ 重构一下
+        // 指定input， output， 需要复用 SceneRT 的结果， 且存到不同 RT 之上
+        // 是否类似于 dynamical- render 了？ 或者可以采取一个 pass 重复执行 n 遍的实现
+        _viewportImageView = _postprocessImageView.get();
+    }
+    else {
+        _viewportImageView = _viewportRT->getFrameBuffer()->getImageView(0).get();
+    }
+
+    // Note: _postprocessImage is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
+
+    // --- MARK: 2: Render UI to Swapchain RT ---
+    {
+        YA_PROFILE_SCOPE("Screen pass")
+        _screenRT->begin(cmdBuf.get());
+
+        // Render ImGui
+        auto &imManager = ImGuiManager::get();
+        imManager.beginFrame();
+
+        this->renderGUI(dt);
+
+        // imcDrawMaterials();
+        imManager.endFrame();
+        imManager.render();
+
+        if (render->getAPI() == ERenderAPI::Vulkan) {
+            imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
+        }
+
+        _screenRT->end(cmdBuf.get());
+    }
+    // Note: executeAll() is now called inside RenderTarget::end()
     cmdBuf->end();
 
     // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
@@ -1093,6 +1177,23 @@ void App::onRenderGUI(float dt)
             YA_CORE_ASSERT(sceneManager, "SceneManager is null");
             sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
                                           getSceneManager()->getActiveScene());
+        }
+        ImGui::Indent();
+        if (ImGui::CollapsingHeader("Monitor Pipelines")) {
+            for (const auto &[name, pipeline] : _monitorPipelines) {
+                ImGui::Text("%s", name.c_str());
+                ImGui::SameLine();
+                if (ImGui::Button("reload")) {
+                    pipeline->reloadShaders();
+                }
+            }
+        }
+        ImGui::Unindent();
+        if (ImGui::TreeNode("Postprocessing")) {
+
+            ImGui::Checkbox("Inversion", &_postProcessor.bInversion);
+
+            ImGui::TreePop();
         }
     }
 

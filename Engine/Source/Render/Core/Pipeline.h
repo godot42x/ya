@@ -80,6 +80,7 @@ struct IGraphicsPipeline
     /**
      * @brief Bind this pipeline to a command buffer
      */
+    [[deprecated("use ICommandBuffer::bindPipeline instead")]]
     virtual void bind(CommandBufferHandle commandBuffer) = 0;
 
     /**
@@ -102,10 +103,8 @@ struct IGraphicsPipeline
     /**
      * @brief Factory method to create graphics pipeline
      */
-    static std::shared_ptr<IGraphicsPipeline> create(
-        IRender         *render,
-        IRenderPass     *renderPass,
-        IPipelineLayout *pipelineLayout);
+    static std::shared_ptr<IGraphicsPipeline> create(IRender         *render,
+                                                     IPipelineLayout *pipelineLayout);
 };
 
 } // namespace ya

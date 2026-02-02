@@ -4,13 +4,20 @@
 namespace ya
 {
 
-#define GET_VK_FUNC(value, name) \
-    value = (PFN_##name)vkGetInstanceProcAddr(_renderer->getInstance(), #name);
 
-void VulkanDebugUtils::init()
+void VulkanDebugUtils::initInstanceLevel()
 {
-    GET_VK_FUNC(pfnCreateDebugUtilsMessengerEXT, vkCreateDebugUtilsMessengerEXT);
-    GET_VK_FUNC(pfnDestroyDebugUtilsMessengerEXT, vkDestroyDebugUtilsMessengerEXT);
+#define ASSIGN_VK_INSTANCE_FUNCTION(v, func)                                \
+    v = (PFN_##func)vkGetInstanceProcAddr(_renderer->getInstance(), #func); \
+    if (nullptr == (v)) {                                                   \
+        YA_CORE_WARN(#func " not available");                               \
+    }                                                                       \
+    else {                                                                  \
+        YA_CORE_INFO(#func " loaded successfully");                         \
+    }
+
+    ASSIGN_VK_INSTANCE_FUNCTION(pfnCreateDebugUtilsMessengerEXT, vkCreateDebugUtilsMessengerEXT);
+    ASSIGN_VK_INSTANCE_FUNCTION(pfnDestroyDebugUtilsMessengerEXT, vkDestroyDebugUtilsMessengerEXT);
 
     // Load debug report callback functions (deprecated but still used)
     // pfnCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT)
@@ -18,8 +25,31 @@ void VulkanDebugUtils::init()
     // pfnDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT)
     //     vkGetInstanceProcAddr(m_Instance, "vkDestroyDebugReportCallbackEXT");
 
-    GET_VK_FUNC(pfnSetDebugUtilsObjectNameEXT, vkSetDebugUtilsObjectNameEXT);
+    ASSIGN_VK_INSTANCE_FUNCTION(pfnSetDebugUtilsObjectNameEXT, vkSetDebugUtilsObjectNameEXT);
+
+
     YA_CORE_ASSERT(pfnSetDebugUtilsObjectNameEXT, "Failed to load vkSetDebugUtilsObjectNameEXT function!");
+#undef ASSIGN_VK_FUNCTION
+}
+
+void VulkanDebugUtils::initDeviceLevel()
+{
+#define ASSIGN_VK_DEVICE_FUNCTION(v, func)                              \
+    v = (PFN_##func)vkGetDeviceProcAddr(_renderer->getDevice(), #func); \
+    if (nullptr == (v)) {                                               \
+        YA_CORE_WARN(#func " not available");                           \
+    }                                                                   \
+    else {                                                              \
+        YA_CORE_INFO(#func " loaded successfully");                     \
+    }
+
+    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdBeginDebugUtilsLabelEXT, vkCmdBeginDebugUtilsLabelEXT);
+    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdEndDebugUtilsLabelEXT, vkCmdEndDebugUtilsLabelEXT);
+    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdInsertDebugUtilsLabelEXT, vkCmdInsertDebugUtilsLabelEXT);
+    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueBeginDebugUtilsLabelEXT, vkQueueBeginDebugUtilsLabelEXT);
+    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueEndDebugUtilsLabelEXT, vkQueueEndDebugUtilsLabelEXT);
+    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueInsertDebugUtilsLabelEXT, vkQueueInsertDebugUtilsLabelEXT);
+#undef ASSIGN_VK_DEVICE_FUNCTION
 }
 
 void VulkanDebugUtils::rewriteDebugUtils()

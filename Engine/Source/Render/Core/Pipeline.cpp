@@ -39,10 +39,9 @@ std::shared_ptr<IPipelineLayout> IPipelineLayout::create(
 
 std::shared_ptr<IGraphicsPipeline> IGraphicsPipeline::create(
     IRender         *render,
-    IRenderPass     *renderPass,
     IPipelineLayout *pipelineLayout)
 {
-    if (!render || !renderPass || !pipelineLayout)
+    if (!render || !pipelineLayout)
         return nullptr;
 
     switch (render->getAPI())
@@ -53,10 +52,9 @@ std::shared_ptr<IGraphicsPipeline> IGraphicsPipeline::create(
         // Note: actual implementation will need to include VulkanPipeline.h in cpp file
         // For now, return nullptr - this will be implemented when VulkanPipeline
         // inherits from IGraphicsPipeline
-        auto vkRender     = render->as<VulkanRender>();
-        auto vkRenderPass = renderPass->as<VulkanRenderPass>();
-        auto vkPipLayout  = pipelineLayout->as<VulkanPipelineLayout>();
-        auto ret          = makeShared<VulkanPipeline>(vkRender, vkRenderPass, vkPipLayout);
+        auto vkRender    = render->as<VulkanRender>();
+        auto vkPipLayout = pipelineLayout->as<VulkanPipelineLayout>();
+        auto ret         = makeShared<VulkanPipeline>(vkRender, vkPipLayout);
         YA_CORE_ASSERT(ret != nullptr, "Failed to create VulkanPipeline");
         return ret;
     }
