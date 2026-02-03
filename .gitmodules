@@ -10,3 +10,9 @@
 [submodule "Engine/ThirdParty/LearnOpenGL"]
 	path = Engine/ThirdParty/LearnOpenGL
 	url = git@github.com:JoeyDeVries/LearnOpenGL.git
+[submodule "Engine/ThirdParty/ImGui"]
+	path = Engine/ThirdParty/ImGui
+	url = git@github.com:ocornut/imgui.git
+[submodule "Engine/ThirdParty/ImGuizmo"]
+	path = Engine/ThirdParty/ImGuizmo
+	url = git@github.com:CedricGuillemet/ImGuizmo.git

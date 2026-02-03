@@ -1,21 +1,28 @@
 #pragma once
 
+#ifndef IMGUI_SDL3_GPU
+    #define IMGUI_SDL3_GPU 0
+#endif
+
 #include "Render/Core/RenderPass.h"
 #include "Render/Render.h"
 #include <Core/Base.h>
 
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_gpu.h>
+
+#if IMGUI_SDL3_GPU
+    #include <SDL3/SDL_gpu.h>
+#endif
 
 #define IMGUI_ENABLE_FREETYPE
 #define IMGUI_USE_WCHAR32
 #include <ImGui.h>
 #include <imgui_impl_sdl3.h>
-
-#include <ImGuizmo.h>
 #include <imgui_impl_sdlgpu3.h>
 #include <imgui_impl_vulkan.h>
+
+#include <ImGuizmo.h>
 
 
 
@@ -72,10 +79,12 @@ struct ImGuiManager
      */
     void initVulkan(SDL_Window *window, IRender *render, IRenderPass *renderPass);
 
+#if IMGUI_SDL3_GPU
     /**
      * @brief Initialize ImGui with SDLGPU backend
      */
     void initSDLGPU(SDL_Window *window, SDL_GPUDevice *device);
+#endif
 
     /**
      * @brief Shutdown ImGui and cleanup resources
@@ -97,10 +106,12 @@ struct ImGuiManager
      */
     void submitVulkan(VkCommandBuffer cmdBuf, VkPipeline pipeline = VK_NULL_HANDLE);
 
+#if IMGUI_SDL3_GPU
     /**
      * @brief Submit ImGui draw commands to SDLGPU
      */
     void submitSDLGPU(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass);
+#endif
 
     /**
      * @brief Process SDL events and determine if ImGui captured them

@@ -1,6 +1,7 @@
 includes("./Plugins/Plugins.xmake.lua")
 includes("./Shader/xmake.lua")
 includes("./Test/xmake.lua")
+includes("./ThirdParty/ThirdParty.xmake.lua")
 -- includes("./Source/Editor/xmake.lua")
 
 add_requires(
@@ -40,29 +41,7 @@ add_requires("assimp", {
 })
 
 
-local imgui_version_str = "imgui docking"
-local imgui_configs = {
-    sdl3 = true,
-    sdl3_gpu = true,
-    vulkan = true,
-    debug = is_mode("debug"),
-    docking = true,
-    freetype = true, -- enable freetype support
-    wchar32 = true,  -- enable wchar32 support -> emoji
-}
-add_requires(imgui_version_str, {
-    debug = is_mode("debug"),
-    system = false,
-    configs = imgui_configs
-})
-add_requires("imguizmo-local", {
-    debug = is_mode("debug"),
-    configs = {
-        ["imgui_version_str"] = imgui_version_str,
-        ["imgui_configs"] = imgui_configs,
-        docking = true,
-    }
-})
+
 add_requires("shaderc", {
     configs = {
         shared = false,
@@ -127,6 +106,8 @@ do
     add_deps("log.cc")
     add_deps("reflect.cc")
     add_deps("reflects-core")
+    add_deps("imgui-local")
+    add_deps("imguizmo-local")
 
 
     -- Add math library for exp2 and log2 functions
@@ -145,8 +126,6 @@ do
     add_packages("libsdl3", { public = true })
     add_packages("libsdl3_image")
     add_packages("glm", { public = true })
-    add_packages("imgui", { public = true })
-    add_packages("imguizmo-local", { public = true })
     --add_packages("glad")
     add_packages("assimp")
     add_packages("ktx")

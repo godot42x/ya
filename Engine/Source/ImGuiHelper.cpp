@@ -165,6 +165,7 @@ void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *
     YA_CORE_INFO("ImGuiManager initialized with Vulkan backend");
 }
 
+#if IMGUI_SDL3_GPU
 void ImGuiManager::initSDLGPU(SDL_Window *window, SDL_GPUDevice *device)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
@@ -186,6 +187,7 @@ void ImGuiManager::initSDLGPU(SDL_Window *window, SDL_GPUDevice *device)
     _initialized = true;
     YA_CORE_INFO("ImGuiManager initialized with SDLGPU backend");
 }
+#endif
 
 void ImGuiManager::shutdown()
 {
@@ -238,12 +240,14 @@ void ImGuiManager::submitVulkan(VkCommandBuffer cmdBuf, VkPipeline pipeline)
     }
 }
 
+#if IMGUI_SDL3_GPU
 void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass)
 {
     if (_drawData && _drawData->CmdListsCount > 0) {
         ImGui_ImplSDLGPU3_RenderDrawData(_drawData, commandBuffer, renderpass);
     }
 }
+#endif
 
 EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
 {
