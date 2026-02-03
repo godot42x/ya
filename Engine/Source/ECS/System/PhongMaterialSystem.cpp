@@ -38,7 +38,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
     auto     _sampleCount = ESampleCount::Sample_1;
 
     // MARK: layout
-    PipelineDesc pipelineLayout{
+    PipelineLayoutDesc pipelineLayout{
         .label         = "PhongMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{

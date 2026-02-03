@@ -429,7 +429,7 @@ struct MyMaterialSystem : public MaterialSystemBase<MyMaterial, MyMaterialCompon
         IRender *render = getRender();
 
         // 创建 Descriptor Set Layouts
-        PipelineDesc pipelineLayout{
+        PipelineLayoutDesc pipelineLayout{
             .label = "MyMaterialSystem_PipelineLayout",
             .pushConstants = {
                 PushConstantRange{

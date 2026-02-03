@@ -1035,7 +1035,7 @@ void App::onRender(float dt)
             pl->init(&ri);
             _monitorPipelines.push_back({pl->_pipeline->getName(), pl->_pipeline.get()});
 
-            _deleter.push(" inversion pipeline", [pl](void *) { // Use value capture instead of reference
+            _deleter.push(" basic postprocessing pipeline", [pl](void *) { // Use value capture instead of reference
                 delete pl;
             });
 
@@ -1046,6 +1046,7 @@ void App::onRender(float dt)
             .inputImageView = inputImageView.get(),
             .extent         = _viewportRT->getExtent(),
             .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
+            .floatParams    = _postProcessingParams,
         };
         basicPostprocessing->render(cmdBuf.get(), payload);
         cmdBuf->endRendering();
@@ -1194,15 +1195,22 @@ void App::onRenderGUI(float dt)
         ImGui::Unindent();
         if (ImGui::TreeNode("Postprocessing")) {
 
-            ImGui::Checkbox("Inversion", &bBasicPostProcessor);
+            ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);
             if (!bBasicPostProcessor) {
                 ImGui::BeginDisabled();
             }
             ImGui::Combo("Effect",
                          reinterpret_cast<int *>(&_postProcessingEffect),
-                         "Inversion\0Grayscale\0Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0Pixel-Style/Retro\0");
+                         "Inversion\0Grayscale\0Weighted Grayscale\0"
+                         "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
+                         // frag shader do nothing, 老电视机花屏效果
+                         "Random\0" 
+                         );
             if (!bBasicPostProcessor) {
                 ImGui::EndDisabled();
+            }
+            for (const auto &[i, p] : ut::enumerate(_postProcessingParams)) {
+                ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
             }
 
             ImGui::TreePop();

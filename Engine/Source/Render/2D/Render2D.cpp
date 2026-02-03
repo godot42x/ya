@@ -108,7 +108,7 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
 {
     _render = render;
 
-    _pipelineDesc = PipelineDesc{
+    _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
         .descriptorSetLayouts = {
             DescriptorSetLayout{

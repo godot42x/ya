@@ -38,7 +38,7 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
 
     constexpr auto size = sizeof(SimpleMaterialSystem::PushConstant);
     YA_CORE_DEBUG("SimpleMaterialSystem PushConstant size: {}", size);
-    PipelineDesc pipDesc{
+    PipelineLayoutDesc pipDesc{
         .label         = "SimpleMaterialSystem_PipelineLayout",
         .pushConstants = {
             PushConstantRange{

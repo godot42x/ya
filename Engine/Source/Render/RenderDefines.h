@@ -639,7 +639,7 @@ struct PushConstantRange
     EShaderStage::T stageFlags = static_cast<EShaderStage::T>(EShaderStage::Vertex | EShaderStage::Fragment); // Default to vertex and fragment stages
 };
 
-struct PipelineDesc
+struct PipelineLayoutDesc
 {
     std::string                      label = "None";
     std::vector<PushConstantRange>   pushConstants;
@@ -731,7 +731,7 @@ struct PipelineRenderingInfo
 struct GraphicsPipelineCreateInfo
 {
     // different shader/pipeline can use same pipeline layout
-    // PipelineDesc *pipelineLayout = nullptr;
+    // PipelineLayoutDesc *pipelineLayout = nullptr;
 
 
 

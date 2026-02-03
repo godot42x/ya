@@ -15,41 +15,16 @@ void BasicPostprocessing::init(const DynamicRenderingInfo *dynamicRenderingInfo)
     auto viewPortRT = app->_viewportRT;
 
 
-    // MARK: descriptor set layout
-    DescriptorSetLayout dsl{
-        .label    = "BasicPostprocessing_DSL",
-        .set      = 0,
-        .bindings = {
-            DescriptorSetLayoutBinding{
-                .binding         = 0,
-                .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = 1,
-                .stageFlags      = EShaderStage::Fragment,
-            },
-        },
-    };
-    _dslInputTexture = IDescriptorSetLayout::create(render, dsl);
-
 
     // MARK: layout
-    PipelineDesc pipelineLayout{
-        .label         = "InversionSystem_PipelineLayout",
-        .pushConstants = {
-            PushConstantRange{
-                .offset     = 0,
-                .size       = sizeof(BasicPostprocessing::PushConstant),
-                .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
-            },
-        },
-        .descriptorSetLayouts = {dsl},
-    };
 
-    auto DSLs = std::vector<std::shared_ptr<IDescriptorSetLayout>>{_dslInputTexture};
+    auto DSLs        = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
+    _dslInputTexture = DSLs[0];
 
     _pipelineLayout = IPipelineLayout::create(
         render,
-        pipelineLayout.label,
-        pipelineLayout.pushConstants,
+        _pipelineLayoutDesc.label,
+        _pipelineLayoutDesc.pushConstants,
         DSLs);
 
     auto _pipelineDesc = GraphicsPipelineCreateInfo{
@@ -187,15 +162,27 @@ void BasicPostprocessing::render(ICommandBuffer *cmdBuf, const RenderPayload &pa
                                0,
                                {_descriptorSet},
                                {});
-    // Push constants
+
+    // Push constants - two separate ranges
+    const auto &pr = _pipelineLayoutDesc.pushConstants;
+
     PushConstant pc{
         .effect = static_cast<uint32_t>(payload.effect),
     };
     cmdBuf->pushConstants(_pipelineLayout.get(),
-                          EShaderStage::Vertex | EShaderStage::Fragment,
-                          0,
-                          sizeof(BasicPostprocessing::PushConstant),
+                          pr[0].stageFlags,
+                          pr[0].offset,
+                          pr[0].size,
                           &pc);
+
+    FragPushConstant fragPC{
+        .floatParams = payload.floatParams,
+    };
+    cmdBuf->pushConstants(_pipelineLayout.get(),
+                          pr[1].stageFlags,
+                          pr[1].offset,
+                          pr[1].size,
+                          &fragPC);
 
     cmdBuf->draw(6, 1, 0, 0);
 }

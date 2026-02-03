@@ -166,8 +166,14 @@ struct App
     std::shared_ptr<IImage>     _postprocessImage     = nullptr;
     std::shared_ptr<IImageView> _postprocessImageView = nullptr;
 
-    bool bBasicPostProcessor = false;
-    int  _postProcessingEffect              = 0;
+    bool                     bBasicPostProcessor   = false;
+    int                      _postProcessingEffect = 0;
+    std::array<glm::vec4, 4> _postProcessingParams = []() {
+        auto ret = std::array<glm::vec4, 4>();
+        ret[0].x = 1.0 / 300.0; // kernel_sharpen defaults
+        return ret;
+    }();
+
 
 
     IImageView *_viewportImageView = nullptr;
