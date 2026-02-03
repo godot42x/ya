@@ -342,19 +342,65 @@ void ImGuiManager::removeTexture(void *textureID)
     ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(textureID));
 }
 
-bool ImGuiManager::manipulate(
-    const float        *view,
-    const float        *projection,
-    ImGuizmo::OPERATION operation,
-    ImGuizmo::MODE      mode,
-    float              *matrix)
-{
-    return ImGuizmo::Manipulate(view, projection, operation, mode, matrix);
-}
-
 void ImGuiManager::setGizmoRect(float x, float y, float width, float height)
 {
     ImGuizmo::SetRect(x, y, width, height);
+}
+
+
+using namespace ImGui;
+static void metricsHelpMarker(const char *desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+void ImGuiManager::onRenderGUI()
+{
+    auto &io    = ImGui::GetIO();
+    auto &style = ImGui::GetStyle();
+
+
+    ShowFontSelector("Fonts##Selector");
+    if (DragFloat("FontSizeBase", &style.FontSizeBase, 0.20f, 5.0f, 100.0f, "%.0f"))
+        style._NextFrameFontSizeBase = style.FontSizeBase; // FIXME: Temporary hack until we finish remaining work.
+    SameLine(0.0f, 0.0f);
+    Text(" (out %.2f)", GetFontSize());
+    DragFloat("FontScaleMain", &style.FontScaleMain, 0.02f, 0.5f, 4.0f);
+    // BeginDisabled(GetIO().ConfigDpiScaleFonts);
+    DragFloat("FontScaleDpi", &style.FontScaleDpi, 0.02f, 0.5f, 4.0f);
+    // SetItemTooltip("When io.ConfigDpiScaleFonts is set, this value is automatically overwritten.");
+    // EndDisabled();
+
+    // Simplified Settings (expose floating-pointer border sizes as boolean representing 0.0f or 1.0f)
+    if (SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f"))
+        style.GrabRounding = style.FrameRounding; // Make GrabRounding always the same value as FrameRounding
+    {
+        bool border = (style.WindowBorderSize > 0.0f);
+        if (Checkbox("WindowBorder", &border)) {
+            style.WindowBorderSize = border ? 1.0f : 0.0f;
+        }
+    }
+    SameLine();
+    {
+        bool border = (style.FrameBorderSize > 0.0f);
+        if (Checkbox("FrameBorder", &border)) {
+            style.FrameBorderSize = border ? 1.0f : 0.0f;
+        }
+    }
+    SameLine();
+    {
+        bool border = (style.PopupBorderSize > 0.0f);
+        if (Checkbox("PopupBorder", &border)) {
+            style.PopupBorderSize = border ? 1.0f : 0.0f;
+        }
+    }
 }
 
 } // namespace ya

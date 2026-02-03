@@ -1229,6 +1229,7 @@ void App::onRender(float dt)
     render->end(imageIndex, {cmdBuf->getHandle()});
 }
 
+// MARK: Render GUI
 void App::onRenderGUI(float dt)
 {
     YA_PROFILE_FUNCTION()
@@ -1267,6 +1268,11 @@ void App::onRenderGUI(float dt)
             YA_CORE_INFO("=====================================");
         }
 
+        if (ImGui::TreeNode("ImGUI")) {
+            ImGuiManager::get().onRenderGUI();
+            ImGui::TreePop();
+        }
+
         auto *swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
@@ -1301,8 +1307,7 @@ void App::onRenderGUI(float dt)
             sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
                                           getSceneManager()->getActiveScene());
         }
-        ImGui::Indent();
-        if (ImGui::CollapsingHeader("Monitor Pipelines")) {
+        if (ImGui::TreeNode("Monitor Pipelines")) {
             for (const auto &[name, pipeline] : _monitorPipelines) {
                 ImGui::Text("%s", name.c_str());
                 ImGui::SameLine();
@@ -1310,8 +1315,8 @@ void App::onRenderGUI(float dt)
                     pipeline->reloadShaders();
                 }
             }
+            ImGui::TreePop();
         }
-        ImGui::Unindent();
         if (ImGui::TreeNode("Postprocessing")) {
 
             ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);

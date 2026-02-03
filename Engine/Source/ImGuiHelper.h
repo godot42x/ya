@@ -145,27 +145,6 @@ struct ImGuiManager
      */
     static void removeTexture(void *textureID);
 
-    /**
-     * @brief Begin ImGuizmo frame (should be called after ImGui::Begin)
-     * Sets up ImGuizmo draw list and rect for the current window
-     */
-    static void beginGizmoFrame();
-
-    /**
-     * @brief Manipulate a transform matrix with ImGuizmo
-     * @param view View matrix
-     * @param projection Projection matrix
-     * @param operation Gizmo operation (Translate/Rotate/Scale)
-     * @param mode Gizmo mode (Local/World)
-     * @param matrix Transform matrix to manipulate (in/out)
-     * @return true if the gizmo was used and matrix was modified
-     */
-    static bool manipulate(
-        const float        *view,
-        const float        *projection,
-        ImGuizmo::OPERATION operation,
-        ImGuizmo::MODE      mode,
-        float              *matrix);
 
     /**
      * @brief Set ImGuizmo rect for the current viewport
@@ -175,6 +154,8 @@ struct ImGuiManager
      * @param height Height
      */
     static void setGizmoRect(float x, float y, float width, float height);
+
+    void onRenderGUI();
 };
 
 // Legacy alias for backward compatibility

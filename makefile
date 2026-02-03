@@ -16,7 +16,7 @@ r:  clean_if_needed cfg_if_needed
 	xmake r $(t) $(r_args)
 
 
-cfg: 
+cfg: basic
 	xmake f -c -y
 	xmake f -m debug -y
 	xmake project -k compile_commands
@@ -30,3 +30,7 @@ clean_if_needed:
 
 cfg_if_needed:
 	$(if $(cfg), xmake f  $(cfg))
+
+basic:
+	# make imgui and imguizmo readonly
+	python3  "./Script/setup_3rd_party.py"
