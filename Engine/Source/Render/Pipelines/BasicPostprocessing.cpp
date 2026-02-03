@@ -1,4 +1,4 @@
-#include "InversionPipeline.h"
+#include "BasicPostprocessing.h"
 #include "Core/App/App.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
@@ -8,7 +8,7 @@ namespace ya
 
 {
 
-void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
+void BasicPostprocessing::init(const DynamicRenderingInfo *dynamicRenderingInfo)
 {
     auto app        = App::get();
     auto render     = app->getRender();
@@ -17,7 +17,7 @@ void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
 
     // MARK: descriptor set layout
     DescriptorSetLayout dsl{
-        .label    = "InversionPipeline_DSL",
+        .label    = "BasicPostprocessing_DSL",
         .set      = 0,
         .bindings = {
             DescriptorSetLayoutBinding{
@@ -33,8 +33,14 @@ void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
 
     // MARK: layout
     PipelineDesc pipelineLayout{
-        .label                = "InversionSystem_PipelineLayout",
-        .pushConstants        = {},
+        .label         = "InversionSystem_PipelineLayout",
+        .pushConstants = {
+            PushConstantRange{
+                .offset     = 0,
+                .size       = sizeof(BasicPostprocessing::PushConstant),
+                .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
+            },
+        },
         .descriptorSetLayouts = {dsl},
     };
 
@@ -49,18 +55,18 @@ void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
     auto _pipelineDesc = GraphicsPipelineCreateInfo{
         .renderingMode         = ERenderingMode::DynamicRendering,
         .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "InversionPipeline",
+            .label                  = "BasicPostprocessing",
             .colorAttachmentFormats = {
                 EFormat::R8G8B8A8_UNORM,
             },
         },
         .shaderDesc = ShaderDesc{
-            .shaderName        = "PostProcessing/Inversion.glsl",
+            .shaderName        = "PostProcessing/Basic.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
-                    .pitch = sizeof(InversionPipeline::PostProcessingVertex),
+                    .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
                 },
             },
             .vertexAttributes = {
@@ -69,14 +75,14 @@ void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
                     .bufferSlot = 0,
                     .location   = 0,
                     .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(InversionPipeline::PostProcessingVertex, position),
+                    .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
                 },
                 //  texcoord
                 VertexAttribute{
                     .bufferSlot = 0, // same buffer slot
                     .location   = 1,
                     .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(InversionPipeline::PostProcessingVertex, texCoord0),
+                    .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
                 },
             },
         },
@@ -144,12 +150,13 @@ void InversionPipeline::init(const DynamicRenderingInfo *dynamicRenderingInfo)
     _descriptorSet = descriptorSets[0];
 }
 
-void InversionPipeline::render(ICommandBuffer *cmdBuf, IImageView *inputImageView, const Extent2D &outputExtent)
+void BasicPostprocessing::render(ICommandBuffer *cmdBuf, const RenderPayload &payload)
 {
+
     auto app    = App::get();
     auto render = app->getRender();
 
-    auto imageViewHandle = inputImageView->getHandle();
+    auto imageViewHandle = payload.inputImageView->getHandle();
     // Update descriptor set only if input image view changed
     if (_currentInputImageViewHandle != imageViewHandle) {
         _currentInputImageViewHandle = imageViewHandle;
@@ -171,14 +178,24 @@ void InversionPipeline::render(ICommandBuffer *cmdBuf, IImageView *inputImageVie
     }
 
     cmdBuf->bindPipeline(_pipeline.get());
-    cmdBuf->setViewport(0, 0, (float)outputExtent.width, (float)outputExtent.height);
-    cmdBuf->setScissor(0, 0, outputExtent.width, outputExtent.height);
+    const auto &extent = payload.extent;
+    cmdBuf->setViewport(0, 0, (float)extent.width, (float)extent.height);
+    cmdBuf->setScissor(0, 0, extent.width, extent.height);
 
     // Bind descriptor set
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
                                0,
                                {_descriptorSet},
                                {});
+    // Push constants
+    PushConstant pc{
+        .effect = static_cast<uint32_t>(payload.effect),
+    };
+    cmdBuf->pushConstants(_pipelineLayout.get(),
+                          EShaderStage::Vertex | EShaderStage::Fragment,
+                          0,
+                          sizeof(BasicPostprocessing::PushConstant),
+                          &pc);
 
     cmdBuf->draw(6, 1, 0, 0);
 }

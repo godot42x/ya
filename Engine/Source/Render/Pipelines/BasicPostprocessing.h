@@ -6,21 +6,25 @@
 
 
 
-
 namespace ya
 {
 
 
 
-struct InversionPipeline
+struct BasicPostprocessing
 {
-    YA_REFLECT_BEGIN(InversionPipeline)
+    YA_REFLECT_BEGIN(BasicPostprocessing)
     YA_REFLECT_END()
 
     struct PostProcessingVertex
     {
         glm::vec3 position;
         glm::vec2 texCoord0;
+    };
+
+    struct PushConstant
+    {
+        uint32_t effect;
     };
 
     stdptr<IPipelineLayout>   _pipelineLayout;
@@ -35,7 +39,7 @@ struct InversionPipeline
     // Current bound input image view (for descriptor update check)
     ImageViewHandle _currentInputImageViewHandle = nullptr;
 
-    ~InversionPipeline()
+    ~BasicPostprocessing()
     {
         _descriptorPool.reset();
         _pipeline.reset();
@@ -47,14 +51,19 @@ struct InversionPipeline
     void init(const DynamicRenderingInfo *dynamicRenderingInfo = nullptr);
     void update() {}
 
-    /**
-     * @brief Render with specified input and output
-     * @param cmdBuf Command buffer
-     * @param inputImageView Input texture to sample (e.g., _viewportRT color attachment)
-     * @param outputImageView Output image view to render to (used for viewport/scissor setup)
-     * @param outputExtent Extent of the output image
-     */
-    void render(ICommandBuffer *cmdBuf, IImageView *inputImageView, const Extent2D &outputExtent);
+    enum EEffect
+    {
+        Inversion = 0,
+        Grayscale = 1
+    };
+
+    struct RenderPayload
+    {
+        IImageView *inputImageView;
+        Extent2D    extent;
+        EEffect     effect;
+    };
+    void render(ICommandBuffer *cmdBuf, const RenderPayload &payload);
 
     void reloadShader()
     {

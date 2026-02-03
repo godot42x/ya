@@ -166,10 +166,8 @@ struct App
     std::shared_ptr<IImage>     _postprocessImage     = nullptr;
     std::shared_ptr<IImageView> _postprocessImageView = nullptr;
 
-    struct PostProcessor
-    {
-        bool bInversion = false;
-    } _postProcessor;
+    bool bBasicPostProcessor = false;
+    int  _postProcessingEffect              = 0;
 
 
     IImageView *_viewportImageView = nullptr;

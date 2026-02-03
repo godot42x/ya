@@ -20,6 +20,7 @@
         "glsl",
         "glslc",
         "gltf",
+        "Grayscale",
         "gtest",
         "HLSL",
         "imguizmo",

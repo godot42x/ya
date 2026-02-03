@@ -46,7 +46,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
-#include "Render/Pipelines/InversionPipeline.h"
+#include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/PrimitiveMeshCache.h"
 #include "Render/Render.h"
 
@@ -272,7 +272,7 @@ void App::init(AppDesc ci)
         .shaderName = "Test/PhongLit.glsl", // 使用新版带 type 和 cutOff 的 shader
     });
     _shaderStorage->load(ShaderDesc{
-        .shaderName = "PostProcessing/Inversion.glsl", // 使用新版带 type 和 cutOff 的 shader
+        .shaderName = "PostProcessing/Basic.glsl", // 使用新版带 type 和 cutOff 的 shader
     });
 
 
@@ -990,26 +990,25 @@ void App::onRender(float dt)
     }
 
     // --- MARK: Postprocessing
-    if (_postProcessor.bInversion)
+    if (bBasicPostProcessor)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
-        // TODO: make those effect in post-processing
         // 1. Inversion 反向
+        // 2. Grayscale 灰度
         auto vkRender = render->as<VulkanRender>();
 
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
 
-        // Input: _viewportRT color attachment (already in ShaderReadOnlyOptimal after viewport pass)
         auto inputImageView = _viewportRT->getFrameBuffer()->getImageView(0);
 
         // Output: _postprocessImage
+        auto rt = _postprocessImage;
+
         // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
-        auto vkPostprocessImage = _postprocessImage;
-        cmdBuf->transitionImageLayout(vkPostprocessImage.get(),
-                                      vkPostprocessImage->as<VulkanImage>()->_layout == VK_IMAGE_LAYOUT_UNDEFINED
-                                          ? EImageLayout::Undefined
-                                          : EImageLayout::ShaderReadOnlyOptimal,
-                                      EImageLayout::ColorAttachmentOptimal);
+        cmdBuf->transitionImageLayout(
+            rt.get(),
+            rt->as<VulkanImage>()->_layout == VK_IMAGE_LAYOUT_UNDEFINED ? EImageLayout::Undefined : EImageLayout::ShaderReadOnlyOptimal,
+            EImageLayout::ColorAttachmentOptimal);
 
         DynamicRenderingInfo ri{
             .label      = "Inversion",
@@ -1031,8 +1030,8 @@ void App::onRender(float dt)
             },
         };
         cmdBuf->beginRendering(ri);
-        static auto inversionPipeline = [&]() {
-            auto pl = new InversionPipeline();
+        static auto basicPostprocessing = [&]() {
+            auto pl = new BasicPostprocessing();
             pl->init(&ri);
             _monitorPipelines.push_back({pl->_pipeline->getName(), pl->_pipeline.get()});
 
@@ -1043,17 +1042,21 @@ void App::onRender(float dt)
             return pl;
         }();
         // Pass input imageView and output extent to render
-        inversionPipeline->render(cmdBuf.get(), inputImageView.get(), _viewportRT->getExtent());
+        BasicPostprocessing::RenderPayload payload{
+            .inputImageView = inputImageView.get(),
+            .extent         = _viewportRT->getExtent(),
+            .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
+        };
+        basicPostprocessing->render(cmdBuf.get(), payload);
         cmdBuf->endRendering();
 
         // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling
-        cmdBuf->transitionImageLayout(vkPostprocessImage.get(),
+        cmdBuf->transitionImageLayout(rt.get(),
                                       EImageLayout::ColorAttachmentOptimal,
                                       EImageLayout::ShaderReadOnlyOptimal);
 
         vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
 
-        // 2. Grayscale 灰度
         // 3. Kernel_Sharpe
         // 4. Kernel_Blur
         // 5. Kernel_Edge-Detection
@@ -1191,7 +1194,16 @@ void App::onRenderGUI(float dt)
         ImGui::Unindent();
         if (ImGui::TreeNode("Postprocessing")) {
 
-            ImGui::Checkbox("Inversion", &_postProcessor.bInversion);
+            ImGui::Checkbox("Inversion", &bBasicPostProcessor);
+            if (!bBasicPostProcessor) {
+                ImGui::BeginDisabled();
+            }
+            ImGui::Combo("Effect",
+                         reinterpret_cast<int *>(&_postProcessingEffect),
+                         "Inversion\0Grayscale\0Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0Pixel-Style/Retro\0");
+            if (!bBasicPostProcessor) {
+                ImGui::EndDisabled();
+            }
 
             ImGui::TreePop();
         }
