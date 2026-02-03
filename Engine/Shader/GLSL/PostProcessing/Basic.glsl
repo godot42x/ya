@@ -36,7 +36,7 @@ const uint WEIGHTED_GRAYSCALE = 2;
 const uint KERNEL_SHARPEN = 3;
 const uint KERNEL_BLUR = 4;
 const uint KERNEL_EDGE_DETECTION = 5;
-const uint TONE_Mapping = 6;
+const uint TONE_MAPPING = 6;
 const uint RANDOM = 7;
 
 layout (push_constant) uniform PushConstants {
@@ -93,7 +93,7 @@ const uint WEIGHTED_GRAYSCALE = 2;
 const uint KERNEL_SHARPEN = 3;
 const uint KERNEL_BLUR = 4;
 const uint KERNEL_EDGE_DETECTION = 5;
-const uint TONE_Mapping = 6;
+const uint TONE_MAPPING = 6;
 const uint RANDOM = 7;
 
 
@@ -119,6 +119,20 @@ vec4 convolution(sampler2D tex, vec2 uv, vec2 offset, float kernel[9]){
         color += texture(tex, uv + offsets[i]).rgb * kernel[i];
     }
     return vec4(color, 1.0);
+}
+
+float luminance(vec3 color, vec3 weights ){
+    return dot(color, weights);
+}
+vec3 acesApprox(vec3 v)
+{
+    v *= 0.6f;
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0f, 1.0f);
 }
 
 
@@ -183,6 +197,12 @@ void main(){
         fColor = vec4(color, 1.0);
 
     } break;
+    case TONE_MAPPING:{
+        vec4 color = texture(uScreenTexture, vTexCoord);
+
+        fColor = vec4(acesApprox(color.rgb), 1.0);
+
+    }break;
     case RANDOM:{
         // Do nothing
     } break;
