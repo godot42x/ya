@@ -8,6 +8,7 @@
 
 #include "Editor/EditorLayer.h"
 
+#include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
 #include "Render/Render.h"
@@ -155,12 +156,17 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    // Render targets
+    // Render targets (simplified - only manage attachments, no RenderPass dependency)
     Rect2D                         viewportRect;
-    std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass
+    std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass (for legacy API)
     std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
-    std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui + viewport
+    std::shared_ptr<IRenderPass>   _screenRenderPass;    // Screen render pass (for ImGui)
+    std::shared_ptr<IRenderTarget> _screenRT = nullptr;   // Swapchain RT for ImGui
+
+    // Material systems (managed externally from RenderTarget)
+    std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
+    FrameContext                                  _frameContext; // Cached camera data per-frame
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     std::shared_ptr<IImage>     _postprocessImage     = nullptr;
@@ -283,6 +289,34 @@ struct App
     // temp
     [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2    &getWindowSize() const { return _windowSize; }
+
+    // Material system management (external from RenderTarget)
+    template <typename T, typename... Args>
+    void addMaterialSystem(IRenderPass *renderPass, Args &&...args)
+    {
+        static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must derive from IMaterialSystem");
+        auto system = makeShared<T>(std::forward<Args>(args)...);
+        system->onInit(renderPass);
+        YA_CORE_DEBUG("Initialized material system: {}", system->_label);
+        _materialSystems.push_back(system);
+    }
+
+    void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func)
+    {
+        for (auto &system : _materialSystems) {
+            func(system);
+        }
+    }
+
+    IMaterialSystem *getMaterialSystemByLabel(const std::string &label)
+    {
+        for (auto &system : _materialSystems) {
+            if (system && system->_label == label) {
+                return system.get();
+            }
+        }
+        return nullptr;
+    }
 
 
   private:

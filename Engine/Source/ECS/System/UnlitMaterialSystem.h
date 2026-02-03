@@ -65,7 +65,7 @@ struct UnlitMaterialSystem : public IMaterialSystem
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override {}
     void onUpdate(float deltaTime) override {}
-    void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
+    void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
     void onRenderGUI() override
     {
         IMaterialSystem::onRenderGUI();
@@ -75,7 +75,7 @@ struct UnlitMaterialSystem : public IMaterialSystem
   private:
     void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(IRenderTarget *rt);
+    void updateFrameDS(FrameContext *ctx);
     void updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial *material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial *material);
 };

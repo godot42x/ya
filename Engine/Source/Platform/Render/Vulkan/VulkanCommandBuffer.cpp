@@ -231,19 +231,19 @@ void VulkanCommandBuffer::executeBeginRendering(const DynamicRenderingInfo &info
     };
     VkRenderingAttachmentInfo *pVkDepthAttach = nullptr;
 
-    if (info.pDepthAttachment != nullptr)
+    if (info.pDepthAttachment.imageView != nullptr)
     {
         vkDepthAttach.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        vkDepthAttach.imageView   = info.pDepthAttachment->imageView->getHandle().as<VkImageView>();
-        vkDepthAttach.imageLayout = EImageLayout::toVk(info.pDepthAttachment->imageLayout);
-        vkDepthAttach.loadOp      = EAttachmentLoadOp::toVk(info.pDepthAttachment->loadOp);
-        vkDepthAttach.storeOp     = EAttachmentStoreOp::toVk(info.pDepthAttachment->storeOp);
+        vkDepthAttach.imageView   = info.pDepthAttachment.imageView->getHandle().as<VkImageView>();
+        vkDepthAttach.imageLayout = EImageLayout::toVk(info.pDepthAttachment.imageLayout);
+        vkDepthAttach.loadOp      = EAttachmentLoadOp::toVk(info.pDepthAttachment.loadOp);
+        vkDepthAttach.storeOp     = EAttachmentStoreOp::toVk(info.pDepthAttachment.storeOp);
 
-        if (info.pDepthAttachment->loadOp == EAttachmentLoadOp::Clear && info.pDepthAttachment->clearValue.isDepthStencil)
+        if (info.pDepthAttachment.loadOp == EAttachmentLoadOp::Clear && info.pDepthAttachment.clearValue.isDepthStencil)
         {
             vkDepthAttach.clearValue.depthStencil = {
-                .depth   = info.pDepthAttachment->clearValue.depthStencil.depth,
-                .stencil = info.pDepthAttachment->clearValue.depthStencil.stencil,
+                .depth   = info.pDepthAttachment.clearValue.depthStencil.depth,
+                .stencil = info.pDepthAttachment.clearValue.depthStencil.stencil,
             };
         }
         pVkDepthAttach = &vkDepthAttach;
@@ -255,19 +255,19 @@ void VulkanCommandBuffer::executeBeginRendering(const DynamicRenderingInfo &info
     };
     VkRenderingAttachmentInfo *pVkStencilAttach = nullptr;
 
-    if (info.pStencilAttachment != nullptr)
+    if (info.pStencilAttachment.imageView != nullptr)
     {
         vkStencilAttach.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        vkStencilAttach.imageView   = info.pStencilAttachment->imageView->getHandle().as<VkImageView>();
-        vkStencilAttach.imageLayout = EImageLayout::toVk(info.pStencilAttachment->imageLayout);
-        vkStencilAttach.loadOp      = EAttachmentLoadOp::toVk(info.pStencilAttachment->loadOp);
-        vkStencilAttach.storeOp     = EAttachmentStoreOp::toVk(info.pStencilAttachment->storeOp);
+        vkStencilAttach.imageView   = info.pStencilAttachment.imageView->getHandle().as<VkImageView>();
+        vkStencilAttach.imageLayout = EImageLayout::toVk(info.pStencilAttachment.imageLayout);
+        vkStencilAttach.loadOp      = EAttachmentLoadOp::toVk(info.pStencilAttachment.loadOp);
+        vkStencilAttach.storeOp     = EAttachmentStoreOp::toVk(info.pStencilAttachment.storeOp);
 
-        if (info.pStencilAttachment->loadOp == EAttachmentLoadOp::Clear && info.pStencilAttachment->clearValue.isDepthStencil)
+        if (info.pStencilAttachment.loadOp == EAttachmentLoadOp::Clear && info.pStencilAttachment.clearValue.isDepthStencil)
         {
             vkStencilAttach.clearValue.depthStencil = {
-                .depth   = info.pStencilAttachment->clearValue.depthStencil.depth,
-                .stencil = info.pStencilAttachment->clearValue.depthStencil.stencil,
+                .depth   = info.pStencilAttachment.clearValue.depthStencil.depth,
+                .stencil = info.pStencilAttachment.clearValue.depthStencil.stencil,
             };
         }
         pVkStencilAttach = &vkStencilAttach;
@@ -525,6 +525,7 @@ void VulkanCommandBuffer::transitionImageLayout(
     EImageLayout::T              newLayout,
     const ImageSubresourceRange *subresourceRange)
 {
+    // TODO: precheck the image's layout == oldLayout and != newLayout
     VkImageSubresourceRange range;
     if (subresourceRange) {
         range.aspectMask     = subresourceRange->aspectMask;

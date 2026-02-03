@@ -425,7 +425,7 @@ void VulkanPipeline::createPipelineInternal()
 
     switch (_ci.renderingMode) {
 
-    case ERenderingMode::Subpass:
+    case ERenderingMode::RenderPass:
     {
         // 传统流程需设置 renderPass 和 subpass，动态渲染模式下这两个参数设为 VK_NULL_HANDLE 与 0
         gplCI.renderPass = _ci.renderPass->getHandleAs<VkRenderPass>();

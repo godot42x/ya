@@ -1,23 +1,22 @@
 #pragma once
 
 #include "Core/Delegate.h"
-#include "ECS/Entity.h"
-#include "ECS/System/IMaterialSystem.h"
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/FrameBuffer.h"
-#include "Render/Core/RenderPass.h"
 #include "Render/RenderDefines.h"
 #include <memory>
-
-#include <glm/glm.hpp>
+#include <string>
 
 namespace ya
 {
 
+// Forward declarations
+struct IImage;
+struct IImageView;
+struct ICommandBuffer;
+struct IFrameBuffer;
+struct IRenderPass;
+
 /**
- * @brief Camera context data cached per-frame
- * Computed once per frame in App::onUpdate, used by all MaterialSystems
- * This decouples camera data acquisition from rendering systems
+ * @brief Frame context containing per-frame camera data
  */
 struct FrameContext
 {
@@ -27,25 +26,50 @@ struct FrameContext
 };
 
 /**
+ * @brief Configuration for creating a RenderTarget
+ * Simplified: only needs format and extent, no RenderPass dependency
+ */
+struct RenderTargetCreateInfo
+{
+    std::string     label            = "RenderTarget";
+    EFormat::T      colorFormat      = EFormat::R8G8B8A8_UNORM;
+    EFormat::T      depthFormat      = EFormat::Undefined; // Undefined = no depth
+    Extent2D        extent           = {800, 600};
+    bool            bSwapChainTarget = false; // If true, use swapchain images instead of creating our own
+    uint32_t        frameBufferCount = 1;     // For swapchain targets, this is ignored (uses swapchain count)
+    ESampleCount::T samples          = ESampleCount::Sample_1;
+
+    // === Legacy RenderPass API support ===
+    // If renderPass is provided, creates VkFramebuffer for traditional rendering pipeline
+    // If nullptr, only manages Images/ImageViews for Dynamic Rendering
+    IRenderPass *renderPass = nullptr;
+};
+
+/**
  * @brief Abstract interface for render targets
- * A render target represents a destination for rendering operations,
- * which can be the swapchain (screen) or an off-screen framebuffer.
+ *
+ * A RenderTarget represents a set of attachments (color + optional depth) that can be
+ * rendered to. It manages the underlying Image and ImageView resources.
+ *
+ * Key design principles:
+ * - No dependency on RenderPass (supports both traditional and dynamic rendering)
+ * - No dependency on Swapchain (extent/format provided at creation)
+ * - MaterialSystems are managed externally for flexibility
+ * - ClearValues are provided through beginRendering API externally
+ * - Dirty flag triggers recreation on next begin()
  */
 struct IRenderTarget
 {
-    std::string label   = "None";
-    Extent2D    _extent = {0, 0};
-    bool        bDirty  = false;
-
-    // ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
-    // ClearValue depthClearValue = ClearValue(1.0f, 0);
-
+    std::string       label          = "None";
+    Extent2D          _extent        = {0, 0};
+    bool              bDirty         = false;
+    ERenderingMode::T _renderingMode = ERenderingMode::None;
 
     /**
-     * @brief Triggered when framebuffer is recreated (e.g., resize, format change)
+     * @brief Triggered when attachments are recreated (e.g., resize, format change)
      * Listeners should invalidate any cached ImageView references
      */
-    MulticastDelegate<void()> onFrameBufferRecreated;
+    MulticastDelegate<void()> onAttachmentsRecreated;
 
     IRenderTarget()          = default;
     virtual ~IRenderTarget() = default;
@@ -59,12 +83,12 @@ struct IRenderTarget
     IRenderTarget &operator=(IRenderTarget &&) = default;
 
     /**
-     * @brief Initialize the render target
+     * @brief Initialize the render target (create initial resources)
      */
     virtual void init() = 0;
 
     /**
-     * @brief Recreate framebuffers (e.g., after window resize)
+     * @brief Recreate attachments (called internally when dirty, or externally if needed)
      */
     virtual void recreate() = 0;
 
@@ -74,96 +98,109 @@ struct IRenderTarget
     virtual void destroy() = 0;
 
     /**
-     * @brief Update render target (called every frame)
+     * @brief Begin frame - check dirty flag and recreate if needed
+     * Call this at the start of each frame before rendering
      */
-    virtual void onUpdate(float deltaTime) = 0;
+    virtual void beginFrame() = 0;
 
     /**
-     * @brief Render all material systems
+     * @brief Set new extent, marks as dirty
      */
-    virtual void onRender(ICommandBuffer *cmdBuf) = 0;
-
-    /**
-     * @brief Render ImGui interface for this render target
-     */
-    virtual void onRenderGUI();
-
-    /**
-     * @brief Begin rendering to this render target
-     * @param cmdBuf Command buffer handle
-     */
-    virtual void begin(ICommandBuffer *cmdBuf) = 0;
-
-    /**
-     * @brief End rendering to this render target
-     * @param cmdBuf Command buffer handle
-     */
-    virtual void end(ICommandBuffer *cmdBuf) = 0;
-
     void setExtent(Extent2D extent)
     {
-        _extent = extent;
-        bDirty  = true;
-    }
-    const Extent2D &getExtent() const { return _extent; }
-
-
-    virtual void setFrameBufferCount(uint32_t count)                                      = 0;
-    virtual void setColorClearValue(ClearValue clearValue)                                = 0;
-    virtual void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue)        = 0;
-    virtual void setDepthStencilClearValue(ClearValue clearValue)                         = 0;
-    virtual void setDepthStencilClearValue(uint32_t attachmentIdx, ClearValue clearValue) = 0;
-
-    // Getters
-    virtual uint32_t                      getFrameBufferCount() const                                  = 0;
-    [[nodiscard]] virtual IRenderPass    *getRenderPass() const                                        = 0;
-    [[nodiscard]] virtual IFrameBuffer   *getFrameBuffer() const                                       = 0;
-    [[nodiscard]] virtual uint32_t        getFrameBufferIndex() const                                  = 0; // Temp
-
-    // Frame camera context methods
-    // App is responsible for computing and setting camera context each frame
-    virtual void                                     setFrameContext(const FrameContext &ctx) = 0;
-    [[nodiscard]] virtual const FrameContext &getFrameContext() const                         = 0;
-
-    /**
-     * @brief Add a material system to this render target
-     * @tparam T Material system type (must derive from IMaterialSystem)
-     * @param args Constructor arguments for the material system
-     */
-    template <typename T, typename... Args>
-    void addMaterialSystem(Args &&...args)
-    {
-        static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
-        auto system = makeShared<T>(std::forward<Args>(args)...);
-        auto rp     = getRenderPass();
-        YA_CORE_ASSERT(rp, "Render pass is null when adding material system");
-        system->onInit(rp);
-        YA_CORE_DEBUG("Initialized material system: {}", system->_label);
-        addMaterialSystemImpl(system);
+        if (_extent.width != extent.width || _extent.height != extent.height)
+        {
+            _extent = extent;
+            bDirty  = true;
+        }
     }
 
-    virtual void             forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) = 0;
-    virtual IMaterialSystem *getMaterialSystemByLabel(const std::string &label)                                = 0;
+    [[nodiscard]] const Extent2D &getExtent() const { return _extent; }
 
-  protected:
+    // ===== Attachment Access =====
+
     /**
-     * @brief Implementation of adding material system (to be overridden)
+     * @brief Get the color image (for use as sampler input, etc.)
+     * @param index Attachment index (for multiple color attachments)
      */
-    virtual void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) = 0;
+    [[nodiscard]] virtual IImage *getColorImage(uint32_t index = 0) const = 0;
+
+    /**
+     * @brief Get the color image view (for descriptor binding, etc.)
+     * @param index Attachment index
+     */
+    [[nodiscard]] virtual IImageView *getColorImageView(uint32_t index = 0) const = 0;
+
+    /**
+     * @brief Get the depth image (nullptr if no depth attachment)
+     */
+    [[nodiscard]] virtual IImage *getDepthImage() const = 0;
+
+    /**
+     * @brief Get the depth image view (nullptr if no depth attachment)
+     */
+    [[nodiscard]] virtual IImageView *getDepthImageView() const = 0;
+
+    /**
+     * @brief Get number of color attachments
+     */
+    [[nodiscard]] virtual uint32_t getColorAttachmentCount() const = 0;
+
+    /**
+     * @brief Check if this render target has a depth attachment
+     */
+    [[nodiscard]] virtual bool hasDepthAttachment() const = 0;
+
+    /**
+     * @brief Get the color format
+     */
+    [[nodiscard]] virtual EFormat::T getColorFormat() const = 0;
+
+    /**
+     * @brief Get the depth format (Undefined if no depth)
+     */
+    [[nodiscard]] virtual EFormat::T getDepthFormat() const = 0;
+
+    /**
+     * @brief Check if this is a swapchain target
+     */
+    [[nodiscard]] virtual bool isSwapChainTarget() const = 0;
+
+    /**
+     * @brief Get the current frame index (relevant for swapchain targets with multiple images)
+     */
+    [[nodiscard]] virtual uint32_t getCurrentFrameIndex() const = 0;
+
+    /**
+     * @brief Get frame buffer count
+     */
+    [[nodiscard]] virtual uint32_t getFrameBufferCount() const = 0;
+
+    // ===== Legacy RenderPass API Support =====
+
+    /**
+     * @brief Get the VkFramebuffer for traditional RenderPass API
+     * @return FrameBuffer pointer, or nullptr if using Dynamic Rendering mode
+     */
+    [[nodiscard]] virtual IFrameBuffer *getFrameBuffer() const { return nullptr; }
+
+    /**
+     * @brief Check if this render target supports traditional RenderPass API
+     * @return true if VkFramebuffer is available
+     */
+    [[nodiscard]] virtual bool hasFrameBuffer() const { return false; }
+
+    /**
+     * @brief Render debug GUI for this render target
+     */
+    virtual void onRenderGUI() {}
+
+    ERenderingMode::T getRenderingMode() const { return _renderingMode; }
 };
 
-
-
-struct RenderTargetCreateInfo
-{
-    std::string  label;
-    // ERenderingMode::DynamicRendering
-    bool         bSwapChainTarget;
-    IRenderPass *renderPass       = nullptr;
-    uint32_t     frameBufferCount = 1;
-    glm::vec2    extent           = {800.f, 600.f};
-};
-
-extern stdptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci);
+/**
+ * @brief Factory function to create a platform-specific render target
+ */
+extern std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo &ci);
 
 } // namespace ya

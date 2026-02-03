@@ -18,6 +18,7 @@ struct VulkanRender;
 struct App;
 struct IRenderTarget;
 struct Scene;
+struct FrameContext;
 
 struct IMaterialSystem : public ISystem
 {
@@ -33,18 +34,17 @@ struct IMaterialSystem : public ISystem
 
     // TODO: abstract render api
     virtual void onInit(IRenderPass *renderPass)                     = 0;
-    virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) = 0;
+    virtual void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) = 0;
     virtual void onUpdate(float deltaTime) override {}
-    virtual void onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt) {}
+    virtual void onUpdateByRenderTarget(float deltaTime, FrameContext *ctx) {}
     virtual void onDestroy() = 0;
 
     void renderGUI()
     {
-        if (!ImGui::CollapsingHeader(_label.c_str())) {
+        bool bOpen = ImGui::TreeNode(_label.c_str());
+        if (!bOpen) {
             return;
         }
-        ImGui::Indent();
-        ImGui::PushID(_label.c_str());
         ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
         ImGui::Checkbox("Enabled", &bEnabled);
         int cull = (int)(_cullMode);
@@ -74,10 +74,8 @@ struct IMaterialSystem : public ISystem
         ImGui::PopStyleColor();
 
         onRenderGUI();
-        ImGui::PopID();
-        ImGui::Unindent();
+        ImGui::TreePop();
     }
-    virtual void onRenderGUI() {}
     virtual void reloadShaders() { _pipeline->reloadShaders(); };
 
 
@@ -91,5 +89,8 @@ struct IMaterialSystem : public ISystem
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must be derived from IMaterialSystem");
         return static_cast<T *>(this);
     }
+
+  protected:
+    virtual void onRenderGUI() {}
 };
 } // namespace ya

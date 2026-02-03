@@ -131,15 +131,15 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override;
-    void onUpdateByRenderTarget(float deltaTime, IRenderTarget *rt) override;
-    void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override;
+    void onUpdateByRenderTarget(float deltaTime, FrameContext *ctx) override;
+    void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
     void onRenderGUI() override;
 
 
   private:
     // void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(IRenderTarget *rt);
+    void updateFrameDS(FrameContext *ctx);
     void updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material);
 

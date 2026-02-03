@@ -1,103 +1,108 @@
 #pragma once
 
-#include "Core/Debug/Instrumentor.h"
-#include "ECS/Entity.h"
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
-#include "Render/Core/RenderPass.h"
 #include "Render/RenderDefines.h"
-
+#include <memory>
+#include <vector>
 
 namespace ya
 {
 
+// Forward declarations
+struct VulkanRender;
+struct VulkanImage;
+struct VulkanImageView;
+struct VulkanFrameBuffer;
+struct ISwapchain;
+struct IRenderPass;
+
 /**
  * @brief Vulkan-specific implementation of render target
- * Manages framebuffers, attachments, and rendering operations for Vulkan
+ *
+ * Manages color and depth attachments as VulkanImage/VulkanImageView.
+ * Supports both standalone rendering and swapchain targets.
+ *
+ * Supports two rendering modes:
+ * 1. Dynamic Rendering (VK_KHR_dynamic_rendering) - no VkFramebuffer needed
+ * 2. Traditional RenderPass API - creates VkFramebuffer when renderPass is provided
+ *
+ * Usage:
+ * 1. Create with RenderTargetCreateInfo (optionally with renderPass for legacy mode)
+ * 2. Call beginFrame() each frame (handles dirty recreation)
+ * 3. Use getColorImageView()/getDepthImageView() for Dynamic Rendering
+ * 4. Or use getFrameBuffer() with RenderPass for traditional rendering
  */
 struct VulkanRenderTarget : public IRenderTarget
 {
+  private:
+    // Configuration
+    EFormat::T      _colorFormat       = EFormat::R8G8B8A8_UNORM;
+    EFormat::T      _depthFormat       = EFormat::Undefined;
+    ESampleCount::T _samples           = ESampleCount::Sample_1;
+    bool            _bSwapChainTarget  = false;
+    uint32_t        _frameBufferCount  = 1;
+    uint32_t        _currentFrameIndex = 0;
+
+    // Resources - per frame (for swapchain targets or multi-buffering)
+    struct FrameAttachments
+    {
+        std::shared_ptr<VulkanImage>     colorImage;
+        std::shared_ptr<VulkanImageView> colorImageView;
+        std::shared_ptr<VulkanImage>     depthImage;
+        std::shared_ptr<VulkanImageView> depthImageView;
+
+        // For legacy RenderPass API: VkFramebuffer
+        std::shared_ptr<VulkanFrameBuffer> frameBuffer;
+
+        // For swapchain targets: we wrap external images, don't own them
+        bool ownsColorImage = true;
+    };
+    std::vector<FrameAttachments> _frameAttachments;
+
+    // Render reference
+    VulkanRender *_vkRender   = nullptr;
+    IRenderPass  *_renderPass = nullptr; // For legacy RenderPass API (not owned)
+
+  public:
+
     VulkanRenderTarget(const VulkanRenderTarget &)            = delete;
     VulkanRenderTarget &operator=(const VulkanRenderTarget &) = delete;
     VulkanRenderTarget(VulkanRenderTarget &&)                 = delete;
     VulkanRenderTarget &operator=(VulkanRenderTarget &&)      = delete;
 
-    IRenderPass *_renderPass       = nullptr;
-    int          subpassRef        = -1; // TODO: a RT should related to a subpass
-    uint32_t     _frameBufferCount = 0;
-
-    std::vector<std::shared_ptr<IFrameBuffer>> _frameBuffers;
-    std::vector<ClearValue>                    _clearValues;
-
-    uint32_t _currentFrameIndex = 0; // Current frame index for this render target
-
-    bool bSwapChainTarget = false; // Whether this render target is the swap chain target
-    bool bBeginTarget     = false; // Whether this render target is the begin target
-
-    std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
-
-    FrameContext _cameraContext; // Cached camera data per-frame
-
-  public:
-
-    VulkanRenderTarget(const RenderTargetCreateInfo &ci);
-
+    explicit VulkanRenderTarget(const RenderTargetCreateInfo &ci);
     virtual ~VulkanRenderTarget() override;
 
-    // IRenderTarget interface implementation
+    // ===== IRenderTarget interface implementation =====
     void init() override;
     void recreate() override;
     void destroy() override;
-    void onUpdate(float deltaTime) override;
-    void onRender(ICommandBuffer *cmdBuf) override
-    {
-        YA_PROFILE_FUNCTION()
-        renderMaterialSystems(cmdBuf);
-    }
+    void beginFrame() override;
+
+    [[nodiscard]] IImage     *getColorImage(uint32_t index = 0) const override;
+    [[nodiscard]] IImageView *getColorImageView(uint32_t index = 0) const override;
+    [[nodiscard]] IImage     *getDepthImage() const override;
+    [[nodiscard]] IImageView *getDepthImageView() const override;
+
+    [[nodiscard]] uint32_t   getColorAttachmentCount() const override { return 1; } // Currently single color attachment
+    [[nodiscard]] bool       hasDepthAttachment() const override { return _depthFormat != EFormat::Undefined; }
+    [[nodiscard]] EFormat::T getColorFormat() const override { return _colorFormat; }
+    [[nodiscard]] EFormat::T getDepthFormat() const override { return _depthFormat; }
+    [[nodiscard]] bool       isSwapChainTarget() const override { return _bSwapChainTarget; }
+    [[nodiscard]] uint32_t   getCurrentFrameIndex() const override { return _currentFrameIndex; }
+    [[nodiscard]] uint32_t   getFrameBufferCount() const override { return _frameBufferCount; }
+
+    // ===== Legacy RenderPass API Support =====
+    [[nodiscard]] IFrameBuffer *getFrameBuffer() const override;
+    [[nodiscard]] bool          hasFrameBuffer() const override { return _renderPass != nullptr; }
+
     void onRenderGUI() override;
 
-    void begin(ICommandBuffer *cmdBuf) override;
-    void end(ICommandBuffer *cmdBuf) override;
-
-    void setColorClearValue(ClearValue clearValue) override;
-    void setColorClearValue(uint32_t attachmentIdx, ClearValue clearValue) override;
-    void setDepthStencilClearValue(ClearValue clearValue) override;
-    void setDepthStencilClearValue(uint32_t attachmentIdx, ClearValue clearValue) override;
-
-    [[nodiscard]] IRenderPass  *getRenderPass() const override { return _renderPass; }
-    [[nodiscard]] IFrameBuffer *getFrameBuffer() const override { return _frameBuffers[_currentFrameIndex].get(); }
-    void                        setFrameBufferCount(uint32_t count) override;
-    uint32_t                    getFrameBufferCount() const override { return _frameBufferCount; }
-    uint32_t                    getFrameBufferIndex() const override { return _currentFrameIndex; } // Temp
-
-    void renderMaterialSystems(ICommandBuffer *cmdBuf);
-
-    // Frame camera context - set by App, used by MaterialSystems
-    void                setFrameContext(const FrameContext &ctx) override { _cameraContext = ctx; }
-    const FrameContext &getFrameContext() const override { return _cameraContext; }
-
-  public:
-    void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func) override
-    {
-        for (auto &system : _materialSystems) {
-            func(system);
-        }
-    }
-
-    IMaterialSystem *getMaterialSystemByLabel(const std::string &label) override
-    {
-        for (auto &system : _materialSystems) {
-            if (system && system->_label == label) {
-                return system.get();
-            }
-        }
-        return nullptr;
-    }
-
-
-  protected:
-    void addMaterialSystemImpl(std::shared_ptr<IMaterialSystem> system) override;
+  private:
+    void createAttachments();
+    void destroyAttachments();
+    void createFrameBuffers(); // Create VkFramebuffers for legacy RenderPass API
+    void destroyFrameBuffers();
 };
 
 } // namespace ya

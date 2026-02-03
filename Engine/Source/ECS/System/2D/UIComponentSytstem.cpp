@@ -21,7 +21,7 @@ void UIComponentSystem::onRender()
     auto scene = app->getSceneManager()->getActiveScene();
 
 
-    auto &ctx      = rt->getFrameContext();
+    auto &ctx      = app->_frameContext;
     auto  viewport = app->viewportRect;
 
     // 这里想要的是一个三维世界之中的2D平面，而不是屏幕二维的平面

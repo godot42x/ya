@@ -59,6 +59,7 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
     if (newLayout == oldLayout) {
         return true;
     }
+    YA_ASSERT(image->_layout == oldLayout, "VulkanImage::transitionImageLayout image layout is not equal to old layout");
 
     VkImageMemoryBarrier imb{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,

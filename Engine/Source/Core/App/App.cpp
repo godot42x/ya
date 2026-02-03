@@ -359,16 +359,23 @@ void App::init(AppDesc ci)
             },
         });
     // Create Scene RenderTarget (offscreen for 3D scene)
+    // Using legacy RenderPass API with VkFramebuffer
     _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
+        .label       = "Viewport RenderTarget",
+        .colorFormat = EFormat::R8G8B8A8_UNORM,
+        .depthFormat = DEPTH_FORMAT,
+        .extent      = {
+                 .width  = static_cast<uint32_t>(winW),
+                 .height = static_cast<uint32_t>(winH),
+        },
         .bSwapChainTarget = false,
-        .renderPass       = _viewportRenderPass.get(),
         .frameBufferCount = 1,
-        .extent           = glm::vec2(static_cast<float>(winW), static_cast<float>(winH)),
+        .renderPass       = _viewportRenderPass.get(), // Enable legacy RenderPass API
     });
-    _viewportRT->addMaterialSystem<SimpleMaterialSystem>();
-    _viewportRT->addMaterialSystem<UnlitMaterialSystem>();
-    _viewportRT->addMaterialSystem<PhongMaterialSystem>();
+    // Material systems are now managed externally
+    addMaterialSystem<SimpleMaterialSystem>(_viewportRenderPass.get());
+    addMaterialSystem<UnlitMaterialSystem>(_viewportRenderPass.get());
+    addMaterialSystem<PhongMaterialSystem>(_viewportRenderPass.get());
 
     // Create postprocess intermediate image (for dynamic rendering)
     {
@@ -442,11 +449,18 @@ void App::init(AppDesc ci)
             },
         });
 
+    // Store screen render pass for reference
+    _screenRenderPass = _renderpass;
+
     // Create UI RenderTarget (swapchain for ImGui)
+    // Using legacy RenderPass API with VkFramebuffer
     _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Final RenderTarget",
+        .colorFormat      = EFormat::R8G8B8A8_UNORM,
+        .depthFormat      = EFormat::Undefined, // No depth for UI pass
+        .extent           = {static_cast<uint32_t>(winW), static_cast<uint32_t>(winH)},
         .bSwapChainTarget = true,
-        .renderPass       = _renderpass.get(),
+        .renderPass       = _screenRenderPass.get(), // Enable legacy RenderPass API
     });
 
     _render->getSwapchain()->onRecreate.addLambda(
@@ -718,6 +732,9 @@ void ya::App::quit()
     ImGuiManager::get().shutdown();
     // }
 
+    // Cleanup material systems (managed externally now)
+    _materialSystems.clear();
+
     // Cleanup render targets before render passes (dependency order)
     if (_viewportRT) {
         _viewportRT->destroy();
@@ -730,6 +747,7 @@ void ya::App::quit()
     }
 
     _renderpass.reset();
+    _screenRenderPass.reset();
     _viewportRenderPass.reset();
 
     _deleter.clear();
@@ -862,12 +880,11 @@ void App::onUpdate(float dt)
         glm::mat4 invView = glm::inverse(ctx.view);
         ctx.cameraPos     = glm::vec3(invView[3]);
 
-        _viewportRT->setFrameContext(ctx);
+        _frameContext = ctx; // Store for material systems
     }
 
     // Store real-time delta for editor
-    _viewportRT->setColorClearValue(colorClearValue);
-    _viewportRT->setDepthStencilClearValue(depthClearValue);
+    // Note: ClearValue is now set in onRender() via beginRenderPass() or beginRendering()
 
     static ResourceResolveSystem *resourceResolveSystem = []() {
         auto sys = new ResourceResolveSystem();
@@ -890,8 +907,13 @@ void App::onUpdate(float dt)
 
     resourceResolveSystem->onUpdate(dt);
     transformSystem->onUpdate(dt);
-    _viewportRT->onUpdate(dt);
-    _screenRT->onUpdate(dt);
+
+    // Update material systems externally
+    for (auto &system : _materialSystems) {
+        if (system->bEnabled) {
+            system->onUpdateByRenderTarget(dt, &_frameContext);
+        }
+    }
 
     Render2D::onUpdate(dt);
 
@@ -951,12 +973,78 @@ void App::onRender(float dt)
     // --- MARK:1: Render 3D Scene to Offscreen RT ---
     {
         YA_PROFILE_SCOPE("ViewPort pass")
-        _viewportRT->begin(cmdBuf.get());
-        _viewportRT->onRender(cmdBuf.get());
+
+        // Begin frame to handle dirty recreation
+        _viewportRT->beginFrame();
+        bool bRenderpassAPI = _viewportRT->getRenderingMode() == ERenderingMode::RenderPass;
+
+        // Use legacy RenderPass API if available
+        if (bRenderpassAPI) {
+
+            // Traditional RenderPass flow: beginRenderPass -> render -> endRenderPass
+            _viewportRenderPass->begin(cmdBuf.get(),
+                                       _viewportRT->getFrameBuffer(),
+                                       _viewportRT->getExtent(),
+                                       {colorClearValue, depthClearValue});
+        }
+        else {
+            // Transition color attachment to ColorAttachmentOptimal
+            auto colorImage = _viewportRT->getColorImage(0);
+            if (colorImage) {
+                cmdBuf->transitionImageLayout(colorImage,
+                                              EImageLayout::Undefined,
+                                              EImageLayout::ColorAttachmentOptimal);
+            }
+
+            // Transition depth attachment if exists
+            auto depthImage = _viewportRT->getDepthImage();
+            if (depthImage) {
+                cmdBuf->transitionImageLayout(depthImage,
+                                              EImageLayout::Undefined,
+                                              EImageLayout::DepthStencilAttachmentOptimal);
+            }
+
+
+            DynamicRenderingInfo ri{
+                .label      = "Viewport",
+                .renderArea = Rect2D{
+                    .pos    = {0, 0},
+                    .extent = _viewportRT->getExtent().toVec2(),
+                },
+                .layerCount       = 1,
+                .colorAttachments = {
+                    RenderingAttachmentInfo{
+                        .imageView   = _viewportRT->getColorImageView(),
+                        .imageLayout = EImageLayout::ColorAttachmentOptimal,
+                        .loadOp      = EAttachmentLoadOp::Clear,
+                        .storeOp     = EAttachmentStoreOp::Store,
+                        .clearValue  = colorClearValue,
+                    },
+                },
+            };
+            // Add depth attachment if exists
+            if (_viewportRT->hasDepthAttachment()) {
+                ri.pDepthAttachment = RenderingAttachmentInfo{
+                    .imageView   = _viewportRT->getDepthImageView(),
+                    .imageLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .clearValue  = depthClearValue,
+                };
+            }
+
+            cmdBuf->beginRendering(ri);
+        }
+        // Render material systems
+        for (auto &system : _materialSystems) {
+            if (system->bEnabled) {
+                YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
+                system->onRender(cmdBuf.get(), &_frameContext);
+            }
+        }
 
         {
             YA_PROFILE_SCOPE("Render2D");
-            // Render 2D overlays on scene (pass frame index for per-frame DescriptorSets)
             Render2D::begin(cmdBuf.get());
             static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
 
@@ -972,16 +1060,30 @@ void App::onRender(float dt)
                 }
             }
 
-            // auto font = FontManager::get()->getFont("JetBrainsMono-Medium", 48);
-            // Render2D::makeText("Hello YaEngine!", pos1 + glm::vec3(200.0f, 200.0f, -0.1f), FUIColor::red().asVec4(), font.get());
-
-            Render2D::onRender(); // 2026/1/31: UIComponent?
+            Render2D::onRender();
             UIManager::get()->render();
             Render2D::onRenderGUI();
             Render2D::end();
         }
 
-        _viewportRT->end(cmdBuf.get());
+        if (bRenderpassAPI)
+        {
+            _viewportRenderPass->end(cmdBuf.get());
+            // Transition color attachment to ShaderReadOnlyOptimal for ImGui sampling
+            // -> already transitions by the render pass, see renderpass::colorAttachment::finalLayout
+        }
+        else {
+
+            cmdBuf->endRendering();
+
+            // Transition color attachment to ShaderReadOnlyOptimal for ImGui sampling
+            if (bRenderpassAPI) {
+                cmdBuf->transitionImageLayout(
+                    _viewportRT->getColorImage(0),
+                    EImageLayout::ColorAttachmentOptimal,
+                    EImageLayout::ShaderReadOnlyOptimal);
+            }
+        }
     }
 
     {
@@ -1002,7 +1104,7 @@ void App::onRender(float dt)
 
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
 
-        auto inputImageView = _viewportRT->getFrameBuffer()->getImageView(0);
+        auto inputImageView = _viewportRT->getColorImageView();
 
         // Output: _postprocessImage
         auto rt = _postprocessImage;
@@ -1046,7 +1148,7 @@ void App::onRender(float dt)
         }();
         // Pass input imageView and output extent to render
         BasicPostprocessing::RenderPayload payload{
-            .inputImageView = inputImageView.get(),
+            .inputImageView = inputImageView,
             .extent         = _viewportRT->getExtent(),
             .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
             .floatParams    = _postProcessingParams,
@@ -1071,7 +1173,7 @@ void App::onRender(float dt)
         _viewportImageView = _postprocessImageView.get();
     }
     else {
-        _viewportImageView = _viewportRT->getFrameBuffer()->getImageView(0).get();
+        _viewportImageView = _viewportRT->getColorImageView();
     }
 
     // Note: _postprocessImage is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
@@ -1079,7 +1181,15 @@ void App::onRender(float dt)
     // --- MARK: 2: Render UI to Swapchain RT ---
     {
         YA_PROFILE_SCOPE("Screen pass")
-        _screenRT->begin(cmdBuf.get());
+
+        // Begin frame to handle dirty recreation
+        _screenRT->beginFrame();
+
+        // Use traditional render pass for ImGui (it requires VkRenderPass)
+        _screenRenderPass->begin(cmdBuf.get(),
+                                 _screenRT->getFrameBuffer(),
+                                 _screenRT->getExtent(),
+                                 {colorClearValue});
 
         // Render ImGui
         auto &imManager = ImGuiManager::get();
@@ -1095,7 +1205,7 @@ void App::onRender(float dt)
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
-        _screenRT->end(cmdBuf.get());
+        _screenRenderPass->end(cmdBuf.get());
     }
     // Note: executeAll() is now called inside RenderTarget::end()
     cmdBuf->end();
@@ -1135,6 +1245,15 @@ void App::onRenderGUI(float dt)
         Render2D::onImGui();
         ImGui::Unindent();
     }
+
+    if (ImGui::CollapsingHeader("Material Systems", 0)) {
+        ImGui::Indent();
+        for (auto &system : _materialSystems) {
+            system->renderGUI();
+        }
+        ImGui::Unindent();
+    }
+
 
     _viewportRT->onRenderGUI();
     _screenRT->onRenderGUI();

@@ -43,7 +43,8 @@ namespace ERenderingMode
 {
 enum T
 {
-    Subpass,          // Traditional RenderPass + Subpass
+    None,
+    RenderPass,       // Traditional RenderPass + Subpass
     DynamicRendering, // Vulkan 1.3+ / VK_KHR_dynamic_rendering
     Auto,             // Auto select based on driver support
 };
@@ -703,11 +704,8 @@ struct DynamicRenderingInfo
     // Color attachments (can have multiple for MRT)
     std::vector<RenderingAttachmentInfo> colorAttachments;
 
-    // Depth attachment (optional)
-    RenderingAttachmentInfo *pDepthAttachment = nullptr;
-
-    // Stencil attachment (optional, can be same as depth)
-    RenderingAttachmentInfo *pStencilAttachment = nullptr;
+    RenderingAttachmentInfo pDepthAttachment   = {}; // Depth attachment (optional)
+    RenderingAttachmentInfo pStencilAttachment = {}; // Stencil attachment (optional, can be same as depth)
 
     // resolve attachment
     // std:
@@ -737,7 +735,7 @@ struct GraphicsPipelineCreateInfo
 
     // Rendering mode
     // TODO: remove this, use cmdBuf.beginRendering to process renderpass verb and dynamical rendering verb
-    ERenderingMode::T renderingMode = ERenderingMode::Subpass;
+    ERenderingMode::T renderingMode = ERenderingMode::RenderPass;
 
     // Subpass mode fields
     uint32_t     subPassRef;

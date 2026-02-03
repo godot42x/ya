@@ -88,10 +88,10 @@ struct MaterialSystemV1Template : public IMaterialSystem
     // ========================================================================
     // 生命周期方法（需要子类实现）
     // ========================================================================
-    virtual void onInit(IRenderPass *renderPass) override                     = 0;
-    virtual void onDestroy() override                                         = 0;
-    virtual void onUpdate(float deltaTime) override                           = 0;
-    virtual void onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt) override = 0;
+    virtual void onInit(IRenderPass *renderPass) override                      = 0;
+    virtual void onDestroy() override                                          = 0;
+    virtual void onUpdate(float deltaTime) override                            = 0;
+    virtual void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override  = 0;
 
     virtual void onRenderGUI() override
     {
@@ -154,12 +154,12 @@ struct MaterialSystemV1Template : public IMaterialSystem
     /**
      * @brief 设置视口和裁剪区域
      * @param cmdBuf 命令缓冲区
-     * @param rt 渲染目标
+     * @param extent 渲染目标尺寸
      */
-    void setupViewportAndScissor(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+    void setupViewportAndScissor(ICommandBuffer *cmdBuf, Extent2D extent)
     {
-        uint32_t width  = rt->getFrameBuffer()->getWidth();
-        uint32_t height = rt->getFrameBuffer()->getHeight();
+        uint32_t width  = extent.width;
+        uint32_t height = extent.height;
 
         float viewportY      = 0.0f;
         float viewportHeight = static_cast<float>(height);
@@ -244,7 +244,8 @@ struct MaterialSystemV1Template : public IMaterialSystem
     /**
      * @brief 通用渲染循环
      * @param cmdBuf 命令缓冲区
-     * @param rt 渲染目标
+     * @param ctx Frame Context (contains camera matrices)
+     * @param extent 渲染目标尺寸
      * @param pushConstantUpdater 更新 Push Constant 的回调
      *
      * 处理材质系统的通用渲染流程，包括：
@@ -257,7 +258,8 @@ struct MaterialSystemV1Template : public IMaterialSystem
     template <typename TPushConstant>
     void renderImpl(
         ICommandBuffer                                                                 *cmdBuf,
-        IRenderTarget                                                                  *rt,
+        FrameContext                                                                   *ctx,
+        Extent2D                                                                        extent,
         std::function<TPushConstant(const TransformComponent &tc)>                      pushConstantUpdater,
         std::function<void(const MaterialComponentType &, const TransformComponent &)> preDrawCallback = nullptr)
     {
@@ -275,10 +277,10 @@ struct MaterialSystemV1Template : public IMaterialSystem
         cmdBuf->bindPipeline(_pipeline.get());
 
         // 设置视口和裁剪区域
-        setupViewportAndScissor(cmdBuf, rt);
+        setupViewportAndScissor(cmdBuf, extent);
 
         // 更新 frame descriptor set
-        updateFrameDS(rt);
+        updateFrameDS(ctx);
 
         // 检查是否需要扩展材质 descriptor pool
         bool     bShouldForceUpdateMaterial = false;
@@ -368,12 +370,12 @@ struct MaterialSystemV1Template : public IMaterialSystem
 
     /**
      * @brief 更新 Frame Descriptor Set
-     * @param rt Render Target
+     * @param ctx Frame Context (contains camera matrices)
      *
      * 更新 per-frame 数据（相机矩阵、时间等）
      * 需要子类实现具体逻辑
      */
-    virtual void updateFrameDS(IRenderTarget *rt) = 0;
+    virtual void updateFrameDS(FrameContext *ctx) = 0;
 
     /**
      * @brief 更新 Material 参数 Descriptor Set

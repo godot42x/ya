@@ -273,7 +273,7 @@ void PhongMaterialSystem::onDestroy()
 }
 
 // MARK: grab resources
-void PhongMaterialSystem::onUpdateByRenderTarget(float dt, IRenderTarget *rt)
+void PhongMaterialSystem::onUpdateByRenderTarget(float dt, FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -366,7 +366,7 @@ void PhongMaterialSystem::onUpdateByRenderTarget(float dt, IRenderTarget *rt)
     // YA_CORE_INFO("PhongMaterialSystem::onUpdate - Final numPointLights = {}", uLight.numPointLights);
 }
 
-void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -388,8 +388,10 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
         cmdBuf->bindPipeline(_pipeline.get());
     }
 
-    uint32_t width  = rt->getFrameBuffer()->getWidth();
-    uint32_t height = rt->getFrameBuffer()->getHeight();
+    // Get viewport extent from App (since we no longer have direct RT access)
+    auto app = getApp();
+    uint32_t width  = app->_viewportRT->getExtent().width;
+    uint32_t height = app->_viewportRT->getExtent().height;
 
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
@@ -408,7 +410,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     {
         YA_PROFILE_SCOPE("PhongMaterial::UpdateFrameDS");
-        updateFrameDS(rt);
+        updateFrameDS(ctx);
     }
 
     // Material tracking for this frame
@@ -558,26 +560,24 @@ void PhongMaterialSystem::onRenderGUI()
 
 
 // TODO: descriptor set can be shared if they use same layout and data
-void PhongMaterialSystem::updateFrameDS(IRenderTarget *rt)
+void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
 
     auto app    = getApp();
     auto render = getRender();
 
-    // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getFrameContext();
-
+    // Use passed camera context
     FrameUBO uFrame{
-        .projection = camCtx.projection,
-        .view       = camCtx.view,
+        .projection = ctx->projection,
+        .view       = ctx->view,
         .resolution = {
-            rt->getFrameBuffer()->getWidth(),
-            rt->getFrameBuffer()->getHeight(),
+            app->_viewportRT->getExtent().width,
+            app->_viewportRT->getExtent().height,
         },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
-        .cameraPos  = camCtx.cameraPos,
+        .cameraPos  = ctx->cameraPos,
     };
 
     // TODO: handle the rotation  of radians in shader

@@ -283,7 +283,7 @@ GraphicsPipelineCreateInfo ci{
 
 ```cpp
 // 检查设备是否支持 Dynamic Rendering
-if (_renderpass->getRenderingMode() == ERenderingMode::Subpass) {
+if (_renderpass->getRenderingMode() == ERenderingMode::RenderPass) {
     YA_CORE_WARN("Dynamic Rendering not supported, falling back to Subpass");
     // 使用传统 API
     renderPass->begin(...);

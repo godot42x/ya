@@ -164,7 +164,7 @@ void SimpleMaterialSystem::onUpdate(float deltaTime)
 {
 }
 
-void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
 
     auto render = getRender();
@@ -179,13 +179,15 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
 
     // Wrap void* in VulkanCommandBuffer for generic bind call
     _pipeline->bind(cmdBuf->getHandle());
-    auto curFrameBuffer = rt->getFrameBuffer();
+
+    // Get viewport extent from App
+    auto app = getApp();
+    auto fbExtent = app->_viewportRT->getExtent();
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo
     // or those properties should be modified in the pipeline recreation if needed.
     // but sometimes that we want to enable depth or color-blend state dynamically
-    auto         fbExtent = curFrameBuffer->getExtent();
     ::VkViewport viewport{
         .x        = 0,
         .y        = 0,
@@ -210,10 +212,9 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     // vkCmdSetScissor(vkCmdBuf, 0, 1, &scissor);
 #pragma endregion
 
-    // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getFrameContext();
-    pc.view            = camCtx.view;
-    pc.projection      = camCtx.projection;
+    // Use passed camera context
+    pc.view            = ctx->view;
+    pc.projection      = ctx->projection;
 
     for (const auto entity : view) {
         const auto &[tc, smc, meshComp] = view.get(entity);

@@ -237,7 +237,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         });
 }
 
-void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
+void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
     Scene *scene = getActiveScene();
     if (!scene) {
@@ -251,8 +251,10 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
     cmdBuf->bindPipeline(_pipeline.get());
 
-    uint32_t width  = rt->getFrameBuffer()->getWidth();
-    uint32_t height = rt->getFrameBuffer()->getHeight();
+    // Get viewport extent from App
+    auto app = getApp();
+    uint32_t width  = app->_viewportRT->getExtent().width;
+    uint32_t height = app->_viewportRT->getExtent().height;
 
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
@@ -267,7 +269,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, IRenderTarget *rt)
     cmdBuf->setCullMode(_cullMode);
 #endif
 
-    updateFrameDS(rt);
+    updateFrameDS(ctx);
 
     //
     bool     bShouldForceUpdateMaterial = false;
@@ -413,20 +415,18 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 }
 
 // TODO: descriptor set can be shared if they use same layout and data
-void UnlitMaterialSystem::updateFrameDS(IRenderTarget *rt)
+void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
 {
     auto app    = getApp();
     auto render = getRender();
 
-    // Use cached camera context (updated once per frame in App::onUpdate)
-    const auto &camCtx = rt->getFrameContext();
-
+    // Use passed camera context
     FrameUBO ubo{
-        .projection = camCtx.projection,
-        .view       = camCtx.view,
+        .projection = ctx->projection,
+        .view       = ctx->view,
         .resolution = {
-            rt->getFrameBuffer()->getWidth(),
-            rt->getFrameBuffer()->getHeight(),
+            app->_viewportRT->getExtent().width,
+            app->_viewportRT->getExtent().height,
         },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
