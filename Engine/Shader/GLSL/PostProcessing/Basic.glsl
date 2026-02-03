@@ -71,6 +71,7 @@ void main()
 #endif
 }
 
+// MARK: fragment
 #type fragment
 #version 450
 
@@ -101,6 +102,24 @@ layout(location = 0) out vec4 fColor;
 layout(set = 0, binding = 0) uniform sampler2D uScreenTexture;
 
 
+vec4 convolution(sampler2D tex, vec2 uv, vec2 offset, float kernel[9]){
+    vec3 color = vec3(0.0);
+    const vec2 offsets[9] = vec2[](
+        vec2(-offset.x,  offset.y), // 左上
+        vec2( 0.0,       offset.y), // 正上
+        vec2( offset.x,  offset.y), // 右上
+        vec2(-offset.x,  0.0),      // 左
+        vec2( 0.0,       0.0),      // 中
+        vec2( offset.x,  0.0),      // 右
+        vec2(-offset.x, -offset.y), // 左下
+        vec2( 0.0,      -offset.y), // 正下
+        vec2( offset.x, -offset.y)  // 右下
+    );
+    for (int i = 0; i < 9; i++){
+        color += texture(tex, uv + offsets[i]).rgb * kernel[i];
+    }
+    return vec4(color, 1.0);
+}
 
 
 void main(){
@@ -131,62 +150,38 @@ void main(){
     {
         // const float offset = 1.0 / 300.0;
         const float offset = fragPC.floatParams[0].x;
-        const vec2 offsets[9] = vec2[](
-            vec2(-offset,  offset), // 左上
-            vec2( 0.0f,    offset), // 正上
-            vec2( offset,  offset), // 右上
-            vec2(-offset,  0.0f),   // 左
-            vec2( 0.0f,    0.0f),   // 中
-            vec2( offset,  0.0f),   // 右
-            vec2(-offset, -offset), // 左下
-            vec2( 0.0f,   -offset), // 正下
-            vec2( offset, -offset)  // 右下
-        );
         const float kernel[9] = float[](
             -1.0, -1.0, -1.0,
             -1.0,  9.0, -1.0,
             -1.0, -1.0, -1.0
         );
-        vec3 sampledTexture[9];
-        for (int i = 0; i < 9; i++) {
-            sampledTexture[i] = texture(uScreenTexture, vTexCoord + offsets[i]).rgb;
-        }
-        vec3 color = vec3(0.0);
-        for (int i = 0; i < 9; i++) {
-            color += sampledTexture[i] * kernel[i];
-        }
+        vec3 color = convolution(uScreenTexture, vTexCoord, vec2(offset, offset), kernel).rgb;
         fColor = vec4(color, 1.0);
     } break;
     case KERNEL_BLUR:
     {
         const float offset = fragPC.floatParams[0].x;
-        const vec2 offsets[9] = vec2[](
-            vec2(-offset,  offset), // 左上
-            vec2( 0.0f,    offset), // 正上
-            vec2( offset,  offset), // 右上
-            vec2(-offset,  0.0f),   // 左
-            vec2( 0.0f,    0.0f),   // 中
-            vec2( offset,  0.0f),   // 右
-            vec2(-offset, -offset), // 左下
-            vec2( 0.0f,   -offset), // 正下
-            vec2( offset, -offset)  // 右下
-        );
-
         const float alpha = fragPC.floatParams[0].y > 0.0 ? fragPC.floatParams[0].y : 16.0;
+        // 默认为16， 即3x3和为16再除以 16
         const float kernel[9] = float[](
             1.0 / alpha, 2.0 / alpha, 1.0 / alpha,
             2.0 / alpha, 4.0 / alpha, 2.0 / alpha,
             1.0 / alpha, 2.0 / alpha, 1.0 / alpha  
         );
-        vec3 sampledTexture[9];
-        for (int i = 0; i < 9; i++) {
-            sampledTexture[i] = texture(uScreenTexture, vTexCoord + offsets[i]).rgb;
-        }
-        vec3 color = vec3(0.0);
-        for (int i = 0; i < 9; i++) {
-            color += sampledTexture[i] * kernel[i];
-        }
+        vec3 color = convolution(uScreenTexture, vTexCoord, vec2(offset, offset), kernel).rgb;
         fColor = vec4(color, 1.0);
+    } break;
+    case KERNEL_EDGE_DETECTION:
+    {
+        const float offset = fragPC.floatParams[0].x;
+         const float kernel[9] = float[](
+            1,  1, 1,
+            1, -8, 1,
+            1,  1, 1
+        );
+        vec3 color = convolution(uScreenTexture, vTexCoord, vec2(offset, offset), kernel).rgb;
+        fColor = vec4(color, 1.0);
+
     } break;
     case RANDOM:{
         // Do nothing

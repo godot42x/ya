@@ -148,11 +148,6 @@ void App::onSceneViewportResized(Rect2D rect)
 const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
 
-
-std::shared_ptr<Mesh> cubeMesh;
-
-
-
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
 ClearValue depthClearValue = ClearValue(1.0f, 0);
 
@@ -989,6 +984,14 @@ void App::onRender(float dt)
         _viewportRT->end(cmdBuf.get());
     }
 
+    {
+        YA_PROFILE_SCOPE("Screen in Screen")
+        // TODO: draw the scene in the scene, a mirror, or a rear-view mirror(后视镜)
+        // 1. 获取镜子的位置、视角方向，获取镜子的view
+        // 2. 使用镜子的view渲染场景到镜子RT
+        // 3. 将镜子RT作为纹理渲染到主场景
+    }
+
     // --- MARK: Postprocessing
     if (bBasicPostProcessor)
     {
@@ -1058,9 +1061,6 @@ void App::onRender(float dt)
 
         vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
 
-        // 3. Kernel_Sharpe
-        // 4. Kernel_Blur
-        // 5. Kernel_Edge-Detection
         // 6. Tone Mapping
         // 7. Pixel-Style/Retro 像素风/复古
         //
@@ -1199,18 +1199,19 @@ void App::onRenderGUI(float dt)
             if (!bBasicPostProcessor) {
                 ImGui::BeginDisabled();
             }
-            ImGui::Combo("Effect",
-                         reinterpret_cast<int *>(&_postProcessingEffect),
-                         "Inversion\0Grayscale\0Weighted Grayscale\0"
-                         "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
-                         // frag shader do nothing, 老电视机花屏效果
-                         "Random\0" 
-                         );
+            {
+                ImGui::Combo("Effect",
+                             reinterpret_cast<int *>(&_postProcessingEffect),
+                             "Inversion\0Grayscale\0Weighted Grayscale\0"
+                             "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
+                             // frag shader do nothing, 老电视机花屏效果
+                             "Random\0");
+                for (const auto &[i, p] : ut::enumerate(_postProcessingParams)) {
+                    ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
+                }
+            }
             if (!bBasicPostProcessor) {
                 ImGui::EndDisabled();
-            }
-            for (const auto &[i, p] : ut::enumerate(_postProcessingParams)) {
-                ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
             }
 
             ImGui::TreePop();
