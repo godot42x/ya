@@ -156,7 +156,7 @@ struct App
     glm::vec2 _lastMousePos = {0, 0};
 
     // Render targets (simplified - only manage attachments, no RenderPass dependency)
-    Rect2D                         viewportRect;
+    Rect2D                         _viewportRect;
     std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass (for legacy API)
     std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
@@ -178,6 +178,9 @@ struct App
         ret[0].x = 1.0 / 300.0; // kernel_sharpen defaults
         return ret;
     }();
+
+    bool  bRetroRendering = false;
+    float _retroScale     = 4.0f;
 
 
 
@@ -329,7 +332,6 @@ struct App
     bool onMouseButtonReleased(const MouseButtonReleasedEvent &event);
     bool onMouseScrolled(const MouseScrolledEvent &event);
     void onSceneViewportResized(Rect2D rect);
-
 
 
 

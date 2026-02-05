@@ -22,7 +22,7 @@ void UIComponentSystem::onRender()
 
 
     auto &ctx      = app->_frameContext;
-    auto  viewport = app->viewportRect;
+    auto  viewport = app->_viewportRect;
 
     // 这里想要的是一个三维世界之中的2D平面，而不是屏幕二维的平面
     // 即可以旋转相机视角，来看到一张纸...

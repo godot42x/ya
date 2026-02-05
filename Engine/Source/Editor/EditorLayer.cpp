@@ -82,15 +82,15 @@ void EditorLayer::onAttach()
 
     // Subscribe to viewport framebuffer recreation to cleanup stale ImGui textures
     // if (_app->_viewportRT) {
-        // _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
-        //     YA_CORE_INFO("EditorLayer: Viewport framebuffer recreated, cleaning up cached viewport image");
-        //     // Clear the cached viewport image since the old ImageView/DescriptorSet is now invalid
-        //     if (_viewportImage && _viewportImage->ds) {
-        //         removeImGuiTexture(_viewportImage);
-        //         _viewportImage              = nullptr;
-        //         _currentViewportImageHandle = nullptr;
-        //     }
-        // });
+    // _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
+    //     YA_CORE_INFO("EditorLayer: Viewport framebuffer recreated, cleaning up cached viewport image");
+    //     // Clear the cached viewport image since the old ImageView/DescriptorSet is now invalid
+    //     if (_viewportImage && _viewportImage->ds) {
+    //         removeImGuiTexture(_viewportImage);
+    //         _viewportImage              = nullptr;
+    //         _currentViewportImageHandle = nullptr;
+    //     }
+    // });
 
     //     YA_CORE_INFO("EditorLayer attached successfully");
     // }
@@ -470,21 +470,6 @@ void EditorLayer::toolbar()
     ImGui::End();
 }
 
-// void EditorLayer::settingsWindow()
-// {
-//     if (!ImGui::Begin("Settings", &bShowSettingsWindow))
-//     {
-//         ImGui::End();
-//         return;
-//     }
-
-//     ImGui::ColorEdit4("Clear Color##editor", glm::value_ptr(_clearColor));
-//     ImGui::DragFloat("Debug Float##editor", &_debugFloat, 0.01f);
-
-//     ImGui::End();
-// }
-
-
 void EditorLayer::viewportWindow()
 {
     YA_PROFILE_FUNCTION();
@@ -551,9 +536,13 @@ void EditorLayer::viewportWindow()
         {
             ImageViewHandle currentHandle = imageView->getHandle();
 
+            // Create new descriptor set for new ImageView
+            Sampler *sampler = _viewPortSamplerType == Linear
+                                 ? TextureLibrary::get().getLinearSampler()
+                                 : TextureLibrary::get().getNearestSampler();
 
             // Check if ImageView changed (framebuffer was recreated)
-            if (_currentViewportImageHandle != currentHandle)
+            if (_currentViewportImageHandle != currentHandle || _currentViewportSampler != sampler)
             {
                 // YA_CORE_TRACE("Viewport ImageView changed, refreshing ImGui texture: {}", App::get()->_frameIndex);
 
@@ -563,8 +552,8 @@ void EditorLayer::viewportWindow()
                     YA_CORE_INFO("Removed old viewport ImGui texture");
                 }
 
-                // Create new descriptor set for new ImageView
-                _viewportImage              = getOrCreateImGuiTextureID(imageView);
+                _currentViewportSampler     = sampler;
+                _viewportImage              = getOrCreateImGuiTextureID(imageView, _currentViewportSampler);
                 _currentViewportImageHandle = currentHandle;
             }
 
@@ -699,6 +688,17 @@ void EditorLayer::viewportWindow()
             ctx.end();
         }
     }
+
+    ImGui::End();
+}
+
+void EditorLayer::editorSettings()
+{
+    if (!ImGui::Begin("Editor Settings")) {
+        ImGui::End();
+        return;
+    }
+    ImGui::Combo("Viewport Sampler", (int *)&_viewPortSamplerType, "Linear\0Nearest\0");
 
     ImGui::End();
 }

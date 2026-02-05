@@ -71,10 +71,16 @@ struct EditorLayer
     const ImGuiImageEntry *_simulationIcon = nullptr;
     const ImGuiImageEntry *_viewportImage  = nullptr;
 
-    void *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
+    void    *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
+    Sampler *_currentViewportSampler     = nullptr;
+    enum
+    {
+        Linear = 0,
+        Nearest
+    } _viewPortSamplerType = Linear;
 
     uint32_t _resizeTimerHandle = 0;
-    Rect2D   _pendingViewportRect;    // Pending resize event to be processed in next frame
+    Rect2D   _pendingViewportRect; // Pending resize event to be processed in next frame
     bool     _bViewportResizePending = false;
 
   public:
@@ -119,7 +125,7 @@ struct EditorLayer
     bool getPendingViewportResize(Rect2D &outRect)
     {
         if (_bViewportResizePending) {
-            outRect = _pendingViewportRect;
+            outRect                 = _pendingViewportRect;
             _bViewportResizePending = false;
             return true;
         }
@@ -146,6 +152,7 @@ struct EditorLayer
         setupDockspace();
         menuBar();
         toolbar();
+        editorSettings();
         viewportWindow();
 
         _sceneHierarchyPanel.onImGuiRender();
@@ -194,6 +201,7 @@ struct EditorLayer
     // void settingsWindow();
     // void renderStatsWindow();
     void viewportWindow();
+    void editorSettings();
 
     // Helpers
     void setupDockspace();

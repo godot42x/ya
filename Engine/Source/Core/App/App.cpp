@@ -95,7 +95,7 @@ uint32_t App::App::_frameIndex = 0;
 
 void App::onSceneViewportResized(Rect2D rect)
 {
-    viewportRect      = rect;
+    _viewportRect     = rect;
     float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
     camera.setAspectRatio(aspectRatio);
 
@@ -704,15 +704,14 @@ int App::onEvent(const Event &event)
         return 0;
     }
 
-    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
+    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, _viewportRect.pos, _viewportRect.extent);
     // currently ui only rendering in viewport
-    if (bInViewport) {
-
-
+    if (bInViewport)
+    {
         UIAppCtx ctx{
             .lastMousePos = _lastMousePos,
             .bInViewport  = bInViewport,
-            .viewportRect = viewportRect,
+            .viewportRect = _viewportRect,
         };
         _editorLayer->screenToViewport(_lastMousePos, ctx.lastMousePos);
         UIManager::get()->onEvent(event, ctx);
@@ -991,15 +990,25 @@ void App::onRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
+
     // --- MARK:1: Render 3D Scene to Offscreen RT ---
     {
         YA_PROFILE_SCOPE("ViewPort pass")
+
+        // from the editor layer's viewport size
+        // auto extent = _editorLayer.g
+        Extent2D extent = Extent2D::fromVec2(_viewportRect.extent);
+
+        if (bRetroRendering) {
+            extent = Extent2D::fromVec2(_viewportRect.extent / _retroScale);
+            _viewportRT->setExtent(extent);
+        }
 
         RenderingInfo ri{
             .label      = "ViewPort",
             .renderArea = Rect2D{
                 .pos    = {0, 0},
-                .extent = _viewportRT->getExtent().toVec2(),
+                .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
@@ -1010,6 +1019,7 @@ void App::onRender(float dt)
 
         cmdBuf->beginRendering(ri);
 
+        _frameContext.extent = _viewportRT->getExtent().toVec2(); // Update frame context with actual render extent for material systems
         // Render material systems
         for (auto &system : _materialSystems) {
             if (system->bEnabled) {
@@ -1021,7 +1031,6 @@ void App::onRender(float dt)
         {
             YA_PROFILE_SCOPE("Render2D");
             Render2D::begin(cmdBuf.get());
-            static glm::vec3 pos1 = glm::vec3(0.f, 0, 0);
 
             if (_appMode == AppMode::Drawing) {
                 for (const auto &&[idx, p] : ut::enumerate(clicked))
@@ -1030,20 +1039,21 @@ void App::onRender(float dt)
                                  ? AssetManager::get()->getTextureByName("uv1")
                                  : AssetManager::get()->getTextureByName("face");
                     YA_CORE_ASSERT(tex, "Texture not found");
-                    glm::vec3 pos = glm::vec3(p.x - viewportRect.pos.x, p.y - viewportRect.pos.y, 0.0f);
-                    Render2D::makeSprite(pos, {50, 50}, tex);
+                    glm::vec2 pos;
+                    _editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
+                    Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
                 }
+
+                Render2D::onRender();
+                UIManager::get()->render();
+                Render2D::onRenderGUI();
+                Render2D::end();
             }
 
-            Render2D::onRender();
-            UIManager::get()->render();
-            Render2D::onRenderGUI();
-            Render2D::end();
+            cmdBuf->endRendering(EndRenderingInfo{
+                .renderTarget = _viewportRT.get(),
+            });
         }
-
-        cmdBuf->endRendering(EndRenderingInfo{
-            .renderTarget = _viewportRT.get(),
-        });
     }
 
     {
@@ -1086,7 +1096,7 @@ void App::onRender(float dt)
             .label      = "Postprocessing",
             .renderArea = Rect2D{
                 .pos    = {0, 0},
-                .extent = _viewportRT->getExtent().toVec2(),
+                .extent = _viewportRect.extent, // Use viewport size for postprocess render area
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
@@ -1121,7 +1131,7 @@ void App::onRender(float dt)
 
         BasicPostprocessing::RenderPayload payload{
             .inputImageView = inputImageView,
-            .extent         = _viewportRT->getExtent(),
+            .extent         = Extent2D::fromVec2(_viewportRect.extent),
             .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
             .floatParams    = _postProcessingParams,
         };
@@ -1136,13 +1146,7 @@ void App::onRender(float dt)
 
         vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
 
-        // 6. Tone Mapping
-        // 7. Pixel-Style/Retro 像素风/复古
-        //
-        // 并且，editor 那边需要按需查看某些效果， 这里的 pass 也要按需执行，不能空耗
-        // 目前的 render target， render pass 不能符合？ 重构一下
-        // 指定input， output， 需要复用 SceneRT 的结果， 且存到不同 RT 之上
-        // 是否类似于 dynamical- render 了？ 或者可以采取一个 pass 重复执行 n 遍的实现
+        // TODO: depending to render graph
         _viewportImageView = _postprocessImageView.get();
     }
     else {
@@ -1155,14 +1159,6 @@ void App::onRender(float dt)
     {
         YA_PROFILE_SCOPE("Screen pass")
 
-        // Begin frame to handle dirty recreation
-        // _screenRT->beginFrame();
-
-        // Use traditional render pass for ImGui (it requires VkRenderPass)
-        // _screenRenderPass->begin(cmdBuf.get(),
-        //                          _screenRT->getFrameBuffer(),
-        //                          _screenRT->getExtent(),
-        //                          {colorClearValue});
         RenderingInfo ri{
             .label      = "Screen",
             .renderArea = Rect2D{
@@ -1180,10 +1176,9 @@ void App::onRender(float dt)
         // Render ImGui
         auto &imManager = ImGuiManager::get();
         imManager.beginFrame();
-
-        this->renderGUI(dt);
-
-        // imcDrawMaterials();
+        {
+            this->renderGUI(dt);
+        }
         imManager.endFrame();
         imManager.render();
 
@@ -1191,11 +1186,11 @@ void App::onRender(float dt)
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
-        cmdBuf->endRendering(EndRenderingInfo{});
+        cmdBuf->endRendering();
     }
-    // Note: executeAll() is now called inside RenderTarget::end()
     cmdBuf->end();
 
+    // TODO: multi-thread rendering
     // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
     // render->submitToQueue(
     //     {cmdBuf->getHandle()},
@@ -1324,6 +1319,15 @@ void App::onRenderGUI(float dt)
                 ImGui::EndDisabled();
             }
 
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Retro Mode")) {
+            if (ImGui::Checkbox("Enable Retro Rendering", &bRetroRendering)) {
+                _viewportRT->setExtent(_viewportRect.extent2D());
+            }
+            ImGui::BeginDisabled(!bRetroRendering);
+            ImGui::DragFloat("Retro Scale", &_retroScale, 0.1f, 1.0f, 10.0f);
+            ImGui::EndDisabled();
             ImGui::TreePop();
         }
     }

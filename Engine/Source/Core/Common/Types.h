@@ -12,7 +12,14 @@ struct Extent2D
     uint32_t width{0};
     uint32_t height{0};
 
-    glm::vec2 toVec2() const { return glm::vec2(width, height); }
+    glm::vec2       toVec2() const { return glm::vec2(width, height); }
+    static Extent2D fromVec2(glm::vec2 v)
+    {
+        return Extent2D{
+            .width  = static_cast<uint32_t>(v.x),
+            .height = static_cast<uint32_t>(v.y),
+        };
+    }
 };
 
 

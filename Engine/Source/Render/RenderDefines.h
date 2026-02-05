@@ -573,6 +573,8 @@ struct Rect2D
         glm::vec2 offset;
     };
     glm::vec2 extent;
+
+    Extent2D extent2D() { return Extent2D::fromVec2(extent); }
 };
 
 struct ViewportState

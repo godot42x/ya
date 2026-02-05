@@ -357,7 +357,7 @@ struct ICommandBuffer
     /**
      * @brief End rendering (works for both RenderPass and Dynamic Rendering)
      */
-    virtual void endRendering(const EndRenderingInfo &info) = 0;
+    virtual void endRendering(const EndRenderingInfo &info = {}) = 0;
 
     virtual void transitionImageLayout(
         IImage                      *image,

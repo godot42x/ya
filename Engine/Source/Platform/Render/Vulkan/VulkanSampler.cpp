@@ -10,11 +10,11 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
     auto vkRender = ya::App::get()->getRender<VulkanRender>();
     vkRender      = static_cast<VulkanRender *>(ya::App::get()->getRender());
 
-    ::VkSamplerCreateInfo vkCI{
+    VkSamplerCreateInfo vkCI{
         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .pNext                   = nullptr,
         .flags                   = 0,
-        .magFilter               = ::VkFilter::VK_FILTER_LINEAR,
+        .magFilter               = toVk(ci.magFilter),
         .minFilter               = toVk(ci.minFilter),
         .mipmapMode              = toVk(ci.mipmapMode),
         .addressModeU            = toVk(ci.addressModeU),
@@ -33,7 +33,7 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
 
     if (vkCI.anisotropyEnable == VK_TRUE)
     {
-        ::VkPhysicalDeviceFeatures deviceFeatures;
+        VkPhysicalDeviceFeatures deviceFeatures;
         vkGetPhysicalDeviceFeatures(vkRender->getPhysicalDevice(), &deviceFeatures);
         if (deviceFeatures.samplerAnisotropy != VK_TRUE)
         {

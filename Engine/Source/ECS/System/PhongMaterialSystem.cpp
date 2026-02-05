@@ -389,7 +389,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     }
 
     // Get viewport extent from App (since we no longer have direct RT access)
-    auto app = getApp();
+    auto     app    = getApp();
     uint32_t width  = app->_viewportRT->getExtent().width;
     uint32_t height = app->_viewportRT->getExtent().height;
 
