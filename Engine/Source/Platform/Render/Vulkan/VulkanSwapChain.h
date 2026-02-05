@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Delegate.h"
+#include "Platform/Render/Vulkan/VulkanUtils.h"
 #include "Render/Core/Swapchain.h"
 #include "WindowProvider.h"
 #include <vector>
@@ -108,12 +109,9 @@ struct VulkanSwapChain : public ISwapchain
             .height = _supportDetails.capabilities.currentExtent.height};
     }
 
-    EFormat::T getFormat() const override;
-
-    uint32_t getImageCount() const override
-    {
-        return static_cast<uint32_t>(_images.size());
-    }
+    // ISwapchain interface implementation
+    EFormat::T getFormat() const override { return EFormat::fromVk(_surfaceFormat); }
+    uint32_t   getImageCount() const override { return static_cast<uint32_t>(_images.size()); }
 
     // ISwapchain interface: VSync control
     bool getVsync() const override { return bVsync; }

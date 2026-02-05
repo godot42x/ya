@@ -452,7 +452,7 @@ void OpenGLCommandBuffer::copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 }
 
-void OpenGLCommandBuffer::beginRendering(const DynamicRenderingInfo &info)
+void OpenGLCommandBuffer::beginRendering(const RenderingInfo &info)
 {
     (void)info; // OpenGL doesn't need explicit rendering begin
 }

@@ -30,7 +30,6 @@ struct VulkanRenderPass : public ya::IRenderPass
     VkFormat         m_depthFormat          = VK_FORMAT_UNDEFINED;
     VulkanSwapChain *_swapChain             = nullptr;
 
-    ya::RenderPassCreateInfo _ci;
 
   public:
     VulkanRenderPass(VulkanRender *render);
@@ -54,9 +53,6 @@ struct VulkanRenderPass : public ya::IRenderPass
     void      *getHandle() const override { return (void *)(uintptr_t)m_renderPass; }
     EFormat::T getDepthFormat() const override;
 
-    uint32_t                                      getAttachmentCount() const override { return static_cast<uint32_t>(_ci.attachments.size()); }
-    const std::vector<ya::AttachmentDescription> &getAttachments() const override { return _ci.attachments; }
-    const ya::RenderPassCreateInfo               &getCreateInfo() const override { return _ci; }
 
     // Vulkan-specific methods
     [[nodiscard]] VkRenderPass getVkHandle() const { return m_renderPass; }

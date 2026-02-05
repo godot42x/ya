@@ -439,6 +439,7 @@ void VulkanPipeline::createPipelineInternal()
                 delete static_cast<std::vector<VkFormat> *>(handle);
             }
         });
+        YA_CORE_ASSERT(_ci.pipelineRenderingInfo.colorAttachmentFormats.size() > 0, "Not a valid dyn rendering pipeline creation info");
         std::ranges::transform(
             _ci.pipelineRenderingInfo.colorAttachmentFormats,
             std::back_inserter(*colorAttachmentRef),

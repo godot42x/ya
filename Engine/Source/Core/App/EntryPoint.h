@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     ya::profiling::StaticInitProfiler::recordEnd();
 
 
-    try {
+    // try {
         ya::AppDesc ci;
         ci.init(argc, argv);
         auto *app = createApp();
@@ -27,15 +27,15 @@ int main(int argc, char **argv)
         app->run();
         app->quit();
         delete app;
-    }
-    catch (const std::exception &e) {
-        YA_CORE_ERROR("Exception caught in main: {}", e.what());
-        return -1;
-    }
-    catch (...) {
-        YA_CORE_ERROR("Unknown exception caught in main");
-        return -1;
-    }
+    // }
+    // catch (const std::exception &e) {
+    //     YA_CORE_ERROR("Exception caught in main: {}", e.what());
+    //     return -1;
+    // }
+    // catch (...) {
+    //     YA_CORE_ERROR("Unknown exception caught in main");
+    //     return -1;
+    // }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Give time for logs to flush
     YA_CORE_INFO("Application exited successfully");

@@ -99,10 +99,30 @@ using stdclock = std::chrono::steady_clock;
 using namespace std::string_literals;
 using namespace std::literals;
 
-#define NAMESPACE_BEGIN(name) \
-    namespace name            \
-    {
-#define NAMESPACE_END(name) }
+// #define NAMESPACE_BEGIN(name) \
+//     namespace name            \
+//     {
+// #define NAMESPACE_END(name) }
 
+template <typename Base>
+struct plat_base
+{
+
+    template <typename Derived>
+    Derived *as()
+    {
+        static_assert(std::is_base_of_v<Base, Derived>, "T must be derived from plat_base");
+        return static_cast<Derived *>(this);
+    }
+
+    // template <typename Derived>
+    // stdptr<Derived> asShared()
+    // {
+    //     static_assert(std::is_base_of_v<Base, Derived>, "T must be derived from plat_base");
+    //     return static_pointer_cast<Derived>(shared_from_this());
+    // }
+
+    virtual ~plat_base() = default;
+};
 
 } // namespace ya

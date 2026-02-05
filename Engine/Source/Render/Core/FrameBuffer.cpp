@@ -6,7 +6,7 @@
 namespace ya
 {
 
-stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, IRenderPass *renderPass, const FrameBufferCreateInfo &ci)
+stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, const FrameBufferCreateInfo &ci)
 {
     auto api = App::get()->getRender()->getAPI();
     switch (api) {
@@ -15,10 +15,8 @@ stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, IRenderPass *renderPa
         break;
     case ERenderAPI::Vulkan:
     {
-        auto vkRender     = static_cast<VulkanRender *>(render);
-        auto vkRenderPass = static_cast<VulkanRenderPass *>(renderPass);
-        auto fb           = makeShared<VulkanFrameBuffer>(vkRender, vkRenderPass, ci.width, ci.height);
-        fb->recreate(ci.images, ci.width, ci.height);
+        auto fb = makeShared<VulkanFrameBuffer>(render->as<VulkanRender>());
+        fb->recreate(ci);
         return fb;
     }
     case ERenderAPI::DirectX12:

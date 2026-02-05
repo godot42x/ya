@@ -43,7 +43,7 @@ struct OpenGLRenderPass : public IRenderPass
     void                                     *getHandle() const override { return (void *)(uintptr_t)_currentFramebuffer; }
     EFormat::T                                getDepthFormat() const override;
     uint32_t                                  getAttachmentCount() const override { return static_cast<uint32_t>(_ci.attachments.size()); }
-    const std::vector<AttachmentDescription> &getAttachments() const override { return _ci.attachments; }
+    const std::vector<AttachmentDescription> &getAttachmentDesc() const override { return _ci.attachments; }
     const RenderPassCreateInfo               &getCreateInfo() const override { return _ci; }
 
   private:

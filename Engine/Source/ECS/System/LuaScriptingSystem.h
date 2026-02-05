@@ -1,4 +1,4 @@
-
+#pragma once
 #include "ScriptingSystem.h"
 #include <functional>
 #include <sol/sol.hpp>

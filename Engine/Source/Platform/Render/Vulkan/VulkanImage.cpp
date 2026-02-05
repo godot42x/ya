@@ -287,7 +287,8 @@ bool VulkanImage::allocate()
     VK_CALL(vkAllocateMemory(_render->getDevice(), &allocInfo, nullptr, &_imageMemory));
     VK_CALL(vkBindImageMemory(_render->getDevice(), _handle, _imageMemory, 0));
 
-    _layout = imageCreateInfo.initialLayout;
+
+    _layout = imageCreateInfo.initialLayout; // already transitioned by the createImage call
     bOwned  = true;
     return true;
 }

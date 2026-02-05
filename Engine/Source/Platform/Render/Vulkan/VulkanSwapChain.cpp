@@ -453,20 +453,6 @@ VkResult VulkanSwapChain::presentImage(uint32_t idx, std::vector<VkSemaphore> wa
     return ret;
 }
 
-// ISwapchain interface implementation
-EFormat::T VulkanSwapChain::getFormat() const
-{
-    // Convert VkFormat to EFormat::T
-    switch (_surfaceFormat) {
-    case VK_FORMAT_R8G8B8A8_UNORM:
-        return EFormat::R8G8B8A8_UNORM;
-    case VK_FORMAT_B8G8R8A8_UNORM:
-        return EFormat::B8G8R8A8_UNORM;
-    default:
-        return EFormat::Undefined;
-    }
-}
-
 EPresentMode::T VulkanSwapChain::getPresentMode() const
 {
     return EPresentMode::fromVk(_presentMode);

@@ -299,7 +299,7 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
 
     // Store as abstract interface
     image     = vkImage;
-    imageView = std::make_shared<VulkanImageView>(vkRender, vkImage.get(), VK_IMAGE_ASPECT_COLOR_BIT);
+    imageView = VulkanImageView::create(vkRender, vkImage, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Create staging buffer
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
@@ -419,7 +419,7 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
     }
 
     image     = vkImage;
-    imageView = std::make_shared<VulkanImageView>(vkRender, vkImage.get(), VK_IMAGE_ASPECT_COLOR_BIT);
+    imageView = VulkanImageView::create(vkRender, vkImage, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Create staging buffer
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(

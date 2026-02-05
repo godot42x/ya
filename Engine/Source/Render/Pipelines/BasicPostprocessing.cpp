@@ -8,7 +8,7 @@ namespace ya
 
 {
 
-void BasicPostprocessing::init(const DynamicRenderingInfo *dynamicRenderingInfo)
+void BasicPostprocessing::init()
 {
     auto app        = App::get();
     auto render     = app->getRender();
@@ -35,29 +35,30 @@ void BasicPostprocessing::init(const DynamicRenderingInfo *dynamicRenderingInfo)
                 EFormat::R8G8B8A8_UNORM,
             },
         },
-        .shaderDesc = ShaderDesc{
-            .shaderName        = "PostProcessing/Basic.glsl",
-            .bDeriveFromShader = false,
-            .vertexBufferDescs = {
+        .pipelineLayout = _pipelineLayout.get(),
+        .shaderDesc     = ShaderDesc{
+                .shaderName        = "PostProcessing/Basic.glsl",
+                .bDeriveFromShader = false,
+                .vertexBufferDescs = {
                 VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
+                        .slot  = 0,
+                        .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
                 },
             },
-            .vertexAttributes = {
+                .vertexAttributes = {
                 // (location=0) in vec3 aPos,
                 VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 0,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
+                        .bufferSlot = 0,
+                        .location   = 0,
+                        .format     = EVertexAttributeFormat::Float3,
+                        .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
                 },
                 //  texcoord
                 VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 1,
-                    .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
+                        .bufferSlot = 0, // same buffer slot
+                        .location   = 1,
+                        .format     = EVertexAttributeFormat::Float2,
+                        .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
                 },
             },
         },

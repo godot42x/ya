@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/PlatBase.h"
 #include "RenderDefines.h"
 
 namespace ya

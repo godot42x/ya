@@ -29,6 +29,7 @@ struct IGraphicsPipeline;
 struct IRenderPass;
 struct IBuffer;
 struct IImage;
+struct IRenderTarget;
 
 
 #if YA_CMDBUF_RECORD_MODE
@@ -113,7 +114,7 @@ struct RenderCommand
     };
     struct BeginRendering
     {
-        DynamicRenderingInfo info;
+        RenderingInfo info;
     };
     struct EndRendering
     {
@@ -299,7 +300,7 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::CopyBuffer{src, dst, size, srcOffset, dstOffset}});
     }
 
-    void beginRendering(const DynamicRenderingInfo &info)
+    void beginRendering(const RenderingInfo &info)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
     }
@@ -350,13 +351,30 @@ struct ICommandBuffer
         const void      *data)                                                   = 0;
     virtual void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                             uint64_t srcOffset = 0, uint64_t dstOffset = 0) = 0;
-    virtual void beginRendering(const DynamicRenderingInfo &info)           = 0;
-    virtual void endRendering()                                             = 0;
+
+    virtual void beginRendering(const RenderingInfo &info) = 0;
+
+    /**
+     * @brief End rendering (works for both RenderPass and Dynamic Rendering)
+     */
+    virtual void endRendering(const EndRenderingInfo &info) = 0;
+
     virtual void transitionImageLayout(
         IImage                      *image,
         EImageLayout::T              oldLayout,
         EImageLayout::T              newLayout,
         const ImageSubresourceRange *subresourceRange = nullptr) = 0;
+
+    virtual void transitionImageLayoutAuto(
+        IImage                      *image,
+        EImageLayout::T              newLayout,
+        const ImageSubresourceRange *subresourceRange = nullptr) = 0;
+
+    // Helper: Transition all attachments of a RenderTarget to specified layouts
+    virtual void transitionRenderTargetLayout(
+        IRenderTarget  *renderTarget,
+        EImageLayout::T colorLayout,
+        EImageLayout::T depthLayout = EImageLayout::Undefined) = 0;
 
     #if YA_CMDBUF_RECORD_MODE
     // No-op in virtual mode - commands are executed immediately

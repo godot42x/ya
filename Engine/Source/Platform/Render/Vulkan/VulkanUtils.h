@@ -399,8 +399,12 @@ inline auto toVk(T format) -> VkFormat
         return VK_FORMAT_R8G8_UNORM;
     case R8G8B8A8_UNORM:
         return VK_FORMAT_R8G8B8A8_UNORM;
+    case R8G8B8A8_SRGB:
+        return VK_FORMAT_R8G8B8A8_SRGB;
     case B8G8R8A8_UNORM:
         return VK_FORMAT_B8G8R8A8_UNORM;
+    case B8G8R8A8_SRGB:
+        return VK_FORMAT_B8G8R8A8_SRGB;
     case D32_SFLOAT:
         return VK_FORMAT_D32_SFLOAT;
     case D32_SFLOAT_S8_UINT: // with stencil?
@@ -487,8 +491,12 @@ inline EFormat::T fromVk(VkFormat format)
         return R8G8_UNORM;
     case VK_FORMAT_R8G8B8A8_UNORM:
         return R8G8B8A8_UNORM;
+    case VK_FORMAT_R8G8B8A8_SRGB:
+        return R8G8B8A8_SRGB;
     case VK_FORMAT_B8G8R8A8_UNORM:
         return B8G8R8A8_UNORM;
+    case VK_FORMAT_B8G8R8A8_SRGB:
+        return B8G8R8A8_SRGB;
     case VK_FORMAT_D32_SFLOAT:
         return D32_SFLOAT;
     case VK_FORMAT_D32_SFLOAT_S8_UINT:
@@ -778,6 +786,29 @@ inline auto toVk(T layout) -> VkImageLayout
     default:
         UNREACHABLE();
     }
+}
+inline auto fromVk(VkImageLayout layout) -> T
+{
+    switch (layout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED:
+        return Undefined;
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        return ColorAttachmentOptimal;
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        return DepthStencilAttachmentOptimal;
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        return ShaderReadOnlyOptimal;
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        return TransferSrcOptimal;
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        return TransferDstOptimal;
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+        return PresentSrcKHR;
+    default:
+        UNREACHABLE();
+    }
+
+    return Undefined;
 }
 
 }; // namespace EImageLayout

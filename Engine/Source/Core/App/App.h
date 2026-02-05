@@ -118,7 +118,6 @@ struct App
     IRender      *_render       = nullptr;
     SceneManager *_sceneManager = nullptr;
 
-    std::shared_ptr<IRenderPass>                 _renderpass;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
 
     std::shared_ptr<ShaderStorage>                                    _shaderStorage = nullptr;
@@ -161,8 +160,8 @@ struct App
     std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass (for legacy API)
     std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
-    std::shared_ptr<IRenderPass>   _screenRenderPass;    // Screen render pass (for ImGui)
-    std::shared_ptr<IRenderTarget> _screenRT = nullptr;   // Swapchain RT for ImGui
+    std::shared_ptr<IRenderPass>   _screenRenderPass;   // Screen render pass (for ImGui)
+    std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui
 
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
@@ -332,7 +331,6 @@ struct App
     void onSceneViewportResized(Rect2D rect);
 
 
-    void imcDrawMaterials();
 
 
     void handleSystemSignals();

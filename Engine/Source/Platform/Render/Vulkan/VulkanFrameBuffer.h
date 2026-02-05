@@ -13,50 +13,31 @@ namespace ya
 struct VulkanFrameBuffer : public IFrameBuffer
 {
     // TODO: replace render with logicalDevice if without other sub access
-    VulkanRender     *render{};
-    VulkanRenderPass *renderPass{};
-    uint32_t          width{};
-    uint32_t          height{};
+    VulkanRender *render{};
+    uint32_t      _width{};
+    uint32_t      _height{};
 
-    std::vector<stdptr<VulkanImage>>     _images;
-    std::vector<stdptr<VulkanImageView>> _imageViews;
-
+    // renderpass api optional
     VkFramebuffer _framebuffer = VK_NULL_HANDLE;
 
-    VulkanFrameBuffer() = default;
-    VulkanFrameBuffer(VulkanRender *render, VulkanRenderPass *renderPass,
-                      uint32_t width, uint32_t height)
-    {
-        this->render     = render;
-        this->renderPass = renderPass;
-        this->width      = width;
-        this->height     = height;
-    }
+    VulkanFrameBuffer(VulkanRender *inRender) { render = inRender; }
     virtual ~VulkanFrameBuffer()
     {
         clean();
     }
 
-    bool recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height) override;
-    bool recreateImpl(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height);
+    bool begin(ICommandBuffer *commandBuffer) override { return true; }
+    bool end(ICommandBuffer *commandBuffer) override { return true; }
 
+    bool onRecreate(const FrameBufferCreateInfo &ci) override;
     void clean();
 
     // IFrameBuffer interface
-    [[nodiscard]] void    *getHandle() const override { return static_cast<void *>(_framebuffer); }
-    [[nodiscard]] Extent2D getExtent() const override { return {width, height}; }
+    [[nodiscard]] Extent2D getExtent() const override { return {.width = _width, .height = _height}; }
 
     // Vulkan-specific accessor
+    [[nodiscard]] void         *getHandle() const override { return static_cast<void *>(_framebuffer); }
     [[nodiscard]] VkFramebuffer getVkHandle() const { return _framebuffer; }
-
-    stdptr<IImageView> getImageView(uint32_t attachmentIdx) override
-    {
-        return _imageViews[attachmentIdx];
-    }
-    IImage *getImage(uint32_t attachmentIdx) override
-    {
-        return _images[attachmentIdx].get();
-    }
 };
 
 } // namespace ya

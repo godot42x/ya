@@ -3,7 +3,7 @@
 
 #include "Core/Base.h"
 #include "Core/Delegate.h"
-#include "Render/Core/PlatBase.h"
+ 
 #include "Render/RenderDefines.h"
 
 

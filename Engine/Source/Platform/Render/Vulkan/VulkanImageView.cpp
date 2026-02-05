@@ -4,7 +4,7 @@
 namespace ya
 {
 
-VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image, VkImageAspectFlags aspectFlags)
+bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
 {
     _render      = render;
     _image       = image;
@@ -12,6 +12,8 @@ VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image,
     _aspectFlags = aspectFlags;
     VkImageViewCreateInfo ci{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext      = nullptr,
+        .flags      = 0,
         .image      = image->getVkImage(),
         .viewType   = VK_IMAGE_VIEW_TYPE_2D,
         .format     = _format,
@@ -30,7 +32,10 @@ VulkanImageView::VulkanImageView(VulkanRender *render, const VulkanImage *image,
         },
     };
 
-    VK_CALL(vkCreateImageView(_render->getDevice(), &ci, _render->getAllocator(), &_handle));
+    VK_CALL_RET(vkCreateImageView(_render->getDevice(),
+                                  &ci,
+                                  _render->getAllocator(),
+                                  &_handle));
 }
 
 VulkanImageView::~VulkanImageView()
@@ -39,11 +44,21 @@ VulkanImageView::~VulkanImageView()
     VK_DESTROY(ImageView, _render->getDevice(), _handle);
 }
 
-const IImage *VulkanImageView::getImage() const { return static_cast<const IImage *>(_image); }
 
 void VulkanImageView::setDebugName(const std::string &name)
 {
     _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, (void *)_handle, name);
 }
+
+stdptr<VulkanImageView> VulkanImageView::create(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
+{
+    auto ret = makeShared<VulkanImageView>();
+    if (!ret->init(render, image, aspectFlags)) {
+        return nullptr;
+    }
+    return ret;
+}
+
+
 
 } // namespace ya

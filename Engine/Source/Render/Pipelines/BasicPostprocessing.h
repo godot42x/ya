@@ -106,7 +106,7 @@ struct BasicPostprocessing
         _sampler.reset();
     }
 
-    void init(const DynamicRenderingInfo *dynamicRenderingInfo = nullptr);
+    void init();
     void update() {}
 
     void render(ICommandBuffer *cmdBuf, const RenderPayload &payload);

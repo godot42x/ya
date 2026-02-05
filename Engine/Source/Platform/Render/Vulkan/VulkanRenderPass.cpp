@@ -320,7 +320,11 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     }
     // YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create render pass with config!");
 
-    YA_CORE_INFO("Created render pass with {} attachments, {} subpasses", attachmentDescs.size(), vkSubpassDescs.size());
+    YA_CORE_INFO("Created render pass {} with {} attachments, {} subpasses", _ci.label, attachmentDescs.size(), vkSubpassDescs.size());
+
+    _render->setDebugObjectName(VK_OBJECT_TYPE_RENDER_PASS,
+                                (void *)(uintptr_t)m_renderPass,
+                                _ci.label);
 
     return true;
 }

@@ -4,54 +4,80 @@ namespace ya
 {
 
 
-bool VulkanFrameBuffer::recreate(std::vector<std::shared_ptr<IImage>> images, uint32_t width, uint32_t height)
-{
-    std::vector<std::shared_ptr<VulkanImage>> vkImages;
-    for (auto &img : images)
-    {
-        vkImages.push_back(std::dynamic_pointer_cast<VulkanImage>(img));
-    }
-    return recreateImpl(vkImages, width, height);
-}
-bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> images, uint32_t width, uint32_t height)
+bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo &ci)
 {
     clean();
-    this->width  = width;
-    this->height = height;
+    _width  = ci.width;
+    _height = ci.height;
 
-
-    _images = images;
-    _imageViews.resize(images.size());
-    for (int i = 0; i < images.size(); i++)
+    _colorImageViews.clear();
+    _colorImageViews.reserve(ci.colorImages.size());
+    for (auto &image : ci.colorImages)
     {
-        bool bDepth    = VulkanUtils::isDepthStencilFormat(_images[i]->getVkFormat());
-        _imageViews[i] = makeShared<VulkanImageView>(render, _images[i].get(), bDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+        _colorImageViews.push_back(
+            VulkanImageView::create(render,
+                                    std::static_pointer_cast<VulkanImage>(image),
+                                    VK_IMAGE_ASPECT_COLOR_BIT));
     }
+
+    _depthImageView.reset();
+    if (ci.depthImage)
+    {
+        _depthImageView = VulkanImageView::create(render,
+                                                  std::static_pointer_cast<VulkanImage>(ci.depthImage),
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT);
+    }
+
+    // _stencilImageView.reset();
+    // if (ci.stencilImage)
+    // {
+    //     _stencilImageView = VulkanImageView::create(render,
+    //                                                 std::static_pointer_cast<VulkanImage>(ci.stencilImage),
+    //                                                 VK_IMAGE_ASPECT_STENCIL_BIT);
+    // }
+
+
+    // if no render pass, just return
+    if (!ci.renderPass) {
+        return true;
+    }
+
+    // or crate the vulkan framebuffer for renderpass api
 
     std::vector<VkImageView> vkImageViews;
-    vkImageViews.reserve(_imageViews.size());
-    for (auto &iv : _imageViews)
+    vkImageViews.reserve(_colorImageViews.size() + 1 + 1);
+    for (auto &imageView : _colorImageViews)
     {
-        vkImageViews.push_back(iv->getVkImageView());
+        vkImageViews.push_back(imageView->getHandle().as<VkImageView>());
     }
+    if (_depthImageView)
+    {
+        vkImageViews.push_back(_depthImageView->getHandle().as<VkImageView>());
+    }
+
+
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = nullptr,
-        .renderPass      = renderPass->getVkHandle(),
+        .flags           = 0,
+        .renderPass      = _renderPass->getHandleAs<VkRenderPass>(),
         .attachmentCount = static_cast<uint32_t>(vkImageViews.size()),
         .pAttachments    = vkImageViews.data(),
-        .width           = width,
-        .height          = height,
+        .width           = _width,
+        .height          = _height,
         .layers          = 1,
 
     };
-    VkResult result = vkCreateFramebuffer(render->getDevice(), &createInfo, nullptr, &_framebuffer);
+    VkResult result = vkCreateFramebuffer(render->getDevice(),
+                                          &createInfo,
+                                          nullptr,
+                                          &_framebuffer);
     if (result != VK_SUCCESS) {
         YA_CORE_ERROR("Failed to create framebuffer: {}", result);
         return false;
     }
-    YA_CORE_TRACE("Created framebuffer: {} with {} attachments", (uintptr_t)_framebuffer, _imageViews.size());
+    YA_CORE_TRACE("Created framebuffer: {}, {} with {} attachments", _label,  (uintptr_t)_framebuffer, vkImageViews.size());
 
     return true;
 }
@@ -60,16 +86,13 @@ bool VulkanFrameBuffer::recreateImpl(std::vector<std::shared_ptr<VulkanImage>> i
 void VulkanFrameBuffer::clean()
 {
     VK_DESTROY(Framebuffer, render->getDevice(), _framebuffer);
-    _imageViews.clear();
-    _images.clear();
-    // for (auto &imageView : _imageViews)
-    // {
-    //     imageView.reset(); // Reset shared pointers to release resources
-    // }
-    // for (auto &image : _images)
-    // {
-    //     image.reset(); // Reset shared pointers to release resources
-    // }
+    _colorImageViews.clear();
+    _depthImageView.reset();
+    // _stencilImageView.reset();
+
+    _colorImages.clear();
+    _depthImage.reset();
+    // _stencilImage.reset();
 }
 
 } // namespace ya

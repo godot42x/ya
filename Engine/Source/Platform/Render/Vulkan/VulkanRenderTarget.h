@@ -35,33 +35,18 @@ struct IRenderPass;
 struct VulkanRenderTarget : public IRenderTarget
 {
   private:
-    // Configuration
-    EFormat::T      _colorFormat       = EFormat::R8G8B8A8_UNORM;
-    EFormat::T      _depthFormat       = EFormat::Undefined;
-    ESampleCount::T _samples           = ESampleCount::Sample_1;
-    bool            _bSwapChainTarget  = false;
-    uint32_t        _frameBufferCount  = 1;
-    uint32_t        _currentFrameIndex = 0;
 
-    // Resources - per frame (for swapchain targets or multi-buffering)
-    struct FrameAttachments
-    {
-        std::shared_ptr<VulkanImage>     colorImage;
-        std::shared_ptr<VulkanImageView> colorImageView;
-        std::shared_ptr<VulkanImage>     depthImage;
-        std::shared_ptr<VulkanImageView> depthImageView;
 
-        // For legacy RenderPass API: VkFramebuffer
-        std::shared_ptr<VulkanFrameBuffer> frameBuffer;
+    VulkanRender *_vkRender = nullptr;
 
-        // For swapchain targets: we wrap external images, don't own them
-        bool ownsColorImage = true;
-    };
-    std::vector<FrameAttachments> _frameAttachments;
+    // For RenderPass API
+    IRenderPass *_renderPass   = nullptr; // For RenderPass API (not owned)
+    uint32_t     _subpassIndex = 0;
 
-    // Render reference
-    VulkanRender *_vkRender   = nullptr;
-    IRenderPass  *_renderPass = nullptr; // For legacy RenderPass API (not owned)
+    uint32_t _frameBufferCount = 0;
+
+    std::vector<AttachmentDescription> _colorAttachments;
+    AttachmentDescription              _depthAttachment;
 
   public:
 
@@ -70,39 +55,26 @@ struct VulkanRenderTarget : public IRenderTarget
     VulkanRenderTarget(VulkanRenderTarget &&)                 = delete;
     VulkanRenderTarget &operator=(VulkanRenderTarget &&)      = delete;
 
-    explicit VulkanRenderTarget(const RenderTargetCreateInfo &ci);
+    VulkanRenderTarget() = default;
     virtual ~VulkanRenderTarget() override;
 
     // ===== IRenderTarget interface implementation =====
-    void init() override;
+    bool onInit(const RenderTargetCreateInfo &ci) override;
     void recreate() override;
     void destroy() override;
-    void beginFrame() override;
 
-    [[nodiscard]] IImage     *getColorImage(uint32_t index = 0) const override;
-    [[nodiscard]] IImageView *getColorImageView(uint32_t index = 0) const override;
-    [[nodiscard]] IImage     *getDepthImage() const override;
-    [[nodiscard]] IImageView *getDepthImageView() const override;
-
-    [[nodiscard]] uint32_t   getColorAttachmentCount() const override { return 1; } // Currently single color attachment
-    [[nodiscard]] bool       hasDepthAttachment() const override { return _depthFormat != EFormat::Undefined; }
-    [[nodiscard]] EFormat::T getColorFormat() const override { return _colorFormat; }
-    [[nodiscard]] EFormat::T getDepthFormat() const override { return _depthFormat; }
-    [[nodiscard]] bool       isSwapChainTarget() const override { return _bSwapChainTarget; }
-    [[nodiscard]] uint32_t   getCurrentFrameIndex() const override { return _currentFrameIndex; }
-    [[nodiscard]] uint32_t   getFrameBufferCount() const override { return _frameBufferCount; }
-
-    // ===== Legacy RenderPass API Support =====
-    [[nodiscard]] IFrameBuffer *getFrameBuffer() const override;
-    [[nodiscard]] bool          hasFrameBuffer() const override { return _renderPass != nullptr; }
+    void beginFrame(ICommandBuffer *cmdBuf) override;
+    void endFrame(ICommandBuffer *cmdBuf) override;
 
     void onRenderGUI() override;
 
+    IFrameBuffer *getFrameBuffer(int32_t index = -1) const;
+
   private:
-    void createAttachments();
-    void destroyAttachments();
-    void createFrameBuffers(); // Create VkFramebuffers for legacy RenderPass API
-    void destroyFrameBuffers();
+
+    bool recreateImagesAndFrameBuffer(uint32_t                                  frameBufferCount,
+                                      const std::vector<AttachmentDescription> &colorAttachments,
+                                      const AttachmentDescription              &depthAttachment);
 };
 
 } // namespace ya

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Handle.h"
-#include "PlatBase.h"
+
 #include "Render/RenderDefines.h"
 
 namespace ya
@@ -21,9 +21,13 @@ struct FormatHandleTag
 using FormatHandle = Handle<FormatHandleTag>;
 
 
+struct IImageView;
 
 struct IImage : public plat_base<IImage>
 {
+    // std::vector<stdptr<IImageView>> _views; // imageview managed by the image?
+    // IImageView* getDefaultImageView() {}// create one ?
+
     /**
      * @brief Get the platform-specific handle for this image
      * @return ImageHandle Platform handle (e.g., VkImage for Vulkan)
@@ -39,11 +43,15 @@ struct IImage : public plat_base<IImage>
     /**
      * @brief Get image usage flags
      */
-    virtual EImageUsage::T getUsage() const = 0;
+    virtual EImageUsage::T  getUsage() const  = 0;
+    virtual EImageLayout::T getLayout() const = 0;
 };
 
 struct IImageView : public plat_base<IImageView>
 {
+    // ref to image
+    stdptr<IImage> _image;
+
     /**
      * @brief Get the platform-specific handle for this image view
      * @return ImageViewHandle Platform handle (e.g., VkImageView for Vulkan)
@@ -53,7 +61,7 @@ struct IImageView : public plat_base<IImageView>
     /**
      * @brief Get the underlying image
      */
-    virtual const IImage *getImage() const = 0;
+    const IImage *getImage() const { return _image.get(); }
 
     virtual EFormat::T getFormat() const { return EFormat::Undefined; }
 

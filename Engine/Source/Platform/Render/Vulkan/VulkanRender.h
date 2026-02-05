@@ -249,7 +249,7 @@ struct VulkanRender : public IRender
 
         // Initialize VK_EXT_extended_dynamic_state3 function pointer
         initExtensionFunctions();
-        if(m_EnableValidationLayers && bSupportDebugUtils)
+        if (m_EnableValidationLayers && bSupportDebugUtils)
         {
             _debugUtils->initDeviceLevel();
         }
@@ -364,7 +364,7 @@ struct VulkanRender : public IRender
     // IRender interface: isolated commands
     ICommandBuffer *beginIsolateCommands() override
     {
-        ::VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
+        VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
         VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
@@ -375,8 +375,7 @@ struct VulkanRender : public IRender
 
     void endIsolateCommands(ICommandBuffer *commandBuffer) override
     {
-        auto *vkCmdBufWrapper = static_cast<VulkanCommandBuffer *>(commandBuffer);
-        auto  vkCmdBuf        = vkCmdBufWrapper->getHandleAs<::VkCommandBuffer>();
+        auto vkCmdBuf = commandBuffer->getHandleAs<VkCommandBuffer>();
 
         VulkanCommandPool::end(vkCmdBuf);
         getGraphicsQueues()[0].submit({vkCmdBuf});
@@ -384,7 +383,7 @@ struct VulkanRender : public IRender
         vkFreeCommandBuffers(m_LogicalDevice, _graphicsCommandPool->_handle, 1, &vkCmdBuf);
 
         // Delete the wrapper
-        delete vkCmdBufWrapper;
+        delete commandBuffer;
     }
 
     // IRender interface: get swapchain

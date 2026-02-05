@@ -8,6 +8,7 @@
 #include "Render/Core/Image.h"
 #include "Render/Render.h"
 
+#include "VulkanUtils.h"
 
 namespace ya
 {
@@ -24,6 +25,7 @@ struct VulkanImage : public IImage
     VkFormat          _format      = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags _usageFlags  = 0;
     bool              bOwned       = false;
+    // TODO: layout should be sync in: different queues, different cmdbuf...
     VkImageLayout     _layout      = VK_IMAGE_LAYOUT_UNDEFINED;
 
     ya::ImageCreateInfo _ci;
@@ -45,6 +47,8 @@ struct VulkanImage : public IImage
             YA_CORE_ERROR("Failed to allocate VulkanImage");
             return nullptr;
         }
+        ret->setDebugName(ci.label);
+
 
         return ret;
     }
@@ -64,6 +68,7 @@ struct VulkanImage : public IImage
     [[nodiscard]] uint32_t       getHeight() const override { return static_cast<uint32_t>(_ci.extent.height); }
     [[nodiscard]] EFormat::T     getFormat() const override { return _ci.format; }
     [[nodiscard]] EImageUsage::T getUsage() const override { return _ci.usage; }
+    EImageLayout::T              getLayout() const override { return EImageLayout::fromVk(_layout); }
 
     // Vulkan-specific accessors
     [[nodiscard]] VkImage  getVkImage() const { return _handle; }

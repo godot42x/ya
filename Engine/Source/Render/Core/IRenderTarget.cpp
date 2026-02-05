@@ -11,14 +11,18 @@ namespace ya
 {
 
 
-std::shared_ptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci)
+std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo &ci)
 {
 
     auto api = App::get()->currentRenderAPI;
     switch (api) {
     case ERenderAPI::Vulkan:
     {
-        return makeShared<VulkanRenderTarget>(ci);
+        auto ret = makeShared<VulkanRenderTarget>();
+        if (!ret->init(ci)) {
+            return nullptr;
+        }
+        return ret;
     } break;
 
     case ERenderAPI::None:
@@ -31,5 +35,6 @@ std::shared_ptr<IRenderTarget> createRenderTarget(RenderTargetCreateInfo ci)
     }
     return nullptr;
 }
+
 
 } // namespace ya

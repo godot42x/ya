@@ -25,6 +25,9 @@ class VulkanCommandBuffer : public ICommandBuffer
     VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
     bool            _isRecording   = false;
 
+    // Track current rendering mode for proper endRendering() call
+    ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
+
     // Static function pointers for VK_KHR_dynamic_rendering
     static PFN_vkCmdBeginRenderingKHR s_vkCmdBeginRenderingKHR;
     static PFN_vkCmdEndRenderingKHR   s_vkCmdEndRenderingKHR;
@@ -48,8 +51,24 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
     void executeSetCullMode(ECullMode::T cullMode);
     void executeSetPolygonMode(EPolygonMode::T polygonMode);
-    void executeBeginRendering(const DynamicRenderingInfo &info);
-    void executeEndRendering();
+
+    // === Rendering helpers ===
+    void beginRenderingWithRenderPass(IRenderTarget *renderTarget, const RenderingInfo &info);
+    void beginDynamicRenderingFromRenderTarget(IRenderTarget *renderTarget, const RenderingInfo &info);
+    void beginDynamicRenderingFromManualImages(const RenderingInfo &info);
+
+    // Helper: Build depth attachment info for dynamic rendering
+    VkRenderingAttachmentInfo *buildDepthAttachmentInfo(const RenderingInfo       &info,
+                                                        VkRenderingAttachmentInfo &outDepthAttach);
+
+    // Helper: Execute dynamic rendering with prepared attachments
+    void executeDynamicRendering(std::vector<VkRenderingAttachmentInfo> &colorAttachments,
+                                 VkRenderingAttachmentInfo              *pDepthAttach,
+                                 const VkRect2D                         &renderArea,
+                                 uint32_t                                layerCount = 1);
+
+    void executeEndRendering(const EndRenderingInfo &info);
+
     void executeBindDescriptorSets(IPipelineLayout                        *pipelineLayout,
                                    uint32_t                                firstSet,
                                    const std::vector<DescriptorSetHandle> &descriptorSets,
@@ -60,6 +79,8 @@ class VulkanCommandBuffer : public ICommandBuffer
                               uint32_t         size,
                               const void      *data);
     void executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset);
+    void executeTransitionImageLayout(IImage *image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
+                                      const ImageSubresourceRange *subresourceRange);
 
   public:
     VulkanCommandBuffer(VulkanRender *render, VkCommandBuffer commandBuffer)
@@ -115,12 +136,18 @@ class VulkanCommandBuffer : public ICommandBuffer
                        const void      *data) override;
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
-    void beginRendering(const DynamicRenderingInfo &info) override;
-    void endRendering() override;
-    void transitionImageLayout(IImage                *image,
-                               EImageLayout::T        oldLayout,
-                               EImageLayout::T        newLayout,
+    void beginRendering(const RenderingInfo &info) override;
+    void endRendering(const EndRenderingInfo &info) override;
+    void transitionImageLayout(IImage *image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
                                const ImageSubresourceRange *subresourceRange) override;
+    void transitionImageLayoutAuto(IImage *image, EImageLayout::T newLayout, const ImageSubresourceRange *subresourceRange = nullptr) override;
+
+
+    // Helper: Transition all attachments of a RenderTarget to specified layouts
+    void transitionRenderTargetLayout(
+        IRenderTarget  *renderTarget,
+        EImageLayout::T colorLayout,
+        EImageLayout::T depthLayout = EImageLayout::Undefined) override;
 };
 
 

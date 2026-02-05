@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PlatBase.h"
+
 #include "Render/RenderDefines.h"
 #include <memory>
 #include <vector>
@@ -17,6 +17,9 @@ struct IFrameBuffer;
  */
 struct IRenderPass : public plat_base<IRenderPass>
 {
+
+    ya::RenderPassCreateInfo _ci;
+
   public:
     virtual ~IRenderPass() = default;
 
@@ -66,20 +69,59 @@ struct IRenderPass : public plat_base<IRenderPass>
      */
     virtual EFormat::T getDepthFormat() const = 0;
 
-    /**
-     * @brief Get attachment count
-     */
-    virtual uint32_t getAttachmentCount() const = 0;
+    [[nodiscard]] uint32_t                                  getAttachmentCount() const { return static_cast<uint32_t>(_ci.attachments.size()); }
+    [[nodiscard]] const std::vector<AttachmentDescription> &getAttachmentDesc() const { return _ci.attachments; }
 
-    /**
-     * @brief Get attachments
-     */
-    virtual const std::vector<AttachmentDescription> &getAttachments() const = 0;
+    [[nodiscard]] std::vector<const AttachmentDescription *> getColorAttachmentDescs(uint32_t subPassIndex = 0) const
+    {
+        if (!isValidSubpassIndex(subPassIndex))
+        {
+            YA_CORE_ERROR("Invalid subpass index: {}", subPassIndex);
+            return {};
+        }
+        std::vector<const AttachmentDescription *> colorAttachments;
 
-    /**
-     * @brief Get the creation info
-     */
-    virtual const RenderPassCreateInfo &getCreateInfo() const = 0;
+        const auto &attachments = getAttachmentDesc();
+        for (const auto &attachment : getSubPasses().at(subPassIndex).colorAttachments)
+        {
+            colorAttachments.push_back(&attachments.at(attachment.ref));
+        }
+        return colorAttachments;
+    }
+    [[nodiscard]] const AttachmentDescription *getDepthAttachmentDesc(uint32_t subPassIndex = 0) const
+    {
+        if (!isValidSubpassIndex(subPassIndex))
+        {
+            YA_CORE_ERROR("Invalid subpass index: {}", subPassIndex);
+            return nullptr;
+        }
+        const auto &attachments = getAttachmentDesc();
+        auto       &subpass     = getSubPasses().at(subPassIndex);
+        if (subpass.depthAttachment.ref == -1)
+        {
+            return nullptr;
+        }
+        return &attachments.at(subpass.depthAttachment.ref);
+    }
+
+    [[nodiscard]] const RenderPassCreateInfo &getCreateInfo() const { return _ci; }
+
+    const std::vector<RenderPassCreateInfo::SubpassInfo> &getSubPasses() const { return _ci.subpasses; }
+    auto                                                  getSubPass(uint32_t index) const { return _ci.subpasses.at(index); }
+
+    [[nodiscard]] uint32_t getSubpassCount() const { return static_cast<uint32_t>(_ci.subpasses.size()); }
+    [[nodiscard]] bool     isValidSubpassIndex(uint32_t index) const { return index < getSubpassCount(); }
+
+    bool hasDepthAttachment(uint32_t subPassIndex = 0) const
+    {
+        if (!isValidSubpassIndex(subPassIndex))
+        {
+            YA_CORE_ERROR("Invalid subpass index: {}", subPassIndex);
+            return false;
+        }
+        auto &subpass = getSubPasses().at(subPassIndex);
+        return subpass.depthAttachment.ref != -1;
+    }
 
     /**
      * @brief Factory method to create render pass

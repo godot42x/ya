@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PlatBase.h"
+ 
 #include "Render/RenderDefines.h"
 #include <memory>
 #include <string>

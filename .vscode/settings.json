@@ -15,6 +15,7 @@
         "Dockspace",
         "DXIL",
         "entt",
+        "Fmts",
         "freetype",
         "fshader",
         "glsl",
@@ -104,4 +105,9 @@
         "Vec3"
     ],
     "path-intellisense.absolutePathToWorkspace": true,
+    "search.exclude": {
+        "**/Engine/ThirdParty/ImGui/examples": true,
+        "**/Engine/ThirdParty/imguizmo/example": true,
+        "**/Engine/ThirdParty/Vulkan-Samples-Assets": true
+    }
 }
