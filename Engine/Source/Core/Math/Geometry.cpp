@@ -127,10 +127,10 @@ void PrimitiveGeometry::createPlane(float width, float depth, float uRepeat, flo
     float hd = depth * 0.5f;
 
     outVertices = {
-        {{-hw, 0.0f, -hd}, {0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{hw, 0.0f, -hd}, {uRepeat, 0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{hw, 0.0f, hd}, {uRepeat, vRepeat}, {0.0f, 1.0f, 0.0f}},
-        {{-hw, 0.0f, hd}, {0.0f, vRepeat}, {0.0f, 1.0f, 0.0f}}};
+        {.position = {-hw, 0.0f, -hd}, .texCoord0 = {0.0f, 0.0f}, .normal = {0.0f, 1.0f, 0.0f}},
+        {.position = {hw, 0.0f, -hd}, .texCoord0 = {uRepeat, 0.0f}, .normal = {0.0f, 1.0f, 0.0f}},
+        {.position = {hw, 0.0f, hd}, .texCoord0 = {uRepeat, vRepeat}, .normal = {0.0f, 1.0f, 0.0f}},
+        {.position = {-hw, 0.0f, hd}, .texCoord0 = {0.0f, vRepeat}, .normal = {0.0f, 1.0f, 0.0f}}};
 
     outIndices = {0, 1, 2, 2, 3, 0};
 }
@@ -153,13 +153,13 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
         // Bottom vertex
         outVertices.push_back({
             .position  = {x, -halfHeight, z},
-            .texCoord0 = {float(i) / segments, 0.0f},
+            .texCoord0 = {float(i) / (float)segments, 0.0f},
             .normal    = normal,
         });
         // Top vertex
         outVertices.push_back({
             .position  = {x, halfHeight, z},
-            .texCoord0 = {float(i) / segments, 1.0f},
+            .texCoord0 = {float(i) / (float)segments, 1.0f},
             .normal    = normal,
         });
     }
@@ -212,13 +212,13 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
     for (uint32_t i = 0; i < segments; ++i) {
         // Bottom cap
         outIndices.push_back(bottomCenterIdx);
-        outIndices.push_back(capStartIdx + i * 2);
         outIndices.push_back(capStartIdx + (i + 1) * 2);
+        outIndices.push_back(capStartIdx + i * 2);
 
         // Top cap
         outIndices.push_back(topCenterIdx);
-        outIndices.push_back(capStartIdx + (i + 1) * 2 + 1);
         outIndices.push_back(capStartIdx + i * 2 + 1);
+        outIndices.push_back(capStartIdx + (i + 1) * 2 + 1);
     }
 }
 
@@ -268,8 +268,8 @@ void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments
         uint32_t next    = baseCenterIdx + 2 + (i + 1) * 2;
 
         outIndices.push_back(baseCenterIdx);
-        outIndices.push_back(current);
         outIndices.push_back(next);
+        outIndices.push_back(current);
     }
 }
 

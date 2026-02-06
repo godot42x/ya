@@ -168,6 +168,11 @@ struct TransformComponent : public IComponent
     {
         return glm::vec3(_worldMatrix[3]);
     }
+    glm::vec3 getWorldRotation() const
+    {
+        auto rotation = glm::quat(_worldMatrix);
+        return glm::eulerAngles(rotation);
+    }
 
     [[nodiscard]] glm::vec3 getLocalForward() const
     {

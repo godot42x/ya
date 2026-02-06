@@ -4,8 +4,6 @@
 
 #include "Core/App/App.h"
 
-#include "ECS/Component.h"
-#include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MeshComponent.h"
 
 #include "Core/Math/Geometry.h"
@@ -15,11 +13,15 @@
 #include "Render/Mesh.h"
 
 
-#include "vulkan/vulkan.h"
 
+#include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
+
+#include "Resource/PrimitiveMeshCache.h"
+
+#include "Core/Math/Math.h"
 
 
 
@@ -155,9 +157,14 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
 
 void SimpleMaterialSystem::onDestroy()
 {
-    _pipelineLayoutOwner.reset();
     _pipeline.reset();
-    _pipelineLayout = nullptr;
+    _pipelineLayout.reset();
+}
+
+void SimpleMaterialSystem::onRenderGUI()
+{
+    IMaterialSystem::onRenderGUI();
+    ImGui::Combo("Default Color Type", &_defaultColorType, "Normal\0UV\0Fixed");
 }
 
 void SimpleMaterialSystem::onUpdate(float deltaTime)
@@ -172,23 +179,22 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     if (!scene) {
         return;
     }
-    const auto &view = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent, MeshComponent>();
-    if (view.begin() == view.end()) {
+    const auto &view1 = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent, MeshComponent>();
+    const auto &view2 = scene->getRegistry().view<TransformComponent, DirectionComponent>();
+    if (view1.begin() == view1.end() && view2.begin() == view2.end()) {
         return;
     }
 
     // Wrap void* in VulkanCommandBuffer for generic bind call
-    _pipeline->bind(cmdBuf->getHandle());
-
     // Get viewport extent from App
-    auto app = getApp();
     auto fbExtent = ctx->extent;
+    cmdBuf->bindPipeline(_pipeline.get());
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo
     // or those properties should be modified in the pipeline recreation if needed.
     // but sometimes that we want to enable depth or color-blend state dynamically
-    ::VkViewport viewport{
+    VkViewport viewport{
         .x        = 0,
         .y        = 0,
         .width    = static_cast<float>(fbExtent.width),
@@ -213,16 +219,18 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 #pragma endregion
 
     // Use passed camera context
-    pc.view            = ctx->view;
-    pc.projection      = ctx->projection;
+    pc.view       = ctx->view;
+    pc.projection = ctx->projection;
 
-    for (const auto entity : view) {
-        const auto &[tc, smc, meshComp] = view.get(entity);
+    // for (const auto entity : view1) {
+    view1.each([this, &cmdBuf](auto &tc, auto &smc, auto &mc) {
+        // const auto &[tc, smc, meshComp] = view1.get(entity);
         // TODO: culling works
 
         SimpleMaterial *material = smc.getMaterial();
         if (!material) {
-            continue;
+            return;
+            // continue;
         }
 
         pc.model     = tc.getTransform();
@@ -236,17 +244,44 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
                               sizeof(PushConstant),
                               &pc);
 
-        // Draw single mesh from MeshComponent
-        Mesh *mesh = meshComp.getMesh();
-        if (mesh && mesh->getVertexBuffer() && mesh->getIndexBuffer()) {
-            VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()->getHandleAs<::VkBuffer>()};
-            // current no need to support subbuffer
-            VkDeviceSize offsets[] = {0};
+        mc.getMesh()->draw(cmdBuf);
+    });
+    auto cone     = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
+    auto cylinder = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cylinder);
 
-            cmdBuf->bindVertexBuffer(0, mesh->getVertexBufferMut(), 0);
-            cmdBuf->bindIndexBuffer(mesh->getIndexBufferMut(), 0, false);
-            cmdBuf->drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
-        }
+    glm::mat4 coneLocalTransf =
+        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
+        glm::scale(glm::mat4(1.0), glm::vec3(0.3f, 1.0f, 0.3f));
+    glm::mat4 cylinderLocalTransf =
+        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
+        glm::scale(glm::mat4(1.0), glm::vec3(0.1f, 1.0f, 0.1f));
+
+    pc.colorType = _defaultColorType;
+    for (auto entity : view2) {
+        const auto &[tc, dc] = view2.get(entity);
+
+        glm::mat4 worldTransform = glm::translate(glm::mat4(1.0), tc.getWorldPosition()) *
+                                   glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
+
+        // Draw cone (arrow tip pointing forward)
+        pc.model = glm::translate(glm::mat4(1.0), -tc.getForward()) *
+                   coneLocalTransf *
+                   worldTransform;
+        cmdBuf->pushConstants(_pipelineLayout.get(),
+                              EShaderStage::Vertex,
+                              0,
+                              sizeof(PushConstant),
+                              &pc);
+        cone->draw(cmdBuf);
+
+        // Draw cylinder (arrow shaft)
+        pc.model = worldTransform * cylinderLocalTransf;
+        cmdBuf->pushConstants(_pipelineLayout.get(),
+                              EShaderStage::Vertex,
+                              0,
+                              sizeof(PushConstant),
+                              &pc);
+        cylinder->draw(cmdBuf);
     }
 }
 

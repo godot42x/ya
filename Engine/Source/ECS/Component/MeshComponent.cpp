@@ -1,8 +1,9 @@
 #include "MeshComponent.h"
 
-#include "Resource/AssetManager.h"
 #include "ECS/Entity.h"
+#include "Resource/AssetManager.h"
 #include "Resource/PrimitiveMeshCache.h"
+
 
 
 namespace ya
@@ -20,7 +21,7 @@ bool MeshComponent::resolve()
     if (_primitiveGeometry != EPrimitiveGeometry::None) {
         auto mesh = PrimitiveMeshCache::get().getMesh(_primitiveGeometry);
         if (mesh) {
-            _cachedMesh = mesh.get();
+            _cachedMesh = mesh;
             _bResolved  = true;
             return true;
         }
@@ -45,7 +46,8 @@ bool MeshComponent::resolve()
         }
         else {
             YA_CORE_WARN("MeshComponent: Failed to get mesh[{}] from model '{}'",
-                         _meshIndex, _sourceModelPath);
+                         _meshIndex,
+                         _sourceModelPath);
             return false;
         }
     }

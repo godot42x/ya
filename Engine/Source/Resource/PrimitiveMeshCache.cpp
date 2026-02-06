@@ -10,18 +10,18 @@ PrimitiveMeshCache &PrimitiveMeshCache::get()
     return instance;
 }
 
-stdptr<Mesh> PrimitiveMeshCache::getMesh(EPrimitiveGeometry type)
+Mesh *PrimitiveMeshCache::getMesh(EPrimitiveGeometry type)
 {
     if (type == EPrimitiveGeometry::None) {
         return nullptr;
     }
 
-    std::lock_guard<std::mutex> lock(_mutex);
+    // std::lock_guard<std::mutex> lock(_mutex);
 
     // Check if already cached
     auto it = _cache.find(type);
     if (it != _cache.end()) {
-        return it->second;
+        return it->second.get();
     }
 
     // Create and cache
@@ -29,7 +29,7 @@ stdptr<Mesh> PrimitiveMeshCache::getMesh(EPrimitiveGeometry type)
     if (mesh) {
         _cache[type] = mesh;
     }
-    return mesh;
+    return _cache[type].get();
 }
 
 void PrimitiveMeshCache::clearCache()
@@ -41,7 +41,7 @@ void PrimitiveMeshCache::clearCache()
 
 bool PrimitiveMeshCache::hasMesh(EPrimitiveGeometry type) const
 {
-    std::lock_guard<std::mutex> lock(_mutex);
+    // std::lock_guard<std::mutex> lock(_mutex);
     return _cache.contains(type);
 }
 

@@ -1,10 +1,11 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Resource/ResourceRegistry.h"
 #include "Render/Mesh.h"
+#include "Resource/ResourceRegistry.h"
 #include <mutex>
 #include <unordered_map>
+
 
 namespace ya
 {
@@ -35,7 +36,7 @@ class PrimitiveMeshCache : public IResourceCache
      *
      * Thread-safe: Multiple threads can call this concurrently
      */
-    stdptr<Mesh> getMesh(EPrimitiveGeometry type);
+    Mesh *getMesh(EPrimitiveGeometry type);
 
     /**
      * @brief Clear all cached meshes (implements IResourceCache)

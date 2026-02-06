@@ -4,6 +4,7 @@
 
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Material/SimpleMaterial.h"
 
 
 namespace ya
@@ -12,8 +13,6 @@ namespace ya
 
 struct SimpleMaterialSystem : public IMaterialSystem
 {
-
-
     struct PushConstant
     {
         glm::mat4 projection = glm::mat4(1.0f);
@@ -25,17 +24,14 @@ struct SimpleMaterialSystem : public IMaterialSystem
     float maxViewDistance = 100.0f;
     // int   culledCount     = 0;
     // int   totalCount      = 0;
+    int _defaultColorType = SimpleMaterial::Default;
 
-    std::shared_ptr<IPipelineLayout> _pipelineLayoutOwner;
     // stdptr<IGraphicsPipeline>        _pipeline       = nullptr; // temp move to IMaterialSystem
-    stdptr<IPipelineLayout>          _pipelineLayout = nullptr;
+    stdptr<IPipelineLayout> _pipelineLayout = nullptr;
 
     void onInit(IRenderPass *renderPass) override;
     void onDestroy() override;
-    void onRenderGUI() override
-    {
-        IMaterialSystem::onRenderGUI();
-    }
+    void onRenderGUI() override;
 
     void onUpdate(float deltaTime) override;
     void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;

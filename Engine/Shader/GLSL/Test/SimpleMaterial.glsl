@@ -23,7 +23,19 @@ void main()
     // vec3 normal = normalize(aNormal.xyz);
 
     gl_Position = pc.projection * pc.view * worldPos;
-    vColor = pc.colorType == 0? vec4(aNormal * 0.5 + 0.5, 1.0): vec4(aTexCoord, 0.0, 1.0);
+    switch(pc.colorType){
+    case 0:{
+        vColor = vec4(aNormal * 0.5 + 0.5, 10.0);
+    }break;
+    case 1:{
+        vColor = vec4(aTexCoord, 0.0, 1.0);
+    }break;;
+    case 2:{
+        // purple
+        vColor = vec4(0.0, 0.8, 0.8, 1.0);
+        vColor = vec4(aNormal * 0.5 + 0.5, 10.0);
+    }break;
+    }
 }
 
 #type fragment
