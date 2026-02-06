@@ -182,7 +182,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
     // Get viewport extent from App
     auto app = getApp();
-    auto fbExtent = app->_viewportRT->getExtent();
+    auto fbExtent = ctx->extent;
 
 #pragma region Dynamic State
     // need set VkPipelineDynamicStateCreateInfo

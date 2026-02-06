@@ -996,8 +996,13 @@ void App::onRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
+    // --- MARK: Camera Pass
+    {
+        auto scene = getSceneManager()->getActiveScene();
+        // scene->getRegistry().view<>()
+    }
 
-    // --- MARK:1: Render 3D Scene to Offscreen RT ---
+    // --- MARK: ViewPort Pass
     {
         YA_PROFILE_SCOPE("ViewPort pass")
 
@@ -1025,7 +1030,7 @@ void App::onRender(float dt)
 
         cmdBuf->beginRendering(ri);
 
-        _frameContext.extent = _viewportRT->getExtent().toVec2(); // Update frame context with actual render extent for material systems
+        _frameContext.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
         // Render material systems
         for (auto &system : _materialSystems) {
             if (system->bEnabled) {

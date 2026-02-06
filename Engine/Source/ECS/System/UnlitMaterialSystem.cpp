@@ -252,9 +252,9 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     cmdBuf->bindPipeline(_pipeline.get());
 
     // Get viewport extent from App
-    auto app = getApp();
-    uint32_t width  = app->_viewportRT->getExtent().width;
-    uint32_t height = app->_viewportRT->getExtent().height;
+    auto     app    = getApp();
+    uint32_t width  = ctx->extent.width;
+    uint32_t height = ctx->extent.height;
 
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
@@ -425,8 +425,8 @@ void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
         .projection = ctx->projection,
         .view       = ctx->view,
         .resolution = {
-            app->_viewportRT->getExtent().width,
-            app->_viewportRT->getExtent().height,
+            ctx->extent.width,
+            ctx->extent.height,
         },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
