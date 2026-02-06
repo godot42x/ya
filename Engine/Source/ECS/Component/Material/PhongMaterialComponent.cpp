@@ -1,6 +1,6 @@
 #include "PhongMaterialComponent.h"
 
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Resource/TextureLibrary.h"
 

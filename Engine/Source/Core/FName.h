@@ -95,13 +95,15 @@ struct FName
     bool isEmpty() const noexcept { return _index == 0; }
 
     operator index_t() const noexcept { return _index; }
-    operator std::string_view() const noexcept { return _data; }
-    operator const char *() const noexcept { return _data.data(); }
-    operator std::string() const noexcept { return std::string(_data); }
+    operator std::string_view() const noexcept { return isValid() ? _data : "None"; }
+    operator const char *() const noexcept { return isValid() ? _data.data() : "None"; }
+    operator std::string() const noexcept { return isValid() ? std::string(_data) : "None"; }
 
     bool operator==(const FName &other) const noexcept { return _index == other._index; }
     bool operator!=(const FName &other) const noexcept { return _index != other._index; }
     bool operator<(const FName &other) const noexcept { return _index < other._index; }
+
+    index_t identity() const { return _index; }
 };
 
 inline void NameRegistry::remove(const FName &name)

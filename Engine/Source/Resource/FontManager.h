@@ -2,7 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/FName.h"
-#include "Core/ResourceRegistry.h"
+#include "Resource/ResourceRegistry.h"
 #include "Render/Core/Texture.h"
 
 namespace ya
@@ -77,10 +77,10 @@ struct FontManager : public IResourceCache
 
   public:
     static FontManager *get();
-    
+
     // IResourceCache interface
-    void clearCache() override;
-    const char* getCacheName() const override { return "FontManager"; }
+    void  clearCache() override;
+    FName getCacheName() const override { return "FontManager"; }
 
     /**
      * @brief Load a font with specific size

@@ -1,8 +1,8 @@
 #include "MeshComponent.h"
 
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "ECS/Entity.h"
-#include "Render/PrimitiveMeshCache.h"
+#include "Resource/PrimitiveMeshCache.h"
 
 
 namespace ya

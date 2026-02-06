@@ -1,5 +1,5 @@
 #include "Core/Common/AssetRef.h"
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "Core/Log.h"
 #include "Core/TypeIndex.h"
 #include "Editor/TypeRenderer.h" // For DeferredModificationQueue

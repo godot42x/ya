@@ -214,7 +214,7 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 // TAssetRef<T>::resolve() Inline Implementations
 // Include necessary headers for inline implementations
 // ============================================================================
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "Core/Log.h"
 
 namespace ya

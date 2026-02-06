@@ -5,7 +5,6 @@
 #include "Core/App/App.h"
 #include "Core/App/FPSCtrl.h"
 #include "Core/App/SDLMisc.h"
-#include "Core/AssetManager.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
@@ -16,13 +15,17 @@
 
 // Managers/System
 #include "Core/Manager/Facade.h"
-#include "Core/ResourceRegistry.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/FrameBuffer.h"
-#include "Resource/TextureLibrary.h"
 #include "Scene/SceneManager.h"
+
+#include "Resource/AssetManager.h"
+#include "Resource/PrimitiveMeshCache.h"
+#include "Resource/RenderTargetPool.h"
+#include "Resource/ResourceRegistry.h"
+#include "Resource/TextureLibrary.h"
 
 
 
@@ -48,7 +51,6 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
-#include "Render/PrimitiveMeshCache.h"
 #include "Render/Render.h"
 
 
@@ -530,6 +532,10 @@ void App::init(AppDesc ci)
     ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
     ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
     ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
+
+    // MARK: Initialize RenderTargetPool for dynamic render target allocation
+    RenderTargetPool::get().init(_render);
+    ResourceRegistry::get().registerCache(&RenderTargetPool::get(), 95); // High priority - after meshes but before textures
 
 
 
@@ -1074,17 +1080,6 @@ void App::onRender(float dt)
         auto vkRender = render->as<VulkanRender>();
 
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
-
-        // Transition viewport color attachment to ShaderReadOnlyOptimal
-        // MAKE SURE the layout
-        // cmdBuf->transitionRenderTargetLayout(_viewportRT.get(),
-        //                                      EImageLayout::ShaderReadOnlyOptimal, // Color attachments
-        //                                      EImageLayout::Undefined);            // Don't touch depth
-
-
-
-        // Output: _postprocessImage
-
         // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
         // Already transitioned by `viewportRenderPass`
         cmdBuf->transitionImageLayoutAuto(_postprocessImage.get(),
@@ -1225,6 +1220,12 @@ void App::onRenderGUI(float dt)
         ImGui::Indent();
         // temp code here to adopt to new Render2D
         Render2D::onImGui();
+        ImGui::Unindent();
+    }
+
+    if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
+        ImGui::Indent();
+        RenderTargetPool::get().onRenderGUI();
         ImGui::Unindent();
     }
 
@@ -1463,6 +1464,10 @@ bool App::onWindowResized(const WindowResizeEvent &event)
     YA_CORE_DEBUG("Window resized to {}x{}, aspectRatio: {} ", w, h, aspectRatio);
     // camera.setAspectRatio(aspectRatio);
     _windowSize = {w, h};
+
+    // Notify RenderTargetPool of window resize
+    RenderTargetPool::get().onWindowResized(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+
     return false;
 }
 

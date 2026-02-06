@@ -11,7 +11,7 @@
 #include "Render/RenderDefines.h"
 #include "imgui.h"
 
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 
 #include "utility.cc/ranges.h"
 

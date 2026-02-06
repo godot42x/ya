@@ -1,5 +1,5 @@
 #include "HelloMaterial.h"
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 
 #include "Core/UI/UITextBlock.h"
 #include "ECS/Component/LuaScriptComponent.h"

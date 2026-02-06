@@ -17,7 +17,7 @@
 #include "Core/System/System.h"
 
 
-#include "FontManager.h"
+#include "Resource/FontManager.h"
 
 namespace ya
 {
@@ -70,7 +70,7 @@ struct FQuadRender
     uint32_t indexCount  = 0;
 
 
-    PipelineLayoutDesc                       _pipelineDesc;
+    PipelineLayoutDesc                 _pipelineDesc;
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
     std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr;
 

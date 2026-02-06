@@ -3,7 +3,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {

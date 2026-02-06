@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "Core/ResourceRegistry.h"
+#include "Resource/ResourceRegistry.h"
 #include "Render/Core/Texture.h"
 #include "Render/Model.h"
 
@@ -51,8 +51,8 @@ class AssetManager : public IResourceCache
     static AssetManager *get();
 
     // IResourceCache interface
-    void        clearCache() override;
-    const char *getCacheName() const override { return "AssetManager"; }
+    void  clearCache() override;
+    FName getCacheName() const override { return "AssetManager"; }
 
     AssetManager();
     ~AssetManager()

@@ -1,6 +1,6 @@
 #include "ResourceResolveSystem.h"
 #include "Core/App/App.h"
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "Scene/Node.h"
 #include "Scene/SceneManager.h"

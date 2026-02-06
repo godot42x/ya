@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/ResourceRegistry.h"
+#include "Resource/ResourceRegistry.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include <memory>
@@ -35,8 +35,8 @@ class TextureLibrary : public IResourceCache
     void init();
 
     // IResourceCache interface
-    void        clearCache() override;
-    const char *getCacheName() const override { return "TextureLibrary"; }
+    void  clearCache() override;
+    FName getCacheName() const override { return "TextureLibrary"; }
 
     /**
      * @brief Get a 1x1 white texture (RGBA: 255,255,255,255)

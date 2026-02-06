@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Core/ResourceRegistry.h"
+#include "Resource/ResourceRegistry.h"
 #include "Render/Mesh.h"
 #include <mutex>
 #include <unordered_map>
@@ -42,8 +42,8 @@ class PrimitiveMeshCache : public IResourceCache
      * Call this before shutting down the renderer
      * @note Must ensure GPU is idle before calling
      */
-    void        clearCache() override;
-    const char *getCacheName() const override { return "PrimitiveMeshCache"; }
+    void  clearCache() override;
+    FName getCacheName() const override { return "PrimitiveMeshCache"; }
 
     /**
      * @brief Check if a mesh is cached

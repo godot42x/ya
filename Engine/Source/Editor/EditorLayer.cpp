@@ -1,6 +1,6 @@
 #include "EditorLayer.h"
 #include "Core/App/App.h"
-#include "Core/AssetManager.h"
+#include "Resource/AssetManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
