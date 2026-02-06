@@ -111,8 +111,11 @@ using namespace std::literals;
 //     {
 // #define NAMESPACE_END(name) }
 
+struct plat_base_tag
+{};
+
 template <typename Base>
-struct plat_base
+struct plat_base : public plat_base_tag
 {
 
     template <typename Derived>

@@ -28,6 +28,8 @@ struct Scene;
 struct Material;
 struct IRenderPass;
 struct LuaScriptingSystem;
+struct Texture;
+struct Texture;
 
 
 enum AppMode
@@ -157,19 +159,20 @@ struct App
 
     // Render targets (simplified - only manage attachments, no RenderPass dependency)
     Rect2D                         _viewportRect;
+    float                          _viewportFrameBufferScale = 1.0f;
     std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass (for legacy API)
     std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
     std::shared_ptr<IRenderPass>   _screenRenderPass;   // Screen render pass (for ImGui)
     std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui
 
+
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
     FrameContext                                  _frameContext; // Cached camera data per-frame
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
-    std::shared_ptr<IImage>     _postprocessImage     = nullptr;
-    std::shared_ptr<IImageView> _postprocessImageView = nullptr;
+    stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
 
     bool                     bBasicPostProcessor   = false;
     int                      _postProcessingEffect = 0;
@@ -179,12 +182,10 @@ struct App
         return ret;
     }();
 
-    bool  bRetroRendering = false;
-    float _retroScale     = 4.0f;
 
-
-
-    IImageView *_viewportImageView = nullptr;
+    // Viewport texture for ImGui display (unified Texture semantics)
+    // This is set to either _postprocessTexture or _viewportRT's color attachment
+    Texture *_viewportTexture = nullptr;
 
     EditorLayer *_editorLayer;
 

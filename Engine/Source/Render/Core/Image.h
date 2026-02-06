@@ -16,9 +16,6 @@ using ImageHandle = Handle<ImageHandleTag>;
 struct ImageViewHandleTag;
 using ImageViewHandle = Handle<ImageViewHandleTag>;
 
-struct FormatHandleTag
-{};
-using FormatHandle = Handle<FormatHandleTag>;
 
 
 struct IImageView;

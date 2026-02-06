@@ -28,4 +28,19 @@ stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, const FrameBufferCrea
     return nullptr;
 }
 
+void IFrameBuffer::clearAttachments()
+{
+    _colorTextures.clear();
+    _depthTexture.reset();
+}
+
+Texture *IFrameBuffer::getColorTexture(uint32_t attachmentIdx) const
+{
+    if (attachmentIdx >= _colorTextures.size()) {
+        return nullptr;
+    }
+    return _colorTextures[attachmentIdx].get();
+}
+
+
 } // namespace ya

@@ -38,6 +38,15 @@ struct VulkanFrameBuffer : public IFrameBuffer
     // Vulkan-specific accessor
     [[nodiscard]] void         *getHandle() const override { return static_cast<void *>(_framebuffer); }
     [[nodiscard]] VkFramebuffer getVkHandle() const { return _framebuffer; }
+
+  private:
+
+    std::shared_ptr<Texture> wrapExternalImage(const stdptr<IImage> &externalImage,
+                                               const std::string    &label,
+                                               VkImageAspectFlags    aspect);
+
+    std::shared_ptr<Texture> createAttachmentTexture(const FrameBufferAttachmentInfo &attachInfo,
+                                                     const std::string               &label);
 };
 
 } // namespace ya

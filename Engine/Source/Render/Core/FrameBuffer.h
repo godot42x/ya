@@ -3,9 +3,10 @@
 
 #include "CommandBuffer.h"
 #include "Core/Base.h"
-#include "Render/Core/Image.h"
+#include "Render/Core/Texture.h"
 #include "Render/RenderDefines.h"
 
+#include <memory>
 
 namespace ya
 {
@@ -14,17 +15,34 @@ namespace ya
 struct IRender;
 struct IRenderPass;
 
+/**
+ * @brief FrameBuffer attachment specification
+ */
+struct FrameBufferAttachmentInfo
+{
+    EFormat::T                     format  = EFormat::Undefined;
+    EImageUsage::T                 usage   = EImageUsage::None;
+    bool                           isDepth = false; // true for depth attachment, false for color
+    std::optional<ESampleCount::T> msaaSamples;     // Optional: MSAA sample count
+};
+
 struct FrameBufferCreateInfo
 {
-    std::string                 label  = "None";
-    uint32_t                    width  = 0;
-    uint32_t                    height = 0;
-    std::vector<stdptr<IImage>> colorImages;
-    stdptr<IImage>              depthImage;
-    // stdptr<IImage>              stencilImage;
+    std::string label  = "None";
+    uint32_t    width  = 0;
+    uint32_t    height = 0;
+
+    // Mode 1: Attachment specifications for FrameBuffer to create textures
+    std::vector<FrameBufferAttachmentInfo>   colorAttachments;
+    std::optional<FrameBufferAttachmentInfo> depthAttachment;
+
+    // Mode 2: External images for swapchain or externally-managed attachments
+    // If provided, these take precedence and will be wrapped into Textures
+    std::vector<stdptr<IImage>> externalColorImages;
+    stdptr<IImage>              externalDepthImage;
 
     // render pass api spec
-    IRenderPass *renderPass;
+    IRenderPass *renderPass = nullptr;
 };
 
 /**
@@ -33,21 +51,15 @@ struct FrameBufferCreateInfo
  */
 struct IFrameBuffer
 {
-    std::string                 _label = "None";
-    std::vector<stdptr<IImage>> _colorImages;
-    stdptr<IImage>              _depthImage;
-    // stdptr<IImage>              _stencilImage;
+    std::string _label = "None";
 
-
-    std::vector<stdptr<IImageView>> _colorImageViews;
-    stdptr<IImageView>              _depthImageView;
-    // stdptr<IImageView>              _stencilImageView;
+    // FrameBuffer directly owns Textures for all attachments
+    std::vector<std::shared_ptr<Texture>> _colorTextures;
+    std::shared_ptr<Texture>              _depthTexture;
 
     IRenderPass *_renderPass = nullptr;
 
     virtual ~IFrameBuffer() = default;
-
-
 
     virtual Extent2D getExtent() const = 0;
     uint32_t         getWidth() const { return getExtent().width; }
@@ -56,10 +68,7 @@ struct IFrameBuffer
     static stdptr<IFrameBuffer> create(IRender *render, const FrameBufferCreateInfo &createInfo);
     bool                        recreate(const FrameBufferCreateInfo &ci)
     {
-        _label       = ci.label;
-        _colorImages = ci.colorImages;
-        _depthImage  = ci.depthImage;
-        // _stencilImage = ci.stencilImage;
+        _label      = ci.label;
         _renderPass = ci.renderPass;
         return onRecreate(ci);
     }
@@ -68,23 +77,21 @@ struct IFrameBuffer
     virtual bool end(ICommandBuffer *commandBuffer)   = 0;
 
     virtual bool onRecreate(const FrameBufferCreateInfo &ci) = 0;
+
     // renderpass api spec
     virtual void *getHandle() const = 0;
     template <typename T>
-    T getHandleAs() const
-    {
-        return static_cast<T>(getHandle());
-    }
-    const std::vector<stdptr<IImage>>     &getColorImages() const { return _colorImages; }
-    const std::vector<stdptr<IImageView>> &getColorImageViews() const { return _colorImageViews; }
+    T getHandleAs() const { return static_cast<T>(getHandle()); }
+
+    // ===== Direct Texture Access =====
+
+    const std::vector<std::shared_ptr<Texture>> &getColorTextures() const { return _colorTextures; }
+    Texture                                     *getColorTexture(uint32_t attachmentIdx) const;
+    Texture                                     *getDepthTexture() const { return _depthTexture.get(); }
 
 
-    IImageView *getColorImageView(uint32_t attachmentIdx) { return _colorImageViews[attachmentIdx].get(); }
-    IImage     *getColorImage(uint32_t attachmentIdx) { return _colorImages[attachmentIdx].get(); }
-    IImageView *getDepthImageView() { return _depthImageView.get(); }
-    IImage     *getDepthImage() { return _depthImage.get(); }
-    // IImageView *getStencilImageView() { return _stencilImageView.get(); }
-    // IImage     *getStencilImage() { return _stencilImage.get(); }
+  protected:
+    void clearAttachments();
 };
 
 } // namespace ya

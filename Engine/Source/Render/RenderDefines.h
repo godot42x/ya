@@ -301,6 +301,7 @@ namespace EImageUsage
 {
 enum T
 {
+    None                   = 0,
     TransferSrc            = 0x01,
     TransferDst            = 0x02,
     Sampled                = 0x04,
@@ -669,11 +670,9 @@ struct DescriptorPoolCreateInfo
 
 struct IImageView;
 struct IRenderPass;
-
-
+struct Texture; // Forward declaration for RenderingInfo::ImageSpec
 
 struct IRenderTarget; // Forward declaration
-
 
 /**
  * @brief Pure data structure for rendering info (supports both RenderPass and Dynamic Rendering modes)
@@ -692,7 +691,7 @@ struct RenderingInfo
 
     struct ImageSpec
     {
-        IImageView *imageView;
+        Texture *texture = nullptr;  // ← 使用高层 Texture 抽象，替代 IImageView*
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 

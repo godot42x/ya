@@ -1,8 +1,80 @@
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
+#include "Render/Core/Texture.h"
 
 namespace ya
 {
 
+std::shared_ptr<Texture> VulkanFrameBuffer::createAttachmentTexture(
+    const FrameBufferAttachmentInfo &attachInfo,
+    const std::string               &label)
+{
+    // Convert FrameBufferAttachmentInfo to ImageCreateInfo
+    ya::ImageCreateInfo imageCI{
+        .label         = label,
+        .format        = attachInfo.format,
+        .extent        = {_width, _height, 1},
+        .mipLevels     = 1,
+        .samples       = attachInfo.msaaSamples.has_value()
+                           ? static_cast<ESampleCount::T>(attachInfo.msaaSamples.value())
+                           : ESampleCount::Sample_1,
+        .usage         = attachInfo.usage,
+        .sharingMode   = ESharingMode::Exclusive,
+        .initialLayout = EImageLayout::Undefined,
+    };
+
+    // Create VulkanImage
+    auto vkImage = VulkanImage::create(render, imageCI);
+    if (!vkImage) {
+        YA_CORE_ERROR("Failed to create image for framebuffer attachment: {}", label);
+        return nullptr;
+    }
+
+    // Create VulkanImageView
+    VkImageAspectFlags aspect = attachInfo.isDepth
+                                  ? VK_IMAGE_ASPECT_DEPTH_BIT
+                                  : VK_IMAGE_ASPECT_COLOR_BIT;
+
+    auto vkImageView = VulkanImageView::create(render, vkImage, aspect);
+    if (!vkImageView) {
+        YA_CORE_ERROR("Failed to create image view for framebuffer attachment: {}", label);
+        return nullptr;
+    }
+
+    // Create Texture directly (FrameBuffer owns the Texture)
+    auto texture     = std::make_shared<Texture>(vkImage, vkImageView, label);
+    texture->_width  = _width;
+    texture->_height = _height;
+    texture->_format = attachInfo.format;
+
+    return texture;
+}
+
+std::shared_ptr<Texture> VulkanFrameBuffer::wrapExternalImage(
+    const stdptr<IImage> &externalImage,
+    const std::string    &label,
+    VkImageAspectFlags    aspect)
+{
+    auto vkImage = std::static_pointer_cast<VulkanImage>(externalImage);
+    if (!vkImage) {
+        YA_CORE_ERROR("Failed to cast external image to VulkanImage: {}", label);
+        return nullptr;
+    }
+
+    // Create VulkanImageView for the external image
+    auto vkImageView = VulkanImageView::create(render, vkImage, aspect);
+    if (!vkImageView) {
+        YA_CORE_ERROR("Failed to create image view for external image: {}", label);
+        return nullptr;
+    }
+
+    // Create Texture wrapping the external image (FrameBuffer owns the Texture wrapper)
+    auto texture     = std::make_shared<Texture>(vkImage, vkImageView, label);
+    texture->_width  = _width;
+    texture->_height = _height;
+    texture->_format = vkImage->getFormat();
+
+    return texture;
+}
 
 bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo &ci)
 {
@@ -10,58 +82,91 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo &ci)
     _width  = ci.width;
     _height = ci.height;
 
-    _colorImageViews.clear();
-    _colorImageViews.reserve(ci.colorImages.size());
-    for (auto &image : ci.colorImages)
-    {
-        _colorImageViews.push_back(
-            VulkanImageView::create(render,
-                                    std::static_pointer_cast<VulkanImage>(image),
-                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    // Determine which mode to use
+    bool useExternalImages = !ci.externalColorImages.empty();
+
+    if (useExternalImages) {
+        // Mode 2: Wrap external images into Textures (swapchain scenario)
+        _colorTextures.clear();
+        _colorTextures.reserve(ci.externalColorImages.size());
+
+        for (size_t i = 0; i < ci.externalColorImages.size(); ++i) {
+            std::string label   = std::format("{}_Color{}", ci.label, i);
+            auto        texture = wrapExternalImage(
+                ci.externalColorImages[i],
+                label,
+                VK_IMAGE_ASPECT_COLOR_BIT);
+            if (!texture) {
+                YA_CORE_ERROR("Failed to wrap external color image {} for framebuffer: {}", i, ci.label);
+                return false;
+            }
+            _colorTextures.push_back(std::move(texture));
+        }
+
+        // Depth attachment from external if provided
+        _depthTexture.reset();
+        if (ci.externalDepthImage) {
+            std::string label = std::format("{}_Depth", ci.label);
+            _depthTexture     = wrapExternalImage(
+                ci.externalDepthImage,
+                label,
+                VK_IMAGE_ASPECT_DEPTH_BIT);
+            if (!_depthTexture) {
+                YA_CORE_ERROR("Failed to wrap external depth image for framebuffer: {}", ci.label);
+                return false;
+            }
+        }
+    }
+    else {
+        // Mode 1: Create textures from specs
+        _colorTextures.clear();
+        _colorTextures.reserve(ci.colorAttachments.size());
+
+        for (size_t i = 0; i < ci.colorAttachments.size(); ++i) {
+            std::string label   = std::format("{}_Color{}", ci.label, i);
+            auto        texture = createAttachmentTexture(ci.colorAttachments[i], label);
+            if (!texture) {
+                YA_CORE_ERROR("Failed to create color attachment {} for framebuffer: {}", i, ci.label);
+                return false;
+            }
+            _colorTextures.push_back(std::move(texture));
+        }
+
+        // Create depth attachment texture if specified
+        _depthTexture.reset();
+        if (ci.depthAttachment.has_value()) {
+            std::string label = std::format("{}_Depth", ci.label);
+            _depthTexture     = createAttachmentTexture(ci.depthAttachment.value(), label);
+            if (!_depthTexture) {
+                YA_CORE_ERROR("Failed to create depth attachment for framebuffer: {}", ci.label);
+                return false;
+            }
+        }
     }
 
-    _depthImageView.reset();
-    if (ci.depthImage)
-    {
-        _depthImageView = VulkanImageView::create(render,
-                                                  std::static_pointer_cast<VulkanImage>(ci.depthImage),
-                                                  VK_IMAGE_ASPECT_DEPTH_BIT);
-    }
-
-    // _stencilImageView.reset();
-    // if (ci.stencilImage)
-    // {
-    //     _stencilImageView = VulkanImageView::create(render,
-    //                                                 std::static_pointer_cast<VulkanImage>(ci.stencilImage),
-    //                                                 VK_IMAGE_ASPECT_STENCIL_BIT);
-    // }
-
-
-    // if no render pass, just return
+    // if no render pass, just return (dynamic rendering mode)
     if (!ci.renderPass) {
         return true;
     }
 
-    // or crate the vulkan framebuffer for renderpass api
-
+    // Create the Vulkan framebuffer for renderpass API
     std::vector<VkImageView> vkImageViews;
-    vkImageViews.reserve(_colorImageViews.size() + 1 + 1);
-    for (auto &imageView : _colorImageViews)
-    {
-        vkImageViews.push_back(imageView->getHandle().as<VkImageView>());
-    }
-    if (_depthImageView)
-    {
-        vkImageViews.push_back(_depthImageView->getHandle().as<VkImageView>());
-    }
+    vkImageViews.reserve(_colorTextures.size() + 1);
 
-
+    for (auto &tex : _colorTextures) {
+        if (tex && tex->imageView) {
+            vkImageViews.push_back(tex->imageView->getHandle().as<VkImageView>());
+        }
+    }
+    if (_depthTexture && _depthTexture->imageView) {
+        vkImageViews.push_back(_depthTexture->imageView->getHandle().as<VkImageView>());
+    }
 
     VkFramebufferCreateInfo createInfo{
         .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext           = nullptr,
         .flags           = 0,
-        .renderPass      = _renderPass->getHandleAs<VkRenderPass>(),
+        .renderPass      = ci.renderPass->getHandleAs<VkRenderPass>(),
         .attachmentCount = static_cast<uint32_t>(vkImageViews.size()),
         .pAttachments    = vkImageViews.data(),
         .width           = _width,
@@ -77,22 +182,15 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo &ci)
         YA_CORE_ERROR("Failed to create framebuffer: {}", result);
         return false;
     }
-    YA_CORE_TRACE("Created framebuffer: {}, {} with {} attachments", _label,  (uintptr_t)_framebuffer, vkImageViews.size());
+    YA_CORE_TRACE("Created framebuffer: {}, {} with {} attachments", ci.label, (uintptr_t)_framebuffer, vkImageViews.size());
 
     return true;
 }
 
-
 void VulkanFrameBuffer::clean()
 {
     VK_DESTROY(Framebuffer, render->getDevice(), _framebuffer);
-    _colorImageViews.clear();
-    _depthImageView.reset();
-    // _stencilImageView.reset();
-
-    _colorImages.clear();
-    _depthImage.reset();
-    // _stencilImage.reset();
+    clearAttachments(); // Clears _colorTextures and _depthTexture
 }
 
 } // namespace ya

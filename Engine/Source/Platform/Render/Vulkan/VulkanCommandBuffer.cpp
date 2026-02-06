@@ -3,6 +3,7 @@
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderPass.h"
+#include "Render/Core/Texture.h" // For ImageSpec::texture access
 #include "VulkanImageView.h"
 #include "VulkanQueue.h"
 #include "VulkanRender.h"
@@ -505,7 +506,7 @@ VkRenderingAttachmentInfo *VulkanCommandBuffer::buildDepthAttachmentInfo(const R
     outDepthAttach = {
         .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .pNext       = nullptr,
-        .imageView   = info.depthAttachment->imageView->getHandle().as<VkImageView>(),
+        .imageView   = info.depthAttachment->texture->getImageView()->getHandle().as<VkImageView>(),
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .resolveMode = VK_RESOLVE_MODE_NONE,
         .loadOp      = EAttachmentLoadOp::toVk(info.depthAttachment->loadOp),
@@ -556,21 +557,21 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget *r
     auto curFrameBuffer = renderTarget->getCurFrameBuffer();
 
     // Build color attachments from framebuffer
-    const auto                            &colorImageViews = curFrameBuffer->getColorImageViews();
+    const auto                            &colorTextures = curFrameBuffer->getColorTextures();
     std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
-    vkColorAttachments.reserve(colorImageViews.size());
+    vkColorAttachments.reserve(colorTextures.size());
 
-    for (uint32_t i = 0; i < colorImageViews.size(); ++i) {
+    for (uint32_t i = 0; i < colorTextures.size(); ++i) {
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
-            .imageView   = colorImageViews[i]->getHandle().as<VkImageView>(),
+            .imageView   = colorTextures[i]->getImageView()->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .resolveMode = VK_RESOLVE_MODE_NONE,
             .loadOp      = EAttachmentLoadOp::toVk(info.colorAttachments[i].loadOp),
             .storeOp     = EAttachmentStoreOp::toVk(info.colorAttachments[i].storeOp),
             .clearValue  = {
-                .color = {{
+                 .color = {{
                     info.colorClearValues[i].color.r,
                     info.colorClearValues[i].color.g,
                     info.colorClearValues[i].color.b,
@@ -610,13 +611,13 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
-            .imageView   = info.colorAttachments[i].imageView->getHandle().as<VkImageView>(),
+            .imageView   = info.colorAttachments[i].texture->getImageView()->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .resolveMode = VK_RESOLVE_MODE_NONE,
             .loadOp      = EAttachmentLoadOp::toVk(info.colorAttachments[i].loadOp),
             .storeOp     = EAttachmentStoreOp::toVk(info.colorAttachments[i].storeOp),
             .clearValue  = {
-                .color = {{
+                 .color = {{
                     info.colorClearValues[i].color.r,
                     info.colorClearValues[i].color.g,
                     info.colorClearValues[i].color.b,
@@ -699,12 +700,12 @@ void VulkanCommandBuffer::transitionRenderTargetLayout(
     if (!curFrameBuffer) return;
 
     if (colorLayout != EImageLayout::Undefined) {
-        const auto &colorImages = curFrameBuffer->getColorImages();
-        for (auto &colorImage : colorImages) {
-            if (colorImage) {
+        const auto &colorTextures = curFrameBuffer->getColorTextures();
+        for (auto &colorTexture : colorTextures) {
+            if (auto colorImage = colorTexture->getImage()) {
                 auto curLayout = colorImage->getLayout();
                 if (curLayout != colorLayout) {
-                    executeTransitionImageLayout(colorImage.get(),
+                    executeTransitionImageLayout(colorImage,
                                                  curLayout,
                                                  colorLayout,
                                                  nullptr);
@@ -714,8 +715,8 @@ void VulkanCommandBuffer::transitionRenderTargetLayout(
     }
 
     // Transition depth attachment
-    if (depthLayout != EImageLayout::Undefined && curFrameBuffer->getDepthImage()) {
-        auto depthImage = curFrameBuffer->getDepthImage();
+    if (depthLayout != EImageLayout::Undefined && curFrameBuffer->getDepthTexture()) {
+        auto depthImage = curFrameBuffer->getDepthTexture()->getImage();
         if (depthImage) {
             auto currentLayout = depthImage->getLayout();
             if (currentLayout != depthLayout) {

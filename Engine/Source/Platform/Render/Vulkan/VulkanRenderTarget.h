@@ -45,8 +45,8 @@ struct VulkanRenderTarget : public IRenderTarget
 
     uint32_t _frameBufferCount = 0;
 
-    std::vector<AttachmentDescription> _colorAttachments;
-    AttachmentDescription              _depthAttachment;
+    std::vector<AttachmentDescription> _colorAttachmentDescs;
+    AttachmentDescription              _depthAttachmentDesc;
 
   public:
 

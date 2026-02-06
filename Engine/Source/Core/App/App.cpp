@@ -28,6 +28,10 @@
 #include "Resource/TextureLibrary.h"
 
 
+// Render Core
+#include "Render/Core/Texture.h"
+
+
 
 // ECS
 #include "ECS/Component/CameraComponent.h"
@@ -115,13 +119,12 @@ void App::onSceneViewportResized(Rect2D rect)
         auto vkRender = _render->as<VulkanRender>();
 
         // Wait for GPU to finish using old resources before destroying them
-        if (_postprocessImage) {
+        if (_postprocessTexture) {
             _render->waitIdle();
         }
 
-        // Release old resources
-        _postprocessImageView.reset();
-        _postprocessImage.reset();
+        // Release old texture
+        _postprocessTexture.reset();
 
         // Create new postprocess image
         ImageCreateInfo imageCI{
@@ -135,15 +138,17 @@ void App::onSceneViewportResized(Rect2D rect)
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
-        _postprocessImage = VulkanImage::create(vkRender, imageCI);
+        auto postprocessImage = VulkanImage::create(vkRender, imageCI);
 
-        if (_postprocessImage) {
-            auto vkImage          = std::static_pointer_cast<VulkanImage>(_postprocessImage);
-            _postprocessImageView = VulkanImageView::create(
+        if (postprocessImage) {
+            auto postprocessImageView = VulkanImageView::create(
                 vkRender,
-                vkImage,
+                postprocessImage,
                 VK_IMAGE_ASPECT_COLOR_BIT);
-            _postprocessImageView->setDebugName("PostprocessImageView");
+            postprocessImageView->setDebugName("PostprocessImageView");
+
+            // 使用新的 Texture 构造函数包装 IImage/IImageView
+            _postprocessTexture = std::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
         }
     }
 }
@@ -401,19 +406,20 @@ void App::init(AppDesc ci)
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
-        _postprocessImage = VulkanImage::create(vkRender, imageCI);
+        auto postprocessImage = VulkanImage::create(vkRender, imageCI);
 
-        if (_postprocessImage) {
-            auto vkImage          = std::static_pointer_cast<VulkanImage>(_postprocessImage);
-            _postprocessImageView = VulkanImageView::create(
+        if (postprocessImage) {
+            auto postprocessImageView = VulkanImageView::create(
                 vkRender,
-                vkImage,
+                postprocessImage,
                 VK_IMAGE_ASPECT_COLOR_BIT);
-            _postprocessImageView->setDebugName("PostprocessImageView");
+            postprocessImageView->setDebugName("PostprocessImageView");
+
+            // 使用新的 Texture 构造函数包装 IImage/IImageView
+            _postprocessTexture = std::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
         }
-        _deleter.push("PostprocessImage", [this](void *) {
-            _postprocessImageView.reset();
-            _postprocessImage.reset();
+        _deleter.push("PostprocessTexture", [this](void *) {
+            _postprocessTexture.reset();
         });
     }
     // auto _postProcessingRT = ya::createRenderTarget(RenderTargetCreateInfo{
@@ -1008,12 +1014,9 @@ void App::onRender(float dt)
 
         // from the editor layer's viewport size
         // auto extent = _editorLayer.g
-        Extent2D extent = Extent2D::fromVec2(_viewportRect.extent);
 
-        if (bRetroRendering) {
-            extent = Extent2D::fromVec2(_viewportRect.extent / _retroScale);
-            _viewportRT->setExtent(extent);
-        }
+        auto extent = Extent2D::fromVec2(_viewportRect.extent / _viewportFrameBufferScale);
+        _viewportRT->setExtent(extent);
 
         RenderingInfo ri{
             .label      = "ViewPort",
@@ -1067,12 +1070,36 @@ void App::onRender(float dt)
         }
     }
 
+    // --- MARK: Mirror Rendering ---
     {
-        YA_PROFILE_SCOPE("Screen in Screen")
-        // TODO: draw the scene in the scene, a mirror, or a rear-view mirror(后视镜)
-        // 1. 获取镜子的位置、视角方向，获取镜子的view
-        // 2. 使用镜子的view渲染场景到镜子RT
-        // 3. 将镜子RT作为纹理渲染到主场景
+        YA_PROFILE_SCOPE("Mirror Pass")
+        // Mirror / Rear-view mirror / Screen-in-screen rendering
+        // Implementation follows: Render-to-Texture + Render-as-Sprite pattern
+        //
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 1: Setup                                                      │
+        // │   - Get mirror entity position & orientation                        │
+        // │   - Calculate mirror view matrix (reflection transform)             │
+        // │   - Allocate/fetch mirror RT from RenderTargetPool                  │
+        // └─────────────────────────────────────────────────────────────────────┘
+        //                              ↓
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 2: Render Scene from Mirror's View                            │
+        // │   - beginRendering(mirrorRT)                                        │
+        // │   - Render scene with mirror camera                                 │
+        // │   - endRendering()                                                  │
+        // └─────────────────────────────────────────────────────────────────────┘
+        //                              ↓
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 3: Composite Mirror into Main View                            │
+        // │   - Transition mirror RT to ShaderReadOnlyOptimal                   │
+        // │   - Render as textured quad in viewport (Render2D::makeSprite)      │
+        // └─────────────────────────────────────────────────────────────────────┘
+
+        // TODO: Implement mirror rendering phases
+        // 1. Query mirror entities from ECS
+        // 2. For each mirror, execute Phase 1-3
+        // 3. Consider using RenderTexture helper class for RT management
     }
 
     // --- MARK: Postprocessing
@@ -1087,7 +1114,7 @@ void App::onRender(float dt)
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
         // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
         // Already transitioned by `viewportRenderPass`
-        cmdBuf->transitionImageLayoutAuto(_postprocessImage.get(),
+        cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
                                           //   EImageLayout::Undefined,
                                           EImageLayout::ColorAttachmentOptimal);
 
@@ -1104,7 +1131,7 @@ void App::onRender(float dt)
             //
             .colorAttachments = {
                 RenderingInfo::ImageSpec{
-                    .imageView   = _postprocessImageView.get(),
+                    .texture     = _postprocessTexture.get(), // ← 使用 App 层的 Texture 接口
                     .sampleCount = ESampleCount::Sample_1,
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1127,10 +1154,10 @@ void App::onRender(float dt)
 
         // Pass input imageView and output extent to render
 
-        const auto &inputImageView = _viewportRT->getCurFrameBuffer()->getColorImageView(0);
+        const auto &tex = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
         BasicPostprocessing::RenderPayload payload{
-            .inputImageView = inputImageView,
+            .inputImageView = tex->getImageView(),
             .extent         = Extent2D::fromVec2(_viewportRect.extent),
             .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
             .floatParams    = _postProcessingParams,
@@ -1139,21 +1166,23 @@ void App::onRender(float dt)
         cmdBuf->endRendering(EndRenderingInfo{});
 
         // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling
-        cmdBuf->transitionImageLayoutAuto(_postprocessImage.get(),
+        cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
                                           //   EImageLayout::ColorAttachmentOptimal,
                                           //   EImageLayout::Undefined,
                                           EImageLayout::ShaderReadOnlyOptimal);
 
         vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
 
-        // TODO: depending to render graph
-        _viewportImageView = _postprocessImageView.get();
+        // Use postprocess texture directly (unified Texture semantics)
+        _viewportTexture = _postprocessTexture.get();
     }
     else {
-        _viewportImageView = _viewportRT->getCurFrameBuffer()->getColorImageView(0);
+        // Create a Texture wrapper from framebuffer's color attachment for unified semantics
+        auto fb          = _viewportRT->getCurFrameBuffer();
+        _viewportTexture = fb->getColorTexture(0);
     }
 
-    // Note: _postprocessImage is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
+    // Note: _postprocessTexture is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
 
     // --- MARK: 2: Render UI to Swapchain RT ---
     {
@@ -1260,6 +1289,8 @@ void App::onRenderGUI(float dt)
             ImGui::TreePop();
         }
 
+        ImGui::DragFloat("Retro Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+
         auto *swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
@@ -1325,15 +1356,6 @@ void App::onRenderGUI(float dt)
                 ImGui::EndDisabled();
             }
 
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Retro Mode")) {
-            if (ImGui::Checkbox("Enable Retro Rendering", &bRetroRendering)) {
-                _viewportRT->setExtent(_viewportRect.extent2D());
-            }
-            ImGui::BeginDisabled(!bRetroRendering);
-            ImGui::DragFloat("Retro Scale", &_retroScale, 0.1f, 1.0f, 10.0f);
-            ImGui::EndDisabled();
             ImGui::TreePop();
         }
     }

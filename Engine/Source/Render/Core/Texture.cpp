@@ -228,13 +228,25 @@ Texture::Texture(uint32_t width, uint32_t height, const void *data, size_t dataS
     YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {})", width, height, (int)format);
 }
 
-// Platform-independent accessor
-FormatHandle Texture::getFormatHandle() const
+Texture::Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, const std::string &label)
+    : _label(label), image(img), imageView(view)
 {
-    // For now, we'll store the VkFormat in the FormatHandle
-    // In a more complete abstraction, you'd have a Format enum or interface
-    return FormatHandle{reinterpret_cast<void *>(static_cast<std::uintptr_t>(toVk(_format)))};
+    YA_CORE_ASSERT(img && view, "Cannot create Texture from null IImage or IImageView");
+
+    // Extract metadata from the wrapped image
+    // Note: We need to cast to platform-specific type to get extent info
+    // This is a temporary solution - ideally IImage would provide extent accessors
+    if (auto vkImg = std::dynamic_pointer_cast<VulkanImage>(img)) {
+        _width     = img->getWidth();
+        _height    = img->getHeight();
+        _format    = vkImg->getFormat();
+        _mipLevels = vkImg->_ci.mipLevels;
+        _channels  = 4; // Default, can't easily determine from VkFormat alone
+    }
+
+    YA_CORE_TRACE("Created Texture from existing IImage/IImageView: {} ({}x{})", label, _width, _height);
 }
+
 
 void Texture::setLabel(const std::string &label)
 {

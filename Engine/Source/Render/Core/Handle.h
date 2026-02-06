@@ -2,19 +2,37 @@
 
 // Type-safe handle wrapper for backend-specific handles
 #include <cstdint>
+#include <type_traits>
+
+#include "Core/Common/Types.h"
+
+// C++20 Concepts for type checking
+template <typename T>
+concept PtrHasGetHandle = requires(const T &obj) {
+    {
+        obj->getHandle()
+    };
+};
+
 template <typename Tag>
 struct Handle
 {
     void *ptr = nullptr;
 
     Handle() = default;
-    Handle(void *p) : ptr(p) {}
+    Handle(std::nullptr_t) {}
 
-    // Allow assignment from void*
-    Handle &operator=(void *p)
+    // Constructor 2: Accept objects with getHandle() method - 自动调用 getHandle()
+    template <typename T>
+        requires(!PtrHasGetHandle<T>)
+    Handle(T p) : ptr(p)
     {
-        ptr = p;
-        return *this;
+    }
+
+    // Constructor 3: Accept other Handle instances
+    template <typename OtherTag>
+    Handle(const Handle<OtherTag> &other) : ptr(other.ptr)
+    {
     }
 
     template <typename T>

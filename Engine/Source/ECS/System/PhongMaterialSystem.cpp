@@ -736,11 +736,11 @@ DescriptorImageInfo PhongMaterialSystem::getDescriptorImageInfo(TextureView cons
     ImageViewHandle imageViewHandle;
     if (!tv) {
         samplerHandle   = TextureLibrary::get().getDefaultSampler()->getHandle();
-        imageViewHandle = TextureLibrary::get().getWhiteTexture()->getImageViewHandle();
+        imageViewHandle = TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
     }
     else {
         samplerHandle   = SamplerHandle(tv->sampler->getHandle());
-        imageViewHandle = tv->texture->getImageViewHandle();
+        imageViewHandle = tv->texture->getImageView()->getHandle();
     }
 
     DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);

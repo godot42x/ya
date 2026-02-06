@@ -1,6 +1,5 @@
 #include "EditorLayer.h"
 #include "Core/App/App.h"
-#include "Resource/AssetManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
@@ -12,6 +11,7 @@
 #include "ECS/System/TransformSystem.h"
 #include "EditorCommon.h"
 #include "ImGuiHelper.h"
+#include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
@@ -528,12 +528,13 @@ void EditorLayer::viewportWindow()
         YA_CORE_INFO("Viewport resize queued: {} x {} (will be processed before render)", _viewportSize.x, _viewportSize.y);
     }
 
-    // Display the render texture from editor render target
+    // Display the render texture from editor render target (unified Texture semantics)
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        auto imageView = App::get()->_viewportImageView;
-        if (imageView)
+        auto viewportTexture = App::get()->_viewportTexture;
+        if (viewportTexture && viewportTexture->isValid())
         {
+            auto            imageView     = viewportTexture->getImageView();
             ImageViewHandle currentHandle = imageView->getHandle();
 
             // Create new descriptor set for new ImageView

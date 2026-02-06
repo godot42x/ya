@@ -59,6 +59,11 @@ struct Texture
      */
     Texture(uint32_t width, uint32_t height, const void *data, size_t dataSize, EFormat::T format);
 
+    /**
+     * @brief Create texture from existing IImage/IImageView (e.g., for render targets)
+     */
+    Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, const std::string &label = "");
+
     virtual ~Texture() = default;
 
     // Disable copy, allow move
@@ -68,10 +73,8 @@ struct Texture
     Texture &operator=(Texture &&)      = default;
 
     // Platform-independent accessors (preferred)
-    ImageHandle                 getImage() const { return image ? image->getHandle() : ImageHandle{}; }
-    std::shared_ptr<IImageView> getImageView() const { return imageView; }
-    ImageViewHandle             getImageViewHandle() const { return imageView ? imageView->getHandle() : ImageViewHandle{}; }
-    FormatHandle                getFormatHandle() const;
+    IImage     *getImage() const { return image.get(); }
+    IImageView *getImageView() const { return imageView.get(); }
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

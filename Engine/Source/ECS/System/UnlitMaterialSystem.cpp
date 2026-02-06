@@ -498,10 +498,10 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
     const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
 
     DescriptorImageInfo imageInfo0(SamplerHandle(tv0->sampler->getHandle()),
-                                   tv0->texture->getImageViewHandle(),
+                                   tv0->texture->getImageView()->getHandle(),
                                    EImageLayout::ShaderReadOnlyOptimal);
     DescriptorImageInfo imageInfo1(SamplerHandle(tv1->sampler->getHandle()),
-                                   tv1->texture->getImageViewHandle(),
+                                   tv1->texture->getImageView()->getHandle(),
                                    EImageLayout::ShaderReadOnlyOptimal);
 
     render

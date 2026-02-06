@@ -59,21 +59,21 @@ bool VulkanRenderTarget::onInit(const RenderTargetCreateInfo &ci)
 
         getAttachmentsFromRenderPass(_renderPass,
                                      _subpassIndex,
-                                     _colorAttachments,
-                                     _depthAttachment);
+                                     _colorAttachmentDescs,
+                                     _depthAttachmentDesc);
     }
     else {
-        _colorAttachments = ci.attachments.colorAttach;
-        _depthAttachment  = ci.attachments.depthAttach;
+        _colorAttachmentDescs = ci.attachments.colorAttach;
+        _depthAttachmentDesc  = ci.attachments.depthAttach;
     }
 
     YA_CORE_DEBUG("RenderTarget '{}': Extracted from RenderPass - {} color attachments, depth format: {}",
                   label,
-                  _colorAttachments.size(),
-                  static_cast<int>(_depthAttachment.format));
+                  _colorAttachmentDescs.size(),
+                  static_cast<int>(_depthAttachmentDesc.format));
     return recreateImagesAndFrameBuffer(_frameBufferCount,
-                                        _colorAttachments,
-                                        _depthAttachment);
+                                        _colorAttachmentDescs,
+                                        _depthAttachmentDesc);
 }
 
 void VulkanRenderTarget::recreate()
@@ -97,8 +97,8 @@ void VulkanRenderTarget::recreate()
     }
 
     recreateImagesAndFrameBuffer(_frameBufferCount,
-                                 _colorAttachments,
-                                 _depthAttachment);
+                                 _colorAttachmentDescs,
+                                 _depthAttachmentDesc);
 
     onFramebufferRecreated.broadcast();
 }
@@ -154,9 +154,17 @@ void VulkanRenderTarget::endFrame(ICommandBuffer *cmdBuf)
         }
     }
 
-    // if (_renderingMode == ERenderingMode::RenderPass) {
-    //     _renderPass->end(cmdBuf);
-    // }
+    // what's different to renderpass api?
+    if (_renderingMode == ERenderingMode::DynamicRendering) {
+        for (const auto &colorAttachmentDesc : _colorAttachmentDescs) {
+            auto image = _frameBuffers[_currentFrameIndex]->getColorTexture(colorAttachmentDesc.index)->getImage();
+            cmdBuf->transitionImageLayoutAuto(image, colorAttachmentDesc.finalLayout);
+        }
+        if (_depthAttachmentDesc.format != EFormat::Undefined) {
+            auto image = _frameBuffers[_currentFrameIndex]->getDepthTexture()->getImage();
+            cmdBuf->transitionImageLayoutAuto(image, _depthAttachmentDesc.finalLayout);
+        }
+    }
 }
 
 bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t                                  frameBufferCount,
@@ -241,12 +249,12 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t                  
 
 
         FrameBufferCreateInfo fbCI{
-            .label       = std::format("{}_FrameBuffer_{}", label, i),
-            .width       = _extent.width,
-            .height      = _extent.height,
-            .colorImages = colorImages,
-            .depthImage  = depthImage,
-            .renderPass  = _renderPass,
+            .label               = std::format("{}_FrameBuffer_{}", label, i),
+            .width               = _extent.width,
+            .height              = _extent.height,
+            .externalColorImages = colorImages,
+            .externalDepthImage  = depthImage,
+            .renderPass          = _renderPass,
         };
         auto fb = IFrameBuffer::create(_vkRender, fbCI);
         YA_CORE_ASSERT(fb != nullptr, "Failed to create framebuffer");
@@ -270,11 +278,11 @@ void VulkanRenderTarget::onRenderGUI()
         ImGui::Indent();
 
         ImGui::Text("Extent: %u x %u", _extent.width, _extent.height);
-        ImGui::Text("Color Attachments: %zu", _colorAttachments.size());
-        for (size_t i = 0; i < _colorAttachments.size(); ++i) {
-            ImGui::Text("  Color[%zu] Format: %d", i, static_cast<int>(_colorAttachments[i].format));
+        ImGui::Text("Color Attachments: %zu", _colorAttachmentDescs.size());
+        for (size_t i = 0; i < _colorAttachmentDescs.size(); ++i) {
+            ImGui::Text("  Color[%zu] Format: %d", i, static_cast<int>(_colorAttachmentDescs[i].format));
         }
-        ImGui::Text("Depth Format: %d", static_cast<int>(_depthAttachment.format));
+        ImGui::Text("Depth Format: %d", static_cast<int>(_depthAttachmentDesc.format));
         ImGui::Text("Frame Count: %u", _frameBufferCount);
         ImGui::Text("Current Frame: %u", _currentFrameIndex);
         ImGui::Text("Is Swapchain Target: %s", bSwapChainTarget ? "Yes" : "No");
@@ -291,20 +299,27 @@ void VulkanRenderTarget::onRenderGUI()
                 ImGui::Indent();
 
                 // Show all color attachments
-                for (size_t colorIdx = 0; colorIdx < frame->_colorImages.size(); ++colorIdx) {
-                    if (frame->_colorImages[colorIdx]) {
-                        ImGui::Text("  Color[%zu] Image: %p", colorIdx, (void *)frame->_colorImages[colorIdx]->getHandle());
+                auto colorTextures = frame->getColorTextures();
+                for (size_t colorIdx = 0; colorIdx < colorTextures.size(); ++colorIdx) {
+                    if (colorTextures[colorIdx]) {
+                        auto tex = colorTextures[colorIdx];
+                        ImGui::Text("  Color[%zu] Texture: %p", colorIdx, (void *)tex.get());
+                        ImGui::Text("    Image: %p", (void *)tex->image->getHandle().as<void *>());
                     }
-                    if (colorIdx < frame->_colorImageViews.size() && frame->_colorImageViews[colorIdx]) {
-                        ImGui::Text("  Color[%zu] View: %p", colorIdx, (void *)frame->_colorImageViews[colorIdx]->getHandle());
+                    auto imageView = frame->getColorTexture(colorIdx)->getImageView();
+                    if (imageView) {
+                        ImGui::Text("  Color[%zu] View: %p", colorIdx, (void *)imageView->getHandle().as<void *>());
                     }
                 }
 
-                if (frame->_depthImage) {
-                    ImGui::Text("  Depth Image: %p", frame->_depthImage->getHandle());
+                if (frame->getDepthTexture()) {
+                    auto depthTex = frame->getDepthTexture();
+                    ImGui::Text("  Depth Texture: %p", (void *)depthTex);
+                    ImGui::Text("    Image: %p", (void *)depthTex->image->getHandle().as<void *>());
                 }
-                if (frame->_depthImageView) {
-                    ImGui::Text("  Depth View: %p", (void *)frame->_depthImageView->getHandle());
+                auto depthImageView = frame->getDepthTexture()->getImageView();
+                if (depthImageView) {
+                    ImGui::Text("  Depth View: %p", (void *)depthImageView->getHandle().as<void *>());
                 }
                 ImGui::Unindent();
             }
