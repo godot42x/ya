@@ -1,6 +1,6 @@
 #pragma once
 
- 
+
 #include "Render/RenderDefines.h"
 #include <memory>
 #include <string>
@@ -103,8 +103,7 @@ struct IGraphicsPipeline
     /**
      * @brief Factory method to create graphics pipeline
      */
-    static std::shared_ptr<IGraphicsPipeline> create(IRender         *render,
-                                                     IPipelineLayout *pipelineLayout);
+    static std::shared_ptr<IGraphicsPipeline> create(IRender *render);
 };
 
 } // namespace ya

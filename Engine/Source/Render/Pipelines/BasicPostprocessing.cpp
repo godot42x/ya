@@ -28,7 +28,7 @@ void BasicPostprocessing::init()
         DSLs);
 
     auto _pipelineDesc = GraphicsPipelineCreateInfo{
-        .renderingMode         = ERenderingMode::DynamicRendering,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "BasicPostprocessing",
             .colorAttachmentFormats = {
@@ -99,7 +99,7 @@ void BasicPostprocessing::init()
             }},
         },
     };
-    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(_pipelineDesc);
 
     // MARK: sampler

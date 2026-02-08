@@ -77,10 +77,9 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     VulkanPipelineLayout *_pipelineLayout = nullptr;
 
   public:
-    VulkanPipeline(VulkanRender *render, VulkanPipelineLayout *pipelineLayout)
+    VulkanPipeline(VulkanRender *render)
     {
-        _render         = render;
-        _pipelineLayout = pipelineLayout;
+        _render = render;
         queryPhysicalDeviceLimits(); // maxTextureSlots
     }
 

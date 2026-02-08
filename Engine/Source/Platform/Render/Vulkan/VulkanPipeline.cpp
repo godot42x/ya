@@ -123,7 +123,8 @@ void VulkanPipeline::cleanup()
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
 {
     YA_PROFILE_FUNCTION_LOG();
-    _ci = ci;
+    _ci             = ci;
+    _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
         createPipelineInternal();
     }
@@ -423,15 +424,13 @@ void VulkanPipeline::createPipelineInternal()
         .basePipelineHandle  = VK_NULL_HANDLE,
     };
 
-    switch (_ci.renderingMode) {
-
-    case ERenderingMode::RenderPass:
+    if (_ci.renderPass != nullptr)
     {
         // 传统流程需设置 renderPass 和 subpass，动态渲染模式下这两个参数设为 VK_NULL_HANDLE 与 0
         gplCI.renderPass = _ci.renderPass->getHandleAs<VkRenderPass>();
         gplCI.subpass    = _ci.subPassRef;
-    } break;
-    case ERenderingMode::DynamicRendering:
+    }
+    else
     {
         // WHY DELETER? RAII will destruct outside this case, extend this life cycle until created pipeline done
         auto colorAttachmentRef = deleter.push("", new std::vector<VkFormat>(), [](void *handle) {
@@ -465,10 +464,6 @@ void VulkanPipeline::createPipelineInternal()
         // 关键：将动态渲染配置挂到 gplCI 的 pNext 上
         gplCI.pNext = ref;
         // gplCI.
-    } break;
-    case ERenderingMode::Auto:
-        UNREACHABLE();
-        break;
     }
 
 

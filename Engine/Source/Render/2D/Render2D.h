@@ -90,7 +90,7 @@ struct FQuadRender
 
     // Note: White texture and default sampler are now provided by TextureLibrary
 
-    void init(IRender *render, IRenderPass *renderPass);
+    void init(IRender *render);
     void destroy();
 
     void onImGui()
@@ -185,7 +185,7 @@ struct Render2D
     virtual ~Render2D() = default;
 
 
-    static void init(IRender *render, IRenderPass *renderpass);
+    static void init(IRender *render);
     static void destroy();
 
     static void onUpdate(float dt);

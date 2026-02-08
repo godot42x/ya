@@ -37,6 +37,14 @@ struct IImage : public plat_base<IImage>
 
     virtual void setDebugName(const std::string &name) = 0;
 
+    Extent2D getExtent() const
+    {
+        return Extent2D{
+            .width  = getWidth(),
+            .height = getHeight(),
+        };
+    }
+
     /**
      * @brief Get image usage flags
      */

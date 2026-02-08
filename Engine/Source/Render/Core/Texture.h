@@ -84,6 +84,7 @@ struct Texture
     void               setLabel(const std::string &label);
     const std::string &getLabel() const { return _label; }
     const std::string &getFilepath() const { return _filepath; }
+    Extent2D         getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
     /**
      * @brief Check if texture is valid

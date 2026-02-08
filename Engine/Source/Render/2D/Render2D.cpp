@@ -26,7 +26,7 @@ FQuadRender  *Render2D::quadData = nullptr;
 auto &data2D = Render2D::data;
 
 
-void Render2D::init(IRender *render, IRenderPass *renderpass)
+void Render2D::init(IRender *render)
 {
     auto *swapchain = render->getSwapchain();
     auto  extent    = swapchain->getExtent();
@@ -44,7 +44,7 @@ void Render2D::init(IRender *render, IRenderPass *renderpass)
     });
 
     quadData = new FQuadRender();
-    quadData->init(render, renderpass);
+    quadData->init(render);
 }
 
 void Render2D::destroy()
@@ -104,7 +104,7 @@ void Render2D::onImGui()
 
 // MARK: quad init
 
-void FQuadRender::init(IRender *render, IRenderPass *renderPass)
+void FQuadRender::init(IRender *render)
 {
     _render = render;
 
@@ -178,10 +178,18 @@ void FQuadRender::init(IRender *render, IRenderPass *renderPass)
     _pipelineLayout                                           = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(GraphicsPipelineCreateInfo{
-        .subPassRef = 0,
-        .renderPass = renderPass,
+        .subPassRef            = 0,
+        .renderPass            = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                  = "Sprite2D_Pipeline",
+            .viewMask               = 0,
+            .colorAttachmentFormats = {App::get()->COLOR_FORMAT},
+            .depthAttachmentFormat  = App::get()->DEPTH_FORMAT,
+        },
+        .pipelineLayout = _pipelineLayout.get(),
+
         .shaderDesc = ShaderDesc{
             .shaderName        = "Sprite2D.glsl",
             .bDeriveFromShader = false,

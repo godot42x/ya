@@ -691,7 +691,7 @@ struct RenderingInfo
 
     struct ImageSpec
     {
-        Texture *texture = nullptr;  // ← 使用高层 Texture 抽象，替代 IImageView*
+        Texture *texture = nullptr; // ← 使用高层 Texture 抽象，替代 IImageView*
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 
@@ -735,19 +735,15 @@ struct IPipelineLayout;
 
 struct GraphicsPipelineCreateInfo
 {
-    // Rendering mode
-    // TODO: remove this, use cmdBuf.beginRendering to process renderpass verb and dynamical rendering verb
-    ERenderingMode::T renderingMode = ERenderingMode::RenderPass;
-
     // Subpass mode fields
-    uint32_t     subPassRef;
+    int32_t      subPassRef = -1;
     IRenderPass *renderPass;
 
     // Dynamic Rendering mode fields (ignored if renderingMode == Subpass)
     PipelineRenderingInfo pipelineRenderingInfo;
 
     // common payloads
-    IPipelineLayout                        *pipelineLayout = nullptr;
+    IPipelineLayout                        *pipelineLayout;
     ShaderDesc                              shaderDesc;
     std::vector<EPipelineDynamicFeature::T> dynamicFeatures = {};
     EPrimitiveType::T                       primitiveType   = EPrimitiveType::TriangleList;
