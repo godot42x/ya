@@ -29,11 +29,9 @@ struct SimpleMaterialSystem : public IMaterialSystem
     // stdptr<IGraphicsPipeline>        _pipeline       = nullptr; // temp move to IMaterialSystem
     stdptr<IPipelineLayout> _pipelineLayout = nullptr;
 
-    void onInit(IRenderPass *renderPass) override;
+    void onInit(IRenderPass *renderPass, const PipelineRenderingInfo & pipelineRenderingInfo) override;
     void onDestroy() override;
     void onRenderGUI() override;
-
-    void onUpdate(float deltaTime) override;
     void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
 };
 } // namespace ya

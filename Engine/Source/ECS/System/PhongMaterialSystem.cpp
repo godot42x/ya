@@ -29,7 +29,7 @@
 namespace ya
 {
 
-void PhongMaterialSystem::onInit(IRenderPass *renderPass)
+void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &inPipelineRenderingInfo)
 {
     YA_PROFILE_FUNCTION();
 
@@ -123,8 +123,10 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
 
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
-        .subPassRef = 0,
-        .renderPass = renderPass,
+        .renderPass            = renderPass,
+        .pipelineRenderingInfo = inPipelineRenderingInfo,
+        .pipelineLayout        = _pipelineLayout.get(),
+
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/PhongLit.glsl",
             .bDeriveFromShader = false,
@@ -173,7 +175,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
             //
             .cullMode  = _cullMode,
             .frontFace = EFrontFaceType::CounterClockWise, // GL
-            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+                                                           // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = true,
@@ -219,53 +221,56 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass)
             }},
         },
     };
-    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(_pipelineDesc);
 
 
     _frameDSP = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 1,
+            .maxSets   = MAX_PASS_SLOTS,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 3, // frame ubo + lighting ubo + debug ubo
+                    .descriptorCount = 3 * MAX_PASS_SLOTS, // (frame + lighting + debug) * slots
                 },
             },
         });
     std::vector<ya::DescriptorSetHandle> sets;
-    _frameDSP->allocateDescriptorSets(_materialFrameDSL, 1, sets);
-    _frameDS = sets[0];
+    _frameDSP->allocateDescriptorSets(_materialFrameDSL, MAX_PASS_SLOTS, sets);
+    for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
+        _frameDSs[i] = sets[i];
+    }
 
     // TODO: create a auto extend descriptor pool class to support recreate
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
-    _frameUBO = IBuffer::create(
-        render,
-        ya::BufferCreateInfo{
-            .label         = "Lit_Frame_UBO",
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(PhongMaterialSystem::FrameUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-
-        });
-    _lightUBO = IBuffer::create(
-        render,
-        ya::BufferCreateInfo{
-            .label         = "Lit_Light_UBO",
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(PhongMaterialSystem::LightUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-        });
-    _debugUBO = IBuffer::create(
-        render,
-        ya::BufferCreateInfo{
-            .label         = "Lit_Debug_UBO",
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(PhongMaterialSystem::DebugUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-        });
+    for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
+        _frameUBOs[i] = IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = std::format("Lit_Frame_UBO_{}", i),
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(PhongMaterialSystem::FrameUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+        _lightUBOs[i] = IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = std::format("Lit_Light_UBO_{}", i),
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(PhongMaterialSystem::LightUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+        _debugUBOs[i] = IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = std::format("Lit_Debug_UBO_{}", i),
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(PhongMaterialSystem::DebugUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+    }
 }
 
 void PhongMaterialSystem::onDestroy()
@@ -273,7 +278,7 @@ void PhongMaterialSystem::onDestroy()
 }
 
 // MARK: grab resources
-void PhongMaterialSystem::onUpdateByRenderTarget(float dt, FrameContext *ctx)
+void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -369,6 +374,7 @@ void PhongMaterialSystem::onUpdateByRenderTarget(float dt, FrameContext *ctx)
 void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
+    preTick(0.0f, ctx);
 
     Scene *scene = getActiveScene();
     if (!scene) {
@@ -389,9 +395,11 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     }
 
     // Get viewport extent from App (since we no longer have direct RT access)
-    auto     app    = getApp();
     uint32_t width  = ctx->extent.width;
     uint32_t height = ctx->extent.height;
+    if (width == 0 || height == 0) {
+        return;
+    }
 
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
@@ -424,16 +432,25 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     std::vector<std::pair<entt::entity, const TransformComponent *>> entries;
     {
         YA_PROFILE_SCOPE("PhongMaterial::SortByZ");
-        view.each([&](entt::entity entity, PhongMaterialComponent &lmc, MeshComponent &meshComp, TransformComponent &tc) {
-            entries.push_back({entity, &tc});
-        });
+        if (ctx->viewOwner != entt::null) {
+            for (const auto &[entity, lmc, mc, tc] : view.each()) {
+                if (entity == ctx->viewOwner) {
+                    continue;
+                }
+                entries.push_back({entity, &tc});
+            }
+        }
+        else {
+            for (const auto &[entity, lmc, mc, tc] : view.each()) {
+                entries.push_back({entity, &tc});
+            }
+        }
         std::ranges::sort(entries, [](const auto &a, const auto &b) {
             // return a.second->getWorldPosition().z > b.second->getWorldPosition().z;
             // world forward is -Z in right-hand system
             return a.second->getWorldPosition().z < b.second->getWorldPosition().z;
         });
     }
-
 
     for (auto &[entity, tc] : entries)
     // for (entt::entity entity : view)
@@ -482,7 +499,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
         {
             YA_PROFILE_SCOPE("PhongMaterial::BindDescriptorSets");
             std::vector<DescriptorSetHandle> descSets = {
-                _frameDS,
+                _frameDSs[getPassSlot()],
                 resourceDS,
                 paramDS,
             };
@@ -514,11 +531,15 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
     // Reset force update flag after rendering
     _bShouldForceUpdateMaterial = false;
+    advanceSlot(); // Advance pass slot for next frame (ring buffer)
 }
 
 void PhongMaterialSystem::onRenderGUI()
 {
+    using namespace ImGui;
     IMaterialSystem::onRenderGUI();
+
+    TextColored(ImColor(1.0f, 1.0f, 0.0f, 1.0f), "pass slot: %d", getPassSlot());
 
     // Polygon Mode Control
     int polygonMode = (int)(_polygonMode);
@@ -584,18 +605,20 @@ void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
     // auto light               = uLight;
     // light.dirLight.direction = glm::radians(light.dirLight.direction);
 
-    _frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
-    _lightUBO->writeData(&uLight, sizeof(LightUBO), 0);
-    _debugUBO->writeData(&uDebug, sizeof(DebugUBO), 0);
+    uint32_t slot = getPassSlot();
+
+    _frameUBOs[slot]->writeData(&uFrame, sizeof(FrameUBO), 0);
+    _lightUBOs[slot]->writeData(&uLight, sizeof(LightUBO), 0);
+    _debugUBOs[slot]->writeData(&uDebug, sizeof(DebugUBO), 0);
 
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 0, EPipelineDescriptorType::UniformBuffer, _frameUBO.get()),
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 1, EPipelineDescriptorType::UniformBuffer, _lightUBO.get()),
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDS, 2, EPipelineDescriptorType::UniformBuffer, _debugUBO.get()),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[slot].get()),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[slot].get()),
+                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[slot].get()),
             },
             {});
 }

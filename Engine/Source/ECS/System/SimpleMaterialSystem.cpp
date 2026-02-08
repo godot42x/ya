@@ -31,7 +31,8 @@ namespace ya
 {
 
 
-void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
+
+void SimpleMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo & pipelineRenderingInfo)
 {
     _label       = "SimpleMaterialSystem";
     auto *render = getRender();
@@ -57,9 +58,11 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
 
 
     GraphicsPipelineCreateInfo pipelineCI{
-        .subPassRef = 0,
-        .renderPass = renderPass,
-        // .pipelineLayout   = pipelineLayout,
+        .subPassRef            = 0,
+        .renderPass            = renderPass,
+        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .pipelineLayout        = _pipelineLayout.get(),
+
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/SimpleMaterial.glsl",
             .bDeriveFromShader = false,
@@ -151,9 +154,10 @@ void SimpleMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(pipelineCI);
 }
+
 
 void SimpleMaterialSystem::onDestroy()
 {
@@ -167,9 +171,6 @@ void SimpleMaterialSystem::onRenderGUI()
     ImGui::Combo("Default Color Type", &_defaultColorType, "Normal\0UV\0Fixed");
 }
 
-void SimpleMaterialSystem::onUpdate(float deltaTime)
-{
-}
 
 void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {

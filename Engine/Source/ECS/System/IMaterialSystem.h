@@ -20,8 +20,10 @@ struct IRenderTarget;
 struct Scene;
 struct FrameContext;
 
-struct IMaterialSystem : public ISystem
+struct IMaterialSystem
 {
+    virtual ~IMaterialSystem() = default;
+
     std::string  _label            = "IMaterialSystem";
     bool         bReverseViewportY = true;
     bool         bEnabled          = true;
@@ -32,12 +34,12 @@ struct IMaterialSystem : public ISystem
 
     std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
 
-    // TODO: abstract render api
-    virtual void onInit(IRenderPass *renderPass)                     = 0;
-    virtual void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) = 0;
-    virtual void onUpdate(float deltaTime) override {}
-    virtual void onUpdateByRenderTarget(float deltaTime, FrameContext *ctx) {}
-    virtual void onDestroy() = 0;
+    virtual void onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo) = 0;
+    virtual void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)                                 = 0;
+    virtual void onDestroy()                                                                         = 0;
+
+    // Reset per-frame slot counter. Call once per frame before any onRender() calls.
+    virtual void resetFrameSlot() {}
 
     void renderGUI()
     {

@@ -68,7 +68,7 @@ struct PhongMaterialSystem : public IMaterialSystem
         float outerCutOff;
     };
 
-    static constexpr uint32_t MAX_POINT_LIGHTS = 4;
+    static constexpr uint32_t MAX_POINT_LIGHTS = 2 * 3; // reuse times * 3 frame buffer?
 
 
     // std140 布局规则（GLSL）：
@@ -106,12 +106,28 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::shared_ptr<IPipelineLayout> _pipelineLayout;
     // std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
 
-    // set 0, contains the frame UBO and lighting UBO
-    stdptr<IDescriptorPool> _frameDSP;
-    DescriptorSetHandle     _frameDS;
-    stdptr<IBuffer>         _frameUBO;
-    stdptr<IBuffer>         _lightUBO;
-    stdptr<IBuffer>         _debugUBO;
+    // TODO: Consider using single UBO with dynamic offsets (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+    //       instead of multiple slot buffers for better cache locality and reduced resource count.
+    //       Current multi-slot approach: 12 buffers + 4 descriptor sets
+    //       Dynamic UBO approach: 3 buffers + 1 descriptor set (with dynamic offsets)
+    //       Performance impact: <1% for 2-4 passes, but code simplification benefit is significant.
+    //       Blocked by: Would require DSL redesign and descriptor handling refactor.
+
+    // Ring buffer slots for multi-pass rendering (mirror + viewport).
+    // When _passSlot >= MAX_PASS_SLOTS, it wraps around: getPassSlot() = _passSlot % MAX_PASS_SLOTS
+    // WARNING: If more than MAX_PASS_SLOTS passes reuse this system in one frame,
+    //          GPU data hazard may occur if earlier passes haven't finished execution.
+    static constexpr uint32_t MAX_PASS_SLOTS = 8;
+    uint32_t                  _passSlot      = 0;
+    stdptr<IDescriptorPool>   _frameDSP;
+    DescriptorSetHandle       _frameDSs[MAX_PASS_SLOTS];
+    stdptr<IBuffer>           _frameUBOs[MAX_PASS_SLOTS];
+    stdptr<IBuffer>           _lightUBOs[MAX_PASS_SLOTS];
+    stdptr<IBuffer>           _debugUBOs[MAX_PASS_SLOTS];
+
+    // TODO: Add GPU event/timeline tracking to detect wrap-around stalls at runtime
+    uint32_t getPassSlot() const { return _passSlot % MAX_PASS_SLOTS; }
+    void     advanceSlot() { _passSlot = (_passSlot + 1) % MAX_PASS_SLOTS; }
 
 
 
@@ -129,11 +145,13 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     EPolygonMode::T _polygonMode = EPolygonMode::Fill; // Polygon rendering mode (Fill, Line, Point)
 
-    void onInit(IRenderPass *renderPass) override;
+    // optional?
+    void onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo) override;
     void onDestroy() override;
-    void onUpdateByRenderTarget(float deltaTime, FrameContext *ctx) override;
+    void preTick(float deltaTime, FrameContext *ctx);
     void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
     void onRenderGUI() override;
+    void resetFrameSlot() override { _passSlot = 0; }
 
 
   private:
@@ -148,7 +166,6 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv0);
 };
-
 
 
 } // namespace ya
