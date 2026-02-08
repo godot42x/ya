@@ -192,6 +192,15 @@ struct TransformComponent : public IComponent
         else {
             return _worldMatrix * -glm::vec4(FMath::Vector::WorldForward, 0.0f);
         }
+
+        float pitch = glm::radians(_rotation.x);
+        float yaw   = glm::radians(_rotation.y);
+        float roll  = glm::radians(_rotation.z);
+
+        glm::quat rotQuat = glm::quat(glm::vec3(pitch, yaw, roll));
+
+        glm::vec3 forward = rotQuat * FMath::Vector::WorldForward;
+        return forward;
     }
 
     // ========================================================================

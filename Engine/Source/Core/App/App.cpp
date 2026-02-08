@@ -3,7 +3,6 @@
 
 // Core
 #include "Core/App/App.h"
-#include "Core/App/FPSCtrl.h"
 #include "Core/App/SDLMisc.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
@@ -23,7 +22,7 @@
 
 #include "Resource/AssetManager.h"
 #include "Resource/PrimitiveMeshCache.h"
-#include "Resource/RenderTargetPool.h"
+// #include "Resource/RenderTargetPool.h"
 #include "Resource/ResourceRegistry.h"
 #include "Resource/TextureLibrary.h"
 
@@ -35,6 +34,7 @@
 
 // ECS
 #include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -76,10 +76,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
 
-// Windows
-#if defined(_WIN32)
-    #include <windows.h>
-#endif
 
 // Scene
 #include "Scene/Scene.h"
@@ -160,76 +156,7 @@ void App::onSceneViewportResized(Rect2D rect)
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
 ClearValue depthClearValue = ClearValue(1.0f, 0);
 
-#pragma region misc
 
-
-void imcFpsControl(FPSControl &fpsCtrl)
-{
-    if (ImGui::CollapsingHeader("FPS Control", 0)) {
-        ImGui::Indent();
-
-        ImGui::Text("FPS Limit: %.1f", fpsCtrl.fpsLimit);
-
-        static float newFpsLimit = fpsCtrl.fpsLimit;
-        ImGui::PushItemWidth(100.0f);
-        ImGui::InputFloat("New: ", &newFpsLimit, 10.0f, 10.0f, "%.1f");
-        ImGui::PopItemWidth();
-
-        ImGui::SameLine();
-        if (ImGui::Button("Confirm")) {
-            fpsCtrl.setFPSLimit(newFpsLimit);
-        }
-
-        ImGui::Checkbox("Enable FPS Control", &fpsCtrl.bEnable);
-        ImGui::Unindent();
-    }
-}
-
-bool imcEditorCamera(FreeCamera &camera)
-{
-    auto position = camera._position;
-    auto rotation = camera._rotation;
-    bool bChanged = false;
-
-    // Add camera control settings to UI
-    if (ImGui::CollapsingHeader("Camera Controls", 0)) {
-        if (ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f)) {
-            bChanged = true;
-        }
-        if (ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.f, -180.0f, 180.0f)) {
-            bChanged = true;
-        }
-        ImGui::DragFloat("Move Speed", &App::get()->cameraController._moveSpeed, 0.1f, 0.1f, 20.0f);
-        ImGui::DragFloat("Rotation Speed", &App::get()->cameraController._rotationSpeed, 1.f, 10.f, 180.f);
-        ImGui::Text("Hold right mouse button to rotate camera");
-        ImGui::Text("WASD: Move horizontally, QE: Move vertically");
-    }
-
-
-    if (bChanged) {
-        camera.setPositionAndRotation(position, rotation);
-    }
-    return bChanged;
-}
-
-void imcClearValues()
-{
-    if (ImGui::CollapsingHeader("Clear Values", 0)) {
-        float color[4] = {colorClearValue.color.r, colorClearValue.color.g, colorClearValue.color.b, colorClearValue.color.a};
-        if (ImGui::ColorEdit4("Color Clear Value", color)) {
-            colorClearValue = ClearValue(color[0], color[1], color[2], color[3]);
-        }
-        float depth = depthClearValue.depthStencil.depth;
-        if (ImGui::DragFloat("Depth Clear Value", &depth, 0.01f, 0.0f, 1.0f)) {
-            depthClearValue = ClearValue(depth, depthClearValue.depthStencil.stencil);
-        }
-    }
-}
-
-#pragma endregion
-
-
-const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
 void App::init(AppDesc ci)
 {
@@ -312,87 +239,75 @@ void App::init(AppDesc ci)
 
     constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
 
-    // MARK: Viewport pass
-    _viewportRenderPass = IRenderPass::create(
-        _render,
-        RenderPassCreateInfo{
-            .label       = "Viewport RenderPass",
-            .attachments = {
-                // Color attachment (will be sampled by ImGui)
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = EFormat::R8G8B8A8_UNORM,
-                    .samples        = _sampleCount,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For ImGui sampling
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-                // Depth attachment
-                AttachmentDescription{
-                    .index          = 1,
-                    .format         = DEPTH_FORMAT,
-                    .samples        = _sampleCount,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                    .usage          = EImageUsage::DepthStencilAttachment,
-                },
-            },
-            .subpasses = {
-                RenderPassCreateInfo::SubpassInfo{
-                    .subpassIndex     = 0,
-                    .inputAttachments = {},
-                    .colorAttachments = {
-                        RenderPassCreateInfo::AttachmentRef{
-                            .ref    = 0,
-                            .layout = EImageLayout::ColorAttachmentOptimal,
-                        },
-                    },
-                    .depthAttachment = RenderPassCreateInfo::AttachmentRef{
-                        .ref    = 1,
-                        .layout = EImageLayout::DepthStencilAttachmentOptimal,
-                    },
-                    .resolveAttachment = {},
-                },
-            },
-            .dependencies = {
-                RenderPassCreateInfo::SubpassDependency{
-                    .bSrcExternal = true,
-                    .srcSubpass   = 0,
-                    .dstSubpass   = 0,
-                },
-            },
-        });
-    // Create Scene RenderTarget (offscreen for 3D scene)
-    // Using legacy RenderPass API with VkFramebuffer
+    // MARK: Viewport pass (dynamic rendering only)
+    _viewportRenderPass = nullptr;
+
     _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Viewport RenderTarget",
-        .renderingMode    = ERenderingMode::RenderPass,
+        .renderingMode    = ERenderingMode::DynamicRendering,
         .bSwapChainTarget = false,
         .extent           = {.width = static_cast<uint32_t>(winW), .height = static_cast<uint32_t>(winH)},
         .frameBufferCount = 1,
-        .subpass =
-            RenderTargetCreateInfo::RenderPassSpec{
-                .renderPass = _viewportRenderPass.get(),
-                .index      = 0, // subpass index
+        .attachments      = {
+                 .colorAttach = {
+                AttachmentDescription{
+                         .index          = 0,
+                         .format         = EFormat::R8G8B8A8_UNORM,
+                         .samples        = _sampleCount,
+                         .loadOp         = EAttachmentLoadOp::Clear,
+                         .storeOp        = EAttachmentStoreOp::Store,
+                         .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                         .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                         .initialLayout  = EImageLayout::ShaderReadOnlyOptimal,
+                         .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
             },
+                 .depthAttach = AttachmentDescription{
+                     .index          = 1,
+                     .format         = DEPTH_FORMAT,
+                     .samples        = _sampleCount,
+                     .loadOp         = EAttachmentLoadOp::Clear,
+                     .storeOp        = EAttachmentStoreOp::Store,
+                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                     .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                     .usage          = EImageUsage::DepthStencilAttachment,
+            },
+        },
     });
-    // Material systems are now managed externally
-    addMaterialSystem<SimpleMaterialSystem>(_viewportRenderPass.get());
-    addMaterialSystem<UnlitMaterialSystem>(_viewportRenderPass.get());
-    addMaterialSystem<PhongMaterialSystem>(_viewportRenderPass.get());
+
+    // pre construct all material systems
+    addMaterialSystem<SimpleMaterialSystem>(nullptr,
+                                            PipelineRenderingInfo{
+                                                .label                   = "SimpleMaterial Pipeline",
+                                                .viewMask                = 0,
+                                                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                                .depthAttachmentFormat   = DEPTH_FORMAT,
+                                                .stencilAttachmentFormat = EFormat::Undefined,
+                                            });
+    addMaterialSystem<UnlitMaterialSystem>(nullptr,
+                                           PipelineRenderingInfo{
+                                               .label                   = "UnlitMaterialSystem Pipeline",
+                                               .viewMask                = 0,
+                                               .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                               .depthAttachmentFormat   = DEPTH_FORMAT,
+                                               .stencilAttachmentFormat = EFormat::Undefined,
+                                           });
+    addMaterialSystem<PhongMaterialSystem>(nullptr,
+                                           PipelineRenderingInfo{
+                                               .label                   = "PhongMaterial Pipeline",
+                                               .viewMask                = 0,
+                                               .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                               .depthAttachmentFormat   = DEPTH_FORMAT,
+                                               .stencilAttachmentFormat = EFormat::Undefined,
+                                           });
     _deleter.push("MaterialSystems", [this](void *) {
         _materialSystems.clear();
     });
 
-    // Create postprocess intermediate image (for dynamic rendering)
+    // MARK: tex-> Postprocessing
     {
         auto            vkRender = _render->as<VulkanRender>();
         ImageCreateInfo imageCI{
@@ -433,18 +348,66 @@ void App::init(AppDesc ci)
     //     .bSwapChainTarget = false,
     //     .frameBufferCount = 1,
     // });
+    // MARK: temp mirror texture
+    {
+        _mirrorRT = ya::createRenderTarget(RenderTargetCreateInfo{
+            .label            = "Postprocess RenderTarget",
+            .renderingMode    = ERenderingMode::DynamicRendering,
+            .bSwapChainTarget = false,
+            .extent           = {
+                          .width  = static_cast<uint32_t>(winW),
+                          .height = static_cast<uint32_t>(winH),
+            },
+            .frameBufferCount = 1,
+            .attachments      = {
 
-    // MARK: Screen pass
-    _screenRenderPass = IRenderPass::create(
-        _render,
-        RenderPassCreateInfo{
-            .label       = "Final RenderPass",
-            .attachments = {
-                // color to present (swapchain)
+                .colorAttach = {
+                    AttachmentDescription{
+                        .index          = 0,
+                        .format         = EFormat::R8G8B8A8_UNORM,
+                        .samples        = ESampleCount::Sample_1,
+                        .loadOp         = EAttachmentLoadOp::Clear,
+                        .storeOp        = EAttachmentStoreOp::Store,
+                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                        .initialLayout  = EImageLayout::Undefined,
+                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
+                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    },
+                },
+                .depthAttach = AttachmentDescription{
+                    .index          = 1,
+                    .format         = DEPTH_FORMAT,
+                    .samples        = _sampleCount,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                    .usage          = EImageUsage::DepthStencilAttachment,
+                },
+            },
+        });
+        _deleter.push("MirrorRT", [this](void *) {
+            _mirrorRT.reset();
+        });
+    }
+
+    // MARK: Screen pass (dynamic rendering only)
+    _screenRenderPass = nullptr;
+
+    _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Final RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = true,
+        .attachments      = {
+
+            .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
-                    .format         = EFormat::R8G8B8A8_UNORM, // TODO: detect by device
-                    .samples        = ESampleCount::Sample_1,  // first present attachment cannot be multi-sampled
+                    .format         = _render->getSwapchain()->getFormat(),
+                    .samples        = ESampleCount::Sample_1,
                     .loadOp         = EAttachmentLoadOp::Clear,
                     .storeOp        = EAttachmentStoreOp::Store,
                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
@@ -454,43 +417,6 @@ void App::init(AppDesc ci)
                     .usage          = EImageUsage::ColorAttachment,
                 },
             },
-            .subpasses = {
-                RenderPassCreateInfo::SubpassInfo{
-                    .subpassIndex     = 0,
-                    .inputAttachments = {},
-                    .colorAttachments = {
-                        RenderPassCreateInfo::AttachmentRef{
-                            .ref    = 0, // color attachment
-                            .layout = EImageLayout::ColorAttachmentOptimal,
-                        },
-                    },
-                    .depthAttachment   = {},
-                    .resolveAttachment = {},
-                },
-            },
-            .dependencies = {
-                RenderPassCreateInfo::SubpassDependency{
-                    .bSrcExternal = true,
-                    .srcSubpass   = 0,
-                    .dstSubpass   = 0,
-                },
-            },
-        });
-
-
-    // Create UI RenderTarget (swapchain for ImGui)
-    // Using legacy RenderPass API with VkFramebuffer
-    _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Final RenderTarget",
-        .renderingMode    = ERenderingMode::RenderPass,
-        .bSwapChainTarget = true,
-        .extent           = Extent2D{
-                      .width  = static_cast<uint32_t>(winW),
-                      .height = static_cast<uint32_t>(winH),
-        },
-        .subpass = RenderTargetCreateInfo::RenderPassSpec{
-            .renderPass = _screenRenderPass.get(),
-            .index      = 0, // subpass index
         },
     });
 
@@ -518,14 +444,13 @@ void App::init(AppDesc ci)
 
 
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
-    // Initialize Render2D with Scene RenderPass (has depth attachment) for compatibility with both passes
-    // The pipeline's depthTestEnable=false allows it to work in UI pass without depth
-    Render2D::init(_render, _viewportRenderPass.get());
+    // Initialize Render2D for dynamic rendering (depthTestEnable=false allows UI pass without depth)
+    Render2D::init(_render);
     Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
 
     // MARK: Imgui
     auto &imManager = ImGuiManager::get();
-    imManager.init(_render, _screenRenderPass.get());
+    imManager.init(_render, nullptr);
 
 
 
@@ -540,8 +465,8 @@ void App::init(AppDesc ci)
     ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
 
     // MARK: Initialize RenderTargetPool for dynamic render target allocation
-    RenderTargetPool::get().init(_render);
-    ResourceRegistry::get().registerCache(&RenderTargetPool::get(), 95); // High priority - after meshes but before textures
+    // RenderTargetPool::get().init(_render);
+    // ResourceRegistry::get().registerCache(&RenderTargetPool::get(), 95); // High priority - after meshes but before textures
 
 
 
@@ -849,9 +774,9 @@ int ya::App::iterate(float dt)
         return 0;
     }
     if (!_bPause) {
-        onUpdate(dt);
+        tickLogic(dt);
     }
-    onRender(dt);
+    tickRender(dt);
     taskManager.update();
     ++_frameIndex;
     return 0;
@@ -859,62 +784,10 @@ int ya::App::iterate(float dt)
 
 
 // MARK: update
-void App::onUpdate(float dt)
+void App::tickLogic(float dt)
 {
     YA_PROFILE_FUNCTION()
     Facade.timerManager.onUpdate(dt);
-
-    // 文件监视器轮询（检测文件变化）
-    if (auto *watcher = FileWatcher::get()) {
-        watcher->poll();
-    }
-
-
-    inputManager.preUpdate();
-    // Update Editor camera (FreeCamera)
-    cameraController.update(camera, inputManager, dt);
-
-    // Get primary camera from ECS for runtime/simulation mode
-    Entity *runtimeCamera = getPrimaryCamera();
-    if (runtimeCamera && runtimeCamera->isValid())
-    {
-
-        auto cc = runtimeCamera->getComponent<CameraComponent>();
-        auto tc = runtimeCamera->getComponent<TransformComponent>();
-
-        const Extent2D &ext = _viewportRT->getExtent();
-        cameraController.update(*tc, *cc, inputManager, ext, dt);
-        // Update aspect ratio for runtime camera
-        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-    }
-
-    // Compute and set camera context for viewport render target
-    // App decides which camera to use based on app state
-    {
-        FrameContext ctx;
-
-        bool bUseRuntimeCamera = (_appState == AppState::Runtime || _appState == AppState::Simulation) &&
-                                 runtimeCamera && runtimeCamera->isValid() &&
-                                 runtimeCamera->hasComponent<CameraComponent>();
-
-        if (bUseRuntimeCamera) {
-            // Use runtime camera (Entity with CameraComponent)
-            auto cc        = runtimeCamera->getComponent<CameraComponent>();
-            ctx.view       = cc->getFreeView();
-            ctx.projection = cc->getProjection();
-        }
-        else {
-            // Use editor camera (FreeCamera)
-            ctx.view       = camera.getViewMatrix();
-            ctx.projection = camera.getProjectionMatrix();
-        }
-
-        // Extract camera position from view matrix inverse
-        glm::mat4 invView = glm::inverse(ctx.view);
-        ctx.cameraPos     = glm::vec3(invView[3]);
-
-        _frameContext = ctx; // Store for material systems
-    }
 
     // Store real-time delta for editor
     // Note: ClearValue is now set in onRender() via beginRenderPass() or beginRendering()
@@ -941,13 +814,6 @@ void App::onUpdate(float dt)
     resourceResolveSystem->onUpdate(dt);
     transformSystem->onUpdate(dt);
 
-    // Update material systems externally
-    for (auto &system : _materialSystems) {
-        if (system->bEnabled) {
-            system->onUpdateByRenderTarget(dt, &_frameContext);
-        }
-    }
-
     Render2D::onUpdate(dt);
 
     switch (_appState) {
@@ -961,13 +827,23 @@ void App::onUpdate(float dt)
     } break;
     }
 
+    // 文件监视器轮询（检测文件变化）
+    if (auto *watcher = FileWatcher::get()) {
+        watcher->poll();
+    }
 
     _editorLayer->onUpdate(dt);
     inputManager.postUpdate();
+
+
+
+    inputManager.preUpdate();
+    // Update Editor camera (FreeCamera)
+    cameraController.update(camera, inputManager, dt);
 }
 
 // MARK: Render
-void App::onRender(float dt)
+void App::tickRender(float dt)
 {
     YA_PROFILE_FUNCTION()
     auto render = getRender();
@@ -1002,13 +878,131 @@ void App::onRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    // --- MARK: Camera Pass
-    {
-        auto scene = getSceneManager()->getActiveScene();
-        // scene->getRegistry().view<>()
+    for (auto &system : _materialSystems) {
+        system->resetFrameSlot();
     }
 
+    FrameContext ctx;
+    {
+
+        // Get primary camera from ECS for runtime/simulation mode
+        Entity *runtimeCamera = getPrimaryCamera();
+        if (runtimeCamera && runtimeCamera->isValid())
+        {
+
+            auto cc = runtimeCamera->getComponent<CameraComponent>();
+            auto tc = runtimeCamera->getComponent<TransformComponent>();
+
+            const Extent2D &ext = _viewportRT->getExtent();
+            cameraController.update(*tc, *cc, inputManager, ext, dt);
+            // Update aspect ratio for runtime camera
+            cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+        }
+
+
+        bool bUseRuntimeCamera = (_appState == AppState::Runtime || _appState == AppState::Simulation) &&
+                                 runtimeCamera && runtimeCamera->isValid() &&
+                                 runtimeCamera->hasComponent<CameraComponent>();
+
+        if (bUseRuntimeCamera) {
+            // Use runtime camera (Entity with CameraComponent)
+            auto cc        = runtimeCamera->getComponent<CameraComponent>();
+            ctx.view       = cc->getFreeView();
+            ctx.projection = cc->getProjection();
+        }
+        else {
+            // Use editor camera (FreeCamera)
+            ctx.view       = camera.getViewMatrix();
+            ctx.projection = camera.getProjectionMatrix();
+        }
+
+        // Extract camera position from view matrix inverse
+        glm::mat4 invView = glm::inverse(ctx.view);
+        ctx.cameraPos     = glm::vec3(invView[3]);
+    }
+
+
+    // --- MARK: Mirror Rendering (Pre scene render some mirror entities and render to texture for later compositing) ---
+    {
+        YA_PROFILE_SCOPE("Mirror Pass")
+        // Mirror / Rear-view mirror / Screen-in-screen rendering
+        // Implementation follows: Render-to-Texture + Render-as-Sprite pattern
+        //
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 1: Setup                                                      │
+        // │   - Get mirror entity position & orientation                        │
+        // │   - Calculate mirror view matrix (reflection transform)             │
+        // │   - Allocate/fetch mirror RT from RenderTargetPool                  │
+        // └─────────────────────────────────────────────────────────────────────┘
+        //                              ↓
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 2: Render Scene from Mirror's View                            │
+        // │   - beginRendering(mirrorRT)                                        │
+        // │   - Render scene with mirror camera                                 │
+        // │   - endRendering()                                                  │
+        // └─────────────────────────────────────────────────────────────────────┘
+        //                              ↓
+        // ┌─────────────────────────────────────────────────────────────────────┐
+        // │ Phase 3: Composite Mirror into Main View                            │
+        // │   - Transition mirror RT to ShaderReadOnlyOptimal                   │
+        // │   - Render as textured quad in viewport (Render2D::makeSprite)      │
+        // └─────────────────────────────────────────────────────────────────────┘
+
+        // TODO: Implement mirror rendering phases
+        // 1. Query mirror entities from ECS
+        // 2. For each mirror, execute Phase 1-3
+        // 3. Consider using RenderTexture helper class for RT management
+
+        auto         scene = getSceneManager()->getActiveScene();
+        auto         view  = scene->getRegistry().view<TransformComponent, MirrorComponent>();
+        FrameContext ctxCopy;
+        bHasMirror = false;
+        for (auto [entity, tc, mc] : view.each())
+        {
+            bHasMirror        = true;
+            ctxCopy.viewOwner = entity;
+            ctxCopy.cameraPos = tc.getWorldPosition();
+
+            const auto &eye    = tc.getWorldPosition();
+            glm::vec3   target = eye + glm::normalize(tc.getForward());
+            ctxCopy.view       = FMath::lookAt(eye, target, FMath::Vector::WorldUp);
+            ctxCopy.view       = glm::inverse(ctxCopy.view); // Invert view for correct reflection
+            break;
+        }
+
+        if (bHasMirror) {
+            ctxCopy.extent = _mirrorRT->getExtent(); // Ensure material systems render with correct extent for mirror RT
+
+            RenderingInfo ri{
+                .label      = "ViewPort",
+                .renderArea = Rect2D{
+                    .pos    = {0, 0},
+                    .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
+                },
+                .layerCount       = 1,
+                .colorClearValues = {colorClearValue},
+                .depthClearValue  = depthClearValue,
+                .renderTarget     = _mirrorRT.get(),
+            };
+            cmdBuf->beginRendering(ri);
+
+            // Render material systems
+            for (auto &system : _materialSystems) {
+                if (system->bEnabled) {
+                    YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
+                    system->onRender(cmdBuf.get(), &ctxCopy);
+                }
+            }
+            cmdBuf->endRendering(EndRenderingInfo{
+                .renderTarget = _mirrorRT.get(),
+            });
+        }
+    }
+
+    bool bViewPortRectValid = _viewportRect.extent.x > 0 && _viewportRect.extent.y > 0;
+
     // --- MARK: ViewPort Pass
+    if (bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("ViewPort pass")
 
@@ -1016,6 +1010,8 @@ void App::onRender(float dt)
         // auto extent = _editorLayer.g
 
         auto extent = Extent2D::fromVec2(_viewportRect.extent / _viewportFrameBufferScale);
+
+
         _viewportRT->setExtent(extent);
 
         RenderingInfo ri{
@@ -1033,12 +1029,14 @@ void App::onRender(float dt)
 
         cmdBuf->beginRendering(ri);
 
-        _frameContext.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
+
+
+        ctx.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
         // Render material systems
         for (auto &system : _materialSystems) {
             if (system->bEnabled) {
                 YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
-                system->onRender(cmdBuf.get(), &_frameContext);
+                system->onRender(cmdBuf.get(), &ctx);
             }
         }
 
@@ -1070,42 +1068,10 @@ void App::onRender(float dt)
         }
     }
 
-    // --- MARK: Mirror Rendering ---
-    {
-        YA_PROFILE_SCOPE("Mirror Pass")
-        // Mirror / Rear-view mirror / Screen-in-screen rendering
-        // Implementation follows: Render-to-Texture + Render-as-Sprite pattern
-        //
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 1: Setup                                                      │
-        // │   - Get mirror entity position & orientation                        │
-        // │   - Calculate mirror view matrix (reflection transform)             │
-        // │   - Allocate/fetch mirror RT from RenderTargetPool                  │
-        // └─────────────────────────────────────────────────────────────────────┘
-        //                              ↓
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 2: Render Scene from Mirror's View                            │
-        // │   - beginRendering(mirrorRT)                                        │
-        // │   - Render scene with mirror camera                                 │
-        // │   - endRendering()                                                  │
-        // └─────────────────────────────────────────────────────────────────────┘
-        //                              ↓
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 3: Composite Mirror into Main View                            │
-        // │   - Transition mirror RT to ShaderReadOnlyOptimal                   │
-        // │   - Render as textured quad in viewport (Render2D::makeSprite)      │
-        // └─────────────────────────────────────────────────────────────────────┘
-
-        // TODO: Implement mirror rendering phases
-        // 1. Query mirror entities from ECS
-        // 2. For each mirror, execute Phase 1-3
-        // 3. Consider using RenderTexture helper class for RT management
-    }
 
     // --- MARK: Postprocessing
-    if (bBasicPostProcessor)
+    if (bBasicPostProcessor && bViewPortRectValid)
     {
-
         YA_PROFILE_SCOPE("Postprocessing pass")
         // 1. Inversion 反向
         // 2. Grayscale 灰度
@@ -1113,7 +1079,7 @@ void App::onRender(float dt)
 
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
         // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
-        // Already transitioned by `viewportRenderPass`
+        // Viewport RT is dynamic rendering
         cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
                                           //   EImageLayout::Undefined,
                                           EImageLayout::ColorAttachmentOptimal);
@@ -1215,7 +1181,9 @@ void App::onRender(float dt)
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
-        cmdBuf->endRendering();
+        cmdBuf->endRendering(EndRenderingInfo{
+            .renderTarget = _screenRT.get(),
+        });
     }
     cmdBuf->end();
 
@@ -1259,7 +1227,7 @@ void App::onRenderGUI(float dt)
 
     if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
         ImGui::Indent();
-        RenderTargetPool::get().onRenderGUI();
+        // RenderTargetPool::get().onRenderGUI();
         ImGui::Unindent();
     }
 
@@ -1493,7 +1461,7 @@ bool App::onWindowResized(const WindowResizeEvent &event)
     _windowSize = {w, h};
 
     // Notify RenderTargetPool of window resize
-    RenderTargetPool::get().onWindowResized(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+    // RenderTargetPool::get().onWindowResized(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
 
     return false;
 }
@@ -1535,58 +1503,6 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
 bool App::onMouseScrolled(const MouseScrolledEvent &event)
 {
     return false;
-}
-
-
-void App::handleSystemSignals()
-{
-#if !defined(_WIN32)
-    auto handler = [](int signal) {
-        if (!App::_instance) {
-            return;
-        }
-        YA_CORE_INFO("Received signal: {}", signal);
-
-        switch (signal) {
-        case SIGINT:
-        case SIGTERM:
-        {
-            App::_instance->requestQuit();
-        } break;
-        default:
-            break;
-        }
-    };
-
-    std::signal(SIGINT, handler);  // Ctrl+C
-    std::signal(SIGTERM, handler); // Termination request
-#else
-    // linux: will continue to execute after handle the signal
-    // Windows: need 用SetConsoleCtrlHandler来拦截并阻止默认退出
-    SetConsoleCtrlHandler(
-        [](DWORD dwCtrlType) -> BOOL {
-            switch (dwCtrlType) {
-            case CTRL_C_EVENT:
-            case CTRL_BREAK_EVENT:
-                YA_CORE_INFO("Received Ctrl+C, requesting graceful shutdown...");
-                if (App::_instance) {
-                    App::_instance->requestQuit();
-                }
-                return true; // 返回TRUE阻止默认的终止行为
-            case CTRL_CLOSE_EVENT:
-            case CTRL_LOGOFF_EVENT:
-            case CTRL_SHUTDOWN_EVENT:
-                YA_CORE_INFO("Received system shutdown event");
-                if (App::_instance) {
-                    App::_instance->requestQuit();
-                }
-                return true; // 返回TRUE阻止默认的终止行为
-            };
-
-            return FALSE; // 对于其他事件，使用默认处理
-        },
-        TRUE);
-#endif
 }
 
 Entity *App::getPrimaryCamera() const

@@ -21,9 +21,6 @@ void UIComponentSystem::onRender()
     auto scene = app->getSceneManager()->getActiveScene();
 
 
-    auto &ctx      = app->_frameContext;
-    auto  viewport = app->_viewportRect;
-
     // 这里想要的是一个三维世界之中的2D平面，而不是屏幕二维的平面
     // 即可以旋转相机视角，来看到一张纸...
     // Render2D 内部的接口只能画在屏幕屏幕?

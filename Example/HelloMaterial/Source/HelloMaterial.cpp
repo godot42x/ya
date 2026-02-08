@@ -381,12 +381,6 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // wc->widget = textBlock;
     }
 }
-void HelloMaterial::onUpdate(float dt)
-{
-    Super::onUpdate(dt);
-
-    // Lua 脚本已经处理旋转，不需要手动更�?
-}
 
 void HelloMaterial::onRenderGUI(float dt)
 {

@@ -82,12 +82,6 @@ struct HelloMaterial : public ya::App
     void createMaterials();
     void createEntities(ya::Scene *scene);
 
-    void onUpdate(float dt) override;
-
-    void onRender(float dt) override
-    {
-        Super::onRender(dt);
-    }
 
     void onRenderGUI(float dt) override;
 

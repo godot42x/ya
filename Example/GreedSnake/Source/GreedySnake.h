@@ -37,18 +37,6 @@ struct GreedySnake : public ya::App
         Super::onSceneDestroy(scene);
     }
 
-    // Application-specific methods implemented in HelloMaterial.cpp
-    void onUpdate(float dt) override
-    {
-        Super::onUpdate(dt);
-    }
-
-
-    void onRender(float dt) override
-    {
-        Super::onRender(dt);
-    }
-
     void onRenderGUI(float dt) override
     {
         Super::onRenderGUI(dt);

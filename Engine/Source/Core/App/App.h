@@ -8,6 +8,7 @@
 
 #include "Editor/EditorLayer.h"
 
+#include "Core/App/FPSCtrl.h"
 #include "ECS/System/IMaterialSystem.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
@@ -31,6 +32,10 @@ struct LuaScriptingSystem;
 struct Texture;
 struct Texture;
 
+
+void imcFpsControl(FPSControl &fpsCtrl);
+bool imcEditorCamera(FreeCamera &camera);
+void imcClearValues();
 
 enum AppMode
 {
@@ -157,22 +162,29 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    // Render targets (simplified - only manage attachments, no RenderPass dependency)
-    Rect2D                         _viewportRect;
-    float                          _viewportFrameBufferScale = 1.0f;
-    std::shared_ptr<IRenderPass>   _viewportRenderPass;   // Scene render pass (for legacy API)
-    std::shared_ptr<IRenderTarget> _viewportRT = nullptr; // Offscreen RT for 3D scene
 
-    std::shared_ptr<IRenderPass>   _screenRenderPass;   // Screen render pass (for ImGui)
-    std::shared_ptr<IRenderTarget> _screenRT = nullptr; // Swapchain RT for ImGui
+    static const auto COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
+    static const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
+
+    // Render targets (simplified - only manage attachments, no RenderPass dependency)
+    Rect2D _viewportRect;
+    float  _viewportFrameBufferScale = 1.0f;
+
+    std::shared_ptr<IRenderPass>   _viewportRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
+    std::shared_ptr<IRenderTarget> _viewportRT         = nullptr; // Offscreen RT for 3D scene
+
+    std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
+    std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
 
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
-    FrameContext                                  _frameContext; // Cached camera data per-frame
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
+
+    stdptr<IRenderTarget> _mirrorRT  = nullptr;
+    bool                  bHasMirror = false;
 
     bool                     bBasicPostProcessor   = false;
     int                      _postProcessingEffect = 0;
@@ -226,8 +238,8 @@ struct App
 
 
     virtual int  onEvent(const Event &event);
-    virtual void onUpdate(float dt);
-    virtual void onRender(float dt);
+    virtual void tickLogic(float dt);
+    virtual void tickRender(float dt);
     virtual void onRenderGUI(float dt);
 
 
@@ -294,13 +306,14 @@ struct App
     [[nodiscard]] const glm::vec2    &getWindowSize() const { return _windowSize; }
 
     // Material system management (external from RenderTarget)
-    template <typename T, typename... Args>
-    void addMaterialSystem(IRenderPass *renderPass, Args &&...args)
+    template <typename T>
+    void addMaterialSystem(IRenderPass *renderPass = nullptr, const PipelineRenderingInfo &pipelineRenderingInfo = {})
     {
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must derive from IMaterialSystem");
-        auto system = makeShared<T>(std::forward<Args>(args)...);
-        system->onInit(renderPass);
-        YA_CORE_DEBUG("Initialized material system: {}", system->_label);
+        stdptr<T> system = makeShared<T>();
+        auto      sys    = static_cast<IMaterialSystem *>(system.get());
+        sys->onInit(renderPass, pipelineRenderingInfo);
+        YA_CORE_DEBUG("Initialized material system: {}", sys->_label);
         _materialSystems.push_back(system);
     }
 
