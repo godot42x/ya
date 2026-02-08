@@ -28,8 +28,9 @@ namespace ya
 
 {
 
-void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
+void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo)
 {
+
     _label = "UnlitMaterialSystem";
 
     IRender *render = getRender();
@@ -106,9 +107,11 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
 
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
-        .subPassRef = 0,
-        .renderPass = renderPass,
-        // .pipelineLayout   = pipelineLayout,
+        .subPassRef            = 0,
+        .renderPass            = renderPass,
+        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .pipelineLayout        = _pipelineLayout.get(),
+
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/Unlit.glsl",
             .bDeriveFromShader = false,
@@ -203,39 +206,43 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass)
         },
     };
     // Use factory method to create graphics pipeline
-    _pipeline = IGraphicsPipeline::create(render, _pipelineLayout.get());
+    _pipeline = IGraphicsPipeline::create(render);
     // _pipeline      = _pipelineOwner;
     _pipeline->recreate(_pipelineDesc);
 
 
     // frames descriptor set pool
     DescriptorPoolCreateInfo poolCI{
-        .maxSets   = 1,
+        .maxSets   = MAX_FRAME_SLOTS,
         .poolSizes = {
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::UniformBuffer,
-                .descriptorCount = 1,
+                .descriptorCount = MAX_FRAME_SLOTS,
             },
         },
     };
     _frameDSP = IDescriptorPool::create(render, poolCI);
     std::vector<ya::DescriptorSetHandle> sets;
-    _frameDSP->allocateDescriptorSets(_materialFrameUboDSL, 1, sets);
-    _frameDS = sets[0];
+    _frameDSP->allocateDescriptorSets(_materialFrameUboDSL, MAX_FRAME_SLOTS, sets);
+    for (uint32_t i = 0; i < MAX_FRAME_SLOTS; ++i) {
+        _frameDSs[i] = sets[i];
+    }
 
     // recreate use material's descriptor set pool
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
-    _frameUBO = ya::IBuffer::create(
-        render,
-        ya::BufferCreateInfo{
-            .label         = "Unlit_Frame_UBO",
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(FrameUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-
-        });
+    for (uint32_t i = 0; i < MAX_FRAME_SLOTS; ++i) {
+        _frameUBOs[i] = ya::IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = std::format("Unlit_Frame_UBO_{}", i),
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(FrameUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+    }
 }
+
 
 void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
@@ -325,7 +332,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
         // bind descriptor set
         std::vector<DescriptorSetHandle> descSets{
-            _frameDS,
+            _frameDSs[getSlot()],
             _materialParamDSs[materialInstanceIndex],
             _materialResourceDSs[materialInstanceIndex],
         };
@@ -347,6 +354,8 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
             mesh->draw(cmdBuf);
         }
     }
+
+    advanceSlot();
 }
 
 void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
@@ -432,15 +441,20 @@ void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
     };
 
-    _frameUBO->writeData(&ubo, sizeof(ubo), 0);
+    uint32_t slot = getSlot();
+    // if (_frameSlot >= MAX_FRAME_SLOTS) {
+    //     YA_CORE_WARN("UnlitMaterialSystem: frame slot wrapped around ({} -> {}), potential GPU data hazard", _frameSlot, slot);
+    // }
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, sizeof(FrameUBO));
+    _frameUBOs[slot]->writeData(&ubo, sizeof(ubo), 0);
+
+    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOs[slot]->getHandle()), 0, sizeof(FrameUBO));
 
     auto *descriptorHelper = render->getDescriptorHelper();
     descriptorHelper->updateDescriptorSets(
         {
             IDescriptorSetHelper::genBufferWrite(
-                _frameDS,
+                _frameDSs[slot],
                 0,
                 0,
                 EPipelineDescriptorType::UniformBuffer,

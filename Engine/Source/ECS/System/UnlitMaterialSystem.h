@@ -38,20 +38,25 @@ struct UnlitMaterialSystem : public IMaterialSystem
     static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
     static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
-    GraphicsPipelineCreateInfo         _pipelineDesc;
+    GraphicsPipelineCreateInfo _pipelineDesc;
     // std::shared_ptr<IGraphicsPipeline> _pipelineOwner;
     // IGraphicsPipeline                 *_pipeline       = nullptr; // temp move to IMaterialSystem
-    stdptr<IPipelineLayout>            _pipelineLayout = nullptr;
+    stdptr<IPipelineLayout> _pipelineLayout = nullptr;
 
 
     std::shared_ptr<IDescriptorSetLayout> _materialFrameUboDSL; // set0
     std::shared_ptr<IDescriptorSetLayout> _materialParamDSL;    // set 1
     std::shared_ptr<IDescriptorSetLayout> _materialResourceDSL; // set 2
 
-    // frame ubo's  constantly
+    // frame ubo's - ring buffer slots for multi-pass rendering within a single frame
+    static constexpr uint32_t            MAX_FRAME_SLOTS = 8;
+    uint32_t                             _frameSlot      = 0;
     std::shared_ptr<ya::IDescriptorPool> _frameDSP;
-    DescriptorSetHandle                  _frameDS;
-    std::shared_ptr<ya::IBuffer>         _frameUBO;
+    DescriptorSetHandle                  _frameDSs[MAX_FRAME_SLOTS];
+    std::shared_ptr<ya::IBuffer>         _frameUBOs[MAX_FRAME_SLOTS];
+
+    uint32_t getSlot() const { return _frameSlot; }
+    void     advanceSlot() { _frameSlot = (_frameSlot + 1) % MAX_FRAME_SLOTS; }
 
     // material ubo's, dynamically extend
     uint32_t                                  _lastMaterialDSCount = 0;
@@ -62,10 +67,10 @@ struct UnlitMaterialSystem : public IMaterialSystem
 
     std::string _ctxEntityDebugStr;
 
-    void onInit(IRenderPass *renderPass) override;
+    void onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo) override;
     void onDestroy() override {}
-    void onUpdate(float deltaTime) override {}
     void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
+    void resetFrameSlot() override { _frameSlot = 0; }
     void onRenderGUI() override
     {
         IMaterialSystem::onRenderGUI();
