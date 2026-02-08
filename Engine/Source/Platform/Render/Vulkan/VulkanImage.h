@@ -76,6 +76,34 @@ struct VulkanImage : public IImage
 
     void setDebugName(const std::string &name) override;
 
+    void setLayout(EImageLayout::T layout)
+    {
+      _layout = EImageLayout::toVk(layout);
+    }
+
+    struct LayoutTransition
+    {
+      VulkanImage         *image     = nullptr;
+      EImageLayout::T      newLayout = EImageLayout::Undefined;
+      ImageSubresourceRange range    = {};
+      bool                 useRange = false;
+
+      LayoutTransition(
+        VulkanImage            *inImage = nullptr,
+        EImageLayout::T         inLayout = EImageLayout::Undefined,
+        const ImageSubresourceRange *inRange = nullptr)
+        : image(inImage),
+          newLayout(inLayout)
+      {
+        if (inRange) {
+          range    = *inRange;
+          useRange = true;
+        }
+      }
+    };
+
+    static bool transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<LayoutTransition> &transitions);
+
     bool isValid() const { return _handle != VK_NULL_HANDLE && _imageMemory != VK_NULL_HANDLE; }
 
 

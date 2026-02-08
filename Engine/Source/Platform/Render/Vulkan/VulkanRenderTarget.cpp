@@ -155,16 +155,17 @@ void VulkanRenderTarget::endFrame(ICommandBuffer *cmdBuf)
     }
 
     // what's different to renderpass api?
-    if (_renderingMode == ERenderingMode::DynamicRendering) {
-        for (const auto &colorAttachmentDesc : _colorAttachmentDescs) {
-            auto image = _frameBuffers[_currentFrameIndex]->getColorTexture(colorAttachmentDesc.index)->getImage();
-            cmdBuf->transitionImageLayoutAuto(image, colorAttachmentDesc.finalLayout);
-        }
-        if (_depthAttachmentDesc.format != EFormat::Undefined) {
-            auto image = _frameBuffers[_currentFrameIndex]->getDepthTexture()->getImage();
-            cmdBuf->transitionImageLayoutAuto(image, _depthAttachmentDesc.finalLayout);
-        }
-    }
+    // Now execute this in command buffer
+    // if (_renderingMode == ERenderingMode::DynamicRendering) {
+    //     for (const auto &colorAttachmentDesc : _colorAttachmentDescs) {
+    //         auto image = _frameBuffers[_currentFrameIndex]->getColorTexture(colorAttachmentDesc.index)->getImage();
+    //         cmdBuf->transitionImageLayoutAuto(image, colorAttachmentDesc.finalLayout);
+    //     }
+    //     if (_depthAttachmentDesc.format != EFormat::Undefined) {
+    //         auto image = _frameBuffers[_currentFrameIndex]->getDepthTexture()->getImage();
+    //         cmdBuf->transitionImageLayoutAuto(image, _depthAttachmentDesc.finalLayout);
+    //     }
+    // }
 }
 
 bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t                                  frameBufferCount,

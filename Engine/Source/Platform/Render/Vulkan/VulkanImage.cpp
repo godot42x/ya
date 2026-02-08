@@ -6,6 +6,89 @@
 namespace ya
 {
 
+// Helper function to get the correct aspect mask based on image format
+static VkImageAspectFlags getAspectMask(VkFormat format)
+{
+    switch (format) {
+    case VK_FORMAT_D16_UNORM:
+    case VK_FORMAT_D32_SFLOAT:
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+        return VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    case VK_FORMAT_S8_UINT:
+        return VK_IMAGE_ASPECT_STENCIL_BIT;
+
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+
+
+    default:
+        // UNREACHABLE();
+        return VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+}
+
+static bool getAccessMask(VkImageLayout layout, VkAccessFlags &mask, bool isSrc)
+{
+    switch (layout) {
+    case VK_IMAGE_LAYOUT_UNDEFINED:
+        mask = 0;
+        return true;
+    case VK_IMAGE_LAYOUT_PREINITIALIZED:
+        mask = VK_ACCESS_HOST_WRITE_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        mask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        mask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        mask = VK_ACCESS_TRANSFER_READ_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        mask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        mask = VK_ACCESS_SHADER_READ_BIT;
+        return true;
+    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+        mask = isSrc ? VK_ACCESS_MEMORY_READ_BIT : 0;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static VkPipelineStageFlags getStageMask(VkImageLayout layout, VkAccessFlags accessMask, bool isSrc)
+{
+    VkPipelineStageFlags stages = 0;
+    if (accessMask & VK_ACCESS_HOST_WRITE_BIT) {
+        stages |= VK_PIPELINE_STAGE_HOST_BIT;
+    }
+    if (accessMask & (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT)) {
+        stages |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    if (accessMask & VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) {
+        stages |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+    if (accessMask & VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) {
+        stages |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    }
+    if (accessMask & VK_ACCESS_SHADER_READ_BIT) {
+        stages |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+    if (layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+        stages |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+    if (stages == 0) {
+        return isSrc ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+    return stages;
+}
+
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
@@ -62,9 +145,8 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
     YA_ASSERT(image->_layout == oldLayout, "VulkanImage::transitionImageLayout image layout is not equal to old layout");
 
     VkImageMemoryBarrier imb{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext = nullptr,
-        // TODO
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext               = nullptr,
         .srcAccessMask       = {},
         .dstAccessMask       = {},
         .oldLayout           = oldLayout,
@@ -73,7 +155,7 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image               = image->getVkImage(),
         .subresourceRange    = {
-               .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+               .aspectMask     = getAspectMask(image->_format),
                .baseMipLevel   = 0,
                .levelCount     = 1,
                .baseArrayLayer = 0,
@@ -84,105 +166,14 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
         imb.subresourceRange = *subresourceRange;
     }
 
-    VkPipelineStageFlags srcStage  = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    VkPipelineStageFlags destStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-
-    // Source layouts (old)
-    // The source access mask controls actions to be finished on the old
-    // layout before it will be transitioned to the new layout.
-    switch (oldLayout) {
-    case VK_IMAGE_LAYOUT_UNDEFINED:
-        // Image layout is undefined (or does not matter).
-        // Only valid as initial layout. No flags required.
-        imb.srcAccessMask = 0;
-        break;
-
-    case VK_IMAGE_LAYOUT_PREINITIALIZED:
-        // Image is preinitialized.
-        // Only valid as initial layout for linear images; preserves memory
-        // contents. Make sure host writes have finished.
-        imb.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-        // Image is a color attachment.
-        // Make sure writes to the color buffer have finished
-        imb.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-        // Image is a depth/stencil attachment.
-        // Make sure any writes to the depth/stencil buffer have finished.
-        imb.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        // Image is a transfer source.
-        // Make sure any reads from the image have finished
-        imb.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        // Image is a transfer destination.
-        // Make sure any writes to the image have finished.
-        imb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-        // Image is read by a shader.
-        // Make sure any shader reads from the image have finished
-        imb.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        break;
-    default:
+    if (!getAccessMask(oldLayout, imb.srcAccessMask, true) || !getAccessMask(newLayout, imb.dstAccessMask, false)) {
         YA_ERROR("Unsupported layout transition: {}->{}", std::to_string(oldLayout), std::to_string(newLayout));
         UNREACHABLE();
         return false;
     }
 
-    // Target layouts (new)
-    // The destination access mask controls the dependency for the new image
-    // layout.
-    switch (newLayout) {
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        // Image will be used as a transfer destination.
-        // Make sure any writes to the image have finished.
-        imb.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        // Image will be used as a transfer source.
-        // Make sure any reads from and writes to the image have finished.
-        imb.srcAccessMask |= VK_ACCESS_TRANSFER_READ_BIT;
-        imb.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-        // Image will be used as a color attachment.
-        // Make sure any writes to the color buffer have finished.
-        imb.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        imb.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-        // Image layout will be used as a depth/stencil attachment.
-        // Make sure any writes to depth/stencil buffer have finished.
-        imb.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        break;
-
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-        // Image will be read in a shader (sampler, input attachment).
-        // Make sure any writes to the image have finished.
-        if (imb.srcAccessMask == 0)
-        {
-            imb.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-        }
-        imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        break;
-    default:
-        YA_ERROR("Unsupported layout transition: {}->{}", std::to_string(oldLayout), std::to_string(newLayout));
-        UNREACHABLE();
-        return false;
-    }
+    VkPipelineStageFlags srcStage  = getStageMask(oldLayout, imb.srcAccessMask, true);
+    VkPipelineStageFlags destStage = getStageMask(newLayout, imb.dstAccessMask, false);
 
 
     vkCmdPipelineBarrier(cmdBuf,
@@ -198,6 +189,86 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
 
     // BUG: this real format changed later  after cmd execution, now it's invalid
     image->_layout = newLayout;
+
+    return true;
+}
+
+bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<LayoutTransition> &transitions)
+{
+    if (transitions.empty()) {
+        return true;
+    }
+
+    std::vector<VkImageMemoryBarrier> barriers;
+    VkPipelineStageFlags              srcStages = 0;
+    VkPipelineStageFlags              dstStages = 0;
+
+    for (const auto &transition : transitions) {
+        if (!transition.image) {
+            continue;
+        }
+        auto oldLayout = transition.image->getLayout();
+        auto newLayout = transition.newLayout;
+        if (oldLayout == newLayout) {
+            continue;
+        }
+
+        VkImageMemoryBarrier barrier{
+            .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext               = nullptr,
+            .srcAccessMask       = 0,
+            .dstAccessMask       = 0,
+            .oldLayout           = EImageLayout::toVk(oldLayout),
+            .newLayout           = EImageLayout::toVk(newLayout),
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image               = transition.image->getVkImage(),
+            .subresourceRange    = {},
+        };
+
+        barrier.subresourceRange.aspectMask = getAspectMask(transition.image->getVkFormat());
+        barrier.subresourceRange.baseMipLevel = transition.range.baseMipLevel;
+        barrier.subresourceRange.levelCount = transition.range.levelCount;
+        barrier.subresourceRange.baseArrayLayer = transition.range.baseArrayLayer;
+        barrier.subresourceRange.layerCount = transition.range.layerCount;
+
+        if (transition.useRange) {
+            barrier.subresourceRange.aspectMask = transition.range.aspectMask;
+        }
+
+        if (!getAccessMask(barrier.oldLayout, barrier.srcAccessMask, true) || !getAccessMask(barrier.newLayout, barrier.dstAccessMask, false)) {
+            YA_ERROR("Unsupported layout transition: {}->{}", std::to_string(barrier.oldLayout), std::to_string(barrier.newLayout));
+            UNREACHABLE();
+            continue;
+        }
+
+        srcStages |= getStageMask(barrier.oldLayout, barrier.srcAccessMask, true);
+        dstStages |= getStageMask(barrier.newLayout, barrier.dstAccessMask, false);
+        barriers.push_back(barrier);
+        transition.image->setLayout(newLayout);
+    }
+
+    if (barriers.empty()) {
+        return true;
+    }
+
+    if (srcStages == 0) {
+        srcStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    }
+    if (dstStages == 0) {
+        dstStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+
+    vkCmdPipelineBarrier(cmdBuf,
+                         srcStages,
+                         dstStages,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         static_cast<uint32_t>(barriers.size()),
+                         barriers.data());
 
     return true;
 }

@@ -282,6 +282,7 @@ void VulkanDescriptorHelper::updateDescriptorSets(
         vkWrites.data(),
         static_cast<uint32_t>(vkCopies.size()),
         vkCopies.data());
+    PFN_vkCmdPushDescriptorSet a;
 }
 
 } // namespace ya

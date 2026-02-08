@@ -20,10 +20,11 @@ struct IRenderPass;
  */
 struct FrameContext
 {
-    glm::mat4 view       = glm::mat4(1.0f);
-    glm::mat4 projection = glm::mat4(1.0f);
-    glm::vec3 cameraPos  = glm::vec3(0.0f);
-    Extent2D  extent     = {.width = 640, .height = 480};
+    glm::mat4    view       = glm::mat4(1.0f);
+    glm::mat4    projection = glm::mat4(1.0f);
+    glm::vec3    cameraPos  = glm::vec3(0.0f);
+    entt::entity viewOwner  = entt::null;
+    Extent2D     extent     = {.width = 640, .height = 480};
 };
 
 /**
@@ -60,8 +61,12 @@ struct IRenderTarget
     Extent2D          _extent        = {.width = 0, .height = 0};
     ERenderingMode::T _renderingMode = ERenderingMode::None;
 
+    std::vector<AttachmentDescription> _colorAttachmentDescs;
+    AttachmentDescription              _depthAttachmentDesc;
+
     std::vector<stdptr<IFrameBuffer>> _frameBuffers;
     uint32_t                          _currentFrameIndex = 0;
+
 
     bool bDirty = false;
 
@@ -100,9 +105,11 @@ struct IRenderTarget
         setExtent(ci.extent);
         bool ok = onInit(ci);
         if (ok) {
-            for (auto fb : _frameBuffers)
-            {
-                YA_CORE_ASSERT(fb->getHandle() != nullptr, "Frame buffer handle is null");
+            if (_renderingMode == ERenderingMode::RenderPass) {
+                for (auto fb : _frameBuffers)
+                {
+                    YA_CORE_ASSERT(fb->getHandle() != nullptr, "Frame buffer handle is null");
+                }
             }
         }
 
@@ -148,6 +155,9 @@ struct IRenderTarget
     ERenderingMode::T getRenderingMode() const { return _renderingMode; }
 
     uint32_t getSubpassIndex() const { return _subpassIndex; }
+
+    const std::vector<AttachmentDescription> &getColorAttachmentDescs() const { return _colorAttachmentDescs; }
+    const AttachmentDescription              &getDepthAttachmentDesc() const { return _depthAttachmentDesc; }
 }; // namespace ya
 
 /**
