@@ -531,41 +531,17 @@ void EditorLayer::viewportWindow()
     // Display the render texture from editor render target (unified Texture semantics)
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        auto viewportTexture = App::get()->_viewportTexture;
-        if (viewportTexture && viewportTexture->isValid())
+        Sampler *sampler = _viewPortSamplerType == Linear
+                             ? TextureLibrary::get().getLinearSampler()
+                             : TextureLibrary::get().getNearestSampler();
+        if (ImGuiHelper::Image(App::get()->_viewportTexture->getImageView(),
+                               sampler,
+                               "Viewport Texture ",
+                               viewportPanelSize,
+                               ImVec2(0, 0),
+                               ImVec2(1, 1)))
         {
-            auto            imageView     = viewportTexture->getImageView();
-            ImageViewHandle currentHandle = imageView->getHandle();
-
-            // Create new descriptor set for new ImageView
-            Sampler *sampler = _viewPortSamplerType == Linear
-                                 ? TextureLibrary::get().getLinearSampler()
-                                 : TextureLibrary::get().getNearestSampler();
-
-            // Check if ImageView changed (framebuffer was recreated)
-            if (_currentViewportImageHandle != currentHandle || _currentViewportSampler != sampler)
-            {
-                // YA_CORE_TRACE("Viewport ImageView changed, refreshing ImGui texture: {}", App::get()->_frameIndex);
-
-                // Cleanup old cached texture if exists
-                if (_viewportImage && _viewportImage->ds) {
-                    removeImGuiTexture(_viewportImage);
-                    YA_CORE_INFO("Removed old viewport ImGui texture");
-                }
-
-                _currentViewportSampler     = sampler;
-                _viewportImage              = getOrCreateImGuiTextureID(imageView, _currentViewportSampler);
-                _currentViewportImageHandle = currentHandle;
-            }
-
-            // Render viewport image
-            if (_viewportImage && _viewportImage->isValid())
-            {
-                ImGui::Image(*_viewportImage, viewportPanelSize, ImVec2(0, 0), ImVec2(1, 1));
-
-                // Render gizmo overlay
-                renderGizmo();
-            }
+            renderGizmo();
         }
     }
     else
@@ -703,6 +679,54 @@ void EditorLayer::editorSettings()
 
     ImGui::End();
 }
+
+void EditorLayer::debugWindow()
+{
+    return;
+    using namespace ImGui;
+    if (!ImGui::Begin("Debug Window"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    auto panelSize = ImGui::GetContentRegionAvail();
+
+
+    auto constraintSize = [&panelSize](auto extent) {
+        return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
+    };
+
+
+    Text("Mirror Render Target (from framebuffer)");
+    if (App::get()->bHasMirror) {
+
+        auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
+        ImGuiHelper::Image(mirrorTexture->getImageView(),
+                           TextureLibrary::get().getLinearSampler(),
+                           "Mirror RT",
+                           constraintSize(mirrorTexture->getExtent()));
+    }
+
+    Text("Viewport Render Target (from framebuffer)");
+    auto viewportRTTexture = App::get()->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
+    ImGuiHelper::Image(viewportRTTexture->getImageView(),
+                       TextureLibrary::get().getLinearSampler(),
+                       "Viewport RT (from framebuffer)",
+                       constraintSize(viewportRTTexture->getExtent()));
+
+    Text("Post-process Texture (from App)");
+    if (App::get()->bBasicPostProcessor) {
+        auto postProcessTexture = App::get()->_postprocessTexture;
+        ImGuiHelper::Image(postProcessTexture->getImageView(),
+                           TextureLibrary::get().getLinearSampler(),
+                           "Post-process texture",
+                           constraintSize(postProcessTexture->getExtent()));
+    }
+
+    ImGui::End();
+}
+
 
 const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
 {

@@ -1,7 +1,9 @@
 #include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
 
+#include <unordered_map>
 #include <vulkan/vulkan.h>
+
 
 #define IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
 #include <imgui_freetype.h>
@@ -10,6 +12,7 @@
 
 #include "Core/Log.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Platform/Render/Vulkan/VulkanUtils.h"
 
 
 
@@ -124,6 +127,22 @@ void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *
 
     auto &queue = vkRender->getGraphicsQueues()[0];
 
+    const bool                    useDynamicRendering = (renderPass == nullptr);
+    VkFormat                      swapchainFormat     = VK_FORMAT_UNDEFINED;
+    VkPipelineRenderingCreateInfo pipelineRenderingCI{};
+    if (useDynamicRendering) {
+        swapchainFormat     = toVk(vkRender->getSwapchain()->getFormat());
+        pipelineRenderingCI = VkPipelineRenderingCreateInfo{
+            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .pNext                   = nullptr,
+            .viewMask                = 0,
+            .colorAttachmentCount    = 1,
+            .pColorAttachmentFormats = &swapchainFormat,
+            .depthAttachmentFormat   = VK_FORMAT_UNDEFINED,
+            .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+        };
+    }
+
     ImGui_ImplVulkan_InitInfo initInfo{
         .ApiVersion         = vkRender->getApiVersion(),
         .Instance           = vkRender->getInstance(),
@@ -137,16 +156,14 @@ void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *
         .ImageCount         = vkRender->getSwapchainImageCount(),
         .PipelineCache      = nullptr,
         .PipelineInfoMain   = ImGui_ImplVulkan_PipelineInfo{
-              .RenderPass  = renderPass->getHandleAs<VkRenderPass>(),
-              .Subpass     = 0,
-              .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
-            // #ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-              .PipelineRenderingCreateInfo = {},
-            // #endif
-              .SwapChainImageUsage = 0,
+              .RenderPass                  = useDynamicRendering ? VK_NULL_HANDLE : renderPass->getHandleAs<VkRenderPass>(),
+              .Subpass                     = 0,
+              .MSAASamples                 = VK_SAMPLE_COUNT_1_BIT,
+              .PipelineRenderingCreateInfo = pipelineRenderingCI,
+              .SwapChainImageUsage         = 0,
         },
         .PipelineInfoForViewports = {},
-        .UseDynamicRendering      = false,
+        .UseDynamicRendering      = useDynamicRendering,
         .Allocator                = vkRender->getAllocator(),
         .CheckVkResultFn          = [](VkResult err) {
             if (err != VK_SUCCESS) {
@@ -195,6 +212,7 @@ void ImGuiManager::shutdown()
         return;
     }
 
+    ImGuiHelper::ClearImageCache();
     ImGui_ImplSDL3_Shutdown();
     ImGui_ImplVulkan_Shutdown();
     ImGui::DestroyContext();
@@ -341,6 +359,100 @@ void ImGuiManager::removeTexture(void *textureID)
     // Platform-specific implementation (Vulkan for now)
     ImGui_ImplVulkan_RemoveTexture(static_cast<VkDescriptorSet>(textureID));
 }
+
+namespace
+{
+struct ImageCacheKey
+{
+    IImageView *imageView = nullptr;
+    Sampler    *sampler   = nullptr;
+
+    bool operator==(const ImageCacheKey &other) const
+    {
+        return imageView == other.imageView && sampler == other.sampler;
+    }
+};
+
+struct ImageCacheKeyHash
+{
+    size_t operator()(const ImageCacheKey &key) const noexcept
+    {
+        size_t h1 = std::hash<void *>{}(key.imageView);
+        size_t h2 = std::hash<void *>{}(key.sampler);
+        return h1 ^ (h2 << 1);
+    }
+};
+
+struct ImageCacheEntry
+{
+    ImageViewHandle handle = {};
+    void           *ds     = nullptr;
+};
+
+std::unordered_map<ImageCacheKey, ImageCacheEntry, ImageCacheKeyHash> g_imageCache;
+
+void *getOrCreateDescriptorSet(IImageView *imageView, Sampler *sampler)
+{
+    if (!imageView || !sampler) {
+        return nullptr;
+    }
+
+    ImageCacheKey   key{.imageView = imageView, .sampler = sampler};
+    ImageViewHandle handle = imageView->getHandle();
+
+    auto it = g_imageCache.find(key);
+    if (it != g_imageCache.end()) {
+        if (it->second.ds && it->second.handle == handle) {
+            return it->second.ds;
+        }
+        if (it->second.ds) {
+            ImGuiManager::removeTexture(it->second.ds);
+            YA_CORE_TRACE("Invalidated ImGui descriptor set for imageView: {}, sampler: {}",
+                          handle.ptr,
+                          sampler->getHandle().ptr);
+        }
+    }
+
+    void *ds = ImGuiManager::addTexture(imageView, sampler, EImageLayout::ShaderReadOnlyOptimal);
+    if (!ds) {
+        return nullptr;
+    }
+
+    g_imageCache[key] = ImageCacheEntry{handle, ds};
+    return ds;
+}
+} // namespace
+
+namespace ImGuiHelper
+{
+bool Image(IImageView        *imageView,
+           Sampler           *sampler,
+           const std::string &alt,
+           const ImVec2      &size,
+           const ImVec2      &uv0,
+           const ImVec2      &uv1,
+           const ImVec4      &tint,
+           const ImVec4      &border)
+{
+    void *ds = getOrCreateDescriptorSet(imageView, sampler);
+    if (ds) {
+        ImGui::Image(ds, size, uv0, uv1, tint, border);
+        return true;
+    }
+    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Invalid Image: %s", alt.c_str());
+    return false;
+}
+
+void ClearImageCache()
+{
+    for (auto &entry : g_imageCache) {
+        if (entry.second.ds) {
+            ImGuiManager::removeTexture(entry.second.ds);
+        }
+    }
+    g_imageCache.clear();
+}
+} // namespace ImGuiHelper
 
 void ImGuiManager::setGizmoRect(float x, float y, float width, float height)
 {

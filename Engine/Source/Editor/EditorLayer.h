@@ -69,10 +69,6 @@ struct EditorLayer
     const ImGuiImageEntry *_pauseIcon      = nullptr;
     const ImGuiImageEntry *_stopIcon       = nullptr;
     const ImGuiImageEntry *_simulationIcon = nullptr;
-    const ImGuiImageEntry *_viewportImage  = nullptr;
-
-    void    *_currentViewportImageHandle = nullptr; // Track ImageView handle to detect changes
-    Sampler *_currentViewportSampler     = nullptr;
     enum
     {
         Linear = 0,
@@ -154,6 +150,7 @@ struct EditorLayer
         toolbar();
         editorSettings();
         viewportWindow();
+        debugWindow();
 
         _sceneHierarchyPanel.onImGuiRender();
         _detailsView.onImGuiRender();
@@ -191,6 +188,10 @@ struct EditorLayer
      * @return ImTextureID (VkDescriptorSet as void*)
      */
     const ImGuiImageEntry *getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
+    const ImGuiImageEntry *getOrCreateImGuiDescriptorSet(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr)
+    {
+        return getOrCreateImGuiTextureID(imageView, sampler);
+    }
 
 
   private:
@@ -202,6 +203,7 @@ struct EditorLayer
     // void renderStatsWindow();
     void viewportWindow();
     void editorSettings();
+    void debugWindow();
 
     // Helpers
     void setupDockspace();

@@ -161,6 +161,20 @@ struct ImGuiManager
 // Legacy alias for backward compatibility
 using ImguiState = ImGuiManager;
 
+namespace ImGuiHelper
+{
+bool Image(IImageView        *imageView,
+           Sampler           *sampler,
+           const std::string &alt,
+           const ImVec2      &size,
+           const ImVec2      &uv0    = ImVec2(0, 0),
+           const ImVec2      &uv1    = ImVec2(1, 1),
+           const ImVec4      &tint   = ImVec4(1, 1, 1, 1),
+           const ImVec4      &border = ImVec4(0, 0, 0, 0));
+
+void ClearImageCache();
+} // namespace ImGuiHelper
+
 
 // RAII helper for ImGui style/color stack
 struct ImGuiStyleScope
