@@ -59,6 +59,7 @@
         "shaderc",
         "SHADERFORMAT",
         "SHADERSTAGE",
+        "Skybox",
         "spdlog",
         "SPIR",
         "SPIRV",

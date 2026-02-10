@@ -111,7 +111,7 @@ void FQuadRender::init(IRender *render)
     _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
         .descriptorSetLayouts = {
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "Frame_UBO",
                 .set      = 0,
                 .bindings = {
@@ -123,7 +123,7 @@ void FQuadRender::init(IRender *render)
                     },
                 },
             },
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "CombinedImageSampler",
                 .set      = 0,
                 .bindings = {

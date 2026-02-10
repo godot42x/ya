@@ -111,7 +111,7 @@ struct MaterialSystemV1Template : public IMaterialSystem
      */
     std::vector<std::shared_ptr<IDescriptorSetLayout>> createDescriptorSetLayouts(
         IRender                                *render,
-        const std::vector<DescriptorSetLayout> &descriptorSetLayouts)
+        const std::vector<DescriptorSetLayoutDesc> &descriptorSetLayouts)
     {
         return IDescriptorSetLayout::create(render, descriptorSetLayouts);
     }

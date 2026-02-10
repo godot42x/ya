@@ -8,7 +8,7 @@ namespace ya
 {
 
 // Factory method to create descriptor set layout based on render backend
-std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *render, const DescriptorSetLayout &layout)
+std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *render, const DescriptorSetLayoutDesc &layout)
 {
     switch (render->getAPI()) {
     case ERenderAPI::Vulkan:
@@ -20,7 +20,7 @@ std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *rend
     }
 }
 
-std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender *render, std::vector<DescriptorSetLayout> descriptorSetLayouts)
+std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender *render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts)
 {
     switch (render->getAPI()) {
     case ERenderAPI::Vulkan:

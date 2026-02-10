@@ -55,15 +55,14 @@ struct DetailsView
     template <typename T, typename Fn>
     void componentWrapper(const std::string &name, Entity &entity, Fn impl)
     {
+        if (!entity.hasComponent<T>()) {
+            return;
+        }
         const auto treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen |
                                    ImGuiTreeNodeFlags_AllowOverlap |
                                    ImGuiTreeNodeFlags_SpanAvailWidth |
                                    ImGuiTreeNodeFlags_FramePadding |
                                    ImGuiTreeNodeFlags_Framed;
-
-        if (!entity.hasComponent<T>()) {
-            return;
-        }
 
         auto  *component              = entity.getComponent<T>();
         ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();

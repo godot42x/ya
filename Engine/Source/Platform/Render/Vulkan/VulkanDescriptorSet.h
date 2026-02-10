@@ -16,13 +16,13 @@ struct VulkanDescriptorSetLayout : public ya::IDescriptorSetLayout
 {
     VulkanRender           *_render = nullptr;
     VkDescriptorSetLayout   _handle = VK_NULL_HANDLE;
-    ya::DescriptorSetLayout _setLayoutInfo;
+    ya::DescriptorSetLayoutDesc _setLayoutInfo;
 
-    VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayout setLayout);
+    VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayoutDesc setLayout);
     virtual ~VulkanDescriptorSetLayout();
 
     // IDescriptorSetLayout interface
-    const ya::DescriptorSetLayout &getLayoutInfo() const override { return _setLayoutInfo; }
+    const ya::DescriptorSetLayoutDesc &getLayoutInfo() const override { return _setLayoutInfo; }
     void                          *getHandle() const override { return (void *)(uintptr_t)_handle; }
 
     // Vulkan-specific accessor

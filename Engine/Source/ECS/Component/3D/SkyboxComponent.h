@@ -10,7 +10,9 @@ namespace ya
 
 struct SkyboxComponent : public IComponent
 {
-    ya::Ptr<Texture> cubemapTexture = nullptr;
+    stdptr<Texture> cubemapTexture = nullptr;
+
+    bool bDirty = true;
 };
 
 } // namespace ya

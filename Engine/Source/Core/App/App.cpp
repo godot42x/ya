@@ -127,10 +127,10 @@ void App::onSceneViewportResized(Rect2D rect)
             .label  = "PostprocessImage",
             .format = EFormat::R8G8B8A8_UNORM,
             .extent = {
-                       .width  = newExtent.width,
-                       .height = newExtent.height,
-                       .depth  = 1,
-                       },
+                .width  = newExtent.width,
+                .height = newExtent.height,
+                .depth  = 1,
+            },
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
@@ -193,33 +193,24 @@ void App::init(AppDesc ci)
                                .FactoryNew<GLSLProcessor>();
 
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-    _shaderStorage->load(ShaderDesc{
-        .shaderName = "Test/Unlit.glsl",
-    });
-    _shaderStorage->load(ShaderDesc{
-        .shaderName = "Test/SimpleMaterial.glsl",
-    });
-    _shaderStorage->load(ShaderDesc{
-        .shaderName = "Sprite2D.glsl",
-    });
-    _shaderStorage->load(ShaderDesc{
-        .shaderName = "Test/PhongLit.glsl", // 使用新版带 type 和 cutOff 的 shader
-    });
-    _shaderStorage->load(ShaderDesc{
-        .shaderName = "PostProcessing/Basic.glsl", // 使用新版带 type 和 cutOff 的 shader
-    });
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/PhongLit.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
 
 
     // ===== Initialize Render =====
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-                                           .imageFormat   = EFormat::R8G8B8A8_UNORM,
-                                           .bVsync        = false,
-                                           .minImageCount = 3,
-                                           .width         = static_cast<uint32_t>(_ci.width),
-                                           .height        = static_cast<uint32_t>(_ci.height),
-                                           },
+            .imageFormat   = EFormat::R8G8B8A8_UNORM,
+            .bVsync        = false,
+            .minImageCount = 3,
+            .width         = static_cast<uint32_t>(_ci.width),
+            .height        = static_cast<uint32_t>(_ci.height),
+        },
     };
     FPSControl::get()->bEnable = true;
     FPSControl::get()->setFPSLimit(120.f);
@@ -249,7 +240,7 @@ void App::init(AppDesc ci)
         .extent           = {.width = static_cast<uint32_t>(winW), .height = static_cast<uint32_t>(winH)},
         .frameBufferCount = 1,
         .attachments      = {
-                             .colorAttach = {
+                 .colorAttach = {
                 AttachmentDescription{
                          .index          = 0,
                          .format         = EFormat::R8G8B8A8_UNORM,
@@ -263,7 +254,7 @@ void App::init(AppDesc ci)
                          .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-                             .depthAttach = AttachmentDescription{
+                 .depthAttach = AttachmentDescription{
                      .index          = 1,
                      .format         = DEPTH_FORMAT,
                      .samples        = _sampleCount,
@@ -275,7 +266,7 @@ void App::init(AppDesc ci)
                      .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
                      .usage          = EImageUsage::DepthStencilAttachment,
             },
-                             },
+        },
     });
 
     // pre construct all material systems
@@ -307,6 +298,22 @@ void App::init(AppDesc ci)
         _materialSystems.clear();
     });
 
+    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
+    _skyboxSystem->onInit(nullptr,
+                          PipelineRenderingInfo{
+                              .label                   = "Skybox Pipeline",
+                              .viewMask                = 0,
+                              .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                              .depthAttachmentFormat   = DEPTH_FORMAT,
+                              .stencilAttachmentFormat = EFormat::Undefined,
+                          });
+    _deleter.push("SkyboxSystem", [this](void *) {
+        _skyboxSystem->onDestroy();
+        _skyboxSystem.reset();
+    });
+
+
+
     // MARK: tex-> Postprocessing
     {
         auto            vkRender = _render->as<VulkanRender>();
@@ -314,10 +321,10 @@ void App::init(AppDesc ci)
             .label  = "PostprocessImage",
             .format = EFormat::R8G8B8A8_UNORM,
             .extent = {
-                       .width  = static_cast<uint32_t>(winW),
-                       .height = static_cast<uint32_t>(winH),
-                       .depth  = 1,
-                       },
+                .width  = static_cast<uint32_t>(winW),
+                .height = static_cast<uint32_t>(winH),
+                .depth  = 1,
+            },
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
@@ -355,39 +362,39 @@ void App::init(AppDesc ci)
             .renderingMode    = ERenderingMode::DynamicRendering,
             .bSwapChainTarget = false,
             .extent           = {
-                                 .width  = static_cast<uint32_t>(winW),
-                                 .height = static_cast<uint32_t>(winH),
-                                 },
+                          .width  = static_cast<uint32_t>(winW),
+                          .height = static_cast<uint32_t>(winH),
+            },
             .frameBufferCount = 1,
             .attachments      = {
 
-                                 .colorAttach = {
-                                 AttachmentDescription{
-                                 .index          = 0,
-                                 .format         = EFormat::R8G8B8A8_UNORM,
-                                 .samples        = ESampleCount::Sample_1,
-                                 .loadOp         = EAttachmentLoadOp::Clear,
-                                 .storeOp        = EAttachmentStoreOp::Store,
-                                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                                 .initialLayout  = EImageLayout::Undefined,
-                                 .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
-                                 .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                                 },
-                                 },
-                                 .depthAttach = AttachmentDescription{
-                                 .index          = 1,
-                                 .format         = DEPTH_FORMAT,
-                                 .samples        = _sampleCount,
-                                 .loadOp         = EAttachmentLoadOp::Clear,
-                                 .storeOp        = EAttachmentStoreOp::Store,
-                                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                                 .initialLayout  = EImageLayout::Undefined,
-                                 .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                                 .usage          = EImageUsage::DepthStencilAttachment,
-                                 },
-                                 },
+                .colorAttach = {
+                    AttachmentDescription{
+                        .index          = 0,
+                        .format         = EFormat::R8G8B8A8_UNORM,
+                        .samples        = ESampleCount::Sample_1,
+                        .loadOp         = EAttachmentLoadOp::Clear,
+                        .storeOp        = EAttachmentStoreOp::Store,
+                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                        .initialLayout  = EImageLayout::Undefined,
+                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
+                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    },
+                },
+                .depthAttach = AttachmentDescription{
+                    .index          = 1,
+                    .format         = DEPTH_FORMAT,
+                    .samples        = _sampleCount,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::Undefined,
+                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                    .usage          = EImageUsage::DepthStencilAttachment,
+                },
+            },
         });
         _deleter.push("MirrorRT", [this](void *) {
             _mirrorRT.reset();
@@ -403,7 +410,7 @@ void App::init(AppDesc ci)
         .bSwapChainTarget = true,
         .attachments      = {
 
-                             .colorAttach = {
+            .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
                     .format         = _render->getSwapchain()->getFormat(),
@@ -417,7 +424,7 @@ void App::init(AppDesc ci)
                     .usage          = EImageUsage::ColorAttachment,
                 },
             },
-                             },
+        },
     });
 
     _render->getSwapchain()->onRecreate.addLambda(
@@ -962,8 +969,8 @@ void App::tickRender(float dt)
             RenderingInfo ri{
                 .label      = "ViewPort",
                 .renderArea = Rect2D{
-                                     .pos    = {0, 0},
-                                     .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
+                    .pos    = {0, 0},
+                    .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
                 },
                 .layerCount       = 1,
                 .colorClearValues = {colorClearValue},
@@ -972,6 +979,8 @@ void App::tickRender(float dt)
             };
             cmdBuf->beginRendering(ri);
 
+            _skyboxSystem->tick(cmdBuf.get(), dt, ctxCopy);
+
             // Render material systems
             for (auto &system : _materialSystems) {
                 if (system->bEnabled) {
@@ -979,6 +988,7 @@ void App::tickRender(float dt)
                     system->onRender(cmdBuf.get(), &ctxCopy);
                 }
             }
+
             cmdBuf->endRendering(EndRenderingInfo{
                 .renderTarget = _mirrorRT.get(),
             });
@@ -1003,8 +1013,8 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "ViewPort",
             .renderArea = Rect2D{
-                                 .pos    = {0, 0},
-                                 .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
+                .pos    = {0, 0},
+                .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
@@ -1018,6 +1028,8 @@ void App::tickRender(float dt)
 
 
         ctx.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
+
+        _skyboxSystem->tick(cmdBuf.get(), dt, ctx);
         // Render material systems
         for (auto &system : _materialSystems) {
             if (system->bEnabled) {
@@ -1025,6 +1037,7 @@ void App::tickRender(float dt)
                 system->onRender(cmdBuf.get(), &ctx);
             }
         }
+
 
         {
             YA_PROFILE_SCOPE("Render2D");
@@ -1074,21 +1087,21 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "Postprocessing",
             .renderArea = Rect2D{
-                                 .pos    = {0, 0},
-                                 .extent = _viewportRect.extent, // Use viewport size for postprocess render area
+                .pos    = {0, 0},
+                .extent = _viewportRect.extent, // Use viewport size for postprocess render area
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
             .depthClearValue  = depthClearValue,
             //
             .colorAttachments = {
-                                 RenderingInfo::ImageSpec{
+                RenderingInfo::ImageSpec{
                     .texture     = _postprocessTexture.get(), // ← 使用 App 层的 Texture 接口
                     .sampleCount = ESampleCount::Sample_1,
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
                 },
-                                 },
+            },
         };
 
         cmdBuf->beginRendering(ri);
@@ -1143,11 +1156,11 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "Screen",
             .renderArea = Rect2D{
-                                 .pos    = {0, 0},
-                                 .extent = _screenRT->getExtent().toVec2(),
-                                 },
+                .pos    = {0, 0},
+                .extent = _screenRT->getExtent().toVec2(),
+            },
             .layerCount       = 1,
-            .colorClearValues = {ClearValue::Black()                         },
+            .colorClearValues = {ClearValue::Black()},
             //
             .renderTarget = _screenRT.get(),
         };

@@ -100,14 +100,14 @@ struct IDescriptorSetLayout
      * @param layout The descriptor set layout description
      * @return Shared pointer to the created descriptor set layout
      */
-    static std::shared_ptr<IDescriptorSetLayout> create(IRender *render, const DescriptorSetLayout &layout);
+    static std::shared_ptr<IDescriptorSetLayout> create(IRender *render, const DescriptorSetLayoutDesc &layout);
 
-    static std::vector<stdptr<IDescriptorSetLayout>> create(IRender *render, std::vector<DescriptorSetLayout> descriptorSetLayouts);
+    static std::vector<stdptr<IDescriptorSetLayout>> create(IRender *render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts);
 
     /**
      * @brief Get the layout information
      */
-    virtual const DescriptorSetLayout &getLayoutInfo() const = 0;
+    virtual const DescriptorSetLayoutDesc &getLayoutInfo() const = 0;
 
     /**
      * @brief Get backend-specific handle (implementation should cast to appropriate type)

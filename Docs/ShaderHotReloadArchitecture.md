@@ -60,7 +60,7 @@ void UnlitMaterialSystem::reloadShaderWithNewLayout()
     );
     
     // 3. 根据反射动态创建 descriptor set layouts
-    std::vector<DescriptorSetLayout> dynamicDSLs = 
+    std::vector<DescriptorSetLayoutDesc> dynamicDSLs = 
         buildDescriptorSetLayoutsFromReflection(fragReflect);
     
     // 4. 重新创建所有资源

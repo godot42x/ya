@@ -8,7 +8,7 @@ namespace ya
 {
 
 
-VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayout setLayout)
+VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayoutDesc setLayout)
 {
     _render        = render;
     _setLayoutInfo = setLayout;

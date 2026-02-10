@@ -22,15 +22,15 @@ struct OpenGLDescriptorSetLayout : public IDescriptorSetLayout
 {
   private:
     OpenGLRender       *_render = nullptr;
-    DescriptorSetLayout _layout;
+    DescriptorSetLayoutDesc _layout;
 
   public:
-    OpenGLDescriptorSetLayout(OpenGLRender *render, const DescriptorSetLayout &layout)
+    OpenGLDescriptorSetLayout(OpenGLRender *render, const DescriptorSetLayoutDesc &layout)
         : _render(render), _layout(layout) {}
 
     ~OpenGLDescriptorSetLayout() override = default;
 
-    const DescriptorSetLayout &getLayoutInfo() const override { return _layout; }
+    const DescriptorSetLayoutDesc &getLayoutInfo() const override { return _layout; }
     void                      *getHandle() const override { return (void *)this; }
 };
 

@@ -632,7 +632,7 @@ struct DescriptorSetLayoutBinding
     EShaderStage::T            stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment;
 };
 
-struct DescriptorSetLayout
+struct DescriptorSetLayoutDesc
 {
     std::string                             label = "None";
     int32_t                                 set   = -1; // indicate pos only, no ref usage
@@ -651,7 +651,7 @@ struct PipelineLayoutDesc
 {
     std::string                      label = "None";
     std::vector<PushConstantRange>   pushConstants;
-    std::vector<DescriptorSetLayout> descriptorSetLayouts;
+    std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts;
 };
 
 struct DescriptorPoolSize
@@ -868,12 +868,14 @@ struct ImageCreateInfo
         uint32_t depth  = 1;
     } extent;
     uint32_t        mipLevels             = 1;
+    uint32_t        arrayLayers           = 1;
     ESampleCount::T samples               = ESampleCount::Sample_1;
     EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
     ESharingMode::T sharingMode           = {};
     uint32_t        queueFamilyIndexCount = 0;
     const uint32_t *pQueueFamilyIndices   = nullptr;
     EImageLayout::T initialLayout         = EImageLayout::Undefined;
+    uint32_t        flags                 = 0;
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };

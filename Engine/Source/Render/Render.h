@@ -100,7 +100,7 @@ struct IRender : public plat_base<IRender>
      * @brief Begin recording commands for isolated/immediate execution
      * @return Command buffer for recording
      */
-    virtual ICommandBuffer *beginIsolateCommands() = 0;
+    virtual ICommandBuffer *beginIsolateCommands(const std::string& context) = 0;
 
     /**
      * @brief End and submit isolated commands

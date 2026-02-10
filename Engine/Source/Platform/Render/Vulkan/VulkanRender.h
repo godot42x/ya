@@ -72,7 +72,7 @@ struct VulkanRender : public IRender
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
-        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
+        {               .name = VK_KHR_SWAPCHAIN_EXTENSION_NAME,  .bRequired = true}, // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
@@ -101,9 +101,9 @@ struct VulkanRender : public IRender
 
 
 
-    ISwapchain              *_swapChain;
+    ISwapchain *_swapChain;
 
-    bool bOnlyOnePresentQueue = false;
+    bool                     bOnlyOnePresentQueue = false;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
 
@@ -376,12 +376,13 @@ struct VulkanRender : public IRender
     void waitIdle() override { VK_CALL(vkDeviceWaitIdle(m_LogicalDevice)); }
 
     // IRender interface: isolated commands
-    ICommandBuffer *beginIsolateCommands() override
+    ICommandBuffer *beginIsolateCommands(const std::string &context = "") override
     {
         VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
         VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
+        setDebugObjectName(VK_OBJECT_TYPE_COMMAND_BUFFER, vkCmdBuf, "IsolatedCommandBuffer_" + context);
         // Create a temporary VulkanCommandBuffer wrapper
         // Note: This is managed manually and will be deleted in endIsolateCommands
         return new VulkanCommandBuffer(this, vkCmdBuf);

@@ -48,7 +48,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
             },
         },
         .descriptorSetLayouts = {
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "UnlitMaterial_FrameDSL",
                 .set      = 0,
                 .bindings = {
@@ -60,7 +60,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     },
                 },
             },
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "UnlitMaterial_ParamDSL",
                 .set      = 1,
                 .bindings = {
@@ -73,7 +73,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                 },
 
             },
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "UnlitMaterial_ResourceDSL",
                 .set      = 2,
                 .bindings = {

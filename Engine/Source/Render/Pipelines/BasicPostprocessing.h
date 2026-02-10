@@ -70,7 +70,7 @@ struct BasicPostprocessing
             },
         },
         .descriptorSetLayouts = {
-            DescriptorSetLayout{
+            DescriptorSetLayoutDesc{
                 .label    = "BasicPostprocessing_DSL",
                 .set      = 0,
                 .bindings = {

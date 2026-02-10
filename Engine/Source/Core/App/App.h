@@ -9,7 +9,10 @@
 #include "Editor/EditorLayer.h"
 
 #include "Core/App/FPSCtrl.h"
+
+#include "ECS/System/3D/SkyboxSystem.h"
 #include "ECS/System/IMaterialSystem.h"
+
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
 #include "Render/Render.h"
@@ -179,6 +182,7 @@ struct App
 
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
+    stdptr<SkyBoxSystem>                          _skyboxSystem = nullptr;
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
