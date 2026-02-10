@@ -5,7 +5,7 @@ b_args:=
 r_args:=
 f:=false
 
-.PHONY: 
+.PHONY:  test
 
 b: clean_if_needed cfg_if_needed
 	xmake b $(t) $(b_args)
@@ -34,3 +34,7 @@ cfg_if_needed:
 basic:
 	# make imgui and imguizmo readonly
 	python3  "./Script/setup_3rd_party.py"
+
+test:
+	xmake b $(t)-testing
+	xmake r $(t)-testing --gtest_filter=$(r_args)

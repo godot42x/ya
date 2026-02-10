@@ -45,9 +45,8 @@ std::shared_ptr<T> makePtr(Args &&...args)
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
-struct Class
+struct Class : public Field
 {
-    std::string        _name;
     refl::type_index_t typeIndex = 0; // 类型索引，用于快速查找和父类指针转换
 
     // TODO: 使用一个field 来存所有-> 省内存
@@ -72,7 +71,10 @@ struct Class
     std::function<void(void *)> destructor;
 
     Class() = default;
-    explicit Class(const std::string &inName) : _name(inName) {}
+    explicit Class(const std::string &inName)
+    {
+        name = inName;
+    }
     virtual ~Class() = default;
 
 
@@ -674,7 +676,7 @@ struct Class
         prop.setValue<T>(nullptr, value);
     }
 
-    const std::string &getName() const { return _name; }
+    const std::string &getName() const { return name; }
 #pragma endregion
 
 #pragma region Constructor Registration
@@ -728,7 +730,7 @@ struct Class
         std::string sig = detail::makeSignature<>();
         auto        it  = constructors.find(sig);
         if (it == constructors.end()) {
-            throw std::runtime_error("No default constructor registered for class: " + _name);
+            throw std::runtime_error("No default constructor registered for class: " + name);
         }
         ArgumentList emptyArgs;
         return it->second.factory(emptyArgs);
@@ -750,7 +752,7 @@ struct Class
         auto        it  = constructors.find(sig);
         if (it == constructors.end()) {
             throw std::runtime_error("No matching constructor for signature '" + sig +
-                                     "' registered for class: " + _name);
+                                     "' registered for class: " + name);
         }
         auto argList = ArgumentList::make(std::forward<Args>(args)...);
         return it->second.factory(argList);
@@ -775,7 +777,7 @@ struct Class
     void destroyInstance(void *obj) const
     {
         if (!destructor) {
-            throw std::runtime_error("No destructor registered for class: " + _name);
+            throw std::runtime_error("No destructor registered for class: " + name);
         }
         if (!obj) {
             throw std::runtime_error("Cannot destroy null object");

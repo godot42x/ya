@@ -67,8 +67,9 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
   public:
     FName _name;
 
-    VkPipeline       _pipeline       = VK_NULL_HANDLE;
-    VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
+    VkPipeline       _pipeline           = VK_NULL_HANDLE;
+    VkDescriptorPool _descriptorPool     = VK_NULL_HANDLE;
+    VkPipeline       _pendingNewPipeline = VK_NULL_HANDLE;
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
@@ -122,6 +123,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     // 2025/1/10 @godot42: now can only reload shader calculating logics, not any unifrom/vertex layout change
     // TODO: sniff layout from ShaderReflection?
     void reloadShaders() override;
+    void tryUpdateShader() override;
 
     ::VkPipeline getVkHandle() const { return _pipeline; }
 

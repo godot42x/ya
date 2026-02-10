@@ -86,6 +86,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     {
         alignas(4) bool bDebugNormal = false;
         alignas(4) bool bDebugDepth  = false;
+        alignas(4) bool bDebugUV     = false;
         glm::vec4 floatParam         = glm::vec4(0.0f);
     } uDebug;
 
@@ -158,7 +159,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // void recreateMaterialDescPool(uint32_t count);
 
     void updateFrameDS(FrameContext *ctx);
-    void updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideMirrorMaterial);
+    void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent &component, bool bOverrideMirrorMaterial);
     void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideDiffuse);
 
 

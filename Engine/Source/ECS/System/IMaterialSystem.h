@@ -40,6 +40,11 @@ struct IMaterialSystem
 
     // Reset per-frame slot counter. Call once per frame before any onRender() calls.
     virtual void resetFrameSlot() {}
+    virtual void beginFrame()
+    {
+        resetFrameSlot();
+        _pipeline->tryUpdateShader();
+    }
 
     void renderGUI()
     {

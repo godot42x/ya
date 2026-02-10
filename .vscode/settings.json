@@ -110,5 +110,5 @@
         "**/Engine/ThirdParty/ImGui/examples": true,
         "**/Engine/ThirdParty/imguizmo/example": true,
         "**/Engine/ThirdParty/Vulkan-Samples-Assets": true
-    }
+    },
 }

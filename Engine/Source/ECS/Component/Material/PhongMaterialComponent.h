@@ -55,48 +55,6 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         setupCallbacks();
     }
 
-    // Default copy/move (TextureSlot is now copyable)
-    // PhongMaterialComponent(const PhongMaterialComponent& other)
-    //     : MaterialComponent<PhongMaterial>(other)
-    //     , _bResolved(other._bResolved)
-    //     , _diffuseSlot(other._diffuseSlot)
-    //     , _specularSlot(other._specularSlot)
-    // {
-    //     setupCallbacks();  // Re-register callbacks with new 'this' pointer
-    // }
-
-    // PhongMaterialComponent& operator=(const PhongMaterialComponent& other)
-    // {
-    //     if (this != &other) {
-    //         MaterialComponent<PhongMaterial>::operator=(other);
-    //         _bResolved = other._bResolved;
-    //         _diffuseSlot = other._diffuseSlot;
-    //         _specularSlot = other._specularSlot;
-    //         setupCallbacks();
-    //     }
-    //     return *this;
-    // }
-
-    // PhongMaterialComponent(PhongMaterialComponent&& other) noexcept
-    //     : MaterialComponent<PhongMaterial>(std::move(other))
-    //     , _bResolved(other._bResolved)
-    //     , _diffuseSlot(std::move(other._diffuseSlot))
-    //     , _specularSlot(std::move(other._specularSlot))
-    // {
-    //     setupCallbacks();
-    // }
-
-    // PhongMaterialComponent& operator=(PhongMaterialComponent&& other) noexcept
-    // {
-    //     if (this != &other) {
-    //         MaterialComponent<PhongMaterial>::operator=(std::move(other));
-    //         _bResolved = other._bResolved;
-    //         _diffuseSlot = std::move(other._diffuseSlot);
-    //         _specularSlot = std::move(other._specularSlot);
-    //         setupCallbacks();
-    //     }
-    //     return *this;
-    // }
 
   private:
     void setupCallbacks()

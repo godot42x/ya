@@ -138,22 +138,33 @@ void DetailsView::drawComponents(Entity &entity)
             bDirty |= ImGui::ColorEdit3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1));
             bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
 
-            // Render texture views
-            for (uint32_t i = 0; i < unlitMat->_textureViews.size(); i++) {
-                auto &tv = unlitMat->_textureViews[i];
-                if (!tv.texture) continue;
-
-                auto label = tv.texture->getLabel();
-                if (label.empty()) {
-                    label = tv.texture->getFilepath();
+            // Edit texture params (UV stored in TextureParam, not TextureView)
+            auto editTextureParam = [&bDirty](const char *name, UnlitMaterial::TextureParam &param, const TextureView *tv) {
+                if (!tv || !tv->texture) return;
+                auto label = tv->texture->getLabel();
+                if (label.empty()) label = tv->texture->getFilepath();
+                ImGui::Text("%s: %s", name, label.c_str());
+                std::string id = name;
+                bDirty |= ImGui::Checkbox(("Enable##" + id).c_str(), &param.enable);
+                // uvTransform: x,y = scale, z,w = offset
+                glm::vec2 offset{param.uvTransform.z, param.uvTransform.w};
+                glm::vec2 scale{param.uvTransform.x, param.uvTransform.y};
+                if (ImGui::DragFloat2(("Offset##" + id).c_str(), glm::value_ptr(offset), 0.01f)) {
+                    param.uvTransform.z = offset.x;
+                    param.uvTransform.w = offset.y;
+                    bDirty              = true;
                 }
-                ImGui::Text("Texture %d: %s", i, label.c_str());
-                bDirty |= ImGui::Checkbox(std::format("Enable##{}", i).c_str(), &tv.bEnable);
-                bDirty |= ImGui::DragFloat2(std::format("Offset##{}", i).c_str(), glm::value_ptr(tv.uvTranslation), 0.01f);
-                bDirty |= ImGui::DragFloat2(std::format("Scale##{}", i).c_str(), glm::value_ptr(tv.uvScale), 0.01f, 0.01f, 10.0f);
+                if (ImGui::DragFloat2(("Scale##" + id).c_str(), glm::value_ptr(scale), 0.01f, 0.01f, 10.0f)) {
+                    param.uvTransform.x = scale.x;
+                    param.uvTransform.y = scale.y;
+                    bDirty              = true;
+                }
                 static constexpr const auto pi = glm::pi<float>();
-                bDirty |= ImGui::DragFloat(std::format("Rotation##{}", i).c_str(), &tv.uvRotation, pi / 3600, -pi, pi);
-            }
+                bDirty |= ImGui::DragFloat(("Rotation##" + id).c_str(), &param.uvRotation, pi / 3600, -pi, pi);
+            };
+
+            editTextureParam("Texture0", unlitMat->uMaterial.textureParam0, unlitMat->getTextureView(UnlitMaterial::BaseColor0));
+            editTextureParam("Texture1", unlitMat->uMaterial.textureParam1, unlitMat->getTextureView(UnlitMaterial::BaseColor1));
 
             if (bDirty) {
                 unlitMat->setParamDirty(true);
@@ -172,9 +183,8 @@ void DetailsView::drawComponents(Entity &entity)
             if (ctx.isModifiedPrefix("_diffuseSlot") || ctx.isModifiedPrefix("_specularSlot")) {
                 pmc->invalidate();
             }
-            else {
-                pmc->getMaterial()->setParamDirty();
-            }
+            // UV params changed -> mark param dirty
+            pmc->getMaterial()->setParamDirty();
         }
         if (ImGui::Button("Invalidate")) {
             pmc->invalidate();

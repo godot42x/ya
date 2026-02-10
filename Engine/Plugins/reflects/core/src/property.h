@@ -81,6 +81,7 @@ enum class FieldFlags : uint32_t
     BlueprintCallable = 1 << 8,  // Can be called from Blueprint
     BlueprintPure     = 1 << 9,  // Pure function (no side effects)
     Exec              = 1 << 10, // Execution function
+    Wrapper           = 1 << 11, // Wrapper type(like struct A{B value}; plain display inner type B)
 };
 
 inline FieldFlags operator|(FieldFlags a, FieldFlags b)
@@ -118,11 +119,11 @@ struct Field
 // ============================================================================
 struct Property : public Field
 {
-    bool        bConst          = false;
-    bool        bStatic         = false;
-    bool        bPointer        = false; ///< True if the property type is a pointer (T*)
-    uint32_t    typeIndex       = 0;
-    uint32_t    pointeeTypeIndex = 0;    ///< If bPointer, the type index of the pointee type (T in T*)
+    bool        bConst           = false;
+    bool        bStatic          = false;
+    bool        bPointer         = false; ///< True if the property type is a pointer (T*)
+    uint32_t    typeIndex        = 0;
+    uint32_t    pointeeTypeIndex = 0; ///< If bPointer, the type index of the pointee type (T in T*)
     std::string typeName;
 
     // ============================================================================

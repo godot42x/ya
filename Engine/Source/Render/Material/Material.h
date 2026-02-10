@@ -43,12 +43,9 @@ struct TextureSlot
     TextureView toTextureView(ya::Ptr<Sampler> sampler = nullptr) const
     {
         TextureView tv;
-        tv.texture       = textureRef.getShared();
-        tv.sampler       = sampler ? sampler : TextureLibrary::get().getDefaultSampler();
-        tv.uvScale       = uvScale;
-        tv.uvTranslation = uvOffset;
-        tv.uvRotation    = uvRotation;
-        tv.bEnable       = bEnable;
+        tv.texture = textureRef.getShared();
+        tv.sampler = sampler ? sampler : TextureLibrary::get().getDefaultSampler();
+        tv.bEnable = bEnable;
         return tv;
     }
 
@@ -57,13 +54,8 @@ struct TextureSlot
      */
     void fromTextureView(const TextureView &tv, const std::string &texturePath)
     {
-        // textureRef.setPath(texturePath);
-        // textureRef._cachedPtr = tv.texture;
         textureRef.set(texturePath, tv.texture);
-        uvScale    = tv.uvScale;
-        uvOffset   = tv.uvTranslation;
-        uvRotation = tv.uvRotation;
-        bEnable    = tv.bEnable;
+        bEnable = tv.bEnable;
     }
 
     bool resolve() { return textureRef.resolve(); }

@@ -65,28 +65,29 @@ void UnlitMaterial::setTextureViewEnable(uint32_t type, bool benable)
 
 void UnlitMaterial::setTextureViewUVTranslation(uint32_t type, const glm::vec2 &uvTranslation)
 {
-    if (hasTextureView(type))
-    {
-        _textureViews[type].setUvTranslation(uvTranslation);
+    auto *param = getTextureParamMut(type);
+    if (param) {
+        param->uvTransform.z = uvTranslation.x;
+        param->uvTransform.w = uvTranslation.y;
         setParamDirty(true);
     }
 }
 
 void UnlitMaterial::setTextureViewUVScale(uint32_t type, const glm::vec2 &uvScale)
 {
-
-    if (hasTextureView(type))
-    {
-        _textureViews[type].setUvScale(uvScale);
+    auto *param = getTextureParamMut(type);
+    if (param) {
+        param->uvTransform.x = uvScale.x;
+        param->uvTransform.y = uvScale.y;
         setParamDirty(true);
     }
 }
 
 void UnlitMaterial::setTextureViewUVRotation(uint32_t type, float uvRotation)
 {
-    if (hasTextureView(type))
-    {
-        _textureViews[type].setUvRotation(uvRotation);
+    auto *param = getTextureParamMut(type);
+    if (param) {
+        param->uvRotation = uvRotation;
         setParamDirty(true);
     }
 }

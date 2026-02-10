@@ -14,21 +14,20 @@ struct UnlitMaterial : public Material
 
     struct TextureParam
     {
-        bool enable;
+        bool enable{false};
         alignas(4) float uvRotation{0.0f};
         // x,y scale, z,w translate
         alignas(16) glm::vec4 uvTransform{1.0f, 1.0f, 0.0f, 0.0f};
 
+        void setUVParams(glm::vec2 scale, glm::vec2 offset, float rotation)
+        {
+            uvRotation  = rotation;
+            uvTransform = {scale.x, scale.y, offset.x, offset.y};
+        }
+
         void updateByTextureView(const TextureView *tv)
         {
-            enable      = tv->bEnable && tv->isValid();
-            uvRotation  = tv->uvRotation;
-            uvTransform = {
-                tv->uvScale.x,
-                tv->uvScale.y,
-                tv->uvTranslation.x,
-                tv->uvTranslation.y,
-            };
+            enable = tv->bEnable && tv->isValid();
         }
     };
 
@@ -83,6 +82,13 @@ struct UnlitMaterial : public Material
     void setTextureViewUVScale(uint32_t type, const glm::vec2 &uvScale);
     void setTextureViewUVRotation(uint32_t type, float uvRotation);
 
+    // Get mutable texture param for UV editing
+    TextureParam *getTextureParamMut(uint32_t type)
+    {
+        if (type == BaseColor0) return &uMaterial.textureParam0;
+        if (type == BaseColor1) return &uMaterial.textureParam1;
+        return nullptr;
+    }
 
     // MARK: params api
     glm::vec3           getBaseColor0() const { return uMaterial.baseColor0; }

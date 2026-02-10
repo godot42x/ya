@@ -217,7 +217,7 @@ Entity *SceneSerializer::deserializeEntity(const nlohmann::json &j)
                 void *componentPtr = reg.addComponent(FName(typeName), registry, entity->getHandle());
                 auto  cls          = ClassRegistry::instance().getClass(id);
                 if (cls) {
-                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->_name);
+                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
                 }
             }
         }

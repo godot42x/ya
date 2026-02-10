@@ -127,10 +127,10 @@ void App::onSceneViewportResized(Rect2D rect)
             .label  = "PostprocessImage",
             .format = EFormat::R8G8B8A8_UNORM,
             .extent = {
-                .width  = newExtent.width,
-                .height = newExtent.height,
-                .depth  = 1,
-            },
+                       .width  = newExtent.width,
+                       .height = newExtent.height,
+                       .depth  = 1,
+                       },
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
@@ -214,12 +214,12 @@ void App::init(AppDesc ci)
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .bVsync        = false,
-            .minImageCount = 3,
-            .width         = static_cast<uint32_t>(_ci.width),
-            .height        = static_cast<uint32_t>(_ci.height),
-        },
+                                           .imageFormat   = EFormat::R8G8B8A8_UNORM,
+                                           .bVsync        = false,
+                                           .minImageCount = 3,
+                                           .width         = static_cast<uint32_t>(_ci.width),
+                                           .height        = static_cast<uint32_t>(_ci.height),
+                                           },
     };
     FPSControl::get()->bEnable = true;
     FPSControl::get()->setFPSLimit(120.f);
@@ -249,7 +249,7 @@ void App::init(AppDesc ci)
         .extent           = {.width = static_cast<uint32_t>(winW), .height = static_cast<uint32_t>(winH)},
         .frameBufferCount = 1,
         .attachments      = {
-                 .colorAttach = {
+                             .colorAttach = {
                 AttachmentDescription{
                          .index          = 0,
                          .format         = EFormat::R8G8B8A8_UNORM,
@@ -263,7 +263,7 @@ void App::init(AppDesc ci)
                          .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-                 .depthAttach = AttachmentDescription{
+                             .depthAttach = AttachmentDescription{
                      .index          = 1,
                      .format         = DEPTH_FORMAT,
                      .samples        = _sampleCount,
@@ -275,7 +275,7 @@ void App::init(AppDesc ci)
                      .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
                      .usage          = EImageUsage::DepthStencilAttachment,
             },
-        },
+                             },
     });
 
     // pre construct all material systems
@@ -314,10 +314,10 @@ void App::init(AppDesc ci)
             .label  = "PostprocessImage",
             .format = EFormat::R8G8B8A8_UNORM,
             .extent = {
-                .width  = static_cast<uint32_t>(winW),
-                .height = static_cast<uint32_t>(winH),
-                .depth  = 1,
-            },
+                       .width  = static_cast<uint32_t>(winW),
+                       .height = static_cast<uint32_t>(winH),
+                       .depth  = 1,
+                       },
             .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .initialLayout = EImageLayout::Undefined,
         };
@@ -331,7 +331,7 @@ void App::init(AppDesc ci)
             postprocessImageView->setDebugName("PostprocessImageView");
 
             // 使用新的 Texture 构造函数包装 IImage/IImageView
-            _postprocessTexture = std::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
+            _postprocessTexture = ya::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
         }
         _deleter.push("PostprocessTexture", [this](void *) {
             _postprocessTexture.reset();
@@ -355,39 +355,39 @@ void App::init(AppDesc ci)
             .renderingMode    = ERenderingMode::DynamicRendering,
             .bSwapChainTarget = false,
             .extent           = {
-                          .width  = static_cast<uint32_t>(winW),
-                          .height = static_cast<uint32_t>(winH),
-            },
+                                 .width  = static_cast<uint32_t>(winW),
+                                 .height = static_cast<uint32_t>(winH),
+                                 },
             .frameBufferCount = 1,
             .attachments      = {
 
-                .colorAttach = {
-                    AttachmentDescription{
-                        .index          = 0,
-                        .format         = EFormat::R8G8B8A8_UNORM,
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::Undefined,
-                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
-                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                    },
-                },
-                .depthAttach = AttachmentDescription{
-                    .index          = 1,
-                    .format         = DEPTH_FORMAT,
-                    .samples        = _sampleCount,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                    .usage          = EImageUsage::DepthStencilAttachment,
-                },
-            },
+                                 .colorAttach = {
+                                 AttachmentDescription{
+                                 .index          = 0,
+                                 .format         = EFormat::R8G8B8A8_UNORM,
+                                 .samples        = ESampleCount::Sample_1,
+                                 .loadOp         = EAttachmentLoadOp::Clear,
+                                 .storeOp        = EAttachmentStoreOp::Store,
+                                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                                 .initialLayout  = EImageLayout::Undefined,
+                                 .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
+                                 .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                                 },
+                                 },
+                                 .depthAttach = AttachmentDescription{
+                                 .index          = 1,
+                                 .format         = DEPTH_FORMAT,
+                                 .samples        = _sampleCount,
+                                 .loadOp         = EAttachmentLoadOp::Clear,
+                                 .storeOp        = EAttachmentStoreOp::Store,
+                                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                                 .initialLayout  = EImageLayout::Undefined,
+                                 .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                                 .usage          = EImageUsage::DepthStencilAttachment,
+                                 },
+                                 },
         });
         _deleter.push("MirrorRT", [this](void *) {
             _mirrorRT.reset();
@@ -403,7 +403,7 @@ void App::init(AppDesc ci)
         .bSwapChainTarget = true,
         .attachments      = {
 
-            .colorAttach = {
+                             .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
                     .format         = _render->getSwapchain()->getFormat(),
@@ -417,7 +417,7 @@ void App::init(AppDesc ci)
                     .usage          = EImageUsage::ColorAttachment,
                 },
             },
-        },
+                             },
     });
 
     _render->getSwapchain()->onRecreate.addLambda(
@@ -879,7 +879,7 @@ void App::tickRender(float dt)
     cmdBuf->begin();
 
     for (auto &system : _materialSystems) {
-        system->resetFrameSlot();
+        system->beginFrame();
     }
 
     FrameContext ctx;
@@ -917,42 +917,15 @@ void App::tickRender(float dt)
         }
 
         // Extract camera position from view matrix inverse
-        glm::mat4 invView       = glm::inverse(ctx.view);
-        ctx.cameraPos           = glm::vec3(invView[3]);
+        glm::mat4 invView = glm::inverse(ctx.view);
+        ctx.cameraPos     = glm::vec3(invView[3]);
     }
 
 
     // --- MARK: Mirror Rendering (Pre scene render some mirror entities and render to texture for later compositing) ---
     {
         YA_PROFILE_SCOPE("Mirror Pass")
-        // Mirror / Rear-view mirror / Screen-in-screen rendering
-        // Implementation follows: Render-to-Texture + Render-as-Sprite pattern
-        //
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 1: Setup                                                      │
-        // │   - Get mirror entity position & orientation                        │
-        // │   - Calculate mirror view matrix (reflection transform)             │
-        // │   - Allocate/fetch mirror RT from RenderTargetPool                  │
-        // └─────────────────────────────────────────────────────────────────────┘
-        //                              ↓
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 2: Render Scene from Mirror's View                            │
-        // │   - beginRendering(mirrorRT)                                        │
-        // │   - Render scene with mirror camera                                 │
-        // │   - endRendering()                                                  │
-        // └─────────────────────────────────────────────────────────────────────┘
-        //                              ↓
-        // ┌─────────────────────────────────────────────────────────────────────┐
-        // │ Phase 3: Composite Mirror into Main View                            │
-        // │   - Transition mirror RT to ShaderReadOnlyOptimal                   │
-        // │   - Render as textured quad in viewport (Render2D::makeSprite)      │
-        // └─────────────────────────────────────────────────────────────────────┘
-
-        // TODO: Implement mirror rendering phases
-        // 1. Query mirror entities from ECS
-        // 2. For each mirror, execute Phase 1-3
-        // 3. Consider using RenderTexture helper class for RT management
-
+        // Mirror / Rear-view mirror / Screen-in-screen rendering (TEMPORARY, for demo/testing only)
         auto         scene = getSceneManager()->getActiveScene();
         auto         view  = scene->getRegistry().view<TransformComponent, MirrorComponent>();
         FrameContext ctxCopy;
@@ -965,19 +938,20 @@ void App::tickRender(float dt)
 
             // Calculate mirror normal
             const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
-            glm::vec3       mirrorNormal = rotQuat * FMath::Vector::WorldForward;
+            glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
             glm::vec3       mirrorPos    = tc.getWorldPosition();
 
             // Extract camera forward direction from view matrix
-            glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
-
-            float dist = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
+            // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
+            glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
+            float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
             // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
-            glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
-            glm::vec3 reflectedDir      = glm::reflect(cameraForward, mirrorNormal);
+            // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
+            glm::vec3 mirroredCameraPos = mirrorPos;
+            glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
             ctxCopy.cameraPos           = mirroredCameraPos;
             ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
-            ctxCopy.view = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
+            ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
 
             break;
         }
@@ -988,8 +962,8 @@ void App::tickRender(float dt)
             RenderingInfo ri{
                 .label      = "ViewPort",
                 .renderArea = Rect2D{
-                    .pos    = {0, 0},
-                    .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
+                                     .pos    = {0, 0},
+                                     .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
                 },
                 .layerCount       = 1,
                 .colorClearValues = {colorClearValue},
@@ -1029,8 +1003,8 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "ViewPort",
             .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
+                                 .pos    = {0, 0},
+                                 .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
@@ -1100,21 +1074,21 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "Postprocessing",
             .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _viewportRect.extent, // Use viewport size for postprocess render area
+                                 .pos    = {0, 0},
+                                 .extent = _viewportRect.extent, // Use viewport size for postprocess render area
             },
             .layerCount       = 1,
             .colorClearValues = {colorClearValue},
             .depthClearValue  = depthClearValue,
             //
             .colorAttachments = {
-                RenderingInfo::ImageSpec{
+                                 RenderingInfo::ImageSpec{
                     .texture     = _postprocessTexture.get(), // ← 使用 App 层的 Texture 接口
                     .sampleCount = ESampleCount::Sample_1,
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
                 },
-            },
+                                 },
         };
 
         cmdBuf->beginRendering(ri);
@@ -1169,11 +1143,11 @@ void App::tickRender(float dt)
         RenderingInfo ri{
             .label      = "Screen",
             .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _screenRT->getExtent().toVec2(),
-            },
+                                 .pos    = {0, 0},
+                                 .extent = _screenRT->getExtent().toVec2(),
+                                 },
             .layerCount       = 1,
-            .colorClearValues = {ClearValue::Black()},
+            .colorClearValues = {ClearValue::Black()                         },
             //
             .renderTarget = _screenRT.get(),
         };
@@ -1315,7 +1289,7 @@ void App::onRenderGUI(float dt)
             }
             ImGui::TreePop();
         }
-    
+
         if (ImGui::TreeNode("Postprocessing")) {
 
             ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);

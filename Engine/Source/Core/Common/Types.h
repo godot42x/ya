@@ -95,6 +95,14 @@ std::shared_ptr<T> makeShared(Args &&...args)
 }
 
 template <typename T, typename... Args>
+std::shared_ptr<T> make_shared(Args &&...args)
+    // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
+    requires std::is_constructible_v<T, Args...>
+{
+    return std::make_shared<T>(std::forward<Args>(args)...);
+}
+
+template <typename T, typename... Args>
 std::unique_ptr<T> makeUnique(Args &&...args)
     requires std::is_constructible_v<T, Args...>
 {

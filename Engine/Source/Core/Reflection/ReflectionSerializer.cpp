@@ -64,7 +64,7 @@ nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t 
     auto &registry = ClassRegistry::instance();
     auto *classPtr = registry.getClass(typeIndex);
     if (classPtr) {
-        return serializeByRuntimeReflection(valuePtr, typeIndex, classPtr->_name);
+        return serializeByRuntimeReflection(valuePtr, typeIndex, classPtr->name);
     }
 
     YA_CORE_WARN("ReflectionSerializer: Unknown type for serialization (typeIndex: {})", typeIndex);
@@ -167,7 +167,7 @@ void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeInde
     if (classPtr) {
         Property tempProp;
         tempProp.typeIndex            = typeIndex;
-        tempProp.typeName             = classPtr->_name;
+        tempProp.typeName             = classPtr->name;
         tempProp.addressGetterMutable = [](void *ptr) -> void * { return ptr; };
         deserializeProperty(tempProp, valuePtr, jsonValue);
         return;
@@ -225,7 +225,7 @@ void ReflectionSerializer::deserializeComplexElement(ya::reflection::IContainerP
     }
 
     if (!elementClass->canCreateInstance()) {
-        YA_CORE_WARN("ReflectionSerializer: Cannot create instance of type '{}'", elementClass->_name);
+        YA_CORE_WARN("ReflectionSerializer: Cannot create instance of type '{}'", elementClass->name);
         return;
     }
 
@@ -235,7 +235,7 @@ void ReflectionSerializer::deserializeComplexElement(ya::reflection::IContainerP
 
         Property elementProp;
         elementProp.typeIndex            = elementTypeIndex;
-        elementProp.typeName             = elementClass->_name;
+        elementProp.typeName             = elementClass->name;
         elementProp.addressGetter        = nullptr;
         elementProp.addressGetterMutable = [](void *ptr) -> void * { return ptr; };
 
@@ -387,7 +387,7 @@ nlohmann::json ReflectionSerializer::serializeBaseClasses(const Class *classPtr,
                 );
 
                 if (!parentJson.empty()) {
-                    baseJson[parentClass->_name] = parentJson;
+                    baseJson[parentClass->name] = parentJson;
                 }
             }
         }
@@ -412,8 +412,8 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
         if (parentClass) {
             void *parentObj = classPtr->getParentPointer(obj, parentTypeId);
             if (parentObj) {
-                if (baseJson.contains(parentClass->_name) && baseJson[parentClass->_name].is_object()) {
-                    const auto &parentJson = baseJson[parentClass->_name];
+                if (baseJson.contains(parentClass->name) && baseJson[parentClass->name].is_object()) {
+                    const auto &parentJson = baseJson[parentClass->name];
 
                     for (auto it = parentJson.begin(); it != parentJson.end(); ++it) {
                         const std::string &jsonKey   = it.key();
@@ -421,7 +421,7 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
 
                         auto *prop = parentClass->findPropertyRecursive(jsonKey);
                         if (!prop) {
-                            YA_CORE_WARN("ReflectionSerializer: Base property '{}.{}' not found", parentClass->_name, jsonKey);
+                            YA_CORE_WARN("ReflectionSerializer: Base property '{}.{}' not found", parentClass->name, jsonKey);
                             continue;
                         }
 
@@ -435,7 +435,7 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
                         }
                         catch (const std::exception &e) {
                             YA_CORE_WARN("ReflectionSerializer: Failed to deserialize base property '{}.{}': {}",
-                                         parentClass->_name,
+                                         parentClass->name,
                                          jsonKey,
                                          e.what());
                         }
@@ -475,7 +475,7 @@ nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *ob
         }
         catch (const std::exception &e) {
             YA_CORE_WARN("ReflectionSerializer: Failed to serialize property '{}.{}': {}",
-                         classPtr->_name,
+                         classPtr->name,
                          propName,
                          e.what());
         }
@@ -505,13 +505,14 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
 
     // ★ NEW: Handle pointer types - dereference and serialize pointee
     if (prop.bPointer && prop.pointeeTypeIndex != 0) {
-        void * const *ptrLocation = static_cast<void * const *>(valuePtr);
-        void *pointee = ptrLocation ? *ptrLocation : nullptr;
-        
+        void *const *ptrLocation = static_cast<void *const *>(valuePtr);
+        void        *pointee     = ptrLocation ? *ptrLocation : nullptr;
+
         if (pointee) {
             // Serialize the pointee object
             j = serializeAnyValue(pointee, prop.pointeeTypeIndex);
-        } else {
+        }
+        else {
             // Null pointer - serialize as null
             j = nullptr;
         }
@@ -589,7 +590,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
         }
         catch (const std::exception &e) {
             YA_CORE_WARN("ReflectionSerializer: Failed to serialize nested property '{}.{}': {}",
-                         classPtr->_name,
+                         classPtr->name,
                          propName,
                          e.what());
         }
@@ -674,13 +675,14 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         auto &registry = ClassRegistry::instance();
         auto *classPtr = registry.getClass(prop.pointeeTypeIndex);
         if (!classPtr) {
-            YA_CORE_WARN("ReflectionSerializer: Pointee class not found for pointer property '{}' (typeIndex: {})", 
-                         prop.name, prop.pointeeTypeIndex);
+            YA_CORE_WARN("ReflectionSerializer: Pointee class not found for pointer property '{}' (typeIndex: {})",
+                         prop.name,
+                         prop.pointeeTypeIndex);
             return;
         }
 
         if (!classPtr->canCreateInstance()) {
-            YA_CORE_WARN("ReflectionSerializer: Cannot create instance for pointee type '{}'", classPtr->_name);
+            YA_CORE_WARN("ReflectionSerializer: Cannot create instance for pointee type '{}'", classPtr->name);
             return;
         }
 
@@ -700,7 +702,8 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         try {
             deserializeAnyValue(pointee, prop.pointeeTypeIndex, j);
             *ptrLocation = pointee;
-        } catch (const std::exception &e) {
+        }
+        catch (const std::exception &e) {
             YA_CORE_WARN("ReflectionSerializer: Failed to deserialize pointer property '{}': {}", prop.name, e.what());
             classPtr->destroyInstance(pointee);
             *ptrLocation = nullptr;
@@ -813,7 +816,7 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         // 递归查找属性（包括父类），兼容没有 __base__ 的 JSON 格式
         auto *subProp = classPtr->findPropertyRecursive(jsonKey);
         if (!subProp) {
-            YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", classPtr->_name, jsonKey);
+            YA_CORE_WARN("ReflectionSerializer: Property '{}.{}' not found", classPtr->name, jsonKey);
             continue;
         }
 
@@ -829,7 +832,7 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         }
         catch (const std::exception &e) {
             YA_CORE_WARN("ReflectionSerializer: Failed to deserialize property '{}.{}': {}",
-                         classPtr->_name,
+                         classPtr->name,
                          jsonKey,
                          e.what());
         }

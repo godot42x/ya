@@ -7,6 +7,11 @@
 **构建系统**: XMake  
 **渲染后端**: Vulkan + OpenGL (多后端架构)
 
+
+## SKILLS
+
+查看 `.github/skills/` 下的每一个 SKILL.md 作为索引
+
 ## 构建系统
 
 ### XMake 配置

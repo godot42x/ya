@@ -62,7 +62,7 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
-layout(std140)
+layout(std140) 
 struct DirectionalLight {
     vec3  direction;    // 光源方向
     vec3 ambient;
@@ -113,6 +113,7 @@ layout(set =0, binding =1, std140) uniform LightUBO {
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
     bool bDebugDepth;
+    bool bDebugUV;
     vec4 floatParam;
 } uDebug;
 
@@ -126,8 +127,10 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 diffuse;
     vec3 specular;
     float shininess;
-    vec2 uvOffset;
 
+    mat3  uvTransform0;
+    mat3  uvTransform1;
+    // vec4 b;
     // TextureParam diffuseTexParam;
     // TextureParam specularTexParam;
 } uParams;
@@ -263,8 +266,32 @@ void main ()
         return;
     }
 
-    vec4 diffuseTexColor = texture(uTexDiffuse, vTexcoord);
-    vec4 specularTexColor = texture(uTexSpecular, vTexcoord);
+    vec2 uv0 = vTexcoord;
+    vec2 uv1 = vTexcoord;
+
+    uv0 = (uParams.uvTransform0 * vec3(vTexcoord, 1.0)).xy;
+    uv1 = (uParams.uvTransform1 * vec3(vTexcoord, 1.0)).xy;
+
+    // 调试用：手动构建变换矩阵 (与 CPU FMath::build_transform_mat3 一致)
+    // vec2 transform = vec2(0,0);
+    // vec2 scale = vec2(1, 1);
+    // float rotation = radians(90);
+    // float c = cos(rotation);
+    // float s = sin(rotation);
+    // mat3 transformMat = mat3(
+    //     scale.x * c,  scale.x * s, 0,      // 列0
+    //     -scale.y * s, scale.y * c, 0,      // 列1
+    //     transform.x,  transform.y, 1       // 列2
+    // );
+    // uv0 = (transformMat * vec3(vTexcoord, 1.0)).xy;
+
+    if(uDebug.bDebugUV){
+        fColor = vec4(uv0.x, uv0.y, 0, 1);
+        return;
+    }
+
+    vec4 diffuseTexColor = texture(uTexDiffuse,  uv0);
+    vec4 specularTexColor = texture(uTexSpecular,  uv1);
     // lib: 尝试在片段着色器中反转镜面光贴图的颜色值，让木头显示镜面高光而钢制边缘不反光（由于钢制边缘中有一些裂缝，边缘仍会显示一些镜面高光，虽然强度会小很多
     // specularTexColor  = vec4(1.0) -specularTexColor;
     if (diffuseTexColor.a < 0.1){

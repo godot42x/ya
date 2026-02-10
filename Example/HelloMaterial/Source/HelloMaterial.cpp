@@ -1,8 +1,8 @@
 #include "HelloMaterial.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
+#include "Resource/FontManager.h"
 
-#include "Core/UI/UITextBlock.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -12,19 +12,14 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
-#include "ECS/Component/WidgetComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/PhongMaterialSystem.h"
-#include "ECS/System/SimpleMaterialSystem.h"
 
-
-#include "Core/UI/UIManager.h"
 
 #include "Core/Math/Geometry.h"
 
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Material/PhongMaterial.h"
-#include "Render/Mesh.h"
 #include "Resource/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include <format>

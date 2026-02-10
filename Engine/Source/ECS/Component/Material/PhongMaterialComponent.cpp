@@ -1,8 +1,9 @@
 #include "PhongMaterialComponent.h"
 
-#include "Resource/AssetManager.h"
 #include "Render/Material/MaterialFactory.h"
+#include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
+
 
 namespace ya
 {

@@ -3,6 +3,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "Material.h"
+#include "Render/Core/Std140Types.h"
 
 
 namespace ya
@@ -25,25 +26,21 @@ struct PhongMaterial : public Material
     // Nested Types
     // ========================================
 
-    /// GPU-aligned parameter UBO (defined in Component, reused here)
+    struct TextureParam
+    {
+    };
+
+    /// GPU UBO 结构 - 使用 std140 兼容类型，直接上传无需 pack
     struct ParamUBO
     {
-        alignas(16) glm::vec3 ambient  = glm::vec3(1.0f);
-        alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
-        alignas(16) glm::vec3 specular = glm::vec3(1.0f);
-        alignas(4) float shininess     = 32.0f;
-        alignas(8) glm::vec2 uvOffset = glm::vec2(0.0f);
+        alignas(16) glm::vec3 ambient{1.0f};  // 16 bytes
+        alignas(16) glm::vec3 diffuse{1.0f};  // 16 bytes
+        alignas(16) glm::vec3 specular{1.0f}; // 16 bytes
+        alignas(4) float shininess{32.0f};    // 4 bytes
 
-        ParamUBO normalize() const
-        {
-            return ParamUBO{
-                .ambient   = glm::normalize(ambient),
-                .diffuse   = glm::normalize(diffuse),
-                .specular  = glm::normalize(specular),
-                .shininess = shininess,
-                .uvOffset  = uvOffset,
-            };
-        }
+        // NOTICE: glm::mat3x3 is not std140 compatible, use mat3x4 instead
+        glm::mat3x4 uvTransform0{1.0f}; // for diffuse, 48 bytes
+        glm::mat3x4 uvTransform1{1.0f}; // for specular, 48 bytes
     };
 
     /// Texture resource enum
@@ -175,7 +172,8 @@ struct PhongMaterial : public Material
 
 } // namespace ya
 
-// Reflection for ParamUBO (cannot be inside class due to memory layout)
+// TODO: Reflection for ParamUBO 需要支持 std140 wrapper 类型
+// 暂时禁用，等待反射系统扩展
 YA_REFLECT_BEGIN_EXTERNAL(ya::PhongMaterial::ParamUBO)
 YA_REFLECT_FIELD(ambient, .color())
 YA_REFLECT_FIELD(diffuse, .color())

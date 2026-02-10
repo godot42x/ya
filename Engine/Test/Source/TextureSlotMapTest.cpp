@@ -140,13 +140,13 @@ TEST_F(TextureSlotMapTest, DeserializeTextureSlotMap)
         EXPECT_TRUE(container.textureSlots.contains(1));
         
         auto& slot0 = container.textureSlots[0];
-        EXPECT_EQ(slot0.textureRef._path, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
+        EXPECT_EQ(slot0.textureRef.getPath(), "Engine/Content/TestTextures/LearnOpenGL/container2.png");
         EXPECT_TRUE(slot0.bEnable);
         EXPECT_EQ(slot0.uvScale.x, 1.0f);
         EXPECT_EQ(slot0.uvScale.y, 1.0f);
         
         auto& slot1 = container.textureSlots[1];
-        EXPECT_EQ(slot1.textureRef._path, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
+        EXPECT_EQ(slot1.textureRef.getPath(), "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
         EXPECT_TRUE(slot1.bEnable);
     }
 }
@@ -167,6 +167,6 @@ TEST_F(TextureSlotMapTest, RoundtripTest)
 
     // 验证往返一致性
     EXPECT_EQ(deserialized.textureSlots.size(), original.textureSlots.size());
-    EXPECT_EQ(deserialized.textureSlots[0].textureRef._path, original.textureSlots[0].textureRef._path);
-    EXPECT_EQ(deserialized.textureSlots[1].textureRef._path, original.textureSlots[1].textureRef._path);
+    EXPECT_EQ(deserialized.textureSlots[0].textureRef.getPath(), original.textureSlots[0].textureRef.getPath());
+    EXPECT_EQ(deserialized.textureSlots[1].textureRef.getPath(), original.textureSlots[1].textureRef.getPath());
 }

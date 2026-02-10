@@ -19,6 +19,7 @@ struct FMath
         static constexpr glm::vec3 WorldRight    = glm::vec3(1.0f, 0.0f, 0.0f);
         // right-handed 看向屏幕内侧
         static constexpr glm::vec3 WorldForward = glm::vec3(0.0f, 0.0f, -1.0f);
+        static constexpr bool      ColumnMajor  = true; // GLM 默认是列主序
 
         // static constexpr glm::vec3 Axis
     };
@@ -49,7 +50,61 @@ struct FMath
         glm::vec3 target  = pos + forward;
         glm::vec3 up      = rotQuat * FMath::Vector::WorldUp;
 
-        return FMath::lookAt(pos, target, up);
+        return FMath::lookAt(pos,
+                             target,
+                             up);
+    }
+
+
+    static glm::mat3 build_scale_mat3(glm::vec2 scale)
+    {
+        return glm::mat3{
+            {scale.x,    0.0f, 0.0f}, // 列0
+            {   0.0f, scale.y, 0.0f}, // 列1
+            {   0.0f,    0.0f, 1.0f}  // 列2（齐次维度）
+        };
+    }
+
+    // 用GLM构造2D UV旋转矩阵（mat3，绕z轴）
+    static glm::mat3 build_rotate_mat3(float deg)
+    {
+        float rad = glm::radians(deg);
+        float c   = glm::cos(rad);
+        float s   = glm::sin(rad);
+        return glm::mat3{
+            {   c,   -s, 0.0f}, // 列0
+            {   s,    c, 0.0f}, // 列1
+            {0.0f, 0.0f, 1.0f}  // 列2
+        };
+    }
+
+    static glm::mat3 build_translate_mat3(glm::vec2 translation)
+    {
+        return {
+            {1.0f, 0.0f, translation.x}, // 列0
+            {0.0f, 1.0f, translation.y}, // 列1
+            {0.0f, 0.0f,          1.0f}  // 列2（齐次坐标）
+        };
+    }
+
+    static glm::mat3 build_transform_mat3(const glm::vec2 &translation, float rotationDeg, const glm::vec2 &scale)
+    {
+        float rad = glm::radians(rotationDeg);
+        float c   = glm::cos(rad);
+        float s   = glm::sin(rad);
+        return glm::mat3{
+            {  scale.x * c,  scale.x * -s, 0.0f}, // 列0
+            {  scale.y * s,   scale.y * c, 0.0f}, // 列1
+            {translation.x, translation.y, 1.0f}  // 列2
+        };
+    }
+
+    static glm::mat4 build_transform_mat4(glm::vec3 translation, glm::vec3 rotationDeg, glm::vec3 scale)
+    {
+        // glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
+        // glm::mat4 rotMat   = glm::yawPitchRoll(glm::radians(rotationDeg.y), glm::radians(rotationDeg.x), glm::radians(rotationDeg.z));
+        // glm::mat4 transMat = glm::translate(glm::mat4(1.0f), translation
+        return glm::mat4(1.0f); // 临时返回单位矩阵，避免编译错误
     }
 };
 

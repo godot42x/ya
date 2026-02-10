@@ -3,10 +3,12 @@
 #include "Core/FName.h"
 #include <any>
 #include <reflects-core/lib.h>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "glm/glm.hpp"
 #include <glm/fwd.hpp>
 
 
@@ -112,6 +114,12 @@ struct MetaBuilder
     MetaBuilder &notSerialized()
     {
         addFlag(FieldFlags::NotSerialized);
+        return *this;
+    }
+
+    MetaBuilder &wrapper()
+    {
+        addFlag(FieldFlags::EditReadOnly);
         return *this;
     }
 

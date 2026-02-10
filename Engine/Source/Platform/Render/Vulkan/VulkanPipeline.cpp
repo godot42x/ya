@@ -142,6 +142,16 @@ void VulkanPipeline::reloadShaders()
     recreate(_ci);
 }
 
+void VulkanPipeline::tryUpdateShader()
+{
+    if (_pendingNewPipeline) {
+        VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
+        _pipeline           = _pendingNewPipeline;
+        _pendingNewPipeline = VK_NULL_HANDLE;
+        YA_CORE_TRACE("Vulkan graphics pipeline replaced successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
+    }
+}
+
 
 void VulkanPipeline::createPipelineInternal()
 {
@@ -184,23 +194,23 @@ void VulkanPipeline::createPipelineInternal()
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
         VkPipelineShaderStageCreateInfo{
-            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .pNext               = nullptr,
-            .flags               = 0,
-            .stage               = VK_SHADER_STAGE_VERTEX_BIT,
-            .module              = vertShaderModule,
-            .pName               = "main",
-            .pSpecializationInfo = {},
-        },
+                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                        .pNext               = nullptr,
+                                        .flags               = 0,
+                                        .stage               = VK_SHADER_STAGE_VERTEX_BIT,
+                                        .module              = vertShaderModule,
+                                        .pName               = "main",
+                                        .pSpecializationInfo = {},
+                                        },
         VkPipelineShaderStageCreateInfo{
-            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .pNext               = nullptr,
-            .flags               = 0,
-            .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module              = fragShaderModule,
-            .pName               = "main",
-            .pSpecializationInfo = {},
-        },
+                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                        .pNext               = nullptr,
+                                        .flags               = 0,
+                                        .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
+                                        .module              = fragShaderModule,
+                                        .pName               = "main",
+                                        .pSpecializationInfo = {},
+                                        },
     };
 
     // Configure vertex input based on configuration
@@ -294,7 +304,7 @@ void VulkanPipeline::createPipelineInternal()
     for (const auto &scissor : _ci.viewportState.scissors) {
         scissors.push_back({
             .offset = {scissor.offsetX, scissor.offsetY},
-            .extent = {scissor.width, scissor.height},
+            .extent = {  scissor.width,  scissor.height},
         });
     }
     VkPipelineViewportStateCreateInfo viewportStateCI{
@@ -364,11 +374,11 @@ void VulkanPipeline::createPipelineInternal()
         .attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size()),
         .pAttachments    = colorBlendAttachments.data(),
         .blendConstants  = {
-            _ci.colorBlendState.blendConstants[0],
-            _ci.colorBlendState.blendConstants[1],
-            _ci.colorBlendState.blendConstants[2],
-            _ci.colorBlendState.blendConstants[3],
-        },
+                            _ci.colorBlendState.blendConstants[0],
+                            _ci.colorBlendState.blendConstants[1],
+                            _ci.colorBlendState.blendConstants[2],
+                            _ci.colorBlendState.blendConstants[3],
+                            },
     };
 
     std::vector<VkDynamicState> dynamicStates = {};
@@ -478,7 +488,13 @@ void VulkanPipeline::createPipelineInternal()
     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
     YA_CORE_ASSERT(newPipeline != VK_NULL_HANDLE, "Failed to create graphics pipeline!");
 
-    _pipeline = newPipeline;
+    // Destroy old pipeline
+    if (!_pipeline && !_pendingNewPipeline) {
+        _pipeline = newPipeline;
+    }
+    else {
+        _pendingNewPipeline = newPipeline;
+    }
 
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
 

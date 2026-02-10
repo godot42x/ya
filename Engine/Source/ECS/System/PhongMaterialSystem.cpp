@@ -11,6 +11,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
+
 #include "Editor/TypeRenderer.h"
 
 #include "Render/Core/Buffer.h"
@@ -22,8 +23,12 @@
 
 
 #include "Scene/Scene.h"
-#include "glm/gtc/type_ptr.hpp"
 #include "imgui.h"
+
+#include "Core/Math/Math.h"
+#include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/mat3x3.hpp"
 
 
 
@@ -42,14 +47,14 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
     PipelineLayoutDesc pipelineLayout{
         .label         = "PhongMaterialSystem_PipelineLayout",
         .pushConstants = {
-            PushConstantRange{
+                          PushConstantRange{
                 .offset     = 0,
                 .size       = sizeof(PhongMaterialSystem::ModelPushConstant),
                 .stageFlags = EShaderStage::Vertex,
             },
-        },
+                          },
         .descriptorSetLayouts = {
-            // per frame
+                          // per frame
             DescriptorSetLayout{
                 .label    = "PhongMaterial_Frame_DSL",
                 .set      = 0,
@@ -77,7 +82,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     },
                 },
             },
-            DescriptorSetLayout{
+                          DescriptorSetLayout{
                 .label    = "PhongMaterial_Resource_DSL",
                 .set      = 1,
                 .bindings = {
@@ -95,7 +100,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     },
                 },
             },
-            DescriptorSetLayout{
+                          DescriptorSetLayout{
                 .label    = "PhongMaterial_Param_DSL",
                 .set      = 2,
                 .bindings = {
@@ -107,7 +112,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     },
                 },
             },
-        },
+                          },
     };
 
     auto DSLs            = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
@@ -129,15 +134,15 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Test/PhongLit.glsl",
-            .bDeriveFromShader = false,
-            .vertexBufferDescs = {
+                                 .shaderName        = "Test/PhongLit.glsl",
+                                 .bDeriveFromShader = false,
+                                 .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
                     .pitch = sizeof(ya::Vertex),
                 },
             },
-            .vertexAttributes = {
+                                 .vertexAttributes = {
                 // (location=0) in vec3 aPos,
                 VertexAttribute{
                     .bufferSlot = 0,
@@ -160,35 +165,35 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     .offset     = offsetof(ya::Vertex, normal),
                 },
             },
-        },
+                                 },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
-            EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+                                 EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
 #if !NOT_DYN_CULL
             EPipelineDynamicFeature::CullMode,
 #endif
-            EPipelineDynamicFeature::Viewport,
-            EPipelineDynamicFeature::PolygonMode,
-        },
+                                 EPipelineDynamicFeature::Viewport,
+                                 EPipelineDynamicFeature::PolygonMode,
+                                 },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
-            .polygonMode = EPolygonMode::Fill,
-            //
+                                 .polygonMode = EPolygonMode::Fill,
+                                 //
             .cullMode  = _cullMode,
-            .frontFace = EFrontFaceType::CounterClockWise, // GL
+                                 .frontFace = EFrontFaceType::CounterClockWise, // GL
                                                            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = true,
-            .bDepthWriteEnable      = true,
-            .depthCompareOp         = ECompareOp::Less,
-            .bDepthBoundsTestEnable = false,
-            .bStencilTestEnable     = false,
-            .minDepthBounds         = 0.0f,
-            .maxDepthBounds         = 1.0f,
-        },
+                                 .bDepthTestEnable       = true,
+                                 .bDepthWriteEnable      = true,
+                                 .depthCompareOp         = ECompareOp::Less,
+                                 .bDepthBoundsTestEnable = false,
+                                 .bStencilTestEnable     = false,
+                                 .minDepthBounds         = 0.0f,
+                                 .maxDepthBounds         = 1.0f,
+                                 },
         .colorBlendState = ColorBlendState{
-            .attachments = {
+                                 .attachments = {
                 ColorBlendAttachmentState{
                     // index of the attachments in the render pass and the renderpass begin info
                     .index               = 0,
@@ -202,9 +207,9 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                 },
             },
-        },
+                                 },
         .viewportState = ViewportState{
-            .viewports = {
+                                 .viewports = {
                 {
                     .x        = 0,
                     .y        = 0,
@@ -214,13 +219,13 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     .maxDepth = 1.0f,
                 },
             },
-            .scissors = {Scissor{
+                                 .scissors = {Scissor{
                 .offsetX = 0,
                 .offsetY = 0,
                 .width   = render->getSwapchain()->getExtent().width,
                 .height  = render->getSwapchain()->getExtent().height,
             }},
-        },
+                                 },
     };
     _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(_pipelineDesc);
@@ -231,12 +236,12 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
         DescriptorPoolCreateInfo{
             .maxSets   = MAX_PASS_SLOTS,
             .poolSizes = {
-                DescriptorPoolSize{
+                          DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
                     .descriptorCount = 3 * MAX_PASS_SLOTS, // (frame + lighting + debug) * slots
                 },
-            },
-        });
+                          },
+    });
     std::vector<ya::DescriptorSetHandle> sets;
     _frameDSP->allocateDescriptorSets(_materialFrameDSL, MAX_PASS_SLOTS, sets);
     for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
@@ -455,7 +460,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
             if (_bShouldForceUpdateMaterial || material->isParamDirty())
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateParamDS");
-                updateMaterialParamDS(paramDS, material, bOverrideMirrorMaterial);
+                updateMaterialParamDS(paramDS, lmc, bOverrideMirrorMaterial);
                 material->setParamDirty(false);
             }
 
@@ -542,6 +547,7 @@ void PhongMaterialSystem::onRenderGUI()
         ImGui::Indent();
         ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
         ImGui::Checkbox("Debug Depth", &uDebug.bDebugDepth);
+        ImGui::Checkbox("Debug UV", &uDebug.bDebugUV);
         ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
         ImGui::Unindent();
     }
@@ -561,9 +567,9 @@ void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
         .projection = ctx->projection,
         .view       = ctx->view,
         .resolution = {
-            ctx->extent.width,
-            ctx->extent.height,
-        },
+                       ctx->extent.width,
+                       ctx->extent.height,
+                       },
         .frameIndex = app->getFrameIndex(),
         .time       = (float)app->getElapsedTimeMS() / 1000.0f,
         .cameraPos  = ctx->cameraPos,
@@ -591,24 +597,29 @@ void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
             {});
 }
 
-void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideMirrorMaterial)
+void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterialComponent &component, bool bOverrideMirrorMaterial)
 {
     YA_PROFILE_FUNCTION();
 
     auto render = getRender();
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
+    PhongMaterial *material = component.getMaterial();
+    auto          &params   = material->getParamsMut();
 
-    auto &params = material->getParamsMut();
-    auto                diffuseTV       = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
-    auto                specularTV      = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
-    // if (diffuseTV) {
-    //     // params.uvOffset
-    // }
-    // const TextureView *tv1 = material->getTextureView(PhongMaterial::BaseColor1);
-    // if (specularTV) {
-    //     // Material::updateTextureParamsByTextureView(specularTV, params.textureParam1);
-    // }
+    // Read UV params directly from TextureSlot (single source of truth)
+    if (auto *diffuseSlot = component.getTextureSlot(PhongMaterial::EResource::DiffuseTexture)) {
+        params.uvTransform0 = FMath::build_transform_mat3(
+            diffuseSlot->uvOffset,
+            diffuseSlot->uvRotation,
+            diffuseSlot->uvScale);
+    }
+    if (auto *specularSlot = component.getTextureSlot(PhongMaterial::EResource::SpecularTexture)) {
+        params.uvTransform1 = FMath::build_transform_mat3(
+            specularSlot->uvOffset,
+            specularSlot->uvRotation,
+            specularSlot->uvScale);
+    }
 
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
     paramUBO->writeData(&params, sizeof(material_param_t), 0);
@@ -684,15 +695,15 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     DescriptorPoolCreateInfo poolCI{
         .maxSets   = newDescriptorSetCount * 2, // max(param , resource)
         .poolSizes = {
-            DescriptorPoolSize{
+                      DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::UniformBuffer,
                 .descriptorCount = newDescriptorSetCount,
             },
-            DescriptorPoolSize{
+                      DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::CombinedImageSampler,
                 .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
             },
-        },
+                      },
     };
     _materialDSP = IDescriptorPool::create(render, poolCI);
 

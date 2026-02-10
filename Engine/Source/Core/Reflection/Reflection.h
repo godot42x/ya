@@ -262,6 +262,9 @@ inline type_index_t getRuntimeObjectType(const void *obj)
 #define YA_REFLECT_FIELD(FieldName, ...) \
     std::forward<Visitor>(visitor)(#FieldName, &class_t::FieldName, ::ya::reflection::MetaBuilder<decltype(class_t::FieldName)>() __VA_ARGS__);
 
+#define YA_REFLECT_FIELD_SPEC(FieldName, Field, ...) \
+    std::forward<Visitor>(visitor)(#FieldName, &Field, ::ya::reflection::MetaBuilder<decltype(Field)>() __VA_ARGS__);
+
 // Macro for easy constructor registration
 // Usage: YA_REGISTER_CONSTRUCTOR(MyClass, int, float)
 //        YA_REGISTER_CONSTRUCTOR(MyClass)  // for default constructor (explicit)
@@ -356,7 +359,7 @@ inline type_index_t getRuntimeObjectType(const void *obj)
 
 
 #define YA_REFLECT_BEGIN_EXTERNAL(ClassName)                  \
-    namespace ya::reflection::detail                        \
+    namespace ya::reflection::detail                          \
     {                                                         \
     template <>                                               \
     struct ExternalReflect<ClassName>                         \

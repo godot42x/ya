@@ -106,18 +106,12 @@ struct TextureView
     YA_REFLECT_FIELD(texture)
     YA_REFLECT_FIELD(sampler)
     YA_REFLECT_FIELD(bEnable)
-    YA_REFLECT_FIELD(uvTranslation)
-    YA_REFLECT_FIELD(uvScale)
-    YA_REFLECT_FIELD(uvRotation)
     YA_REFLECT_END()
 
     ya::Ptr<Texture> texture = nullptr;
     ya::Ptr<Sampler> sampler = nullptr;
 
-    bool      bEnable = true;
-    glm::vec2 uvTranslation{0.f};
-    glm::vec2 uvScale{1.0f};
-    float     uvRotation = 0.f;
+    bool bEnable = true;
 
     static TextureView create(stdptr<Texture> texture, stdptr<Sampler> sampler)
     {
@@ -141,21 +135,6 @@ struct TextureView
     TextureView *setEnable(bool bEnable_)
     {
         bEnable = bEnable_;
-        return this;
-    }
-    TextureView *setUvTranslation(const glm::vec2 &uvTranslation_)
-    {
-        uvTranslation = uvTranslation_;
-        return this;
-    }
-    TextureView *setUvScale(const glm::vec2 &uvScale_)
-    {
-        uvScale = uvScale_;
-        return this;
-    }
-    TextureView *setUvRotation(float uvRotation_)
-    {
-        uvRotation = uvRotation_;
         return this;
     }
 };
