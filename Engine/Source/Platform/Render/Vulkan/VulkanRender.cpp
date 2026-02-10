@@ -5,10 +5,12 @@
 #include <Core/Base.h>
 #include <Core/Log.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
 
 
 #ifdef _WIN32
@@ -157,14 +159,16 @@ void VulkanRender::createInstance()
 
 void VulkanRender::findPhysicalDevice()
 {
-    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    m_PhysicalDevice     = VK_NULL_HANDLE;
+    _graphicsQueueFamily = {};
+    _presentQueueFamily  = {};
+    _deviceCandidates.clear();
 
-    // Enumerate physical devices
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
+    VK_CALL(vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr));
     YA_CORE_ASSERT(deviceCount > 0, "Failed to find GPUs with Vulkan support!");
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data());
+    VK_CALL(vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data()));
     YA_CORE_INFO("Found {} physical devices", deviceCount);
 
     auto getDeviceTypeStr = [](VkPhysicalDeviceType type) -> std::string {
@@ -184,7 +188,6 @@ void VulkanRender::findPhysicalDevice()
         vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
         int score = 0;
-
         switch (deviceProperties.deviceType) {
         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
             score += 1000;
@@ -202,7 +205,6 @@ void VulkanRender::findPhysicalDevice()
             break;
         }
 
-        // Check for geometry shader support
         VkPhysicalDeviceFeatures deviceFeatures;
         vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
         if (deviceFeatures.geometryShader) {
@@ -212,72 +214,68 @@ void VulkanRender::findPhysicalDevice()
         return score;
     };
 
-    // Select the first suitable device
-    int maxScore = 0;
-
-    VkPhysicalDeviceProperties deviceProperties;
     for (const auto &device : devices) {
-        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+        PhysicalDeviceCandidate candidate;
+
+        candidate.device = device;
+        vkGetPhysicalDeviceProperties(device, &candidate.properties);
+
         printf("==========================================\n");
-        YA_CORE_INFO("Found device: {} {}", deviceProperties.deviceName, (uintptr_t)device);
-        YA_CORE_INFO("Device type: {}", getDeviceTypeStr(deviceProperties.deviceType));
-        YA_CORE_INFO("Vendor ID: {}", deviceProperties.vendorID);
-        YA_CORE_INFO("Device ID: {}", deviceProperties.deviceID);
-        YA_CORE_INFO("API version: {}.{}.{}", VK_VERSION_MAJOR(deviceProperties.apiVersion), VK_VERSION_MINOR(deviceProperties.apiVersion), VK_VERSION_PATCH(deviceProperties.apiVersion));
+        YA_CORE_INFO("Found device: {} {}", candidate.properties.deviceName, (uintptr_t)device);
+        YA_CORE_INFO("Device type: {}", getDeviceTypeStr(candidate.properties.deviceType));
+        YA_CORE_INFO("Vendor ID: {}", candidate.properties.vendorID);
+        YA_CORE_INFO("Device ID: {}", candidate.properties.deviceID);
+        YA_CORE_INFO("API version: {}.{}.{}",
+                     VK_VERSION_MAJOR(candidate.properties.apiVersion),
+                     VK_VERSION_MINOR(candidate.properties.apiVersion),
+                     VK_VERSION_PATCH(candidate.properties.apiVersion));
 
+        candidate.score = getDeviceScore(device);
 
-        int score = getDeviceScore(device);
-        YA_CORE_INFO("Device score: {}", score);
-
-        // surface format support
         uint32_t formatCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, nullptr);
-        std::vector<VkSurfaceFormatKHR> formats(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, formats.data());
-        for (const auto &format : formats) {
-            if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                score += 100; // Add score for preferred format
-                break;
+        VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, nullptr));
+        if (formatCount > 0) {
+            std::vector<VkSurfaceFormatKHR> formats(formatCount);
+            VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, formats.data()));
+            for (const auto &format : formats) {
+                if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                    candidate.score += 100;
+                    break;
+                }
             }
         }
 
-        // surface present mode support
-        uint32_t count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
-        std::vector<VkQueueFamilyProperties> families(count);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families.data());
+        uint32_t familyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> families(familyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, families.data());
+        candidate.queueFamilyCount = familyCount;
 
-        YA_CORE_INFO("Queue family count: {}", count);
-
-        printf("==========================================\n");
-
-        if (score < maxScore) {
-            continue; // Skip if score is not better than max
-        }
+        YA_CORE_INFO("Device score: {}", candidate.score);
+        YA_CORE_INFO("Queue family count: {}", familyCount);
 
         std::vector<QueueFamilyIndices> graphicsQueueFamilies;
         std::vector<QueueFamilyIndices> presentQueueFamilies;
 
         int32_t familyIndex = 0;
         for (const auto &queueFamily : families) {
-            if (queueFamily.queueCount == 0)
-            {
+            if (queueFamily.queueCount == 0) {
+                ++familyIndex;
                 continue;
             }
 
-            // required graphics rendering queue
             if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                YA_CORE_TRACE("\tGraphics queue family index: {}:{}, queue count: {}", graphicsQueueFamilies.size(), familyIndex, queueFamily.queueCount);
                 graphicsQueueFamilies.push_back({
                     .queueFamilyIndex = familyIndex,
                     .queueCount       = (int32_t)queueFamily.queueCount,
                 });
             }
 
-            // also need support for presentation queue
             VkBool32 bSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, _surface, &bSupport);
-            if (bSupport)
-            {
+            VK_CALL(vkGetPhysicalDeviceSurfaceSupportKHR(device, familyIndex, _surface, &bSupport));
+            if (bSupport) {
+                YA_CORE_TRACE("\tPresent queue family index: {}:{}, queue count: {}", presentQueueFamilies.size(), familyIndex, queueFamily.queueCount);
                 presentQueueFamilies.push_back({
                     .queueFamilyIndex = familyIndex,
                     .queueCount       = (int32_t)queueFamily.queueCount,
@@ -287,38 +285,53 @@ void VulkanRender::findPhysicalDevice()
             ++familyIndex;
         }
 
-        // better graphics and present queue use different queue
-        if (graphicsQueueFamilies.size() > 0 && presentQueueFamilies.size() > 0)
-        {
-            maxScore       = score;
-            physicalDevice = device;
+        printf("==========================================\n");
 
-            if (graphicsQueueFamilies.size() > 1 || presentQueueFamilies.size() > 1)
-            {
-                for (const auto &graphicsQueueFamily : graphicsQueueFamilies)
-                {
-                    for (const auto &presentQueueFamily : presentQueueFamilies)
-                    {
-                        if (graphicsQueueFamily.queueFamilyIndex != presentQueueFamily.queueFamilyIndex)
-                        {
-                            _graphicsQueueFamily = graphicsQueueFamily;
-                            _presentQueueFamily  = presentQueueFamily;
-                            break;
-                        }
-                    }
+        if (graphicsQueueFamilies.empty() || presentQueueFamilies.empty()) {
+            YA_CORE_WARN("Skipping device {}, missing required queue families", candidate.properties.deviceName);
+            continue;
+        }
+
+
+        bool foundSeparate = false;
+        for (const auto &graphicsQueueFamily : graphicsQueueFamilies) {
+            for (const auto &presentQueueFamily : presentQueueFamilies) {
+                if (graphicsQueueFamily.queueFamilyIndex != presentQueueFamily.queueFamilyIndex) {
+                    candidate.graphicsQueue = graphicsQueueFamily;
+                    candidate.presentQueue  = presentQueueFamily;
+                    foundSeparate           = true;
+                    break;
                 }
             }
-            else {
-                _graphicsQueueFamily = graphicsQueueFamilies[0];
-                _presentQueueFamily  = presentQueueFamilies[0];
+            if (foundSeparate) {
+                break;
             }
         }
+
+        if (!foundSeparate) {
+            candidate.graphicsQueue = graphicsQueueFamilies[0];
+            candidate.presentQueue  = presentQueueFamilies[0];
+        }
+
+        _deviceCandidates.push_back(candidate);
+    }
+    std::ranges::sort(_deviceCandidates, [](const PhysicalDeviceCandidate &a, const PhysicalDeviceCandidate &b) {
+        return a.score > b.score;
+    });
+
+    if (_deviceCandidates.empty()) {
+        YA_CORE_ERROR("No suitable physical devices found");
+        return;
     }
 
-    YA_CORE_INFO("Selected physical device: {}", (uintptr_t)physicalDevice);
+    const auto &selected = _deviceCandidates.front();
+    m_PhysicalDevice     = selected.device;
+    _graphicsQueueFamily = selected.graphicsQueue;
+    _presentQueueFamily  = selected.presentQueue;
+
+    YA_CORE_INFO("Selected physical device: {}", (uintptr_t)m_PhysicalDevice);
     YA_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
     YA_CORE_INFO("Present queue idx {} count: {}", _presentQueueFamily.queueFamilyIndex, _presentQueueFamily.queueCount);
-    m_PhysicalDevice = physicalDevice;
 
     vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &_physicalMemoryProperties);
     // YA_CORE_INFO("Memory Type Count: {}", _memoryProperties.memoryTypeCount);
@@ -332,180 +345,244 @@ void VulkanRender::createSurface()
 
 bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t presentQueueCount)
 {
-    Deleter deleter;
+    if (_deviceCandidates.empty()) {
+        findPhysicalDevice();
+    }
 
-    if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount)
-    {
-        YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
-                      graphicsQueueCount,
-                      _graphicsQueueFamily.queueCount,
-                      _graphicsQueueFamily.queueFamilyIndex);
+    if (_deviceCandidates.empty()) {
+        YA_CORE_ERROR("No suitable physical devices available for logical device creation");
         return false;
     }
 
-    if ((int)presentQueueCount > _presentQueueFamily.queueCount)
-    {
-        YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
-                      presentQueueCount,
-                      _presentQueueFamily.queueCount,
-                      _presentQueueFamily.queueFamilyIndex);
-        return false;
-    }
+    auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate &candidate) -> VkResult {
+        m_PhysicalDevice     = candidate.device;
+        _graphicsQueueFamily = candidate.graphicsQueue;
+        _presentQueueFamily  = candidate.presentQueue;
+        m_LogicalDevice      = VK_NULL_HANDLE;
+        _graphicsQueues.clear();
+        _presentQueues.clear();
+        bOnlyOnePresentQueue = false;
 
-    // all graphics queue need lower than present queue
-    std::vector<float> graphicsQueuePriorities(graphicsQueueCount, 0.0f);
-    std::vector<float> presentQueuePriorities(presentQueueCount, 1.0f);
+        if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount)
+        {
+            YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
+                          graphicsQueueCount,
+                          _graphicsQueueFamily.queueCount,
+                          _graphicsQueueFamily.queueFamilyIndex);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
 
-    bool bSameQueueFamily = isGraphicsPresentSameQueueFamily();
+        if ((int)presentQueueCount > _presentQueueFamily.queueCount)
+        {
+            YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
+                          presentQueueCount,
+                          _presentQueueFamily.queueCount,
+                          _presentQueueFamily.queueFamilyIndex);
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
 
 
-    std::vector<VkDeviceQueueCreateInfo> deviceQueueCIs;
-    deviceQueueCIs.push_back({
-        .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .pNext            = nullptr,
-        .flags            = 0,
-        .queueFamilyIndex = static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex),
-        .queueCount       = graphicsQueueCount,
-        .pQueuePriorities = graphicsQueuePriorities.data(),
-    });
-    if (bSameQueueFamily)
-    {
-        auto &graphicsQueueCI      = deviceQueueCIs.back();
-        graphicsQueueCI.queueCount = std::min(graphicsQueueCount, graphicsQueueCount + presentQueueCount);
-        graphicsQueuePriorities.insert(graphicsQueuePriorities.end(), presentQueuePriorities.begin(), presentQueuePriorities.end());
-        graphicsQueueCI.pQueuePriorities = graphicsQueuePriorities.data();
-    }
-    else
-    {
+        bool     bSameQueueFamily   = isGraphicsPresentSameQueueFamily();
+        uint32_t combinedQueueCount = graphicsQueueCount + presentQueueCount;
+        uint32_t queueCreateCount   = graphicsQueueCount;
+        if (bSameQueueFamily)
+        {
+            if (combinedQueueCount > static_cast<uint32_t>(_graphicsQueueFamily.queueCount)) {
+                if (_graphicsQueueFamily.queueCount == 1) {
+                    bOnlyOnePresentQueue = true;
+                    queueCreateCount     = 1;
+                }
+                else {
+                    YA_CORE_ERROR("Requested combined queue count {} exceeds available queue count {} for family index {}",
+                                  combinedQueueCount,
+                                  _graphicsQueueFamily.queueCount,
+                                  _graphicsQueueFamily.queueFamilyIndex);
+                    return VK_ERROR_INITIALIZATION_FAILED;
+                }
+            }
+            else {
+                queueCreateCount = combinedQueueCount;
+            }
+        }
+        else {
+            if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount) {
+                YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
+                              graphicsQueueCount,
+                              _graphicsQueueFamily.queueCount,
+                              _graphicsQueueFamily.queueFamilyIndex);
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            if ((int)presentQueueCount > _presentQueueFamily.queueCount) {
+                YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
+                              presentQueueCount,
+                              _presentQueueFamily.queueCount,
+                              _presentQueueFamily.queueFamilyIndex);
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            queueCreateCount = graphicsQueueCount;
+        }
+
+
+        std::vector<float> graphicsQueuePriorities(queueCreateCount, 0.0f);
+        std::vector<float> presentQueuePriorities(presentQueueCount, 1.0f);
+        if (bSameQueueFamily && !bOnlyOnePresentQueue) {
+            graphicsQueuePriorities.insert(graphicsQueuePriorities.end(),
+                                           presentQueuePriorities.begin(),
+                                           presentQueuePriorities.end());
+        }
+
+        std::vector<VkDeviceQueueCreateInfo> deviceQueueCIs;
         deviceQueueCIs.push_back({
             .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .pNext            = nullptr,
             .flags            = 0,
-            .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
-            .queueCount       = presentQueueCount,
-            .pQueuePriorities = presentQueuePriorities.data(),
+            .queueFamilyIndex = static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex),
+            .queueCount       = queueCreateCount,
+            .pQueuePriorities = graphicsQueuePriorities.data(),
         });
-    }
-
-
-    auto requestExtensions = _deviceExtensions;
-    auto requestLayers     = _deviceLayers;
-
-
-    uint32_t extensionCount = 0;
-    vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, nullptr);
-    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-    vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, availableExtensions.data());
-
-    uint32_t layerCount = 0;
-    vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, nullptr);
-    std::vector<VkLayerProperties> availableLayers(layerCount);
-    vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, availableLayers.data());
-
-    std::vector<const char *> extensionNames;
-    std::vector<const char *> layerNames;
-
-
-    bool bSupported = isFeatureSupported(
-        "Vulkan device",
-        availableExtensions,
-        availableLayers,
-        requestExtensions,
-        requestLayers,
-        extensionNames,
-        layerNames);
-    if (!bSupported)
-    {
-        YA_CORE_ERROR("Vulkan instance is not suitable!");
-        return false;
-    }
-
-    // MARK: device ci linklist
-    VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
-    physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE; // Enable anisotropic filtering
-    physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE; // Enable LINE and POINT polygon modes
-    // physicalDeviceFeatures.geometryShader    = VK_TRUE; // Enable geometry shader support
-    // physicalDeviceFeatures.shaderClipDistance = VK_TRUE; // Enable clip distance support
-    // physicalDeviceFeatures.shaderCullDistance = VK_TRUE; // Enable cull distance support
-
-    {
-        VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
-        dynamicRenderingFeatures.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-        dynamicRenderingFeatures.dynamicRendering = VK_TRUE; // 启用动态渲染
-
-        VkPhysicalDeviceFeatures2 features2{};
-        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        features2.pNext = &dynamicRenderingFeatures;
-
-        vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
-        if (!dynamicRenderingFeatures.dynamicRendering)
+        if (!bSameQueueFamily)
         {
-            YA_CORE_ERROR("Dynamic rendering is not supported!");
-            return false;
-        }
-    }
-
-    // instructive link-list
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
-        .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .pNext            = nullptr,
-        .dynamicRendering = VK_TRUE,
-    };
-
-    // Enable VK_EXT_extended_dynamic_state3 features
-    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
-        .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-        .pNext                            = &dynamicRenderingFeatures,
-        .extendedDynamicState3PolygonMode = VK_TRUE,
-    };
-
-    VkDeviceCreateInfo deviceCreateInfo = {
-        .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext                   = &extendedDynamicState3Features,
-        .flags                   = 0,
-        .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
-        .pQueueCreateInfos       = deviceQueueCIs.data(),
-        .enabledLayerCount       = static_cast<uint32_t>(layerNames.size()),
-        .ppEnabledLayerNames     = layerNames.data(),
-        .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
-        .ppEnabledExtensionNames = extensionNames.data(),
-        .pEnabledFeatures        = &physicalDeviceFeatures,
-
-    };
-
-
-    VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
-    YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create logical device!,{}", ret);
-
-    for (uint32_t i = 0; i < graphicsQueueCount; i++)
-    {
-        VkQueue queue = VK_NULL_HANDLE;
-        vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
-        if (queue == VK_NULL_HANDLE) {
-            YA_CORE_ERROR("Failed to get graphics queue!");
-            return false;
+            deviceQueueCIs.push_back({
+                .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .pNext            = nullptr,
+                .flags            = 0,
+                .queueFamilyIndex = static_cast<uint32_t>(_presentQueueFamily.queueFamilyIndex),
+                .queueCount       = presentQueueCount,
+                .pQueuePriorities = presentQueuePriorities.data(),
+            });
         }
 
-        _graphicsQueues.emplace_back(_graphicsQueueFamily.queueFamilyIndex, i, queue, false);
-        setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
-                           queue,
-                           std::format("GraphicsQueue_{}", i).c_str());
-    }
-    for (uint32_t i = 0; i < presentQueueCount; i++)
-    {
-        VkQueue queue = VK_NULL_HANDLE;
-        vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);
-        if (queue == VK_NULL_HANDLE) {
-            YA_CORE_ERROR("Failed to get present queue!");
-            return false;
+        auto requestExtensions = _deviceExtensions;
+        auto requestLayers     = _deviceLayers;
+
+        uint32_t extensionCount = 0;
+        VK_CALL(vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, nullptr));
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        VK_CALL(vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, availableExtensions.data()));
+
+        uint32_t layerCount = 0;
+        VK_CALL(vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, nullptr));
+        std::vector<VkLayerProperties> availableLayers(layerCount);
+        VK_CALL(vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, availableLayers.data()));
+
+        std::vector<const char *> extensionNames;
+        std::vector<const char *> layerNames;
+
+        bool bSupported = isFeatureSupported(
+            "Vulkan device",
+            availableExtensions,
+            availableLayers,
+            requestExtensions,
+            requestLayers,
+            extensionNames,
+            layerNames);
+        if (!bSupported)
+        {
+            YA_CORE_ERROR("Vulkan device is not suitable for {}", candidate.properties.deviceName);
+            return VK_ERROR_FEATURE_NOT_PRESENT;
         }
-        _presentQueues.emplace_back(_presentQueueFamily.queueFamilyIndex, i, queue, true);
-        setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
-                           queue,
-                           std::format("PresentQueue_{}", i).c_str());
+
+        VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
+        physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE;
+        physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE;
+
+        {
+            VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+            dynamicRenderingFeatures.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+            dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+
+            VkPhysicalDeviceFeatures2 features2{};
+            features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            features2.pNext = &dynamicRenderingFeatures;
+
+            vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
+            if (!dynamicRenderingFeatures.dynamicRendering)
+            {
+                YA_CORE_ERROR("Dynamic rendering is not supported on {}", candidate.properties.deviceName);
+                return VK_ERROR_FEATURE_NOT_PRESENT;
+            }
+        }
+
+        VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
+            .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+            .pNext            = nullptr,
+            .dynamicRendering = VK_TRUE,
+        };
+
+        VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
+            .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+            .pNext                            = &dynamicRenderingFeatures,
+            .extendedDynamicState3PolygonMode = VK_TRUE,
+        };
+
+        VkDeviceCreateInfo deviceCreateInfo = {
+            .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pNext                   = &extendedDynamicState3Features,
+            .flags                   = 0,
+            .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
+            .pQueueCreateInfos       = deviceQueueCIs.data(),
+            .enabledLayerCount       = static_cast<uint32_t>(layerNames.size()),
+            .ppEnabledLayerNames     = layerNames.data(),
+            .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
+            .ppEnabledExtensionNames = extensionNames.data(),
+            .pEnabledFeatures        = &physicalDeviceFeatures,
+
+        };
+
+        VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
+        VK_CALL(ret);
+        if (ret != VK_SUCCESS) {
+            return ret;
+        }
+
+        for (uint32_t i = 0; i < graphicsQueueCount; i++)
+        {
+            VkQueue queue = VK_NULL_HANDLE;
+            vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
+            if (queue == VK_NULL_HANDLE) {
+                YA_CORE_ERROR("Failed to get graphics queue!");
+                vkDestroyDevice(m_LogicalDevice, nullptr);
+                m_LogicalDevice = VK_NULL_HANDLE;
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+
+            _graphicsQueues.emplace_back(_graphicsQueueFamily.queueFamilyIndex, i, queue, false);
+            setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
+                               queue,
+                               std::format("GraphicsQueue_{}", i).c_str());
+        }
+        for (uint32_t i = 0; i < presentQueueCount; i++)
+        {
+            VkQueue queue = VK_NULL_HANDLE;
+            vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);
+            if (queue == VK_NULL_HANDLE) {
+                YA_CORE_ERROR("Failed to get present queue!");
+                vkDestroyDevice(m_LogicalDevice, nullptr);
+                m_LogicalDevice = VK_NULL_HANDLE;
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+            _presentQueues.emplace_back(_presentQueueFamily.queueFamilyIndex, i, queue, true);
+            setDebugObjectName(VK_OBJECT_TYPE_QUEUE,
+                               queue,
+                               std::format("PresentQueue_{}", i).c_str());
+        }
+
+        vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &_physicalMemoryProperties);
+        return VK_SUCCESS;
+    };
+
+    for (const auto &candidate : _deviceCandidates) {
+        YA_CORE_INFO("Trying device: {}", candidate.properties.deviceName);
+        VkResult ret = tryCreateForCandidate(candidate);
+        if (ret == VK_SUCCESS) {
+            return true;
+        }
+        YA_CORE_WARN("Failed to create logical device for {}: {}",
+                     candidate.properties.deviceName,
+                     ret);
     }
 
-    return true;
+    return false;
 }
 
 bool VulkanRender::createCommandPool()

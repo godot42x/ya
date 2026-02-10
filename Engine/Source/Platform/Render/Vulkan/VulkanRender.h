@@ -45,6 +45,16 @@ struct QueueFamilyIndices
     int32_t queueCount       = -1;
 };
 
+struct PhysicalDeviceCandidate
+{
+    VkPhysicalDevice           device           = VK_NULL_HANDLE;
+    QueueFamilyIndices         graphicsQueue    = {};
+    QueueFamilyIndices         presentQueue     = {};
+    VkPhysicalDeviceProperties properties       = {};
+    uint32_t                   queueFamilyCount = 0;
+    int                        score            = 0;
+};
+
 struct VulkanRender : public IRender
 {
     friend struct VulkanUtils;
@@ -85,11 +95,15 @@ struct VulkanRender : public IRender
     VkPhysicalDevice                 m_PhysicalDevice = VK_NULL_HANDLE;
     VkPhysicalDeviceMemoryProperties _physicalMemoryProperties;
 
+    std::vector<PhysicalDeviceCandidate> _deviceCandidates;
+
     VkDevice m_LogicalDevice = VK_NULL_HANDLE;
 
 
 
     ISwapchain              *_swapChain;
+
+    bool bOnlyOnePresentQueue = false;
     std::vector<VulkanQueue> _presentQueues;
     std::vector<VulkanQueue> _graphicsQueues;
 
