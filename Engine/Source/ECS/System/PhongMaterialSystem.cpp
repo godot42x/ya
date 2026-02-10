@@ -7,6 +7,7 @@
 
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
@@ -285,64 +286,14 @@ void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
     auto scene = getActiveScene();
     YA_CORE_ASSERT(scene, "PhongMaterialSystem::onUpdate - Scene is null");
 
-    // Phase 1: Resolve all unresolved components (resource loading)
-    // This must happen BEFORE rendering to ensure all materials/meshes are ready
-    // {
-    //     YA_PROFILE_SCOPE("PhongMaterial::ResolvePhase");
-    //     auto view = scene->getRegistry().view<NameComponent, PhongMaterialComponent, MeshComponent, TransformComponent>();
-    //     for (entt::entity entity : view)
-    //     {
-    //         auto &lmc = view.get<PhongMaterialComponent>(entity);
-    //         auto &mc  = view.get<MeshComponent>(entity);
-
-    //         // Resolve mesh component
-    //         if (!mc.isResolved() && mc.hasMeshSource()) {
-    //             mc.resolve();
-    //         }
-
-    //         // Resolve material component
-    //         if (!lmc.isResolved()) {
-    //             lmc.resolve();
-    //         }
-    //     }
-    // }
-
-    // Phase 2: Check and expand descriptor pool capacity AFTER all resolves
-    // This prevents descriptor set invalidation during the render loop
-    {
-        uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
-        if (materialCount > _lastMaterialDSCount) {
-            YA_PROFILE_SCOPE("PhongMaterial::RecreateMaterialDescPool");
-            recreateMaterialDescPool(materialCount);
-            _bShouldForceUpdateMaterial = true;
-        }
-    }
-
+    // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
     // Reset point light count
     uLight.numPointLights = 0;
-
-    // Count entities with PointLightComponent
-    auto   lightView   = scene->getRegistry().view<PointLightComponent, TransformComponent>();
-    size_t entityCount = 0;
-    for (auto _ : lightView) {
-        entityCount++;
-    }
-
-    if (entityCount == 0) {
-        // YA_CORE_WARN("PhongMaterialSystem::onUpdate - No entities found with PointLightComponent + TransformComponent");
-    }
-    else if (entityCount > MAX_POINT_LIGHTS) {
-        YA_CORE_WARN("PhongMaterialSystem::onUpdate - Found {} entities with PointLightComponent, but only {} are supported", entityCount, MAX_POINT_LIGHTS);
-    }
-
-    // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
-    for (auto entity : scene->getRegistry().view<PointLightComponent, TransformComponent>()) {
+    for (const auto &[entity, plc, tc] : scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
         if (uLight.numPointLights >= MAX_POINT_LIGHTS) {
             YA_CORE_WARN("Exceeded maximum point lights ({}), ignoring additional lights", MAX_POINT_LIGHTS);
             break;
         }
-
-        const auto &[plc, tc] = scene->getRegistry().get<PointLightComponent, TransformComponent>(entity);
 
         // Fill point light data
         uLight.pointLights[uLight.numPointLights] = PointLightData{
@@ -367,19 +318,28 @@ void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
 
         uLight.numPointLights++;
     }
-
-    // YA_CORE_INFO("PhongMaterialSystem::onUpdate - Final numPointLights = {}", uLight.numPointLights);
+    // This prevents descriptor set invalidation during the render loop
+    {
+        uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
+        if (materialCount > _lastMaterialDSCount) {
+            YA_PROFILE_SCOPE("PhongMaterial::RecreateMaterialDescPool");
+            recreateMaterialDescPool(materialCount);
+            _bShouldForceUpdateMaterial = true;
+        }
+    }
 }
 
+// MARK: render
 void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 {
     YA_PROFILE_FUNCTION();
-    preTick(0.0f, ctx);
 
     Scene *scene = getActiveScene();
     if (!scene) {
         return;
     }
+
+    preTick(0.0f, ctx);
 
 
     // Query entities with both PhongMaterialComponent and MeshComponent
@@ -421,9 +381,6 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
         updateFrameDS(ctx);
     }
 
-    // Material tracking for this frame
-    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
-    std::vector<int> updatedMaterial(materialCount, 0);
 
     // Phase 3: Render loop
     YA_PROFILE_SCOPE("PhongMaterial::EntityLoop");
@@ -437,12 +394,12 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
                 if (entity == ctx->viewOwner) {
                     continue;
                 }
-                entries.push_back({entity, &tc});
+                entries.emplace_back(entity, &tc);
             }
         }
         else {
             for (const auto &[entity, lmc, mc, tc] : view.each()) {
-                entries.push_back({entity, &tc});
+                entries.emplace_back(entity, &tc);
             }
         }
         std::ranges::sort(entries, [](const auto &a, const auto &b) {
@@ -452,25 +409,33 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
         });
     }
 
+    entt::entity mirrorID = entt::null;
+    for (const auto &[id, mc, pmc] : scene->getRegistry().view<MirrorComponent, PhongMaterialComponent>().each()) {
+        mirrorID = id;
+        break;
+    }
+
+
+    // Material tracking for this frame
+    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
+    std::vector<int> updatedMaterial(materialCount, 0);
+
     for (auto &[entity, tc] : entries)
-    // for (entt::entity entity : view)
     {
         const auto &[lmc, meshComp, tc2] = view.get(entity);
 
+        Entity *entityPtr = scene->getEntityByEnttID(entity);
+
         // Get runtime material from component
         PhongMaterial *material = lmc.getMaterial();
-        if (!material || material->getIndex() < 0) {
-            // Get entity name for warning (optional, can be removed if not needed)
-            Entity *entityPtr = scene->getEntityByEnttID(entity);
+        if (!material || material->getIndex() < 0)
+        {
             YA_CORE_WARN("PhongMaterialSystem: Entity '{}' has no valid material",
                          entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
+        _ctxEntityDebugStr = std::format("{} (Mat: {})", entityPtr ? entityPtr->getName() : "Unknown", material->getLabel());
 
-        Entity *entityPtr  = scene->getEntityByEnttID(entity);
-        _ctxEntityDebugStr = std::format("{} (Mat: {})",
-                                         entityPtr ? entityPtr->getName() : "Unknown",
-                                         material->getLabel());
 
         // update each material instance's descriptor set if dirty
         uint32_t            materialInstanceIndex = material->getIndex();
@@ -479,16 +444,18 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
         // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
         if (!updatedMaterial[materialInstanceIndex]) {
-            if (_bShouldForceUpdateMaterial || material->isResourceDirty())
+            // FIXME: hack for now update the mirror material every time
+            bool bOverrideMirrorMaterial = (entity == mirrorID);
+            if (_bShouldForceUpdateMaterial || material->isResourceDirty() || bOverrideMirrorMaterial)
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateResourceDS");
-                updateMaterialResourceDS(resourceDS, material);
+                updateMaterialResourceDS(resourceDS, material, bOverrideMirrorMaterial);
                 material->setResourceDirty(false);
             }
             if (_bShouldForceUpdateMaterial || material->isParamDirty())
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateParamDS");
-                updateMaterialParamDS(paramDS, material);
+                updateMaterialParamDS(paramDS, material, bOverrideMirrorMaterial);
                 material->setParamDirty(false);
             }
 
@@ -498,12 +465,13 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
         // bind descriptor set
         {
             YA_PROFILE_SCOPE("PhongMaterial::BindDescriptorSets");
-            std::vector<DescriptorSetHandle> descSets = {
-                _frameDSs[getPassSlot()],
-                resourceDS,
-                paramDS,
-            };
-            cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
+            cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
+                                       0,
+                                       {
+                                           _frameDSs[getPassSlot()],
+                                           resourceDS,
+                                           paramDS,
+                                       });
         }
 
         // update push constant
@@ -623,7 +591,7 @@ void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
             {});
 }
 
-void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material)
+void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideMirrorMaterial)
 {
     YA_PROFILE_FUNCTION();
 
@@ -632,14 +600,14 @@ void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMat
 
 
     auto &params = material->getParamsMut();
-    // update param from texture
-    // const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
-    // if (tv0) {
-    //     Material::updateTextureParamsByTextureView(tv0, params.textureParam0);
+    auto                diffuseTV       = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
+    auto                specularTV      = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
+    // if (diffuseTV) {
+    //     // params.uvOffset
     // }
     // const TextureView *tv1 = material->getTextureView(PhongMaterial::BaseColor1);
-    // if (tv1) {
-    //     Material::updateTextureParamsByTextureView(tv1, params.textureParam1);
+    // if (specularTV) {
+    //     // Material::updateTextureParamsByTextureView(specularTV, params.textureParam1);
     // }
 
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
@@ -651,17 +619,12 @@ void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMat
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genBufferWrite(
-                    ds,
-                    0,
-                    0,
-                    EPipelineDescriptorType::UniformBuffer,
-                    {bufferInfo}),
+                IDescriptorSetHelper::genSingleBufferWrite(ds, 0, EPipelineDescriptorType::UniformBuffer, paramUBO.get()),
             },
             {});
 }
 
-void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material)
+void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideDiffuse)
 {
     YA_PROFILE_FUNCTION();
 
@@ -669,8 +632,16 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
-    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(material->getTextureView(PhongMaterial::EResource::DiffuseTexture));
-    DescriptorImageInfo specularTexture = getDescriptorImageInfo(material->getTextureView(PhongMaterial::EResource::SpecularTexture));
+    auto                diffuseTV       = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
+    auto                specularTV      = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
+    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(diffuseTV);
+    DescriptorImageInfo specularTexture = getDescriptorImageInfo(specularTV);
+
+    //  mirror or other rt?
+    if (bOverrideDiffuse) {
+        auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
+        diffuseTexture     = getDescriptorImageInfo(mirrorTexture->getImageView(), nullptr);
+    }
 
     render
         ->getDescriptorHelper()
@@ -751,23 +722,6 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 
 
     _lastMaterialDSCount = newDescriptorSetCount;
-}
-
-DescriptorImageInfo PhongMaterialSystem::getDescriptorImageInfo(TextureView const *tv)
-{
-    SamplerHandle   samplerHandle;
-    ImageViewHandle imageViewHandle;
-    if (!tv) {
-        samplerHandle   = TextureLibrary::get().getDefaultSampler()->getHandle();
-        imageViewHandle = TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
-    }
-    else {
-        samplerHandle   = SamplerHandle(tv->sampler->getHandle());
-        imageViewHandle = tv->texture->getImageView()->getHandle();
-    }
-
-    DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
-    return imageInfo0;
 }
 
 } // namespace ya

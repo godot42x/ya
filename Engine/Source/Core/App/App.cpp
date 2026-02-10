@@ -917,8 +917,8 @@ void App::tickRender(float dt)
         }
 
         // Extract camera position from view matrix inverse
-        glm::mat4 invView = glm::inverse(ctx.view);
-        ctx.cameraPos     = glm::vec3(invView[3]);
+        glm::mat4 invView       = glm::inverse(ctx.view);
+        ctx.cameraPos           = glm::vec3(invView[3]);
     }
 
 
@@ -959,14 +959,26 @@ void App::tickRender(float dt)
         bHasMirror = false;
         for (auto [entity, tc, mc] : view.each())
         {
-            bHasMirror        = true;
-            ctxCopy.viewOwner = entity;
-            ctxCopy.cameraPos = tc.getWorldPosition();
+            bHasMirror         = true;
+            ctxCopy.viewOwner  = entity;
+            ctxCopy.projection = ctx.projection;
 
-            const auto &eye    = tc.getWorldPosition();
-            glm::vec3   target = eye + glm::normalize(tc.getForward());
-            ctxCopy.view       = FMath::lookAt(eye, target, FMath::Vector::WorldUp);
-            ctxCopy.view       = glm::inverse(ctxCopy.view); // Invert view for correct reflection
+            // Calculate mirror normal
+            const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
+            glm::vec3       mirrorNormal = rotQuat * FMath::Vector::WorldForward;
+            glm::vec3       mirrorPos    = tc.getWorldPosition();
+
+            // Extract camera forward direction from view matrix
+            glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
+
+            float dist = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
+            // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
+            glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
+            glm::vec3 reflectedDir      = glm::reflect(cameraForward, mirrorNormal);
+            ctxCopy.cameraPos           = mirroredCameraPos;
+            ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
+            ctxCopy.view = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
+
             break;
         }
 
@@ -1303,6 +1315,7 @@ void App::onRenderGUI(float dt)
             }
             ImGui::TreePop();
         }
+    
         if (ImGui::TreeNode("Postprocessing")) {
 
             ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);

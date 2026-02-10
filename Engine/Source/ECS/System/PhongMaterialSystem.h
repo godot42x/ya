@@ -158,13 +158,44 @@ struct PhongMaterialSystem : public IMaterialSystem
     // void recreateMaterialDescPool(uint32_t count);
 
     void updateFrameDS(FrameContext *ctx);
-    void updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material);
-    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material);
+    void updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideMirrorMaterial);
+    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideDiffuse);
 
 
     void recreateMaterialDescPool(uint32_t _materialCount);
 
-    DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv0);
+    DescriptorImageInfo getDescriptorImageInfo(IImageView *iv, Sampler *sampler)
+    {
+        SamplerHandle   samplerHandle   = nullptr;
+        ImageViewHandle imageViewHandle = nullptr;
+        if (iv) {
+            imageViewHandle = iv->getHandle();
+        }
+        if (sampler) {
+            samplerHandle = sampler->getHandle();
+        }
+
+        if (imageViewHandle == nullptr) {
+            imageViewHandle = TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
+        }
+        if (samplerHandle == nullptr) {
+            samplerHandle = TextureLibrary::get().getDefaultSampler()->getHandle();
+        }
+
+
+        DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
+        return imageInfo0;
+    }
+
+    DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv)
+    {
+        if (!tv) {
+            return getDescriptorImageInfo(nullptr, nullptr);
+        }
+        else {
+            return getDescriptorImageInfo(tv->texture->getImageView(), tv->sampler);
+        }
+    }
 };
 
 

@@ -3,6 +3,7 @@
 #include "Buffer.h"
 #include "Handle.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Core/Texture.h"
 #include "Render/RenderDefines.h"
 #include <cstdint>
 #include <memory>
@@ -238,6 +239,20 @@ struct IDescriptorSetHelper
                               0,
                               descriptorType,
                               {DescriptorBufferInfo(buf->getHandle(), 0, buf->getSize())});
+    }
+    static WriteDescriptorSet genSingleTextureViewWrite(
+        DescriptorSetHandle        dstSet,
+        uint32_t                   dstBinding,
+        EPipelineDescriptorType::T descriptorType,
+        TextureView               *tv)
+    {
+        return genImageWrite(dstSet,
+                             dstBinding,
+                             0,
+                             descriptorType,
+                             {DescriptorImageInfo(tv->getSampler()->getHandle(),
+                                                  tv->texture->getImageView()->getHandle(),
+                                                  EImageLayout::ShaderReadOnlyOptimal)});
     }
 
     /**

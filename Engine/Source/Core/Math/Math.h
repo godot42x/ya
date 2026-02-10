@@ -28,13 +28,28 @@ struct FMath
     {
         return glm::lookAtRH(eye, center, up);
     }
-    static glm::mat4 perspective(float fovYRadians, float aspect, float nearPlane, float farPlane)
+    static glm::mat4 perspective(float fovyInRadians, float aspect, float nearPlane, float farPlane)
     {
-        return glm::perspectiveRH_ZO(fovYRadians, aspect, nearPlane, farPlane);
+        return glm::perspectiveRH_ZO(fovyInRadians, aspect, nearPlane, farPlane);
     }
     static glm::mat4 orthographic(float left, float right, float bottom, float top, float nearPlane, float farPlane)
     {
         return glm::orthoRH_ZO(left, right, bottom, top, nearPlane, farPlane);
+    }
+
+    static glm::mat4 calcViewFrom(glm::vec3 pos, glm::vec3 rotDegrees)
+    {
+        const glm::quat rotQuat = glm::quat(glm::radians(rotDegrees));
+
+        // viewMatrix = glm::translate(glm::mat4(1.0f), _position) *
+        //              glm::mat4_cast(rotQuat);
+
+        // 看向 -z 方向，右手坐标系， 屏幕内测
+        glm::vec3 forward = rotQuat * FMath::Vector::WorldForward;
+        glm::vec3 target  = pos + forward;
+        glm::vec3 up      = rotQuat * FMath::Vector::WorldUp;
+
+        return FMath::lookAt(pos, target, up);
     }
 };
 

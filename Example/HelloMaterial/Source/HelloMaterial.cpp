@@ -1,4 +1,5 @@
 #include "HelloMaterial.h"
+#include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 
 #include "Core/UI/UITextBlock.h"
@@ -243,7 +244,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     if (auto *LitTestCube0 = scene->createNode3D("Lit Test")) {
         ya::Entity *entity = LitTestCube0->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
-        tc->setPosition(glm::vec3(0.0f, 0.f, 0.f));
+        tc->setPosition(glm::vec3(0.0f, 0.f, -5.0f));
         tc->setScale(glm::vec3(3.0f));
         _litTestEntity = entity;
 
@@ -268,6 +269,30 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // 可以添加多个脚本，类似Unity
         // lsc->addScript("Content/Scripts/Health.lua");
         // lsc->addScript("Content/Scripts/Inventory.lua");
+    }
+    if (auto *LitTestCube1 = scene->createNode3D("Lit Test 1")) {
+        ya::Entity *entity = LitTestCube1->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-5.0f, 0.f, -5.0f));
+        tc->setScale(glm::vec3(3.0f));
+        _litTestEntity = entity;
+
+        // Mesh component (separate from material)
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Quad);
+        tc->setRotation(glm::vec3(-0.0f, 0.f, 0.0f));
+
+        // Material component with serializable texture slots
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
+        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
+            .ambient   = glm::vec3(1.0f),
+            .diffuse   = glm::vec3(1.0f),
+            .specular  = glm::vec3(1.0f),
+            .shininess = 32.0f,
+        };
+
+        entity->addComponent<ya::MirrorComponent>();
     }
     if (auto *suzanne = scene->createNode3D("Suzanne")) {
         ya::Entity *entity = suzanne->getEntity();

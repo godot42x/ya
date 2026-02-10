@@ -682,7 +682,6 @@ void EditorLayer::editorSettings()
 
 void EditorLayer::debugWindow()
 {
-    return;
     using namespace ImGui;
     if (!ImGui::Begin("Debug Window"))
     {

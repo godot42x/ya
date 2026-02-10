@@ -739,7 +739,7 @@ struct GraphicsPipelineCreateInfo
     int32_t      subPassRef = -1;
     IRenderPass *renderPass;
 
-    // Dynamic Rendering mode fields (ignored if renderingMode == Subpass)
+    // Dynamic Rendering mode fields (ignored if rendering not nullptr)
     PipelineRenderingInfo pipelineRenderingInfo;
 
     // common payloads

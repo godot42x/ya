@@ -32,7 +32,7 @@ struct PhongMaterial : public Material
         alignas(16) glm::vec3 diffuse  = glm::vec3(1.0f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
         alignas(4) float shininess     = 32.0f;
-        // alignas(8) glm::vec2 uvs
+        alignas(8) glm::vec2 uvOffset = glm::vec2(0.0f);
 
         ParamUBO normalize() const
         {
@@ -41,6 +41,7 @@ struct PhongMaterial : public Material
                 .diffuse   = glm::normalize(diffuse),
                 .specular  = glm::normalize(specular),
                 .shininess = shininess,
+                .uvOffset  = uvOffset,
             };
         }
     };

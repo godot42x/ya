@@ -176,6 +176,9 @@ void DetailsView::drawComponents(Entity &entity)
                 pmc->getMaterial()->setParamDirty();
             }
         }
+        if (ImGui::Button("Invalidate")) {
+            pmc->invalidate();
+        }
     });
 
     drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {

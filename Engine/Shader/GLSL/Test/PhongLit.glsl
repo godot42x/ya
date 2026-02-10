@@ -126,6 +126,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 diffuse;
     vec3 specular;
     float shininess;
+    vec2 uvOffset;
 
     // TextureParam diffuseTexParam;
     // TextureParam specularTexParam;

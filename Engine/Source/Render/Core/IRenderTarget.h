@@ -20,11 +20,11 @@ struct IRenderPass;
  */
 struct FrameContext
 {
-    glm::mat4    view       = glm::mat4(1.0f);
-    glm::mat4    projection = glm::mat4(1.0f);
-    glm::vec3    cameraPos  = glm::vec3(0.0f);
-    entt::entity viewOwner  = entt::null;
-    Extent2D     extent     = {.width = 640, .height = 480};
+    glm::mat4    view           = glm::mat4(1.0f);
+    glm::mat4    projection     = glm::mat4(1.0f);
+    glm::vec3    cameraPos      = glm::vec3(0.0f);
+    entt::entity viewOwner      = entt::null;
+    Extent2D     extent         = {.width = 640, .height = 480};
 };
 
 /**
