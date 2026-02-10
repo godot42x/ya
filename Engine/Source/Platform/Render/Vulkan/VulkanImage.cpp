@@ -323,7 +323,7 @@ bool VulkanImage::allocate()
     VkImageCreateInfo imageCreateInfo{
         .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext     = nullptr,
-        .flags     = 0,
+        .flags     = static_cast<VkImageCreateFlags>(_ci.flags),
         .imageType = VK_IMAGE_TYPE_2D,
         .format    = _format,
         .extent    = {
@@ -332,7 +332,7 @@ bool VulkanImage::allocate()
                .depth  = _ci.extent.depth,
         },
         .mipLevels             = _ci.mipLevels,
-        .arrayLayers           = 1,
+        .arrayLayers           = _ci.arrayLayers,
         .samples               = toVk(_ci.samples),
         .tiling                = selectedTiling,
         .usage                 = _usageFlags,

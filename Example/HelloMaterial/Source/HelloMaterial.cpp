@@ -3,6 +3,7 @@
 #include "Resource/AssetManager.h"
 #include "Resource/FontManager.h"
 
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -12,6 +13,8 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
+
 #include "ECS/Entity.h"
 #include "ECS/System/PhongMaterialSystem.h"
 
@@ -159,6 +162,36 @@ void HelloMaterial::createMaterials()
 void HelloMaterial::createEntities(ya::Scene *scene)
 {
 
+
+
+    if (auto skyBox = scene->createNode3D("Skybox")) {
+        ya::Entity *entity = skyBox->getEntity();
+
+        // Mesh component
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
+        // Material component
+        // auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        // lmc->createDefaultMaterial();
+        // lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/Textures/Skybox/skybox.png");
+        if (auto *sc = entity->addComponent<ya::SkyboxComponent>()) {
+            ya::Texture::CubeMapCreateInfo ci{
+                .label = "SkyboxCubemap",
+                .files = {},
+            };
+            ci.files[ya::Texture::ECubeFace::PosX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/right.jpg";
+            ci.files[ya::Texture::ECubeFace::NegX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/left.jpg";
+            ci.files[ya::Texture::ECubeFace::PosY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/top.jpg";
+            ci.files[ya::Texture::ECubeFace::NegY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/bottom.jpg";
+            ci.files[ya::Texture::ECubeFace::PosZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/front.jpg";
+            ci.files[ya::Texture::ECubeFace::NegZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/back.jpg";
+
+            auto cubeMap = ya::make_shared<ya::Texture>(ci);
+
+            sc->cubemapTexture = cubeMap;
+        }
+    }
 
 
     auto simpleMaterials = ya::MaterialFactory::get()->getMaterials<ya::SimpleMaterial>();

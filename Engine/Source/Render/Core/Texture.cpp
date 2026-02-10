@@ -4,6 +4,7 @@
 #include "stb/stb_image.h"
 
 #include <cstddef>
+#include <cstring>
 
 #include "Platform/Render/Vulkan/VulkanUtils.h"
 
@@ -20,6 +21,62 @@
 
 namespace ya
 {
+
+namespace
+{
+struct StbiImage
+{
+    stbi_uc *data = nullptr;
+
+    StbiImage() = default;
+    explicit StbiImage(stbi_uc *inData)
+        : data(inData) {}
+
+    ~StbiImage()
+    {
+        if (data) {
+            stbi_image_free(data);
+        }
+    }
+
+    StbiImage(const StbiImage &)            = delete;
+    StbiImage &operator=(const StbiImage &) = delete;
+
+    StbiImage(StbiImage &&other) noexcept
+        : data(other.data)
+    {
+        other.data = nullptr;
+    }
+
+    StbiImage &operator=(StbiImage &&other) noexcept
+    {
+        if (this != &other) {
+            if (data) {
+                stbi_image_free(data);
+            }
+            data       = other.data;
+            other.data = nullptr;
+        }
+        return *this;
+    }
+
+    explicit operator bool() const { return data != nullptr; }
+    stbi_uc *get() const { return data; }
+};
+
+struct StbiFlipGuard
+{
+    explicit StbiFlipGuard(bool enable)
+    {
+        stbi_set_flip_vertically_on_load(enable ? 1 : 0);
+    }
+
+    ~StbiFlipGuard()
+    {
+        stbi_set_flip_vertically_on_load(0);
+    }
+};
+} // namespace
 
 
 
@@ -186,10 +243,9 @@ Texture::Texture(const std::string &filepath)
         return;
     }
 
-    int   texWidth = -1, texHeight = -1, texChannels = -1;
-    void *pixels = nullptr;
+    int texWidth = -1, texHeight = -1, texChannels = -1;
     // TODO: support other formats, eg: ktx
-    pixels = stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    StbiImage pixels(stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha));
     if (!pixels) {
         YA_CORE_ERROR("failed to load texture image! {}", filepath.data());
         return;
@@ -197,8 +253,7 @@ Texture::Texture(const std::string &filepath)
 
     _filepath = filepath;
     _channels = 4; // Force RGBA
-    createImage(pixels, 0, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
-    stbi_image_free(pixels);
+    createImage(pixels.get(), 0, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
     YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath.data(), texWidth, texHeight, texChannels);
 }
 
@@ -247,6 +302,12 @@ Texture::Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, 
     YA_CORE_TRACE("Created Texture from existing IImage/IImageView: {} ({}x{})", label, _width, _height);
 }
 
+Texture::Texture(const CubeMapCreateInfo &ci)
+    : _label(ci.label)
+{
+    createCubeMap(ci);
+}
+
 
 void Texture::setLabel(const std::string &label)
 {
@@ -281,10 +342,10 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
         .label  = std::format("Texture_Image_{}", _label),
         .format = format,
         .extent = {
-            .width  = texWidth,
-            .height = texHeight,
-            .depth  = 1,
-        },
+                   .width  = texWidth,
+                   .height = texHeight,
+                   .depth  = 1,
+                   },
         .mipLevels     = mipLevels,
         .samples       = ESampleCount::Sample_1,
         .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
@@ -347,7 +408,7 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
             currentHeight = std::max(currentHeight, 1u);
 
             // Calculate level size based on block compression
-            size_t       blockSize = getFormatPixelSize(format);
+            uint32_t     blockSize = getFormatPixelSize(format);
             uint32_t     blocksX   = (currentWidth + 3) / 4;
             uint32_t     blocksY   = (currentHeight + 3) / 4;
             VkDeviceSize levelSize = blocksX * blocksY * blockSize;
@@ -369,8 +430,8 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
             region.imageSubresource.mipLevel       = level;
             region.imageSubresource.baseArrayLayer = 0;
             region.imageSubresource.layerCount     = 1;
-            region.imageOffset                     = {0, 0, 0};
-            region.imageExtent                     = {currentWidth, currentHeight, 1};
+            region.imageOffset                     = {.x = 0, .y = 0, .z = 0};
+            region.imageExtent                     = {.width = currentWidth, .height = currentHeight, .depth = 1};
 
             vkCmdCopyBufferToImage(vkCmdBuf,
                                    dynamic_cast<VulkanBuffer *>(stagingBuffer.get())->getHandle().as<VkBuffer>(),
@@ -413,10 +474,10 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
         .label  = std::format("Texture_Fallback_{}", _label),
         .format = EFormat::R8G8B8A8_UNORM,
         .extent = {
-            .width  = texWidth,
-            .height = texHeight,
-            .depth  = 1,
-        },
+                   .width  = texWidth,
+                   .height = texHeight,
+                   .depth  = 1,
+                   },
         .mipLevels     = 1,
         .samples       = ESampleCount::Sample_1,
         .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
@@ -447,6 +508,7 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
     auto           *cmdBuf   = vkRender->beginIsolateCommands();
     VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
 
+    // Transition, copy, and transition back to shader read-only
     VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VulkanImage::transfer(vkCmdBuf, dynamic_cast<VulkanBuffer *>(stagingBuffer.get()), vkImage.get());
     VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -454,6 +516,139 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
     vkRender->endIsolateCommands(cmdBuf);
 
     YA_CORE_WARN("Created fallback texture ({}x{}) for: {}", texWidth, texHeight, _filepath.empty() ? _label : _filepath);
+}
+
+void Texture::createCubeMap(const CubeMapCreateInfo &ci)
+{
+    auto vkRender = ya::App::get()->getRender<VulkanRender>();
+
+    std::array<StbiImage, ECubeFace::Count> pixels{};
+
+    int width    = 0;
+    int height   = 0;
+    int channels = 0;
+
+    StbiFlipGuard flipGuard(ci.flipVertical);
+    for (size_t i = 0; i < ECubeFace::Count; ++i) {
+        pixels[i] = StbiImage(stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha));
+        if (!pixels[i]) {
+            YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i].c_str());
+            return;
+        }
+        if (i == 0) {
+            _width    = static_cast<uint32_t>(width);
+            _height   = static_cast<uint32_t>(height);
+            _channels = 4;
+        }
+        if (_width != static_cast<uint32_t>(width) || _height != static_cast<uint32_t>(height)) {
+            YA_CORE_ERROR("Cubemap faces must have the same dimensions");
+            return;
+        }
+    }
+
+    _format    = EFormat::R8G8B8A8_UNORM;
+    _mipLevels = 1;
+
+    VkDeviceSize faceSize  = static_cast<VkDeviceSize>(_width) * static_cast<VkDeviceSize>(_height) * 4;
+    VkDeviceSize totalSize = faceSize * ECubeFace::Count;
+
+    ImageCreateInfo imageCI{
+        .label  = std::format("CubeMap_{}", _label),
+        .format = _format,
+        .extent = {
+                   .width  = _width,
+                   .height = _height,
+                   .depth  = 1,
+                   },
+        .mipLevels     = 1,
+        .arrayLayers   = ECubeFace::Count,
+        .samples       = ESampleCount::Sample_1,
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
+        .sharingMode   = ESharingMode::Exclusive,
+        .initialLayout = EImageLayout::Undefined,
+        .flags         = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+    };
+
+    auto vkImage = VulkanImage::create(vkRender, imageCI);
+    if (!vkImage || !vkImage->isValid()) {
+        YA_CORE_ERROR("Failed to create cubemap image: {}", _label);
+        return;
+    }
+
+    image = vkImage;
+
+    VulkanImageView::CreateInfo viewCI{};
+    viewCI.viewType       = VK_IMAGE_VIEW_TYPE_CUBE;
+    viewCI.aspectFlags    = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewCI.baseMipLevel   = 0;
+    viewCI.levelCount     = _mipLevels;
+    viewCI.baseArrayLayer = 0;
+    viewCI.layerCount     = ECubeFace::Count;
+    imageView             = VulkanImageView::create(vkRender, vkImage, viewCI);
+
+    std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
+    for (size_t i = 0; i < ECubeFace::Count; ++i) {
+        std::memcpy(stagingData.data() + (i * faceSize), pixels[i].get(), static_cast<size_t>(faceSize));
+    }
+
+    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
+        vkRender,
+        BufferCreateInfo{
+            .label         = std::format("StagingBuffer_CubeMap_{}", _label),
+            .usage         = EBufferUsage::TransferSrc,
+            .data          = stagingData.data(),
+            .size          = static_cast<uint32_t>(totalSize),
+            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+        });
+
+    auto           *cmdBuf   = vkRender->beginIsolateCommands();
+    VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
+
+    VkImageSubresourceRange cubeRange{
+        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel   = 0,
+        .levelCount     = _mipLevels,
+        .baseArrayLayer = 0,
+        .layerCount     = ECubeFace::Count,
+    };
+
+    VulkanImage::transitionLayout(vkCmdBuf,
+                                  vkImage.get(),
+                                  VK_IMAGE_LAYOUT_UNDEFINED,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  &cubeRange);
+
+    for (uint32_t face = 0; face < ECubeFace::Count; ++face) {
+        VkBufferImageCopy region{};
+        region.bufferOffset      = faceSize * face;
+        region.bufferRowLength   = 0;
+        region.bufferImageHeight = 0;
+
+        region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel       = 0;
+        region.imageSubresource.baseArrayLayer = face;
+        region.imageSubresource.layerCount     = 1;
+        region.imageOffset                     = {.x = 0, .y = 0, .z = 0};
+        region.imageExtent                     = {.width = _width, .height = _height, .depth = 1};
+
+        vkCmdCopyBufferToImage(vkCmdBuf,
+                               stagingBuffer->getHandle().as<VkBuffer>(),
+                               vkImage->getHandle().as<VkImage>(),
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               1,
+                               &region);
+    }
+
+    VulkanImage::transitionLayout(vkCmdBuf,
+                                  vkImage.get(),
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                  &cubeRange);
+    vkRender->endIsolateCommands(cmdBuf);
+
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, vkImage->getHandle().as<VkImage>(), std::format("CubeMap_Image_{}", _label));
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, vkImage->_imageMemory, std::format("CubeMap_ImageMemory_{}", _label));
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, dynamic_cast<VulkanImageView *>(imageView.get())->getHandle().as<VkImageView>(), std::format("CubeMap_ImageView_{}", _label));
 }
 
 } // namespace ya

@@ -7,6 +7,8 @@
 #include "Render/RenderDefines.h"
 #include "Sampler.h"
 
+#include <array>
+
 
 namespace ya
 {
@@ -64,6 +66,29 @@ struct Texture
      */
     Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, const std::string &label = "");
 
+    enum ECubeFace
+    {
+        PosX = 0,
+        NegX,
+        PosY,
+        NegY,
+        PosZ,
+        NegZ,
+        Count
+    };
+
+    struct CubeMapCreateInfo
+    {
+        std::string                              label;
+        std::array<std::string, ECubeFace::Count> files;
+        bool                                     flipVertical = false;
+    };
+
+    /**
+     * @brief Create cubemap from 6 image files
+     */
+    Texture(const CubeMapCreateInfo &ci);
+
     virtual ~Texture() = default;
 
     // Disable copy, allow move
@@ -94,6 +119,7 @@ struct Texture
   private:
     void createImage(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format = EFormat::R8G8B8A8_UNORM, uint32_t mipLevels = 1);
     void createFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
+        void createCubeMap(const CubeMapCreateInfo &ci);
 
 
   private:

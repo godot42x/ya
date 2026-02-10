@@ -4,18 +4,18 @@
 namespace ya
 {
 
-bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
+bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci)
 {
     _render      = render;
     _image       = image;
     _format      = image->getVkFormat();
-    _aspectFlags = aspectFlags;
-    VkImageViewCreateInfo ci{
+    _aspectFlags = ci.aspectFlags;
+    VkImageViewCreateInfo viewCI{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext      = nullptr,
         .flags      = 0,
         .image      = image->getVkImage(),
-        .viewType   = VK_IMAGE_VIEW_TYPE_2D,
+        .viewType   = ci.viewType,
         .format     = _format,
         .components = {
             .r = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -25,15 +25,15 @@ bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, VkIm
         },
         .subresourceRange = {
             .aspectMask     = _aspectFlags,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
+            .baseMipLevel   = ci.baseMipLevel,
+            .levelCount     = ci.levelCount,
+            .baseArrayLayer = ci.baseArrayLayer,
+            .layerCount     = ci.layerCount,
         },
     };
 
     VK_CALL_RET(vkCreateImageView(_render->getDevice(),
-                                  &ci,
+                                  &viewCI,
                                   _render->getAllocator(),
                                   &_handle));
 }
@@ -52,8 +52,15 @@ void VulkanImageView::setDebugName(const std::string &name)
 
 stdptr<VulkanImageView> VulkanImageView::create(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
 {
+    CreateInfo ci{};
+    ci.aspectFlags = aspectFlags;
+    return create(render, image, ci);
+}
+
+stdptr<VulkanImageView> VulkanImageView::create(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci)
+{
     auto ret = makeShared<VulkanImageView>();
-    if (!ret->init(render, image, aspectFlags)) {
+    if (!ret->init(render, image, ci)) {
         return nullptr;
     }
     return ret;
