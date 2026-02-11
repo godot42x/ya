@@ -355,6 +355,7 @@ struct App
     void renderScene(ICommandBuffer *cmdBuf, float dt, FrameContext &ctx);
     void beginFrame()
     {
+        _skyboxSystem->beginFrame();
         for (auto &system : _materialSystems) {
             system->beginFrame();
         }

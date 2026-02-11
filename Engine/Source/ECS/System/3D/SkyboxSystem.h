@@ -50,12 +50,19 @@ struct SkyBoxSystem
         glm::mat4 view;
     };
 
+    static constexpr uint32_t SKYBOX_PER_FRAME_SET = 4;
+
+    uint32_t _index = 0;
+
     stdptr<IDescriptorSetLayout> _dslPerFrame;
     stdptr<IDescriptorSetLayout> _dslResource;
 
     stdptr<IDescriptorPool> _DSP;
-    DescriptorSetHandle     _dsPerFrame;
-    DescriptorSetHandle     _dsResource;
+
+    std::array<DescriptorSetHandle, SKYBOX_PER_FRAME_SET> _dsPerFrame;
+    std::array<stdptr<IBuffer>, SKYBOX_PER_FRAME_SET>     _frameUBO;
+
+    DescriptorSetHandle _dsResource;
 
     stdptr<IPipelineLayout>   _pipelineLayout = nullptr;
     stdptr<IGraphicsPipeline> _pipeline       = nullptr;
@@ -63,11 +70,12 @@ struct SkyBoxSystem
 
 
 
-    stdptr<IBuffer> _frameUBO;
-
     void onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo);
     void tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameContext &ctx);
     void onDestroy();
+
+    void advance() { _index = (_index + 1) % SKYBOX_PER_FRAME_SET; }
+    void beginFrame() { _index = 0; }
 };
 
 } // namespace ya

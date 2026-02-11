@@ -219,7 +219,6 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t                  
                     .mipLevels     = 1,
                     .samples       = colorAttachment.samples,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                    .sharingMode   = ESharingMode::Exclusive,
                     .initialLayout = EImageLayout::Undefined,
                 };
                 auto image    = VulkanImage::create(_vkRender, imageCI);
@@ -241,7 +240,6 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t                  
                 .mipLevels     = 1,
                 .samples       = depthAttachment.samples,
                 .usage         = EImageUsage::DepthStencilAttachment,
-                .sharingMode   = ESharingMode::Exclusive,
                 .initialLayout = EImageLayout::Undefined,
             };
             depthImage = VulkanImage::create(_vkRender, depthCI);

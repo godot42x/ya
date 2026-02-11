@@ -865,7 +865,7 @@ void App::tickRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    beginFrame();
+    // beginFrame();
 
     FrameContext ctx;
     {

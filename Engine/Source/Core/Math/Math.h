@@ -59,9 +59,9 @@ struct FMath
     static glm::mat3 build_scale_mat3(glm::vec2 scale)
     {
         return glm::mat3{
-            {scale.x,    0.0f, 0.0f}, // 列0
-            {   0.0f, scale.y, 0.0f}, // 列1
-            {   0.0f,    0.0f, 1.0f}  // 列2（齐次维度）
+            {scale.x, 0.0f, 0.0f}, // 列0
+            {0.0f, scale.y, 0.0f}, // 列1
+            {0.0f, 0.0f, 1.0f}     // 列2（齐次维度）
         };
     }
 
@@ -72,9 +72,9 @@ struct FMath
         float c   = glm::cos(rad);
         float s   = glm::sin(rad);
         return glm::mat3{
-            {   c,   -s, 0.0f}, // 列0
-            {   s,    c, 0.0f}, // 列1
-            {0.0f, 0.0f, 1.0f}  // 列2
+            {c, -s, 0.0f},     // 列0
+            {s, c, 0.0f},      // 列1
+            {0.0f, 0.0f, 1.0f} // 列2
         };
     }
 
@@ -83,7 +83,7 @@ struct FMath
         return {
             {1.0f, 0.0f, translation.x}, // 列0
             {0.0f, 1.0f, translation.y}, // 列1
-            {0.0f, 0.0f,          1.0f}  // 列2（齐次坐标）
+            {0.0f, 0.0f, 1.0f}           // 列2（齐次坐标）
         };
     }
 
@@ -93,9 +93,9 @@ struct FMath
         float c   = glm::cos(rad);
         float s   = glm::sin(rad);
         return glm::mat3{
-            {  scale.x * c,  scale.x * -s, 0.0f}, // 列0
-            {  scale.y * s,   scale.y * c, 0.0f}, // 列1
-            {translation.x, translation.y, 1.0f}  // 列2
+            {scale.x * c, scale.x * -s, 0.0f},   // 列0
+            {scale.y * s, scale.y * c, 0.0f},    // 列1
+            {translation.x, translation.y, 1.0f} // 列2
         };
     }
 
@@ -105,6 +105,16 @@ struct FMath
         // glm::mat4 rotMat   = glm::yawPitchRoll(glm::radians(rotationDeg.y), glm::radians(rotationDeg.x), glm::radians(rotationDeg.z));
         // glm::mat4 transMat = glm::translate(glm::mat4(1.0f), translation
         return glm::mat4(1.0f); // 临时返回单位矩阵，避免编译错误
+    }
+
+    static glm::mat4 dropTranslation(const glm::mat4 &mat)
+    {
+        return {
+            {mat[0][0], mat[0][1], mat[0][2], 0.0f},
+            {mat[1][0], mat[1][1], mat[1][2], 0.0f},
+            {mat[2][0], mat[2][1], mat[2][2], 0.0f},
+            {0.0f, 0.0f, 0.0f, 1.0f},
+        };
     }
 };
 

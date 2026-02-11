@@ -18,7 +18,6 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createAttachmentTexture(
                            ? static_cast<ESampleCount::T>(attachInfo.msaaSamples.value())
                            : ESampleCount::Sample_1,
         .usage         = attachInfo.usage,
-        .sharingMode   = ESharingMode::Exclusive,
         .initialLayout = EImageLayout::Undefined,
     };
 

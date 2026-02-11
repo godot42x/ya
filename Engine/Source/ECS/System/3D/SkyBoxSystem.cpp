@@ -35,7 +35,8 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
 
-            .shaderName = "Skybox.glsl",
+            .shaderName        = "Skybox.glsl",
+            .bDeriveFromShader = false,
 
             // also a cube mesh
             .vertexBufferDescs = {
@@ -76,7 +77,7 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .cullMode    = ECullMode::Front,
+            .cullMode    = ECullMode::Front, // cull front face, we in the sky box
             .frontFace   = EFrontFaceType::CounterClockWise,
         },
         .depthStencilState = DepthStencilState{
@@ -96,22 +97,8 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
             },
         },
         .viewportState = ViewportState{
-            .viewports = {
-                {
-                    .x        = 0,
-                    .y        = 0,
-                    .width    = static_cast<float>(render->getSwapchain()->getExtent().width),
-                    .height   = static_cast<float>(render->getSwapchain()->getExtent().height),
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                },
-            },
-            .scissors = {Scissor{
-                .offsetX = 0,
-                .offsetY = 0,
-                .width   = render->getSwapchain()->getExtent().width,
-                .height  = render->getSwapchain()->getExtent().height,
-            }},
+            .viewports = {Viewport::defaults()},
+            .scissors  = {Scissor::defaults()},
         },
     };
     _pipeline = IGraphicsPipeline::create(render);
@@ -122,11 +109,11 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
     _DSP = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 2,
+            .maxSets   = SKYBOX_PER_FRAME_SET + 1,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 1,
+                    .descriptorCount = SKYBOX_PER_FRAME_SET,
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
@@ -136,25 +123,48 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
         });
 
     // MARK: Allocate Descriptor Sets
-    std::vector<ya::DescriptorSetHandle> perFrameSets;
+    std::vector<ya::DescriptorSetHandle> frameSets;
     std::vector<ya::DescriptorSetHandle> resourceSets;
-    _DSP->allocateDescriptorSets(_dslPerFrame, 1, perFrameSets);
+    _DSP->allocateDescriptorSets(_dslPerFrame, 4, frameSets);
     _DSP->allocateDescriptorSets(_dslResource, 1, resourceSets);
 
-    _dsPerFrame = perFrameSets[0];
-    _dsResource = resourceSets[0];
-    render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsPerFrame.ptr, "Skybox_PerFrame_DS");
-    render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsResource.ptr, "Skybox_Resource_DS");
 
-    // MARK: Create Frame UBO
-    _frameUBO = IBuffer::create(
-        render,
-        ya::BufferCreateInfo{
-            .label         = "Skybox_Frame_UBO",
-            .usage         = ya::EBufferUsage::UniformBuffer,
-            .size          = sizeof(SkyboxFrameUBO),
-            .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-        });
+    // MARK: Initial descriptor set updates (once during init)
+    SkyboxFrameUBO initialFrameData{
+        .projection = glm::mat4(1.0f),
+        .view       = glm::mat4(1.0f),
+    };
+
+    std::vector<WriteDescriptorSet> writes;
+    writes.resize(4);
+    for (uint32_t i = 0; i < 4; i++) {
+        _dsPerFrame[i] = frameSets[i];
+        render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET,
+                                                       _dsPerFrame[i].ptr,
+                                                       std::format("Skybox_PerFrame_DS_{}", i).c_str());
+
+        // MARK: Create Frame UBO
+        _frameUBO[i] = IBuffer::create(
+            render,
+            ya::BufferCreateInfo{
+                .label         = std::format("Skybox_Frame_UBO_{}", i),
+                .usage         = ya::EBufferUsage::UniformBuffer,
+                .size          = sizeof(SkyboxFrameUBO),
+                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+            });
+        _frameUBO[i]->writeData(&initialFrameData, sizeof(SkyboxFrameUBO), 0);
+
+        writes[i] = IDescriptorSetHelper::genSingleBufferWrite(
+            _dsPerFrame[i],
+            0,
+            EPipelineDescriptorType::UniformBuffer,
+            _frameUBO[i].get());
+    }
+    render->getDescriptorHelper()->updateDescriptorSets(writes, {});
+
+
+    _dsResource = resourceSets[0];
+    render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsResource.ptr, "Skybox_Resource_DS");
 
     _sampler3D = Sampler::create(SamplerDesc{
         .label        = "SkyboxSampler",
@@ -162,22 +172,6 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
         .addressModeV = ESamplerAddressMode::Repeat,
         .addressModeW = ESamplerAddressMode::Repeat,
     });
-
-    // MARK: Initial descriptor set updates (once during init)
-    SkyboxFrameUBO initialFrameData{
-        .projection = glm::mat4(1.0f),
-        .view       = glm::mat4(1.0f),
-    };
-    _frameUBO->writeData(&initialFrameData, sizeof(SkyboxFrameUBO), 0);
-
-    render->getDescriptorHelper()->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genSingleBufferWrite(_dsPerFrame,
-                                                       0,
-                                                       EPipelineDescriptorType::UniformBuffer,
-                                                       _frameUBO.get()),
-        },
-        {});
 }
 
 void SkyBoxSystem::onDestroy()
@@ -210,6 +204,12 @@ void SkyBoxSystem::tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameCont
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
 
+    if (1 /*bReverseViewportY*/) {
+        viewportY      = static_cast<float>(height);
+        viewportHeight = -static_cast<float>(height);
+    }
+
+
     // MARK: Bind Pipeline
     cmdBuf->bindPipeline(_pipeline.get());
 
@@ -219,9 +219,9 @@ void SkyBoxSystem::tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameCont
     // MARK: Update UBO data (buffer only, no descriptor set update)
     SkyboxFrameUBO frameData{
         .projection = ctx.projection,
-        .view       = ctx.view,
+        .view       = FMath::dropTranslation(ctx.view),
     };
-    _frameUBO->writeData(&frameData, sizeof(SkyboxFrameUBO), 0);
+    _frameUBO[_index]->writeData(&frameData, sizeof(SkyboxFrameUBO), 0);
 
     // MARK: Update descriptor sets only when resources change
     auto render = App::get()->getRender();
@@ -232,25 +232,31 @@ void SkyBoxSystem::tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameCont
 
         render->getDescriptorHelper()->updateDescriptorSets(
             {
+                IDescriptorSetHelper::genSingleBufferWrite(
+                    _dsPerFrame[_index],
+                    0,
+                    EPipelineDescriptorType::UniformBuffer,
+                    _frameUBO[_index].get()),
                 IDescriptorSetHelper::genSingleTextureViewWrite(
                     _dsResource,
                     0,
                     EPipelineDescriptorType::CombinedImageSampler,
                     &tv),
             },
-            {}
-        );
+            {});
     }
 
     // MARK: Bind descriptor sets (bound sets already initialized)
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
                                0,
                                {
-                                   _dsPerFrame,
+                                   _dsPerFrame[_index],
                                    _dsResource,
                                });
 
     meshComp->getMesh()->draw(cmdBuf);
+
+    advance();
 }
 
 } // namespace ya

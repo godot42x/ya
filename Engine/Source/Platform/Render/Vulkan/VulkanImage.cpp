@@ -334,6 +334,15 @@ bool VulkanImage::allocate()
     if (_ci.flags & EImageCreateFlag::Disjoint)
         vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
 
+    bool     bSameQueueFamily     = _render->isGraphicsPresentSameQueueFamily();
+    auto     sharingMode          = bSameQueueFamily ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
+    uint32_t queueFamilyCont      = bSameQueueFamily ? 0 : 2;
+    uint32_t queueFamilyIndices[] = {
+        (uint32_t)_render->getGraphicsQueueFamilyInfo().queueFamilyIndex,
+        (uint32_t)_render->getPresentQueueFamilyInfo().queueFamilyIndex,
+    };
+
+
     VkImageCreateInfo imageCreateInfo{
         .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext     = nullptr,
@@ -350,9 +359,9 @@ bool VulkanImage::allocate()
         .samples               = toVk(_ci.samples),
         .tiling                = selectedTiling,
         .usage                 = _usageFlags,
-        .sharingMode           = _render->isGraphicsPresentSameQueueFamily() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
-        .queueFamilyIndexCount = _ci.queueFamilyIndexCount,
-        .pQueueFamilyIndices   = _ci.pQueueFamilyIndices,
+        .sharingMode           = sharingMode,
+        .queueFamilyIndexCount = queueFamilyCont,
+        .pQueueFamilyIndices   = queueFamilyIndices,
         .initialLayout         = toVk(_ci.initialLayout),
     };
 

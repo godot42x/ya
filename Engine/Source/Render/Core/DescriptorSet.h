@@ -159,10 +159,9 @@ struct IDescriptorPool
      * @param outSets Output vector of allocated descriptor set handles
      * @return true if allocation succeeded
      */
-    virtual bool allocateDescriptorSets(
-        const std::shared_ptr<IDescriptorSetLayout> &layout,
-        uint32_t                                     count,
-        std::vector<DescriptorSetHandle>            &outSets) = 0;
+    virtual bool allocateDescriptorSets(const std::shared_ptr<IDescriptorSetLayout> &layout,
+                                        uint32_t                                     count,
+                                        std::vector<DescriptorSetHandle>            &outSets) = 0;
 
     /**
      * @brief Reset the descriptor pool

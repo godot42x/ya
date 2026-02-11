@@ -160,8 +160,8 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 struct ShaderDesc
 {
-    std::string                          shaderName;               // we use single glsl now
-    bool                                 bDeriveFromShader = true; // whether to use vertex layout by the shader's reflection
+    std::string                          shaderName;                // we use single glsl now
+    bool                                 bDeriveFromShader = false; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
     std::vector<std::string>             defines{}; // #define in shader
@@ -256,8 +256,8 @@ enum T
     ColorAttachmentOptimal,
     DepthStencilAttachmentOptimal,
     ShaderReadOnlyOptimal,
-    TransferSrc/*Optimal*/,
-    TransferDst/*Optimal*/,
+    TransferSrc /*Optimal*/,
+    TransferDst /*Optimal*/,
     PresentSrcKHR,
 };
 } // namespace EImageLayout
@@ -549,12 +549,13 @@ struct MultisampleState
 // 把NDC（-1，1） 转化为屏幕坐标
 struct Viewport
 {
-    float x        = 0.0f;
-    float y        = 0.0f;
-    float width    = 5.0f;
-    float height   = 5.0f;
-    float minDepth = 0.0f;
-    float maxDepth = 5.0f;
+    float           x        = 0.0f;
+    float           y        = 0.0f;
+    float           width    = 800.0f;
+    float           height   = 600.0f;
+    float           minDepth = 0.0f;
+    float           maxDepth = 5.0f;
+    static Viewport defaults() { return Viewport{}; }
 };
 
 // limit render in specific area, clip
@@ -562,8 +563,10 @@ struct Scissor
 {
     int32_t  offsetX = 0;
     int32_t  offsetY = 0;
-    uint32_t width   = 0;
-    uint32_t height  = 0;
+    uint32_t width   = 800;
+    uint32_t height  = 600;
+
+    static Scissor defaults() { return Scissor{}; }
 };
 
 struct Rect2D
@@ -649,8 +652,8 @@ struct PushConstantRange
 
 struct PipelineLayoutDesc
 {
-    std::string                      label = "None";
-    std::vector<PushConstantRange>   pushConstants;
+    std::string                          label = "None";
+    std::vector<PushConstantRange>       pushConstants;
     std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts;
 };
 
@@ -821,16 +824,16 @@ struct ImageSubresourceLayers
  */
 struct BufferImageCopy
 {
-    uint64_t               bufferOffset      = 0; // Offset in bytes from start of buffer
-    uint32_t               bufferRowLength   = 0; // Buffer row length (0 = tightly packed)
-    uint32_t               bufferImageHeight = 0; // Buffer image height (0 = tightly packed)
+    uint64_t               bufferOffset      = 0;  // Offset in bytes from start of buffer
+    uint32_t               bufferRowLength   = 0;  // Buffer row length (0 = tightly packed)
+    uint32_t               bufferImageHeight = 0;  // Buffer image height (0 = tightly packed)
     ImageSubresourceLayers imageSubresource  = {}; // Image subresource to copy to
-    int32_t                imageOffsetX      = 0; // X offset in image
-    int32_t                imageOffsetY      = 0; // Y offset in image
-    int32_t                imageOffsetZ      = 0; // Z offset in image
-    uint32_t               imageExtentWidth  = 0; // Width of region to copy
-    uint32_t               imageExtentHeight = 0; // Height of region to copy
-    uint32_t               imageExtentDepth  = 1; // Depth of region to copy
+    int32_t                imageOffsetX      = 0;  // X offset in image
+    int32_t                imageOffsetY      = 0;  // Y offset in image
+    int32_t                imageOffsetZ      = 0;  // Z offset in image
+    uint32_t               imageExtentWidth  = 0;  // Width of region to copy
+    uint32_t               imageExtentHeight = 0;  // Height of region to copy
+    uint32_t               imageExtentDepth  = 1;  // Depth of region to copy
 };
 
 
