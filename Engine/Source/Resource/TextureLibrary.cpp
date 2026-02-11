@@ -84,21 +84,18 @@ void TextureLibrary::createTextures()
     color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
 
     // Create 1x1 white texture
-    _whiteTexture = makeShared<Texture>(1, 1, std::vector<color_t>{white});
-    _whiteTexture->setLabel("white");
+    _whiteTexture = Texture::fromData(1, 1, std::vector<color_t>{white}, "white");
 
     // Create 1x1 black texture
-    _blackTexture = makeShared<Texture>(1, 1, std::vector<color_t>{black});
-    _blackTexture->setLabel("black");
+    _blackTexture = Texture::fromData(1, 1, std::vector<color_t>{black}, "black");
 
     // Create 2x2 multi-pixel texture with pattern: white, blue, blue, white
-    _multiPixelTexture = makeShared<Texture>(2, 2, std::vector<color_t>{
+    _multiPixelTexture = Texture::fromData(2, 2, std::vector<color_t>{
                                                        white,
                                                        blue,
                                                        blue,
                                                        white,
-                                                   });
-    _multiPixelTexture->setLabel("multi-pixel");
+                                                   }, "multi-pixel");
 }
 
 ya::Ptr<Texture> TextureLibrary::getWhiteTexture()

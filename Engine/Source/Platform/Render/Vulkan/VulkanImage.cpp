@@ -226,11 +226,11 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
             .subresourceRange    = {},
         };
 
-        barrier.subresourceRange.aspectMask = getAspectMask(transition.image->getVkFormat());
-        barrier.subresourceRange.baseMipLevel = transition.range.baseMipLevel;
-        barrier.subresourceRange.levelCount = transition.range.levelCount;
+        barrier.subresourceRange.aspectMask     = getAspectMask(transition.image->getVkFormat());
+        barrier.subresourceRange.baseMipLevel   = transition.range.baseMipLevel;
+        barrier.subresourceRange.levelCount     = transition.range.levelCount;
         barrier.subresourceRange.baseArrayLayer = transition.range.baseArrayLayer;
-        barrier.subresourceRange.layerCount = transition.range.layerCount;
+        barrier.subresourceRange.layerCount     = transition.range.layerCount;
 
         if (transition.useRange) {
             barrier.subresourceRange.aspectMask = transition.range.aspectMask;
@@ -320,10 +320,24 @@ bool VulkanImage::allocate()
         }
     }
 
+    // Convert EImageCreateFlag to VkImageCreateFlags, excluding sparse flags
+    VkImageCreateFlags vkFlags = 0;
+    if (_ci.flags & EImageCreateFlag::CubeCompatible)
+        vkFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    if (_ci.flags & EImageCreateFlag::MutableFormat)
+        vkFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    // Note: Sparse flags are intentionally not mapped as they require device feature support
+    if (_ci.flags & EImageCreateFlag::Protected)
+        vkFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+    if (_ci.flags & EImageCreateFlag::ExtendedUsage)
+        vkFlags |= VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
+    if (_ci.flags & EImageCreateFlag::Disjoint)
+        vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
+
     VkImageCreateInfo imageCreateInfo{
         .sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext     = nullptr,
-        .flags     = static_cast<VkImageCreateFlags>(_ci.flags),
+        .flags     = vkFlags,
         .imageType = VK_IMAGE_TYPE_2D,
         .format    = _format,
         .extent    = {
@@ -336,7 +350,7 @@ bool VulkanImage::allocate()
         .samples               = toVk(_ci.samples),
         .tiling                = selectedTiling,
         .usage                 = _usageFlags,
-        .sharingMode           = toVk(_ci.sharingMode),
+        .sharingMode           = _render->isGraphicsPresentSameQueueFamily() ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
         .queueFamilyIndexCount = _ci.queueFamilyIndexCount,
         .pQueueFamilyIndices   = _ci.pQueueFamilyIndices,
         .initialLayout         = toVk(_ci.initialLayout),

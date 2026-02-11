@@ -14,11 +14,11 @@ namespace ya
 {
 
 static void collectRenderTargetTransitions(
-    IRenderTarget                                    *renderTarget,
-    bool                                              useInitialLayout,
-    std::vector<VulkanImage::LayoutTransition>       &outTransitions,
-    EImageLayout::T                                   colorOverrideLayout = EImageLayout::Undefined,
-    EImageLayout::T                                   depthOverrideLayout = EImageLayout::Undefined)
+    IRenderTarget                              *renderTarget,
+    bool                                        useInitialLayout,
+    std::vector<VulkanImage::LayoutTransition> &outTransitions,
+    EImageLayout::T                             colorOverrideLayout = EImageLayout::Undefined,
+    EImageLayout::T                             depthOverrideLayout = EImageLayout::Undefined)
 {
     if (!renderTarget) {
         return;
@@ -330,6 +330,49 @@ void VulkanCommandBuffer::executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t
         dst->getHandleAs<VkBuffer>(),
         1,
         &copyRegion);
+}
+
+void VulkanCommandBuffer::copyBufferToImage(IBuffer *srcBuffer,
+                                            IImage *dstImage, EImageLayout::T dstImageLayout,
+                                            const std::vector<BufferImageCopy> &regions)
+{
+    if (!srcBuffer || !dstImage || regions.empty()) return;
+
+    std::vector<VkBufferImageCopy> vkRegions;
+    vkRegions.reserve(regions.size());
+
+    for (const auto &region : regions) {
+        VkBufferImageCopy vkRegion{
+            .bufferOffset      = region.bufferOffset,
+            .bufferRowLength   = region.bufferRowLength,
+            .bufferImageHeight = region.bufferImageHeight,
+            .imageSubresource  = {
+                 .aspectMask     = region.imageSubresource.aspectMask,
+                 .mipLevel       = region.imageSubresource.mipLevel,
+                 .baseArrayLayer = region.imageSubresource.baseArrayLayer,
+                 .layerCount     = region.imageSubresource.layerCount,
+            },
+            .imageOffset = {
+                region.imageOffsetX,
+                region.imageOffsetY,
+                region.imageOffsetZ,
+            },
+            .imageExtent = {
+                region.imageExtentWidth,
+                region.imageExtentHeight,
+                region.imageExtentDepth,
+            },
+        };
+        vkRegions.push_back(vkRegion);
+    }
+
+    vkCmdCopyBufferToImage(
+        _commandBuffer,
+        srcBuffer->getHandleAs<VkBuffer>(),
+        dstImage->getHandle().as<VkImage>(),
+        EImageLayout::toVk(dstImageLayout),
+        static_cast<uint32_t>(vkRegions.size()),
+        vkRegions.data());
 }
 
 void VulkanCommandBuffer::executeTransitionImageLayout(IImage *image, EImageLayout::T oldLayout, EImageLayout::T newLayout,

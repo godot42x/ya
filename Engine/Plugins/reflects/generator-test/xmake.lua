@@ -111,7 +111,7 @@ do
 
     -- 头文件（应用反射生成规则）
     -- 注意：只有包含 [[refl::uclass]] 的头文件才会触发反射代码生成
-    add_files("./src/*.h", { rules = "reflects_generator" })
+    -- add_files("./src/*.h", { rules = "reflects_generator" })
 
     -- ========================================================================
     -- 包含目录

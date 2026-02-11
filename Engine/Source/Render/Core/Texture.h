@@ -1,18 +1,18 @@
 #pragma once
 
-
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Image.h"
 #include "Render/RenderDefines.h"
 #include "Sampler.h"
+#include "TextureFactory.h"
 
 #include <array>
-
 
 namespace ya
 {
 
+// Forward declaration
 template <typename ComponentType>
 struct ColorRGBA
 {
@@ -24,13 +24,6 @@ struct ColorRGBA
 };
 
 using ColorU8_t = ColorRGBA<uint8_t>;
-
-/**
- * @brief Texture - Platform-independent texture wrapper
- *
- * Manages image data, image view, and metadata.
- * Can be created from file or raw pixel data.
- */
 struct Texture
 {
     EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
@@ -45,50 +38,61 @@ struct Texture
     std::shared_ptr<IImage>     image;
     std::shared_ptr<IImageView> imageView;
 
+    static std::shared_ptr<Texture> fromFile(const std::string &filepath, const std::string &label = "");
+
+    static std::shared_ptr<Texture> fromData(
+        uint32_t                               width,
+        uint32_t                               height,
+        const std::vector<ColorRGBA<uint8_t>> &data,
+        const std::string                     &label = "");
+
+    static std::shared_ptr<Texture> fromData(uint32_t           width,
+                                             uint32_t           height,
+                                             const void        *data,
+                                             size_t             dataSize,
+                                             EFormat::T         format,
+                                             const std::string &label = "");
+
+    static std::shared_ptr<Texture> createCubeMap(const CubeMapCreateInfo &ci);
+
+    static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo &ci);
 
     /**
-     * @brief Create texture from file
+     * @brief Wrap existing IImage/IImageView into a Texture
+     * @param img Existing image
+     * @param view Existing image view
+     * @param label Optional label for debugging
+     * @return Shared pointer to Texture
+     *
+     * Usage (internal): auto tex = Texture::wrap(vkImage, vkImageView, "label");
      */
-    Texture(const std::string &filepath);
+    static std::shared_ptr<Texture> wrap(
+        std::shared_ptr<IImage>     img,
+        std::shared_ptr<IImageView> view,
+        const std::string          &label = "");
 
-    /**
-     * @brief Create texture from raw RGBA8 data
-     */
-    Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data);
 
-    /**
-     * @brief Create texture from raw data with custom format
-     */
-    Texture(uint32_t width, uint32_t height, const void *data, size_t dataSize, EFormat::T format);
+  private:
+    friend struct ITextureFactory;
+    friend class VulkanTextureFactory;
 
-    /**
-     * @brief Create texture from existing IImage/IImageView (e.g., for render targets)
-     */
-    Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, const std::string &label = "");
+    // Default constructor for factory use
+    Texture() = default;
 
-    enum ECubeFace
-    {
-        PosX = 0,
-        NegX,
-        PosY,
-        NegY,
-        PosZ,
-        NegZ,
-        Count
-    };
+    // clang-format off
+  private: struct dummy {};
+  public: Texture(dummy d) {}
+    // clang-format on
 
-    struct CubeMapCreateInfo
-    {
-        std::string                              label;
-        std::array<std::string, ECubeFace::Count> files;
-        bool                                     flipVertical = false;
-    };
+  private:
+    static std::shared_ptr<Texture> createShared() { return ya::make_shared<Texture>(dummy{}); }
 
-    /**
-     * @brief Create cubemap from 6 image files
-     */
-    Texture(const CubeMapCreateInfo &ci);
+    // Internal initialization methods (called by factory)
+    void initFromData(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels = 1);
+    void initCubeMap(const CubeMapCreateInfo &ci);
+    void initFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
+  public:
     virtual ~Texture() = default;
 
     // Disable copy, allow move
@@ -97,7 +101,7 @@ struct Texture
     Texture(Texture &&)                 = default;
     Texture &operator=(Texture &&)      = default;
 
-    // Platform-independent accessors (preferred)
+    // Platform-independent accessors
     IImage     *getImage() const { return image.get(); }
     IImageView *getImageView() const { return imageView.get(); }
 
@@ -109,20 +113,26 @@ struct Texture
     void               setLabel(const std::string &label);
     const std::string &getLabel() const { return _label; }
     const std::string &getFilepath() const { return _filepath; }
-    Extent2D         getExtent() const { return Extent2D{.width = _width, .height = _height}; }
+    Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
     /**
      * @brief Check if texture is valid
      */
     bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
 
-  private:
-    void createImage(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format = EFormat::R8G8B8A8_UNORM, uint32_t mipLevels = 1);
-    void createFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
-        void createCubeMap(const CubeMapCreateInfo &ci);
+    /**
+     * @brief Get texture render API type
+     * @return Render API type
+     */
+    ERenderAPI::T getRenderAPI() const;
 
-
   private:
+    /**
+     * @brief Get texture factory
+     * @return ITextureFactory interface pointer
+     * @throw If factory is not available
+     */
+    static class ITextureFactory *getTextureFactory();
 };
 
 
@@ -164,7 +174,5 @@ struct TextureView
         return this;
     }
 };
-
-
 
 } // namespace ya

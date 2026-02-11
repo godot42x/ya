@@ -176,18 +176,18 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // lmc->createDefaultMaterial();
         // lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/Textures/Skybox/skybox.png");
         if (auto *sc = entity->addComponent<ya::SkyboxComponent>()) {
-            ya::Texture::CubeMapCreateInfo ci{
+            ya::CubeMapCreateInfo ci{
                 .label = "SkyboxCubemap",
                 .files = {},
             };
-            ci.files[ya::Texture::ECubeFace::PosX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/right.jpg";
-            ci.files[ya::Texture::ECubeFace::NegX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/left.jpg";
-            ci.files[ya::Texture::ECubeFace::PosY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/top.jpg";
-            ci.files[ya::Texture::ECubeFace::NegY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/bottom.jpg";
-            ci.files[ya::Texture::ECubeFace::PosZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/front.jpg";
-            ci.files[ya::Texture::ECubeFace::NegZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/back.jpg";
+            ci.files[ya::CubeFace_PosX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/right.jpg";
+            ci.files[ya::CubeFace_NegX] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/left.jpg";
+            ci.files[ya::CubeFace_PosY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/top.jpg";
+            ci.files[ya::CubeFace_NegY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/bottom.jpg";
+            ci.files[ya::CubeFace_PosZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/front.jpg";
+            ci.files[ya::CubeFace_NegZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/back.jpg";
 
-            auto cubeMap = ya::make_shared<ya::Texture>(ci);
+            auto cubeMap = ya::Texture::createCubeMap(ci);
 
             sc->cubemapTexture = cubeMap;
         }

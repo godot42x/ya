@@ -256,8 +256,8 @@ enum T
     ColorAttachmentOptimal,
     DepthStencilAttachmentOptimal,
     ShaderReadOnlyOptimal,
-    TransferSrcOptimal,
-    TransferDstOptimal,
+    TransferSrc/*Optimal*/,
+    TransferDst/*Optimal*/,
     PresentSrcKHR,
 };
 } // namespace EImageLayout
@@ -805,6 +805,34 @@ struct ImageSubresourceRange
     uint32_t layerCount     = 1; // Layer count
 };
 
+/**
+ * @brief Image subresource layers for copy operations
+ */
+struct ImageSubresourceLayers
+{
+    uint32_t aspectMask     = 1; // Aspect mask (color, depth, stencil)
+    uint32_t mipLevel       = 0; // Mip level
+    uint32_t baseArrayLayer = 0; // Base array layer
+    uint32_t layerCount     = 1; // Layer count
+};
+
+/**
+ * @brief Buffer to image copy region (RHI layer)
+ */
+struct BufferImageCopy
+{
+    uint64_t               bufferOffset      = 0; // Offset in bytes from start of buffer
+    uint32_t               bufferRowLength   = 0; // Buffer row length (0 = tightly packed)
+    uint32_t               bufferImageHeight = 0; // Buffer image height (0 = tightly packed)
+    ImageSubresourceLayers imageSubresource  = {}; // Image subresource to copy to
+    int32_t                imageOffsetX      = 0; // X offset in image
+    int32_t                imageOffsetY      = 0; // Y offset in image
+    int32_t                imageOffsetZ      = 0; // Z offset in image
+    uint32_t               imageExtentWidth  = 0; // Width of region to copy
+    uint32_t               imageExtentHeight = 0; // Height of region to copy
+    uint32_t               imageExtentDepth  = 1; // Depth of region to copy
+};
+
 
 struct SwapchainCreateInfo
 {
@@ -871,7 +899,6 @@ struct ImageCreateInfo
     uint32_t        arrayLayers           = 1;
     ESampleCount::T samples               = ESampleCount::Sample_1;
     EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
-    ESharingMode::T sharingMode           = {};
     uint32_t        queueFamilyIndexCount = 0;
     const uint32_t *pQueueFamilyIndices   = nullptr;
     EImageLayout::T initialLayout         = EImageLayout::Undefined;

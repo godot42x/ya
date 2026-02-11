@@ -136,6 +136,8 @@ class VulkanCommandBuffer : public ICommandBuffer
                        const void      *data) override;
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
+    void copyBufferToImage(IBuffer *srcBuffer, IImage *dstImage, EImageLayout::T dstImageLayout,
+                           const std::vector<BufferImageCopy> &regions) override;
     void beginRendering(const RenderingInfo &info) override;
     void endRendering(const EndRenderingInfo &info) override;
     void transitionImageLayout(IImage *image, EImageLayout::T oldLayout, EImageLayout::T newLayout,

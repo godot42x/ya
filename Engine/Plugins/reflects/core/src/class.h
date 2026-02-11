@@ -164,7 +164,23 @@ struct Class : public Field
     template <typename VisitorFunc>
     void visitAllProperties(void *obj, VisitorFunc &&visitor, bool recursive = false) const
     {
-        return visitAllProperties(const_cast<const void *>(obj), std::forward<VisitorFunc>(visitor), recursive);
+        if (recursive) {
+            for (auto parentTypeId : parents) {
+                // 从注册表获取父类 Class
+                Class *parentClass = getClassByTypeId(parentTypeId);
+                if (parentClass) {
+                    void *parentObj = getParentPointer(obj, parentTypeId);
+                    if (parentObj) {
+                        parentClass->visitAllProperties(parentObj, std::forward<VisitorFunc>(visitor), true);
+                    }
+                }
+            }
+        }
+
+        // 访问当前类的属性
+        for (const auto &[name, prop] : properties) {
+            std::forward<VisitorFunc>(visitor)(name, prop, obj);
+        }
     }
 
     // 访问所有属性（可选递归访问父类）- const 版本（用于只读操作，如序列化）

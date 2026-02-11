@@ -12,6 +12,7 @@
 
 
 #include "Render/Core/Swapchain.h"
+#include "Render/Core/TextureFactory.h"
 #include "Render/Render.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
@@ -20,6 +21,7 @@
 #include "VulkanQueue.h"
 #include "VulkanRenderPass.h"
 #include "VulkanSwapChain.h"
+#include "VulkanTextureFactory.h"
 #include "VulkanUtils.h"
 
 
@@ -72,7 +74,7 @@ struct VulkanRender : public IRender
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
-        {               .name = VK_KHR_SWAPCHAIN_EXTENSION_NAME,  .bRequired = true}, // "VK_KHR_swapchain"
+        {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
@@ -117,8 +119,9 @@ struct VulkanRender : public IRender
     VkSemaphore m_renderFinishedSemaphore;
     VkFence     m_inFlightFence;
 
-    std::unique_ptr<VulkanDebugUtils> _debugUtils       = nullptr;
-    VulkanDescriptorHelper           *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
+    std::unique_ptr<VulkanDebugUtils>     _debugUtils       = nullptr;
+    VulkanDescriptorHelper               *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
+    std::unique_ptr<VulkanTextureFactory> _textureFactory   = nullptr; // 纹理工厂
 
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
@@ -159,6 +162,9 @@ struct VulkanRender : public IRender
 
         bool success = initInternal(ci);
         YA_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
+
+        // 初始化纹理工厂
+        _textureFactory = std::make_unique<VulkanTextureFactory>(this);
 
         return true;
     }
@@ -224,6 +230,9 @@ struct VulkanRender : public IRender
     void *createSemaphore(const char *debugName = nullptr) override;
     void  destroySemaphore(void *semaphore) override;
     void  advanceFrame() override { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
+
+    // IRender interface: get texture factory
+    ITextureFactory *getTextureFactory() override { return _textureFactory.get(); }
 
   private:
     void terminate()
@@ -360,18 +369,6 @@ struct VulkanRender : public IRender
     std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
     const ::VkAllocationCallbacks              *getAllocator();
 
-
-    // VkSampler createSampler(const ya::SamplerDesc &ci);
-    // void      removeSampler(const std::string &label);
-    // VkSampler getSampler(const std::string &name)
-    // {
-    //     auto it = _samplers.find(name);
-    //     if (it != _samplers.end()) {
-    //         return it->second;
-    //     }
-    //     YA_CORE_WARN("Sampler not found: {}", name);
-    //     return VK_NULL_HANDLE;
-    // }
 
     void waitIdle() override { VK_CALL(vkDeviceWaitIdle(m_LogicalDevice)); }
 

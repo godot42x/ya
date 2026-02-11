@@ -112,39 +112,34 @@ void App::onSceneViewportResized(Rect2D rect)
     //      but framebuffer depend on the renderpass
     // Recreate postprocess image when viewport size changes
     if (_render && newExtent.width > 0 && newExtent.height > 0) {
-        auto vkRender = _render->as<VulkanRender>();
 
         // Wait for GPU to finish using old resources before destroying them
         if (_postprocessTexture) {
             _render->waitIdle();
         }
-
-        // Release old texture
         _postprocessTexture.reset();
+        _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+            .label   = "PostprocessRenderTarget",
+            .width   = newExtent.width,
+            .height  = newExtent.height,
+            .format  = EFormat::R8G8B8A8_UNORM,
+            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples = ESampleCount::Sample_1,
+            .isDepth = false,
+        });
+        // }
+    }
+}
 
-        // Create new postprocess image
-        ImageCreateInfo imageCI{
-            .label  = "PostprocessImage",
-            .format = EFormat::R8G8B8A8_UNORM,
-            .extent = {
-                .width  = newExtent.width,
-                .height = newExtent.height,
-                .depth  = 1,
-            },
-            .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .initialLayout = EImageLayout::Undefined,
-        };
-        auto postprocessImage = VulkanImage::create(vkRender, imageCI);
+void App::renderScene(ICommandBuffer *cmdBuf, float dt, FrameContext &ctx)
+{
+    _skyboxSystem->tick(cmdBuf, dt, ctx);
 
-        if (postprocessImage) {
-            auto postprocessImageView = VulkanImageView::create(
-                vkRender,
-                postprocessImage,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-            postprocessImageView->setDebugName("PostprocessImageView");
-
-            // 使用新的 Texture 构造函数包装 IImage/IImageView
-            _postprocessTexture = std::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
+    // Render material systems
+    for (auto &system : _materialSystems) {
+        if (system->bEnabled) {
+            YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
+            system->onRender(cmdBuf, &ctx);
         }
     }
 }
@@ -316,30 +311,15 @@ void App::init(AppDesc ci)
 
     // MARK: tex-> Postprocessing
     {
-        auto            vkRender = _render->as<VulkanRender>();
-        ImageCreateInfo imageCI{
-            .label  = "PostprocessImage",
-            .format = EFormat::R8G8B8A8_UNORM,
-            .extent = {
-                .width  = static_cast<uint32_t>(winW),
-                .height = static_cast<uint32_t>(winH),
-                .depth  = 1,
-            },
-            .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .initialLayout = EImageLayout::Undefined,
-        };
-        auto postprocessImage = VulkanImage::create(vkRender, imageCI);
-
-        if (postprocessImage) {
-            auto postprocessImageView = VulkanImageView::create(
-                vkRender,
-                postprocessImage,
-                VK_IMAGE_ASPECT_COLOR_BIT);
-            postprocessImageView->setDebugName("PostprocessImageView");
-
-            // 使用新的 Texture 构造函数包装 IImage/IImageView
-            _postprocessTexture = ya::make_shared<Texture>(postprocessImage, postprocessImageView, "PostprocessTexture");
-        }
+        _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+            .label   = "PostprocessRenderTarget",
+            .width   = static_cast<uint32_t>(winW),
+            .height  = static_cast<uint32_t>(winH),
+            .format  = EFormat::R8G8B8A8_UNORM,
+            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples = ESampleCount::Sample_1,
+            .isDepth = false,
+        });
         _deleter.push("PostprocessTexture", [this](void *) {
             _postprocessTexture.reset();
         });
@@ -885,9 +865,7 @@ void App::tickRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    for (auto &system : _materialSystems) {
-        system->beginFrame();
-    }
+    beginFrame();
 
     FrameContext ctx;
     {
@@ -979,15 +957,7 @@ void App::tickRender(float dt)
             };
             cmdBuf->beginRendering(ri);
 
-            _skyboxSystem->tick(cmdBuf.get(), dt, ctxCopy);
-
-            // Render material systems
-            for (auto &system : _materialSystems) {
-                if (system->bEnabled) {
-                    YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
-                    system->onRender(cmdBuf.get(), &ctxCopy);
-                }
-            }
+            renderScene(cmdBuf.get(), dt, ctxCopy);
 
             cmdBuf->endRendering(EndRenderingInfo{
                 .renderTarget = _mirrorRT.get(),
@@ -1029,15 +999,7 @@ void App::tickRender(float dt)
 
         ctx.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
 
-        _skyboxSystem->tick(cmdBuf.get(), dt, ctx);
-        // Render material systems
-        for (auto &system : _materialSystems) {
-            if (system->bEnabled) {
-                YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
-                system->onRender(cmdBuf.get(), &ctx);
-            }
-        }
-
+        renderScene(cmdBuf.get(), dt, ctx);
 
         {
             YA_PROFILE_SCOPE("Render2D");

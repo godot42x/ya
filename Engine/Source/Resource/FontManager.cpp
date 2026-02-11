@@ -69,7 +69,7 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     auto font        = std::make_shared<Font>();
     font->fontSize   = (float)fontSize;
     font->fontPath   = fontPath;
-    font->lineHeight = (float)(face->size->metrics.height >> 6);   // 26.6 fixed point to integer
+    font->lineHeight = (float)(face->size->metrics.height >> 6);    // 26.6 fixed point to integer
     font->ascent     = (float)(face->size->metrics.ascender >> 6);  // Distance from baseline to top
     font->descent    = (float)(face->size->metrics.descender >> 6); // Distance from baseline to bottom (negative)
 
@@ -189,8 +189,12 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     FT_Done_FreeType(ft);
 
     // Create atlas texture
-    font->atlasTexture = makeShared<Texture>(atlasWidth, atlasHeight, atlasData);
-    font->atlasTexture->setLabel(std::format("FontAtlas_{}", fontName.toString()));
+    font->atlasTexture = Texture::fromData(atlasWidth,
+                                           atlasHeight,
+                                           atlasData.data(),
+                                           atlasData.size(),
+                                           EFormat::R8_UNORM,
+                                           std::format("FontAtlas_{}", fontName.toString()));
     AssetManager::get()->registerTexture(std::format("FontAtlas_{}:{}", fontName.toString(), fontSize), font->atlasTexture);
 
     // Cache the loaded font

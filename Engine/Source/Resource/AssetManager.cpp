@@ -368,7 +368,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
         return _textureViews.find(filepath)->second;
     }
 
-    auto texture = makeShared<Texture>(filepath);
+    auto texture = Texture::fromFile(filepath);
     if (!texture) {
         YA_CORE_WARN("Failed to create texture: {}", filepath);
         return nullptr;
@@ -385,8 +385,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, cons
         return _textureViews.find(name)->second;
     }
 
-    auto texture = makeShared<Texture>(filepath);
-    texture->setLabel(name);
+    auto texture = Texture::fromFile(filepath, name);
     if (!texture) {
         YA_CORE_WARN("Failed to create texture: {}", filepath);
     }

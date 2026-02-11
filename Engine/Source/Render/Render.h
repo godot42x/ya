@@ -10,6 +10,7 @@ namespace ya
 struct ICommandBuffer;
 struct ISwapchain;
 struct IDescriptorSetHelper;
+struct ITextureFactory; // 添加TextureFactory前向声明
 
 
 enum class ERenderObject : uint32_t
@@ -100,7 +101,7 @@ struct IRender : public plat_base<IRender>
      * @brief Begin recording commands for isolated/immediate execution
      * @return Command buffer for recording
      */
-    virtual ICommandBuffer *beginIsolateCommands(const std::string& context) = 0;
+    virtual ICommandBuffer *beginIsolateCommands(const std::string& context = "") = 0;
 
     /**
      * @brief End and submit isolated commands
@@ -118,6 +119,12 @@ struct IRender : public plat_base<IRender>
      * @return Pointer to descriptor set helper interface
      */
     virtual IDescriptorSetHelper *getDescriptorHelper() = 0;
+
+    /**
+     * @brief Get the texture factory for creating image resources
+     * @return Pointer to texture factory interface
+     */
+    virtual ITextureFactory *getTextureFactory() = 0;
 
     /**
      * @brief Submit command buffers to graphics queue with synchronization

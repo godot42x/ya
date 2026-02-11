@@ -40,8 +40,8 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createAttachmentTexture(
         return nullptr;
     }
 
-    // Create Texture directly (FrameBuffer owns the Texture)
-    auto texture     = std::make_shared<Texture>(vkImage, vkImageView, label);
+    // Create Texture using wrap factory method (FrameBuffer owns the Texture)
+    auto texture = Texture::wrap(vkImage, vkImageView, label);
     texture->_width  = _width;
     texture->_height = _height;
     texture->_format = attachInfo.format;
@@ -67,8 +67,8 @@ std::shared_ptr<Texture> VulkanFrameBuffer::wrapExternalImage(
         return nullptr;
     }
 
-    // Create Texture wrapping the external image (FrameBuffer owns the Texture wrapper)
-    auto texture     = std::make_shared<Texture>(vkImage, vkImageView, label);
+    // Create Texture using wrap factory method (FrameBuffer owns the Texture wrapper)
+    auto texture = Texture::wrap(vkImage, vkImageView, label);
     texture->_width  = _width;
     texture->_height = _height;
     texture->_format = vkImage->getFormat();

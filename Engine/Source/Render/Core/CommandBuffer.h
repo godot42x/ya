@@ -352,6 +352,19 @@ struct ICommandBuffer
     virtual void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                             uint64_t srcOffset = 0, uint64_t dstOffset = 0) = 0;
 
+    /**
+     * @brief Copy data from buffer to image
+     * @param srcBuffer Source buffer
+     * @param dstImage Destination image
+     * @param dstImageLayout Current layout of destination image (must be TransferDst)
+     * @param regions Copy regions
+     */
+    virtual void copyBufferToImage(
+        IBuffer                        *srcBuffer,
+        IImage                         *dstImage,
+        EImageLayout::T                 dstImageLayout,
+        const std::vector<BufferImageCopy> &regions) = 0;
+
     virtual void beginRendering(const RenderingInfo &info) = 0;
 
     /**

@@ -352,6 +352,13 @@ struct App
     void onSceneViewportResized(Rect2D rect);
 
 
+    void renderScene(ICommandBuffer *cmdBuf, float dt, FrameContext &ctx);
+    void beginFrame()
+    {
+        for (auto &system : _materialSystems) {
+            system->beginFrame();
+        }
+    }
 
     void handleSystemSignals();
 };

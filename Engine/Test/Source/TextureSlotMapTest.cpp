@@ -118,7 +118,7 @@ TEST_F(TextureSlotMapTest, DeserializeTextureSlotMap)
                     auto *textureSlotClass = registry.getClass(accessor->getElementTypeIndex());
                     std::cout << "TextureSlot class found: " << (textureSlotClass ? "YES" : "NO") << std::endl;
                     if (textureSlotClass) {
-                        std::cout << "TextureSlot class name: " << textureSlotClass->_name << std::endl;
+                        std::cout << "TextureSlot class name: " << textureSlotClass->name << std::endl;
                         std::cout << "Can create instance: " << (textureSlotClass->canCreateInstance() ? "YES" : "NO") << std::endl;
                     }
                 }

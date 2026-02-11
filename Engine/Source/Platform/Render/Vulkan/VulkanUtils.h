@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 
 #include "Render/Core/Buffer.h"
+#include "Render/Core/Image.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
 
@@ -482,6 +483,7 @@ inline auto toVk(T format) -> VkFormat
     }
     return VK_FORMAT_UNDEFINED;
 }
+
 inline EFormat::T fromVk(VkFormat format)
 {
     switch (format) {
@@ -777,9 +779,9 @@ inline auto toVk(T layout) -> VkImageLayout
         return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     case ShaderReadOnlyOptimal:
         return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    case TransferSrcOptimal:
+    case TransferSrc:
         return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    case TransferDstOptimal:
+    case TransferDst:
         return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     case PresentSrcKHR:
         return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -799,9 +801,9 @@ inline auto fromVk(VkImageLayout layout) -> T
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
         return ShaderReadOnlyOptimal;
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        return TransferSrcOptimal;
+        return TransferSrc;
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        return TransferDstOptimal;
+        return TransferDst;
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
         return PresentSrcKHR;
     default:

@@ -6,14 +6,11 @@
 #include <cstddef>
 #include <cstring>
 
-#include "Platform/Render/Vulkan/VulkanUtils.h"
-
-#include "Platform/Render/Vulkan/VulkanBuffer.h"
-#include "Platform/Render/Vulkan/VulkanImage.h"
-#include "Platform/Render/Vulkan/VulkanImageView.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/CommandBuffer.h"
 
 #include "Render/Core/Buffer.h"
+#include "Render/Core/Image.h" // Include Image.h for RHI enums
+#include "Render/Core/TextureFactory.h"
 #include "Render/Render.h"
 
 #include "ktx.h"
@@ -26,101 +23,82 @@ namespace
 {
 struct StbiImage
 {
-    stbi_uc *data = nullptr;
+    std::shared_ptr<stbi_uc> data = nullptr;
 
     StbiImage() = default;
-    explicit StbiImage(stbi_uc *inData)
-        : data(inData) {}
-
+    explicit StbiImage(stbi_uc *ptr)
+    {
+        data = std::shared_ptr<stbi_uc>(ptr, [](stbi_uc *ptr) {
+            stbi_image_free(ptr);
+        });
+    }
     ~StbiImage()
     {
-        if (data) {
-            stbi_image_free(data);
-        }
     }
-
-    StbiImage(const StbiImage &)            = delete;
-    StbiImage &operator=(const StbiImage &) = delete;
-
-    StbiImage(StbiImage &&other) noexcept
-        : data(other.data)
-    {
-        other.data = nullptr;
-    }
-
-    StbiImage &operator=(StbiImage &&other) noexcept
-    {
-        if (this != &other) {
-            if (data) {
-                stbi_image_free(data);
-            }
-            data       = other.data;
-            other.data = nullptr;
-        }
-        return *this;
-    }
-
-    explicit operator bool() const { return data != nullptr; }
-    stbi_uc *get() const { return data; }
+    operator bool() const { return data != nullptr; }
+    const stbi_uc *get() const { return data.get(); }
+    stbi_uc       *get() { return data.get(); }
 };
 
-struct StbiFlipGuard
+class StbiFlipGuard
 {
-    explicit StbiFlipGuard(bool enable)
+  public:
+    explicit StbiFlipGuard(bool flip) : m_flip(flip)
     {
-        stbi_set_flip_vertically_on_load(enable ? 1 : 0);
+        if (m_flip) {
+            stbi_set_flip_vertically_on_load_thread(true);
+        }
     }
-
     ~StbiFlipGuard()
     {
-        stbi_set_flip_vertically_on_load(0);
+        if (m_flip) {
+            stbi_set_flip_vertically_on_load_thread(false);
+        }
     }
+    bool m_flip = false;
 };
 } // namespace
 
+static size_t getFormatPixelSize(EFormat::T format);
+static bool   isBlockCompressed(EFormat::T format);
 
-
-// Helper function to calculate pixel size or block size
+/**
+ * @brief Get the size in bytes per pixel/block for a given format
+ */
 static size_t getFormatPixelSize(EFormat::T format)
 {
     switch (format) {
-    // Uncompressed formats
     case EFormat::R8_UNORM:
         return 1;
     case EFormat::R8G8_UNORM:
         return 2;
     case EFormat::R8G8B8A8_UNORM:
+    case EFormat::R8G8B8A8_SRGB:
     case EFormat::B8G8R8A8_UNORM:
+    case EFormat::B8G8R8A8_SRGB:
+    case EFormat::D32_SFLOAT:
+    case EFormat::D24_UNORM_S8_UINT:
         return 4;
+    case EFormat::D32_SFLOAT_S8_UINT:
+        return 5; // 4 bytes for depth + 1 byte for stencil (padded to 8 in practice)
 
-    // Block compressed formats (BC1-DXT1: 4x4 blocks, 8 bytes per block)
+    // BC formats (block size)
     case EFormat::BC1_RGB_UNORM_BLOCK:
     case EFormat::BC1_RGBA_UNORM_BLOCK:
     case EFormat::BC1_RGB_SRGB_BLOCK:
     case EFormat::BC1_RGBA_SRGB_BLOCK:
-        return 8;
-
-    // Block compressed formats (BC3-DXT5: 4x4 blocks, 16 bytes per block)
-    case EFormat::BC3_UNORM_BLOCK:
-    case EFormat::BC3_SRGB_BLOCK:
-        return 16;
-
-    // Block compressed formats (BC7: 4x4 blocks, 16 bytes per block)
-    case EFormat::BC7_UNORM_BLOCK:
-    case EFormat::BC7_SRGB_BLOCK:
-        return 16;
-
-    // Block compressed formats (BC4: 4x4 blocks, 8 bytes per block)
     case EFormat::BC4_UNORM_BLOCK:
     case EFormat::BC4_SNORM_BLOCK:
-        return 8;
-
-    // Block compressed formats (BC5: 4x4 blocks, 16 bytes per block)
+        return 8; // 8 bytes per 4x4 block
+    case EFormat::BC3_UNORM_BLOCK:
+    case EFormat::BC3_SRGB_BLOCK:
     case EFormat::BC5_UNORM_BLOCK:
     case EFormat::BC5_SNORM_BLOCK:
-        return 16;
+    case EFormat::BC7_UNORM_BLOCK:
+    case EFormat::BC7_SRGB_BLOCK:
+        return 16; // 16 bytes per 4x4 block
 
-    // ASTC formats (4x4 blocks, 16 bytes per block)
+    // ASTC formats (all 16 bytes per block)
     case EFormat::ASTC_4x4_UNORM_BLOCK:
     case EFormat::ASTC_4x4_SRGB_BLOCK:
     case EFormat::ASTC_5x5_UNORM_BLOCK:
@@ -133,7 +111,7 @@ static size_t getFormatPixelSize(EFormat::T format)
     case EFormat::ASTC_10x10_SRGB_BLOCK:
         return 16;
 
-    // ETC2 formats (4x4 blocks, 8 or 16 bytes per block)
+    // ETC2 formats
     case EFormat::ETC2_R8G8B8_UNORM_BLOCK:
     case EFormat::ETC2_R8G8B8_SRGB_BLOCK:
     case EFormat::ETC2_R8G8B8A1_UNORM_BLOCK:
@@ -144,12 +122,14 @@ static size_t getFormatPixelSize(EFormat::T format)
         return 16;
 
     default:
-        YA_CORE_WARN("Unknown format {}, assuming 4 bytes per pixel", (int)format);
-        return 4;
+        YA_CORE_WARN("Unknown format pixel size for format: {}", static_cast<int>(format));
+        return 4; // Default to 4 bytes
     }
 }
 
-// Helper function to check if format is block compressed
+/**
+ * @brief Check if a format is block compressed
+ */
 static bool isBlockCompressed(EFormat::T format)
 {
     switch (format) {
@@ -187,177 +167,212 @@ static bool isBlockCompressed(EFormat::T format)
     }
 }
 
-Texture::Texture(const std::string &filepath)
-{
+// ====== Static Factory Methods Implementation ======
 
+ITextureFactory *Texture::getTextureFactory()
+{
+    auto render = ya::App::get()->getRender();
+    YA_CORE_ASSERT(render, "Render is not initialized");
+
+    auto textureFactory = render->getTextureFactory();
+    YA_CORE_ASSERT(textureFactory && textureFactory->isValid(), "TextureFactory is not available");
+
+    return textureFactory;
+}
+
+std::shared_ptr<Texture> Texture::fromFile(const std::string &filepath, const std::string &label)
+{
     stdpath p = filepath;
     if (p.extension() == ".ktx" || p.extension() == ".ktx2") {
-        // Load KTX texture
-        ktxTexture2   *tex    = nullptr;
-        KTX_error_code result = ktxTexture2_CreateFromNamedFile(filepath.c_str(), KTX_TEXTURE_CREATE_NO_FLAGS, &tex);
-
-        if (result != KTX_SUCCESS) {
-            YA_CORE_ERROR("Failed to load KTX texture: {}", filepath.c_str());
-            return;
-        }
-
-        // Get texture properties
-        ktx_uint32_t width     = tex->baseWidth;
-        ktx_uint32_t height    = tex->baseHeight;
-        ktx_uint32_t mipLevels = tex->numLevels;
-
-        VkFormat   vkFormat = static_cast<VkFormat>(tex->vkFormat);
-        EFormat::T format   = EFormat::fromVk(vkFormat);
-
-        if (format == EFormat::Undefined) {
-            YA_CORE_ERROR("Unsupported KTX format: {}", tex->vkFormat);
-            ktxTexture_Destroy(ktxTexture(tex));
-            return;
-        }
-
-        auto vkRender = ya::App::get()->getRender<VulkanRender>();
-
-        // Calculate total size needed for staging buffer
-        ktx_size_t totalSize = ktxTexture_GetDataSize(ktxTexture(tex));
-
-        // Upload the KTX texture data to GPU directly using KTX's upload function
-        // This is the most reliable way to handle block compressed formats
-        ktx_uint8_t *ktxData     = ktxTexture_GetData(ktxTexture(tex));
-        ktx_size_t   ktxDataSize = ktxTexture_GetDataSize(ktxTexture(tex));
-
-        // Note: For KTX with block compression, we need to properly handle mip level offsets
-        // The createImage function will handle the per-level copying
-
-        createImage(ktxData, ktxDataSize, width, height, format, mipLevels);
-
-        ktxTexture_Destroy(ktxTexture(tex));
-
-        _filepath = filepath;
-        YA_CORE_TRACE("Created KTX texture from file: {} ({}x{}, {} mips, format: {}, data size: {})",
-                      filepath.data(),
-                      width,
-                      height,
-                      mipLevels,
-                      (int)format,
-                      ktxDataSize);
-        return;
+        // TODO: KTX texture loading support
+        YA_CORE_WARN("KTX texture loading not yet implemented: {}", filepath);
+        return nullptr;
     }
 
-    int texWidth = -1, texHeight = -1, texChannels = -1;
-    // TODO: support other formats, eg: ktx
+    int       texWidth = -1, texHeight = -1, texChannels = -1;
     StbiImage pixels(stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha));
     if (!pixels) {
-        YA_CORE_ERROR("failed to load texture image! {}", filepath.data());
-        return;
+        YA_CORE_ERROR("Failed to load texture image: {}", filepath);
+        return nullptr;
     }
 
-    _filepath = filepath;
-    _channels = 4; // Force RGBA
-    createImage(pixels.get(), 0, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
-    YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath.data(), texWidth, texHeight, texChannels);
+    auto texture       = Texture::createShared();
+    texture->_filepath = filepath;
+    texture->_label    = label.empty() ? filepath : label;
+    texture->_channels = 4; // Force RGBA
+    texture->initFromData(pixels.get(), 0, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
+
+    YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath, texWidth, texHeight, texChannels);
+    return texture;
 }
 
-Texture::Texture(uint32_t width, uint32_t height, const std::vector<ColorRGBA<uint8_t>> &data)
+std::shared_ptr<Texture> Texture::fromData(
+    uint32_t                               width,
+    uint32_t                               height,
+    const std::vector<ColorRGBA<uint8_t>> &data,
+    const std::string                     &label)
 {
-    YA_CORE_ASSERT((uint32_t)data.size() == width * height, "pixel data size does not match width * height");
-    _channels = 4;
-    createImage(data.data(), 0, width, height, EFormat::R8G8B8A8_UNORM);
-    YA_CORE_TRACE("Created texture from data({}x{})", width, height);
+    YA_CORE_ASSERT((uint32_t)data.size() == width * height, "Pixel data size does not match width * height");
+
+    auto texture       = Texture::createShared();
+    texture->_label    = label;
+    texture->_channels = 4;
+    texture->initFromData(data.data(), 0, width, height, EFormat::R8G8B8A8_UNORM);
+
+    YA_CORE_TRACE("Created texture from RGBA data ({}x{}) label: {}", width, height, label);
+    return texture;
 }
 
-Texture::Texture(uint32_t width, uint32_t height, const void *data, size_t dataSize, EFormat::T format)
+std::shared_ptr<Texture> Texture::fromData(
+    uint32_t           width,
+    uint32_t           height,
+    const void        *data,
+    size_t             dataSize,
+    EFormat::T         format,
+    const std::string &label)
 {
-    _format = format;
+    auto texture     = Texture::createShared();
+    texture->_label  = label;
+    texture->_format = format;
+
     // Derive channels from format
     switch (format) {
     case EFormat::R8G8B8A8_UNORM:
     case EFormat::B8G8R8A8_UNORM:
-        _channels = 4;
+        texture->_channels = 4;
         break;
     default:
-        _channels = 4; // Default
+        texture->_channels = 4; // Default
         break;
     }
 
-    createImage(data, dataSize, width, height, format, 1);
-    YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {})", width, height, (int)format);
+    texture->initFromData(data, dataSize, width, height, format, 1);
+
+    YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {}) label: {}", width, height, (int)format, label);
+    return texture;
 }
 
-Texture::Texture(std::shared_ptr<IImage> img, std::shared_ptr<IImageView> view, const std::string &label)
-    : _label(label), image(img), imageView(view)
+std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo &ci)
 {
-    YA_CORE_ASSERT(img && view, "Cannot create Texture from null IImage or IImageView");
+    auto texture    = Texture::createShared();
+    texture->_label = ci.label;
+    texture->initCubeMap(ci);
 
-    // Extract metadata from the wrapped image
-    // Note: We need to cast to platform-specific type to get extent info
-    // This is a temporary solution - ideally IImage would provide extent accessors
-    if (auto vkImg = std::dynamic_pointer_cast<VulkanImage>(img)) {
-        _width     = img->getWidth();
-        _height    = img->getHeight();
-        _format    = vkImg->getFormat();
-        _mipLevels = vkImg->_ci.mipLevels;
-        _channels  = 4; // Default, can't easily determine from VkFormat alone
+    if (!texture->isValid()) {
+        return nullptr;
     }
 
-    YA_CORE_TRACE("Created Texture from existing IImage/IImageView: {} ({}x{})", label, _width, _height);
+    return texture;
 }
 
-Texture::Texture(const CubeMapCreateInfo &ci)
-    : _label(ci.label)
+std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo &ci)
 {
-    createCubeMap(ci);
+    auto textureFactory = getTextureFactory();
+
+    // Create image for render target
+    ImageCreateInfo imageCI{
+        .label  = ci.label,
+        .format = ci.format,
+        .extent = {
+            .width  = ci.width,
+            .height = ci.height,
+            .depth  = 1,
+        },
+        .mipLevels     = 1,
+        .samples       = ci.samples,
+        .usage         = ci.usage,
+        .initialLayout = EImageLayout::Undefined,
+    };
+
+    auto image = textureFactory->createImage(imageCI);
+    if (!image) {
+        YA_CORE_ERROR("Failed to create render target image: {}", ci.label);
+        return nullptr;
+    }
+
+    // Create image view
+    uint32_t aspectFlags = ci.isDepth ? EImageAspect::Depth : EImageAspect::Color;
+    auto     imageView   = textureFactory->createImageView(image, aspectFlags);
+    if (!imageView) {
+        YA_CORE_ERROR("Failed to create render target image view: {}", ci.label);
+        return nullptr;
+    }
+
+    return Texture::wrap(image, imageView, ci.label);
 }
 
+std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
+                                       std::shared_ptr<IImageView> view,
+                                       const std::string          &label)
+{
+    YA_CORE_ASSERT(img && view, "Cannot wrap null IImage or IImageView");
+
+    auto texture = createShared();
+
+    texture->_label    = label;
+    texture->image     = img;
+    texture->imageView = view;
+
+    // Extract metadata from the wrapped image using RHI interface
+    texture->_width     = img->getWidth();
+    texture->_height    = img->getHeight();
+    texture->_format    = img->getFormat();
+    texture->_mipLevels = 1; // Default mip levels
+    texture->_channels  = 4; // Default
+
+    YA_CORE_TRACE("Created Texture from existing IImage/IImageView: {} ({}x{})", label, texture->_width, texture->_height);
+    return texture;
+}
 
 void Texture::setLabel(const std::string &label)
 {
     _label = label;
-    image->setDebugName(std::format("Texture_Image_{}", label));
-    imageView->setDebugName(std::format("Texture_ImageView_{}", label));
+    if (image) {
+        image->setDebugName(std::format("Texture_Image_{}", label));
+    }
+    if (imageView) {
+        imageView->setDebugName(std::format("Texture_ImageView_{}", label));
+    }
 }
 
-void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels)
+void Texture::initFromData(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels)
 {
     _width     = texWidth;
     _height    = texHeight;
     _format    = format;
     _mipLevels = mipLevels;
 
-    auto vkRender = ya::App::get()->getRender<VulkanRender>();
+    auto render         = App::get()->getRender();
+    auto textureFactory = render->getTextureFactory();
 
     // Calculate image size
-    // For uncompressed formats, calculate based on pixel size
-    // For block compressed formats, dataSize should be provided directly from KTX
-    VkDeviceSize imageSize;
+    VkDeviceSize imageSize = 0;
     if (dataSize > 0) {
-        // Use provided data size (typically from KTX with all mip levels)
         imageSize = dataSize;
     }
     else {
-        // Calculate for uncompressed single mip level
         size_t pixelSize = getFormatPixelSize(format);
         imageSize        = pixelSize * texWidth * texHeight;
     }
+
     auto ci = ya::ImageCreateInfo{
         .label  = std::format("Texture_Image_{}", _label),
         .format = format,
         .extent = {
-                   .width  = texWidth,
-                   .height = texHeight,
-                   .depth  = 1,
-                   },
+            .width  = texWidth,
+            .height = texHeight,
+            .depth  = 1,
+        },
         .mipLevels     = mipLevels,
         .samples       = ESampleCount::Sample_1,
         .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
-        .sharingMode   = ESharingMode::Exclusive,
         .initialLayout = EImageLayout::Undefined,
     };
 
-    // Create Vulkan image
-    auto vkImage = VulkanImage::create(vkRender, ci);
-    // TODO: some format(eg: VK_FORMAT_ASTC_5x5_SRGB_BLOCK ) now supported for now , simply skip it
-    if (!vkImage || !vkImage->isValid()) {
-        YA_CORE_ERROR("Failed to create VulkanImage for texture: {} (format: {}, {}x{})",
+    // Create image using texture factory
+    image = textureFactory->createImage(ci);
+    if (!image || !image->getHandle()) {
+        YA_CORE_ERROR("Failed to create image for texture: {} (format: {}, {}x{})",
                       _filepath.empty() ? _label : _filepath,
                       (int)format,
                       texWidth,
@@ -365,55 +380,47 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
 
         // Create a fallback 1x1 magenta texture to indicate error
         uint32_t magentaPixel = 0xFFFF00FF; // RGBA: magenta
-        createFallbackTexture(&magentaPixel, sizeof(magentaPixel), 1, 1);
+        initFallbackTexture(&magentaPixel, sizeof(magentaPixel), 1, 1);
         return;
     }
 
-
-    // Store as abstract interface
-    image     = vkImage;
-    imageView = VulkanImageView::create(vkRender, vkImage, VK_IMAGE_ASPECT_COLOR_BIT);
+    // Create image view using texture factory
+    imageView = textureFactory->createImageView(image, EImageAspect::Color);
+    YA_CORE_ASSERT(imageView, "Failed to create image view for texture: {} (format: {}, {}x{})", _filepath.empty() ? _label : _filepath, (int)format, texWidth, texHeight);
 
     // Create staging buffer
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        vkRender,
+        render,
         ya::BufferCreateInfo{
-            .label         = std::format("StagingBuffer_Texture_{}", _filepath),
+            .label         = std::format("StagingBuffer_Texture_{}", _filepath.empty() ? _label : _filepath),
             .usage         = EBufferUsage::TransferSrc,
             .data          = (void *)pixels,
             .size          = static_cast<uint32_t>(imageSize),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto           *cmdBuf   = vkRender->beginIsolateCommands();
-    VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
+    auto *cmdBuf = render->beginIsolateCommands();
 
-    // Do layout transition image: UNDEFINED -> TRANSFER_DST, copy, TRANSFER_DST -> SHADER_READ_ONLY
-    VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // Transition image layout: UNDEFINED -> TRANSFER_DST
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
-    // For block compressed formats with multiple mip levels, need to copy each level separately
-    // Use KTX API to get correct data offsets for each level
+    // For block compressed formats with multiple mip levels
     bool isCompressed = isBlockCompressed(format);
 
     if (isCompressed && mipLevels > 1 && dataSize > 0) {
-        // For KTX textures, we need to calculate offsets correctly
-        // Each mip level is stored contiguously with proper alignment
         VkDeviceSize bufferOffset  = 0;
         uint32_t     currentWidth  = texWidth;
         uint32_t     currentHeight = texHeight;
 
         for (uint32_t level = 0; level < mipLevels; level++) {
-            // Ensure minimum dimensions
             currentWidth  = std::max(currentWidth, 1u);
             currentHeight = std::max(currentHeight, 1u);
 
-            // Calculate level size based on block compression
             uint32_t     blockSize = getFormatPixelSize(format);
             uint32_t     blocksX   = (currentWidth + 3) / 4;
             uint32_t     blocksY   = (currentHeight + 3) / 4;
             VkDeviceSize levelSize = blocksX * blocksY * blockSize;
 
-            // Ensure we don't exceed buffer size
             if (bufferOffset + levelSize > imageSize) {
                 YA_CORE_ERROR("Mip level {} data exceeds buffer size: {} > {}",
                               level,
@@ -422,45 +429,60 @@ void Texture::createImage(const void *pixels, size_t dataSize, uint32_t texWidth
                 break;
             }
 
-            VkBufferImageCopy region{};
-            region.bufferOffset                    = bufferOffset;
-            region.bufferRowLength                 = 0; // Tightly packed
-            region.bufferImageHeight               = 0;
-            region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-            region.imageSubresource.mipLevel       = level;
-            region.imageSubresource.baseArrayLayer = 0;
-            region.imageSubresource.layerCount     = 1;
-            region.imageOffset                     = {.x = 0, .y = 0, .z = 0};
-            region.imageExtent                     = {.width = currentWidth, .height = currentHeight, .depth = 1};
+            BufferImageCopy region{
+                .bufferOffset      = bufferOffset,
+                .bufferRowLength   = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource  = {
+                     .aspectMask     = EImageAspect::Color,
+                     .mipLevel       = level,
+                     .baseArrayLayer = 0,
+                     .layerCount     = 1,
+                },
+                .imageOffsetX      = 0,
+                .imageOffsetY      = 0,
+                .imageOffsetZ      = 0,
+                .imageExtentWidth  = currentWidth,
+                .imageExtentHeight = currentHeight,
+                .imageExtentDepth  = 1,
+            };
 
-            vkCmdCopyBufferToImage(vkCmdBuf,
-                                   dynamic_cast<VulkanBuffer *>(stagingBuffer.get())->getHandle().as<VkBuffer>(),
-                                   vkImage->getHandle().as<VkImage>(),
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                   1,
-                                   &region);
+            cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
 
             bufferOffset += levelSize;
-
-            // Halve dimensions for next level
-            currentWidth >>= 1;
-            currentHeight >>= 1;
+            currentWidth /= 2;
+            currentHeight /= 2;
         }
     }
     else {
-        // Simple copy for non-compressed or single mip level
-        VulkanImage::transfer(vkCmdBuf, dynamic_cast<VulkanBuffer *>(stagingBuffer.get()), vkImage.get());
+        BufferImageCopy region{
+            .bufferOffset      = 0,
+            .bufferRowLength   = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource  = {
+                 .aspectMask     = EImageAspect::Color,
+                 .mipLevel       = 0,
+                 .baseArrayLayer = 0,
+                 .layerCount     = 1,
+            },
+            .imageOffsetX      = 0,
+            .imageOffsetY      = 0,
+            .imageOffsetZ      = 0,
+            .imageExtentWidth  = texWidth,
+            .imageExtentHeight = texHeight,
+            .imageExtentDepth  = 1,
+        };
+
+        cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
     }
 
-    VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    vkRender->endIsolateCommands(cmdBuf);
+    // Transition to shader read-only layout
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
 
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, vkImage->getHandle().as<VkImage>(), std::format("Texture_Image_{}", _filepath));
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, vkImage->_imageMemory, std::format("Texture_ImageMemory_{}", _filepath));
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, dynamic_cast<VulkanImageView *>(imageView.get())->getHandle().as<VkImageView>(), std::format("Texture_ImageView_{}", _filepath));
+    render->endIsolateCommands(cmdBuf);
 }
 
-void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)
+void Texture::initFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)
 {
     _width     = texWidth;
     _height    = texHeight;
@@ -468,35 +490,38 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
     _mipLevels = 1;
     _channels  = 4;
 
-    auto vkRender = ya::App::get()->getRender<VulkanRender>();
+    auto textureFactory = getTextureFactory();
+    auto render         = textureFactory->getRender();
 
     auto ci = ya::ImageCreateInfo{
         .label  = std::format("Texture_Fallback_{}", _label),
         .format = EFormat::R8G8B8A8_UNORM,
         .extent = {
-                   .width  = texWidth,
-                   .height = texHeight,
-                   .depth  = 1,
-                   },
+            .width  = texWidth,
+            .height = texHeight,
+            .depth  = 1,
+        },
         .mipLevels     = 1,
         .samples       = ESampleCount::Sample_1,
         .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
-        .sharingMode   = ESharingMode::Exclusive,
         .initialLayout = EImageLayout::Undefined,
     };
 
-    auto vkImage = VulkanImage::create(vkRender, ci);
-    if (!vkImage) {
+    image = textureFactory->createImage(ci);
+    if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create fallback texture!");
         return;
     }
 
-    image     = vkImage;
-    imageView = VulkanImageView::create(vkRender, vkImage, VK_IMAGE_ASPECT_COLOR_BIT);
+    imageView = textureFactory->createImageView(image, EImageAspect::Color);
+    if (!imageView || !imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create fallback texture image view!");
+        image = nullptr;
+        return;
+    }
 
-    // Create staging buffer
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        vkRender,
+        render,
         ya::BufferCreateInfo{
             .label         = std::format("StagingBuffer_Fallback_{}", _label),
             .usage         = EBufferUsage::TransferSrc,
@@ -505,34 +530,52 @@ void Texture::createFallbackTexture(const void *pixels, size_t dataSize, uint32_
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto           *cmdBuf   = vkRender->beginIsolateCommands();
-    VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
+    auto *cmdBuf = render->beginIsolateCommands();
 
-    // Transition, copy, and transition back to shader read-only
-    VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    VulkanImage::transfer(vkCmdBuf, dynamic_cast<VulkanBuffer *>(stagingBuffer.get()), vkImage.get());
-    VulkanImage::transitionLayout(vkCmdBuf, vkImage.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
-    vkRender->endIsolateCommands(cmdBuf);
+    BufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+             .aspectMask     = EImageAspect::Color,
+             .mipLevel       = 0,
+             .baseArrayLayer = 0,
+             .layerCount     = 1,
+        },
+        .imageOffsetX      = 0,
+        .imageOffsetY      = 0,
+        .imageOffsetZ      = 0,
+        .imageExtentWidth  = texWidth,
+        .imageExtentHeight = texHeight,
+        .imageExtentDepth  = 1,
+    };
+    cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
+
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
+
+    render->endIsolateCommands(cmdBuf);
 
     YA_CORE_WARN("Created fallback texture ({}x{}) for: {}", texWidth, texHeight, _filepath.empty() ? _label : _filepath);
 }
 
-void Texture::createCubeMap(const CubeMapCreateInfo &ci)
+void Texture::initCubeMap(const CubeMapCreateInfo &ci)
 {
-    auto vkRender = ya::App::get()->getRender<VulkanRender>();
+    auto textureFactory = getTextureFactory();
+    auto render         = textureFactory->getRender();
 
-    std::array<StbiImage, ECubeFace::Count> pixels{};
+    std::array<StbiImage, CubeFace_Count> pixels{};
 
     int width    = 0;
     int height   = 0;
     int channels = 0;
 
     StbiFlipGuard flipGuard(ci.flipVertical);
-    for (size_t i = 0; i < ECubeFace::Count; ++i) {
+    for (size_t i = 0; i < CubeFace_Count; ++i) {
         pixels[i] = StbiImage(stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha));
         if (!pixels[i]) {
-            YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i].c_str());
+            YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i]);
             return;
         }
         if (i == 0) {
@@ -550,49 +593,44 @@ void Texture::createCubeMap(const CubeMapCreateInfo &ci)
     _mipLevels = 1;
 
     VkDeviceSize faceSize  = static_cast<VkDeviceSize>(_width) * static_cast<VkDeviceSize>(_height) * 4;
-    VkDeviceSize totalSize = faceSize * ECubeFace::Count;
+    VkDeviceSize totalSize = faceSize * CubeFace_Count;
 
     ImageCreateInfo imageCI{
         .label  = std::format("CubeMap_{}", _label),
         .format = _format,
         .extent = {
-                   .width  = _width,
-                   .height = _height,
-                   .depth  = 1,
-                   },
+            .width  = _width,
+            .height = _height,
+            .depth  = 1,
+        },
         .mipLevels     = 1,
-        .arrayLayers   = ECubeFace::Count,
+        .arrayLayers   = CubeFace_Count,
         .samples       = ESampleCount::Sample_1,
         .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
-        .sharingMode   = ESharingMode::Exclusive,
         .initialLayout = EImageLayout::Undefined,
-        .flags         = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+        .flags         = EImageCreateFlag::CubeCompatible,
     };
 
-    auto vkImage = VulkanImage::create(vkRender, imageCI);
-    if (!vkImage || !vkImage->isValid()) {
+    image = textureFactory->createImage(imageCI);
+    if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create cubemap image: {}", _label);
         return;
     }
 
-    image = vkImage;
-
-    VulkanImageView::CreateInfo viewCI{};
-    viewCI.viewType       = VK_IMAGE_VIEW_TYPE_CUBE;
-    viewCI.aspectFlags    = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewCI.baseMipLevel   = 0;
-    viewCI.levelCount     = _mipLevels;
-    viewCI.baseArrayLayer = 0;
-    viewCI.layerCount     = ECubeFace::Count;
-    imageView             = VulkanImageView::create(vkRender, vkImage, viewCI);
+    imageView = textureFactory->createCubeMapImageView(image, EImageAspect::Color);
+    if (!imageView || !imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create cubemap image view: {}", _label);
+        image = nullptr;
+        return;
+    }
 
     std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
-    for (size_t i = 0; i < ECubeFace::Count; ++i) {
+    for (size_t i = 0; i < CubeFace_Count; ++i) {
         std::memcpy(stagingData.data() + (i * faceSize), pixels[i].get(), static_cast<size_t>(faceSize));
     }
 
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        vkRender,
+        render,
         BufferCreateInfo{
             .label         = std::format("StagingBuffer_CubeMap_{}", _label),
             .usage         = EBufferUsage::TransferSrc,
@@ -601,54 +639,43 @@ void Texture::createCubeMap(const CubeMapCreateInfo &ci)
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto           *cmdBuf   = vkRender->beginIsolateCommands();
-    VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
+    auto *cmdBuf = render->beginIsolateCommands();
 
-    VkImageSubresourceRange cubeRange{
-        .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+    ImageSubresourceRange cubeRange{
+        .aspectMask     = EImageAspect::Color,
         .baseMipLevel   = 0,
         .levelCount     = _mipLevels,
         .baseArrayLayer = 0,
-        .layerCount     = ECubeFace::Count,
+        .layerCount     = CubeFace_Count,
     };
 
-    VulkanImage::transitionLayout(vkCmdBuf,
-                                  vkImage.get(),
-                                  VK_IMAGE_LAYOUT_UNDEFINED,
-                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                  &cubeRange);
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst, &cubeRange);
 
-    for (uint32_t face = 0; face < ECubeFace::Count; ++face) {
-        VkBufferImageCopy region{};
-        region.bufferOffset      = faceSize * face;
-        region.bufferRowLength   = 0;
-        region.bufferImageHeight = 0;
+    BufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+             .aspectMask     = EImageAspect::Color,
+             .mipLevel       = 0,
+             .baseArrayLayer = 0,
+             .layerCount     = CubeFace_Count,
+        },
+        .imageOffsetX      = 0,
+        .imageOffsetY      = 0,
+        .imageOffsetZ      = 0,
+        .imageExtentWidth  = _width,
+        .imageExtentHeight = _height,
+        .imageExtentDepth  = 1,
+    };
 
-        region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel       = 0;
-        region.imageSubresource.baseArrayLayer = face;
-        region.imageSubresource.layerCount     = 1;
-        region.imageOffset                     = {.x = 0, .y = 0, .z = 0};
-        region.imageExtent                     = {.width = _width, .height = _height, .depth = 1};
+    cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
 
-        vkCmdCopyBufferToImage(vkCmdBuf,
-                               stagingBuffer->getHandle().as<VkBuffer>(),
-                               vkImage->getHandle().as<VkImage>(),
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               1,
-                               &region);
-    }
+    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
 
-    VulkanImage::transitionLayout(vkCmdBuf,
-                                  vkImage.get(),
-                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                  &cubeRange);
-    vkRender->endIsolateCommands(cmdBuf);
+    render->endIsolateCommands(cmdBuf);
 
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, vkImage->getHandle().as<VkImage>(), std::format("CubeMap_Image_{}", _label));
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, vkImage->_imageMemory, std::format("CubeMap_ImageMemory_{}", _label));
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, dynamic_cast<VulkanImageView *>(imageView.get())->getHandle().as<VkImageView>(), std::format("CubeMap_ImageView_{}", _label));
+    YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, (int)CubeFace_Count);
 }
 
 } // namespace ya
