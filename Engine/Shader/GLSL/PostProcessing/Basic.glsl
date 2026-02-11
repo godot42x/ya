@@ -126,7 +126,7 @@ float luminance(vec3 color, vec3 weights ){
 }
 vec3 acesApprox(vec3 v)
 {
-    v *= 0.6f;
+    v *= 1.0f;  // Increased from 0.6 to 1.0 for better brightness
     float a = 2.51f;
     float b = 0.03f;
     float c = 2.43f;
@@ -135,6 +135,17 @@ vec3 acesApprox(vec3 v)
     return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0f, 1.0f);
 }
 
+
+vec3 uncharted2ToneMap(vec3 x)
+{
+    float A = 0.15;
+    float B = 0.50;
+    float C = 0.10;
+    float D = 0.20;
+    float E = 0.02;
+    float F = 0.30;
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
 
 void main(){
     #if DEBUG_ALL
@@ -201,6 +212,16 @@ void main(){
         vec4 color = texture(uScreenTexture, vTexCoord);
 
         fColor = vec4(acesApprox(color.rgb), 1.0);
+        if(fragPC.floatParams[3].x > 0){
+            vec3 c = color.rgb;
+            c = uncharted2ToneMap(c * 2.0f);  // Reduced from 4.5 to 2.0 for better brightness
+            // Gamma correct
+            // TODO: select the VK_FORMAT_B8G8R8A8_SRGB surface format,
+            // there is no need to do gamma correction in the fragment shader
+            c = c * (1.0f / uncharted2ToneMap(vec3(11.2f)));
+            c = vec3(pow(c.x, 1.0 / 2.2), pow(c.y, 1.0 / 2.2), pow(c.z, 1.0 / 2.2));
+            fColor = vec4(c, 1.0);
+        }
 
     }break;
     case RANDOM:{
