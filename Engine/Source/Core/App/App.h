@@ -182,6 +182,7 @@ struct App
 
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
+    std::vector<stdptr<ISystem>> _systems;
     stdptr<SkyBoxSystem>                          _skyboxSystem = nullptr;
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
@@ -291,7 +292,7 @@ struct App
 
   protected:
     // Protected for derived classes to override
-    // virtual void onSceneInit(Scene *scene);
+    virtual void onSceneInit(Scene *scene);
     virtual void onSceneDestroy(Scene *scene);
     virtual void onSceneActivated(Scene *scene);
 

@@ -28,29 +28,50 @@ struct [[refl]] Scene
     std::shared_ptr<Node>                                   _rootNode = nullptr;
 
   public:
-    Scene(const std::string &name = "Untitled Scene");
+    Scene(const std::string& name = "Untitled Scene");
     ~Scene();
 
 
     // Delete copy constructor and assignment operator
-    Scene(const Scene &)            = delete;
-    Scene &operator=(const Scene &) = delete;
+    Scene(const Scene&)            = delete;
+    Scene& operator=(const Scene&) = delete;
 
     // Add move constructor and assignment operator
-    Scene(Scene &&)            = default;
-    Scene &operator=(Scene &&) = default;
+    Scene(Scene&&)            = default;
+    Scene& operator=(Scene&&) = default;
 
     // === Public Node API (Application Layer) ===
-    Node   *createNode(const std::string &name = "Entity", Node *parent = nullptr, Entity *entity = nullptr);
-    Node3D *createNode3D(const std::string &name = "Entity", Node *parent = nullptr, Entity *entity = nullptr);
+    Node*   createNode(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
+    Node3D* createNode3D(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
 
 
+    template <typename ComponentType, typename... Args>
+        requires(!std::is_base_of_v<ComponentType, IComponent>)
+    ComponentType* addComponent(entt::entity entity, Args&&... args)
+    {
+        if (!isValid()) {
+            YA_CORE_WARN("Scene is invalid");
+            return nullptr;
+        }
+        return &_registry.emplace<ComponentType>(entity, std::forward<Args>(args)...);
+    }
+
+    template <typename ComponentType>
+    void removeComponent(entt::entity entity)
+    {
+        if (!isValid()) {
+            YA_CORE_WARN("Scene is invalid");
+            return;
+        }
+        _registry.remove<ComponentType>(entity);
+        SceneBus::get().onComponentRemoved.broadcast(_registry, entity, type_index_v<ComponentType>);
+    }
     /**
      * @brief Destroy a Node and its underlying Entity
      */
-    void destroyNode(Node *node);
+    void destroyNode(Node* node);
 
-    void destroyEntity(Entity *entity);
+    void destroyEntity(Entity* entity);
 
 
     /**
@@ -59,34 +80,29 @@ struct [[refl]] Scene
      * Q: why not add Entity::getNode(self) interface?
      * A: We in the early POC stage, we don't sure yet to make ECS and the NodeTree be integrated
      */
-    Node *getNodeByEntity(Entity *entity);
-    Node *getNodeByEntity(entt::entity handle);
+    Node* getNodeByEntity(Entity* entity);
+    Node* getNodeByEntity(entt::entity handle);
 
     /**
      * @brief Get root node of scene hierarchy
      */
-    Node *getRootNode()
+    Node* getRootNode()
     {
         createRootNode();
         return _rootNode.get();
     }
-    bool isValidEntity(const Entity *entity) const;
+    bool isValidEntity(const Entity* entity) const;
 
-    // Check if Scene pointer is safe to access
-    bool isValid() const
-    {
-        // return this && _magic == SCENE_MAGIC;
-        return _magic == SCENE_MAGIC;
-    }
+    bool isValid() const;
 
-    Entity       *getEntityByEnttID(entt::entity id);
-    const Entity *getEntityByEnttID(entt::entity id) const;
-    Entity       *getEntityByID(uint32_t id)
+    Entity*       getEntityByEnttID(entt::entity id);
+    const Entity* getEntityByEnttID(entt::entity id) const;
+    Entity*       getEntityByID(uint32_t id)
     {
         return getEntityByEnttID(static_cast<entt::entity>(id));
     }
 
-    Entity *getEntityByName(const std::string &name);
+    Entity* getEntityByName(const std::string& name);
 
     // Scene management
     void clear();
@@ -96,18 +112,18 @@ struct [[refl]] Scene
     void onRenderRuntime();
 
     // Getters
-    const std::string &getName() const { return _name; }
-    void               setName(const std::string &name) { _name = name; }
+    const std::string& getName() const { return _name; }
+    void               setName(const std::string& name) { _name = name; }
 
     // Registry access
-    entt::registry       &getRegistry() { return _registry; }
-    const entt::registry &getRegistry() const { return _registry; }
+    entt::registry&       getRegistry() { return _registry; }
+    const entt::registry& getRegistry() const { return _registry; }
 
     // Find entities
-    Entity              findEntityByName(const std::string &name);
-    std::vector<Entity> findEntitiesByTag(const std::string &tag);
+    Entity              findEntityByName(const std::string& name);
+    std::vector<Entity> findEntitiesByTag(const std::string& tag);
 
-    void addToScene(Node *node)
+    void addToScene(Node* node)
     {
         if (!_rootNode) {
             createRootNode();
@@ -116,10 +132,10 @@ struct [[refl]] Scene
     }
 
     stdptr<Scene>        clone();
-    static stdptr<Scene> cloneScene(const Scene *scene);
-    static stdptr<Scene> cloneSceneByReflection(const Scene *scene);
+    static stdptr<Scene> cloneScene(const Scene* scene);
+    static stdptr<Scene> cloneSceneByReflection(const Scene* scene);
 
-    Node *duplicateNode(Node *node, Node *parent = nullptr);
+    Node* duplicateNode(Node* node, Node* parent = nullptr);
 
   private:
     // === Internal ECS API (Engine Systems Only) ===
@@ -128,15 +144,15 @@ struct [[refl]] Scene
      * @note Only for internal systems (Serialization, ResourceResolve, etc.)
      * @note Application code should use createNode() instead
      */
-    Entity *createEntity(const std::string &name = "Entity");
-    Entity *createEntityWithUUID(uint64_t           uuid,
-                                 const std::string &name = "Entity");
+    Entity* createEntity(const std::string& name = "Entity");
+    Entity* createEntityWithUUID(uint64_t           uuid,
+                                 const std::string& name = "Entity");
 
-    void createEntityImpl(Entity &entity);
+    void createEntityImpl(Entity& entity);
 
     void createRootNode();
 
-    void onNodeCreated(stdptr<Node> node, Node *parent);
+    void onNodeCreated(stdptr<Node> node, Node* parent);
 
     // Allow internal systems to access createEntity
     friend class SceneSerializer;

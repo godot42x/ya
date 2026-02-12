@@ -38,14 +38,12 @@ class ContainerPropertyRenderer
      * @param name Property display name
      * @param prop Property object with container extension
      * @param containerPtr Pointer to the container instance
-     * @param ctx Render context for tracking modifications
-     * @param depth Recursion depth
+     * @param renderFn Element render callback: (label, elementPtr, typeIndex) -> bool
      * @return true if any modification was made
      */
     static bool renderContainer(const std::string &name,
                                 Property          &prop,
                                 void              *containerPtr,
-                                RenderContext     &ctx,
                                 int                depth)
     {
         YA_PROFILE_SCOPE("ContainerPropertyRenderer::renderContainer");
@@ -69,23 +67,21 @@ class ContainerPropertyRenderer
         bool bNodeOpen = ImGui::TreeNodeEx(headerLabel);
 
         // Render collapsible header with size info
-        renderButtons(name, size, accessor, containerPtr, ctx);
+        bModified |= renderButtons(name, size, accessor, containerPtr);
 
         if (bNodeOpen) {
             // Only render contents when expanded - key performance optimization
             if (accessor->isMapLike()) {
-                renderMapContainer(accessor,
-                                   containerPtr,
-                                   prop,
-                                   ctx,
-                                   depth + 1);
+                bModified |= renderMapContainer(accessor,
+                                                containerPtr,
+                                                prop,
+                                                depth + 1);
             }
             else {
-                renderSequenceContainer(accessor,
-                                        containerPtr,
-                                        prop,
-                                        ctx,
-                                        depth + 1);
+                bModified |= renderSequenceContainer(accessor,
+                                                     containerPtr,
+                                                     prop,
+                                                     depth + 1);
             }
 
 
@@ -93,6 +89,7 @@ class ContainerPropertyRenderer
         }
 
         ImGui::PopID();
+        return bModified;
     }
 
     /**
@@ -142,12 +139,12 @@ class ContainerPropertyRenderer
         return cache;
     }
 
-    static void renderMapContainer(reflection::IContainerProperty *accessor,
+    static bool renderMapContainer(reflection::IContainerProperty *accessor,
                                    void                           *containerPtr,
                                    Property                       &prop,
-                                   RenderContext                  &ctx,
                                    int                             depth)
     {
+        bool   bModified   = false;
         size_t currentSize = accessor->getSize(containerPtr);
 
         // Get or create cache entry
@@ -172,7 +169,9 @@ class ContainerPropertyRenderer
                 auto available = ImGui::GetContentRegionAvail();
                 ImGui::PushItemWidth(available.x * 0.4f);
 
+                ya::RenderContext ctx;
                 ya::renderReflectedType("##key", entry.keyTypeIndex, entry.valuePtr, ctx, depth + 1);
+                bModified |= ctx.hasModifications();
 
                 ImGui::PopItemWidth();
 
@@ -181,7 +180,9 @@ class ContainerPropertyRenderer
                 ImGui::SameLine();
 
                 // Value (editable)
-                ya::renderReflectedType("##val", entry.valueTypeIndex, entry.valuePtr, ctx, depth + 1);
+                ya::RenderContext ctx2;
+                ya::renderReflectedType("##val", entry.valueTypeIndex, entry.valuePtr, ctx2, depth + 1);
+                bModified |= ctx2.hasModifications();
 
                 // Delete button
                 ImGui::SameLine();
@@ -199,8 +200,11 @@ class ContainerPropertyRenderer
                 }
                 // Key (read-only for maps)
                 if (bNodeOpen) {
-                    ya::renderReflectedType("##key", entry.keyTypeIndex, entry.keyPtr, ctx, depth + 1);
-                    ya::renderReflectedType(entry.typeStr, entry.valueTypeIndex, entry.valuePtr, ctx, depth + 1);
+                    ya::RenderContext ctx3;
+                    ya::renderReflectedType("##key", entry.keyTypeIndex, entry.keyPtr, ctx3, depth + 1);
+                    ya::RenderContext ctx4;
+                    ya::renderReflectedType(entry.typeStr, entry.valueTypeIndex, entry.valuePtr, ctx4, depth + 1);
+                    bModified |= ctx3.hasModifications() || ctx4.hasModifications();
                     ImGui::TreePop();
                 }
 
@@ -218,8 +222,10 @@ class ContainerPropertyRenderer
                 accessor->removeByKey(containerPtr, keyPtr);
             }
             cache.markDirty();
-            ctx.pushModified();
+            bModified = true;
         }
+
+        return bModified;
     }
 
     static void rebuildMapCache(CachedMapData &cache, void *containerPtr, Property &prop, size_t currentSize)
@@ -249,12 +255,13 @@ class ContainerPropertyRenderer
 
     // ==================== Sequence Container Support ====================
 
-    static void renderSequenceContainer(reflection::IContainerProperty *accessor,
+    template <typename RenderFn>
+    static bool renderSequenceContainer(reflection::IContainerProperty *accessor,
                                         void                           *containerPtr,
                                         Property                       &prop,
-                                        RenderContext                  &ctx,
-                                        int                             depth)
+                                        RenderFn                      &&renderFn)
     {
+        bool   bModified     = false;
         size_t indexToRemove = SIZE_MAX;
 
         ya::reflection::PropertyContainerHelper::iterateContainer(
@@ -267,7 +274,9 @@ class ContainerPropertyRenderer
                 char label[32];
                 snprintf(label, sizeof(label), "[%zu]", index);
 
-                ya::renderReflectedType(label, elementTypeIndex, elementPtr, ctx, depth + 1);
+                ya::RenderContext ctx;
+                ya::renderReflectedType(label, elementTypeIndex, elementPtr, ctx);
+                bModified |= ctx.hasModifications();
 
                 // Delete button for sequence containers
                 if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {
@@ -283,24 +292,26 @@ class ContainerPropertyRenderer
         // Deferred deletion to avoid iterator invalidation
         if (indexToRemove != SIZE_MAX) {
             accessor->removeElement(containerPtr, indexToRemove);
-            ctx.pushModified();
+            bModified = true;
         }
+
+        return bModified;
     }
 
     // ==================== Header Rendering ====================
 
-    static void renderButtons(const std::string              &name,
+    static bool renderButtons(const std::string              &name,
                               size_t                          size,
                               reflection::IContainerProperty *accessor,
-                              void                           *containerPtr,
-                              RenderContext                  &ctx)
+                              void                           *containerPtr)
     {
+        bool bModified = false;
 
         // Add element button
         ImGui::SameLine();
         if (ImGui::SmallButton("+")) {
             accessor->addEmptyEntry(containerPtr);
-            ctx.pushModified();
+            bModified = true;
         }
 
         if (size > 0) {
@@ -310,9 +321,11 @@ class ContainerPropertyRenderer
                 accessor->clear(containerPtr);
                 // Also clear map cache for this container
                 getMapCache().erase(containerPtr);
-                ctx.pushModified();
+                bModified = true;
             }
         }
+
+        return bModified;
     }
 
   public:

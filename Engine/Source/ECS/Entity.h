@@ -39,11 +39,18 @@ struct Entity
     T *addComponent(Args &&...args)
     {
         YA_CORE_ASSERT(!hasComponent<T>(), "Entity already has component!");
-        T &component = _scene->_registry.emplace<T>(_entityHandle, std::forward<Args>(args)...);
-        static_cast<IComponent &>(component).setOwner(this);
-
-        return &component;
+        T *comp = _scene->addComponent<T>(_entityHandle, std::forward<Args>(args)...);
+        YA_CORE_ASSERT(comp != nullptr, "Failed to add component!");
+        static_cast<IComponent *>(comp)->setOwner(this);
+        return comp;
     }
+    template <typename T>
+    void removeComponent()
+    {
+        assert(hasComponent<T>() && "Entity does not have component!");
+        _scene->removeComponent<T>(_entityHandle);
+    }
+
 
     // template <typename T, typename... Args>
     // T &addOrReplaceComponent(Args &&...args) { return _scene->_registry.emplace_or_replace<T>(_entityHandle, std::forward<Args>(args)...); }
@@ -67,13 +74,6 @@ struct Entity
         return _scene->_registry.all_of<T>(_entityHandle);
     }
 
-    template <typename T>
-    void removeComponent()
-    {
-        assert(hasComponent<T>() && "Entity does not have component!");
-        _scene->_registry.remove<T>(_entityHandle);
-    }
-
     template <typename... Components>
     [[nodiscard]] bool hasComponents() const { return _scene->_registry.all_of<Components...>(_entityHandle); }
 
@@ -94,7 +94,7 @@ struct Entity
     bool operator!=(const Entity &other) const { return !(*this == other); }
 
     const std::string &getName() const { return name; }
-    void setName(const std::string &newName) { name = newName; }
+    void               setName(const std::string &newName) { name = newName; }
 };
 
 } // namespace ya

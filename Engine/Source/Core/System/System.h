@@ -9,7 +9,9 @@ namespace ya
 
 struct ISystem
 {
-    virtual void onUpdate(float deltaTime) = 0;
+    virtual void init() {}
+    virtual void onUpdate(float deltaTime) {}
+    virtual void shutdown() {}
 
 
     virtual ~ISystem() = default;
@@ -18,13 +20,12 @@ struct ISystem
 // life time: exe start to exe end
 struct EngineSystem : public ISystem
 {
-    void onUpdate(float deltaTime) override;
+    virtual void onUpdate(float deltaTime) = 0;
 };
 
 // life time: game start to game end
 struct GameInstanceSystem : public ISystem
 {
-    void onUpdate(float deltaTime) override = 0;
 };
 
 

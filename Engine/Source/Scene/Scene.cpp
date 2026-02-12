@@ -173,6 +173,7 @@ Node3D *Scene::createNode3D(const std::string &name, Node *parent, Entity *entit
     return static_cast<Node3D *>(_nodeMap[entity->getHandle()].get());
 }
 
+
 void Scene::destroyNode(Node *node)
 {
     if (!node) {
@@ -214,6 +215,13 @@ bool Scene::isValidEntity(const Entity *entity) const
            _registry.valid(entity->getHandle());
 }
 
+// Check if Scene pointer is safe to access
+bool Scene::isValid() const
+{
+    SceneManager *sceneManager = App::get()->getSceneManager();
+    return sceneManager->isSceneValid(this) && _magic == SCENE_MAGIC;
+}
+
 
 Entity *Scene::getEntityByEnttID(entt::entity id)
 {
@@ -249,10 +257,10 @@ Entity *Scene::getEntityByName(const std::string &name)
 
 void Scene::clear()
 {
-    _registry.clear();
     _entityMap.clear();
     _nodeMap.clear();
     _rootNode.reset();
+    _registry.clear();
     _entityCounter = 0;
 }
 
@@ -471,7 +479,7 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
     // Step 2: Use ECSRegistry to automatically discover and copy ALL registered component types
     auto &ecsRegistry = ya::ECSRegistry::get();
 
-    for (const auto &[fName, typeIndex] : ecsRegistry._typeIndexCache)
+    for (const auto &[fName, typeIndex] : ecsRegistry.getTypeIndexCache())
     {
         std::string componentName = fName.toString();
 

@@ -14,8 +14,7 @@
 
 // Managers/System
 #include "Core/Manager/Facade.h"
-#include "ECS/System/ResourceResolveSystem.h"
-#include "ECS/System/TransformSystem.h"
+
 #include "ImGuiHelper.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Scene/SceneManager.h"
@@ -33,16 +32,21 @@
 
 
 // ECS
+
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/2D/UIComponentSytstem.h"
+#include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/PhongMaterialSystem.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
+#include "ECS/System/TransformSystem.h"
 #include "ECS/System/UnlitMaterialSystem.h"
+
 
 
 
@@ -90,7 +94,7 @@ namespace ya
 {
 
 // Define the static member variable
-App     *App::_instance        = nullptr;
+App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
 
 
@@ -131,17 +135,18 @@ void App::onSceneViewportResized(Rect2D rect)
     }
 }
 
-void App::renderScene(ICommandBuffer *cmdBuf, float dt, FrameContext &ctx)
+void App::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
 {
-    _skyboxSystem->tick(cmdBuf, dt, ctx);
 
     // Render material systems
-    for (auto &system : _materialSystems) {
+    for (auto& system : _materialSystems) {
         if (system->bEnabled) {
             YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
             system->onRender(cmdBuf, &ctx);
         }
     }
+    // early-z
+    _skyboxSystem->tick(cmdBuf, dt, ctx);
 }
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
@@ -289,7 +294,7 @@ void App::init(AppDesc ci)
                                                .depthAttachmentFormat   = DEPTH_FORMAT,
                                                .stencilAttachmentFormat = EFormat::Undefined,
                                            });
-    _deleter.push("MaterialSystems", [this](void *) {
+    _deleter.push("MaterialSystems", [this](void*) {
         _materialSystems.clear();
     });
 
@@ -302,7 +307,7 @@ void App::init(AppDesc ci)
                               .depthAttachmentFormat   = DEPTH_FORMAT,
                               .stencilAttachmentFormat = EFormat::Undefined,
                           });
-    _deleter.push("SkyboxSystem", [this](void *) {
+    _deleter.push("SkyboxSystem", [this](void*) {
         _skyboxSystem->onDestroy();
         _skyboxSystem.reset();
     });
@@ -320,7 +325,7 @@ void App::init(AppDesc ci)
             .samples = ESampleCount::Sample_1,
             .isDepth = false,
         });
-        _deleter.push("PostprocessTexture", [this](void *) {
+        _deleter.push("PostprocessTexture", [this](void*) {
             _postprocessTexture.reset();
         });
     }
@@ -376,7 +381,7 @@ void App::init(AppDesc ci)
                 },
             },
         });
-        _deleter.push("MirrorRT", [this](void *) {
+        _deleter.push("MirrorRT", [this](void*) {
             _mirrorRT.reset();
         });
     }
@@ -436,7 +441,7 @@ void App::init(AppDesc ci)
     Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
 
     // MARK: Imgui
-    auto &imManager = ImGuiManager::get();
+    auto& imManager = ImGuiManager::get();
     imManager.init(_render, nullptr);
 
 
@@ -466,9 +471,9 @@ void App::init(AppDesc ci)
 
     // ===== Initialize SceneManager =====
     _sceneManager = new SceneManager();
-    // _sceneManager->onSceneInit.addLambda(this, [this](Scene *scene) { this->onSceneInit(scene); });
-    _sceneManager->onSceneDestroy.addLambda(this, [this](Scene *scene) { this->onSceneDestroy(scene); });
-    _sceneManager->onSceneActivated.addLambda(this, [this](Scene *scene) { this->onSceneActivated(scene); });
+    _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
+    _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
+    _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
 
     // wait something done
     _render->waitIdle();
@@ -477,6 +482,23 @@ void App::init(AppDesc ci)
         YA_PROFILE_SCOPE_LOG("Post Init");
         onPostInit();
     }
+
+    auto sys = ya::makeShared<ResourceResolveSystem>();
+    sys->init();
+    _systems.push_back(sys);
+    auto sys2 = ya::makeShared<TransformSystem>();
+    sys2->init();
+    _systems.push_back(sys2);
+    auto sys3 = ya::makeShared<ComponentLinkageSystem>();
+    sys3->init();
+    _systems.push_back(sys3);
+    _deleter.push("Systems", [this](void*) {
+        for (auto& sys : _systems) {
+            sys->shutdown();
+        }
+        _systems.clear();
+    });
+
 
     _editorLayer = new EditorLayer(this);
     _editorLayer->onAttach();
@@ -504,7 +526,7 @@ void App::init(AppDesc ci)
 }
 
 template <typename T>
-int App::dispatchEvent(const T &event)
+int App::dispatchEvent(const T& event)
 {
     if (0 == onEvent(event)) {
         MessageBus::get()->publish(event);
@@ -545,8 +567,8 @@ void App::onPostInit()
 {
     // those resources are depends on the render context
     // LOAD demo testing textures
-    const char *faceTexturePath = "Engine/Content/TestTextures/face.png";
-    const char *uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
+    const char* faceTexturePath = "Engine/Content/TestTextures/face.png";
+    const char* uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
     ya::AssetManager::get()->loadTexture("face", faceTexturePath);
     ya::AssetManager::get()->loadTexture("uv1", uv1TexturePath);
@@ -555,7 +577,7 @@ void App::onPostInit()
 }
 
 
-int App::onEvent(const Event &event)
+int App::onEvent(const Event& event)
 {
     // YA_CORE_TRACE("Event processed: {}", event.type);
     EventProcessState ret = ImGuiManager::get().processEvent(event);
@@ -569,24 +591,24 @@ int App::onEvent(const Event &event)
     switch (ty) {
     case EEvent::MouseMoved:
     {
-        bHandled |= onMouseMoved(static_cast<const MouseMoveEvent &>(event));
+        bHandled |= onMouseMoved(static_cast<const MouseMoveEvent&>(event));
 
     } break;
     case EEvent::MouseButtonReleased:
     {
-        bHandled |= onMouseButtonReleased(static_cast<const MouseButtonReleasedEvent &>(event));
+        bHandled |= onMouseButtonReleased(static_cast<const MouseButtonReleasedEvent&>(event));
     } break;
     case EEvent::WindowResize:
     {
-        bHandled |= onWindowResized(static_cast<const WindowResizeEvent &>(event));
+        bHandled |= onWindowResized(static_cast<const WindowResizeEvent&>(event));
     } break;
     case EEvent::KeyReleased:
     {
-        bHandled |= onKeyReleased(static_cast<const KeyReleasedEvent &>(event));
+        bHandled |= onKeyReleased(static_cast<const KeyReleasedEvent&>(event));
     } break;
     case EEvent::MouseScrolled:
     {
-        bHandled |= onMouseScrolled(static_cast<const MouseScrolledEvent &>(event));
+        bHandled |= onMouseScrolled(static_cast<const MouseScrolledEvent&>(event));
     } break;
     case EEvent::None:
         break;
@@ -735,11 +757,11 @@ int ya::App::run()
 }
 
 
-int ya::App::processEvent(SDL_Event &event)
+int ya::App::processEvent(SDL_Event& event)
 {
     processSDLEvent(
         event,
-        [this](const auto &e) { this->dispatchEvent(e); });
+        [this](const auto& e) { this->dispatchEvent(e); });
     return 0;
 };
 
@@ -779,27 +801,10 @@ void App::tickLogic(float dt)
     // Store real-time delta for editor
     // Note: ClearValue is now set in onRender() via beginRenderPass() or beginRendering()
 
-    static ResourceResolveSystem *resourceResolveSystem = []() {
-        auto sys = new ResourceResolveSystem();
-        std::atexit([]() {
-            resourceResolveSystem->destroy();
-            delete resourceResolveSystem;
-        });
-        sys->init();
-        return sys;
-    }();
-    static TransformSystem *transformSystem = []() {
-        auto sys = new TransformSystem();
-        std::atexit([]() {
-            transformSystem->destroy();
-            delete transformSystem;
-        });
-        sys->init();
-        return sys;
-    }();
+    for (auto& sys : _systems) {
+        sys->onUpdate(dt);
+    }
 
-    resourceResolveSystem->onUpdate(dt);
-    transformSystem->onUpdate(dt);
 
     Render2D::onUpdate(dt);
 
@@ -815,7 +820,7 @@ void App::tickLogic(float dt)
     }
 
     // 文件监视器轮询（检测文件变化）
-    if (auto *watcher = FileWatcher::get()) {
+    if (auto* watcher = FileWatcher::get()) {
         watcher->poll();
     }
 
@@ -871,14 +876,14 @@ void App::tickRender(float dt)
     {
 
         // Get primary camera from ECS for runtime/simulation mode
-        Entity *runtimeCamera = getPrimaryCamera();
+        Entity* runtimeCamera = getPrimaryCamera();
         if (runtimeCamera && runtimeCamera->isValid())
         {
 
             auto cc = runtimeCamera->getComponent<CameraComponent>();
             auto tc = runtimeCamera->getComponent<TransformComponent>();
 
-            const Extent2D &ext = _viewportRT->getExtent();
+            const Extent2D& ext = _viewportRT->getExtent();
             cameraController.update(*tc, *cc, inputManager, ext, dt);
             // Update aspect ratio for runtime camera
             cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
@@ -1006,7 +1011,7 @@ void App::tickRender(float dt)
             Render2D::begin(cmdBuf.get());
 
             if (_appMode == AppMode::Drawing) {
-                for (const auto &&[idx, p] : ut::enumerate(clicked))
+                for (const auto&& [idx, p] : ut::enumerate(clicked))
                 {
                     auto tex = idx % 2 == 0
                                  ? AssetManager::get()->getTextureByName("uv1")
@@ -1072,7 +1077,7 @@ void App::tickRender(float dt)
             pl->init();
             _monitorPipelines.push_back({pl->_pipeline->getName(), pl->_pipeline.get()});
 
-            _deleter.push(" basic postprocessing pipeline", [pl](void *) { // Use value capture instead of reference
+            _deleter.push(" basic postprocessing pipeline", [pl](void*) { // Use value capture instead of reference
                 delete pl;
             });
 
@@ -1081,7 +1086,7 @@ void App::tickRender(float dt)
 
         // Pass input imageView and output extent to render
 
-        const auto &tex = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
+        const auto& tex = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
         BasicPostprocessing::RenderPayload payload{
             .inputImageView = tex->getImageView(),
@@ -1130,7 +1135,7 @@ void App::tickRender(float dt)
         cmdBuf->beginRendering(ri);
 
         // Render ImGui
-        auto &imManager = ImGuiManager::get();
+        auto& imManager = ImGuiManager::get();
         imManager.beginFrame();
         {
             this->renderGUI(dt);
@@ -1172,7 +1177,7 @@ void App::tickRender(float dt)
 void App::onRenderGUI(float dt)
 {
     YA_PROFILE_FUNCTION()
-    auto &io = ImGui::GetIO();
+    auto& io = ImGui::GetIO();
     if (!ImGui::Begin("App Info"))
     {
         ImGui::End();
@@ -1194,7 +1199,7 @@ void App::onRenderGUI(float dt)
 
     if (ImGui::CollapsingHeader("Material Systems", 0)) {
         ImGui::Indent();
-        for (auto &system : _materialSystems) {
+        for (auto& system : _materialSystems) {
             system->renderGUI();
         }
         ImGui::Unindent();
@@ -1220,7 +1225,7 @@ void App::onRenderGUI(float dt)
 
         ImGui::DragFloat("Retro Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
 
-        auto *swapchain = _render->getSwapchain();
+        auto* swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
             taskManager.registerFrameTask([swapchain, bVsync]() {
@@ -1229,20 +1234,20 @@ void App::onRenderGUI(float dt)
         }
 
         EPresentMode::T presentMode  = swapchain->getPresentMode();
-        const char     *presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
-        if (ImGui::Combo("Present Mode", reinterpret_cast<int *>(&presentMode), presentModes)) {
+        const char*     presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
+        if (ImGui::Combo("Present Mode", reinterpret_cast<int*>(&presentMode), presentModes)) {
             taskManager.registerFrameTask([swapchain, presentMode]() {
                 swapchain->setPresentMode(presentMode);
             });
         }
 
         AppMode mode = _appMode;
-        if (ImGui::Combo("App Mode", reinterpret_cast<int *>(&mode), "Control\0Drawing\0")) {
+        if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
             _appMode = mode;
         }
 
         std::string clickedPoints;
-        for (const auto &p : clicked) {
+        for (const auto& p : clicked) {
             clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
         }
         ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
@@ -1255,7 +1260,7 @@ void App::onRenderGUI(float dt)
                                           getSceneManager()->getActiveScene());
         }
         if (ImGui::TreeNode("Monitor Pipelines")) {
-            for (const auto &[name, pipeline] : _monitorPipelines) {
+            for (const auto& [name, pipeline] : _monitorPipelines) {
                 ImGui::Text("%s", name.c_str());
                 ImGui::SameLine();
                 if (ImGui::Button("reload")) {
@@ -1273,12 +1278,12 @@ void App::onRenderGUI(float dt)
             }
             {
                 ImGui::Combo("Effect",
-                             reinterpret_cast<int *>(&_postProcessingEffect),
+                             reinterpret_cast<int*>(&_postProcessingEffect),
                              "Inversion\0Grayscale\0Weighted Grayscale\0"
                              "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
                              // frag shader do nothing, 老电视机花屏效果
                              "Random\0");
-                for (const auto &[i, p] : ut::enumerate(_postProcessingParams)) {
+                for (const auto& [i, p] : ut::enumerate(_postProcessingParams)) {
                     ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
                 }
             }
@@ -1309,7 +1314,7 @@ void App::onRenderGUI(float dt)
 
 
 // MARK: Scene
-bool App::loadScene(const std::string &path)
+bool App::loadScene(const std::string& path)
 {
     switch (_appState) {
     case AppState::Runtime:
@@ -1334,19 +1339,19 @@ bool App::unloadScene()
     return false;
 }
 
-// void App::onSceneInit(Scene *scene)
-// {
+void App::onSceneInit(Scene* scene)
+{
 
-//     // Create camera entity
-// }
+    // Create camera entity
+}
 
-void App::onSceneDestroy(Scene *scene)
+void App::onSceneDestroy(Scene* scene)
 {
     // No longer need to clear runtime camera reference
     // as we query it from ECS each frame
 }
 
-void App::onSceneActivated(Scene *scene)
+void App::onSceneActivated(Scene* scene)
 {
     _editorLayer->setSceneContext(scene);
 
@@ -1413,7 +1418,7 @@ void App::stopSimulation()
     onExitSimulation();
 }
 
-bool App::onWindowResized(const WindowResizeEvent &event)
+bool App::onWindowResized(const WindowResizeEvent& event)
 {
     auto  w           = event.GetWidth();
     auto  h           = event.GetHeight();
@@ -1428,7 +1433,7 @@ bool App::onWindowResized(const WindowResizeEvent &event)
     return false;
 }
 
-bool App::onKeyReleased(const KeyReleasedEvent &event)
+bool App::onKeyReleased(const KeyReleasedEvent& event)
 {
     if (event.getKeyCode() == EKey::Escape) {
         YA_CORE_INFO("{}", event.toString());
@@ -1438,13 +1443,13 @@ bool App::onKeyReleased(const KeyReleasedEvent &event)
     return false;
 }
 
-bool App::onMouseMoved(const MouseMoveEvent &event)
+bool App::onMouseMoved(const MouseMoveEvent& event)
 {
     _lastMousePos = glm::vec2(event.getX(), event.getY());
     return false;
 }
 
-bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
+bool App::onMouseButtonReleased(const MouseButtonReleasedEvent& event)
 {
     // YA_CORE_INFO("Mouse Button Released: {}", event.toString());
     switch (_appMode) {
@@ -1462,23 +1467,23 @@ bool App::onMouseButtonReleased(const MouseButtonReleasedEvent &event)
     return false;
 }
 
-bool App::onMouseScrolled(const MouseScrolledEvent &event)
+bool App::onMouseScrolled(const MouseScrolledEvent& event)
 {
     return false;
 }
 
-Entity *App::getPrimaryCamera() const
+Entity* App::getPrimaryCamera() const
 {
     if (!_sceneManager) {
         return nullptr;
     }
 
-    Scene *scene = _sceneManager->getActiveScene();
+    Scene* scene = _sceneManager->getActiveScene();
     if (!scene || !scene->isValid()) {
         return nullptr;
     }
 
-    auto &registry = scene->getRegistry();
+    auto& registry = scene->getRegistry();
 
     // Strategy 1: Find camera with PlayerComponent (fallback)
     auto playerCameraView = registry.view<CameraComponent, PlayerComponent>();
@@ -1489,7 +1494,7 @@ Entity *App::getPrimaryCamera() const
     // Strategy 2: Find camera with _primary == true
     auto view = registry.view<CameraComponent>();
     for (auto entity : view) {
-        auto &cc = view.get<CameraComponent>(entity);
+        auto& cc = view.get<CameraComponent>(entity);
         if (cc.bPrimary) {
             return scene->getEntityByEnttID(entity);
         }

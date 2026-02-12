@@ -10,7 +10,20 @@ namespace ya
 
 SceneManager::~SceneManager()
 {
-    unloadScene();
+    // First cleanup _currentScene if it's different from _editorScene
+    if (_currentScene && _currentScene != _editorScene) {
+        onSceneDestroyInternal(_currentScene.get());
+        _currentScene.reset();
+    }
+    
+    // Then cleanup _editorScene
+    if (_editorScene) {
+        onSceneDestroyInternal(_editorScene.get());
+        _editorScene.reset();
+    }
+    
+    // Clear the mapping (should already be empty, but just in case)
+    _reg2scene.clear();
 }
 
 bool SceneManager::loadScene(const std::string &path)
@@ -29,6 +42,7 @@ bool SceneManager::loadScene(const std::string &path)
     SceneSerializer serializer(_editorScene.get());
     serializer.loadFromFile(path);
 
+    onSceneInitInternal(_editorScene.get());
     // Call initialization callback if set
     setActiveScene(_editorScene);
 
@@ -42,7 +56,7 @@ bool SceneManager::unloadScene()
     if (!_currentScene) {
         return false;
     }
-    onSceneDestroy.broadcast(_currentScene.get());
+    onSceneDestroyInternal(_currentScene.get());
 
     _currentScene.reset();
     // YA_CORE_INFO("Scene unloaded: {}", _currentScenePath);
@@ -53,8 +67,23 @@ bool SceneManager::unloadScene()
 
 void SceneManager::setActiveScene(stdptr<Scene> scene)
 {
-    _currentScene.reset();
+    // Don't do anything if setting the same scene
+    if (_currentScene == scene) {
+        return;
+    }
+    
+    // Cleanup old current scene if it's not the editor scene (runtime scene)
+    if (_currentScene && _currentScene != _editorScene) {
+        onSceneDestroyInternal(_currentScene.get());
+    }
+    
     _currentScene = scene;
+    
+    // Register new scene if not already registered (e.g., cloned scene)
+    if (scene && !_reg2scene.contains(&scene->getRegistry())) {
+        onSceneInitInternal(scene.get());
+    }
+    
     onSceneActivated.broadcast(scene.get());
 }
 
@@ -93,15 +122,17 @@ void SceneManager::deserializeFromFile(const std::string &path, Scene *scene)
 void SceneManager::onStartRuntime()
 {
     auto newScene = getEditorScene()->clone();
+    // Note: setActiveScene will register the cloned scene to _reg2scene
     setActiveScene(newScene);
 }
 
 void SceneManager::onStopRuntime()
 {
+    // setActiveScene will cleanup the runtime scene and switch back to editor
     setActiveScene(_editorScene);
 }
 
-bool SceneManager::isSceneValid(Scene *ptr)
+bool SceneManager::isSceneValid(const Scene *ptr)
 {
     return ptr == _currentScene.get() || ptr == _editorScene.get();
 }
@@ -109,6 +140,30 @@ bool SceneManager::isSceneValid(Scene *ptr)
 stdptr<Scene> SceneManager::cloneScene(Scene *scene) const
 {
     return scene->clone();
+}
+
+void SceneManager::onSceneInitInternal(Scene *scene)
+{
+    YA_CORE_ASSERT(!_reg2scene.contains(&scene->getRegistry()), "Scene registry already exists");
+    _reg2scene[&scene->getRegistry()] = scene;
+
+    onSceneInit.broadcast(scene);
+}
+
+void SceneManager::onSceneDestroyInternal(Scene *scene)
+{
+    if (!scene) {
+        return;
+    }
+    
+    // Broadcast destroy event first (while scene is still valid)
+    onSceneDestroy.broadcast(scene);
+    
+    // Then remove from registry mapping
+    auto it = _reg2scene.find(&scene->getRegistry());
+    if (it != _reg2scene.end()) {
+        _reg2scene.erase(it);
+    }
 }
 
 } // namespace ya

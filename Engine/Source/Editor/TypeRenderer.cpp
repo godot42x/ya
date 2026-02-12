@@ -105,11 +105,11 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
 
                     if (isContainer) {
                         // 容器属性：使用容器渲染器
+                        // TODO: ContainerPropertyRenderer should also use RenderContext
                         ya::editor::ContainerPropertyRenderer::renderContainer(
                             prettyName,
                             prop,
                             subPropInstancePtr,
-                            ctx,
                             depth + 2);
                     }
                     else if (isPointer && propCtxCache.pointeeTypeIndex != 0) {
@@ -120,12 +120,7 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
                         if (pointee) {
                             // Has valid pointee - render it with indirection indicator
                             std::string ptrLabel = prettyName + " (->)";
-                            renderReflectedType(ptrLabel,
-                                                propCtxCache.pointeeTypeIndex,
-                                                pointee,
-                                                ctx,
-                                                depth + 1,
-                                                nullptr);
+                            renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, nullptr);
                         }
                         else {
                             // Null pointer - show placeholder
@@ -303,19 +298,6 @@ void registerBuiltinTypeRenderers()
                 }
             },
         });
-    // glm::vec2
-    registry.registerRenderer(
-        ya::type_index_v<glm::vec2>,
-        TypeRenderer{
-            .typeName   = "glm::vec2",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto *ptr      = static_cast<float *>(instance);
-                bool  modified = ImGui::DragFloat2(propCtx.prettyName.c_str(), ptr, 0.1f);
-                if (modified) {
-                    ctx.pushModified();
-                }
-            },
-        });
 
     // glm::vec3 类型渲染器
     registry.registerRenderer(
@@ -329,7 +311,7 @@ void registerBuiltinTypeRenderers()
                     modified = ImGui::ColorEdit3(propCtx.prettyName.c_str(), ptr);
                 }
                 else {
-                    modified = ImGui::DragFloat3(propCtx.prettyName.c_str(), ptr, 0.1f);
+                    modified = ImGui::DragFloat3(propCtx.prettyName.c_str(), ptr);
                 }
                 if (modified) {
                     ctx.pushModified();

@@ -86,12 +86,13 @@ do
     if bEnableUnity then
         add_rules("c++.unity_build", { batchsize = 2 })
         add_files("./Source/Core/**.cpp", { unity_group = "Core" })
+        add_files("./Source/Bus/**.cpp", { unity_group = "Bus" })
         add_files("./Source/Platform/**.cpp", { unity_group = "Platform" })
         add_files("./Source/Resource/**.cpp", { unity_group = "Resource" })
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
-        add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
         add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
+        add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
     add_files("./Source/*.cpp")

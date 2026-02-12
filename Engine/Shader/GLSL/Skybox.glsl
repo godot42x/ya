@@ -17,6 +17,8 @@ void main()
 {
     vUV = aPos;
     gl_Position = uFrame.proj * uFrame.view * vec4(aPos, 1.0);
+    gl_Position.z =  gl_Position.w;
+    
 }
 
 // MARK: Separator

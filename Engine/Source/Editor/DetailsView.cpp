@@ -16,7 +16,10 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
+
 #include "EditorLayer.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
@@ -28,7 +31,7 @@
 namespace ya
 {
 
-DetailsView::DetailsView(EditorLayer *owner) : _owner(owner)
+DetailsView::DetailsView(EditorLayer* owner) : _owner(owner)
 {
 }
 
@@ -44,7 +47,7 @@ void DetailsView::onImGuiRender()
 
     if (!_owner->getSelections().empty())
     {
-        if (auto *firstEntity = _owner->getSelections()[0]; firstEntity->isValid()) {
+        if (auto* firstEntity = _owner->getSelections()[0]; firstEntity->isValid()) {
 
             drawComponents(*firstEntity);
         }
@@ -58,7 +61,8 @@ void DetailsView::onImGuiRender()
 
 
 
-void DetailsView::drawComponents(Entity &entity)
+// MARK: drawComponents
+void DetailsView::drawComponents(Entity& entity)
 {
     YA_PROFILE_FUNCTION();
     if (!entity)
@@ -70,8 +74,8 @@ void DetailsView::drawComponents(Entity &entity)
     ImGui::Separator();
 
     // ★ 自定义名字编辑器：优先使用 Node 的名字
-    Scene *scene = entity.getScene();
-    Node  *node  = scene ? scene->getNodeByEntity(&entity) : nullptr;
+    Scene* scene = entity.getScene();
+    Node*  node  = scene ? scene->getNodeByEntity(&entity) : nullptr;
 
     ImGui::PushID("Name");
     if (node) {
@@ -97,22 +101,22 @@ void DetailsView::drawComponents(Entity &entity)
     }
     ImGui::PopID();
 
-    drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent *tc) {
+    drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent* tc) {
         // Mark both local and world as dirty, then propagate to children
         tc->markLocalDirty();
         tc->propagateWorldDirtyToChildren();
     });
-    drawReflectedComponent<ModelComponent>("Model", entity, [](ModelComponent *mc) {
+    drawReflectedComponent<ModelComponent>("Model", entity, [](ModelComponent* mc) {
         mc->invalidate();
     });
-    drawReflectedComponent<MeshComponent>("Mesh", entity, [](MeshComponent *mc) {
+    drawReflectedComponent<MeshComponent>("Mesh", entity, [](MeshComponent* mc) {
         mc->invalidate();
     });
-    drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent *uc) {});
+    drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
 
     // 其他组件保持原有的自定义渲染逻辑
-    drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent *smc) {
-        auto *simpleMat = smc->getMaterial();
+    drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent* smc) {
+        auto* simpleMat = smc->getMaterial();
         if (!simpleMat) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
@@ -123,8 +127,12 @@ void DetailsView::drawComponents(Entity &entity)
         }
     });
 
-    drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent *umc) {
-        auto *unlitMat = umc->getMaterial();
+    drawReflectedComponent<RenderComponent>("Render Component", entity, [](RenderComponent* rc) {
+        // TODO: implement render component details
+    });
+
+    drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc) {
+        auto* unlitMat = umc->getMaterial();
         if (!unlitMat) {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
             return;
@@ -139,7 +147,7 @@ void DetailsView::drawComponents(Entity &entity)
             bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
 
             // Edit texture params (UV stored in TextureParam, not TextureView)
-            auto editTextureParam = [&bDirty](const char *name, UnlitMaterial::TextureParam &param, const TextureView *tv) {
+            auto editTextureParam = [&bDirty](const char* name, UnlitMaterial::TextureParam& param, const TextureView* tv) {
                 if (!tv || !tv->texture) return;
                 auto label = tv->texture->getLabel();
                 if (label.empty()) label = tv->texture->getFilepath();
@@ -173,7 +181,7 @@ void DetailsView::drawComponents(Entity &entity)
         }
     });
 
-    drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent *pmc) {
+    drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent* pmc) {
         ya::RenderContext ctx;
         ctx.beginInstance(pmc);
         ya::renderReflectedType("PhongMaterialComponent", type_index_v<PhongMaterialComponent>, pmc, ctx, 0);
@@ -191,16 +199,16 @@ void DetailsView::drawComponents(Entity &entity)
         }
     });
 
-    drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent *plc) {
+    drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent* plc) {
         // TODO: implement point light component details
     });
 
-    drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent *lsc) {
+    drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent* lsc) {
         // Add new script button
         if (ImGui::Button("+ Add Script")) {
             _filePicker.openScriptPicker(
                 "",
-                [lsc](const std::string &scriptPath) {
+                [lsc](const std::string& scriptPath) {
                     lsc->addScript(scriptPath);
                 });
         }
@@ -210,7 +218,7 @@ void DetailsView::drawComponents(Entity &entity)
         // List all scripts
         int indexToRemove = -1;
         for (size_t i = 0; i < lsc->scripts.size(); ++i) {
-            auto &script = lsc->scripts[i];
+            auto& script = lsc->scripts[i];
 
             ImGui::PushID(i);
 
@@ -238,7 +246,7 @@ void DetailsView::drawComponents(Entity &entity)
 
                 ImGui::SameLine();
                 if (ImGui::Button("Browse...")) {
-                    _filePicker.openScriptPicker(script.scriptPath, [&script](const std::string &newPath) {
+                    _filePicker.openScriptPicker(script.scriptPath, [&script](const std::string& newPath) {
                         script.scriptPath              = newPath;
                         script.bLoaded                 = false;
                         script.bEditorPreviewAttempted = false;
@@ -277,7 +285,7 @@ void DetailsView::drawComponents(Entity &entity)
                         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Script Properties:");
 
                         // 渲染每个属性
-                        for (auto &prop : script.properties) {
+                        for (auto& prop : script.properties) {
                             renderScriptProperty(&prop, &script);
                         }
 
@@ -326,7 +334,7 @@ void DetailsView::drawComponents(Entity &entity)
     drawAddComponentButton(entity);
 }
 
-void DetailsView::drawAddComponentButton(Entity &entity)
+void DetailsView::drawAddComponentButton(Entity& entity)
 {
     ImGui::Separator();
 
@@ -344,7 +352,7 @@ void DetailsView::drawAddComponentButton(Entity &entity)
 
     if (ImGui::BeginPopup("AddComponentPopup")) {
         // Get all registered components from ECSRegistry
-        auto &ecsRegistry = ECSRegistry::get();
+        auto& ecsRegistry = ECSRegistry::get();
 
         // Filter input
         static char searchFilter[128] = "";
@@ -356,7 +364,7 @@ void DetailsView::drawAddComponentButton(Entity &entity)
 
         // static std::
 
-        for (auto &[fname, typeIndex] : ecsRegistry._typeIndexCache) {
+        for (auto& [fname, typeIndex] : ecsRegistry.getTypeIndexCache()) {
             std::string componentName = fname.toString();
 
             // Apply search filter
@@ -368,29 +376,19 @@ void DetailsView::drawAddComponentButton(Entity &entity)
                 }
             }
 
-            // Check if entity already has this component
-            auto it = ecsRegistry._componentGetters.find(typeIndex);
-            if (it != ecsRegistry._componentGetters.end()) {
-                auto &registry          = entity.getScene()->getRegistry();
-                void *existingComponent = it->second(registry, entity.getHandle());
-
-                if (existingComponent != nullptr) {
-                    // Already has this component, show disabled
-                    ImGui::BeginDisabled();
-                    ImGui::MenuItem(componentName.c_str());
-                    ImGui::EndDisabled();
-                }
-                else {
-                    // Can add this component
-                    if (ImGui::MenuItem(componentName.c_str())) {
-                        // Create the component
-                        auto creatorIt = ecsRegistry._componentCreators.find(typeIndex);
-                        if (creatorIt != ecsRegistry._componentCreators.end()) {
-                            creatorIt->second(registry, entity.getHandle());
-                            YA_CORE_INFO("Added component '{}' to entity '{}'", componentName, entity.getName());
-                        }
-                        ImGui::CloseCurrentPopup();
+            auto& registry = entity.getScene()->getRegistry();
+            if (ecsRegistry.hasComponent(typeIndex, registry, entity.getHandle())) {
+                ImGui::BeginDisabled();
+                ImGui::MenuItem(componentName.c_str());
+                ImGui::EndDisabled();
+            }
+            else {
+                if (ImGui::MenuItem(componentName.c_str())) {
+                    // Create the component
+                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, registry, entity.getHandle())) {
+                        YA_CORE_INFO("Added component '{}' to entity '{}' {}", componentName, entity.getName(), compPtr);
                     }
+                    ImGui::CloseCurrentPopup();
                 }
             }
         }
@@ -399,13 +397,13 @@ void DetailsView::drawAddComponentButton(Entity &entity)
     }
 }
 
-void DetailsView::renderScriptProperty(void *propPtr, void *scriptInstancePtr)
+void DetailsView::renderScriptProperty(void* propPtr, void* scriptInstancePtr)
 {
     using namespace ImGui;
 
-    auto       &prop        = *static_cast<LuaScriptComponent::ScriptProperty *>(propPtr);
-    auto       &script      = *static_cast<LuaScriptComponent::ScriptInstance *>(scriptInstancePtr);
-    sol::table &scriptTable = script.self;
+    auto&       prop        = *static_cast<LuaScriptComponent::ScriptProperty*>(propPtr);
+    auto&       script      = *static_cast<LuaScriptComponent::ScriptInstance*>(scriptInstancePtr);
+    sol::table& scriptTable = script.self;
 
     // 显示 tooltip（如果有）
     if (!prop.tooltip.empty()) {
@@ -492,11 +490,11 @@ void DetailsView::renderScriptProperty(void *propPtr, void *scriptInstancePtr)
     }
 }
 
-void DetailsView::tryLoadScriptForEditor(void *scriptPtr)
+void DetailsView::tryLoadScriptForEditor(void* scriptPtr)
 {
     using namespace ya;
 
-    auto &script = *static_cast<LuaScriptComponent::ScriptInstance *>(scriptPtr);
+    auto& script = *static_cast<LuaScriptComponent::ScriptInstance*>(scriptPtr);
 
     // 初始化编辑器 Lua 状态（仅一次）
     if (!_editorLuaInitialized) {
@@ -592,22 +590,22 @@ void DetailsView::tryLoadScriptForEditor(void *scriptPtr)
                      script.scriptPath,
                      script.properties.size());
     }
-    catch (const sol::error &e) {
+    catch (const sol::error& e) {
         YA_CORE_ERROR("[Editor Preview] Exception while loading {}: {}", script.scriptPath, e.what());
         script.self = sol::lua_nil;
         script.properties.clear();
     }
-    catch (const std::exception &e) {
+    catch (const std::exception& e) {
         YA_CORE_ERROR("[Editor Preview] Unexpected error: {}", e.what());
         script.self = sol::lua_nil;
         script.properties.clear();
     }
 }
 
-void DetailsView::testNewRenderInterface(Entity &entity)
+void DetailsView::testNewRenderInterface(Entity& entity)
 {
     // 示例：使用新的renderReflectedType接口
-    if (auto *transform = entity.getComponent<TransformComponent>()) {
+    if (auto* transform = entity.getComponent<TransformComponent>()) {
         ya::RenderContext ctx;
         ctx.beginInstance(transform); // Set current instance for PropertyId generation
         ya::renderReflectedType("Transform", ya::type_index_v<TransformComponent>, transform, ctx, 0);
@@ -622,7 +620,7 @@ void DetailsView::testNewRenderInterface(Entity &entity)
 
         // 遍历所有修改
         if (ctx.hasModifications()) {
-            for (const auto &mod : ctx.modifications) {
+            for (const auto& mod : ctx.modifications) {
                 YA_CORE_INFO("Property {} was modified (path: {})", mod.propPath, mod.propId.id);
             }
         }
