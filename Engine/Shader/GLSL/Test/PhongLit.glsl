@@ -120,6 +120,7 @@ layout(set = 0, binding =2, std140) uniform DebugUBO {
 
 layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
 layout(set =1, binding = 1) uniform sampler2D uTexSpecular;
+layout(set =1, binding = 2) uniform sampler2D uTexReflection;
 
 
 layout(set = 2, binding = 0) uniform ParamUBO {
@@ -134,6 +135,10 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     // TextureParam diffuseTexParam;
     // TextureParam specularTexParam;
 } uParams;
+
+
+
+layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 
 
 // MARK: frag i/o

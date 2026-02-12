@@ -49,7 +49,6 @@
 
 
 
-
 // Render
 #include "Platform/Render/Vulkan//VulkanRender.h"
 #include "Platform/Render/Vulkan/VulkanImage.h"
@@ -201,11 +200,10 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
 
 
-    // ===== Initialize Render =====
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = EFormat::R8G8B8A8_UNORM,
+            .imageFormat   = COLOR_FORMAT,
             .bVsync        = false,
             .minImageCount = 3,
             .width         = static_cast<uint32_t>(_ci.width),
@@ -243,7 +241,7 @@ void App::init(AppDesc ci)
                  .colorAttach = {
                 AttachmentDescription{
                          .index          = 0,
-                         .format         = EFormat::R8G8B8A8_UNORM,
+                         .format         = COLOR_FORMAT,
                          .samples        = _sampleCount,
                          .loadOp         = EAttachmentLoadOp::Clear,
                          .storeOp        = EAttachmentStoreOp::Store,
@@ -267,6 +265,41 @@ void App::init(AppDesc ci)
                      .usage          = EImageUsage::DepthStencilAttachment,
             },
         },
+    });
+
+    // MARK: Render Resources
+    _descriptorPool   = IDescriptorPool::create(_render,
+                                              DescriptorPoolCreateInfo{
+                                                    .label     = "Global Descriptor Pool",
+                                                    .maxSets   = 1, // max allow allocated
+                                                    .poolSizes = {
+                                                      // max iamge set allowed < maxSets
+                                                      DescriptorPoolSize{
+                                                            .type            = EPipelineDescriptorType::CombinedImageSampler,
+                                                            .descriptorCount = 1, // for skybox
+                                                      },
+                                                  },
+                                              });
+    _skyBoxCubeMapDSL = IDescriptorSetLayout::create(_render,
+                                                     DescriptorSetLayoutDesc{
+                                                         .label    = "Skybox_CubeMap_DSL",
+                                                         .bindings = {
+                                                             DescriptorSetLayoutBinding{
+                                                                 .binding         = 0,
+                                                                 .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                                                                 .descriptorCount = 1,
+                                                                 .stageFlags      = EShaderStage::Fragment,
+                                                             },
+                                                         },
+                                                     });
+    _skyBoxCubeMapDS  = _descriptorPool->allocateDescriptorSets(_skyBoxCubeMapDSL);
+    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
+
+    _deleter.push("SkyboxCubeMapDSL", [this](void*) {
+        _skyBoxCubeMapDSL.reset();
+    });
+    _deleter.push("DescriptorPool", [this](void*) {
+        _descriptorPool.reset();
     });
 
     // pre construct all material systems
@@ -298,7 +331,8 @@ void App::init(AppDesc ci)
         _materialSystems.clear();
     });
 
-    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
+    _skyboxSystem             = ya::makeShared<SkyBoxSystem>();
+    _skyboxSystem->_cubeMapDS = _skyBoxCubeMapDS;
     _skyboxSystem->onInit(nullptr,
                           PipelineRenderingInfo{
                               .label                   = "Skybox Pipeline",
@@ -312,6 +346,10 @@ void App::init(AppDesc ci)
         _skyboxSystem.reset();
     });
 
+
+    getMaterialSystemByLabel("PhongMaterialSystem")
+        ->as<PhongMaterialSystem>()
+        ->skyBoxCubeMapDS = _skyBoxCubeMapDS;
 
 
     // MARK: tex-> Postprocessing

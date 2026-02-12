@@ -13,7 +13,7 @@
 namespace ya
 {
 
-void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo)
+void SkyBoxSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo)
 {
     auto render = App::get()->getRender();
 
@@ -109,24 +109,24 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
     _DSP = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = SKYBOX_PER_FRAME_SET + 1,
+            .maxSets   = SKYBOX_PER_FRAME_SET /*+ 1*/,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
                     .descriptorCount = SKYBOX_PER_FRAME_SET,
                 },
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1,
-                },
+                // DescriptorPoolSize{
+                //     .type            = EPipelineDescriptorType::CombinedImageSampler,
+                //     .descriptorCount = 1,
+                // },
             },
         });
 
     // MARK: Allocate Descriptor Sets
     std::vector<ya::DescriptorSetHandle> frameSets;
-    std::vector<ya::DescriptorSetHandle> resourceSets;
+    // std::vector<ya::DescriptorSetHandle> resourceSets;
     _DSP->allocateDescriptorSets(_dslPerFrame, 4, frameSets);
-    _DSP->allocateDescriptorSets(_dslResource, 1, resourceSets);
+    // _DSP->allocateDescriptorSets(_dslResource, 1, resourceSets);
 
 
     // MARK: Initial descriptor set updates (once during init)
@@ -163,8 +163,8 @@ void SkyBoxSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &
     render->getDescriptorHelper()->updateDescriptorSets(writes, {});
 
 
-    _dsResource = resourceSets[0];
-    render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsResource.ptr, "Skybox_Resource_DS");
+    // _cubeMapDS = resourceSets[0];
+    // render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsResource.ptr, "Skybox_Resource_DS");
 
     _sampler3D = Sampler::create(SamplerDesc{
         .label        = "SkyboxSampler",
@@ -178,20 +178,36 @@ void SkyBoxSystem::onDestroy()
 {
 }
 
-void SkyBoxSystem::tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameContext &ctx)
+void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx)
 {
     auto             scene      = App::get()->getSceneManager()->getActiveScene();
-    SkyboxComponent *skyboxComp = nullptr;
-    MeshComponent   *meshComp   = nullptr;
-    for (const auto &[entity, sc, mc] :
+    SkyboxComponent* skyboxComp = nullptr;
+    MeshComponent*   meshComp   = nullptr;
+    for (const auto& [entity, sc, mc] :
          scene->getRegistry().view<SkyboxComponent, MeshComponent>().each())
     {
         skyboxComp = &sc;
         meshComp   = &mc;
         break;
     }
-    if (!skyboxComp) {
+    if (!skyboxComp || !meshComp) {
         return;
+    }
+
+    if (skyboxComp->bDirty) {
+        skyboxComp->bDirty = false;
+        TextureView tv     = TextureView::create(skyboxComp->cubemapTexture, _sampler3D);
+
+        auto render = App::get()->getRender();
+        render->getDescriptorHelper()->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genSingleTextureViewWrite(
+                    _cubeMapDS,
+                    0,
+                    EPipelineDescriptorType::CombinedImageSampler,
+                    &tv),
+            },
+            {});
     }
 
 
@@ -223,35 +239,14 @@ void SkyBoxSystem::tick(ICommandBuffer *cmdBuf, float deltaTime, const FrameCont
     };
     _frameUBO[_index]->writeData(&frameData, sizeof(SkyboxFrameUBO), 0);
 
-    // MARK: Update descriptor sets only when resources change
-    auto render = App::get()->getRender();
 
-    if (skyboxComp->bDirty) {
-        skyboxComp->bDirty = false;
-        TextureView tv     = TextureView::create(skyboxComp->cubemapTexture, _sampler3D);
-
-        render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genSingleBufferWrite(
-                    _dsPerFrame[_index],
-                    0,
-                    EPipelineDescriptorType::UniformBuffer,
-                    _frameUBO[_index].get()),
-                IDescriptorSetHelper::genSingleTextureViewWrite(
-                    _dsResource,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    &tv),
-            },
-            {});
-    }
 
     // MARK: Bind descriptor sets (bound sets already initialized)
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
                                0,
                                {
                                    _dsPerFrame[_index],
-                                   _dsResource,
+                                   _cubeMapDS,
                                });
 
     meshComp->getMesh()->draw(cmdBuf);

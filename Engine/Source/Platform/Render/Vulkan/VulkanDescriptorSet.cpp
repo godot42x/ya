@@ -131,29 +131,6 @@ bool VulkanDescriptorPool::allocateDescriptorSets(
     return true;
 }
 
-bool VulkanDescriptorPool::allocateDescriptorSetN(const std::shared_ptr<VulkanDescriptorSetLayout> &layout,
-                                                  uint32_t                                          count,
-                                                  std::vector<VkDescriptorSet>                     &set)
-{
-    if (set.size() < count) {
-        set.resize(count);
-    }
-    std::vector<VkDescriptorSetLayout> sameLayouts(set.size(), layout->_handle);
-
-    // 基于同一种layout，allocate n 个 set
-    VkDescriptorSetAllocateInfo dsAI{
-        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext              = nullptr,
-        .descriptorPool     = _handle,
-        .descriptorSetCount = static_cast<uint32_t>(set.size()),
-        .pSetLayouts        = sameLayouts.data(),
-    };
-
-    VK_CALL(vkAllocateDescriptorSets(_render->getDevice(),
-                                     &dsAI,
-                                     set.data()));
-    return true;
-}
 
 void VulkanDescriptorPool::cleanup()
 {

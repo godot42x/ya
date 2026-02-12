@@ -35,12 +35,12 @@
 namespace ya
 {
 
-void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &inPipelineRenderingInfo)
+void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& inPipelineRenderingInfo)
 {
     YA_PROFILE_FUNCTION();
 
     _label                = "PhongMaterialSystem";
-    IRender *render       = getRender();
+    IRender* render       = getRender();
     auto     _sampleCount = ESampleCount::Sample_1;
 
     // MARK: layout
@@ -112,6 +112,18 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                     },
                 },
             },
+            DescriptorSetLayoutDesc{
+                .label    = "SkyBox_CubeMap_DSL",
+                .set      = 3,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
         },
     };
 
@@ -119,6 +131,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
     _materialFrameDSL    = DSLs[0];
     _materialResourceDSL = DSLs[1];
     _materialParamDSL    = DSLs[2];
+    // _skyBoxCbeMapDSL     = DSLs[3];
 
     _pipelineLayout = IPipelineLayout::create(
         render,
@@ -251,6 +264,7 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
     // TODO: create a auto extend descriptor pool class to support recreate
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
 
+    std::vector<WriteDescriptorSet> writes;
     for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
         _frameUBOs[i] = IBuffer::create(
             render,
@@ -276,7 +290,13 @@ void PhongMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
                 .size          = sizeof(PhongMaterialSystem::DebugUBO),
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             });
+
+        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[i].get()));
+        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[i].get()));
+        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[i].get()));
     }
+
+    render->getDescriptorHelper()->updateDescriptorSets(writes, {});
 }
 
 void PhongMaterialSystem::onDestroy()
@@ -284,7 +304,7 @@ void PhongMaterialSystem::onDestroy()
 }
 
 // MARK: grab resources
-void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
+void PhongMaterialSystem::preTick(float dt, FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -294,7 +314,7 @@ void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
     // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
     // Reset point light count
     uLight.numPointLights = 0;
-    for (const auto &[entity, plc, tc] : scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
+    for (const auto& [entity, plc, tc] : scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
         if (uLight.numPointLights >= MAX_POINT_LIGHTS) {
             YA_CORE_WARN("Exceeded maximum point lights ({}), ignoring additional lights", MAX_POINT_LIGHTS);
             break;
@@ -335,11 +355,11 @@ void PhongMaterialSystem::preTick(float dt, FrameContext *ctx)
 }
 
 // MARK: render
-void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
+void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
-    Scene *scene = getActiveScene();
+    Scene* scene = getActiveScene();
     if (!scene) {
         return;
     }
@@ -391,11 +411,11 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     YA_PROFILE_SCOPE("PhongMaterial::EntityLoop");
 
     // sort by z to render farthest objects first
-    std::vector<std::pair<entt::entity, const TransformComponent *>> entries;
+    std::vector<std::pair<entt::entity, const TransformComponent*>> entries;
     {
         YA_PROFILE_SCOPE("PhongMaterial::SortByZ");
         if (ctx->viewOwner != entt::null) {
-            for (const auto &[entity, lmc, mc, tc] : view.each()) {
+            for (const auto& [entity, lmc, mc, tc] : view.each()) {
                 if (entity == ctx->viewOwner) {
                     continue;
                 }
@@ -403,11 +423,11 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
             }
         }
         else {
-            for (const auto &[entity, lmc, mc, tc] : view.each()) {
+            for (const auto& [entity, lmc, mc, tc] : view.each()) {
                 entries.emplace_back(entity, &tc);
             }
         }
-        std::ranges::sort(entries, [](const auto &a, const auto &b) {
+        std::ranges::sort(entries, [](const auto& a, const auto& b) {
             // return a.second->getWorldPosition().z > b.second->getWorldPosition().z;
             // world forward is -Z in right-hand system
             return a.second->getWorldPosition().z < b.second->getWorldPosition().z;
@@ -415,7 +435,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     }
 
     entt::entity mirrorID = entt::null;
-    for (const auto &[id, mc, pmc] : scene->getRegistry().view<MirrorComponent, PhongMaterialComponent>().each()) {
+    for (const auto& [id, mc, pmc] : scene->getRegistry().view<MirrorComponent, PhongMaterialComponent>().each()) {
         mirrorID = id;
         break;
     }
@@ -425,14 +445,14 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
     std::vector<int> updatedMaterial(materialCount, 0);
 
-    for (auto &[entity, tc] : entries)
+    for (auto& [entity, tc] : entries)
     {
-        const auto &[lmc, meshComp, tc2] = view.get(entity);
+        const auto& [lmc, meshComp, tc2] = view.get(entity);
 
-        Entity *entityPtr = scene->getEntityByEnttID(entity);
+        Entity* entityPtr = scene->getEntityByEnttID(entity);
 
         // Get runtime material from component
-        PhongMaterial *material = lmc.getMaterial();
+        PhongMaterial* material = lmc.getMaterial();
         if (!material || material->getIndex() < 0)
         {
             YA_CORE_WARN("PhongMaterialSystem: Entity '{}' has no valid material",
@@ -457,10 +477,10 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
                 updateMaterialResourceDS(resourceDS, material, bOverrideMirrorMaterial);
                 material->setResourceDirty(false);
             }
-            if (_bShouldForceUpdateMaterial || material->isParamDirty())
+            if (_bShouldForceUpdateMaterial || material->isParamDirty() || bOverrideMirrorMaterial)
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateParamDS");
-                updateMaterialParamDS(paramDS, lmc, bOverrideMirrorMaterial);
+                updateMaterialParamDS(paramDS, lmc, bOverrideMirrorMaterial, _bShouldForceUpdateMaterial);
                 material->setParamDirty(false);
             }
 
@@ -476,6 +496,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
                                            _frameDSs[getPassSlot()],
                                            resourceDS,
                                            paramDS,
+                                           skyBoxCubeMapDS,
                                        });
         }
 
@@ -495,7 +516,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
         // draw mesh from MeshComponent (single mesh per component)
         {
             YA_PROFILE_SCOPE("PhongMaterial::DrawMesh");
-            Mesh *mesh = meshComp.getMesh();
+            Mesh* mesh = meshComp.getMesh();
             if (mesh) {
                 mesh->draw(cmdBuf);
             }
@@ -555,7 +576,7 @@ void PhongMaterialSystem::onRenderGUI()
 
 
 // TODO: descriptor set can be shared if they use same layout and data
-void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
+void PhongMaterialSystem::updateFrameDS(FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -586,35 +607,35 @@ void PhongMaterialSystem::updateFrameDS(FrameContext *ctx)
     _debugUBOs[slot]->writeData(&uDebug, sizeof(DebugUBO), 0);
 
 
-    render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[slot].get()),
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[slot].get()),
-                IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[slot].get()),
-            },
-            {});
+    // render
+    //     ->getDescriptorHelper()
+    //     ->updateDescriptorSets(
+    //         {
+    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[slot].get()),
+    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[slot].get()),
+    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[slot].get()),
+    //         },
+    //         {});
 }
 
-void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterialComponent &component, bool bOverrideMirrorMaterial)
+void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterialComponent& component, bool bOverrideDiffuse, bool bRecreated)
 {
     YA_PROFILE_FUNCTION();
 
     auto render = getRender();
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
-    PhongMaterial *material = component.getMaterial();
-    auto          &params   = material->getParamsMut();
+    PhongMaterial* material = component.getMaterial();
+    auto&          params   = material->getParamsMut();
 
     // Read UV params directly from TextureSlot (single source of truth)
-    if (auto *diffuseSlot = component.getTextureSlot(PhongMaterial::EResource::DiffuseTexture)) {
+    if (auto* diffuseSlot = component.getTextureSlot(PhongMaterial::EResource::DiffuseTexture)) {
         params.uvTransform0 = FMath::build_transform_mat3(
             diffuseSlot->uvOffset,
             diffuseSlot->uvRotation,
             diffuseSlot->uvScale);
     }
-    if (auto *specularSlot = component.getTextureSlot(PhongMaterial::EResource::SpecularTexture)) {
+    if (auto* specularSlot = component.getTextureSlot(PhongMaterial::EResource::SpecularTexture)) {
         params.uvTransform1 = FMath::build_transform_mat3(
             specularSlot->uvOffset,
             specularSlot->uvRotation,
@@ -624,18 +645,21 @@ void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMat
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
     paramUBO->writeData(&params, sizeof(material_param_t), 0);
 
-    DescriptorBufferInfo bufferInfo(paramUBO->getHandle(), 0, sizeof(material_param_t));
 
-    render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genSingleBufferWrite(ds, 0, EPipelineDescriptorType::UniformBuffer, paramUBO.get()),
-            },
-            {});
+    // ubo already bound to the ds, no need to update, except for recreation
+    if (bRecreated || bOverrideDiffuse) {
+        // FIXME: why must bOverrideDiffuse be true then the mirror texture render success?
+        render
+            ->getDescriptorHelper()
+            ->updateDescriptorSets(
+                {
+                    IDescriptorSetHelper::genSingleBufferWrite(ds, 0, EPipelineDescriptorType::UniformBuffer, paramUBO.get()),
+                },
+                {});
+    }
 }
 
-void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideDiffuse)
+void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material, bool bOverrideDiffuse)
 {
     YA_PROFILE_FUNCTION();
 
@@ -668,7 +692,7 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 {
     YA_PROFILE_FUNCTION();
 
-    auto *render = getRender();
+    auto* render = getRender();
     YA_CORE_ASSERT(render != nullptr, "Render is null");
     // 1. calculate how many set needed
     uint32_t newDescriptorSetCount = std::max<uint32_t>(1, _lastMaterialDSCount);
@@ -713,12 +737,13 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
     _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
 
-    for (auto &ds : _materialParamDSs) {
+    for (auto& ds : _materialParamDSs) {
         YA_CORE_ASSERT(ds.ptr != nullptr, "Failed to allocate material param descriptor set");
     }
 
     // 5. create UBOs
-    uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
+    uint32_t                        diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
+    std::vector<WriteDescriptorSet> writes;
     for (uint32_t i = 0; i < diffCount; i++) {
         auto buffer = ya::IBuffer::create(
             render,
@@ -729,7 +754,9 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             });
         _materialParamsUBOs.push_back(buffer);
+        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_materialParamDSs[i], 0, EPipelineDescriptorType::UniformBuffer, buffer.get()));
     }
+    render->getDescriptorHelper()->updateDescriptorSets(writes, {});
 
 
     _lastMaterialDSCount = newDescriptorSetCount;

@@ -37,17 +37,17 @@ struct RenderCommand
 {
     struct BindPipeline
     {
-        IGraphicsPipeline *pipeline = nullptr;
+        IGraphicsPipeline* pipeline = nullptr;
     };
     struct BindVertexBuffer
     {
         uint32_t       binding = 0;
-        const IBuffer *buffer  = nullptr;
+        const IBuffer* buffer  = nullptr;
         uint64_t       offset  = 0;
     };
     struct BindIndexBuffer
     {
-        IBuffer *buffer          = nullptr;
+        IBuffer* buffer          = nullptr;
         uint64_t offset          = 0;
         bool     use16BitIndices = false;
     };
@@ -92,22 +92,22 @@ struct RenderCommand
     };
     struct BindDescriptorSets
     {
-        IPipelineLayout                 *pipelineLayout = nullptr;
+        IPipelineLayout*                 pipelineLayout = nullptr;
         uint32_t                         firstSet       = 0;
         std::vector<DescriptorSetHandle> descriptorSets;
         std::vector<uint32_t>            dynamicOffsets;
     };
     struct PushConstants
     {
-        IPipelineLayout     *pipelineLayout = nullptr;
+        IPipelineLayout*     pipelineLayout = nullptr;
         EShaderStage::T      stages         = {};
         uint32_t             offset         = 0;
         std::vector<uint8_t> data;
     };
     struct CopyBuffer
     {
-        IBuffer *src       = nullptr;
-        IBuffer *dst       = nullptr;
+        IBuffer* src       = nullptr;
+        IBuffer* dst       = nullptr;
         uint64_t size      = 0;
         uint64_t srcOffset = 0;
         uint64_t dstOffset = 0;
@@ -121,7 +121,7 @@ struct RenderCommand
     };
     struct TransitionImageLayout
     {
-        void                 *image     = nullptr;
+        void*                 image     = nullptr;
         EImageLayout::T       oldLayout = EImageLayout::Undefined;
         EImageLayout::T       newLayout = EImageLayout::Undefined;
         ImageSubresourceRange subresourceRange;
@@ -164,11 +164,11 @@ struct ICommandBuffer
   public:
     virtual ~ICommandBuffer() = default;
 
-    ICommandBuffer()                                  = default;
-    ICommandBuffer(const ICommandBuffer &)            = delete;
-    ICommandBuffer &operator=(const ICommandBuffer &) = delete;
-    ICommandBuffer(ICommandBuffer &&)                 = default;
-    ICommandBuffer &operator=(ICommandBuffer &&)      = default;
+    ICommandBuffer()                                 = default;
+    ICommandBuffer(const ICommandBuffer&)            = delete;
+    ICommandBuffer& operator=(const ICommandBuffer&) = delete;
+    ICommandBuffer(ICommandBuffer&&)                 = default;
+    ICommandBuffer& operator=(ICommandBuffer&&)      = default;
 
     /**
      * @brief Get the native handle (backend-specific)
@@ -203,23 +203,23 @@ struct ICommandBuffer
 
 #if YA_CMDBUF_RECORD_MODE
     // ========== Recording Mode: Push commands to vector ==========
-    void bindPipeline(IGraphicsPipeline *pipeline)
+    void bindPipeline(IGraphicsPipeline* pipeline)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindPipeline{pipeline}});
     }
 #else
     // ========== Virtual Mode: Direct virtual function calls ==========
-    virtual void bindPipeline(IGraphicsPipeline *pipeline) = 0;
+    virtual void bindPipeline(IGraphicsPipeline* pipeline) = 0;
 #endif
 
 #if YA_CMDBUF_RECORD_MODE
     // ========== Recording Mode Implementations ==========
-    void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0)
+    void bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindVertexBuffer{binding, buffer, offset}});
     }
 
-    void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false)
+    void bindIndexBuffer(IBuffer* buffer, uint64_t offset = 0, bool use16BitIndices = false)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindIndexBuffer{buffer, offset, use16BitIndices}});
     }
@@ -262,10 +262,10 @@ struct ICommandBuffer
     }
 
     void bindDescriptorSets(
-        IPipelineLayout                        *pipelineLayout,
+        IPipelineLayout*                        pipelineLayout,
         uint32_t                                firstSet,
-        const std::vector<DescriptorSetHandle> &descriptorSets,
-        const std::vector<uint32_t>            &dynamicOffsets = {})
+        const std::vector<DescriptorSetHandle>& descriptorSets,
+        const std::vector<uint32_t>&            dynamicOffsets = {})
     {
         RenderCommand::BindDescriptorSets cmd{
             .pipelineLayout = pipelineLayout,
@@ -277,11 +277,11 @@ struct ICommandBuffer
     }
 
     void pushConstants(
-        IPipelineLayout *pipelineLayout,
+        IPipelineLayout* pipelineLayout,
         EShaderStage::T  stages,
         uint32_t         offset,
         uint32_t         size,
-        const void      *data)
+        const void*      data)
     {
         RenderCommand::PushConstants cmd;
         cmd.pipelineLayout = pipelineLayout;
@@ -294,13 +294,13 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{std::move(cmd)});
     }
 
-    void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
+    void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::CopyBuffer{src, dst, size, srcOffset, dstOffset}});
     }
 
-    void beginRendering(const RenderingInfo &info)
+    void beginRendering(const RenderingInfo& info)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
     }
@@ -311,10 +311,10 @@ struct ICommandBuffer
     }
 
     void transitionImageLayout(
-        void                        *image,
+        void*                        image,
         EImageLayout::T              oldLayout,
         EImageLayout::T              newLayout,
-        const ImageSubresourceRange &subresourceRange)
+        const ImageSubresourceRange& subresourceRange)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::TransitionImageLayout{image, oldLayout, newLayout, subresourceRange}});
     }
@@ -326,8 +326,8 @@ struct ICommandBuffer
 
 #else
     // ========== Virtual Mode Declarations ==========
-    virtual void bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset = 0)      = 0;
-    virtual void bindIndexBuffer(IBuffer *buffer, uint64_t offset = 0, bool use16BitIndices = false) = 0;
+    virtual void bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset = 0)      = 0;
+    virtual void bindIndexBuffer(IBuffer* buffer, uint64_t offset = 0, bool use16BitIndices = false) = 0;
     virtual void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
                       uint32_t firstVertex = 0, uint32_t firstInstance = 0)                          = 0;
     virtual void drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
@@ -338,19 +338,17 @@ struct ICommandBuffer
     virtual void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)                   = 0;
     virtual void setCullMode(ECullMode::T cullMode)                                                  = 0;
     virtual void setPolygonMode(EPolygonMode::T polygonMode)                                         = 0;
-    virtual void bindDescriptorSets(
-        IPipelineLayout                        *pipelineLayout,
-        uint32_t                                firstSet,
-        const std::vector<DescriptorSetHandle> &descriptorSets,
-        const std::vector<uint32_t>            &dynamicOffsets = {}) = 0;
-    virtual void pushConstants(
-        IPipelineLayout *pipelineLayout,
-        EShaderStage::T  stages,
-        uint32_t         offset,
-        uint32_t         size,
-        const void      *data)                                                   = 0;
-    virtual void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
-                            uint64_t srcOffset = 0, uint64_t dstOffset = 0) = 0;
+    virtual void bindDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                                    uint32_t                                firstSet,
+                                    const std::vector<DescriptorSetHandle>& descriptorSets,
+                                    const std::vector<uint32_t>&            dynamicOffsets = {})                = 0;
+    virtual void pushConstants(IPipelineLayout* pipelineLayout,
+                               EShaderStage::T  stages,
+                               uint32_t         offset,
+                               uint32_t         size,
+                               const void*      data)                                                     = 0;
+    virtual void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
+                            uint64_t srcOffset = 0, uint64_t dstOffset = 0)                          = 0;
 
     /**
      * @brief Copy data from buffer to image
@@ -360,32 +358,32 @@ struct ICommandBuffer
      * @param regions Copy regions
      */
     virtual void copyBufferToImage(
-        IBuffer                        *srcBuffer,
-        IImage                         *dstImage,
-        EImageLayout::T                 dstImageLayout,
-        const std::vector<BufferImageCopy> &regions) = 0;
+        IBuffer*                            srcBuffer,
+        IImage*                             dstImage,
+        EImageLayout::T                     dstImageLayout,
+        const std::vector<BufferImageCopy>& regions) = 0;
 
-    virtual void beginRendering(const RenderingInfo &info) = 0;
+    virtual void beginRendering(const RenderingInfo& info) = 0;
 
     /**
      * @brief End rendering (works for both RenderPass and Dynamic Rendering)
      */
-    virtual void endRendering(const EndRenderingInfo &info = {}) = 0;
+    virtual void endRendering(const EndRenderingInfo& info = {}) = 0;
 
     virtual void transitionImageLayout(
-        IImage                      *image,
+        IImage*                      image,
         EImageLayout::T              oldLayout,
         EImageLayout::T              newLayout,
-        const ImageSubresourceRange *subresourceRange = nullptr) = 0;
+        const ImageSubresourceRange* subresourceRange = nullptr) = 0;
 
     virtual void transitionImageLayoutAuto(
-        IImage                      *image,
+        IImage*                      image,
         EImageLayout::T              newLayout,
-        const ImageSubresourceRange *subresourceRange = nullptr) = 0;
+        const ImageSubresourceRange* subresourceRange = nullptr) = 0;
 
     // Helper: Transition all attachments of a RenderTarget to specified layouts
     virtual void transitionRenderTargetLayout(
-        IRenderTarget  *renderTarget,
+        IRenderTarget*  renderTarget,
         EImageLayout::T colorLayout,
         EImageLayout::T depthLayout = EImageLayout::Undefined) = 0;
 

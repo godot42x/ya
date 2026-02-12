@@ -64,7 +64,7 @@ struct WriteDescriptorSet
 
     // For texel buffer views
     // 专门为纹理(texel)缓冲视图设计
-    std::vector<void *> texelBufferViews;
+    std::vector<void*> texelBufferViews;
 };
 
 // Descriptor copy operation (if needed in the future)
@@ -88,11 +88,11 @@ struct IDescriptorSetLayout
   public:
     virtual ~IDescriptorSetLayout() = default;
 
-    IDescriptorSetLayout()                                        = default;
-    IDescriptorSetLayout(const IDescriptorSetLayout &)            = delete;
-    IDescriptorSetLayout &operator=(const IDescriptorSetLayout &) = delete;
-    IDescriptorSetLayout(IDescriptorSetLayout &&)                 = default;
-    IDescriptorSetLayout &operator=(IDescriptorSetLayout &&)      = default;
+    IDescriptorSetLayout()                                       = default;
+    IDescriptorSetLayout(const IDescriptorSetLayout&)            = delete;
+    IDescriptorSetLayout& operator=(const IDescriptorSetLayout&) = delete;
+    IDescriptorSetLayout(IDescriptorSetLayout&&)                 = default;
+    IDescriptorSetLayout& operator=(IDescriptorSetLayout&&)      = default;
 
     /**
      * @brief Create a descriptor set layout
@@ -100,19 +100,19 @@ struct IDescriptorSetLayout
      * @param layout The descriptor set layout description
      * @return Shared pointer to the created descriptor set layout
      */
-    static std::shared_ptr<IDescriptorSetLayout> create(IRender *render, const DescriptorSetLayoutDesc &layout);
+    static std::shared_ptr<IDescriptorSetLayout> create(IRender* render, const DescriptorSetLayoutDesc& layout);
 
-    static std::vector<stdptr<IDescriptorSetLayout>> create(IRender *render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts);
+    static std::vector<stdptr<IDescriptorSetLayout>> create(IRender* render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts);
 
     /**
      * @brief Get the layout information
      */
-    virtual const DescriptorSetLayoutDesc &getLayoutInfo() const = 0;
+    virtual const DescriptorSetLayoutDesc& getLayoutInfo() const = 0;
 
     /**
      * @brief Get backend-specific handle (implementation should cast to appropriate type)
      */
-    virtual void *getHandle() const = 0;
+    virtual void* getHandle() const = 0;
 
     /**
      * @brief Get typed backend-specific handle
@@ -138,11 +138,11 @@ struct IDescriptorPool
   public:
     virtual ~IDescriptorPool() = default;
 
-    IDescriptorPool()                                   = default;
-    IDescriptorPool(const IDescriptorPool &)            = delete;
-    IDescriptorPool &operator=(const IDescriptorPool &) = delete;
-    IDescriptorPool(IDescriptorPool &&)                 = default;
-    IDescriptorPool &operator=(IDescriptorPool &&)      = default;
+    IDescriptorPool()                                  = default;
+    IDescriptorPool(const IDescriptorPool&)            = delete;
+    IDescriptorPool& operator=(const IDescriptorPool&) = delete;
+    IDescriptorPool(IDescriptorPool&&)                 = default;
+    IDescriptorPool& operator=(IDescriptorPool&&)      = default;
 
     /**
      * @brief Factory method to create descriptor pool for the current render backend
@@ -150,7 +150,7 @@ struct IDescriptorPool
      * @param ci Pool creation info
      * @return Shared pointer to the created descriptor pool
      */
-    static std::shared_ptr<IDescriptorPool> create(IRender *render, const DescriptorPoolCreateInfo &ci);
+    static std::shared_ptr<IDescriptorPool> create(IRender* render, const DescriptorPoolCreateInfo& ci);
 
     /**
      * @brief Allocate N descriptor sets of the same layout
@@ -159,9 +159,11 @@ struct IDescriptorPool
      * @param outSets Output vector of allocated descriptor set handles
      * @return true if allocation succeeded
      */
-    virtual bool allocateDescriptorSets(const std::shared_ptr<IDescriptorSetLayout> &layout,
+    virtual bool allocateDescriptorSets(const std::shared_ptr<IDescriptorSetLayout>& layout,
                                         uint32_t                                     count,
-                                        std::vector<DescriptorSetHandle>            &outSets) = 0;
+                                        std::vector<DescriptorSetHandle>&            outSets) = 0;
+
+    virtual DescriptorSetHandle allocateDescriptorSets(const std::shared_ptr<ya::IDescriptorSetLayout>& layout) = 0;
 
     /**
      * @brief Reset the descriptor pool
@@ -171,12 +173,12 @@ struct IDescriptorPool
     /**
      * @brief Set debug name for the pool
      */
-    virtual void setDebugName(const char *name) = 0;
+    virtual void setDebugName(const char* name) = 0;
 
     /**
      * @brief Get backend-specific handle
      */
-    virtual void *getHandle() const = 0;
+    virtual void* getHandle() const = 0;
 };
 
 /**
@@ -188,11 +190,11 @@ struct IDescriptorSetHelper
   public:
     virtual ~IDescriptorSetHelper() = default;
 
-    IDescriptorSetHelper()                                        = default;
-    IDescriptorSetHelper(const IDescriptorSetHelper &)            = delete;
-    IDescriptorSetHelper &operator=(const IDescriptorSetHelper &) = delete;
-    IDescriptorSetHelper(IDescriptorSetHelper &&)                 = default;
-    IDescriptorSetHelper &operator=(IDescriptorSetHelper &&)      = default;
+    IDescriptorSetHelper()                                       = default;
+    IDescriptorSetHelper(const IDescriptorSetHelper&)            = delete;
+    IDescriptorSetHelper& operator=(const IDescriptorSetHelper&) = delete;
+    IDescriptorSetHelper(IDescriptorSetHelper&&)                 = default;
+    IDescriptorSetHelper& operator=(IDescriptorSetHelper&&)      = default;
 
     /**
      * @brief Update descriptor sets with writes and copies
@@ -200,8 +202,8 @@ struct IDescriptorSetHelper
      * @param copies Vector of copy operations
      */
     virtual void updateDescriptorSets(
-        const std::vector<WriteDescriptorSet> &writes,
-        const std::vector<CopyDescriptorSet>  &copies = {}) = 0;
+        const std::vector<WriteDescriptorSet>& writes,
+        const std::vector<CopyDescriptorSet>&  copies = {}) = 0;
 
     /**
      * @brief Helper to generate a buffer write descriptor
@@ -231,7 +233,7 @@ struct IDescriptorSetHelper
         DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
         EPipelineDescriptorType::T descriptorType,
-        IBuffer                   *buf)
+        IBuffer*                   buf)
     {
         return genBufferWrite(dstSet,
                               dstBinding,
@@ -243,7 +245,7 @@ struct IDescriptorSetHelper
         DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
         EPipelineDescriptorType::T descriptorType,
-        TextureView               *tv)
+        TextureView*               tv)
     {
         return genImageWrite(dstSet,
                              dstBinding,
@@ -285,7 +287,7 @@ struct IDescriptorSetHelper
         uint32_t                   dstBinding,
         uint32_t                   dstArrayElement,
         EPipelineDescriptorType::T descriptorType,
-        std::vector<void *>        pTexelBufferView)
+        std::vector<void*>         pTexelBufferView)
 
     {
         WriteDescriptorSet write{

@@ -103,6 +103,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::shared_ptr<IDescriptorSetLayout> _materialFrameDSL;    // set 0: perframe
     std::shared_ptr<IDescriptorSetLayout> _materialResourceDSL; // set 1: per material resource (textures)
     std::shared_ptr<IDescriptorSetLayout> _materialParamDSL;    // set 2: per material param
+    // std::shared_ptr<IDescriptorSetLayout> _skyBoxCbeMapDSL;    // set 3: skyBoxCubeMap
 
     std::shared_ptr<IPipelineLayout> _pipelineLayout;
     // std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
@@ -142,15 +143,16 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
     std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
-    std::string _ctxEntityDebugStr;
+    DescriptorSetHandle skyBoxCubeMapDS = nullptr;
+    std::string         _ctxEntityDebugStr;
 
     EPolygonMode::T _polygonMode = EPolygonMode::Fill; // Polygon rendering mode (Fill, Line, Point)
 
     // optional?
-    void onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo) override;
+    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;
     void onDestroy() override;
-    void preTick(float deltaTime, FrameContext *ctx);
-    void onRender(ICommandBuffer *cmdBuf, FrameContext *ctx) override;
+    void preTick(float deltaTime, FrameContext* ctx);
+    void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx) override;
     void onRenderGUI() override;
     void resetFrameSlot() override { _passSlot = 0; }
 
@@ -158,14 +160,14 @@ struct PhongMaterialSystem : public IMaterialSystem
   private:
     // void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(FrameContext *ctx);
-    void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent &component, bool bOverrideMirrorMaterial);
-    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial *material, bool bOverrideDiffuse);
+    void updateFrameDS(FrameContext* ctx);
+    void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent& component, bool bOverrideMirrorMaterial, bool bRecreated);
+    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material, bool bOverrideDiffuse);
 
 
     void recreateMaterialDescPool(uint32_t _materialCount);
 
-    DescriptorImageInfo getDescriptorImageInfo(IImageView *iv, Sampler *sampler)
+    DescriptorImageInfo getDescriptorImageInfo(IImageView* iv, Sampler* sampler)
     {
         SamplerHandle   samplerHandle   = nullptr;
         ImageViewHandle imageViewHandle = nullptr;
@@ -188,7 +190,7 @@ struct PhongMaterialSystem : public IMaterialSystem
         return imageInfo0;
     }
 
-    DescriptorImageInfo getDescriptorImageInfo(TextureView const *tv)
+    DescriptorImageInfo getDescriptorImageInfo(const TextureView* tv)
     {
         if (!tv) {
             return getDescriptorImageInfo(nullptr, nullptr);

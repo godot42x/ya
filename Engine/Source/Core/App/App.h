@@ -36,8 +36,8 @@ struct Texture;
 struct Texture;
 
 
-void imcFpsControl(FPSControl &fpsCtrl);
-bool imcEditorCamera(FreeCamera &camera);
+void imcFpsControl(FPSControl& fpsCtrl);
+bool imcEditorCamera(FreeCamera& camera);
 void imcClearValues();
 
 enum AppMode
@@ -81,7 +81,7 @@ struct AppDesc
 
 
 
-    void init(int argc, char **argv)
+    void init(int argc, char** argv)
     {
         YA_CORE_INFO(FUNCTION_SIG);
         params
@@ -120,18 +120,18 @@ struct TaskManager
 
 struct App
 {
-    static App *_instance;
+    static App* _instance;
 
     Deleter _deleter;
 
     // Core subsystems
-    IRender      *_render       = nullptr;
-    SceneManager *_sceneManager = nullptr;
+    IRender*      _render       = nullptr;
+    SceneManager* _sceneManager = nullptr;
 
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
 
-    std::shared_ptr<ShaderStorage>                                    _shaderStorage = nullptr;
-    std::vector<std::pair<std::string /*name*/, IGraphicsPipeline *>> _monitorPipelines;
+    std::shared_ptr<ShaderStorage>                                   _shaderStorage = nullptr;
+    std::vector<std::pair<std::string /*name*/, IGraphicsPipeline*>> _monitorPipelines;
 
     // Runtime state
     bool          bRunning         = true;
@@ -180,10 +180,15 @@ struct App
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
 
+    stdptr<IDescriptorPool> _descriptorPool = nullptr;
+
     // Material systems (managed externally from RenderTarget)
     std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
-    std::vector<stdptr<ISystem>> _systems;
-    stdptr<SkyBoxSystem>                          _skyboxSystem = nullptr;
+    std::vector<stdptr<ISystem>>                  _systems;
+
+    stdptr<SkyBoxSystem>         _skyboxSystem     = nullptr;
+    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
+    DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
@@ -202,31 +207,31 @@ struct App
 
     // Viewport texture for ImGui display (unified Texture semantics)
     // This is set to either _postprocessTexture or _viewportRT's color attachment
-    Texture *_viewportTexture = nullptr;
+    Texture* _viewportTexture = nullptr;
 
-    EditorLayer *_editorLayer;
+    EditorLayer* _editorLayer;
 
     MulticastDelegate<void()> onScenePostInit;
 
-    LuaScriptingSystem *_luaScriptingSystem;
+    LuaScriptingSystem* _luaScriptingSystem;
 
 
   public:
-    App()                       = default;
-    App(const App &)            = delete;
-    App &operator=(const App &) = delete;
-    App(App &&)                 = delete;
-    App &operator=(App &&)      = delete;
-    virtual ~App()              = default;
+    App()                      = default;
+    App(const App&)            = delete;
+    App& operator=(const App&) = delete;
+    App(App&&)                 = delete;
+    App& operator=(App&&)      = delete;
+    virtual ~App()             = default;
 
     void init(AppDesc ci);
     int  run();
     int  iterate(float dt);
     void quit();
-    int  processEvent(SDL_Event &event);
+    int  processEvent(SDL_Event& event);
 
     template <typename T>
-    int  dispatchEvent(const T &event);
+    int  dispatchEvent(const T& event);
     void renderGUI(float dt);
 
     void requestQuit()
@@ -242,25 +247,25 @@ struct App
     virtual void onQuit() {}
 
 
-    virtual int  onEvent(const Event &event);
+    virtual int  onEvent(const Event& event);
     virtual void tickLogic(float dt);
     virtual void tickRender(float dt);
     virtual void onRenderGUI(float dt);
 
 
 
-    static App *get() { return _instance; }
+    static App* get() { return _instance; }
 
 
-    [[nodiscard]] IRender *getRender() const { return _render; }
+    [[nodiscard]] IRender* getRender() const { return _render; }
     template <typename T>
-    [[nodiscard]] T *getRender() { return static_cast<T *>(getRender()); }
+    [[nodiscard]] T* getRender() { return static_cast<T*>(getRender()); }
 
-    [[nodiscard]] const AppDesc                 &getCI() const { return _ci; }
+    [[nodiscard]] const AppDesc&                 getCI() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
     // Getters for subsystems
-    [[nodiscard]] SceneManager *getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] SceneManager* getSceneManager() const { return _sceneManager; }
     [[nodiscard]] uint32_t      getFrameIndex() const { return _frameIndex; }
     [[nodiscard]] uint64_t      getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
 
@@ -283,18 +288,18 @@ struct App
 
     // Get primary camera from ECS (entity with CameraComponent._primary == true)
     // Returns nullptr if no primary camera found
-    Entity *getPrimaryCamera() const;
+    Entity* getPrimaryCamera() const;
 
-    bool loadScene(const std::string &path);
+    bool loadScene(const std::string& path);
     bool unloadScene();
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
   protected:
     // Protected for derived classes to override
-    virtual void onSceneInit(Scene *scene);
-    virtual void onSceneDestroy(Scene *scene);
-    virtual void onSceneActivated(Scene *scene);
+    virtual void onSceneInit(Scene* scene);
+    virtual void onSceneDestroy(Scene* scene);
+    virtual void onSceneActivated(Scene* scene);
 
     // void onScenePostInit(Scene *scene) {}
 
@@ -307,16 +312,16 @@ struct App
   private:
 
     // temp
-    [[nodiscard]] const InputManager &getInputManager() const { return inputManager; }
-    [[nodiscard]] const glm::vec2    &getWindowSize() const { return _windowSize; }
+    [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
+    [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
 
     // Material system management (external from RenderTarget)
     template <typename T>
-    void addMaterialSystem(IRenderPass *renderPass = nullptr, const PipelineRenderingInfo &pipelineRenderingInfo = {})
+    void addMaterialSystem(IRenderPass* renderPass = nullptr, const PipelineRenderingInfo& pipelineRenderingInfo = {})
     {
         static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must derive from IMaterialSystem");
         stdptr<T> system = makeShared<T>();
-        auto      sys    = static_cast<IMaterialSystem *>(system.get());
+        auto      sys    = static_cast<IMaterialSystem*>(system.get());
         sys->onInit(renderPass, pipelineRenderingInfo);
         YA_CORE_DEBUG("Initialized material system: {}", sys->_label);
         _materialSystems.push_back(system);
@@ -324,14 +329,14 @@ struct App
 
     void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func)
     {
-        for (auto &system : _materialSystems) {
+        for (auto& system : _materialSystems) {
             func(system);
         }
     }
 
-    IMaterialSystem *getMaterialSystemByLabel(const std::string &label)
+    IMaterialSystem* getMaterialSystemByLabel(const std::string& label)
     {
-        for (auto &system : _materialSystems) {
+        for (auto& system : _materialSystems) {
             if (system && system->_label == label) {
                 return system.get();
             }
@@ -343,21 +348,21 @@ struct App
   private:
 
 
-    bool saveScene([[maybe_unused]] const std::string &path) { return false; } // TODO: implement
+    bool saveScene([[maybe_unused]] const std::string& path) { return false; } // TODO: implement
 
-    bool onWindowResized(const WindowResizeEvent &event);
-    bool onKeyReleased(const KeyReleasedEvent &event);
-    bool onMouseMoved(const MouseMoveEvent &event);
-    bool onMouseButtonReleased(const MouseButtonReleasedEvent &event);
-    bool onMouseScrolled(const MouseScrolledEvent &event);
+    bool onWindowResized(const WindowResizeEvent& event);
+    bool onKeyReleased(const KeyReleasedEvent& event);
+    bool onMouseMoved(const MouseMoveEvent& event);
+    bool onMouseButtonReleased(const MouseButtonReleasedEvent& event);
+    bool onMouseScrolled(const MouseScrolledEvent& event);
     void onSceneViewportResized(Rect2D rect);
 
 
-    void renderScene(ICommandBuffer *cmdBuf, float dt, FrameContext &ctx);
+    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx);
     void beginFrame()
     {
         _skyboxSystem->beginFrame();
-        for (auto &system : _materialSystems) {
+        for (auto& system : _materialSystems) {
             system->beginFrame();
         }
     }

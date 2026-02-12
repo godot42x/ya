@@ -7,6 +7,7 @@
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include <algorithm>
@@ -30,7 +31,8 @@ using components_to_copy = refl::type_list<
     LuaScriptComponent,
     PointLightComponent,
     MeshComponent,
-    ModelComponent>;
+    ModelComponent,
+    RenderComponent>;
 
 Scene::Scene(const std::string &name)
     : _name(name)
