@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <array>
 #include <map>
 #include <set>
 #include <type_traits>
@@ -150,6 +151,25 @@ struct ContainerTraits<std::unordered_set<T, Hash, KeyEqual, Allocator>>
     using ContainerType = std::unordered_set<T, Hash, KeyEqual, Allocator>;
     using Iterator      = typename std::unordered_set<T, Hash, KeyEqual, Allocator>::iterator;
     using ConstIterator = typename std::unordered_set<T, Hash, KeyEqual, Allocator>::const_iterator;
+};
+
+// ============================================================================
+// Array 特化 (fixed-size container)
+// ============================================================================
+
+template <typename T, std::size_t N>
+struct ContainerTraits<std::array<T, N>>
+{
+    static constexpr bool              IsContainer = true;
+    static constexpr EContainer        Type        = EContainer::Array;
+    static constexpr ContainerCategory Category    = ContainerCategory::SequenceContainer;
+    static constexpr bool              HasKeyValue = false;
+    static constexpr std::size_t       Size        = N;
+
+    using ElementType   = T;
+    using ContainerType = std::array<T, N>;
+    using Iterator      = typename std::array<T, N>::iterator;
+    using ConstIterator = typename std::array<T, N>::const_iterator;
 };
 
 // ============================================================================

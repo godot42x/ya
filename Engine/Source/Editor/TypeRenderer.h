@@ -20,7 +20,8 @@ namespace ya
 // ============================================================================
 // MARK: Constants
 // ============================================================================
-static constexpr int MAX_RECURSION_DEPTH = 10;
+static constexpr int   MAX_RECURSION_DEPTH  = 10;
+static constexpr float CHILD_CLASS_INDENT  = 8.0f;
 // static constexpr bool EXPERMENTIAL_ASYNC_PROPERTY_CHANGED = false;
 
 // ============================================================================

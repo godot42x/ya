@@ -13,6 +13,7 @@
 
 #include "ContainerTraits.h"
 #include "Core/TypeIndex.h"
+#include <array>
 #include <memory>
 #include <set>
 #include <string>
@@ -76,6 +77,10 @@ struct IContainerProperty
 
     virtual void addEmptyEntry(void *containerPtr) {}                               // Map::emplace
     virtual void popBack(void *containerPtr) {}                               // Map::emplace
+
+    // Fixed-size container query
+    virtual bool   isFixedSize() const { return false; }
+    virtual size_t getFixedSize() const { return 0; }
 };
 
 // ============================================================================
@@ -621,6 +626,104 @@ class UnorderedSetProperty : public IContainerProperty
 };
 
 // ============================================================================
+// MARK: Array 容器属性实现 (fixed-size)
+// ============================================================================
+
+template <typename T, std::size_t N>
+class ArrayProperty : public IContainerProperty
+{
+    using ContainerType = std::array<T, N>;
+    using ElementType   = T;
+
+    // Array 迭代器实现
+    struct ArrayIterator : public ContainerIterator
+    {
+        ContainerType *container;
+        size_t         currentIndex = 0;
+
+        ArrayIterator(ContainerType *c) : container(c) {}
+
+        bool hasNext() const override { return currentIndex < N; }
+        void next() override { ++currentIndex; }
+
+        void *getElementPtr() override
+        {
+            return currentIndex < N ? &(*container)[currentIndex] : nullptr;
+        }
+
+        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    };
+
+  public:
+    EContainer        getContainerType() const override { return EContainer::Array; }
+    ContainerCategory getCategory() const override { return ContainerCategory::SequenceContainer; }
+    bool              isMapLike() const override { return false; }
+    bool              isFixedSize() const override { return true; }
+    size_t            getFixedSize() const override { return N; }
+
+    size_t getSize(void *containerPtr) const override
+    {
+        (void)containerPtr;
+        return N; // Array size is always N
+    }
+
+    void clear(void *containerPtr) override
+    {
+        // Array cannot be cleared, but we can reset to default values
+        auto *arr = static_cast<ContainerType *>(containerPtr);
+        for (size_t i = 0; i < N; ++i) {
+            (*arr)[i] = T{};
+        }
+    }
+
+    void resize(void *containerPtr, size_t size) override
+    {
+        // Array cannot be resized - fixed size at compile time
+        (void)containerPtr;
+        (void)size;
+    }
+
+    void *getElementPtr(void *containerPtr, size_t index) override
+    {
+        auto *arr = static_cast<ContainerType *>(containerPtr);
+        return index < N ? &(*arr)[index] : nullptr;
+    }
+
+    void *getValuePtr(void *containerPtr, const std::string &key) override
+    {
+        return nullptr; // Array does not support key access
+    }
+
+    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+
+    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    {
+        return std::make_unique<ArrayIterator>(static_cast<ContainerType *>(containerPtr));
+    }
+
+    // Array does not support dynamic add/remove operations
+    void addElement(void *containerPtr, void *elementPtr) override
+    {
+        // Not supported for fixed-size array
+        (void)containerPtr;
+        (void)elementPtr;
+    }
+
+    void removeElement(void *containerPtr, size_t index) override
+    {
+        // Not supported for fixed-size array
+        (void)containerPtr;
+        (void)index;
+    }
+
+    void addEmptyEntry(void *containerPtr) override
+    {
+        // Not supported for fixed-size array
+        (void)containerPtr;
+    }
+};
+
+// ============================================================================
 // MARK: 容器属性工厂
 // ============================================================================
 
@@ -651,6 +754,11 @@ std::unique_ptr<IContainerProperty> createContainerProperty()
         else if constexpr (Traits::Type == EContainer::UnorderedSet) {
             using ElementType = typename Traits::ElementType;
             return std::make_unique<UnorderedSetProperty<ElementType>>();
+        }
+        else if constexpr (Traits::Type == EContainer::Array) {
+            using ElementType            = typename Traits::ElementType;
+            constexpr std::size_t ArrSize = Traits::Size;
+            return std::make_unique<ArrayProperty<ElementType, ArrSize>>();
         }
     }
 

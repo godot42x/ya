@@ -67,7 +67,10 @@ class ContainerPropertyRenderer
         bool bNodeOpen = ImGui::TreeNodeEx(headerLabel);
 
         // Render collapsible header with size info
-        bModified |= renderButtons(name, size, accessor, containerPtr);
+        // Don't show add/clear buttons for fixed-size containers (std::array)
+        if (!accessor->isFixedSize()) {
+            bModified |= renderButtons(name, size, accessor, containerPtr);
+        }
 
         if (bNodeOpen) {
             // Only render contents when expanded - key performance optimization
@@ -278,8 +281,9 @@ class ContainerPropertyRenderer
                 ya::renderReflectedType(label, elementTypeIndex, elementPtr, ctx);
                 bModified |= ctx.hasModifications();
 
-                // Delete button for sequence containers
-                if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer) {
+                // Delete button for sequence containers (except fixed-size)
+                if (accessor->getCategory() == reflection::ContainerCategory::SequenceContainer &&
+                    !accessor->isFixedSize()) {
                     ImGui::SameLine();
                     if (ImGui::SmallButton("X")) {
                         indexToRemove = index;

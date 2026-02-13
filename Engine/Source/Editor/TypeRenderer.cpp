@@ -147,9 +147,9 @@ void renderReflectedType(const std::string& name, uint32_t typeIndex, void* inst
                 // 优化：depth > 1 时默认折叠，减少渲染开销
                 bool isOpen = ImGui::TreeNodeEx(name.c_str(), flags, "%s", name.c_str());
                 if (isOpen) {
-                    ImGui::Indent();
+                    // ImGui::Indent(CHILD_CLASS_INDENT);
                     iterateAll();
-                    ImGui::Unindent();
+                    // ImGui::Unindent(CHILD_CLASS_INDENT);
                     ImGui::TreePop();
                 }
                 return;
@@ -346,6 +346,21 @@ void registerBuiltinTypeRenderers()
                 else {
                     modified = ImGui::DragFloat4(propCtx.prettyName.c_str(), val);
                 }
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<glm::mat3x4>,
+        TypeRenderer{
+            .typeName   = "glm::mat3x4",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* mat      = static_cast<glm::mat3x4*>(instance);
+                bool  modified = false;
+                modified |= ImGui::DragFloat4("[0]", &mat->operator[](0).x);
+                modified |= ImGui::DragFloat4("[1]", &mat->operator[](1).x);
+                modified |= ImGui::DragFloat4("[2]", &mat->operator[](2).x);
                 if (modified) {
                     ctx.pushModified();
                 }
