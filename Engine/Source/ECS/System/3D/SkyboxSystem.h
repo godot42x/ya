@@ -74,6 +74,8 @@ struct SkyBoxSystem
     void tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx);
     void onDestroy();
 
+    void preload();
+
     void advance() { _index = (_index + 1) % SKYBOX_PER_FRAME_SET; }
     void beginFrame() { _index = 0; }
 };

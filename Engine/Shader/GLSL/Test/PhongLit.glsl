@@ -47,7 +47,7 @@ void main (){
 }
 
 
-// MARK: Splitter
+// MARK: ===========
 #type fragment
 #version 450
 
@@ -93,11 +93,6 @@ struct PointLight {
     float outerCutoff; // cos(outerAngle)
 };
 
-struct TextureParam{
-    bool bEnable;
-    float uvRotation;
-    vec4  uvTransform; // x,y: scale, z,w: translate
-};
 
 
 #define MAX_POINT_LIGHTS 4
@@ -122,6 +117,17 @@ layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
 layout(set =1, binding = 1) uniform sampler2D uTexSpecular;
 layout(set =1, binding = 2) uniform sampler2D uTexReflection;
 
+// struct TextureParam{
+//     bool bEnable;
+//     float uvRotation;
+//     vec4  uvTransform; // x,y: scale, z,w: translate
+// };
+
+struct TextureParam{
+    bool bEnable;
+    mat3 uvTransform;
+};
+
 
 layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 ambient; 
@@ -129,11 +135,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 specular;
     float shininess;
 
-    mat3  uvTransform0;
-    mat3  uvTransform1;
-    // vec4 b;
-    // TextureParam diffuseTexParam;
-    // TextureParam specularTexParam;
+    TextureParam texParams[3];
 } uParams;
 
 
@@ -273,9 +275,14 @@ void main ()
 
     vec2 uv0 = vTexcoord;
     vec2 uv1 = vTexcoord;
+    vec2 uv2 = vTexcoord;
 
-    uv0 = (uParams.uvTransform0 * vec3(vTexcoord, 1.0)).xy;
-    uv1 = (uParams.uvTransform1 * vec3(vTexcoord, 1.0)).xy;
+#define GET_UV(to, index)  \
+    to = (uParams.texParams[index].uvTransform * vec3(vTexcoord, 1.0)).xy;
+
+    GET_UV(uv0, 0);
+    GET_UV(uv1, 1);
+    GET_UV(uv2, 2);
 
     // 调试用：手动构建变换矩阵 (与 CPU FMath::build_transform_mat3 一致)
     // vec2 transform = vec2(0,0);
@@ -295,13 +302,21 @@ void main ()
         return;
     }
 
-    vec4 diffuseTexColor = texture(uTexDiffuse,  uv0);
-    vec4 specularTexColor = texture(uTexSpecular,  uv1);
+    vec4 diffuseTexColor =  vec4(1);
+    vec4 specularTexColor = vec4(1);
+    if(uParams.texParams[0].bEnable){
+        diffuseTexColor =  texture(uTexDiffuse,  uv0);
+    }
+    if (uParams.texParams[1].bEnable){
+        specularTexColor = texture(uTexSpecular,  uv1);
+    }
+
+    // TODO: 未来需要拆分透明和不透明材质的shader
     // lib: 尝试在片段着色器中反转镜面光贴图的颜色值，让木头显示镜面高光而钢制边缘不反光（由于钢制边缘中有一些裂缝，边缘仍会显示一些镜面高光，虽然强度会小很多
     // specularTexColor  = vec4(1.0) -specularTexColor;
-    if (diffuseTexColor.a < 0.1){
-        discard;
-    }
+    // if (diffuseTexColor.a < 0.1){
+    //     discard;
+    // }
     
     // 累积所有点光源的光照
     vec3 lighting = vec3(0.0);
@@ -314,10 +329,20 @@ void main ()
         lighting += calculatePointLight(uLit.pointLights[i], vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
     }
 
-    float a = uDebug.floatParam.x > 0 ? uDebug.floatParam.x : diffuseTexColor.a;
-    // float a =  uDebug.floatParam.x ;
 
-    // a = uParams.specular.x; // use specular alpha to control overall alpha
+    vec4 reflectionColor = vec4(0);
+    if (uParams.texParams[2].bEnable)
+    {
+        vec3 I = normalize(-viewDir);
+        vec3 R = reflect(I, norm);
+        reflectionColor = texture(uSkyBox, R);
+        vec4 reflectionRatio = texture(uTexReflection, uv2);
+        reflectionColor = reflectionColor * reflectionRatio;
+    }
+
+    lighting += reflectionColor.xyz;
+    // float a = uDebug.floatParam.x > 0 ? uDebug.floatParam.x : diffuseTexColor.a;
+    float a = 1.0f;
     
     fColor = vec4(lighting, a);
 }

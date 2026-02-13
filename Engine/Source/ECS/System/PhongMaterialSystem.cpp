@@ -44,90 +44,8 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
     auto     _sampleCount = ESampleCount::Sample_1;
 
     // MARK: layout
-    PipelineLayoutDesc pipelineLayout{
-        .label         = "PhongMaterialSystem_PipelineLayout",
-        .pushConstants = {
-            PushConstantRange{
-                .offset     = 0,
-                .size       = sizeof(PhongMaterialSystem::ModelPushConstant),
-                .stageFlags = EShaderStage::Vertex,
-            },
-        },
-        .descriptorSetLayouts = {
-            // per frame
-            DescriptorSetLayoutDesc{
-                .label    = "PhongMaterial_Frame_DSL",
-                .set      = 0,
-                .bindings = {
-                    // Frame UBO
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
-                    },
-                    // Lighting
-                    DescriptorSetLayoutBinding{
-                        .binding         = 1,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    // Reserved binding = 2
-                    DescriptorSetLayoutBinding{
-                        .binding         = 2,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
-                    },
-                },
-            },
-            DescriptorSetLayoutDesc{
-                .label    = "PhongMaterial_Resource_DSL",
-                .set      = 1,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    DescriptorSetLayoutBinding{
-                        .binding         = 1,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-            DescriptorSetLayoutDesc{
-                .label    = "PhongMaterial_Param_DSL",
-                .set      = 2,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-            DescriptorSetLayoutDesc{
-                .label    = "SkyBox_CubeMap_DSL",
-                .set      = 3,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-        },
-    };
 
-    auto DSLs            = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts);
+    auto DSLs            = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
     _materialFrameDSL    = DSLs[0];
     _materialResourceDSL = DSLs[1];
     _materialParamDSL    = DSLs[2];
@@ -135,8 +53,8 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
 
     _pipelineLayout = IPipelineLayout::create(
         render,
-        pipelineLayout.label,
-        pipelineLayout.pushConstants,
+        _pipelineLayoutDesc.label,
+        _pipelineLayoutDesc.pushConstants,
         DSLs);
 
 
@@ -629,17 +547,40 @@ void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMat
     auto&          params   = material->getParamsMut();
 
     // Read UV params directly from TextureSlot (single source of truth)
-    if (auto* diffuseSlot = component.getTextureSlot(PhongMaterial::EResource::DiffuseTexture)) {
-        params.uvTransform0 = FMath::build_transform_mat3(
-            diffuseSlot->uvOffset,
-            diffuseSlot->uvRotation,
-            diffuseSlot->uvScale);
+    auto& diffuseTexParam = params.textureParams[PhongMaterial::EResource::DiffuseTexture];
+    if (auto* slot = component.getTextureSlot(PhongMaterial::EResource::DiffuseTexture)) {
+        diffuseTexParam.uvTransform = FMath::build_transform_mat3(
+            slot->uvOffset,
+            slot->uvRotation,
+            slot->uvScale);
+        diffuseTexParam.bEnable = slot->bEnable;
     }
-    if (auto* specularSlot = component.getTextureSlot(PhongMaterial::EResource::SpecularTexture)) {
-        params.uvTransform1 = FMath::build_transform_mat3(
-            specularSlot->uvOffset,
-            specularSlot->uvRotation,
-            specularSlot->uvScale);
+    else {
+        diffuseTexParam.bEnable = false;
+    }
+
+    auto& specularTexParam = params.textureParams[PhongMaterial::EResource::SpecularTexture];
+    if (auto* slot = component.getTextureSlot(PhongMaterial::EResource::SpecularTexture)) {
+        specularTexParam.uvTransform = FMath::build_transform_mat3(
+            slot->uvOffset,
+            slot->uvRotation,
+            slot->uvScale);
+        specularTexParam.bEnable = slot->bEnable;
+    }
+    else {
+        specularTexParam.bEnable = false;
+    }
+
+    auto& reflectionTexParam = params.textureParams[PhongMaterial::EResource::ReflectionTexture];
+    if (auto* slot = component.getTextureSlot(PhongMaterial::EResource::ReflectionTexture)) {
+        reflectionTexParam.uvTransform = FMath::build_transform_mat3(
+            slot->uvOffset,
+            slot->uvRotation,
+            slot->uvScale);
+        reflectionTexParam.bEnable = slot->bEnable;
+    }
+    else {
+        reflectionTexParam.bEnable = false;
     }
 
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
@@ -667,11 +608,13 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
-    auto                diffuseTV       = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
-    auto                specularTV      = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
-    DescriptorImageInfo diffuseTexture  = getDescriptorImageInfo(diffuseTV);
-    DescriptorImageInfo specularTexture = getDescriptorImageInfo(specularTV);
+    auto diffuseTV    = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
+    auto specularTV   = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
+    auto reflectionTV = material->getTextureView(PhongMaterial::EResource::ReflectionTexture);
 
+    DescriptorImageInfo diffuseTexture    = getDescriptorImageInfo(diffuseTV);
+    DescriptorImageInfo specularTexture   = getDescriptorImageInfo(specularTV);
+    DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(reflectionTV);
     //  mirror or other rt?
     if (bOverrideDiffuse) {
         auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
@@ -684,6 +627,7 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
             {
                 IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuseTexture}),
                 IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specularTexture}),
+                IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflectionTexture}),
             },
             {});
 }
@@ -717,7 +661,7 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
         _materialDSP->resetPool();
     }
     DescriptorPoolCreateInfo poolCI{
-        .maxSets   = newDescriptorSetCount * 2, // max(param , resource)
+        .maxSets   = newDescriptorSetCount * (1 + 3),
         .poolSizes = {
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::UniformBuffer,
@@ -725,7 +669,7 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
             },
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
+                .descriptorCount = newDescriptorSetCount * 3, // tex0 + tex1  + tex2 for each material param in one set
             },
         },
     };

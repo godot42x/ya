@@ -37,15 +37,16 @@ using f32 = glm::float32_t;
 using i32 = int32_t;
 using u32 = uint32_t;
 
-struct b32
+struct alignas(4) b32
 {
-    alignas(4) bool value = false; // GLSL bool is 4 bytes
+    bool value = false; // GLSL bool is 4 bytes
 
     b32() = default;
-    b32(bool v) : value(v) {}
-    operator bool() const { return value; }
-    b32 &operator=(bool v)
+    b32(bool v) : value(v ? 1 : 0) {}
+    operator bool() const { return value /*!= 0*/; }
+    b32& operator=(bool v)
     {
+        // value = v ? 1 : 0;
         value = v;
         return *this;
     }
@@ -60,17 +61,17 @@ struct vec2
     alignas(8) glm::vec2 value{0.0f};
 
     vec2() = default;
-    vec2(const glm::vec2 &v) : value(v) {}
+    vec2(const glm::vec2& v) : value(v) {}
     vec2(float x, float y) : value(x, y) {}
     operator glm::vec2() const { return value; }
-    vec2 &operator=(const glm::vec2 &v)
+    vec2& operator=(const glm::vec2& v)
     {
         value = v;
         return *this;
     }
 
-    float       &operator[](int i) { return value[i]; }
-    const float &operator[](int i) const { return value[i]; }
+    float&       operator[](int i) { return value[i]; }
+    const float& operator[](int i) const { return value[i]; }
 };
 
 struct vec3
@@ -78,18 +79,18 @@ struct vec3
     alignas(16) glm::vec3 value{0.0f};
 
     vec3() = default;
-    vec3(const glm::vec3 &v) : value(v) {}
+    vec3(const glm::vec3& v) : value(v) {}
     vec3(float x, float y, float z) : value(x, y, z) {}
     vec3(float s) : value(s) {}
     operator glm::vec3() const { return value; }
-    vec3 &operator=(const glm::vec3 &v)
+    vec3& operator=(const glm::vec3& v)
     {
         value = v;
         return *this;
     }
 
-    float       &operator[](int i) { return value[i]; }
-    const float &operator[](int i) const { return value[i]; }
+    float&       operator[](int i) { return value[i]; }
+    const float& operator[](int i) const { return value[i]; }
 };
 
 struct vec4
@@ -97,19 +98,19 @@ struct vec4
     alignas(16) glm::vec4 value{0.0f};
 
     vec4() = default;
-    vec4(const glm::vec4 &v) : value(v) {}
+    vec4(const glm::vec4& v) : value(v) {}
     vec4(float x, float y, float z, float w) : value(x, y, z, w) {}
-    vec4(const glm::vec3 &xyz, float w) : value(xyz, w) {}
+    vec4(const glm::vec3& xyz, float w) : value(xyz, w) {}
     vec4(float s) : value(s) {}
     operator glm::vec4() const { return value; }
-    vec4 &operator=(const glm::vec4 &v)
+    vec4& operator=(const glm::vec4& v)
     {
         value = v;
         return *this;
     }
 
-    float       &operator[](int i) { return value[i]; }
-    const float &operator[](int i) const { return value[i]; }
+    float&       operator[](int i) { return value[i]; }
+    const float& operator[](int i) const { return value[i]; }
 };
 
 struct ivec2
@@ -117,10 +118,10 @@ struct ivec2
     alignas(8) glm::ivec2 value{0};
 
     ivec2() = default;
-    ivec2(const glm::ivec2 &v) : value(v) {}
+    ivec2(const glm::ivec2& v) : value(v) {}
     ivec2(int x, int y) : value(x, y) {}
     operator glm::ivec2() const { return value; }
-    ivec2 &operator=(const glm::ivec2 &v)
+    ivec2& operator=(const glm::ivec2& v)
     {
         value = v;
         return *this;
@@ -132,9 +133,9 @@ struct ivec4
     alignas(16) glm::ivec4 value{0};
 
     ivec4() = default;
-    ivec4(const glm::ivec4 &v) : value(v) {}
+    ivec4(const glm::ivec4& v) : value(v) {}
     operator glm::ivec4() const { return value; }
-    ivec4 &operator=(const glm::ivec4 &v)
+    ivec4& operator=(const glm::ivec4& v)
     {
         value = v;
         return *this;
@@ -150,12 +151,12 @@ struct ivec4
  *
  * 注意：GLSL 中 mat3 的每一列按 vec4 对齐
  */
-struct mat3
+struct alignas(16) mat3
 {
     alignas(16) glm::mat3x4 value{1.0f}; // 使用 mat3x4 存储，自动满足 std140 对齐
 
 
-    mat3(const glm::mat3 &m)
+    mat3(const glm::mat3& m)
     {
         value = m;
     }
@@ -173,14 +174,14 @@ struct mat3
         return value;
     }
 
-    mat3 &operator=(const glm::mat3 &m)
+    mat3& operator=(const glm::mat3& m)
     {
         value = m;
         return *this;
     }
 
-    glm::vec4       &operator[](int i) { return value[i]; }
-    const glm::vec4 &operator[](int i) const { return value[i]; }
+    glm::vec4&       operator[](int i) { return value[i]; }
+    const glm::vec4& operator[](int i) const { return value[i]; }
 };
 
 struct mat4
@@ -188,17 +189,17 @@ struct mat4
     alignas(16) glm::mat4 value{1.0f};
 
     mat4() = default;
-    mat4(const glm::mat4 &m) : value(m) {}
+    mat4(const glm::mat4& m) : value(m) {}
     mat4(float diagonal) : value(diagonal) {}
     operator glm::mat4() const { return value; }
-    mat4 &operator=(const glm::mat4 &m)
+    mat4& operator=(const glm::mat4& m)
     {
         value = m;
         return *this;
     }
 
-    glm::vec4       &operator[](int i) { return value[i]; }
-    const glm::vec4 &operator[](int i) const { return value[i]; }
+    glm::vec4&       operator[](int i) { return value[i]; }
+    const glm::vec4& operator[](int i) const { return value[i]; }
 };
 
 } // namespace ya::std140

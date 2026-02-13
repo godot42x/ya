@@ -26,8 +26,21 @@ struct PhongMaterial : public Material
     // Nested Types
     // ========================================
 
-    struct TextureParam
+    struct alignas(16)
+        TextureParam
     {
+        std140::b32  bEnable{true};
+        std140::mat3 uvTransform{1.0f};
+    };
+
+    /// Texture resource enum
+    enum EResource : int
+    {
+        DiffuseTexture    = 0,
+        SpecularTexture   = 1,
+        ReflectionTexture = 2,
+        // Extend here for normal map, etc.
+        Count,
     };
 
     /// GPU UBO 结构 - 使用 std140 兼容类型，直接上传无需 pack
@@ -38,18 +51,9 @@ struct PhongMaterial : public Material
         alignas(16) glm::vec3 specular{1.0f}; // 16 bytes
         alignas(4) float shininess{32.0f};    // 4 bytes
 
-        // NOTICE: glm::mat3x3 is not std140 compatible, use mat3x4 instead
-        glm::mat3x4 uvTransform0{1.0f}; // for diffuse, 48 bytes
-        glm::mat3x4 uvTransform1{1.0f}; // for specular, 48 bytes
+        std::array<TextureParam, EResource::Count> textureParams;
     };
 
-    /// Texture resource enum
-    enum EResource : int
-    {
-        DiffuseTexture  = 0,
-        SpecularTexture = 1,
-        // Extend here for normal map, etc.
-    };
 
     // ========================================
     // Reflection Registration
@@ -67,8 +71,8 @@ struct PhongMaterial : public Material
     // ========================================
     // Parameter Accessors
     // ========================================
-    [[nodiscard]] const ParamUBO &getParams() const { return _params; }
-    ParamUBO                     &getParamsMut() { return _params; }
+    [[nodiscard]] const ParamUBO& getParams() const { return _params; }
+    ParamUBO&                     getParamsMut() { return _params; }
 
     /**
      * @brief Set all Phong parameters (synced from Component)
@@ -85,7 +89,7 @@ struct PhongMaterial : public Material
     /**
      * @brief Set diffuse parameter (synced from Component)
      */
-    void setDiffuseParam(const glm::vec3 &diffuse)
+    void setDiffuseParam(const glm::vec3& diffuse)
     {
         _params.diffuse = diffuse;
         setParamDirty();
@@ -94,7 +98,7 @@ struct PhongMaterial : public Material
     /**
      * @brief Set specular parameter (synced from Component)
      */
-    void setSpecularParam(const glm::vec3 &specular)
+    void setSpecularParam(const glm::vec3& specular)
     {
         _params.specular = specular;
         setParamDirty();
@@ -116,7 +120,7 @@ struct PhongMaterial : public Material
     /**
      * @brief Get resolved texture view for rendering
      */
-    [[nodiscard]] TextureView *getTextureView(EResource type)
+    [[nodiscard]] TextureView* getTextureView(EResource type)
     {
         auto it = _textureViews.find(static_cast<int>(type));
         return it != _textureViews.end() ? &it->second : nullptr;
@@ -125,7 +129,7 @@ struct PhongMaterial : public Material
     /**
      * @brief Set texture view directly (called by Component/Resolver)
      */
-    TextureView *setTextureView(EResource type, const TextureView &tv)
+    TextureView* setTextureView(EResource type, const TextureView& tv)
     {
         _textureViews[static_cast<int>(type)] = tv;
         setResourceDirty();
@@ -145,22 +149,13 @@ struct PhongMaterial : public Material
     // Virtual Interface Implementation
     // ========================================
 
-    const char *getTextureSlotName(int resourceEnum) const override
-    {
-        switch (static_cast<EResource>(resourceEnum)) {
-        case DiffuseTexture:
-            return "diffuse";
-        case SpecularTexture:
-            return "specular";
-        default:
-            return "unknown";
-        }
-    }
 
-    int getTextureSlotEnum(const std::string &name) const override
+
+    int getTextureSlotEnum(const std::string& name) const override
     {
         if (name == "diffuse") return DiffuseTexture;
         if (name == "specular") return SpecularTexture;
+        if (name == "reflection") return ReflectionTexture;
         return -1;
     }
 
@@ -172,11 +167,15 @@ struct PhongMaterial : public Material
 
 } // namespace ya
 
-// TODO: Reflection for ParamUBO 需要支持 std140 wrapper 类型
-// 暂时禁用，等待反射系统扩展
+YA_REFLECT_BEGIN_EXTERNAL(ya::PhongMaterial::TextureParam)
+YA_REFLECT_FIELD(uvTransform)
+YA_REFLECT_FIELD(bEnable)
+YA_REFLECT_END_EXTERNAL()
+
 YA_REFLECT_BEGIN_EXTERNAL(ya::PhongMaterial::ParamUBO)
 YA_REFLECT_FIELD(ambient, .color())
 YA_REFLECT_FIELD(diffuse, .color())
 YA_REFLECT_FIELD(specular, .color())
 YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
+YA_REFLECT_FIELD(textureParams)
 YA_REFLECT_END_EXTERNAL()

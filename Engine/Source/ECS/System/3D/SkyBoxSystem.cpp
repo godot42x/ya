@@ -178,6 +178,29 @@ void SkyBoxSystem::onDestroy()
 {
 }
 
+void SkyBoxSystem::preload()
+{
+    auto scene = App::get()->getSceneManager()->getActiveScene();
+    for (const auto& [entity, sc, mc] :
+         scene->getRegistry().view<SkyboxComponent, MeshComponent>().each())
+    {
+        if (sc.bDirty) {
+            TextureView tv = TextureView::create(sc.cubemapTexture, _sampler3D);
+
+            auto render = App::get()->getRender();
+            render->getDescriptorHelper()->updateDescriptorSets(
+                {
+                    IDescriptorSetHelper::genSingleTextureViewWrite(
+                        _cubeMapDS,
+                        0,
+                        EPipelineDescriptorType::CombinedImageSampler,
+                        &tv),
+                },
+                {});
+        }
+    }
+}
+
 void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx)
 {
     auto             scene      = App::get()->getSceneManager()->getActiveScene();

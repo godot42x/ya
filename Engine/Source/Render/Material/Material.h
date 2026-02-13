@@ -146,12 +146,6 @@ struct Material
     // Virtual Interface for Derived Classes
     // ========================================
 
-    /**
-     * @brief Get texture slot name for serialization
-     * @param resourceEnum The resource enum value (e.g., EResource::DiffuseTexture)
-     * @return Human-readable name for JSON keys
-     */
-    virtual const char *getTextureSlotName(int resourceEnum) const { return "unknown"; }
 
     /**
      * @brief Get resource enum from slot name (for deserialization)

@@ -22,7 +22,7 @@ namespace ya
 // TypeRenderRegistry Implementation
 // ============================================================================
 
-TypeRenderRegistry &TypeRenderRegistry::instance()
+TypeRenderRegistry& TypeRenderRegistry::instance()
 {
     static TypeRenderRegistry inst;
     return inst;
@@ -30,7 +30,7 @@ TypeRenderRegistry &TypeRenderRegistry::instance()
 
 // ============================================================================
 // Type Rendering Functions - New Implementation with Context
-void renderReflectedType(const std::string &name, uint32_t typeIndex, void *instance, RenderContext &ctx, int depth, const PropertyRenderContext *propRenderCache)
+void renderReflectedType(const std::string& name, uint32_t typeIndex, void* instance, RenderContext& ctx, int depth, const PropertyRenderContext* propRenderCache)
 {
     YA_PROFILE_SCOPE(std::format("renderReflectedType(ctx), {}, typeIndex: {}", name, typeIndex));
 
@@ -50,7 +50,7 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
 
 
     // 如果没有类缓存，尝试使用类型渲染器
-    if (auto *renderer = TypeRenderRegistry::instance().getRenderer(typeIndex)) {
+    if (auto* renderer = TypeRenderRegistry::instance().getRenderer(typeIndex)) {
         renderer->render(instance, propRenderCache ? *propRenderCache : PropertyRenderContext{}, ctx);
         return;
     }
@@ -78,30 +78,30 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
         {
             auto iterateAll = [&]() {
                 // 首先递归渲染父类的属性
-                auto &registry = ClassRegistry::instance();
+                auto& registry = ClassRegistry::instance();
                 for (auto parentTypeId : cache->classPtr->parents) {
                     // 获取父类指针
-                    void *parentPtr = cache->classPtr->getParentPointer(instance, parentTypeId);
+                    void* parentPtr = cache->classPtr->getParentPointer(instance, parentTypeId);
                     if (!parentPtr) {
                         continue;
                     }
 
                     // 获取父类的 Class 信息
-                    if (auto *parentClass = registry.getClass(parentTypeId)) {
+                    if (auto* parentClass = registry.getClass(parentTypeId)) {
                         // 递归渲染父类（使用父类的 typeIndex 和指针）
                         renderReflectedType(parentClass->getName(), parentTypeId, parentPtr, ctx, depth + 1, nullptr);
                     }
                 }
 
                 // 然后渲染当前类的属性
-                for (auto &[propName, prop] : cache->classPtr->properties) {
+                for (auto& [propName, prop] : cache->classPtr->properties) {
                     auto subPropInstancePtr = prop.addressGetterMutable(instance);
 
                     // 从缓存获取属性渲染上下文
-                    const auto &propCtxCache = cache->propertyContexts[propName];
+                    const auto& propCtxCache = cache->propertyContexts[propName];
                     const bool  isContainer  = propCtxCache.isContainer;
                     const bool  isPointer    = propCtxCache.bPointer;
-                    const auto &prettyName   = propCtxCache.prettyName;
+                    const auto& prettyName   = propCtxCache.prettyName;
 
                     if (isContainer) {
                         // 容器属性：使用容器渲染器
@@ -114,8 +114,8 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
                     }
                     else if (isPointer && propCtxCache.pointeeTypeIndex != 0) {
                         // Pointer property: dereference and render pointee object
-                        void **ptrLocation = static_cast<void **>(subPropInstancePtr);
-                        void  *pointee     = ptrLocation ? *ptrLocation : nullptr;
+                        void** ptrLocation = static_cast<void**>(subPropInstancePtr);
+                        void*  pointee     = ptrLocation ? *ptrLocation : nullptr;
 
                         if (pointee) {
                             // Has valid pointee - render it with indirection indicator
@@ -165,9 +165,9 @@ void renderReflectedType(const std::string &name, uint32_t typeIndex, void *inst
 // ============================================================================
 
 // Helper function for integer types rendering
-static bool integerRenderFunc(int &value, const PropertyRenderContext &propCtx)
+static bool integerRenderFunc(int& value, const PropertyRenderContext& propCtx)
 {
-    const auto &spec = propCtx.manipulateSpec;
+    const auto& spec = propCtx.manipulateSpec;
     switch (spec.type) {
     case ya::reflection::Meta::ManipulateSpec::Slider:
         return ImGui::SliderInt(propCtx.prettyName.c_str(), &value, static_cast<int>(spec.min), static_cast<int>(spec.max));
@@ -183,15 +183,15 @@ static bool integerRenderFunc(int &value, const PropertyRenderContext &propCtx)
 
 void registerBuiltinTypeRenderers()
 {
-    auto &registry = TypeRenderRegistry::instance();
+    auto& registry = TypeRenderRegistry::instance();
 
     // int 类型渲染器
     registry.registerRenderer(
         ya::type_index_v<int>,
         TypeRenderer{
             .typeName   = "int",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto ptr = static_cast<int *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto ptr = static_cast<int*>(instance);
                 if (integerRenderFunc(*ptr, propCtx)) {
                     ctx.pushModified();
                 }
@@ -202,8 +202,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<uint32_t>,
         TypeRenderer{
             .typeName   = "uint32_t",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto &value = *static_cast<uint32_t *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<uint32_t*>(instance);
                 int   temp  = static_cast<int>(value);
                 if (integerRenderFunc(temp, propCtx)) {
                     value = static_cast<uint32_t>(temp);
@@ -216,8 +216,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<int32_t>,
         TypeRenderer{
             .typeName   = "int32_t",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto &value = *static_cast<int32_t *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<int32_t*>(instance);
                 int   temp  = static_cast<int>(value);
                 if (integerRenderFunc(temp, propCtx)) {
                     value = static_cast<int32_t>(temp);
@@ -230,8 +230,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<uint64_t>,
         TypeRenderer{
             .typeName   = "uint64_t",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto &value = *static_cast<uint64_t *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<uint64_t*>(instance);
                 int   temp  = static_cast<int>(value);
                 if (integerRenderFunc(temp, propCtx)) {
                     value = static_cast<uint64_t>(temp);
@@ -245,8 +245,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<bool>,
         TypeRenderer{
             .typeName   = "bool",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                if (ImGui::Checkbox(propCtx.prettyName.c_str(), static_cast<bool *>(instance))) {
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                if (ImGui::Checkbox(propCtx.prettyName.c_str(), static_cast<bool*>(instance))) {
                     ctx.pushModified();
                 }
             },
@@ -257,9 +257,9 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<float>,
         TypeRenderer{
             .typeName   = "float",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                const auto &spec     = propCtx.manipulateSpec;
-                auto        ptr      = static_cast<float *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                const auto& spec     = propCtx.manipulateSpec;
+                auto        ptr      = static_cast<float*>(instance);
                 bool        modified = false;
                 switch (spec.type) {
                 case ya::reflection::Meta::ManipulateSpec::Slider:
@@ -286,8 +286,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<std::string>,
         TypeRenderer{
             .typeName   = "std::string",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto &s = *static_cast<std::string *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& s = *static_cast<std::string*>(instance);
                 char  buf[256];
                 std::memcpy(buf, s.c_str(), std::min(s.size() + 1, sizeof(buf)));
                 buf[sizeof(buf) - 1] = '\0';
@@ -298,14 +298,27 @@ void registerBuiltinTypeRenderers()
                 }
             },
         });
+    registry.registerRenderer(
+        ya::type_index_v<glm::vec2>,
+        TypeRenderer{
+            .typeName   = "glm::vec2",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* ptr      = static_cast<float*>(instance);
+                bool  modified = false;
+                modified       = ImGui::DragFloat2(propCtx.prettyName.c_str(), ptr);
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
 
-    // glm::vec3 类型渲染器
+
     registry.registerRenderer(
         ya::type_index_v<glm::vec3>,
         TypeRenderer{
             .typeName   = "glm::vec3",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                auto *ptr      = static_cast<float *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* ptr      = static_cast<float*>(instance);
                 bool  modified = false;
                 if (propCtx.bColor) {
                     modified = ImGui::ColorEdit3(propCtx.prettyName.c_str(), ptr);
@@ -324,8 +337,8 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<glm::vec4>,
         TypeRenderer{
             .typeName   = "glm::vec4",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                float *val      = static_cast<float *>(instance);
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                float* val      = static_cast<float*>(instance);
                 bool   modified = false;
                 if (propCtx.bColor) {
                     modified = ImGui::ColorEdit4(propCtx.prettyName.c_str(), val);
@@ -343,14 +356,14 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<ModelRef>,
         TypeRenderer{
             .typeName   = "ModelRef",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                pathWrapper(instance, propCtx, ctx, [](void *instance, const PropertyRenderContext &propCtx) {
-                    auto &assetRef = *static_cast<AssetRefBase *>(instance);
-                    if (auto *app = App::get()) {
-                        if (auto *editorLayer = app->_editorLayer) {
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
+                    auto& assetRef = *static_cast<AssetRefBase*>(instance);
+                    if (auto* app = App::get()) {
+                        if (auto* editorLayer = app->_editorLayer) {
                             editorLayer->_filePicker.openModelPicker(
                                 assetRef.getPath(),
-                                [&assetRef](const std::string &newPath) {
+                                [&assetRef](const std::string& newPath) {
                                     auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
                                     assetRef.setPath(p);
                                 });
@@ -364,14 +377,14 @@ void registerBuiltinTypeRenderers()
         ya::type_index_v<TextureRef>,
         TypeRenderer{
             .typeName   = "TextureRef",
-            .renderFunc = [](void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) {
-                pathWrapper(instance, propCtx, ctx, [](void *instance, const PropertyRenderContext &propCtx) {
-                    auto &assetRef = *static_cast<AssetRefBase *>(instance);
-                    if (auto *app = App::get()) {
-                        if (auto *editorLayer = app->_editorLayer) {
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
+                    auto& assetRef = *static_cast<AssetRefBase*>(instance);
+                    if (auto* app = App::get()) {
+                        if (auto* editorLayer = app->_editorLayer) {
                             editorLayer->_filePicker.openTexturePicker(
                                 assetRef.getPath(),
-                                [&assetRef](const std::string &newPath) {
+                                [&assetRef](const std::string& newPath) {
                                     auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
                                     assetRef.setPath(p);
                                 });
@@ -382,12 +395,12 @@ void registerBuiltinTypeRenderers()
         });
 }
 
-void pathWrapper(void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx, auto internal)
+void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx, auto internal)
 {
-    auto &assetRef = *static_cast<AssetRefBase *>(instance);
+    auto& assetRef = *static_cast<AssetRefBase*>(instance);
 
     // Display current path
-    const auto &p           = assetRef.getPath();
+    const auto& p           = assetRef.getPath();
     std::string displayPath = p.empty() ? "[No Path]" : p;
 
     // Path input field (read-only display)
@@ -411,17 +424,17 @@ void pathWrapper(void *instance, const PropertyRenderContext &propCtx, RenderCon
     }
 };
 
-struct EditorLayer *getEditor()
+struct EditorLayer* getEditor()
 {
-    if (auto *app = App::get()) {
+    if (auto* app = App::get()) {
         return app->_editorLayer;
     }
     return nullptr;
 }
 
-struct FilePicker *getFilePicker()
+struct FilePicker* getFilePicker()
 {
-    if (auto *editor = getEditor()) {
+    if (auto* editor = getEditor()) {
         return &editor->_filePicker;
     }
     return nullptr;

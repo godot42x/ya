@@ -63,6 +63,17 @@ struct AssetRefBase
     }
 
     /**
+     * @brief Set path without triggering modification callback
+     * Used when initializing from external source (e.g., shared material)
+     * where we don't want to trigger a resolve cycle
+     */
+    void setPathWithoutNotify(const std::string &path)
+    {
+        _path = path;
+        // Don't invalidate or notify - caller manages state
+    }
+
+    /**
      * @brief Notify that the asset was modified (enqueues to deferred queue)
      * Called by editor UI after async file picker completes.
      * The modification will be collected by RenderContext::beginInstance() on next frame.

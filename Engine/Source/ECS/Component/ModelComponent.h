@@ -85,8 +85,8 @@ struct ModelComponent : public IComponent
     std::vector<Node *> _childNodes;
 
     /**
-     * @brief Cached runtime materials for this Model (one per embedded material)
-     * Key: material index in Model's embeddedMaterials
+     * @brief Cached runtime materials for this Model (one per material in model file)
+     * Key: material index in Model's MaterialData array
      * Value: runtime PhongMaterial pointer (managed by MaterialFactory)
      * This allows multiple meshes to share the same material instance
      */

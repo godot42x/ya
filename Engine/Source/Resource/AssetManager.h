@@ -4,9 +4,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "Resource/ResourceRegistry.h"
 #include "Render/Core/Texture.h"
 #include "Render/Model.h"
+#include "Resource/ResourceRegistry.h"
+
 
 namespace Assimp
 {
@@ -46,9 +47,12 @@ class AssetManager : public IResourceCache
     std::unordered_map<std::string, std::shared_ptr<Texture>> _textureViews;
     std::unordered_map<FName, std::string>                    _textureName2Path;
 
+    //  use file as a renderTargets, and
+    std::unordered_map<FName, stdptr<Texture>> _renderTexture;
+
 
   public:
-    static AssetManager *get();
+    static AssetManager* get();
 
     // IResourceCache interface
     void  clearCache() override;
@@ -60,19 +64,19 @@ class AssetManager : public IResourceCache
         YA_CORE_INFO("AssetManager destructor");
     }
 
-    std::shared_ptr<Model> loadModel(const std::string &filepath);
-    std::shared_ptr<Model> loadModel(const std::string &name, const std::string &filepath);
+    std::shared_ptr<Model> loadModel(const std::string& filepath);
+    std::shared_ptr<Model> loadModel(const std::string& name, const std::string& filepath);
 
-    std::shared_ptr<Model> getModel(const std::string &filepath) const;
-    bool                   isModelLoaded(const std::string &filepath) const;
+    std::shared_ptr<Model> getModel(const std::string& filepath) const;
+    bool                   isModelLoaded(const std::string& filepath) const;
 
-    std::shared_ptr<Texture> loadTexture(const std::string &filepath);
-    std::shared_ptr<Texture> getTextureByPath(const std::string &filepath) const
+    std::shared_ptr<Texture> loadTexture(const std::string& filepath);
+    std::shared_ptr<Texture> getTextureByPath(const std::string& filepath) const
     {
         return isTextureLoaded(filepath) ? _textureViews.find(filepath)->second : nullptr;
     }
-    std::shared_ptr<Texture> loadTexture(const std::string &name, const std::string &filepath);
-    std::shared_ptr<Texture> getTextureByName(const std::string &name) const
+    std::shared_ptr<Texture> loadTexture(const std::string& name, const std::string& filepath);
+    std::shared_ptr<Texture> getTextureByName(const std::string& name) const
     {
         if (isTextureLoadedByName(name))
         {
@@ -80,16 +84,16 @@ class AssetManager : public IResourceCache
         }
         return nullptr;
     }
-    bool isTextureLoaded(const std::string &filepath) const
+    bool isTextureLoaded(const std::string& filepath) const
     {
         return _textureViews.find(filepath) != _textureViews.end();
     }
-    bool isTextureLoadedByName(const std::string &name) const
+    bool isTextureLoadedByName(const std::string& name) const
     {
         return _textureName2Path.find(name) != _textureName2Path.end();
     }
 
-    void registerTexture(const std::string &name, const stdptr<Texture> &texture)
+    void registerTexture(const std::string& name, const stdptr<Texture>& texture)
     {
         auto it = _textureViews.find(name);
         if (it != _textureViews.end()) {
@@ -98,7 +102,7 @@ class AssetManager : public IResourceCache
         _textureViews.insert({name, texture});
     }
 
-    void invalidate(const std::string &filepath) override
+    void invalidate(const std::string& filepath) override
     {
         if (isModelLoaded(filepath))
         {
@@ -111,7 +115,7 @@ class AssetManager : public IResourceCache
     }
 
   private:
-    std::shared_ptr<Model> loadModelImpl(const std::string &filepath, const std::string &identifier);
+    std::shared_ptr<Model> loadModelImpl(const std::string& filepath, const std::string& identifier);
 };
 
 } // namespace ya

@@ -49,13 +49,13 @@ void HelloMaterial::loadResources()
 void HelloMaterial::createMaterials()
 {
     // Create base materials
-    auto *baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base0");
-    auto *baseMaterial1      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base1");
+    auto* baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base0");
+    auto* baseMaterial1      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base1");
     baseMaterial0->colorType = ya::SimpleMaterial::EColor::Normal;
     baseMaterial1->colorType = ya::SimpleMaterial::EColor::Texcoord;
 
     // Create unlit materials
-    auto *unlitMaterial0 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit0");
+    auto* unlitMaterial0 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit0");
     unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor0,
                                    ya::TextureView{
                                        .texture = ya::TextureLibrary::get().getWhiteTexture(),
@@ -70,7 +70,7 @@ void HelloMaterial::createMaterials()
     unlitMaterial0->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial0->setMixValue(0.5);
 
-    auto *unlitMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit1");
+    auto* unlitMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit1");
     unlitMaterial1->setTextureView(ya::UnlitMaterial::BaseColor0,
                                    ya::TextureView{
                                        .texture = ya::TextureLibrary::get().getBlackTexture(),
@@ -85,7 +85,7 @@ void HelloMaterial::createMaterials()
     unlitMaterial1->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
     unlitMaterial1->setMixValue(0.5);
 
-    auto *unlitMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit2");
+    auto* unlitMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit2");
     unlitMaterial2->setTextureView(ya::UnlitMaterial::BaseColor0,
                                    ya::TextureView{
                                        .texture = ya::AssetManager::get()->getTextureByName("uv1"),
@@ -102,7 +102,7 @@ void HelloMaterial::createMaterials()
 
 
     // Create ground plane material
-    auto *unlitMaterial3 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit3");
+    auto* unlitMaterial3 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit3");
     unlitMaterial3->setTextureView(ya::UnlitMaterial::BaseColor0,
                                    ya::TextureView{
                                        .texture = ya::TextureLibrary::get().getWhiteTexture(),
@@ -126,7 +126,7 @@ void HelloMaterial::createMaterials()
         for (auto it : j["materials"]) {
             auto name = it["name"].get<std::string>();
             _pongMaterialNames.push_back(name);
-            auto *mat       = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>(name);
+            auto* mat       = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>(name);
             auto  ambient   = it["ambient"].get<std::vector<float>>();
             auto  diff      = it["diffuse"].get<std::vector<float>>();
             auto  specular  = it["specular"].get<std::vector<float>>();
@@ -140,8 +140,8 @@ void HelloMaterial::createMaterials()
         }
     }
 
-    auto *litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit0");
-    auto *litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit1_WorldBasic");
+    auto* litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit0");
+    auto* litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit1_WorldBasic");
 
     auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
     pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
@@ -159,13 +159,13 @@ void HelloMaterial::createMaterials()
     pointLightMat->setMixValue(0.8f);
 }
 
-void HelloMaterial::createEntities(ya::Scene *scene)
+void HelloMaterial::createEntities(ya::Scene* scene)
 {
 
 
 
     if (auto skyBox = scene->createNode3D("Skybox")) {
-        ya::Entity *entity = skyBox->getEntity();
+        ya::Entity* entity = skyBox->getEntity();
 
         // Mesh component
         auto mc = entity->addComponent<ya::MeshComponent>();
@@ -175,7 +175,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
         // lmc->createDefaultMaterial();
         // lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/Textures/Skybox/skybox.png");
-        if (auto *sc = entity->addComponent<ya::SkyboxComponent>()) {
+        if (auto* sc = entity->addComponent<ya::SkyboxComponent>()) {
             ya::CubeMapCreateInfo ci{
                 .label = "SkyboxCubemap",
                 .files = {},
@@ -199,7 +199,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
     // Create ground plane - using new reflection-based approach
     if (auto plane = scene->createNode3D("Plane")) {
-        ya::Entity *entity = plane->getEntity();
+        ya::Entity* entity = plane->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
         tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
@@ -233,7 +233,7 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
                 // YA_CORE_DEBUG("1.1 {} {} {}", i, j, k);
                 auto        cube   = scene->createNode(std::format("Cube_{}_{}_{}", i, j, k));
-                ya::Entity *entity = cube->getEntity();
+                ya::Entity* entity = cube->getEntity();
                 {
                     auto v  = glm::vec3(i, j, k);
                     auto tc = entity->getComponent<ya::TransformComponent>();
@@ -269,8 +269,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     }
 #endif
 
-    if (auto *LitTestCube0 = scene->createNode3D("Lit Test")) {
-        ya::Entity *entity = LitTestCube0->getEntity();
+    if (auto* LitTestCube0 = scene->createNode3D("Lit Test")) {
+        ya::Entity* entity = LitTestCube0->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0f, 0.f, -5.0f));
         tc->setScale(glm::vec3(3.0f));
@@ -298,8 +298,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         // lsc->addScript("Content/Scripts/Health.lua");
         // lsc->addScript("Content/Scripts/Inventory.lua");
     }
-    if (auto *LitTestCube1 = scene->createNode3D("Lit Test 1")) {
-        ya::Entity *entity = LitTestCube1->getEntity();
+    if (auto* LitTestCube1 = scene->createNode3D("Lit Test 1")) {
+        ya::Entity* entity = LitTestCube1->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-5.0f, 0.f, -5.0f));
         tc->setScale(glm::vec3(3.0f));
@@ -322,8 +322,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
 
         entity->addComponent<ya::MirrorComponent>();
     }
-    if (auto *suzanne = scene->createNode3D("Suzanne")) {
-        ya::Entity *entity = suzanne->getEntity();
+    if (auto* suzanne = scene->createNode3D("Suzanne")) {
+        ya::Entity* entity = suzanne->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(5.0f, 0.f, 0.f));
         tc->setScale(glm::vec3(2.0f));
@@ -344,8 +344,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         };
     }
 
-    if (auto *backpack = scene->createNode3D("Backpack")) {
-        ya::Entity *entity = backpack->getEntity();
+    if (auto* backpack = scene->createNode3D("Backpack")) {
+        ya::Entity* entity = backpack->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-5.0f, 0.f, 0.f));
 
@@ -362,10 +362,30 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         //     .shininess = 16.0f,
         // };
     }
-
-    if (auto *window = scene->createNode3D("Window"))
+    if (auto* nanoSuit = scene->createNode3D("NanoSuit"))
     {
-        ya::Entity *entity = window->getEntity();
+        ya::Entity* entity = nanoSuit->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-10.0f, 0.f, 5.f));
+
+        // Mesh component with external model
+        auto mc = entity->addComponent<ya::ModelComponent>();
+        mc->setModelPath("Engine/ThirdParty/LearnOpenGL/resources/objects/nanosuit/nanosuit.obj");
+
+        // Material component
+        // auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        // lmc->createDefaultMaterial();
+        // lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
+        //     .ambient   = glm::vec3(0.1f),
+        //     .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
+        //     .specular  = glm::vec3(0.5f),
+        //     .shininess = 16.0f,
+        // };
+    }
+
+    if (auto* window = scene->createNode3D("Window"))
+    {
+        ya::Entity* entity = window->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(5.f, 0.f, 3.f));
         tc->setScale(glm::vec3(1.0f, 1.0f, 0.1f));
@@ -381,8 +401,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
         lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/window.png");
     }
 
-    if (auto *pointLt = scene->createNode3D("Point Light")) {
-        ya::Entity *entity = pointLt->getEntity();
+    if (auto* pointLt = scene->createNode3D("Point Light")) {
+        ya::Entity* entity = pointLt->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
         _pointLightEntity = entity;
@@ -408,8 +428,8 @@ void HelloMaterial::createEntities(ya::Scene *scene)
     glm::vec3 startPos(-10.0f, -20.0f, -20.0f);
     float     spacing = 3.0f;
     for (size_t i = 0; i < _pongMaterialNames.size(); ++i) {
-        auto       *node   = scene->createNode3D(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
-        ya::Entity *entity = node->getEntity();
+        auto*       node   = scene->createNode3D(std::format("PhongSample_{}_{}", i, _pongMaterialNames[i]));
+        ya::Entity* entity = node->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         float       x      = startPos.x + (i % 5) * spacing;
         float       z      = startPos.z + (i / 5) * spacing;
@@ -449,7 +469,7 @@ void HelloMaterial::onEnterRuntime()
 
     if (auto player = scene->createNode3D("Player"))
     {
-        ya::Entity *entity = player->getEntity();
+        ya::Entity* entity = player->getEntity();
         entity->addComponent<ya::PlayerComponent>();
         entity->addComponent<ya::CameraComponent>();
         entity->addComponent<ya::SimpleMaterialComponent>();

@@ -1,5 +1,7 @@
 #include "AssetManager.h"
 
+#include <math.h>
+
 #include "Core/Debug/Instrumentor.h"
 #include "assimp/IOStream.hpp"
 #include "assimp/IOSystem.hpp"
@@ -35,7 +37,7 @@ namespace
 class VFSIOStream : public Assimp::IOStream
 {
   public:
-    VFSIOStream(const std::string &path, std::string content)
+    VFSIOStream(const std::string& path, std::string content)
         : _path(path), _content(std::move(content)), _position(0)
     {
     }
@@ -43,7 +45,7 @@ class VFSIOStream : public Assimp::IOStream
     ~VFSIOStream() override = default;
 
     // Read operations
-    size_t Read(void *pvBuffer, size_t pSize, size_t pCount) override
+    size_t Read(void* pvBuffer, size_t pSize, size_t pCount) override
     {
         size_t bytesToRead = pSize * pCount;
         size_t available   = _content.size() - _position;
@@ -58,7 +60,7 @@ class VFSIOStream : public Assimp::IOStream
     }
 
     // Write operations (not supported for read-only stream)
-    size_t Write(const void *pvBuffer, size_t pSize, size_t pCount) override
+    size_t Write(const void* pvBuffer, size_t pSize, size_t pCount) override
     {
         // Read-only stream
         return 0;
@@ -113,13 +115,13 @@ class VFSIOStream : public Assimp::IOStream
 class VFSIOSystem : public Assimp::IOSystem
 {
   public:
-    explicit VFSIOSystem(const std::string &baseDir) : _baseDir(baseDir)
+    explicit VFSIOSystem(const std::string& baseDir) : _baseDir(baseDir)
     {
         // Normalize base directory path
         if (!_baseDir.empty() && _baseDir.back() != '/' && _baseDir.back() != '\\') {
             _baseDir += '/';
         }
-        std::replace(_baseDir.begin(), _baseDir.end(), '\\', '/');
+        std::ranges::replace(_baseDir, '\\', '/');
     }
 
     ~VFSIOSystem() override = default;
@@ -127,7 +129,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Check if a file exists in VirtualFileSystem
      */
-    bool Exists(const char *pFile) const override
+    bool Exists(const char* pFile) const override
     {
         if (!pFile) {
             return false;
@@ -145,7 +147,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Open a file through VirtualFileSystem
      */
-    Assimp::IOStream *Open(const char *pFile, const char *pMode = "rb") override
+    Assimp::IOStream* Open(const char* pFile, const char* pMode = "rb") override
     {
         if (!pFile) {
             YA_CORE_ERROR("VFSIOSystem: Attempted to open null file path");
@@ -169,7 +171,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Close an open IOStream
      */
-    void Close(Assimp::IOStream *pFile) override
+    void Close(Assimp::IOStream* pFile) override
     {
         if (pFile) {
             delete pFile;
@@ -179,7 +181,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Compare two paths (for file system operations)
      */
-    bool ComparePaths(const char *first, const char *second) const override
+    bool ComparePaths(const char* first, const char* second) const override
     {
         std::string firstNormalized  = normalizePath(first);
         std::string secondNormalized = normalizePath(second);
@@ -193,7 +195,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Resolve a relative path to an absolute path based on base directory
      */
-    std::string resolvePath(const char *pFile) const
+    std::string resolvePath(const char* pFile) const
     {
         if (!pFile) {
             return "";
@@ -217,7 +219,7 @@ class VFSIOSystem : public Assimp::IOSystem
     /**
      * @brief Normalize path separators to '/'
      */
-    static std::string normalizePath(const std::string &path)
+    static std::string normalizePath(const std::string& path)
     {
         std::string normalized = path;
         std::replace(normalized.begin(), normalized.end(), '\\', '/');
@@ -233,7 +235,7 @@ class VFSIOSystem : public Assimp::IOSystem
  * @param scene Assimp scene (may contain metadata)
  * @return Inferred coordinate system
  */
-static CoordinateSystem inferAssimpCoordinateSystem(const std::string &filepath, const aiScene *scene)
+static CoordinateSystem inferAssimpCoordinateSystem(const std::string& filepath, const aiScene* scene)
 {
     // Extract file extension
     std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
@@ -312,7 +314,7 @@ static CoordinateSystem inferAssimpCoordinateSystem(const std::string &filepath,
 
 
 
-AssetManager *AssetManager::get()
+AssetManager* AssetManager::get()
 {
     static AssetManager instance;
     return &instance;
@@ -331,14 +333,14 @@ AssetManager::AssetManager()
 {
 }
 
-std::shared_ptr<Model> AssetManager::loadModel(const std::string &filepath)
+std::shared_ptr<Model> AssetManager::loadModel(const std::string& filepath)
 {
     return loadModelImpl(filepath, "");
 }
 
 
 
-std::shared_ptr<Model> AssetManager::loadModel(const std::string &name, const std::string &filepath)
+std::shared_ptr<Model> AssetManager::loadModel(const std::string& name, const std::string& filepath)
 {
     auto model = loadModelImpl(filepath, name);
     if (model) {
@@ -349,12 +351,12 @@ std::shared_ptr<Model> AssetManager::loadModel(const std::string &name, const st
 
 
 
-bool AssetManager::isModelLoaded(const std::string &filepath) const
+bool AssetManager::isModelLoaded(const std::string& filepath) const
 {
     return modelCache.find(filepath) != modelCache.end();
 }
 
-std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
+std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
 {
     if (isModelLoaded(filepath)) {
         return modelCache.at(filepath);
@@ -362,7 +364,7 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string &filepath) const
     return nullptr;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath)
 {
     if (isTextureLoaded(filepath)) {
         return _textureViews.find(filepath)->second;
@@ -379,7 +381,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &filepath)
     return texture;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, const std::string &filepath)
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name, const std::string& filepath)
 {
     if (isTextureLoaded(name)) {
         return _textureViews.find(name)->second;
@@ -395,7 +397,7 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string &name, cons
     return texture;
 }
 
-std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, const std::string &identifier)
+std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string& filepath, const std::string& identifier)
 {
     // Check if the model is already loaded
     if (isModelLoaded(filepath)) {
@@ -411,12 +413,29 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
     // Get directory path for texture loading
     size_t      lastSlash = filepath.find_last_of("/\\");
     std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
+    model->setDirectory(directory);
+
 
     // Check if file exists using VirtualFileSystem
     if (!VirtualFileSystem::get()->isFileExists(filepath)) {
         YA_CORE_ERROR("Model file does not exist: {}", filepath);
         return nullptr;
     }
+
+    // Load the model using Assimp with content and format hint
+    // The custom IOSystem will handle loading MTL and textures
+    constexpr unsigned int assimpFlags =
+        aiProcess_Triangulate |           // Convert all primitives to triangles
+        aiProcess_GenSmoothNormals |      // Generate smooth normals if missing
+        aiProcess_CalcTangentSpace |      // Calculate tangents for normal mapping
+        aiProcess_JoinIdenticalVertices | // Merge identical vertices (important!)
+        aiProcess_ImproveCacheLocality |  // Optimize vertex cache locality
+        aiProcess_FindDegenerates |       // Find degenerate primitives
+        aiProcess_SortByPType |           // Sort meshes by primitive type
+        aiProcess_FindInvalidData |       // Detect invalid data (NaN, etc.)
+        aiProcess_ValidateDataStructure;  // Validate the scene structure
+
+#if USE_ENGINE_IO_INTERFACE
 
     // Read the main model file content
     std::string fileContent;
@@ -427,7 +446,7 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
 
     // Extract file extension as format hint for Assimp
     std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    std::ranges::transform(ext, ext.begin(), ::tolower);
 
     // Set custom IOSystem to bridge VirtualFileSystem
     // This allows Assimp to load MTL files and textures through VFS
@@ -436,17 +455,14 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
 
     YA_CORE_INFO("Loading model '{}' with VFSIOSystem (base directory: '{}')", filepath, directory);
 
-    // Load the model using Assimp with content and format hint
-    // The custom IOSystem will handle loading MTL and textures
-    const aiScene *scene = importer.ReadFileFromMemory(
-        fileContent.data(),
-        fileContent.size(),
-        aiProcess_Triangulate |
-            aiProcess_GenSmoothNormals |
-            // aiProcess_FlipUVs |
-            aiProcess_CalcTangentSpace,
-        ext.c_str()); // Format hint (e.g., "obj", "fbx")
 
+    const aiScene* scene = importer.ReadFileFromMemory(fileContent.data(),
+                                                       fileContent.size(),
+                                                       assimpFlags,
+                                                       ext.c_str()); // Format hint (e.g., "obj", "fbx")
+#endif
+
+    const aiScene* scene = importer.ReadFile(filepath, assimpFlags);
     // Check for errors
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
         YA_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
@@ -457,54 +473,66 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
     std::vector<stdptr<Mesh>> meshes;
 
     // Material data per mesh (indexed by mesh index)
-    std::vector<EmbeddedMaterial> embeddedMaterials;
-    std::vector<int32_t>          meshMaterialIndices;
+    std::vector<MaterialData> embeddedMaterials;
+    std::vector<int32_t>      meshMaterialIndices;
 
     // Process all materials first
-    auto processMaterial = [&directory](const aiScene *scene, aiMaterial *material) -> EmbeddedMaterial {
-        EmbeddedMaterial embeddedMat;
+    auto processMaterial = [&](const aiScene* scene, aiMaterial* material) -> MaterialData {
+        MaterialData matData;
+        matData.type      = "phong"; // Default to phong, can be detected from source
+        matData.directory = model->getDirectory();
 
         if (!material) {
-            return embeddedMat; // Return default material
+            return matData; // Return default material
         }
 
         // Get material name
         aiString matName;
         if (material->Get(AI_MATKEY_NAME, matName) == AI_SUCCESS) {
-            embeddedMat.name = matName.C_Str();
+            matData.name = matName.C_Str();
         }
 
-        // Get colors
+        // Get colors - using dynamic params
         aiColor4D color;
         if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
-            embeddedMat.baseColor = glm::vec4(color.r, color.g, color.b, color.a);
+            matData.setParam(MatParam::BaseColor, glm::vec4(color.r, color.g, color.b, color.a));
         }
         if (material->Get(AI_MATKEY_COLOR_AMBIENT, color) == AI_SUCCESS) {
-            embeddedMat.ambient = glm::vec3(color.r, color.g, color.b);
+            matData.setParam(MatParam::Ambient, glm::vec3(color.r, color.g, color.b));
         }
         if (material->Get(AI_MATKEY_COLOR_SPECULAR, color) == AI_SUCCESS) {
-            embeddedMat.specular = glm::vec3(color.r, color.g, color.b);
+            matData.setParam(MatParam::Specular, glm::vec3(color.r, color.g, color.b));
         }
         if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
-            embeddedMat.emissive = glm::vec3(color.r, color.g, color.b);
+            matData.setParam(MatParam::Emissive, glm::vec3(color.r, color.g, color.b));
         }
 
-        // Get shininess
-        float shininess;
+        // Get scalar parameters
+        float shininess = NAN;
         if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {
-            embeddedMat.shininess = shininess;
+            matData.setParam(MatParam::Shininess, shininess);
         }
-
-        // Get opacity
-        float opacity;
+        float opacity = NAN;
         if (material->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
-            embeddedMat.opacity = opacity;
+            matData.setParam(MatParam::Opacity, opacity);
+        }
+        float refractIndex = NAN;
+        if (material->Get(AI_MATKEY_REFRACTI, refractIndex) == AI_SUCCESS) {
+            matData.setParam(MatParam::RefractIndex, refractIndex);
+        }
+        float reflection = NAN;
+        if (material->Get(AI_MATKEY_REFLECTIVITY, reflection) == AI_SUCCESS) {
+            matData.setParam(MatParam::Reflection, reflection);
         }
 
         // Get textures (store relative paths)
         // Note: In MTL files, map_Bump is mapped to aiTextureType_HEIGHT, not NORMALS
-        auto getTexturePath = [](aiMaterial *mat, aiTextureType type) -> std::string {
-            if (mat->GetTextureCount(type) > 0) {
+        auto getTexturePath = [&](aiMaterial* mat, aiTextureType type) -> std::string {
+            if (auto count = mat->GetTextureCount(type); count > 0) {
+                if (count > 1) {
+                    YA_CORE_WARN("Material '{}' has multiple textures of type {}", matData.name, (int)type);
+                }
+
                 aiString path;
                 if (mat->GetTexture(type, 0, &path) == AI_SUCCESS) {
                     return path.C_Str();
@@ -515,29 +543,30 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
 
         // Debug: Log texture counts for this material
         YA_CORE_TRACE("Material '{}': Diffuse={}, Specular={}, Height={}, Emissive={}",
-                      embeddedMat.name,
+                      matData.name,
                       material->GetTextureCount(aiTextureType_DIFFUSE),
                       material->GetTextureCount(aiTextureType_SPECULAR),
                       material->GetTextureCount(aiTextureType_HEIGHT),
                       material->GetTextureCount(aiTextureType_EMISSIVE));
 
-        // TODO: refactor
-        embeddedMat.diffuseTexturePath  = getTexturePath(material, aiTextureType_DIFFUSE);
-        embeddedMat.specularTexturePath = getTexturePath(material, aiTextureType_SPECULAR);
-        embeddedMat.normalTexturePath   = getTexturePath(material, aiTextureType_HEIGHT); // map_Bump -> HEIGHT
-        embeddedMat.emissiveTexturePath = getTexturePath(material, aiTextureType_EMISSIVE);
+        // Set texture paths using dynamic map
+        matData.setTexturePath(MatTexture::Diffuse, getTexturePath(material, aiTextureType_DIFFUSE));
+        matData.setTexturePath(MatTexture::Specular, getTexturePath(material, aiTextureType_SPECULAR));
+        matData.setTexturePath(MatTexture::Normal, getTexturePath(material, aiTextureType_HEIGHT)); // map_Bump -> HEIGHT
+        matData.setTexturePath(MatTexture::Emissive, getTexturePath(material, aiTextureType_EMISSIVE));
 
         // Debug: Log loaded texture paths
-        if (!embeddedMat.diffuseTexturePath.empty())
-            YA_CORE_TRACE("  -> Diffuse: {}", embeddedMat.diffuseTexturePath);
-        if (!embeddedMat.specularTexturePath.empty())
-            YA_CORE_TRACE("  -> Specular: {}", embeddedMat.specularTexturePath);
-        if (!embeddedMat.normalTexturePath.empty())
-            YA_CORE_TRACE("  -> Normal: {}", embeddedMat.normalTexturePath);
-        if (!embeddedMat.emissiveTexturePath.empty())
-            YA_CORE_TRACE("  -> Emissive: {}", embeddedMat.emissiveTexturePath);
+        YA_CORE_TRACE("Material texture details for '{}'", model->getDirectory());
+        if (matData.hasTexture(MatTexture::Diffuse))
+            YA_CORE_TRACE("  -> Diffuse: {}", matData.getTexturePath(MatTexture::Diffuse));
+        if (matData.hasTexture(MatTexture::Specular))
+            YA_CORE_TRACE("  -> Specular: {}", matData.getTexturePath(MatTexture::Specular));
+        if (matData.hasTexture(MatTexture::Normal))
+            YA_CORE_TRACE("  -> Normal: {}", matData.getTexturePath(MatTexture::Normal));
+        if (matData.hasTexture(MatTexture::Emissive))
+            YA_CORE_TRACE("  -> Emissive: {}", matData.getTexturePath(MatTexture::Emissive));
 
-        return embeddedMat;
+        return matData;
     };
 
     // Process all materials in the scene
@@ -545,9 +574,28 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
         embeddedMaterials.push_back(processMaterial(scene, scene->mMaterials[i]));
     }
 
-    auto processMesh = [&filepath, &meshes, &meshMaterialIndices](const aiScene *scene, aiMesh *mesh) {
+    auto processMesh = [&filepath, &meshes, &meshMaterialIndices](const aiScene* scene, aiMesh* mesh) {
         // Get mesh name
         std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
+
+        // Validate mesh has enough data
+        if (mesh->mNumVertices < 3) {
+            YA_CORE_WARN("Skipping mesh '{}': insufficient vertices ({})", meshName, mesh->mNumVertices);
+            meshMaterialIndices.push_back(-1); // Placeholder for skipped mesh
+            return;
+        }
+        if (mesh->mNumFaces == 0) {
+            YA_CORE_WARN("Skipping mesh '{}': no faces", meshName);
+            meshMaterialIndices.push_back(-1);
+            return;
+        }
+
+        // Check primitive type - we only support triangles
+        if (!(mesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE)) {
+            YA_CORE_WARN("Skipping mesh '{}': not triangulated (type={})", meshName, mesh->mPrimitiveTypes);
+            meshMaterialIndices.push_back(-1);
+            return;
+        }
 
         // Infer coordinate system from file format
         CoordinateSystem sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
@@ -605,6 +653,13 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
         }
 
         auto newMesh = meshData.createMesh(meshName, sourceCoordSystem);
+
+        YA_CORE_TRACE("Processed mesh '{}': {} vertices, {} indices ({} triangles)",
+                      meshName,
+                      meshData.vertices.size(),
+                      meshData.indices.size(),
+                      meshData.indices.size() / 3);
+
         meshes.push_back(std::move(newMesh));
 
         // Record material index for this mesh
@@ -616,10 +671,10 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string &filepath, 
         }
     };
 
-    std::function<void(const aiScene *, aiNode *)> processNode;
-    processNode = [&processMesh, &processNode](const aiScene *scene, aiNode *node) {
+    std::function<void(const aiScene*, aiNode*)> processNode;
+    processNode = [&processMesh, &processNode](const aiScene* scene, aiNode* node) {
         for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-            aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
+            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
             processMesh(scene, mesh);
         }
         for (unsigned int i = 0; i < node->mNumChildren; i++) {

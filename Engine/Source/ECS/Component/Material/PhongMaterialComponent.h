@@ -23,6 +23,7 @@
 
 #include "MaterialComponent.h"
 #include "Render/Material/PhongMaterial.h"
+#include "Render/Model.h" // For MaterialData
 
 namespace ya
 {
@@ -40,6 +41,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     // YA_REFLECT_FIELD(_textureSlots)
     YA_REFLECT_FIELD(_diffuseSlot)
     YA_REFLECT_FIELD(_specularSlot)
+    YA_REFLECT_FIELD(_reflectionSlot)
     YA_REFLECT_END()
 
 
@@ -48,6 +50,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     // TextureSlotMap _textureSlots;
     TextureSlot _diffuseSlot;
     TextureSlot _specularSlot;
+    TextureSlot _reflectionSlot;
 
   public:
     PhongMaterialComponent()
@@ -65,6 +68,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 
         _diffuseSlot.textureRef.onModified.addLambda(this, f);
         _specularSlot.textureRef.onModified.addLambda(this, f);
+        _reflectionSlot.textureRef.onModified.addLambda(this, f);
     }
 
   public:
@@ -82,7 +86,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     }
     bool isResolved() const { return _bResolved; }
 
-    TextureSlot *getTextureSlot(PhongMaterial::EResource resourceEnum)
+    TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum)
     {
         // return _textureSlots[resourceEnum];
         switch (resourceEnum) {
@@ -94,7 +98,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
             return nullptr;
         }
     }
-    TextureSlot *setTextureSlot(PhongMaterial::EResource resourceEnum, const std::string &path)
+    TextureSlot* setTextureSlot(PhongMaterial::EResource resourceEnum, const std::string& path)
     {
         // _textureSlots[resourceEnum].textureRef = TextureRef(path);
         // invalidate();
@@ -114,6 +118,27 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     }
 
     void syncTextureSlots();
+
+    /**
+     * @brief Import material data from a generic MaterialData descriptor
+     * Maps descriptor params to Phong-specific properties
+     *
+     * @param matData The material descriptor from model import
+     * @param syncParams If true, sync parameters to runtime material (default: true)
+     */
+    void importFromDescriptor(const MaterialData& matData, bool syncParams = true);
+
+    /**
+     * @brief Import material data and use an existing shared material
+     *
+     * This sets up the component's texture slots from the descriptor,
+     * while using an externally provided shared material instance.
+     * The component will NOT own or destroy this material.
+     *
+     * @param matData The material descriptor from model import
+     * @param sharedMaterial Pre-created shared material instance
+     */
+    void importFromDescriptorWithSharedMaterial(const MaterialData& matData, PhongMaterial* sharedMaterial);
 };
 
 

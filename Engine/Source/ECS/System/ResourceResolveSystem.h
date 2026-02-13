@@ -14,7 +14,7 @@ struct PhongMaterialComponent;
 struct Scene;
 struct Entity;
 struct Model;
-struct EmbeddedMaterial;
+struct MaterialData;
 struct Node;
 class PhongMaterial;
 
@@ -58,7 +58,7 @@ struct ResourceResolveSystem : public ISystem
      * @brief Resolve a ModelComponent
      * Loads the Model and creates child entities for each mesh
      */
-    void resolveModelComponent(Scene *scene, Entity *entity, ModelComponent &modelComp);
+    void resolveModelComponent(Scene* scene, Entity* entity, ModelComponent& modelComp);
 
     /**
      * @brief Create a child node for a single mesh from Model
@@ -69,12 +69,11 @@ struct ResourceResolveSystem : public ISystem
      * @param modelComp The ModelComponent (contains cached shared materials)
      * @return Created Node pointer
      */
-    Node *createMeshNode(
-        Scene          *scene,
-        Entity         *parentEntity,
-        Model          *model,
-        uint32_t        meshIndex,
-        ModelComponent &modelComp);
+    Node* createMeshNode(Scene*          scene,
+                         Entity*         parentEntity,
+                         Model*          model,
+                         uint32_t        meshIndex,
+                         ModelComponent& modelComp);
 
     /**
      * @brief Initialize a shared PhongMaterial from embedded material data
@@ -82,23 +81,21 @@ struct ResourceResolveSystem : public ISystem
      * @param embeddedMat The embedded material data
      * @param modelDirectory The model's directory for resolving texture paths
      */
-    void initSharedMaterial(
-        PhongMaterial            *material,
-        const EmbeddedMaterial *embeddedMat,
-        const std::string      &modelDirectory);
+    void initSharedMaterial(PhongMaterial*      material,
+                            const MaterialData* matData,
+                            const std::string&  modelDirectory);
 
     /**
      * @brief Initialize PhongMaterialComponent from embedded material data
      */
-    void initMaterialFromEmbedded(
-        PhongMaterialComponent   &matComp,
-        const EmbeddedMaterial *embeddedMat,
-        const std::string      &modelDirectory);
+    void initMaterialFromEmbedded(PhongMaterialComponent& matComp,
+                                  const MaterialData*     matData,
+                                  const std::string&      modelDirectory);
 
     /**
      * @brief Clean up child nodes when Model changes or component is removed
      */
-    void cleanupChildEntities(Scene *scene, ModelComponent &modelComp);
+    void cleanupChildEntities(Scene* scene, ModelComponent& modelComp);
 };
 
 } // namespace ya

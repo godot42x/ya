@@ -97,6 +97,96 @@ struct PhongMaterialSystem : public IMaterialSystem
         glm::mat4 modelMat;
     };
 
+    PipelineLayoutDesc _pipelineLayoutDesc{
+        .label         = "PhongMaterialSystem_PipelineLayout",
+        .pushConstants = {
+            PushConstantRange{
+                .offset     = 0,
+                .size       = sizeof(PhongMaterialSystem::ModelPushConstant),
+                .stageFlags = EShaderStage::Vertex,
+            },
+        },
+        .descriptorSetLayouts = {
+            // per frame
+            DescriptorSetLayoutDesc{
+                .label    = "PhongMaterial_Frame_DSL",
+                .set      = 0,
+                .bindings = {
+                    // Frame UBO
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                    },
+                    // Lighting
+                    DescriptorSetLayoutBinding{
+                        .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    // Reserved binding = 2
+                    DescriptorSetLayoutBinding{
+                        .binding         = 2,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                    },
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "PhongMaterial_Resource_DSL",
+                .set      = 1,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    DescriptorSetLayoutBinding{
+                        .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    // reflection texture
+                    DescriptorSetLayoutBinding{
+                        .binding         = 2,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "PhongMaterial_Param_DSL",
+                .set      = 2,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "SkyBox_CubeMap_DSL",
+                .set      = 3,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
+        },
+    };
+
 
     GraphicsPipelineCreateInfo _pipelineDesc;
 

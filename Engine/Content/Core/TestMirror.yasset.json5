@@ -1,0 +1,18 @@
+{
+    "type": "RenderTexture",
+    "width": 1024,
+    "height": 768,
+    "format": "R8G8B8A8_UNORM",
+    "framebufferAttachment": [
+        {
+            "index": 0,
+            "attachment": "Color",
+            "target": "Color"
+        },
+        {
+            "index": 1,
+            "attachment": "Color",
+            "target": "Color"
+        }
+    ]
+}
