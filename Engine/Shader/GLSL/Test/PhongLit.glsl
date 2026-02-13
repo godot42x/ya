@@ -50,19 +50,80 @@ void main (){
 #type geometry
 #version 450
 
-
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
 
+layout(location = 0) in vec3 vPos[];
+layout(location = 1) in vec2 vTexcoord[];
+layout(location = 2) in vec3 vNormal[];
+
+layout(location = 0) out vec3 gPos;
+layout(location = 1) out vec2 gTexcoord;
+layout(location = 2) out vec3 gNormal;
+
+layout(set =0, binding =0, std140) uniform FrameUBO {
+    mat4 projMat;
+    mat4 viewMat;
+    ivec2 resolution;
+    uint frameIdx;
+    float time;
+    vec3 cameraPos;  // 相机世界空间位置
+} uFrame;
+
+layout(push_constant) uniform PushConstants{
+    mat4 modelMat;
+}pc;
+
+
+
+vec3 getNormal()
+{
+   vec3 a = vPos[1] - vPos[0];
+   vec3 b = vPos[2] - vPos[1];
+   return normalize(cross(a, b));
+}
+
+vec4 explode(vec4 position, vec3 normal)
+{
+    int explodeType = 1;
+    float magnitude = 2;
+
+    if(explodeType == 0){
+        // return position;
+        vec3 direction = normal * ((sin(uFrame.time)   + 1.0) * 0.8) * magnitude; 
+        return position + vec4(direction, 0.0);
+    }
+    else if(explodeType == 1)
+    {
+        // based on triangle
+        vec3 triangleCenter = (vPos[0] + vPos[1] + vPos[2]) / 3.0;
+        // get model world pos by model matrix
+        vec3 modelWorldPos =  pc.modelMat[3].xyz;
+        vec3 explosionDir = normalize(triangleCenter - modelWorldPos);
+        float explosionStrength =  sin(uFrame.time) + 1.0 * 0.8  * magnitude;
+        return position + vec4(explosionDir * explosionStrength, 0.0);
+    }
+
+    return position;
+}
+
 
 // MARK: Geometry Main
-void main(){
-    gl_Position = gl_in[0].gl_Position + vec4(1.0, 0.0, 0.0, 0.0);
-    EmitVertex();
-    gl_Position = gl_in[1].gl_Position + vec4(0.0, 1.0, 0.0, 0.0);
-    EmitVertex();
-    gl_Position = gl_in[2].gl_Position + vec4(0.0, 0.0, 1.0, 0.0);
-    EmitVertex();
+void main()
+{
+    vec3 normal = getNormal();
+    mat4 /*m*/vp = uFrame.projMat * uFrame.viewMat; //* pc.modelMat; see vertex shader already transformed by the model matrix
+
+    for(int i = 0; i < 3; i++){
+        // vec4 pos =  explode (gl_in[i].gl_Position, normal);
+        vec4 pos =  /*m*/vp * explode( vec4( vPos[i], 1.0), normal);
+        gl_Position = pos;
+        gPos = pos.xyz;
+        gTexcoord = vTexcoord[i];
+        gNormal = vNormal[i];
+        EmitVertex();
+    }
+    
     EndPrimitive();
 }
 
@@ -164,7 +225,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 
 
-// MARK: frag i/o
+// MARK: frag i/o, if have geometry shader, from geometry shader's out
 layout(location = 0) in vec3 vPos;
 layout(location = 1) in vec2 vTexcoord;
 layout(location = 2) in vec3 vNormal;

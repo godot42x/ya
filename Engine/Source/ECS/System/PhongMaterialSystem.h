@@ -103,7 +103,7 @@ struct PhongMaterialSystem : public IMaterialSystem
             PushConstantRange{
                 .offset     = 0,
                 .size       = sizeof(PhongMaterialSystem::ModelPushConstant),
-                .stageFlags = EShaderStage::Vertex,
+                .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry,
             },
         },
         .descriptorSetLayouts = {
@@ -117,7 +117,7 @@ struct PhongMaterialSystem : public IMaterialSystem
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
                     },
                     // Lighting
                     DescriptorSetLayoutBinding{

@@ -541,9 +541,19 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
         pos          = source.find(typeToken, nextLinePos);
         size_t count = (nextLinePos == std::string ::npos ? source.size() - 1 : nextLinePos);
 
+        // 计算这个shader stage在原始文件中的起始行号
+        size_t lineNumber = std::count(source.begin(), source.begin() + nextLinePos, '\n');
+        
+        // 提取shader代码
         std::string codes = std::string(source.substr(nextLinePos, pos - count));
+        
+        // 在代码前面填充空白行，使错误行号能够直接对应到原始文件
+        std::string paddedCodes;
+        paddedCodes.reserve(lineNumber + codes.size());
+        paddedCodes.append(lineNumber, '\n');
+        paddedCodes.append(codes);
 
-        auto [_, Ok] = shaderSources.insert(std::make_pair(shader_type, codes));
+        auto [_, Ok] = shaderSources.insert(std::make_pair(shader_type, paddedCodes));
 
         YA_CORE_ASSERT(Ok, "Failed to insert this shader source");
     }

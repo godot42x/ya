@@ -487,6 +487,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
         physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE;
         physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE;
+        physicalDeviceFeatures.geometryShader           = VK_TRUE;
 
         {
             VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
