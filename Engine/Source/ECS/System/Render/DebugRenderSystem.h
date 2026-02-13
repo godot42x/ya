@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "ECS/System/IRenderSystem.h"
+#include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"

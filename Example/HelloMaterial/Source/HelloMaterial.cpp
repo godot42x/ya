@@ -16,7 +16,6 @@
 
 
 #include "ECS/Entity.h"
-#include "ECS/System/PhongMaterialSystem.h"
 
 
 #include "Core/Math/Geometry.h"

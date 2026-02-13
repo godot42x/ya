@@ -41,12 +41,14 @@
 #include "ECS/System/2D/UIComponentSytstem.h"
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
-#include "ECS/System/PhongMaterialSystem.h"
+
 #include "ECS/System/Render/DebugRenderSystem.h"
+#include "ECS/System/Render/PhongMaterialSystem.h"
+#include "ECS/System/Render/SimpleMaterialSystem.h"
+#include "ECS/System/Render/UnlitMaterialSystem.h"
+
 #include "ECS/System/ResourceResolveSystem.h"
-#include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/TransformSystem.h"
-#include "ECS/System/UnlitMaterialSystem.h"
 
 
 

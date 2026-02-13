@@ -4,7 +4,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/System.h"
 
-#include "IRenderSystem.h"
+#include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
 #include "imgui.h"

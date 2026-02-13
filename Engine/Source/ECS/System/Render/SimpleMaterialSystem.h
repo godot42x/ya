@@ -2,7 +2,7 @@
 
 #include "Core/Base.h"
 
-#include "ECS/System/IMaterialSystem.h"
+#include "ECS/System/Render/IMaterialSystem.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/SimpleMaterial.h"
 

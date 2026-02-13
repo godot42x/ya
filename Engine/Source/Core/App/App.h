@@ -11,7 +11,7 @@
 #include "Core/App/FPSCtrl.h"
 
 #include "ECS/System/3D/SkyboxSystem.h"
-#include "ECS/System/IRenderSystem.h"
+#include "ECS/System/Render/IRenderSystem.h"
 
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
