@@ -160,7 +160,7 @@ struct FQuadRender
 
 struct FRender2dData
 {
-    std::vector<stdptr<RenderSystem>> _systems;
+    // std::vector<stdptr<RenderSystem>> _systems;
 
     uint32_t        windowWidth  = 800;
     uint32_t        windowHeight = 600;

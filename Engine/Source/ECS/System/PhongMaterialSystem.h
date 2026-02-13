@@ -9,6 +9,7 @@
 #include "Render/RenderDefines.h"
 
 
+
 struct VulkanPipelineLayout;
 struct VulkanPipeline;
 struct VulkanBuffer;
@@ -82,6 +83,9 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
     } uLight;
 
+    // TODO: move to one debug layer system
+    //   another pipeline to draw debug effect to the output iamge(or another RT)
+    //   redraw ech obj in world? use defer rendering to avoid redraw
     struct DebugUBO
     {
         alignas(4) bool bDebugNormal = false;
@@ -89,8 +93,6 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(4) bool bDebugUV     = false;
         glm::vec4 floatParam         = glm::vec4(0.0f);
     } uDebug;
-
-
 
     struct ModelPushConstant
     {
@@ -126,12 +128,12 @@ struct PhongMaterialSystem : public IMaterialSystem
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
                     },
-                    // Reserved binding = 2
+                    // Debug UBO for now
                     DescriptorSetLayoutBinding{
                         .binding         = 2,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
                     },
                 },
             },
@@ -237,6 +239,10 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::string         _ctxEntityDebugStr;
 
     EPolygonMode::T _polygonMode = EPolygonMode::Fill; // Polygon rendering mode (Fill, Line, Point)
+
+
+  public:
+    PhongMaterialSystem() : IMaterialSystem("PhongMaterialSystem") {}
 
     // optional?
     void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;

@@ -42,6 +42,7 @@
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/PhongMaterialSystem.h"
+#include "ECS/System/Render/DebugRenderSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/SimpleMaterialSystem.h"
 #include "ECS/System/TransformSystem.h"
@@ -137,8 +138,7 @@ void App::onSceneViewportResized(Rect2D rect)
 void App::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
 {
 
-    // Render material systems
-    for (auto& system : _materialSystems) {
+    for (auto& system : _renderSystems) {
         if (system->bEnabled) {
             YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
             system->onRender(cmdBuf, &ctx);
@@ -196,6 +196,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/PhongLit.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
 
@@ -303,36 +304,43 @@ void App::init(AppDesc ci)
     });
 
     // pre construct all material systems
-    addMaterialSystem<SimpleMaterialSystem>(nullptr,
-                                            PipelineRenderingInfo{
-                                                .label                   = "SimpleMaterial Pipeline",
-                                                .viewMask                = 0,
-                                                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                                .depthAttachmentFormat   = DEPTH_FORMAT,
-                                                .stencilAttachmentFormat = EFormat::Undefined,
-                                            });
-    addMaterialSystem<UnlitMaterialSystem>(nullptr,
-                                           PipelineRenderingInfo{
-                                               .label                   = "UnlitMaterialSystem Pipeline",
-                                               .viewMask                = 0,
-                                               .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                               .depthAttachmentFormat   = DEPTH_FORMAT,
-                                               .stencilAttachmentFormat = EFormat::Undefined,
-                                           });
-    addMaterialSystem<PhongMaterialSystem>(nullptr,
-                                           PipelineRenderingInfo{
-                                               .label                   = "PhongMaterial Pipeline",
-                                               .viewMask                = 0,
-                                               .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                               .depthAttachmentFormat   = DEPTH_FORMAT,
-                                               .stencilAttachmentFormat = EFormat::Undefined,
-                                           });
+    addRenderSystem<SimpleMaterialSystem>(nullptr,
+                                          PipelineRenderingInfo{
+                                              .label                   = "SimpleMaterial Pipeline",
+                                              .viewMask                = 0,
+                                              .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                              .depthAttachmentFormat   = DEPTH_FORMAT,
+                                              .stencilAttachmentFormat = EFormat::Undefined,
+                                          });
+    addRenderSystem<UnlitMaterialSystem>(nullptr,
+                                         PipelineRenderingInfo{
+                                             .label                   = "UnlitMaterialSystem Pipeline",
+                                             .viewMask                = 0,
+                                             .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                             .depthAttachmentFormat   = DEPTH_FORMAT,
+                                             .stencilAttachmentFormat = EFormat::Undefined,
+                                         });
+    addRenderSystem<PhongMaterialSystem>(nullptr,
+                                         PipelineRenderingInfo{
+                                             .label                   = "PhongMaterial Pipeline",
+                                             .viewMask                = 0,
+                                             .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                             .depthAttachmentFormat   = DEPTH_FORMAT,
+                                             .stencilAttachmentFormat = EFormat::Undefined,
+                                         });
+    // addRenderSystem<DebugRenderSystem>(nullptr,
+    //                                    PipelineRenderingInfo{
+    //                                        .label                   = "DebugRender Pipeline",
+    //                                        .viewMask                = 0,
+    //                                        .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+    //                                        .depthAttachmentFormat   = DEPTH_FORMAT,
+    //                                        .stencilAttachmentFormat = EFormat::Undefined,
+    //                                    });
     _deleter.push("MaterialSystems", [this](void*) {
-        _materialSystems.clear();
+        _renderSystems.clear();
     });
 
-    _skyboxSystem             = ya::makeShared<SkyBoxSystem>();
-    _skyboxSystem->_cubeMapDS = _skyBoxCubeMapDS;
+    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
     _skyboxSystem->onInit(nullptr,
                           PipelineRenderingInfo{
                               .label                   = "Skybox Pipeline",
@@ -347,9 +355,10 @@ void App::init(AppDesc ci)
     });
 
 
-    getMaterialSystemByLabel("PhongMaterialSystem")
-        ->as<PhongMaterialSystem>()
-        ->skyBoxCubeMapDS = _skyBoxCubeMapDS;
+    _skyboxSystem->_cubeMapDS                                                             = _skyBoxCubeMapDS;
+    _name2renderSystem["PhongMaterialSystem"]->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
+
+    // _name2renderSystem["DebugRenderSystem"]->bEnabled                                     = false;
 
 
     // MARK: tex-> Postprocessing
@@ -476,7 +485,7 @@ void App::init(AppDesc ci)
     // FIXME: current 2D rely on the the white texture of App, fix dependencies and move before load scene
     // Initialize Render2D for dynamic rendering (depthTestEnable=false allows UI pass without depth)
     Render2D::init(_render);
-    Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
+    // Render2D::data._systems.push_back(makeShared<UIComponentSystem>());
 
     // MARK: Imgui
     auto& imManager = ImGuiManager::get();
@@ -1223,26 +1232,19 @@ void App::onRenderGUI(float dt)
     }
 
     if (ImGui::CollapsingHeader("Render 2D", 0)) {
-        ImGui::Indent();
         // temp code here to adopt to new Render2D
         Render2D::onImGui();
-        ImGui::Unindent();
     }
 
     if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
-        ImGui::Indent();
         // RenderTargetPool::get().onRenderGUI();
-        ImGui::Unindent();
     }
 
-    if (ImGui::CollapsingHeader("Material Systems", 0)) {
-        ImGui::Indent();
-        for (auto& system : _materialSystems) {
+    if (ImGui::CollapsingHeader("Render Systems", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (auto& system : _renderSystems) {
             system->renderGUI();
         }
-        ImGui::Unindent();
     }
-
 
     _viewportRT->onRenderGUI();
     _screenRT->onRenderGUI();

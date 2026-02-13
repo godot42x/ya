@@ -32,10 +32,9 @@ namespace ya
 
 
 
-void SimpleMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo & pipelineRenderingInfo)
+void SimpleMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo)
 {
-    _label       = "SimpleMaterialSystem";
-    auto *render = getRender();
+    auto* render = getRender();
 
     auto _sampleCount = ESampleCount::Sample_1;
 
@@ -172,7 +171,7 @@ void SimpleMaterialSystem::onRenderGUI()
 }
 
 
-void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
+void SimpleMaterialSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
 {
 
     auto render = getRender();
@@ -180,8 +179,8 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     if (!scene) {
         return;
     }
-    const auto &view1 = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent, MeshComponent>();
-    const auto &view2 = scene->getRegistry().view<TransformComponent, DirectionComponent>();
+    const auto& view1 = scene->getRegistry().view<TransformComponent, SimpleMaterialComponent, MeshComponent>();
+    const auto& view2 = scene->getRegistry().view<TransformComponent, DirectionComponent>();
     if (view1.begin() == view1.end() && view2.begin() == view2.end()) {
         return;
     }
@@ -224,11 +223,11 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
     pc.projection = ctx->projection;
 
     // for (const auto entity : view1) {
-    view1.each([this, &cmdBuf](auto &tc, auto &smc, auto &mc) {
+    view1.each([this, &cmdBuf](auto& tc, auto& smc, auto& mc) {
         // const auto &[tc, smc, meshComp] = view1.get(entity);
         // TODO: culling works
 
-        SimpleMaterial *material = smc.getMaterial();
+        SimpleMaterial* material = smc.getMaterial();
         if (!material) {
             return;
             // continue;
@@ -259,7 +258,7 @@ void SimpleMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
     pc.colorType = _defaultColorType;
     for (auto entity : view2) {
-        const auto &[tc, dc] = view2.get(entity);
+        const auto& [tc, dc] = view2.get(entity);
 
         glm::mat4 worldTransform = glm::translate(glm::mat4(1.0), tc.getWorldPosition()) *
                                    glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));

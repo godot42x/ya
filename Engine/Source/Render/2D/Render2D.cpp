@@ -55,18 +55,18 @@ void Render2D::destroy()
 
 void Render2D::onUpdate(float dt)
 {
-    for (auto sys : Render2D::data._systems)
-    {
-        sys->onUpdate(dt);
-    }
+    // for (auto sys : Render2D::data._systems)
+    // {
+    //     sys->onUpdate(dt);
+    // }
 }
 
 void Render2D::onRender()
 {
-    for (auto sys : Render2D::data._systems)
-    {
-        sys->onRender();
-    }
+    // for (auto sys : Render2D::data._systems)
+    // {
+    //     sys->onRender();
+    // }
 }
 
 void Render2D::onImGui()

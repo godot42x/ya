@@ -39,7 +39,6 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
 {
     YA_PROFILE_FUNCTION();
 
-    _label                = "PhongMaterialSystem";
     IRender* render       = getRender();
     auto     _sampleCount = ESampleCount::Sample_1;
 

@@ -12,6 +12,7 @@ struct ISystem
     virtual void init() {}
     virtual void onUpdate(float deltaTime) {}
     virtual void shutdown() {}
+    virtual void onRenderGUI() {}
 
 
     virtual ~ISystem() = default;
@@ -29,13 +30,6 @@ struct GameInstanceSystem : public ISystem
 };
 
 
-struct RenderSystem
-{
-    virtual ~RenderSystem() = default;
-
-    virtual void onUpdate(float deltaTime) = 0;
-    virtual void onRender()                = 0;
-};
 
 
 } // namespace ya

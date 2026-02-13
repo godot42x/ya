@@ -31,7 +31,6 @@ namespace ya
 void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo)
 {
 
-    _label = "UnlitMaterialSystem";
 
     IRender *render = getRender();
 

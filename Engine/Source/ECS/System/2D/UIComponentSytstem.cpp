@@ -1,45 +1,45 @@
-#include "UIComponentSytstem.h"
-#include "Core/App/App.h"
-#include "ECS/Component/2D/UIComponent.h"
+// #include "UIComponentSytstem.h"
+// #include "Core/App/App.h"
+// #include "ECS/Component/2D/UIComponent.h"
 
-#include "Core/Math/ScreenUtil.h"
-#include "Render/2D/Render2D.h"
-
-
-
-namespace ya
-
-{
-
-void UIComponentSystem::onRender()
-{
-    return;
-
-    auto app = App::get();
-    auto rt  = app->_viewportRT;
-    // auto rp    = rt->getRenderPass();
-    auto scene = app->getSceneManager()->getActiveScene();
+// #include "Core/Math/ScreenUtil.h"
+// #include "Render/2D/Render2D.h"
 
 
-    // 这里想要的是一个三维世界之中的2D平面，而不是屏幕二维的平面
-    // 即可以旋转相机视角，来看到一张纸...
-    // Render2D 内部的接口只能画在屏幕屏幕?
-    // 需要一个 quad mesh + transform + texture + 光照？
-    // 放入 PhongMaterialSystem 之中实现
 
-    // 错误的， quad render 的 batch 内部有 view(identity) 和 proj(orthographic) 矩阵
-    // 不符合 3D 之中的透明物体渲染要求
-    // scene->getRegistry()
-    //     .view<UIComponent, TransformComponent>()
-    //     .each(
-    //         [&](auto /*entity*/, UIComponent &uc, TransformComponent &tc) {
-    //             auto mat = tc.getWorldMatrix();
-    //             // mat[1] *= -1.0f; // Flip Y for screen space
-    //             mat = ctx.projection * ctx.view * mat;
-    //             Render2D::makeSprite(
-    //                 mat,
-    //                 uc.view.textureRef.getShared());
-    //         });
-}
+// namespace ya
 
-} // namespace ya
+// {
+
+// void UIComponentSystem::onRender()
+// {
+//     return;
+
+//     auto app = App::get();
+//     auto rt  = app->_viewportRT;
+//     // auto rp    = rt->getRenderPass();
+//     auto scene = app->getSceneManager()->getActiveScene();
+
+
+//     // 这里想要的是一个三维世界之中的2D平面，而不是屏幕二维的平面
+//     // 即可以旋转相机视角，来看到一张纸...
+//     // Render2D 内部的接口只能画在屏幕屏幕?
+//     // 需要一个 quad mesh + transform + texture + 光照？
+//     // 放入 PhongMaterialSystem 之中实现
+
+//     // 错误的， quad render 的 batch 内部有 view(identity) 和 proj(orthographic) 矩阵
+//     // 不符合 3D 之中的透明物体渲染要求
+//     // scene->getRegistry()
+//     //     .view<UIComponent, TransformComponent>()
+//     //     .each(
+//     //         [&](auto /*entity*/, UIComponent &uc, TransformComponent &tc) {
+//     //             auto mat = tc.getWorldMatrix();
+//     //             // mat[1] *= -1.0f; // Flip Y for screen space
+//     //             mat = ctx.projection * ctx.view * mat;
+//     //             Render2D::makeSprite(
+//     //                 mat,
+//     //                 uc.view.textureRef.getShared());
+//     //         });
+// }
+
+// } // namespace ya

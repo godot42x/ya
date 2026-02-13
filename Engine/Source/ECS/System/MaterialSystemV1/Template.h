@@ -3,7 +3,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/TransformComponent.h"
-#include "ECS/System/IMaterialSystem.h"
+#include "ECS/System/IRenderSystem.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"

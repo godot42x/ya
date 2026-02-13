@@ -16,6 +16,8 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
+    bool bDebugDepth;
+    bool bDebugUV;
     vec4 floatParam;
 } uDebug;
 
@@ -70,6 +72,13 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
+layout(set = 0, binding =2, std140) uniform DebugUBO {
+    bool bDebugNormal;
+    bool bDebugDepth;
+    bool bDebugUV;
+    vec4 floatParam;
+} uDebug;
+
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
 }pc;
@@ -107,13 +116,10 @@ vec4 explode(vec4 position, vec3 normal)
     return position;
 }
 
-
-// MARK: Geometry Main
-void main()
+void explodeEffect()
 {
     vec3 normal = getNormal();
     mat4 /*m*/vp = uFrame.projMat * uFrame.viewMat; //* pc.modelMat; see vertex shader already transformed by the model matrix
-
     for(int i = 0; i < 3; i++){
         // vec4 pos =  explode (gl_in[i].gl_Position, normal);
         vec4 pos =  /*m*/vp * explode( vec4( vPos[i], 1.0), normal);
@@ -125,6 +131,28 @@ void main()
     }
     
     EndPrimitive();
+
+}
+
+void defaultPass()
+{
+    for(int i = 0; i < 3; i++){
+        gl_Position = gl_in[i].gl_Position;
+        gPos = vPos[i];
+        gTexcoord = vTexcoord[i];
+        gNormal = vNormal[i];
+        EmitVertex();
+    }
+    
+    EndPrimitive();
+
+}
+
+// MARK: Geometry Main
+void main()
+{
+    // explodeEffect();
+    defaultPass();
 }
 
 

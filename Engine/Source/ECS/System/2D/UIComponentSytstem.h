@@ -1,19 +1,19 @@
 
-#pragma once
+// #pragma once
 
-#include "Core/Common/FWD-std.h"
-#include "Core/System/System.h"
+// #include "Core/Common/FWD-std.h"
+// #include "Core/System/System.h"
 
-namespace ya
-{
+// namespace ya
+// {
 
-struct UIComponentSystem : public RenderSystem
-{
-    UIComponentSystem() {}
-    virtual ~UIComponentSystem() = default;
+// struct UIComponentSystem : public RenderSystem
+// {
+//     UIComponentSystem() {}
+//     virtual ~UIComponentSystem() = default;
 
-    void onUpdate(float dt) override {}
-    void onRender() override;
-};
+//     void onUpdate(float dt) override {}
+//     void onRender() override;
+// };
 
-} // namespace ya
+// } // namespace ya

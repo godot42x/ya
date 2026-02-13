@@ -11,7 +11,7 @@
 #include "Core/App/FPSCtrl.h"
 
 #include "ECS/System/3D/SkyboxSystem.h"
-#include "ECS/System/IMaterialSystem.h"
+#include "ECS/System/IRenderSystem.h"
 
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
@@ -183,8 +183,9 @@ struct App
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
     // Material systems (managed externally from RenderTarget)
-    std::vector<std::shared_ptr<IMaterialSystem>> _materialSystems;
-    std::vector<stdptr<ISystem>>                  _systems;
+    std::vector<std::shared_ptr<IRenderSystem>> _renderSystems;
+    std::unordered_map<FName, IRenderSystem*>   _name2renderSystem;
+    std::vector<stdptr<ISystem>>                _systems;
 
     stdptr<SkyBoxSystem>         _skyboxSystem     = nullptr;
     stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
@@ -315,33 +316,18 @@ struct App
     [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
 
-    // Material system management (external from RenderTarget)
+
     template <typename T>
-    void addMaterialSystem(IRenderPass* renderPass = nullptr, const PipelineRenderingInfo& pipelineRenderingInfo = {})
+    void addRenderSystem(IRenderPass* renderPass = nullptr, const PipelineRenderingInfo& pipelineRenderingInfo = {})
     {
-        static_assert(std::is_base_of_v<IMaterialSystem, T>, "T must derive from IMaterialSystem");
+        static_assert(std::is_base_of_v<IRenderSystem, T>, "T must derive from IRenderSystem");
         stdptr<T> system = makeShared<T>();
-        auto      sys    = static_cast<IMaterialSystem*>(system.get());
+        auto      sys    = static_cast<IRenderSystem*>(system.get());
         sys->onInit(renderPass, pipelineRenderingInfo);
-        YA_CORE_DEBUG("Initialized material system: {}", sys->_label);
-        _materialSystems.push_back(system);
-    }
-
-    void forEachMaterialSystem(std::function<void(std::shared_ptr<IMaterialSystem>)> func)
-    {
-        for (auto& system : _materialSystems) {
-            func(system);
-        }
-    }
-
-    IMaterialSystem* getMaterialSystemByLabel(const std::string& label)
-    {
-        for (auto& system : _materialSystems) {
-            if (system && system->_label == label) {
-                return system.get();
-            }
-        }
-        return nullptr;
+        YA_CORE_DEBUG("Initialized render system: {}", sys->_label);
+        _renderSystems.push_back(system);
+        YA_CORE_ASSERT(!_name2renderSystem.contains(FName(sys->getLabel())), "Name conflicts {}", sys->getLabel());
+        _name2renderSystem[sys->_label] = _renderSystems.back().get();
     }
 
 
@@ -362,7 +348,7 @@ struct App
     void beginFrame()
     {
         _skyboxSystem->beginFrame();
-        for (auto& system : _materialSystems) {
+        for (auto& system : _renderSystems) {
             system->beginFrame();
         }
     }
