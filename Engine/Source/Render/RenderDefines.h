@@ -24,7 +24,7 @@ constexpr Enum operator^(Enum lhs, Enum rhs) { return static_cast<Enum>(static_c
 template <enum_t Enum>
 constexpr Enum operator~(Enum lhs) { return static_cast<Enum>(~static_cast<std::underlying_type_t<Enum>>(lhs)); }
 template <enum_t Enum>
-constexpr Enum operator|=(Enum &lhs, Enum rhs) { return lhs = lhs | rhs; }
+constexpr Enum operator|=(Enum& lhs, Enum rhs) { return lhs = lhs | rhs; }
 
 namespace ERenderAPI
 {
@@ -129,9 +129,10 @@ namespace EShaderStage
 enum T
 {
     Vertex   = 0x01,
-    Fragment = 0x02,
-    Geometry = 0x04,
+    Geometry = 0x02,
+    Fragment = 0x04,
     Compute  = 0x08,
+    Count,
 };
 
 inline T fromString(std::string_view str)
@@ -694,7 +695,7 @@ struct RenderingInfo
 
     struct ImageSpec
     {
-        Texture *texture = nullptr; // ← 使用高层 Texture 抽象，替代 IImageView*
+        Texture* texture = nullptr; // ← 使用高层 Texture 抽象，替代 IImageView*
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 
@@ -707,15 +708,15 @@ struct RenderingInfo
     };
 
     // use render target spec
-    IRenderTarget *renderTarget = nullptr;
+    IRenderTarget* renderTarget = nullptr;
 
     // or manual combined image spec
     std::vector<ImageSpec> colorAttachments = {};
-    ImageSpec             *depthAttachment  = nullptr;
+    ImageSpec*             depthAttachment  = nullptr;
 };
 struct EndRenderingInfo
 {
-    IRenderTarget *renderTarget = nullptr;
+    IRenderTarget* renderTarget = nullptr;
 };
 
 
@@ -740,13 +741,13 @@ struct GraphicsPipelineCreateInfo
 {
     // Subpass mode fields
     int32_t      subPassRef = -1;
-    IRenderPass *renderPass;
+    IRenderPass* renderPass;
 
     // Dynamic Rendering mode fields (ignored if rendering not nullptr)
     PipelineRenderingInfo pipelineRenderingInfo;
 
     // common payloads
-    IPipelineLayout                        *pipelineLayout;
+    IPipelineLayout*                        pipelineLayout;
     ShaderDesc                              shaderDesc;
     std::vector<EPipelineDynamicFeature::T> dynamicFeatures = {};
     EPrimitiveType::T                       primitiveType   = EPrimitiveType::TriangleList;
@@ -868,12 +869,12 @@ struct DeviceFeature
     std::string name;
     bool        bRequired;
 
-    bool operator==(const DeviceFeature &other) const
+    bool operator==(const DeviceFeature& other) const
     {
         return name == other.name;
     }
 
-    bool operator<(const DeviceFeature &other) const
+    bool operator<(const DeviceFeature& other) const
     {
         return name < other.name;
     }
@@ -903,7 +904,7 @@ struct ImageCreateInfo
     ESampleCount::T samples               = ESampleCount::Sample_1;
     EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
     uint32_t        queueFamilyIndexCount = 0;
-    const uint32_t *pQueueFamilyIndices   = nullptr;
+    const uint32_t* pQueueFamilyIndices   = nullptr;
     EImageLayout::T initialLayout         = EImageLayout::Undefined;
     uint32_t        flags                 = 0;
     // TODO: manual conversion
@@ -965,7 +966,7 @@ struct SamplerDesc
     float                  maxLod                  = 1.0f;
     bool                   unnormalizedCoordinates = false;
 
-    bool operator==(const SamplerDesc &other) const
+    bool operator==(const SamplerDesc& other) const
     {
         return minFilter == other.minFilter &&
                magFilter == other.magFilter &&

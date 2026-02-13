@@ -192,26 +192,45 @@ void VulkanPipeline::createPipelineInternal()
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", _name.toString()).c_str());
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", _name.toString()).c_str());
 
-    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
+
+
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {
         VkPipelineShaderStageCreateInfo{
-                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                        .pNext               = nullptr,
-                                        .flags               = 0,
-                                        .stage               = VK_SHADER_STAGE_VERTEX_BIT,
-                                        .module              = vertShaderModule,
-                                        .pName               = "main",
-                                        .pSpecializationInfo = {},
-                                        },
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
+            .flags               = 0,
+            .stage               = VK_SHADER_STAGE_VERTEX_BIT,
+            .module              = vertShaderModule,
+            .pName               = "main",
+            .pSpecializationInfo = {},
+        },
         VkPipelineShaderStageCreateInfo{
-                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                        .pNext               = nullptr,
-                                        .flags               = 0,
-                                        .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
-                                        .module              = fragShaderModule,
-                                        .pName               = "main",
-                                        .pSpecializationInfo = {},
-                                        },
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
+            .flags               = 0,
+            .stage               = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .module              = fragShaderModule,
+            .pName               = "main",
+            .pSpecializationInfo = {},
+        },
     };
+
+    if (stage2Spirv->count(EShaderStage::Geometry)) {
+        auto geomShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Geometry));
+        deleter.push("", geomShaderModule, [this](void *handle) {
+            vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
+        });
+        _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, geomShaderModule, std::format("{}_geom", _name.toString()).c_str());
+        shaderStages.push_back(VkPipelineShaderStageCreateInfo{
+                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                        .pNext               = nullptr,
+                                        .flags               = 0,
+                                        .stage               = VK_SHADER_STAGE_GEOMETRY_BIT,
+                                        .module              = geomShaderModule,
+                                        .pName               = "main",
+                                        .pSpecializationInfo = {},
+                                        });
+    }
 
     // Configure vertex input based on configuration
 
@@ -418,7 +437,7 @@ void VulkanPipeline::createPipelineInternal()
         .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext               = nullptr,
         .flags               = 0,
-        .stageCount          = shaderStages.size(),
+        .stageCount          = static_cast<uint32_t>(shaderStages.size()),
         .pStages             = shaderStages.data(),
         .pVertexInputState   = &vertexInputStateCI,
         .pInputAssemblyState = &inputAssemblyStateCI,

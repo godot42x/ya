@@ -27,7 +27,7 @@
 #include "Core/System/VirtualFileSystem.h"
 
 
-static const char *eolFlag =
+static const char* eolFlag =
 #if _WIN32
     "\r\n";
 #elif __linux__
@@ -47,7 +47,10 @@ shaderc_shader_kind toShadercType(EShaderStage::T Stage)
         return shaderc_glsl_vertex_shader;
     case Fragment:
         return shaderc_glsl_fragment_shader;
+    case Geometry:
+        return shaderc_glsl_geometry_shader;
     default:
+        UNREACHABLE();
         break;
     }
 
@@ -55,7 +58,7 @@ shaderc_shader_kind toShadercType(EShaderStage::T Stage)
     return shaderc_shader_kind(0);
 }
 
-const char *getOpenGLCacheFileExtension(EShaderStage::T stage)
+const char* getOpenGLCacheFileExtension(EShaderStage::T stage)
 {
     switch (stage)
     {
@@ -63,14 +66,17 @@ const char *getOpenGLCacheFileExtension(EShaderStage::T stage)
         return ".cached.opengl.vert";
     case EShaderStage::Fragment:
         return ".cached.opengl.frag";
+    case EShaderStage::Geometry:
+        return ".cached.opengl.geom";
     default:
+        UNREACHABLE();
         break;
     }
     YA_CORE_ASSERT(false, "Unknown shader type!");
     return "";
 }
 
-const char *getVulkanCacheFileExtension(EShaderStage::T stage)
+const char* getVulkanCacheFileExtension(EShaderStage::T stage)
 {
     switch (stage)
     {
@@ -78,14 +84,17 @@ const char *getVulkanCacheFileExtension(EShaderStage::T stage)
         return ".cached.vulkan.vert";
     case EShaderStage::Fragment:
         return ".cached.vulkan.frag";
+    case EShaderStage::Geometry:
+        return ".cached.vulkan.geom";
     default:
+        UNREACHABLE();
         break;
     }
-    // YA_CORE_ASSERT(false);
+    YA_CORE_ASSERT(false, "Unknown shader type!");
     return "";
 }
 
-const char *getSpvOutputExtension(EShaderStage::T stage)
+const char* getSpvOutputExtension(EShaderStage::T stage)
 {
     switch (stage)
     {
@@ -93,7 +102,10 @@ const char *getSpvOutputExtension(EShaderStage::T stage)
         return "vert.spv";
     case EShaderStage::Fragment:
         return "frag.spv";
+    case EShaderStage::Geometry:
+        return "geom.spv";
     default:
+        UNREACHABLE();
         break;
     }
     // YA_CORE_ASSERT(false);
@@ -108,6 +120,8 @@ SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
         return SDL_GPU_SHADERSTAGE_VERTEX;
     case Fragment:
         return SDL_GPU_SHADERSTAGE_FRAGMENT;
+    // case Geometry:
+    // return SDL_GPU_SHADERSTAGE_GEOMETRY;
     default:
         break;
     }
@@ -133,7 +147,7 @@ std::filesystem::path GLSLProcessor::GetCachePath(bool bVulkan, EShaderStage::T 
 
 
 // Get size of a SPIRV type with proper alignment for C++ structs
-uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType &type)
+uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType& type)
 {
     uint32_t size = 0;
     switch (type.basetype)
@@ -166,7 +180,7 @@ uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType &type)
 }
 
 // Get the offset for a member in a struct with proper C++ alignment
-uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type)
+uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType& type)
 {
     // Determine the alignment requirement based on std140 layout rules
     uint32_t alignment = 4; // Default to 4 bytes for basic types
@@ -184,7 +198,7 @@ uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t current_offset, const spir
 namespace ShaderReflection
 {
 
-DataType getSpirvBaseType(const spirv_cross::SPIRType &type)
+DataType getSpirvBaseType(const spirv_cross::SPIRType& type)
 {
     switch (type.basetype) {
     case spirv_cross::SPIRType::Boolean:
@@ -270,7 +284,7 @@ uint32_t getDataTypeSize(DataType type)
 
 } // namespace ShaderReflection
 
-ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData)
+ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)
 {
     std::vector<uint32_t>        spirv_ir(spirvData.begin(), spirvData.end());
     spirv_cross::Compiler        compiler(spirv_ir);
@@ -295,12 +309,12 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
     YA_CORE_TRACE("Stage Inputs (with alignment information):");
     uint32_t   struct_offset      = 0;
     const bool IS_CPP_STRUCT_PACK = true;
-    for (const auto &input : spirvResources.stage_inputs) {
+    for (const auto& input : spirvResources.stage_inputs) {
 
         uint32_t location = compiler.get_decoration(input.id, spv::DecorationLocation);
         uint32_t offset   = compiler.get_decoration(input.id, spv::DecorationOffset);
 
-        const spirv_cross::SPIRType &type = compiler.get_type(input.type_id);
+        const spirv_cross::SPIRType& type = compiler.get_type(input.type_id);
 
         // Calculate aligned offset
         uint32_t aligned_offset = SPIRVHelper::getVertexAlignedOffset(struct_offset, type);
@@ -333,10 +347,10 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
 
     // Process stage outputs
     YA_CORE_TRACE("Stage Outputs:");
-    for (const auto &output : spirvResources.stage_outputs) {
+    for (const auto& output : spirvResources.stage_outputs) {
         uint32_t                     location = compiler.get_decoration(output.id, spv::DecorationLocation);
         uint32_t                     offset   = compiler.get_decoration(output.id, spv::DecorationOffset);
-        const spirv_cross::SPIRType &type     = compiler.get_type(output.type_id);
+        const spirv_cross::SPIRType& type     = compiler.get_type(output.type_id);
 
         // Create stage output data
         ShaderReflection::StageIOData outputData;
@@ -355,8 +369,8 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
 
     // Process uniform buffers
     YA_CORE_TRACE("Uniform buffers:");
-    for (const auto &resource : spirvResources.uniform_buffers) {
-        const auto &buffer_type  = compiler.get_type(resource.base_type_id);
+    for (const auto& resource : spirvResources.uniform_buffers) {
+        const auto& buffer_type  = compiler.get_type(resource.base_type_id);
         uint32_t    bufferSize   = compiler.get_declared_struct_size(buffer_type);
         uint32_t    binding      = compiler.get_decoration(resource.id, spv::DecorationBinding);
         int         member_count = buffer_type.member_types.size();
@@ -381,7 +395,7 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
 
         for (int i = 0; i < member_count; i++) {
             const std::string memberName   = compiler.get_member_name(buffer_type.self, i);
-            const auto       &memberType   = compiler.get_type(buffer_type.member_types[i]);
+            const auto&       memberType   = compiler.get_type(buffer_type.member_types[i]);
             uint32_t          memberOffset = compiler.type_struct_member_offset(buffer_type, i);
             uint32_t          memberSize   = compiler.get_declared_struct_member_size(buffer_type, i);
 
@@ -421,10 +435,10 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
 
     // Process sampled images
     YA_CORE_TRACE("Sampled images:");
-    for (const auto &resource : spirvResources.sampled_images) {
+    for (const auto& resource : spirvResources.sampled_images) {
         uint32_t    binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
         uint32_t    set     = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
-        const auto &type    = compiler.get_type(resource.type_id);
+        const auto& type    = compiler.get_type(resource.type_id);
 
         // Create resource
         ShaderReflection::Resource sampledImage;
@@ -458,11 +472,11 @@ auto getOption(bool bOptimized)
 
 
 
-bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string> &defines, std::vector<ir_t> &outSpv)
+bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string>& defines, std::vector<ir_t>& outSpv)
 {
     shaderc::Compiler compiler;
     auto              options = getOption(false);
-    for (const auto &def : defines)
+    for (const auto& def : defines)
     {
         options.AddMacroDefinition(def);
     }
@@ -487,7 +501,7 @@ bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view con
     return true;
 }
 
-std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombinedSource(const stdpath &filepath)
+std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombinedSource(const stdpath& filepath)
 {
     std::unordered_map<EShaderStage::T, std::string> shaderSources;
 
@@ -519,7 +533,7 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
         type                   = ut::str::trim(type);
 
         EShaderStage::T shader_type = EShaderStage::fromString(type);
-        YA_CORE_ASSERT(shader_type, "Invalid shader type specific");
+        // YA_CORE_ASSERT(shader_type, "Invalid shader type specific");
 
         // get the shader content range
         size_t nextLinePos = source.find_first_not_of(eolFlag, eol);
@@ -536,12 +550,12 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
     return shaderSources;
 }
 
-bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap)
+bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t& outSpvMap)
 {
     YA_CORE_INFO("Found spv shader files for {}: {} and {}", curFileName, vertFile, fragFile);
 
 
-    auto toSpirv = [](std::string_view ctx, const std::string &src, std::vector<ir_t> &spirv) {
+    auto toSpirv = [](std::string_view ctx, const std::string& src, std::vector<ir_t>& spirv) {
         if (src.size() % sizeof(ir_t) != 0)
         {
             YA_CORE_WARN("Cached vertex shader file size is not a multiple of ir_t size: {}", ctx);
@@ -583,7 +597,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
 
 
-bool GLSLProcessor::processCombinedSource(const stdpath &filepath, const std::vector<std::string> &defines, stage2spirv_t &outSpvMap)
+bool GLSLProcessor::processCombinedSource(const stdpath& filepath, const std::vector<std::string>& defines, stage2spirv_t& outSpvMap)
 {
     std::unordered_map<EShaderStage::T, std::string> shaderSources = preprocessCombinedSource(filepath);
 
@@ -595,7 +609,7 @@ bool GLSLProcessor::processCombinedSource(const stdpath &filepath, const std::ve
 
 
     // Compile
-    for (auto &&[stage, source] : shaderSources)
+    for (auto&& [stage, source] : shaderSources)
     {
         std::vector<ir_t> spv;
         if (!compileToSpv(filepath.string(), source, stage, defines, spv))
@@ -612,10 +626,11 @@ bool GLSLProcessor::processCombinedSource(const stdpath &filepath, const std::ve
 }
 
 
-std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc &ci)
+std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc& ci)
 {
 
     YA_CORE_ASSERT(ci.shaderName.ends_with(".glsl"), "Shader filename must end with .glsl, got: {}", ci.shaderName);
+
     curFileName = ut::str::replace(ci.shaderName, ".glsl", "");
 
     curFilePath = stdpath(shaderStoragePath) / ci.shaderName;
@@ -623,9 +638,6 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 
     // 1. detect file changed unimplemented for now
     // TODO: use hash to detect shader source change, and output to "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" and a "xxx.metadata" file
-
-    // C:\Users\dexzhou\1\craft\Neon\Engine\Intermediate\Shader\GLSL\HelloCube.vert.spv
-    // C:\Users\dexzhou\1\craft\Neon\Engine\Intermediate\Shader\GLSL\Test\HelloCube.vert.glsl
 
     // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
     // auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
@@ -636,6 +648,27 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
     //         return std::move(ret);
     //     }
     // }
+
+
+    // TODO: use a config file as options to remap to different single shader file
+    // if (ci.shaderName.ends_with(".ya.shader")) {
+    //     try {
+    //         auto j    = nlohmann::json::parse(ci.shaderName);
+    //         auto type = j["type"];
+    //         if (type.is_string() && type.get<std::string>() == "splits") {
+    //             // load from  different single shader file
+    //             auto vertFile = j["vertex"];
+    //             auto fragFile = j["fragment"];
+    //             auto geomFile = j["geometry"];
+    //         }
+    //     }
+    //     catch (const std::exception& e)
+    //     {
+    //         YA_CORE_ERROR("Failed to parse shader config file: {}", e.what());
+    //         return {};
+    //     }
+    // }
+
 
     ret.clear();
     // 3. load it from sources
@@ -648,7 +681,7 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
     }
 
     // Validate SPIR-V magic number
-    for (const auto &[stage, spirv] : ret) {
+    for (const auto& [stage, spirv] : ret) {
         if (spirv.empty() || spirv[0] != 0x07230203) {
             YA_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::T2Strings[stage]);
             YA_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::T2Strings[stage]);
