@@ -27,6 +27,9 @@ namespace ya::reflection::detail
 template <typename T>
 struct ExternalReflect;
 
+template <typename T>
+struct ExternalEnumReflect;
+
 // Constructor registration traits
 template <typename T, typename... Args>
 struct RegisterConstructorBase
@@ -75,8 +78,8 @@ struct has_external_reflect : std::false_type
 template <typename T>
 struct has_external_reflect<T, std::void_t<
                                    decltype(::ya::reflection::detail::ExternalReflect<T>::visit_properties(
-                                       std::declval<T &>(),
-                                       std::declval<int (*)(const char *, int &)>()))>> : std::true_type
+                                       std::declval<T&>(),
+                                       std::declval<int (*)(const char*, int&)>()))>> : std::true_type
 {};
 
 template <typename T>
@@ -89,7 +92,7 @@ inline constexpr bool has_external_reflect_v = has_external_reflect<T>::value;
 template <typename T>
 struct Visitor
 {
-    static void visit_properties(T &obj, auto &&visitor)
+    static void visit_properties(T& obj, auto&& visitor)
     {
         if constexpr (reflection::detail::has_external_reflect_v<T>) {
             ::ya::reflection::detail::ExternalReflect<T>::visit_properties(obj, std::forward<decltype(visitor)>(visitor));
@@ -103,13 +106,8 @@ struct Visitor
 template <>
 struct Visitor<void>
 {
-    static void visit_properties(auto &obj, auto &&visitor) {}
+    static void visit_properties(auto& obj, auto&& visitor) {}
 };
-
-inline type_index_t getRuntimeObjectType(const void *obj)
-{
-    // return ::ya::ECSRegistry::get().getRuntimeObjectType(obj);
-}
 
 
 // inline void make_pretty_type_name(std::string_view &name)
@@ -189,14 +187,14 @@ inline type_index_t getRuntimeObjectType(const void *obj)
             if constexpr (has_base_class) {                                                                                                       \
                 reg->template parentClass<base_t>();                                                                                              \
             }                                                                                                                                     \
-            visit_static_fields([&reg](const char *name, auto fieldPtr, auto meta) {                                                              \
+            visit_static_fields([&reg](const char* name, auto fieldPtr, auto meta) {                                                              \
                 reg->property(name, fieldPtr, meta);                                                                                              \
                                                                                                                                                   \
                 /* TODO: Move into reflects-core*/                                                                                                \
                 using FieldType = std::decay_t<decltype(std::declval<class_t>().*fieldPtr)>;                                                      \
-                auto &registry  = ClassRegistry::instance();                                                                                      \
-                if (auto *cls = registry.getClass(ya::type_index_v<class_t>)) {                                                                   \
-                    if (auto *prop = cls->getProperty(name)) {                                                                                    \
+                auto& registry  = ClassRegistry::instance();                                                                                      \
+                if (auto* cls = registry.getClass(ya::type_index_v<class_t>)) {                                                                   \
+                    if (auto* prop = cls->getProperty(name)) {                                                                                    \
                         ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop);                                        \
                     }                                                                                                                             \
                 }                                                                                                                                 \
@@ -208,25 +206,25 @@ inline type_index_t getRuntimeObjectType(const void *obj)
             ___YA_REFLECT_EXTENSION(ClassName)                                                                                                    \
         }                                                                                                                                         \
         template <typename Visitor>                                                                                                               \
-        static void visit_fields(void *obj, Visitor &&visitor)                                                                                    \
+        static void visit_fields(void* obj, Visitor&& visitor)                                                                                    \
         {                                                                                                                                         \
-            visit_static_fields([&obj, &visitor](const char *name, auto fieldPtr, auto /*meta*/) {                                                \
+            visit_static_fields([&obj, &visitor](const char* name, auto fieldPtr, auto /*meta*/) {                                                \
                 using ClassType     = class_t;                                                                                                    \
-                using FieldType     = std::decay_t<decltype(std::declval<ClassType &>().*fieldPtr)>;                                              \
-                FieldType &fieldRef = static_cast<ClassType *>(obj)->*fieldPtr;                                                                   \
+                using FieldType     = std::decay_t<decltype(std::declval<ClassType&>().*fieldPtr)>;                                               \
+                FieldType& fieldRef = static_cast<ClassType*>(obj)->*fieldPtr;                                                                    \
                 std::forward<Visitor>(visitor)(name, fieldRef);                                                                                   \
             });                                                                                                                                   \
         }                                                                                                                                         \
                                                                                                                                                   \
         /* Constructor registration using trait-based approach */                                                                                 \
         template <typename RegType>                                                                                                               \
-        static void register_constructors(RegType &reg)                                                                                           \
+        static void register_constructors(RegType& reg)                                                                                           \
         {                                                                                                                                         \
             register_constructors_impl(reg);                                                                                                      \
         }                                                                                                                                         \
                                                                                                                                                   \
         template <typename RegType>                                                                                                               \
-        static void register_constructors_impl(RegType &reg)                                                                                      \
+        static void register_constructors_impl(RegType& reg)                                                                                      \
         {                                                                                                                                         \
             using ConstructorTrait = ::ya::reflection::detail::RegisterConstructor<class_t>;                                                      \
             if constexpr (ConstructorTrait::has_custom_ctor) {                                                                                    \
@@ -240,12 +238,12 @@ inline type_index_t getRuntimeObjectType(const void *obj)
         }                                                                                                                                         \
                                                                                                                                                   \
         template <typename RegType, typename ConstructClassType, typename... Args>                                                                \
-        static void register_constructor_from_trait(RegType &reg, ::ya::reflection::detail::RegisterConstructorBase<ConstructClassType, Args...>) \
+        static void register_constructor_from_trait(RegType& reg, ::ya::reflection::detail::RegisterConstructorBase<ConstructClassType, Args...>) \
         {                                                                                                                                         \
             reg.template constructor<Args...>();                                                                                                  \
         }                                                                                                                                         \
         template <typename Visitor>                                                                                                               \
-        static void visit_static_fields(Visitor &&visitor)                                                                                        \
+        static void visit_static_fields(Visitor&& visitor)                                                                                        \
         {
 
 // 支持 1 个参数（无父类）或 2 个参数（有父类）
@@ -302,59 +300,36 @@ inline type_index_t getRuntimeObjectType(const void *obj)
 // 枚举反射宏 (YA_REFLECT_ENUM_*)
 // ============================================================================
 
-/**
- * @brief 开始枚举反射定义
- * @param EnumType 枚举类型（支持 enum class 和普通 enum）
- *
- * 用法:
- * YA_REFLECT_ENUM_BEGIN(ya::EPrimitiveGeometry)
- *     YA_REFLECT_ENUM_VALUE(None)
- *     YA_REFLECT_ENUM_VALUE(Cube)
- *     YA_REFLECT_ENUM_VALUE(Sphere)
- * YA_REFLECT_ENUM_END()
- *
- * NOTE: Uses delayed initialization via addPostStaticInitializer to ensure
- *       type_index_v<EnumType> is properly initialized (not 0).
- */
-#define YA_REFLECT_ENUM_BEGIN(EnumType)       \
-    namespace                                 \
-    {                                         \
-    struct _YA_ENUM_REFLECT_STRUCT_##__LINE__ \
-    {                                         \
-        using _EnumType = EnumType;           \
-        _YA_ENUM_REFLECT_STRUCT_##__LINE__()  \
-        {                                     \
-            ClassRegistry::instance().addPostStaticInitializer([]() {                   \
+
+#define YA_REFLECT_ENUM_BEGIN(EnumType)  \
+    namespace ya::reflection::detail     \
+    {                                    \
+    template <>                          \
+    struct ExternalEnumReflect<EnumType> \
+    {                                    \
+        struct _reflecting_type          \
+        {                                \
+            using _EnumType = EnumType;  \
+            _reflecting_type()           \
+            {                            \
+                ClassRegistry::instance().addPostStaticInitializer([]() {                   \
                 RegisterEnum<_EnumType> reg(#EnumType, ::ya::type_index_v<_EnumType>);  \
                 reg
 
-/**
- * @brief 注册枚举值（自动使用枚举成员名称）
- * @param ValueName 枚举值名称（不需要带枚举前缀）
- */
-#define YA_REFLECT_ENUM_VALUE(ValueName) \
-    .value(#ValueName, _EnumType::ValueName)
+#define YA_REFLECT_ENUM_VALUE(ValueName) .value(#ValueName, _EnumType::ValueName)
+#define YA_REFLECT_ENUM_VALUE_NAMED(ValueName, DisplayName) .value(DisplayName, _EnumType::ValueName)
 
-/**
- * @brief 注册枚举值（自定义显示名称）
- * @param ValueName 枚举值名称
- * @param DisplayName 自定义显示名称字符串
- */
-#define YA_REFLECT_ENUM_VALUE_NAMED(ValueName, DisplayName) \
-    .value(DisplayName, _EnumType::ValueName)
 
-/**
- * @brief 结束枚举反射定义
- */
 // clang-format off
-#define YA_REFLECT_ENUM_END()                                                           \
-                ;                                                                       \
-            });                                                                         \
-        }                                                                               \
-    };                                                                                  \
-    static _YA_ENUM_REFLECT_STRUCT_##__LINE__ _g_ya_enum_reflect_instance_##__LINE__;   \
+#define YA_REFLECT_ENUM_END()                                   \
+                    ;                                           \
+                });                                             \
+            }                                                   \
+        };                                                      \
+        static inline _reflecting_type _g_ya_enum_reflect_instance_;  \
+    };                                                        \
     }
-  // clang-format on
+// clang-format on
 
 
 
