@@ -94,22 +94,26 @@ vec3 getNormal()
 
 vec4 explode(vec4 position, vec3 normal)
 {
-    int explodeType = 1;
+    const int explodeType = 0;
     float magnitude = 2;
 
-    if(explodeType == 0){
-        // return position;
-        vec3 direction = normal * ((sin(uFrame.time)   + 1.0) * 0.8) * magnitude; 
+    if(explodeType == 0)
+    {
+        vec3 direction = normal * ((sin(uFrame.time)  + 1.0) * 0.8) * magnitude; 
         return position + vec4(direction, 0.0);
     }
-    else if(explodeType == 1)
+    else if(explodeType == 1) // based on triangle
     {
-        // based on triangle
         vec3 triangleCenter = (vPos[0] + vPos[1] + vPos[2]) / 3.0;
         // get model world pos by model matrix
-        vec3 modelWorldPos =  pc.modelMat[3].xyz;
+        // vec3 modelWorldPos =  pc.modelMat[3].xyz;
+        vec3 modelWorldPos = vec3(
+            pc.modelMat[0].w,
+            pc.modelMat[1].w,
+            pc.modelMat[2].w
+        );
         vec3 explosionDir = normalize(triangleCenter - modelWorldPos);
-        float explosionStrength =  sin(uFrame.time) + 1.0 * 0.8  * magnitude;
+        float explosionStrength =  (sin(uFrame.time) + 1.0) * 0.8  * magnitude;
         return position + vec4(explosionDir * explosionStrength, 0.0);
     }
 
@@ -121,8 +125,9 @@ void explodeEffect()
     vec3 normal = getNormal();
     mat4 /*m*/vp = uFrame.projMat * uFrame.viewMat; //* pc.modelMat; see vertex shader already transformed by the model matrix
     for(int i = 0; i < 3; i++){
-        // vec4 pos =  explode (gl_in[i].gl_Position, normal);
-        vec4 pos =  /*m*/vp * explode( vec4( vPos[i], 1.0), normal);
+        vec4 pos =  vec4(vPos[i], 1.0);  // world-pos
+        pos =  /*m*/vp * explode( pos, normal);
+        
         gl_Position = pos;
         gPos = pos.xyz;
         gTexcoord = vTexcoord[i];

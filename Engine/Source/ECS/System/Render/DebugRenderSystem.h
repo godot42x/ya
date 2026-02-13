@@ -6,24 +6,29 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 
-#include "glm/gtc/type_ptr.hpp"
-#include "glm/mat4x4.hpp"
-#include "glm/vec4.hpp"
-#include "imgui.h"
 
 namespace ya
 {
 
 struct DebugRenderSystem : public IRenderSystem
 {
+    enum EMode
+    {
+        None = 0,
+        NormalColor,
+        NormalDir,
+        Depth,
+        UV,
+    };
+
     struct DebugUBO
     {
         glm::mat4 projection{1.f};
         glm::mat4 view{1.f};
         alignas(8) glm::ivec2 resolution{0, 0};
-        alignas(4) int32_t mode = 0; // 0:none, 1:normal, 2:depth, 3:uv
-        alignas(4) float time   = 0.f;
-        glm::vec4 floatParam    = glm::vec4(0.0f);
+        alignas(4) int mode = 0; // 0:none, 1:normal, 2:depth, 3:uv
+        alignas(4) float time = 0.f;
+        glm::vec4 floatParam  = glm::vec4(0.0f);
     };
 
     struct ModelPushConstant
@@ -32,6 +37,7 @@ struct DebugRenderSystem : public IRenderSystem
     };
 
     DebugUBO uDebug;
+    EMode _mode;
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "DebugRenderSystem_PipelineLayout",
@@ -58,7 +64,7 @@ struct DebugRenderSystem : public IRenderSystem
         },
     };
 
-    GraphicsPipelineCreateInfo _pipelineDesc;
+    GraphicsPipelineCreateInfo _pipelineCI;
 
     stdptr<IDescriptorSetLayout> _dsl;
     stdptr<IPipelineLayout>      _pipelineLayout;
@@ -80,4 +86,13 @@ struct DebugRenderSystem : public IRenderSystem
     void updateUBO(FrameContext* ctx);
 };
 
+
 } // namespace ya
+
+YA_REFLECT_ENUM_BEGIN(::ya::DebugRenderSystem::EMode)
+YA_REFLECT_ENUM_VALUE(None)
+YA_REFLECT_ENUM_VALUE(NormalColor)
+YA_REFLECT_ENUM_VALUE(NormalDir)
+YA_REFLECT_ENUM_VALUE(Depth)
+YA_REFLECT_ENUM_VALUE(UV)
+YA_REFLECT_ENUM_END()

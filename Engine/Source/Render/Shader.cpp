@@ -10,10 +10,12 @@
 #include "Shader.h"
 
 
+#include <shaderc/shaderc.h>
 #include <shaderc/shaderc.hpp>
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
+
 
 #include <spirv_cross/spirv.h>
 #include <spirv_cross/spirv_cross.hpp>
@@ -466,16 +468,69 @@ auto getOption(bool bOptimized)
     if (optimize) {
         options.SetOptimizationLevel(shaderc_optimization_level_performance);
     }
-    options.AddMacroDefinition("YA_PLATFORM_VULKAN 1");
+    options.AddMacroDefinition("YA_PLATFORM_VULKAN", "1");
     return options;
 }
+
+struct ShadercIncludeResultData
+{
+    shaderc_include_result result{};
+    std::string            sourceName;
+    std::string            content;
+};
+
+struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
+{
+    shaderc_include_result* GetInclude(const char* requested_source,
+                                       shaderc_include_type /*type*/,
+                                       const char* requesting_source,
+                                       size_t /*include_depth*/) override
+    {
+        auto* data = new ShadercIncludeResultData();
+
+        auto reqPath = std::filesystem::path(requested_source ? requested_source : "");
+        auto srcPath = std::filesystem::path(requesting_source ? requesting_source : "");
+
+        std::filesystem::path resolvedPath;
+        if (reqPath.is_absolute()) {
+            resolvedPath = reqPath;
+        }
+        else {
+            resolvedPath = (srcPath.parent_path() / reqPath).lexically_normal();
+        }
+
+        data->sourceName = resolvedPath.generic_string();
+        if (!VirtualFileSystem::get()->readFileToString(data->sourceName, data->content)) {
+            data->content = std::format("#error \"Failed to include file: {}\"\n", data->sourceName);
+            YA_CORE_ERROR("Shader include failed: '{}' requested by '{}'", data->sourceName, requesting_source ? requesting_source : "");
+        }
+
+        data->result.source_name        = data->sourceName.c_str();
+        data->result.source_name_length = data->sourceName.size();
+        data->result.content            = data->content.c_str();
+        data->result.content_length     = data->content.size();
+        data->result.user_data          = data;
+        return &data->result;
+    }
+
+    void ReleaseInclude(shaderc_include_result* include_result) override
+    {
+        if (!include_result) {
+            return;
+        }
+        auto* data = static_cast<ShadercIncludeResultData*>(include_result->user_data);
+        delete data;
+    }
+};
 
 
 
 bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string>& defines, std::vector<ir_t>& outSpv)
 {
     shaderc::Compiler compiler;
-    auto              options = getOption(false);
+
+    auto options = getOption(false);
+    options.SetIncluder(std::make_unique<ShadercVfsIncluder>());
     for (const auto& def : defines)
     {
         options.AddMacroDefinition(def);
@@ -486,7 +541,7 @@ bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view con
         content.data(),
         EShaderStage::toShadercType(stage),
         filename.data(),
-        stage == EShaderStage::Vertex ? "vs_main\0" : "fs_main\0",
+        "main",
         options);
 
     if (result.GetCompilationStatus() != shaderc_compilation_status_success)
@@ -543,10 +598,10 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
 
         // 计算这个shader stage在原始文件中的起始行号
         size_t lineNumber = std::count(source.begin(), source.begin() + nextLinePos, '\n');
-        
+
         // 提取shader代码
         std::string codes = std::string(source.substr(nextLinePos, pos - count));
-        
+
         // 在代码前面填充空白行，使错误行号能够直接对应到原始文件
         std::string paddedCodes;
         paddedCodes.reserve(lineNumber + codes.size());

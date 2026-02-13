@@ -330,14 +330,14 @@ void App::init(AppDesc ci)
                                              .depthAttachmentFormat   = DEPTH_FORMAT,
                                              .stencilAttachmentFormat = EFormat::Undefined,
                                          });
-    // addRenderSystem<DebugRenderSystem>(nullptr,
-    //                                    PipelineRenderingInfo{
-    //                                        .label                   = "DebugRender Pipeline",
-    //                                        .viewMask                = 0,
-    //                                        .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-    //                                        .depthAttachmentFormat   = DEPTH_FORMAT,
-    //                                        .stencilAttachmentFormat = EFormat::Undefined,
-    //                                    });
+    addRenderSystem<DebugRenderSystem>(nullptr,
+                                       PipelineRenderingInfo{
+                                           .label                   = "DebugRender Pipeline",
+                                           .viewMask                = 0,
+                                           .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                                           .depthAttachmentFormat   = DEPTH_FORMAT,
+                                           .stencilAttachmentFormat = EFormat::Undefined,
+                                       });
     _deleter.push("MaterialSystems", [this](void*) {
         _renderSystems.clear();
     });
@@ -360,7 +360,7 @@ void App::init(AppDesc ci)
     _skyboxSystem->_cubeMapDS                                                             = _skyBoxCubeMapDS;
     _name2renderSystem["PhongMaterialSystem"]->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
 
-    // _name2renderSystem["DebugRenderSystem"]->bEnabled                                     = false;
+    _name2renderSystem["DebugRenderSystem"]->bEnabled = false;
 
 
     // MARK: tex-> Postprocessing

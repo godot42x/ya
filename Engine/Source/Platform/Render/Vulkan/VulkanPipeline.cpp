@@ -13,12 +13,12 @@ namespace ya
 {
 
 void VulkanPipelineLayout::create(const std::vector<PushConstantRange>             pushConstants,
-                                  const std::vector<stdptr<IDescriptorSetLayout>> &layouts)
+                                  const std::vector<stdptr<IDescriptorSetLayout>>& layouts)
 {
     // _ci = ci;
 
     std::vector<::VkPushConstantRange> vkPSs;
-    for (const auto &pushConstant : pushConstants) {
+    for (const auto& pushConstant : pushConstants) {
         vkPSs.push_back(::VkPushConstantRange{
             .stageFlags = toVk(pushConstant.stageFlags),
             .offset     = pushConstant.offset,
@@ -77,7 +77,7 @@ void VulkanPipelineLayout::create(const std::vector<PushConstantRange>          
     // } uLight;
 
     std::vector<VkDescriptorSetLayout> vkLayouts;
-    for (const auto &layout : layouts) {
+    for (const auto& layout : layouts) {
         vkLayouts.push_back(layout->getHandleAs<VkDescriptorSetLayout>());
     }
 
@@ -120,7 +120,7 @@ void VulkanPipeline::cleanup()
     VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
 }
 
-bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
+bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 {
     YA_PROFILE_FUNCTION_LOG();
     _ci             = ci;
@@ -128,17 +128,20 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo &ci)
     try {
         createPipelineInternal();
     }
-    catch (const std::exception &e) {
+    catch (const std::exception& e) {
         YA_CORE_ERROR("Failed to create pipeline: {}", e.what());
         return false;
     }
     return true;
 }
 
-void VulkanPipeline::reloadShaders()
+void VulkanPipeline::reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci)
 {
     auto shaderStorage = ya::App::get()->getShaderStorage();
     shaderStorage->removeCache(_ci.shaderDesc.shaderName);
+    if(ci.has_value()){
+        _ci = ci.value();
+    }
     recreate(_ci);
 }
 
@@ -168,7 +171,7 @@ void VulkanPipeline::createPipelineInternal()
 
             stage2Spirv = shaderStorage->load(_ci.shaderDesc);
         }
-        catch (const std::exception &e) {
+        catch (const std::exception& e) {
             YA_CORE_ERROR("Failed to load shader: {}", e.what());
             return;
         }
@@ -182,10 +185,10 @@ void VulkanPipeline::createPipelineInternal()
     // Create shader modules
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
     auto fragShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Fragment));
-    deleter.push("", vertShaderModule, [this](void *handle) {
+    deleter.push("", vertShaderModule, [this](void* handle) {
         vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
     });
-    deleter.push("", fragShaderModule, [this](void *handle) {
+    deleter.push("", fragShaderModule, [this](void* handle) {
         vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
     });
 
@@ -217,19 +220,19 @@ void VulkanPipeline::createPipelineInternal()
 
     if (stage2Spirv->count(EShaderStage::Geometry)) {
         auto geomShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Geometry));
-        deleter.push("", geomShaderModule, [this](void *handle) {
+        deleter.push("", geomShaderModule, [this](void* handle) {
             vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
         });
         _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, geomShaderModule, std::format("{}_geom", _name.toString()).c_str());
         shaderStages.push_back(VkPipelineShaderStageCreateInfo{
-                                        .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                        .pNext               = nullptr,
-                                        .flags               = 0,
-                                        .stage               = VK_SHADER_STAGE_GEOMETRY_BIT,
-                                        .module              = geomShaderModule,
-                                        .pName               = "main",
-                                        .pSpecializationInfo = {},
-                                        });
+            .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .pNext               = nullptr,
+            .flags               = 0,
+            .stage               = VK_SHADER_STAGE_GEOMETRY_BIT,
+            .module              = geomShaderModule,
+            .pName               = "main",
+            .pSpecializationInfo = {},
+        });
     }
 
     // Configure vertex input based on configuration
@@ -237,13 +240,13 @@ void VulkanPipeline::createPipelineInternal()
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
     std::vector<VkVertexInputBindingDescription>   vertexBindingDescriptions;
 
-    const auto &config = _ci.shaderDesc;
+    const auto& config = _ci.shaderDesc;
 
     if (_ci.shaderDesc.bDeriveFromShader) {
         // Get vertex input info from shader reflection
         auto vertexReflectInfo = shaderStorage->getProcessor()->reflect(EShaderStage::Vertex, stage2Spirv->at(EShaderStage::Vertex));
 
-        auto spirvType2VulkanFormat = [](const auto &type) -> VkFormat {
+        auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat {
             if (type.vecsize == 3 && type.basetype == 0)
                 return VK_FORMAT_R32G32B32_SFLOAT;
             if (type.vecsize == 4 && type.basetype == 0)
@@ -253,7 +256,7 @@ void VulkanPipeline::createPipelineInternal()
             return VK_FORMAT_R32G32B32_SFLOAT; // Default fallback
         };
 
-        for (auto &input : vertexReflectInfo.inputs) {
+        for (auto& input : vertexReflectInfo.inputs) {
             vertexAttributeDescriptions.push_back({
                 .location = input.location,
                 .binding  = 0,
@@ -272,7 +275,7 @@ void VulkanPipeline::createPipelineInternal()
     }
     else {
         // Use provided vertex layout configuration
-        for (const auto &bufferDesc : config.vertexBufferDescs) {
+        for (const auto& bufferDesc : config.vertexBufferDescs) {
             vertexBindingDescriptions.push_back({
                 .binding   = bufferDesc.slot,
                 .stride    = bufferDesc.pitch,
@@ -280,7 +283,7 @@ void VulkanPipeline::createPipelineInternal()
             });
         }
 
-        for (const auto &attr : config.vertexAttributes) {
+        for (const auto& attr : config.vertexAttributes) {
             vertexAttributeDescriptions.push_back({
                 .location = attr.location,
                 .binding  = attr.bufferSlot,
@@ -309,7 +312,7 @@ void VulkanPipeline::createPipelineInternal()
 
 
     std::vector<VkViewport> viewports;
-    for (const auto &viewport : _ci.viewportState.viewports) {
+    for (const auto& viewport : _ci.viewportState.viewports) {
         viewports.push_back({
             .x        = viewport.x,
             .y        = viewport.y,
@@ -320,10 +323,10 @@ void VulkanPipeline::createPipelineInternal()
         });
     }
     std::vector<VkRect2D> scissors;
-    for (const auto &scissor : _ci.viewportState.scissors) {
+    for (const auto& scissor : _ci.viewportState.scissors) {
         scissors.push_back({
             .offset = {scissor.offsetX, scissor.offsetY},
-            .extent = {  scissor.width,  scissor.height},
+            .extent = {scissor.width, scissor.height},
         });
     }
     VkPipelineViewportStateCreateInfo viewportStateCI{
@@ -370,7 +373,7 @@ void VulkanPipeline::createPipelineInternal()
     };
 
     std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments;
-    for (const auto &attachment : _ci.colorBlendState.attachments) {
+    for (const auto& attachment : _ci.colorBlendState.attachments) {
         VkPipelineColorBlendAttachmentState colorBlendAttachment{
             .blendEnable         = attachment.bBlendEnable ? VK_TRUE : VK_FALSE,
             .srcColorBlendFactor = toVk(attachment.srcColorBlendFactor),
@@ -393,11 +396,11 @@ void VulkanPipeline::createPipelineInternal()
         .attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size()),
         .pAttachments    = colorBlendAttachments.data(),
         .blendConstants  = {
-                            _ci.colorBlendState.blendConstants[0],
-                            _ci.colorBlendState.blendConstants[1],
-                            _ci.colorBlendState.blendConstants[2],
-                            _ci.colorBlendState.blendConstants[3],
-                            },
+            _ci.colorBlendState.blendConstants[0],
+            _ci.colorBlendState.blendConstants[1],
+            _ci.colorBlendState.blendConstants[2],
+            _ci.colorBlendState.blendConstants[3],
+        },
     };
 
     std::vector<VkDynamicState> dynamicStates = {};
@@ -462,9 +465,9 @@ void VulkanPipeline::createPipelineInternal()
     else
     {
         // WHY DELETER? RAII will destruct outside this case, extend this life cycle until created pipeline done
-        auto colorAttachmentRef = deleter.push("", new std::vector<VkFormat>(), [](void *handle) {
+        auto colorAttachmentRef = deleter.push("", new std::vector<VkFormat>(), [](void* handle) {
             if (handle) {
-                delete static_cast<std::vector<VkFormat> *>(handle);
+                delete static_cast<std::vector<VkFormat>*>(handle);
             }
         });
         YA_CORE_ASSERT(_ci.pipelineRenderingInfo.colorAttachmentFormats.size() > 0, "Not a valid dyn rendering pipeline creation info");
@@ -486,8 +489,8 @@ void VulkanPipeline::createPipelineInternal()
             .stencilAttachmentFormat = toVk(_ci.pipelineRenderingInfo.stencilAttachmentFormat),
         });
         // auto ref  = deleter.add(plRI, nullptr);
-        auto ref = deleter.push("", plRI, [](void *handle) {
-            delete static_cast<VkPipelineRenderingCreateInfo *>(handle);
+        auto ref = deleter.push("", plRI, [](void* handle) {
+            delete static_cast<VkPipelineRenderingCreateInfo*>(handle);
         });
 
         // 关键：将动态渲染配置挂到 gplCI 的 pNext 上
@@ -521,32 +524,8 @@ void VulkanPipeline::createPipelineInternal()
 }
 
 
-// void VulkanPipeline::createDefaultSampler()
-// {
-//     VkSamplerCreateInfo samplerInfo{
-//         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-//         .magFilter               = VK_FILTER_LINEAR,
-//         .minFilter               = VK_FILTER_LINEAR,
-//         .mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-//         .addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-//         .addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-//         .addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-//         .mipLodBias              = 0.0f,
-//         .anisotropyEnable        = VK_TRUE,
-//         .maxAnisotropy           = 16.0f,
-//         .compareEnable           = VK_FALSE,
-//         .compareOp               = VK_COMPARE_OP_ALWAYS,
-//         .minLod                  = 0.0f,
-//         .maxLod                  = 0.0f,
-//         .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-//         .unnormalizedCoordinates = VK_FALSE,
-//     };
 
-//     VkResult result = vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &m_defaultTextureSampler);
-//     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create texture sampler!");
-// }
-
-VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t> &spv_binary)
+VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t>& spv_binary)
 {
     VkShaderModuleCreateInfo createInfo{
         .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,

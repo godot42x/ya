@@ -471,23 +471,19 @@ void PhongMaterialSystem::onRenderGUI()
         }
     }
 
-    ImGui::Text("Directional Light");
-    ImGui::Indent();
-    {
+    if (TreeNode("Directional Light")) {
         ya::RenderContext ctx;
         ya::renderReflectedType("DirectionalLight", ya::type_index_v<PhongMaterialSystem::DirectionalLightData>, &uLight.dirLight, ctx);
+        TreePop();
     }
-    ImGui::Unindent();
-    ImGui::Separator();
 
 
-    if (ImGui::CollapsingHeader("Debug Options", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Indent();
+    if (ImGui::TreeNode("Debug Options")) {
         ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
         ImGui::Checkbox("Debug Depth", &uDebug.bDebugDepth);
         ImGui::Checkbox("Debug UV", &uDebug.bDebugUV);
         ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
-        ImGui::Unindent();
+        TreePop();
     }
 };
 

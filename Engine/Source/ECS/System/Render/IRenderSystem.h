@@ -30,6 +30,7 @@ struct IRenderSystem
     std::shared_ptr<IGraphicsPipeline> _pipeline;
 
     IRenderSystem(const std::string& label) : _label(label) {}
+    virtual ~IRenderSystem() = default;
 
     virtual void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) = 0;
     virtual void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)                                 = 0;
@@ -50,7 +51,6 @@ struct IRenderSystem
         if (!bOpen) {
             return;
         }
-
         ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
         ImGui::Checkbox("Enabled", &bEnabled);
 
@@ -75,7 +75,7 @@ struct IRenderSystem
             }
         }
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
         if (ImGui::Button("Reload Shaders")) {
             reloadShaders();
         }
@@ -85,10 +85,10 @@ struct IRenderSystem
         ImGui::TreePop();
     }
 
-    virtual void reloadShaders()
+    virtual void reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {})
     {
         if (_pipeline) {
-            _pipeline->reloadShaders();
+            _pipeline->reloadShaders(ci);
         }
     }
 
@@ -106,7 +106,10 @@ struct IRenderSystem
     const std::string& getLabel() const { return _label; }
 
   protected:
-    virtual void onRenderGUI() {}
+    virtual void onRenderGUI()
+    {
+        ImGui::Separator();
+    }
 };
 
 } // namespace ya

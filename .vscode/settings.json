@@ -26,6 +26,7 @@
         "gtest",
         "HLSL",
         "imguizmo",
+        "Includer",
         "Instrumentor",
         "ivec",
         "LGUI",

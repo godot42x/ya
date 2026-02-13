@@ -18,12 +18,6 @@ enum T
 
 };
 
-YA_REFLECT_ENUM_BEGIN(ERenderingLayer::T)
-YA_REFLECT_ENUM_VALUE(Opaque)
-YA_REFLECT_ENUM_VALUE(AlphaTest)
-YA_REFLECT_ENUM_VALUE(Translucent)
-YA_REFLECT_ENUM_VALUE(Additive)
-YA_REFLECT_ENUM_END()
 
 
 struct RenderComponent : public IComponent
@@ -38,3 +32,10 @@ struct RenderComponent : public IComponent
 
 
 }; // namespace ya
+
+YA_REFLECT_ENUM_BEGIN(ya::ERenderingLayer::T)
+YA_REFLECT_ENUM_VALUE(Opaque)
+YA_REFLECT_ENUM_VALUE(AlphaTest)
+YA_REFLECT_ENUM_VALUE(Translucent)
+YA_REFLECT_ENUM_VALUE(Additive)
+YA_REFLECT_ENUM_END()

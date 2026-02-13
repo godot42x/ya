@@ -6,6 +6,10 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Scene/Scene.h"
+#include "glm/gtc/type_ptr.hpp"
+#include "glm/mat4x4.hpp"
+#include "glm/vec4.hpp"
+#include "imgui.h"
 
 namespace ya
 {
@@ -26,7 +30,7 @@ void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingI
         _pipelineLayoutDesc.pushConstants,
         dslVec);
 
-    _pipelineDesc = GraphicsPipelineCreateInfo{
+    _pipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = renderPass,
         .pipelineRenderingInfo = pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
@@ -76,7 +80,7 @@ void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingI
         },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = true,
-            .bDepthWriteEnable      = false,
+            .bDepthWriteEnable      = true,
             .depthCompareOp         = ECompareOp::LessOrEqual,
             .bDepthBoundsTestEnable = false,
             .bStencilTestEnable     = false,
@@ -119,7 +123,7 @@ void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingI
     };
 
     _pipeline = IGraphicsPipeline::create(render);
-    _pipeline->recreate(_pipelineDesc);
+    _pipeline->recreate(_pipelineCI);
 
     _dsp = IDescriptorPool::create(
         render,
@@ -228,7 +232,28 @@ void DebugRenderSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
 
 void DebugRenderSystem::onRenderGUI()
 {
-    ImGui::InputInt("Debug Mode", &uDebug.mode);
+    RenderContext ctx;
+    ya::renderReflectedType("Debug Mode",
+                            ya::type_index_v<DebugRenderSystem::EMode>,
+                            &_mode,
+                            ctx,
+                            0,
+                            nullptr);
+    if (ctx.hasModifications()) {
+        if (_mode == EMode::NormalDir) {
+            _pipelineCI.shaderDesc.defines = {
+                "DEBUG_NORMAL_DIR",
+            };
+            reloadShaders(_pipelineCI);
+        }
+        else {
+            _pipelineCI.shaderDesc.defines = {};
+            if (uDebug.mode == (int)EMode::NormalDir) {
+                reloadShaders(_pipelineCI);
+            }
+        }
+        uDebug.mode = (int)_mode;
+    }
     ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
 }
 
