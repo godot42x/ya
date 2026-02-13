@@ -1393,8 +1393,6 @@ void App::onSceneActivated(Scene* scene)
 {
     _editorLayer->setSceneContext(scene);
 
-    _skyboxSystem->preload();
-
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
 }

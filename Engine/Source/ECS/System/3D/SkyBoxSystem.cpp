@@ -178,7 +178,7 @@ void SkyBoxSystem::onDestroy()
 {
 }
 
-void SkyBoxSystem::preload()
+void SkyBoxSystem::updateSkyboxCubeMap()
 {
     auto scene = App::get()->getSceneManager()->getActiveScene();
     for (const auto& [entity, sc, mc] :
@@ -197,6 +197,7 @@ void SkyBoxSystem::preload()
                         &tv),
                 },
                 {});
+            sc.bDirty = false;
         }
     }
 }
@@ -217,21 +218,21 @@ void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameCont
         return;
     }
 
-    if (skyboxComp->bDirty) {
-        skyboxComp->bDirty = false;
-        TextureView tv     = TextureView::create(skyboxComp->cubemapTexture, _sampler3D);
+    // if (skyboxComp->bDirty) {
+    //     skyboxComp->bDirty = false;
+    //     TextureView tv     = TextureView::create(skyboxComp->cubemapTexture, _sampler3D);
 
-        auto render = App::get()->getRender();
-        render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genSingleTextureViewWrite(
-                    _cubeMapDS,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    &tv),
-            },
-            {});
-    }
+    //     auto render = App::get()->getRender();
+    //     render->getDescriptorHelper()->updateDescriptorSets(
+    //         {
+    //             IDescriptorSetHelper::genSingleTextureViewWrite(
+    //                 _cubeMapDS,
+    //                 0,
+    //                 EPipelineDescriptorType::CombinedImageSampler,
+    //                 &tv),
+    //         },
+    //         {});
+    // }
 
 
     // MARK: Set Viewport and Scissor
