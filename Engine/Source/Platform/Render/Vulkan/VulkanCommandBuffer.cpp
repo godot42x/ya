@@ -14,11 +14,13 @@ namespace ya
 {
 
 static void collectRenderTargetTransitions(
-    IRenderTarget                              *renderTarget,
+    IRenderTarget*                              renderTarget,
     bool                                        useInitialLayout,
-    std::vector<VulkanImage::LayoutTransition> &outTransitions,
+    std::vector<VulkanImage::LayoutTransition>& outTransitions,
     EImageLayout::T                             colorOverrideLayout = EImageLayout::Undefined,
-    EImageLayout::T                             depthOverrideLayout = EImageLayout::Undefined)
+    EImageLayout::T                             depthOverrideLayout = EImageLayout::Undefined,
+    EImageLayout::T                             resolveOverrideLayout = EImageLayout::Undefined
+)
 {
     if (!renderTarget) {
         return;
@@ -29,9 +31,10 @@ static void collectRenderTargetTransitions(
         return;
     }
 
-    const auto &colorDescs    = renderTarget->getColorAttachmentDescs();
-    const auto &colorTextures = curFrameBuffer->getColorTextures();
-    const auto &depthDesc     = renderTarget->getDepthAttachmentDesc();
+    const auto& colorDescs    = renderTarget->getColorAttachmentDescs();
+    const auto& colorTextures = curFrameBuffer->getColorTextures();
+    const auto& depthDesc     = renderTarget->getDepthAttachmentDesc();
+    const auto& resolveDesc   = renderTarget->getResolveAttachmentDesc();
 
     const auto colorCount = std::min(colorTextures.size(), colorDescs.size());
     for (size_t i = 0; i < colorCount; ++i) {
@@ -48,16 +51,16 @@ static void collectRenderTargetTransitions(
             }
         }
         if (auto colorImage = colorTextures[i]->getImage()) {
-            if (auto vkImage = dynamic_cast<VulkanImage *>(colorImage)) {
+            if (auto vkImage = dynamic_cast<VulkanImage*>(colorImage)) {
                 outTransitions.emplace_back(vkImage, targetLayout);
             }
         }
     }
 
-    if (depthDesc.format != EFormat::Undefined) {
+    if (depthDesc){
         auto targetLayout = depthOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
-            targetLayout = useInitialLayout ? depthDesc.initialLayout : depthDesc.finalLayout;
+            targetLayout = useInitialLayout ? depthDesc->initialLayout : depthDesc->finalLayout;
         }
         if (targetLayout == EImageLayout::Undefined) {
             if (useInitialLayout) {
@@ -69,8 +72,24 @@ static void collectRenderTargetTransitions(
         }
         if (auto depthTex = curFrameBuffer->getDepthTexture()) {
             if (auto depthImage = depthTex->getImage()) {
-                if (auto vkImage = dynamic_cast<VulkanImage *>(depthImage)) {
+                if (auto vkImage = dynamic_cast<VulkanImage*>(depthImage)) {
                     outTransitions.emplace_back(vkImage, targetLayout);
+                }
+            }
+        }
+    }
+
+    if(resolveDesc) {
+        auto targetLayout = resolveOverrideLayout;
+        if (targetLayout == EImageLayout::Undefined) {
+            targetLayout = useInitialLayout ? resolveDesc->initialLayout : resolveDesc->finalLayout;
+        }
+        if (targetLayout != EImageLayout::Undefined) {
+            if (auto resolveTex = curFrameBuffer->getColorTexture(0)) {
+                if (auto resolveImage = resolveTex->getImage()) {
+                    if (auto vkImage = dynamic_cast<VulkanImage*>(resolveImage)) {
+                        outTransitions.emplace_back(vkImage, targetLayout);
+                    }
                 }
             }
         }
@@ -82,7 +101,7 @@ PFN_vkCmdBeginRenderingKHR VulkanCommandBuffer::s_vkCmdBeginRenderingKHR = nullp
 PFN_vkCmdEndRenderingKHR   VulkanCommandBuffer::s_vkCmdEndRenderingKHR   = nullptr;
 PFN_vkCmdSetPolygonModeEXT VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = nullptr;
 
-VulkanCommandPool::VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, VkCommandPoolCreateFlags flags)
+VulkanCommandPool::VulkanCommandPool(VulkanRender* render, VulkanQueue* queue, VkCommandPoolCreateFlags flags)
 {
     _render = render;
     VkCommandPoolCreateInfo ci{
@@ -97,7 +116,7 @@ VulkanCommandPool::VulkanCommandPool(VulkanRender *render, VulkanQueue *queue, V
     YA_CORE_TRACE("Created command pool: {} success, queue family: {}", (uintptr_t)_handle, queue->_familyIndex);
 }
 
-bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer &outCommandBuffer)
+bool VulkanCommandPool::allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer& outCommandBuffer)
 {
     VkCommandBufferAllocateInfo allocInfo{
         .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -162,12 +181,12 @@ void VulkanCommandBuffer::reset()
 
 // ========== Recording Mode: Internal execute implementations ==========
 
-void VulkanCommandBuffer::executeBindPipeline(IGraphicsPipeline *pipeline)
+void VulkanCommandBuffer::executeBindPipeline(IGraphicsPipeline* pipeline)
 {
     vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandleAs<VkPipeline>());
 }
 
-void VulkanCommandBuffer::executeBindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset)
+void VulkanCommandBuffer::executeBindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset)
 {
     if (!buffer) return;
 
@@ -176,7 +195,7 @@ void VulkanCommandBuffer::executeBindVertexBuffer(uint32_t binding, const IBuffe
     vkCmdBindVertexBuffers(_commandBuffer, binding, 1, &vkBuffer, &vkOffset);
 }
 
-void VulkanCommandBuffer::executeBindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices)
+void VulkanCommandBuffer::executeBindIndexBuffer(IBuffer* buffer, uint64_t offset, bool use16BitIndices)
 {
     if (!buffer) return;
 
@@ -237,7 +256,7 @@ void VulkanCommandBuffer::executeSetPolygonMode(EPolygonMode::T polygonMode)
     }
 }
 
-void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo &info)
+void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo& info)
 {
     if (_currentRenderingMode == ERenderingMode::RenderPass) {
         // End traditional render pass
@@ -268,15 +287,15 @@ void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo &info)
     _currentRenderingMode = ERenderingMode::None;
 }
 
-void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout                        *pipelineLayout,
+void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                                                     uint32_t                                firstSet,
-                                                    const std::vector<DescriptorSetHandle> &descriptorSets,
-                                                    const std::vector<uint32_t>            &dynamicOffsets)
+                                                    const std::vector<DescriptorSetHandle>& descriptorSets,
+                                                    const std::vector<uint32_t>&            dynamicOffsets)
 {
     std::vector<VkDescriptorSet> vkDescriptorSets;
     vkDescriptorSets.reserve(descriptorSets.size());
 
-    for (const auto &ds : descriptorSets)
+    for (const auto& ds : descriptorSets)
     {
         vkDescriptorSets.push_back(ds.as<VkDescriptorSet>());
     }
@@ -292,11 +311,11 @@ void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout             
         dynamicOffsets.empty() ? nullptr : dynamicOffsets.data());
 }
 
-void VulkanCommandBuffer::executePushConstants(IPipelineLayout *pipelineLayout,
+void VulkanCommandBuffer::executePushConstants(IPipelineLayout* pipelineLayout,
                                                EShaderStage::T  stages,
                                                uint32_t         offset,
                                                uint32_t         size,
-                                               const void      *data)
+                                               const void*      data)
 {
     VkShaderStageFlags vkStages = 0;
     if (stages & EShaderStage::Vertex) vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
@@ -313,7 +332,7 @@ void VulkanCommandBuffer::executePushConstants(IPipelineLayout *pipelineLayout,
         data);
 }
 
-void VulkanCommandBuffer::executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
+void VulkanCommandBuffer::executeCopyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
                                             uint64_t srcOffset, uint64_t dstOffset)
 {
     if (!src || !dst) return;
@@ -332,16 +351,16 @@ void VulkanCommandBuffer::executeCopyBuffer(IBuffer *src, IBuffer *dst, uint64_t
         &copyRegion);
 }
 
-void VulkanCommandBuffer::copyBufferToImage(IBuffer *srcBuffer,
-                                            IImage *dstImage, EImageLayout::T dstImageLayout,
-                                            const std::vector<BufferImageCopy> &regions)
+void VulkanCommandBuffer::copyBufferToImage(IBuffer* srcBuffer,
+                                            IImage* dstImage, EImageLayout::T dstImageLayout,
+                                            const std::vector<BufferImageCopy>& regions)
 {
     if (!srcBuffer || !dstImage || regions.empty()) return;
 
     std::vector<VkBufferImageCopy> vkRegions;
     vkRegions.reserve(regions.size());
 
-    for (const auto &region : regions) {
+    for (const auto& region : regions) {
         VkBufferImageCopy vkRegion{
             .bufferOffset      = region.bufferOffset,
             .bufferRowLength   = region.bufferRowLength,
@@ -375,8 +394,8 @@ void VulkanCommandBuffer::copyBufferToImage(IBuffer *srcBuffer,
         vkRegions.data());
 }
 
-void VulkanCommandBuffer::executeTransitionImageLayout(IImage *image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
-                                                       const ImageSubresourceRange *subresourceRange)
+void VulkanCommandBuffer::executeTransitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
+                                                       const ImageSubresourceRange* subresourceRange)
 {
     VkImageSubresourceRange range;
     if (subresourceRange) {
@@ -397,9 +416,9 @@ void VulkanCommandBuffer::executeTransitionImageLayout(IImage *image, EImageLayo
 #if YA_CMDBUF_RECORD_MODE
 void VulkanCommandBuffer::executeAll()
 {
-    for (const auto &cmd : recordedCommands) {
+    for (const auto& cmd : recordedCommands) {
         std::visit(
-            [&](auto &&arg) {
+            [&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (std::is_same_v<T, RenderCommand::BindPipeline>) {
                     executeBindPipeline(arg.pipeline);
@@ -456,17 +475,17 @@ void VulkanCommandBuffer::executeAll()
 
 // ========== Virtual Mode: Direct vkCmd* implementations ==========
 
-void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline *pipeline)
+void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline* pipeline)
 {
     executeBindPipeline(pipeline);
 }
 
-void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer *buffer, uint64_t offset)
+void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset)
 {
     executeBindVertexBuffer(binding, buffer, offset);
 }
 
-void VulkanCommandBuffer::bindIndexBuffer(IBuffer *buffer, uint64_t offset, bool use16BitIndices)
+void VulkanCommandBuffer::bindIndexBuffer(IBuffer* buffer, uint64_t offset, bool use16BitIndices)
 {
     executeBindIndexBuffer(buffer, offset, use16BitIndices);
 }
@@ -506,7 +525,7 @@ void VulkanCommandBuffer::setPolygonMode(EPolygonMode::T polygonMode)
     executeSetPolygonMode(polygonMode);
 }
 
-void VulkanCommandBuffer::beginRendering(const RenderingInfo &info)
+void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
 {
     // === Mode 1: From RenderTarget (automatic mode selection) ===
     if (info.renderTarget != nullptr) {
@@ -545,7 +564,7 @@ void VulkanCommandBuffer::beginRendering(const RenderingInfo &info)
     UNREACHABLE();
 }
 
-void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget *renderTarget, const RenderingInfo &info)
+void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget* renderTarget, const RenderingInfo& info)
 {
     auto renderPass  = renderTarget->getRenderPass();
     auto framebuffer = renderTarget->getCurFrameBuffer();
@@ -574,7 +593,7 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget *renderTarg
     // Setup clear values
     std::vector<VkClearValue> vkClearValues;
     vkClearValues.reserve(info.colorClearValues.size() + 1);
-    for (const auto &clearValue : info.colorClearValues) {
+    for (const auto& clearValue : info.colorClearValues) {
         VkClearValue vkClear;
         vkClear.color = {
             {
@@ -616,8 +635,8 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget *renderTarg
     _currentRenderingMode = ERenderingMode::RenderPass;
 }
 
-VkRenderingAttachmentInfo *VulkanCommandBuffer::buildDepthAttachmentInfo(const RenderingInfo       &info,
-                                                                         VkRenderingAttachmentInfo &outDepthAttach)
+VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const RenderingInfo&       info,
+                                                                         VkRenderingAttachmentInfo& outDepthAttach)
 {
     if (!info.depthAttachment) {
         return nullptr;
@@ -644,9 +663,9 @@ VkRenderingAttachmentInfo *VulkanCommandBuffer::buildDepthAttachmentInfo(const R
     return &outDepthAttach;
 }
 
-void VulkanCommandBuffer::executeDynamicRendering(std::vector<VkRenderingAttachmentInfo> &colorAttachments,
-                                                  VkRenderingAttachmentInfo              *pDepthAttach,
-                                                  const VkRect2D                         &renderArea,
+void VulkanCommandBuffer::executeDynamicRendering(std::vector<VkRenderingAttachmentInfo>& colorAttachments,
+                                                  VkRenderingAttachmentInfo*              pDepthAttach,
+                                                  const VkRect2D&                         renderArea,
                                                   uint32_t                                layerCount)
 {
     VkRenderingInfo vkRenderingInfo{
@@ -665,7 +684,7 @@ void VulkanCommandBuffer::executeDynamicRendering(std::vector<VkRenderingAttachm
     s_vkCmdBeginRenderingKHR(_commandBuffer, &vkRenderingInfo);
 }
 
-void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget *renderTarget, const RenderingInfo &info)
+void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* renderTarget, const RenderingInfo& info)
 {
     _currentRenderingMode = ERenderingMode::DynamicRendering;
 
@@ -681,7 +700,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget *r
     auto curFrameBuffer = renderTarget->getCurFrameBuffer();
 
     // Build color attachments from framebuffer
-    const auto                            &colorTextures = curFrameBuffer->getColorTextures();
+    const auto&                            colorTextures = curFrameBuffer->getColorTextures();
     std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
     vkColorAttachments.reserve(colorTextures.size());
 
@@ -711,16 +730,16 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget *r
     // Build depth attachment
     VkRenderingAttachmentInfo  vkDepthAttach{};
     auto                       depthAttachmentDesc = renderTarget->getDepthAttachmentDesc();
-    VkRenderingAttachmentInfo *pVkDepthAttach      = nullptr;
-    if (depthAttachmentDesc.format != EFormat::Undefined) {
+    VkRenderingAttachmentInfo* pVkDepthAttach      = nullptr;
+    if (depthAttachmentDesc) {
         vkDepthAttach = {
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
             .imageView   = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             .resolveMode = VK_RESOLVE_MODE_NONE,
-            .loadOp      = EAttachmentLoadOp::toVk(depthAttachmentDesc.loadOp),
-            .storeOp     = EAttachmentStoreOp::toVk(depthAttachmentDesc.storeOp),
+            .loadOp      = EAttachmentLoadOp::toVk(depthAttachmentDesc->loadOp),
+            .storeOp     = EAttachmentStoreOp::toVk(depthAttachmentDesc->storeOp),
             .clearValue  = {
                 info.depthClearValue.isDepthStencil
                      ? VkClearValue{
@@ -745,7 +764,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget *r
     executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, 1);
 }
 
-void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingInfo &info)
+void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingInfo& info)
 {
     _currentRenderingMode = ERenderingMode::DynamicRendering;
 
@@ -781,7 +800,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 
     // Build depth attachment using shared helper
     VkRenderingAttachmentInfo  vkDepthAttach{};
-    VkRenderingAttachmentInfo *pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
+    VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
 
     // Execute dynamic rendering
     VkRect2D renderArea = {
@@ -791,45 +810,45 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, info.layerCount);
 }
 
-void VulkanCommandBuffer::endRendering(const EndRenderingInfo &info)
+void VulkanCommandBuffer::endRendering(const EndRenderingInfo& info)
 {
     executeEndRendering(info);
 }
 
 void VulkanCommandBuffer::bindDescriptorSets(
-    IPipelineLayout                        *pipelineLayout,
+    IPipelineLayout*                        pipelineLayout,
     uint32_t                                firstSet,
-    const std::vector<DescriptorSetHandle> &descriptorSets,
-    const std::vector<uint32_t>            &dynamicOffsets)
+    const std::vector<DescriptorSetHandle>& descriptorSets,
+    const std::vector<uint32_t>&            dynamicOffsets)
 {
     executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets);
 }
 
 void VulkanCommandBuffer::pushConstants(
-    IPipelineLayout *pipelineLayout,
+    IPipelineLayout* pipelineLayout,
     EShaderStage::T  stages,
     uint32_t         offset,
     uint32_t         size,
-    const void      *data)
+    const void*      data)
 {
     executePushConstants(pipelineLayout, stages, offset, size, data);
 }
 
-void VulkanCommandBuffer::copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset)
+void VulkanCommandBuffer::copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset)
 {
     executeCopyBuffer(src, dst, size, srcOffset, dstOffset);
 }
 
 void VulkanCommandBuffer::transitionImageLayout(
-    IImage                      *image,
+    IImage*                      image,
     EImageLayout::T              oldLayout,
     EImageLayout::T              newLayout,
-    const ImageSubresourceRange *subresourceRange)
+    const ImageSubresourceRange* subresourceRange)
 {
     executeTransitionImageLayout(image, oldLayout, newLayout, subresourceRange);
 }
 
-void VulkanCommandBuffer::transitionImageLayoutAuto(IImage *image, EImageLayout::T newLayout, const ImageSubresourceRange *subresourceRange)
+void VulkanCommandBuffer::transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange)
 {
     // the layout changed in cmdbuf:
     // may not really layout in gpu, but will be the layout at execution
@@ -841,7 +860,7 @@ void VulkanCommandBuffer::transitionImageLayoutAuto(IImage *image, EImageLayout:
 }
 
 void VulkanCommandBuffer::transitionRenderTargetLayout(
-    IRenderTarget  *renderTarget,
+    IRenderTarget*  renderTarget,
     EImageLayout::T colorLayout,
     EImageLayout::T depthLayout)
 {

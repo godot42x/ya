@@ -48,16 +48,16 @@ struct VulkanRenderTarget : public IRenderTarget
 
   public:
 
-    VulkanRenderTarget(const VulkanRenderTarget &)            = delete;
-    VulkanRenderTarget &operator=(const VulkanRenderTarget &) = delete;
-    VulkanRenderTarget(VulkanRenderTarget &&)                 = delete;
-    VulkanRenderTarget &operator=(VulkanRenderTarget &&)      = delete;
+    VulkanRenderTarget(const VulkanRenderTarget&)            = delete;
+    VulkanRenderTarget& operator=(const VulkanRenderTarget&) = delete;
+    VulkanRenderTarget(VulkanRenderTarget&&)                 = delete;
+    VulkanRenderTarget& operator=(VulkanRenderTarget&&)      = delete;
 
     VulkanRenderTarget() = default;
     virtual ~VulkanRenderTarget() override;
 
     // ===== IRenderTarget interface implementation =====
-    bool onInit(const RenderTargetCreateInfo &ci) override;
+    bool onInit(const RenderTargetCreateInfo& ci) override;
     void recreate() override;
     void destroy() override;
 
@@ -66,13 +66,13 @@ struct VulkanRenderTarget : public IRenderTarget
 
     void onRenderGUI() override;
 
-    IFrameBuffer *getFrameBuffer(int32_t index = -1) const;
+    IFrameBuffer* getFrameBuffer(int32_t index = -1) const;
 
   private:
 
-    bool recreateImagesAndFrameBuffer(uint32_t                                  frameBufferCount,
-                                      const std::vector<AttachmentDescription> &colorAttachments,
-                                      const AttachmentDescription              &depthAttachment);
+    bool recreateImagesAndFrameBuffer(uint32_t frameBufferCount);
+
+    void getAttachmentsFromRenderPass(const IRenderPass* pass, uint32_t subPassIndex);
 };
 
 } // namespace ya

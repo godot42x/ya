@@ -42,8 +42,9 @@ struct RenderTargetCreateInfo
 
     struct AttachmentSpec
     {
-        std::vector<AttachmentDescription> colorAttach = {}; // Support multiple color attachments
-        AttachmentDescription              depthAttach = {}; // Undefined = no depth
+        std::vector<AttachmentDescription>   colorAttach   = {}; // Support multiple color attachments
+        std::optional<AttachmentDescription> depthAttach   = {}; // Undefined = no depth
+        std::optional<AttachmentDescription> resolveAttach = {}; // Optional resolve attachment
     };
 
     struct RenderPassSpec
@@ -61,8 +62,9 @@ struct IRenderTarget
     Extent2D          _extent        = {.width = 0, .height = 0};
     ERenderingMode::T _renderingMode = ERenderingMode::None;
 
-    std::vector<AttachmentDescription> _colorAttachmentDescs;
-    AttachmentDescription              _depthAttachmentDesc;
+    std::vector<AttachmentDescription>   _colorAttachmentDescs;
+    std::optional<AttachmentDescription> _depthAttachmentDesc;
+    std::optional<AttachmentDescription> _resolveAttachmentDesc;
 
     std::vector<stdptr<IFrameBuffer>> _frameBuffers;
     uint32_t                          _currentFrameIndex = 0;
@@ -156,8 +158,9 @@ struct IRenderTarget
 
     uint32_t getSubpassIndex() const { return _subpassIndex; }
 
-    const std::vector<AttachmentDescription> &getColorAttachmentDescs() const { return _colorAttachmentDescs; }
-    const AttachmentDescription              &getDepthAttachmentDesc() const { return _depthAttachmentDesc; }
+    const std::vector<AttachmentDescription>&   getColorAttachmentDescs() const { return _colorAttachmentDescs; }
+    const std::optional<AttachmentDescription>& getDepthAttachmentDesc() const { return _depthAttachmentDesc; }
+    const std::optional<AttachmentDescription>& getResolveAttachmentDesc() const { return _resolveAttachmentDesc; }
 }; // namespace ya
 
 /**
