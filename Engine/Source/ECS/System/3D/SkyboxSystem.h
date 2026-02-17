@@ -11,6 +11,7 @@ namespace ya
 
 struct SkyBoxSystem : public IRenderSystem
 {
+    using Super = IRenderSystem;
 
     PipelineLayoutDesc _pipelineLayoutDesc = {
         .label                = "SkyboxPipelineLayout",
@@ -66,7 +67,6 @@ struct SkyBoxSystem : public IRenderSystem
     DescriptorSetHandle _cubeMapDS;
 
     stdptr<IPipelineLayout>   _pipelineLayout = nullptr;
-    stdptr<IGraphicsPipeline> _pipeline       = nullptr;
     stdptr<Sampler>           _sampler3D      = nullptr;
 
     SkyBoxSystem() : IRenderSystem("SkyBoxSystem") {}
@@ -81,6 +81,7 @@ struct SkyBoxSystem : public IRenderSystem
     void advance() { _index = (_index + 1) % SKYBOX_PER_FRAME_SET; }
     void beginFrame() override
     {
+        Super::beginFrame();
         updateSkyboxCubeMap();
         _index = 0;
     }

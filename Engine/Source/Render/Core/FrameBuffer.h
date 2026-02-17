@@ -40,7 +40,7 @@ struct FrameBufferCreateInfo
     // If provided, these take precedence and will be wrapped into Textures
     std::vector<stdptr<IImage>> colorImages;
     stdptr<IImage>              depthImages;
-    stdptr<IImage>              resolveImages;
+    stdptr<IImage>              resolveImage;
 
     // render pass api spec
     IRenderPass* renderPass = nullptr;

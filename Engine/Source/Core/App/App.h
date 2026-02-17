@@ -184,12 +184,13 @@ struct App
     stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
     DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
 
-    stdptr<IRenderSystem> _simpleMaterialSystem     = nullptr;
-    stdptr<IRenderSystem> _unlitMaterialSystem      = nullptr;
-    stdptr<IRenderSystem> _phongMaterialSystem      = nullptr;
-    stdptr<IRenderSystem> _debugRenderSystem        = nullptr;
-    stdptr<IRenderSystem> _skyboxSystem             = nullptr;
-    Delegate<void()>      _onRenderRenderSystemsGUI = {};
+    stdptr<IRenderSystem>                          _simpleMaterialSystem     = nullptr;
+    stdptr<IRenderSystem>                          _unlitMaterialSystem      = nullptr;
+    stdptr<IRenderSystem>                          _phongMaterialSystem      = nullptr;
+    stdptr<IRenderSystem>                          _debugRenderSystem        = nullptr;
+    stdptr<IRenderSystem>                          _skyboxSystem             = nullptr;
+    Delegate<void()>                               _onRenderRenderSystemsGUI = {}; // TEMP
+    Delegate<void(Delegate<void(IRenderSystem*)>)> _forEachSystem            = {}; // TEMP
 
 
     // other systems, eg: transform, resource resolve

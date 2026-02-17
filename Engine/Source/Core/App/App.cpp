@@ -203,7 +203,7 @@ void App::createRenderSystems()
 {
     _simpleMaterialSystem = ya::makeShared<SimpleMaterialSystem>();
     _simpleMaterialSystem->init(IRenderSystem::InitParams{
-        .renderPass = nullptr,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "SimpleMaterial Pipeline",
             .viewMask                = 0,
@@ -216,7 +216,7 @@ void App::createRenderSystems()
 
     _unlitMaterialSystem = ya::makeShared<UnlitMaterialSystem>();
     _unlitMaterialSystem->init(IRenderSystem::InitParams{
-        .renderPass = nullptr,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "UnlitMaterial Pipeline",
             .viewMask                = 0,
@@ -228,7 +228,7 @@ void App::createRenderSystems()
     });
     _phongMaterialSystem = ya::makeShared<PhongMaterialSystem>();
     _phongMaterialSystem->init(IRenderSystem::InitParams{
-        .renderPass = nullptr,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "PhongMaterial Pipeline",
             .viewMask                = 0,
@@ -240,7 +240,7 @@ void App::createRenderSystems()
     });
     _debugRenderSystem = ya::makeShared<DebugRenderSystem>();
     _debugRenderSystem->init(IRenderSystem::InitParams{
-        .renderPass = nullptr,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "DebugRender Pipeline",
             .viewMask                = 0,
@@ -254,7 +254,7 @@ void App::createRenderSystems()
 
     _skyboxSystem = ya::makeShared<SkyBoxSystem>();
     _skyboxSystem->init(IRenderSystem::InitParams{
-        .renderPass = nullptr,
+        .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "Skybox Pipeline",
             .viewMask                = 0,
@@ -272,7 +272,15 @@ void App::createRenderSystems()
         _debugRenderSystem->renderGUI();
         _skyboxSystem->renderGUI();
     });
+    _forEachSystem.set([this](Delegate<void(IRenderSystem*)> func) {
+        func(_simpleMaterialSystem.get());
+        func(_unlitMaterialSystem.get());
+        func(_phongMaterialSystem.get());
+        func(_debugRenderSystem.get());
+        func(_skyboxSystem.get());
+    });
 }
+
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
 
@@ -444,7 +452,7 @@ void App::init(AppDesc ci)
     // MARK: temp mirror texture
     {
         _mirrorRT = ya::createRenderTarget(RenderTargetCreateInfo{
-            .label            = "Postprocess RenderTarget",
+            .label            = "Mirror RenderTarget",
             .renderingMode    = ERenderingMode::DynamicRendering,
             .bSwapChainTarget = false,
             .extent           = {
@@ -887,7 +895,6 @@ int ya::App::iterate(float dt)
         tickLogic(dt);
     }
     tickRender(dt);
-    taskManager.update();
     ++_frameIndex;
     return 0;
 }
@@ -897,6 +904,7 @@ int ya::App::iterate(float dt)
 void App::tickLogic(float dt)
 {
     YA_PROFILE_FUNCTION()
+    taskManager.update();
     Facade.timerManager.onUpdate(dt);
 
     // Store real-time delta for editor
@@ -1023,31 +1031,31 @@ void App::tickRender(float dt)
         auto         view  = scene->getRegistry().view<TransformComponent, MirrorComponent>();
         FrameContext ctxCopy;
         bHasMirror = false;
-        for (auto [entity, tc, mc] : view.each())
-        {
-            bHasMirror         = true;
-            ctxCopy.viewOwner  = entity;
-            ctxCopy.projection = ctx.projection;
+        // for (auto [entity, tc, mc] : view.each())
+        // {
+        //     bHasMirror         = true;
+        //     ctxCopy.viewOwner  = entity;
+        //     ctxCopy.projection = ctx.projection;
 
-            // Calculate mirror normal
-            const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
-            glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
-            glm::vec3       mirrorPos    = tc.getWorldPosition();
+        //     // Calculate mirror normal
+        //     const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
+        //     glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
+        //     glm::vec3       mirrorPos    = tc.getWorldPosition();
 
-            // Extract camera forward direction from view matrix
-            // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
-            glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
-            float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
-            // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
-            // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
-            glm::vec3 mirroredCameraPos = mirrorPos;
-            glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
-            ctxCopy.cameraPos           = mirroredCameraPos;
-            ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
-            ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
+        //     // Extract camera forward direction from view matrix
+        //     // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
+        //     glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
+        //     float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
+        //     // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
+        //     // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
+        //     glm::vec3 mirroredCameraPos = mirrorPos;
+        //     glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
+        //     ctxCopy.cameraPos           = mirroredCameraPos;
+        //     ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
+        //     ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
 
-            break;
-        }
+        //     break;
+        // }
 
         if (bHasMirror) {
             ctxCopy.extent = _mirrorRT->getExtent(); // Ensure material systems render with correct extent for mirror RT
@@ -1187,8 +1195,8 @@ void App::tickRender(float dt)
         // Pass input imageView and output extent to render
 
         const auto& tex = bMSAA
-                            ? _viewportRT->getCurFrameBuffer()->getColorTexture(0)
-                            : _viewportRT->getCurFrameBuffer()->getResolveTexture();
+                            ? _viewportRT->getCurFrameBuffer()->getResolveTexture()
+                            : _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
         BasicPostprocessing::RenderPayload payload{
             .inputImageView = tex->getImageView(),
@@ -1212,9 +1220,11 @@ void App::tickRender(float dt)
     }
     else {
         // Create a Texture wrapper from framebuffer's color attachment for unified semantics
-        auto fb          = _viewportRT->getCurFrameBuffer();
-        _viewportTexture = fb->getColorTexture(0);
+        auto fb = _viewportRT->getCurFrameBuffer();
+        // _viewportTexture = fb->getColorTexture(0);
+        _viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
     }
+    YA_CORE_ASSERT(_viewportTexture, "Failed to get viewport texture for postprocessing");
 
     // Note: _postprocessTexture is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
 
@@ -1319,6 +1329,13 @@ void App::onRenderGUI(float dt)
         ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
         if (ImGui::Checkbox("MSAA", &bMSAA)) {
             taskManager.registerFrameTask([this]() {
+                auto sampleCount = bMSAA ? ESampleCount::Sample_4 : ESampleCount::Sample_1;
+                _simpleMaterialSystem->getPipeline()->setSampleCount(sampleCount);
+                _unlitMaterialSystem->getPipeline()->setSampleCount(sampleCount);
+                _phongMaterialSystem->getPipeline()->setSampleCount(sampleCount);
+                _debugRenderSystem->getPipeline()->setSampleCount(sampleCount);
+                _skyboxSystem->getPipeline()->setSampleCount(sampleCount);
+
                 uint32_t width  = _viewportRect.extent2D().width;
                 uint32_t height = _viewportRect.extent2D().height;
                 recreateViewPortRT(width, height);
@@ -1371,7 +1388,6 @@ void App::onRenderGUI(float dt)
         }
 
         if (ImGui::TreeNode("Postprocessing")) {
-
             ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);
             if (!bBasicPostProcessor) {
                 ImGui::BeginDisabled();

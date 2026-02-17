@@ -136,6 +136,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
         YA_CORE_ERROR("Failed to create pipeline: {}", e.what());
         return false;
     }
+    _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, _pipeline, _name.toString().c_str());
     return true;
 }
 

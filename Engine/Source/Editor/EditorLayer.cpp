@@ -26,7 +26,7 @@
 namespace ya
 {
 
-EditorLayer::EditorLayer(App *app)
+EditorLayer::EditorLayer(App* app)
     : _app(app),
       _sceneHierarchyPanel(this),
       _detailsView(this),
@@ -115,7 +115,7 @@ void EditorLayer::onUpdate(float dt)
 
 
 
-bool EditorLayer::screenToViewport(float screenX, float screenY, float &outX, float &outY) const
+bool EditorLayer::screenToViewport(float screenX, float screenY, float& outX, float& outY) const
 {
     // Check if point is within viewport bounds
     if (screenX < _viewportBounds[0].x || screenX > _viewportBounds[1].x ||
@@ -131,12 +131,12 @@ bool EditorLayer::screenToViewport(float screenX, float screenY, float &outX, fl
     return true;
 }
 
-bool EditorLayer::screenToViewport(const glm::vec2 in, glm::vec2 &out) const
+bool EditorLayer::screenToViewport(const glm::vec2 in, glm::vec2& out) const
 {
     return screenToViewport(in.x, in.y, out.x, out.y);
 }
 
-void EditorLayer::onEvent(const Event &event)
+void EditorLayer::onEvent(const Event& event)
 {
     // Handle viewport-specific events when focused
     // Example: Camera controls, object picking, gizmo manipulation
@@ -145,7 +145,7 @@ void EditorLayer::onEvent(const Event &event)
     switch (event.getEventType()) {
     case EEvent::MouseButtonPressed:
     {
-        auto &mouseEvent = static_cast<const MouseButtonPressedEvent &>(event);
+        auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
         if (mouseEvent.GetMouseButton() == EMouse::Right && bViewportHovered) {
             _rightMousePressPos  = _app->getLastMousePos();
             _bRightMouseDragging = false; // Not dragging yet, just pressed
@@ -164,7 +164,7 @@ void EditorLayer::onEvent(const Event &event)
     } break;
     case EEvent::MouseButtonReleased:
     {
-        auto &mouseEvent = static_cast<const MouseButtonReleasedEvent &>(event);
+        auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
         if (mouseEvent.GetMouseButton() == EMouse::Right) {
             // Reset drag state on release (after a short delay to let ImGui process)
             // We keep the flag true briefly so context menu check can see it
@@ -192,7 +192,7 @@ void EditorLayer::onEvent(const Event &event)
     case EEvent::MouseButtonReleased:
     {
         // Handle viewport clicks (object selection, gizmo interaction)
-        auto &mouseEvent = static_cast<const MouseButtonPressedEvent &>(event);
+        auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
         // Only pick on left click and when gizmo is not being used
         if (mouseEvent.GetMouseButton() == EMouse::Left) {
             if (!isGizmoActive()) {
@@ -212,7 +212,7 @@ void EditorLayer::onEvent(const Event &event)
 
     case EEvent::KeyPressed:
     {
-        auto &keyEvent = static_cast<const KeyPressedEvent &>(event);
+        auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
         if (_selections.size() > 0 && _selections[0]->isValid())
         {
             // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
@@ -246,12 +246,12 @@ void EditorLayer::onEvent(const Event &event)
     }
 }
 
-void EditorLayer::updateWindowFlags(ya::ImGuiStyleScope &style)
+void EditorLayer::updateWindowFlags(ya::ImGuiStyleScope& style)
 {
     YA_PROFILE_FUNCTION();
     if (bFullscreen)
     {
-        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
@@ -281,9 +281,9 @@ void EditorLayer::updateWindowFlags(ya::ImGuiStyleScope &style)
 void EditorLayer::setupDockspace()
 {
     YA_PROFILE_FUNCTION();
-    ImGuiIO &io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
 
-    ImGuiStyle &style          = ImGui::GetStyle();
+    ImGuiStyle& style          = ImGui::GetStyle();
     float       minWindowWidth = style.WindowMinSize.x;
     style.WindowMinSize.x      = 320.f;
     style.WindowMinSize.x      = minWindowWidth;
@@ -319,7 +319,7 @@ void EditorLayer::menuBar()
             {
                 if (_app && _app->getSceneManager())
                 {
-                    auto *scene = _app->getSceneManager()->getActiveScene();
+                    auto* scene = _app->getSceneManager()->getActiveScene();
                     if (scene)
                     {
                         _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
@@ -333,7 +333,7 @@ void EditorLayer::menuBar()
                 std::string defaultName = "NewScene";
                 if (_app && _app->getSceneManager())
                 {
-                    auto *scene = _app->getSceneManager()->getActiveScene();
+                    auto* scene = _app->getSceneManager()->getActiveScene();
                     if (scene && !scene->getName().empty())
                     {
                         defaultName = scene->getName();
@@ -342,11 +342,11 @@ void EditorLayer::menuBar()
 
                 _filePicker.openSceneSavePicker(
                     defaultName,
-                    [this](const std::string &selectedDir, const std::string &sceneName) {
+                    [this](const std::string& selectedDir, const std::string& sceneName) {
                         _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                         if (_app && _app->getSceneManager())
                         {
-                            auto *scene = _app->getSceneManager()->getActiveScene();
+                            auto* scene = _app->getSceneManager()->getActiveScene();
                             if (scene)
                             {
                                 scene->setName(sceneName);
@@ -363,7 +363,7 @@ void EditorLayer::menuBar()
             std::string defaultName = "NewScene";
             if (_app && _app->getSceneManager())
             {
-                auto *scene = _app->getSceneManager()->getActiveScene();
+                auto* scene = _app->getSceneManager()->getActiveScene();
                 if (scene && !scene->getName().empty())
                 {
                     defaultName = scene->getName();
@@ -372,11 +372,11 @@ void EditorLayer::menuBar()
 
             _filePicker.openSceneSavePicker(
                 defaultName,
-                [this](const std::string &selectedDir, const std::string &sceneName) {
+                [this](const std::string& selectedDir, const std::string& sceneName) {
                     _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                     if (_app && _app->getSceneManager())
                     {
-                        auto *scene = _app->getSceneManager()->getActiveScene();
+                        auto* scene = _app->getSceneManager()->getActiveScene();
                         if (scene)
                         {
                             scene->setName(sceneName);
@@ -531,7 +531,7 @@ void EditorLayer::viewportWindow()
     // Display the render texture from editor render target (unified Texture semantics)
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        Sampler *sampler = _viewPortSamplerType == Linear
+        Sampler* sampler = _viewPortSamplerType == Linear
                              ? TextureLibrary::get().getLinearSampler()
                              : TextureLibrary::get().getNearestSampler();
         if (ImGuiHelper::Image(App::get()->_viewportTexture->getImageView(),
@@ -573,8 +573,8 @@ void EditorLayer::viewportWindow()
             {
                 if (auto scene = _app->getSceneManager()->getActiveScene())
                 {
-                    Node *newNode = scene->createNode3D("New Node");
-                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
+                    Node* newNode = scene->createNode3D("New Node");
+                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                         setSelectedEntity(node3D->getEntity());
                     }
                 }
@@ -586,9 +586,9 @@ void EditorLayer::viewportWindow()
                 {
                     if (auto scene = _app->getSceneManager()->getActiveScene())
                     {
-                        Node *newNode = scene->createNode3D("Cube");
-                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                            Entity *newEntity = node3D->getEntity();
+                        Node* newNode = scene->createNode3D("Cube");
+                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                            Entity* newEntity = node3D->getEntity();
                             auto    mc        = newEntity->addComponent<MeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
                             newEntity->addComponent<PhongMaterialComponent>();
@@ -600,9 +600,9 @@ void EditorLayer::viewportWindow()
                 {
                     if (auto scene = _app->getSceneManager()->getActiveScene())
                     {
-                        Node *newNode = scene->createNode3D("Sphere");
-                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                            Entity *newEntity = node3D->getEntity();
+                        Node* newNode = scene->createNode3D("Sphere");
+                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                            Entity* newEntity = node3D->getEntity();
                             auto    mc        = newEntity->addComponent<MeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
                             newEntity->addComponent<PhongMaterialComponent>();
@@ -614,9 +614,9 @@ void EditorLayer::viewportWindow()
                 {
                     if (auto scene = _app->getSceneManager()->getActiveScene())
                     {
-                        Node *newNode = scene->createNode3D("Plane");
-                        if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                            Entity *newEntity = node3D->getEntity();
+                        Node* newNode = scene->createNode3D("Plane");
+                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                            Entity* newEntity = node3D->getEntity();
                             auto    mc        = newEntity->addComponent<MeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
                             newEntity->addComponent<PhongMaterialComponent>();
@@ -631,9 +631,9 @@ void EditorLayer::viewportWindow()
             {
                 if (auto scene = _app->getSceneManager()->getActiveScene())
                 {
-                    Node *newNode = scene->createNode3D("Point Light");
-                    if (auto *node3D = dynamic_cast<Node3D *>(newNode)) {
-                        Entity *newEntity = node3D->getEntity();
+                    Node* newNode = scene->createNode3D("Point Light");
+                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                        Entity* newEntity = node3D->getEntity();
                         newEntity->addComponent<PointLightComponent>();
                         setSelectedEntity(newEntity);
                     }
@@ -643,7 +643,7 @@ void EditorLayer::viewportWindow()
             ctx.separator();
 
             // Duplicate selected entity
-            Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
+            Entity* selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
             if (selectedEntity && selectedEntity->isValid())
             {
                 if (ctx.menuItem("Duplicate Selected"))
@@ -675,7 +675,7 @@ void EditorLayer::editorSettings()
         ImGui::End();
         return;
     }
-    ImGui::Combo("Viewport Sampler", (int *)&_viewPortSamplerType, "Linear\0Nearest\0");
+    ImGui::Combo("Viewport Sampler", (int*)&_viewPortSamplerType, "Linear\0Nearest\0");
 
     ImGui::End();
 }
@@ -727,7 +727,7 @@ void EditorLayer::debugWindow()
 }
 
 
-const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
+const ImGuiImageEntry* EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler)
 {
     YA_PROFILE_FUNCTION();
     if (!imageView) {
@@ -753,7 +753,7 @@ const ImGuiImageEntry *EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView
     }
 
     // Create new ImGui descriptor set (platform-agnostic through ImGuiManager)
-    void *textureID = ImGuiManager::addTexture(imageView.get(), sampler.get(), EImageLayout::ShaderReadOnlyOptimal);
+    void* textureID = ImGuiManager::addTexture(imageView.get(), sampler.get(), EImageLayout::ShaderReadOnlyOptimal);
 
     if (!textureID) {
         YA_CORE_ERROR("EditorLayer::getOrCreateImGuiTextureID: Failed to create descriptor set");
@@ -772,7 +772,7 @@ void EditorLayer::cleanupImGuiTextures()
 {
     YA_CORE_INFO("EditorLayer::cleanupImGuiTextures - Releasing {} descriptor sets", _imguiTextureCache.size());
 
-    for (auto &entry : _imguiTextureCache) {
+    for (auto& entry : _imguiTextureCache) {
         if (entry.ds) {
             ImGuiManager::removeTexture(entry.ds);
         }
@@ -780,7 +780,7 @@ void EditorLayer::cleanupImGuiTextures()
     _imguiTextureCache.clear();
 }
 
-void EditorLayer::removeImGuiTexture(const ImGuiImageEntry *entry)
+void EditorLayer::removeImGuiTexture(const ImGuiImageEntry* entry)
 {
     ImGuiManager::removeTexture(entry->ds);
     _imguiTextureCache.erase(*entry);
@@ -797,7 +797,7 @@ void EditorLayer::renderGizmo()
 {
     YA_PROFILE_FUNCTION();
     // Get selected entity from hierarchy panel
-    Entity *selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
+    Entity* selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
 
     // CRITICAL: Do NOT call selectedEntity->isValid() before null check!
     // The entity pointer may point to destroyed memory after scene switch.
@@ -821,13 +821,13 @@ void EditorLayer::renderGizmo()
     if (!selectedEntity->hasComponent<TransformComponent>()) {
         return;
     }
-    auto *tc = selectedEntity->getComponent<TransformComponent>();
+    auto* tc = selectedEntity->getComponent<TransformComponent>();
     if (!tc) {
         return; // No transform component
     }
 
     // Get camera view and projection matrices
-    auto *app = App::get();
+    auto* app = App::get();
     if (!app) {
         return;
     }
@@ -840,11 +840,10 @@ void EditorLayer::renderGizmo()
     ImGuizmo::SetDrawlist();
 
     // Set gizmo rect to match viewport bounds
-    ImGuizmo::SetRect(
-        _viewportBounds[0].x,
-        _viewportBounds[0].y,
-        _viewportSize.x,
-        _viewportSize.y);
+    ImGuizmo::SetRect(_viewportBounds[0].x,
+                      _viewportBounds[0].y,
+                      _viewportSize.x,
+                      _viewportSize.y);
     // Get parent world matrix for hierarchy transform calculations
 
     // Use WORLD matrix for gizmo display (so gizmo appears at actual world position)
@@ -909,13 +908,13 @@ void EditorLayer::renderGizmo()
 void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
 {
     YA_PROFILE_FUNCTION_LOG();
-    auto *app = App::get();
+    auto* app = App::get();
     if (!app) {
         return;
     }
 
     // Get active scene
-    auto *scene = app->getSceneManager()->getActiveScene();
+    auto* scene = app->getSceneManager()->getActiveScene();
     if (!scene) {
         return;
     }
@@ -937,7 +936,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
 
     // Use RayCastMousePickingSystem to pick entity
     // viewportLocalX/Y are in viewport space (0,0 = top-left of viewport)
-    Entity *pickedEntity = RayCastMousePickingSystem::pickEntity(
+    Entity* pickedEntity = RayCastMousePickingSystem::pickEntity(
         scene,
         viewportLocalX,
         viewportLocalY,
@@ -957,7 +956,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     }
 }
 
-glm::vec3 extractEulerAnglesFromViewMatrix(const glm::mat4 &viewMatrix)
+glm::vec3 extractEulerAnglesFromViewMatrix(const glm::mat4& viewMatrix)
 {
     glm::mat3 rotMat  = glm::mat3(viewMatrix);
     glm::vec3 forward = -rotMat[2];
@@ -975,16 +974,16 @@ glm::vec3 extractEulerAnglesFromViewMatrix(const glm::mat4 &viewMatrix)
     return glm::vec3(glm::degrees(pitch), glm::degrees(yaw), glm::degrees(roll));
 }
 
-void EditorLayer::focusCameraOnEntity(Entity *entity)
+void EditorLayer::focusCameraOnEntity(Entity* entity)
 {
     if (!entity || !entity->isValid()) {
         return;
     }
-    auto *tc = entity->getComponent<TransformComponent>();
+    auto* tc = entity->getComponent<TransformComponent>();
     if (!tc) {
         return;
     }
-    auto *app = App::get();
+    auto* app = App::get();
     if (!app) {
         return;
     }

@@ -25,6 +25,9 @@
 #include "Core/Reflection/Reflection.h"
 #include "glm/glm.hpp"
 #include "stdint.h"
+// warning C4324
+#pragma warning(push)
+#pragma warning(disable : 4324)
 
 namespace ya::std140
 {
@@ -51,6 +54,7 @@ struct alignas(4) b32
         return *this;
     }
 };
+
 
 // ============================================================================
 // 向量类型 - vec2: 8字节, vec3/vec4: 16字节对齐
@@ -228,3 +232,6 @@ YA_REFLECT_END_EXTERNAL()
 YA_REFLECT_BEGIN_EXTERNAL(ya::std140::mat4)
 YA_REFLECT_FIELD_SPEC(mat4, ya::std140::mat4::value)
 YA_REFLECT_END_EXTERNAL()
+
+
+#pragma warning(pop)

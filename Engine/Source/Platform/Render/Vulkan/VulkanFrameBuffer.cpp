@@ -117,10 +117,10 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
     }
 
     _resolveTexture.reset();
-    if (ci.resolveImages) {
+    if (ci.resolveImage) {
         std::string label = std::format("{}_Resolve", ci.label);
         _resolveTexture   = createTexture(
-            ci.resolveImages,
+            ci.resolveImage,
             label,
             VK_IMAGE_ASPECT_COLOR_BIT);
         if (!_resolveTexture) {

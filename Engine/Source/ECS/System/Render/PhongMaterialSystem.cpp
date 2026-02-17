@@ -265,7 +265,7 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
         if (materialCount > _lastMaterialDSCount) {
             YA_PROFILE_SCOPE("PhongMaterial::RecreateMaterialDescPool");
             recreateMaterialDescPool(materialCount);
-            _bShouldForceUpdateMaterial = true;
+            _bDescriptorPoolRecreated = true;
         }
     }
 }
@@ -385,16 +385,16 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
         if (!updatedMaterial[materialInstanceIndex]) {
             // FIXME: hack for now update the mirror material every time
             bool bOverrideMirrorMaterial = (entity == mirrorID);
-            if (_bShouldForceUpdateMaterial || material->isResourceDirty() || bOverrideMirrorMaterial)
+            if (_bDescriptorPoolRecreated || material->isResourceDirty() || bOverrideMirrorMaterial)
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateResourceDS");
                 updateMaterialResourceDS(resourceDS, material, bOverrideMirrorMaterial);
                 material->setResourceDirty(false);
             }
-            if (_bShouldForceUpdateMaterial || material->isParamDirty() || bOverrideMirrorMaterial)
+            if (_bDescriptorPoolRecreated || material->isParamDirty() || bOverrideMirrorMaterial)
             {
                 YA_PROFILE_SCOPE("PhongMaterial::UpdateParamDS");
-                updateMaterialParamDS(paramDS, lmc, bOverrideMirrorMaterial, _bShouldForceUpdateMaterial);
+                updateMaterialParamDS(paramDS, lmc, bOverrideMirrorMaterial, _bDescriptorPoolRecreated);
                 material->setParamDirty(false);
             }
 
@@ -421,7 +421,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
                 .modelMat = tc->getTransform(),
             };
             cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex,
+                                  _pipelineLayoutDesc.pushConstants[0].stageFlags,
                                   0,
                                   sizeof(PhongMaterialSystem::ModelPushConstant),
                                   &pushConst);
@@ -438,7 +438,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
     }
 
     // Reset force update flag after rendering
-    _bShouldForceUpdateMaterial = false;
+    _bDescriptorPoolRecreated = false;
     advanceSlot(); // Advance pass slot for next frame (ring buffer)
 }
 
@@ -498,15 +498,17 @@ void PhongMaterialSystem::updateFrameDS(const FrameContext* ctx)
     _debugUBOs[slot]->writeData(&uDebug, sizeof(DebugUBO), 0);
 
 
-    // render
-    //     ->getDescriptorHelper()
-    //     ->updateDescriptorSets(
-    //         {
-    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[slot].get()),
-    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[slot].get()),
-    //             IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[slot].get()),
-    //         },
-    //         {});
+    if (_bDescriptorPoolRecreated) {
+        render
+            ->getDescriptorHelper()
+            ->updateDescriptorSets(
+                {
+                    IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[slot].get()),
+                    IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[slot].get()),
+                    IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[slot], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[slot].get()),
+                },
+                {});
+    }
 }
 
 void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterialComponent& component, bool bOverrideDiffuse, bool bRecreated)
@@ -589,7 +591,7 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
     DescriptorImageInfo specularTexture   = getDescriptorImageInfo(specularTV);
     DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(reflectionTV);
     //  mirror or other rt?
-    if (bOverrideDiffuse) {
+    if (bOverrideDiffuse && App::get()->bHasMirror) {
         auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
         diffuseTexture     = getDescriptorImageInfo(mirrorTexture->getImageView(), nullptr);
     }

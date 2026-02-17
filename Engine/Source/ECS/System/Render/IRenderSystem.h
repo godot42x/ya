@@ -123,6 +123,7 @@ struct IRenderSystem
     }
 
     const std::string& getLabel() const { return _label; }
+    IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
 
   protected:
     virtual void onInitImpl(const InitParams& initParams) = 0;

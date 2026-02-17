@@ -272,12 +272,13 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
         }
 
         FrameBufferCreateInfo fbCI{
-            .label       = std::format("{}_FrameBuffer_{}", label, i),
-            .width       = _extent.width,
-            .height      = _extent.height,
-            .colorImages = colorImages,
-            .depthImages = depthImage,
-            .renderPass  = _renderPass,
+            .label        = std::format("{}_FrameBuffer_{}", label, i),
+            .width        = _extent.width,
+            .height       = _extent.height,
+            .colorImages  = colorImages,
+            .depthImages  = depthImage,
+            .resolveImage = resolveImage,
+            .renderPass   = _renderPass,
         };
         auto fb = IFrameBuffer::create(_vkRender, fbCI);
         YA_CORE_ASSERT(fb != nullptr, "Failed to create framebuffer");
