@@ -73,6 +73,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
+    bool                           _bDirty = false;
 
     VulkanRender         *_render         = nullptr;
     VulkanPipelineLayout *_pipelineLayout = nullptr;
@@ -124,6 +125,15 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     // TODO: sniff layout from ShaderReflection?
     void reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) override;
     void tryUpdateShader() override;
+    void beginFrame() override;
+    void renderGUI() override;
+
+    void setSampleCount(ESampleCount::T sampleCount) override;
+    ESampleCount::T getSampleCount() const override { return _ci.multisampleState.sampleCount; }
+    void setCullMode(ECullMode::T cullMode) override;
+    ECullMode::T getCullMode() const override { return _ci.rasterizationState.cullMode; }
+    void setPolygonMode(EPolygonMode::T polygonMode) override;
+    EPolygonMode::T getPolygonMode() const override { return _ci.rasterizationState.polygonMode; }
 
     ::VkPipeline getVkHandle() const { return _pipeline; }
 

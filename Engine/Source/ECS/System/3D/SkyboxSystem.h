@@ -2,13 +2,14 @@
 
 #include "Core/Base.h"
 #include "Core/Camera/Camera.h"
+#include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderPass.h"
 
 namespace ya
 {
 
-struct SkyBoxSystem
+struct SkyBoxSystem : public IRenderSystem
 {
 
     PipelineLayoutDesc _pipelineLayoutDesc = {
@@ -68,16 +69,17 @@ struct SkyBoxSystem
     stdptr<IGraphicsPipeline> _pipeline       = nullptr;
     stdptr<Sampler>           _sampler3D      = nullptr;
 
+    SkyBoxSystem() : IRenderSystem("SkyBoxSystem") {}
 
 
-    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo);
-    void tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx);
-    void onDestroy();
+    void onInitImpl(const InitParams& initParams) override;
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
+    void onDestroy() override;
 
     void updateSkyboxCubeMap();
 
     void advance() { _index = (_index + 1) % SKYBOX_PER_FRAME_SET; }
-    void beginFrame()
+    void beginFrame() override
     {
         updateSkyboxCubeMap();
         _index = 0;

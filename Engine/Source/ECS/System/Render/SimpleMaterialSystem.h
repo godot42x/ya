@@ -30,9 +30,9 @@ struct SimpleMaterialSystem : public IMaterialSystem
     stdptr<IPipelineLayout> _pipelineLayout = nullptr;
     SimpleMaterialSystem() : IMaterialSystem("SimpleMaterialSystem") {}
 
-    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;
+    void onInitImpl(const InitParams& initParams) override;
     void onDestroy() override;
     void onRenderGUI() override;
-    void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx) override;
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
 };
 } // namespace ya

@@ -70,9 +70,9 @@ struct UnlitMaterialSystem : public IMaterialSystem
   public:
     UnlitMaterialSystem() : IMaterialSystem("UnlitMaterialSystem") {}
 
-    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;
+    void onInitImpl(const InitParams& initParams) override;
     void onDestroy() override {}
-    void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx) override;
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void resetFrameSlot() override { _frameSlot = 0; }
     void onRenderGUI() override
     {
@@ -83,7 +83,7 @@ struct UnlitMaterialSystem : public IMaterialSystem
   private:
     void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(FrameContext* ctx);
+    void updateFrameDS(const FrameContext* ctx);
     void updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial* material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial* material);
 };

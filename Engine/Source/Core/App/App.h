@@ -180,22 +180,28 @@ struct App
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
 
-    stdptr<IDescriptorPool> _descriptorPool = nullptr;
-
-    // Material systems (managed externally from RenderTarget)
-    std::vector<std::shared_ptr<IRenderSystem>> _renderSystems;
-    std::unordered_map<FName, IRenderSystem*>   _name2renderSystem;
-    std::vector<stdptr<ISystem>>                _systems;
-
-    stdptr<SkyBoxSystem>         _skyboxSystem     = nullptr;
+    stdptr<IDescriptorPool>      _descriptorPool   = nullptr;
     stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
     DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
+
+    stdptr<IRenderSystem> _simpleMaterialSystem     = nullptr;
+    stdptr<IRenderSystem> _unlitMaterialSystem      = nullptr;
+    stdptr<IRenderSystem> _phongMaterialSystem      = nullptr;
+    stdptr<IRenderSystem> _debugRenderSystem        = nullptr;
+    stdptr<IRenderSystem> _skyboxSystem             = nullptr;
+    Delegate<void()>      _onRenderRenderSystemsGUI = {};
+
+
+    // other systems, eg: transform, resource resolve
+    std::vector<stdptr<ISystem>> _systems;
 
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
 
     stdptr<IRenderTarget> _mirrorRT  = nullptr;
     bool                  bHasMirror = false;
+
+    bool bMSAA = false;
 
     bool                     bBasicPostProcessor   = false;
     int                      _postProcessingEffect = 0;
@@ -317,20 +323,6 @@ struct App
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
 
 
-    template <typename T>
-    void addRenderSystem(IRenderPass* renderPass = nullptr, const PipelineRenderingInfo& pipelineRenderingInfo = {})
-    {
-        static_assert(std::is_base_of_v<IRenderSystem, T>, "T must derive from IRenderSystem");
-        stdptr<T> system = makeShared<T>();
-        auto      sys    = static_cast<IRenderSystem*>(system.get());
-        sys->onInit(renderPass, pipelineRenderingInfo);
-        YA_CORE_DEBUG("Initialized render system: {}", sys->_label);
-        _renderSystems.push_back(system);
-        YA_CORE_ASSERT(!_name2renderSystem.contains(FName(sys->getLabel())), "Name conflicts {}", sys->getLabel());
-        _name2renderSystem[sys->_label] = _renderSystems.back().get();
-    }
-
-
   private:
 
 
@@ -344,16 +336,27 @@ struct App
     void onSceneViewportResized(Rect2D rect);
 
 
-    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx);
+    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
+    {
+        _simpleMaterialSystem->tick(cmdBuf, dt, ctx);
+        _unlitMaterialSystem->tick(cmdBuf, dt, ctx);
+        _phongMaterialSystem->tick(cmdBuf, dt, ctx);
+        _debugRenderSystem->tick(cmdBuf, dt, ctx);
+        // early-z  to render skybox last ?
+        _skyboxSystem->tick(cmdBuf, dt, ctx);
+    }
     void beginFrame()
     {
         _skyboxSystem->beginFrame();
-        for (auto& system : _renderSystems) {
-            system->beginFrame();
-        }
+        _simpleMaterialSystem->beginFrame();
+        _unlitMaterialSystem->beginFrame();
+        _phongMaterialSystem->beginFrame();
+        _debugRenderSystem->beginFrame();
     }
 
     void handleSystemSignals();
+    bool recreateViewPortRT(uint32_t width, uint32_t height);
+    void createRenderSystems();
 };
 
 

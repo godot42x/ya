@@ -28,13 +28,11 @@ namespace ya
 
 {
 
-void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderingInfo &pipelineRenderingInfo)
+void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
 {
 
 
-    IRender *render = getRender();
-
-    auto _sampleCount = ESampleCount::Sample_1;
+    IRender* render = getRender();
 
     // MARK: layout
     PipelineLayoutDesc pipelineLayout{
@@ -107,8 +105,8 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
         .subPassRef            = 0,
-        .renderPass            = renderPass,
-        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
@@ -146,9 +144,6 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
         },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
-#if !NOT_DYN_CULL
-                            EPipelineDynamicFeature::CullMode,
-#endif
                             EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
@@ -157,7 +152,7 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
             // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
         },
         .multisampleState = MultisampleState{
-            .sampleCount          = _sampleCount,
+            .sampleCount          = ESampleCount::Sample_1,
             .bSampleShadingEnable = false,
         },
         .depthStencilState = DepthStencilState{
@@ -243,9 +238,9 @@ void UnlitMaterialSystem::onInit(IRenderPass *renderPass, const PipelineRenderin
 }
 
 
-void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
+void UnlitMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
-    Scene *scene = getActiveScene();
+    Scene* scene = getActiveScene();
     if (!scene) {
         return;
     }
@@ -271,9 +266,6 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, width, height);
-#if !NOT_DYN_CULL
-    cmdBuf->setCullMode(_cullMode);
-#endif
 
     updateFrameDS(ctx);
 
@@ -289,18 +281,18 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
     for (entt::entity entity : view)
     {
-        const auto &[umc, meshComp, tc] = view.get(entity);
+        const auto& [umc, meshComp, tc] = view.get(entity);
 
         // Get runtime material from component
-        UnlitMaterial *material = umc.getMaterial();
+        UnlitMaterial* material = umc.getMaterial();
         if (!material || material->getIndex() < 0) {
-            Entity *entityPtr = scene->getEntityByEnttID(entity);
+            Entity* entityPtr = scene->getEntityByEnttID(entity);
             YA_CORE_WARN("UnlitMaterialSystem: Entity '{}' has no valid material",
                          entityPtr ? entityPtr->getName() : "Unknown");
             continue;
         }
 
-        Entity *entityPtr  = scene->getEntityByEnttID(entity);
+        Entity* entityPtr  = scene->getEntityByEnttID(entity);
         _ctxEntityDebugStr = std::format("{} (Mat: {})",
                                          entityPtr ? entityPtr->getName() : "Unknown",
                                          material->getLabel());
@@ -348,7 +340,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
                               &pushConst);
 
         // draw mesh from MeshComponent (single mesh per component)
-        Mesh *mesh = meshComp.getMesh();
+        Mesh* mesh = meshComp.getMesh();
         if (mesh) {
             mesh->draw(cmdBuf);
         }
@@ -359,7 +351,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer *cmdBuf, FrameContext *ctx)
 
 void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 {
-    auto *render = getRender();
+    auto* render = getRender();
     YA_CORE_ASSERT(render != nullptr, "Render is null");
     // 1. calculate how many set needed
     uint32_t newDescriptorSetCount = std::max<uint32_t>(1, _lastMaterialDSCount);
@@ -423,7 +415,7 @@ void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
 }
 
 // TODO: descriptor set can be shared if they use same layout and data
-void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
+void UnlitMaterialSystem::updateFrameDS(const FrameContext* ctx)
 {
     auto app    = getApp();
     auto render = getRender();
@@ -449,7 +441,7 @@ void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
 
     DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOs[slot]->getHandle()), 0, sizeof(FrameUBO));
 
-    auto *descriptorHelper = render->getDescriptorHelper();
+    auto* descriptorHelper = render->getDescriptorHelper();
     descriptorHelper->updateDescriptorSets(
         {
             IDescriptorSetHelper::genBufferWrite(
@@ -462,20 +454,20 @@ void UnlitMaterialSystem::updateFrameDS(FrameContext *ctx)
         {});
 }
 
-void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial *material)
+void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial* material)
 {
     auto render = getRender();
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
 
-    auto &params = material->uMaterial;
+    auto& params = material->uMaterial;
     // update param from texture
-    const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
+    const TextureView* tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
     if (tv0) {
         params.textureParam0.updateByTextureView(tv0);
     }
-    const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+    const TextureView* tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
     if (tv1) {
         params.textureParam1.updateByTextureView(tv1);
     }
@@ -499,7 +491,7 @@ void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMat
             {});
 }
 
-void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial *material)
+void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial* material)
 {
     auto render = getRender();
 
@@ -507,8 +499,8 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
     // TODO: not texture and default texture?
     // update param from texture
-    const TextureView *tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
-    const TextureView *tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
+    const TextureView* tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
+    const TextureView* tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
 
     DescriptorImageInfo imageInfo0(SamplerHandle(tv0->sampler->getHandle()),
                                    tv0->texture->getImageView()->getHandle(),

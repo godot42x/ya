@@ -2,10 +2,12 @@
 
 #include "Core/App/App.h"
 #include "Core/Log.h"
+#include "ImGui.h"
 #include "Render/RenderDefines.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
+
 
 
 
@@ -124,6 +126,8 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 {
     YA_PROFILE_FUNCTION_LOG();
     _ci             = ci;
+    // TODO: precreate post create to avoid reentrance?
+    _bDirty         = false;
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
         createPipelineInternal();
@@ -139,7 +143,7 @@ void VulkanPipeline::reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci)
 {
     auto shaderStorage = ya::App::get()->getShaderStorage();
     shaderStorage->removeCache(_ci.shaderDesc.shaderName);
-    if(ci.has_value()){
+    if (ci.has_value()) {
         _ci = ci.value();
     }
     recreate(_ci);
@@ -153,6 +157,85 @@ void VulkanPipeline::tryUpdateShader()
         _pendingNewPipeline = VK_NULL_HANDLE;
         YA_CORE_TRACE("Vulkan graphics pipeline replaced successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
     }
+}
+
+void VulkanPipeline::beginFrame()
+{
+    if (_bDirty) {
+        auto pendingCI = _ci;
+        _bDirty        = false;
+        if (!recreate(pendingCI)) {
+            _bDirty = true;
+        }
+    }
+    tryUpdateShader();
+}
+
+void VulkanPipeline::setSampleCount(ESampleCount::T sampleCount)
+{
+    if (_ci.multisampleState.sampleCount == sampleCount) {
+        return;
+    }
+    _ci.multisampleState.sampleCount = sampleCount;
+    _bDirty                          = true;
+}
+
+void VulkanPipeline::setCullMode(ECullMode::T cullMode)
+{
+    if (_ci.rasterizationState.cullMode == cullMode) {
+        return;
+    }
+    _ci.rasterizationState.cullMode = cullMode;
+    _bDirty                         = true;
+}
+
+void VulkanPipeline::setPolygonMode(EPolygonMode::T polygonMode)
+{
+    if (_ci.rasterizationState.polygonMode == polygonMode) {
+        return;
+    }
+    _ci.rasterizationState.polygonMode = polygonMode;
+    _bDirty                            = true;
+}
+
+void VulkanPipeline::renderGUI()
+{
+    bool bManualReload = false;
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
+    if (ImGui::Button("Reload Shaders")) {
+        bManualReload = true;
+    }
+    ImGui::PopStyleColor();
+    int cull = static_cast<int>(_ci.rasterizationState.cullMode);
+    if (ImGui::Combo("Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
+        setCullMode(static_cast<ECullMode::T>(cull));
+    }
+
+    int polygonMode = static_cast<int>(_ci.rasterizationState.polygonMode);
+    if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
+        setPolygonMode(static_cast<EPolygonMode::T>(polygonMode));
+    }
+
+
+    // SampleCount need the render pass/render target compatibility,
+    //  so we can only allow changing it in a limited scope:
+    //  change renderpass(optional) -> change rt/recreate attachments -> change pipeline
+    // int sampleCount = toSampleCountIndex(_ci.multisampleState.sampleCount);
+    // if (ImGui::Combo("Sample Count", &sampleCount, "1\0"
+    //                                                "2\0"
+    //                                                "4\0"
+    //                                                "8\0"
+    //                                                "16\0"
+    //                                                "32\0"
+    //                                                "64\0")) {
+    //     setSampleCount(toSampleCount(sampleCount));
+    // }
+
+    if (bManualReload) {
+        reloadShaders();
+        
+    }
+
 }
 
 

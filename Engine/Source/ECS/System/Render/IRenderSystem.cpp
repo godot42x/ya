@@ -15,12 +15,35 @@ namespace ya
 {
 
 
-App *IRenderSystem::getApp() const
+void IRenderSystem::renderGUI()
+{
+    bool bOpen = ImGui::TreeNode(_label.c_str());
+    if (!bOpen) {
+        return;
+    }
+    ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
+    bool bEnabledLocal = this->bEnabled;
+    if (ImGui::Checkbox("Enabled", &bEnabledLocal)) {
+        App::get()->taskManager.registerFrameTask([this, bEnabledLocal]() {
+            // TODO: weak check
+            this->bEnabled = bEnabledLocal;
+        });
+    }
+
+    if (_pipeline) {
+        _pipeline->renderGUI();
+    }
+
+    onRenderGUI();
+    ImGui::TreePop();
+}
+
+App* IRenderSystem::getApp() const
 {
     return App::get();
 }
 
-Scene *IRenderSystem::getActiveScene() const
+Scene* IRenderSystem::getActiveScene() const
 {
     if (getApp()) {
         return getApp()->getSceneManager()->getActiveScene();
@@ -28,7 +51,7 @@ Scene *IRenderSystem::getActiveScene() const
     return nullptr;
 }
 
-IRender *IRenderSystem::getRender() const
+IRender* IRenderSystem::getRender() const
 {
     if (getApp()) {
         return getApp()->getRender();

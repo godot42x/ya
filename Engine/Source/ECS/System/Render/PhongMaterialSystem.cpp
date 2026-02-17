@@ -35,12 +35,11 @@
 namespace ya
 {
 
-void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& inPipelineRenderingInfo)
+void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
 {
     YA_PROFILE_FUNCTION();
 
-    IRender* render       = getRender();
-    auto     _sampleCount = ESampleCount::Sample_1;
+    IRender* render = getRender();
 
     // MARK: layout
 
@@ -59,8 +58,8 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
 
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
-        .renderPass            = renderPass,
-        .pipelineRenderingInfo = inPipelineRenderingInfo,
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
@@ -99,19 +98,18 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
             EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
-#if !NOT_DYN_CULL
-            EPipelineDynamicFeature::CullMode,
-#endif
             EPipelineDynamicFeature::Viewport,
-            EPipelineDynamicFeature::PolygonMode,
         },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
             //
-            .cullMode  = _cullMode,
+            .cullMode  = ECullMode::Back,
             .frontFace = EFrontFaceType::CounterClockWise, // GL
                                                            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+        },
+        .multisampleState = MultisampleState{
+            .sampleCount = ESampleCount::Sample_1,
         },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = true,
@@ -214,6 +212,7 @@ void PhongMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderin
     }
 
     render->getDescriptorHelper()->updateDescriptorSets(writes, {});
+    // where to create pipeline? -> on frame begin -> bDirty
 }
 
 void PhongMaterialSystem::onDestroy()
@@ -221,7 +220,7 @@ void PhongMaterialSystem::onDestroy()
 }
 
 // MARK: grab resources
-void PhongMaterialSystem::preTick(float dt, FrameContext* ctx)
+void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -272,7 +271,7 @@ void PhongMaterialSystem::preTick(float dt, FrameContext* ctx)
 }
 
 // MARK: render
-void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
+void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
@@ -314,8 +313,6 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
         YA_PROFILE_SCOPE("PhongMaterial::SetViewportScissorCull");
         cmdBuf->setViewport(0.0f, viewportY, (float)width, viewportHeight, 0.0f, 1.0f);
         cmdBuf->setScissor(0, 0, width, height);
-        cmdBuf->setCullMode(_cullMode);
-        cmdBuf->setPolygonMode(_polygonMode);
     }
 
     {
@@ -452,25 +449,6 @@ void PhongMaterialSystem::onRenderGUI()
 
     TextColored(ImColor(1.0f, 1.0f, 0.0f, 1.0f), "pass slot: %d", getPassSlot());
 
-    // Polygon Mode Control
-    int polygonMode = (int)(_polygonMode);
-    if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
-        switch (polygonMode) {
-        case 0:
-            _polygonMode = EPolygonMode::Fill;
-            break;
-        case 1:
-            _polygonMode = EPolygonMode::Line;
-            break;
-        case 2:
-            _polygonMode = EPolygonMode::Point;
-            break;
-        default:
-            _polygonMode = EPolygonMode::Fill;
-            break;
-        }
-    }
-
     if (TreeNode("Directional Light")) {
         ya::RenderContext ctx;
         ya::renderReflectedType("DirectionalLight", ya::type_index_v<PhongMaterialSystem::DirectionalLightData>, &uLight.dirLight, ctx);
@@ -489,7 +467,7 @@ void PhongMaterialSystem::onRenderGUI()
 
 
 // TODO: descriptor set can be shared if they use same layout and data
-void PhongMaterialSystem::updateFrameDS(FrameContext* ctx)
+void PhongMaterialSystem::updateFrameDS(const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 

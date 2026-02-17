@@ -26,7 +26,7 @@ struct DebugRenderSystem : public IRenderSystem
         glm::mat4 projection{1.f};
         glm::mat4 view{1.f};
         alignas(8) glm::ivec2 resolution{0, 0};
-        alignas(4) int mode = 0; // 0:none, 1:normal, 2:depth, 3:uv
+        alignas(4) int mode   = 0; // 0:none, 1:normal, 2:depth, 3:uv
         alignas(4) float time = 0.f;
         glm::vec4 floatParam  = glm::vec4(0.0f);
     };
@@ -37,7 +37,7 @@ struct DebugRenderSystem : public IRenderSystem
     };
 
     DebugUBO uDebug;
-    EMode _mode;
+    EMode    _mode;
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "DebugRenderSystem_PipelineLayout",
@@ -75,15 +75,15 @@ struct DebugRenderSystem : public IRenderSystem
   public:
     DebugRenderSystem() : IRenderSystem("DebugRenderSystem") {}
 
-    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;
+    void onInitImpl(const InitParams& initParams) override;
     void onDestroy() override;
-    void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx) override;
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
 
   protected:
     void onRenderGUI() override;
 
   private:
-    void updateUBO(FrameContext* ctx);
+    void updateUBO(const FrameContext* ctx);
 };
 
 

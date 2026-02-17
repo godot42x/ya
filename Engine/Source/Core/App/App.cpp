@@ -137,17 +137,141 @@ void App::onSceneViewportResized(Rect2D rect)
     }
 }
 
-void App::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
+bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 {
+    RenderTargetCreateInfo viewportRTci = RenderTargetCreateInfo{
+        .label            = "Viewport RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = false,
+        // update when viewport resized
+        .extent           = {.width = width, .height = height},
+        .frameBufferCount = 1,
+        .attachments      = {
 
-    for (auto& system : _renderSystems) {
-        if (system->bEnabled) {
-            YA_PROFILE_SCOPE(std::format("RenderMaterialSystem_{}", system->_label));
-            system->onRender(cmdBuf, &ctx);
-        }
+            .colorAttach = {
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = COLOR_FORMAT,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::ShaderReadOnlyOptimal,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+            },
+            .depthAttach = AttachmentDescription{
+                .index          = 1,
+                .format         = DEPTH_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment,
+            },
+        } // namespace ya
+    };
+
+    if (bMSAA) {
+        viewportRTci.attachments.colorAttach[0].samples = ESampleCount::Sample_4;
+        viewportRTci.attachments.depthAttach->samples   = ESampleCount::Sample_4;
+
+        viewportRTci.attachments.resolveAttach = AttachmentDescription{
+            .index          = 2,
+            .format         = COLOR_FORMAT,
+            .samples        = ESampleCount::Sample_1,
+            .loadOp         = EAttachmentLoadOp::DontCare,
+            .storeOp        = EAttachmentStoreOp::Store,
+            .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+            .stencilStoreOp = EAttachmentStoreOp::DontCare,
+            .initialLayout  = EImageLayout::Undefined,
+            .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+            .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
     }
-    // early-z
-    _skyboxSystem->tick(cmdBuf, dt, ctx);
+
+    _viewportRT = ya::createRenderTarget(viewportRTci);
+    return _viewportRT != nullptr;
+}
+
+void App::createRenderSystems()
+{
+    _simpleMaterialSystem = ya::makeShared<SimpleMaterialSystem>();
+    _simpleMaterialSystem->init(IRenderSystem::InitParams{
+        .renderPass = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "SimpleMaterial Pipeline",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = DEPTH_FORMAT,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+        .sampleCount = ESampleCount::Sample_1,
+    });
+
+    _unlitMaterialSystem = ya::makeShared<UnlitMaterialSystem>();
+    _unlitMaterialSystem->init(IRenderSystem::InitParams{
+        .renderPass = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "UnlitMaterial Pipeline",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = DEPTH_FORMAT,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+        .sampleCount = ESampleCount::Sample_1,
+    });
+    _phongMaterialSystem = ya::makeShared<PhongMaterialSystem>();
+    _phongMaterialSystem->init(IRenderSystem::InitParams{
+        .renderPass = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "PhongMaterial Pipeline",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = DEPTH_FORMAT,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+        .sampleCount = ESampleCount::Sample_1,
+    });
+    _debugRenderSystem = ya::makeShared<DebugRenderSystem>();
+    _debugRenderSystem->init(IRenderSystem::InitParams{
+        .renderPass = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "DebugRender Pipeline",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = DEPTH_FORMAT,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+        .sampleCount = ESampleCount::Sample_1,
+    });
+
+
+    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
+    _skyboxSystem->init(IRenderSystem::InitParams{
+        .renderPass = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "Skybox Pipeline",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = DEPTH_FORMAT,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+        .sampleCount = ESampleCount::Sample_1,
+    });
+
+    _onRenderRenderSystemsGUI.set([this]() {
+        _simpleMaterialSystem->renderGUI();
+        _unlitMaterialSystem->renderGUI();
+        _phongMaterialSystem->renderGUI();
+        _debugRenderSystem->renderGUI();
+        _skyboxSystem->renderGUI();
+    });
 }
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
@@ -229,46 +353,11 @@ void App::init(AppDesc ci)
     // Allocate command buffers for swapchain (both scene and UI in same buffer)
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
 
-    constexpr auto _sampleCount = ESampleCount::Sample_1; // TODO: support MSAA
 
     // MARK: Viewport pass (dynamic rendering only)
     _viewportRenderPass = nullptr;
+    recreateViewPortRT(winW, winH);
 
-    _viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = static_cast<uint32_t>(winW), .height = static_cast<uint32_t>(winH)},
-        .frameBufferCount = 1,
-        .attachments      = {
-                 .colorAttach = {
-                AttachmentDescription{
-                         .index          = 0,
-                         .format         = COLOR_FORMAT,
-                         .samples        = _sampleCount,
-                         .loadOp         = EAttachmentLoadOp::Clear,
-                         .storeOp        = EAttachmentStoreOp::Store,
-                         .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                         .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                         .initialLayout  = EImageLayout::ShaderReadOnlyOptimal,
-                         .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-                 .depthAttach = AttachmentDescription{
-                     .index          = 1,
-                     .format         = DEPTH_FORMAT,
-                     .samples        = _sampleCount,
-                     .loadOp         = EAttachmentLoadOp::Clear,
-                     .storeOp        = EAttachmentStoreOp::Store,
-                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                     .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                     .usage          = EImageUsage::DepthStencilAttachment,
-            },
-        },
-    });
 
     // MARK: Render Resources
     _descriptorPool   = IDescriptorPool::create(_render,
@@ -305,62 +394,25 @@ void App::init(AppDesc ci)
         _descriptorPool.reset();
     });
 
-    // pre construct all material systems
-    addRenderSystem<SimpleMaterialSystem>(nullptr,
-                                          PipelineRenderingInfo{
-                                              .label                   = "SimpleMaterial Pipeline",
-                                              .viewMask                = 0,
-                                              .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                              .depthAttachmentFormat   = DEPTH_FORMAT,
-                                              .stencilAttachmentFormat = EFormat::Undefined,
-                                          });
-    addRenderSystem<UnlitMaterialSystem>(nullptr,
-                                         PipelineRenderingInfo{
-                                             .label                   = "UnlitMaterialSystem Pipeline",
-                                             .viewMask                = 0,
-                                             .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                             .depthAttachmentFormat   = DEPTH_FORMAT,
-                                             .stencilAttachmentFormat = EFormat::Undefined,
-                                         });
-    addRenderSystem<PhongMaterialSystem>(nullptr,
-                                         PipelineRenderingInfo{
-                                             .label                   = "PhongMaterial Pipeline",
-                                             .viewMask                = 0,
-                                             .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                             .depthAttachmentFormat   = DEPTH_FORMAT,
-                                             .stencilAttachmentFormat = EFormat::Undefined,
-                                         });
-    addRenderSystem<DebugRenderSystem>(nullptr,
-                                       PipelineRenderingInfo{
-                                           .label                   = "DebugRender Pipeline",
-                                           .viewMask                = 0,
-                                           .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                                           .depthAttachmentFormat   = DEPTH_FORMAT,
-                                           .stencilAttachmentFormat = EFormat::Undefined,
-                                       });
-    _deleter.push("MaterialSystems", [this](void*) {
-        _renderSystems.clear();
-    });
+    createRenderSystems();
 
-    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
-    _skyboxSystem->onInit(nullptr,
-                          PipelineRenderingInfo{
-                              .label                   = "Skybox Pipeline",
-                              .viewMask                = 0,
-                              .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                              .depthAttachmentFormat   = DEPTH_FORMAT,
-                              .stencilAttachmentFormat = EFormat::Undefined,
-                          });
-    _deleter.push("SkyboxSystem", [this](void*) {
+    _deleter.push("RenderSystems", [this](void*) {
+        _simpleMaterialSystem->onDestroy();
+        _simpleMaterialSystem.reset();
+        _unlitMaterialSystem->onDestroy();
+        _unlitMaterialSystem.reset();
+        _phongMaterialSystem->onDestroy();
+        _phongMaterialSystem.reset();
+        _debugRenderSystem->onDestroy();
+        _debugRenderSystem.reset();
         _skyboxSystem->onDestroy();
         _skyboxSystem.reset();
     });
 
+    _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
+    _phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
+    _debugRenderSystem->bEnabled                                     = false;
 
-    _skyboxSystem->_cubeMapDS                                                             = _skyBoxCubeMapDS;
-    _name2renderSystem["PhongMaterialSystem"]->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
-
-    _name2renderSystem["DebugRenderSystem"]->bEnabled = false;
 
 
     // MARK: tex-> Postprocessing
@@ -419,7 +471,7 @@ void App::init(AppDesc ci)
                 .depthAttach = AttachmentDescription{
                     .index          = 1,
                     .format         = DEPTH_FORMAT,
-                    .samples        = _sampleCount,
+                    .samples        = ESampleCount::Sample_1,
                     .loadOp         = EAttachmentLoadOp::Clear,
                     .storeOp        = EAttachmentStoreOp::Store,
                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
@@ -960,8 +1012,10 @@ void App::tickRender(float dt)
         ctx.cameraPos     = glm::vec3(invView[3]);
     }
 
+    bool bViewPortRectValid = _viewportRect.extent.x > 0 && _viewportRect.extent.y > 0;
 
     // --- MARK: Mirror Rendering (Pre scene render some mirror entities and render to texture for later compositing) ---
+    // if (bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("Mirror Pass")
         // Mirror / Rear-view mirror / Screen-in-screen rendering (TEMPORARY, for demo/testing only)
@@ -1019,7 +1073,6 @@ void App::tickRender(float dt)
         }
     }
 
-    bool bViewPortRectValid = _viewportRect.extent.x > 0 && _viewportRect.extent.y > 0;
 
     // --- MARK: ViewPort Pass
     if (bViewPortRectValid)
@@ -1049,8 +1102,6 @@ void App::tickRender(float dt)
 
         cmdBuf->beginRendering(ri);
 
-
-
         ctx.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
 
         renderScene(cmdBuf.get(), dt, ctx);
@@ -1076,11 +1127,11 @@ void App::tickRender(float dt)
                 Render2D::onRenderGUI();
                 Render2D::end();
             }
-
-            cmdBuf->endRendering(EndRenderingInfo{
-                .renderTarget = _viewportRT.get(),
-            });
         }
+
+        cmdBuf->endRendering(EndRenderingInfo{
+            .renderTarget = _viewportRT.get(),
+        });
     }
 
 
@@ -1135,7 +1186,9 @@ void App::tickRender(float dt)
 
         // Pass input imageView and output extent to render
 
-        const auto& tex = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
+        const auto& tex = bMSAA
+                            ? _viewportRT->getCurFrameBuffer()->getColorTexture(0)
+                            : _viewportRT->getCurFrameBuffer()->getResolveTexture();
 
         BasicPostprocessing::RenderPayload payload{
             .inputImageView = tex->getImageView(),
@@ -1243,9 +1296,7 @@ void App::onRenderGUI(float dt)
     }
 
     if (ImGui::CollapsingHeader("Render Systems", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (auto& system : _renderSystems) {
-            system->renderGUI();
-        }
+        _onRenderRenderSystemsGUI.executeIfBound();
     }
 
     _viewportRT->onRenderGUI();
@@ -1265,7 +1316,14 @@ void App::onRenderGUI(float dt)
             ImGui::TreePop();
         }
 
-        ImGui::DragFloat("Retro Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+        ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+        if (ImGui::Checkbox("MSAA", &bMSAA)) {
+            taskManager.registerFrameTask([this]() {
+                uint32_t width  = _viewportRect.extent2D().width;
+                uint32_t height = _viewportRect.extent2D().height;
+                recreateViewPortRT(width, height);
+            });
+        }
 
         auto* swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();

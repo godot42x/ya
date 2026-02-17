@@ -58,10 +58,14 @@ struct IPipelineLayout : public plat_base<IPipelineLayout>
         const std::vector<std::shared_ptr<IDescriptorSetLayout>>& descriptorSetLayouts);
 };
 
+struct IPipeline
+{
+};
+
 /**
  * @brief Generic graphics pipeline interface
  */
-struct IGraphicsPipeline
+struct IGraphicsPipeline : public IPipeline
 {
   public:
     virtual ~IGraphicsPipeline() = default;
@@ -71,11 +75,14 @@ struct IGraphicsPipeline
     IGraphicsPipeline& operator=(const IGraphicsPipeline&) = delete;
     IGraphicsPipeline(IGraphicsPipeline&&)                 = default;
     IGraphicsPipeline& operator=(IGraphicsPipeline&&)      = default;
-
     /**
-     * @brief Recreate the pipeline with new configuration
+     * @brief Factory method to create graphics pipeline
      */
+    static std::shared_ptr<IGraphicsPipeline> create(IRender* render);
+
     virtual bool recreate(const GraphicsPipelineCreateInfo& ci) = 0;
+    virtual void beginFrame()                                   = 0;
+    virtual void renderGUI()                                    = 0;
 
     /**
      * @brief Bind this pipeline to a command buffer
@@ -83,28 +90,24 @@ struct IGraphicsPipeline
     [[deprecated("use ICommandBuffer::bindPipeline instead")]]
     virtual void bind(CommandBufferHandle commandBuffer) = 0;
 
-    /**
-     * @brief Get the native handle (backend-specific)
-     */
-    virtual void* getHandle() const = 0;
 
-    /**
-     * @brief Get typed native handle
-     */
+    virtual void* getHandle() const = 0;
     template <typename T>
     T getHandleAs() const { return static_cast<T>(getHandle()); }
 
     /**
      * @brief Get the pipeline name
      */
-    virtual const std::string& getName() const                                                  = 0;
-    virtual void               reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) = 0;
-    virtual void               tryUpdateShader()                                                = 0;
+    virtual const std::string& getName() const = 0;
 
-    /**
-     * @brief Factory method to create graphics pipeline
-     */
-    static std::shared_ptr<IGraphicsPipeline> create(IRender* render);
+    virtual void            reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) = 0;
+    virtual void            tryUpdateShader()                                                = 0;
+    virtual void            setSampleCount(ESampleCount::T sampleCount)                      = 0;
+    virtual ESampleCount::T getSampleCount() const                                           = 0;
+    virtual void            setCullMode(ECullMode::T cullMode)                               = 0;
+    virtual ECullMode::T    getCullMode() const                                              = 0;
+    virtual void            setPolygonMode(EPolygonMode::T polygonMode)                      = 0;
+    virtual EPolygonMode::T getPolygonMode() const                                           = 0;
 };
 
 } // namespace ya

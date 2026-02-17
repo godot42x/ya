@@ -238,17 +238,14 @@ struct PhongMaterialSystem : public IMaterialSystem
     DescriptorSetHandle skyBoxCubeMapDS = nullptr;
     std::string         _ctxEntityDebugStr;
 
-    EPolygonMode::T _polygonMode = EPolygonMode::Fill; // Polygon rendering mode (Fill, Line, Point)
-
-
   public:
     PhongMaterialSystem() : IMaterialSystem("PhongMaterialSystem") {}
 
     // optional?
-    void onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo) override;
+    void onInitImpl(const InitParams& initParams) override;
     void onDestroy() override;
-    void preTick(float deltaTime, FrameContext* ctx);
-    void onRender(ICommandBuffer* cmdBuf, FrameContext* ctx) override;
+    void preTick(float deltaTime, const FrameContext* ctx);
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void onRenderGUI() override;
     void resetFrameSlot() override { _passSlot = 0; }
 
@@ -256,7 +253,7 @@ struct PhongMaterialSystem : public IMaterialSystem
   private:
     // void recreateMaterialDescPool(uint32_t count);
 
-    void updateFrameDS(FrameContext* ctx);
+    void updateFrameDS(const FrameContext* ctx);
     void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent& component, bool bOverrideMirrorMaterial, bool bRecreated);
     void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material, bool bOverrideDiffuse);
 

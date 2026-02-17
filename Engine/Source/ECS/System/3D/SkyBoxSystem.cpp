@@ -13,7 +13,7 @@
 namespace ya
 {
 
-void SkyBoxSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo)
+void SkyBoxSystem::onInitImpl(const InitParams& initParams)
 {
     auto render = App::get()->getRender();
 
@@ -30,8 +30,8 @@ void SkyBoxSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& 
 
     // MARK: Create Graphics Pipeline
     GraphicsPipelineCreateInfo ci = {
-        .renderPass            = renderPass,
-        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
 
@@ -129,7 +129,7 @@ void SkyBoxSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& 
     // _DSP->allocateDescriptorSets(_dslResource, 1, resourceSets);
 
 
-    // MARK: Initial descriptor set updates (once during init)
+    // MARK: Descriptor set updates 
     SkyboxFrameUBO initialFrameData{
         .projection = glm::mat4(1.0f),
         .view       = glm::mat4(1.0f),
@@ -174,6 +174,7 @@ void SkyBoxSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& 
     });
 }
 
+
 void SkyBoxSystem::onDestroy()
 {
 }
@@ -202,8 +203,11 @@ void SkyBoxSystem::updateSkyboxCubeMap()
     }
 }
 
-void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx)
+void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
+    if (!ctx) {
+        return;
+    }
     auto             scene      = App::get()->getSceneManager()->getActiveScene();
     SkyboxComponent* skyboxComp = nullptr;
     MeshComponent*   meshComp   = nullptr;
@@ -236,15 +240,15 @@ void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameCont
 
 
     // MARK: Set Viewport and Scissor
-    uint32_t width  = ctx.extent.width;
-    uint32_t height = ctx.extent.height;
+    uint32_t width  = ctx->extent.width;
+    uint32_t height = ctx->extent.height;
     if (width == 0 || height == 0) {
         return;
     }
     float viewportY      = 0.0f;
     float viewportHeight = static_cast<float>(height);
 
-    if (1 /*bReverseViewportY*/) {
+    if (bReverseViewportY) {
         viewportY      = static_cast<float>(height);
         viewportHeight = -static_cast<float>(height);
     }
@@ -258,8 +262,8 @@ void SkyBoxSystem::tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameCont
 
     // MARK: Update UBO data (buffer only, no descriptor set update)
     SkyboxFrameUBO frameData{
-        .projection = ctx.projection,
-        .view       = FMath::dropTranslation(ctx.view),
+        .projection = ctx->projection,
+        .view       = FMath::dropTranslation(ctx->view),
     };
     _frameUBO[_index]->writeData(&frameData, sizeof(SkyboxFrameUBO), 0);
 

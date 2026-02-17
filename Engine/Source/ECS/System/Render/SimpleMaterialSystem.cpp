@@ -32,11 +32,9 @@ namespace ya
 
 
 
-void SimpleMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo)
+void SimpleMaterialSystem::onInitImpl(const InitParams& initParams)
 {
     auto* render = getRender();
-
-    auto _sampleCount = ESampleCount::Sample_1;
 
     constexpr auto size = sizeof(SimpleMaterialSystem::PushConstant);
     YA_CORE_DEBUG("SimpleMaterialSystem PushConstant size: {}", size);
@@ -58,8 +56,8 @@ void SimpleMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderi
 
     GraphicsPipelineCreateInfo pipelineCI{
         .subPassRef            = 0,
-        .renderPass            = renderPass,
-        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
@@ -106,7 +104,7 @@ void SimpleMaterialSystem::onInit(IRenderPass* renderPass, const PipelineRenderi
             // .frontFace = EFrontFaceType::ClockWise, // VK
         },
         .multisampleState = MultisampleState{
-            .sampleCount          = _sampleCount,
+            .sampleCount          = ESampleCount::Sample_1,
             .bSampleShadingEnable = false,
         },
         .depthStencilState = DepthStencilState{
@@ -171,7 +169,7 @@ void SimpleMaterialSystem::onRenderGUI()
 }
 
 
-void SimpleMaterialSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
+void SimpleMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
 
     auto render = getRender();

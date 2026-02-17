@@ -14,7 +14,7 @@
 namespace ya
 {
 
-void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingInfo& pipelineRenderingInfo)
+void DebugRenderSystem::onInitImpl(const InitParams& initParams)
 {
 
 
@@ -31,8 +31,8 @@ void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingI
         dslVec);
 
     _pipelineCI = GraphicsPipelineCreateInfo{
-        .renderPass            = renderPass,
-        .pipelineRenderingInfo = pipelineRenderingInfo,
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
@@ -68,14 +68,11 @@ void DebugRenderSystem::onInit(IRenderPass* renderPass, const PipelineRenderingI
         .dynamicFeatures = {
             EPipelineDynamicFeature::Scissor,
             EPipelineDynamicFeature::Viewport,
-#if !NOT_DYN_CULL
-            EPipelineDynamicFeature::CullMode,
-#endif
         },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .cullMode    = _cullMode,
+            .cullMode    = ECullMode::Back,
             .frontFace   = EFrontFaceType::CounterClockWise,
         },
         .depthStencilState = DepthStencilState{
@@ -163,9 +160,7 @@ void DebugRenderSystem::onDestroy()
     _pipeline.reset();
 }
 
-
-
-void DebugRenderSystem::updateUBO(FrameContext* ctx)
+void DebugRenderSystem::updateUBO(const FrameContext* ctx)
 {
     auto* app         = getApp();
     uDebug.projection = ctx->projection;
@@ -176,8 +171,12 @@ void DebugRenderSystem::updateUBO(FrameContext* ctx)
     _ubo->writeData(&uDebug, sizeof(DebugUBO), 0);
 }
 
-void DebugRenderSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
+void DebugRenderSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
+    if(_mode == EMode::None) {
+        return;
+    }
+
     auto* scene = getActiveScene();
     if (!scene) {
         return;
@@ -205,9 +204,6 @@ void DebugRenderSystem::onRender(ICommandBuffer* cmdBuf, FrameContext* ctx)
 
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, width, height);
-#if !NOT_DYN_CULL
-    cmdBuf->setCullMode(_cullMode);
-#endif
 
     for (auto [entity, meshComp, tc] : view.each()) {
         auto* mesh = meshComp.getMesh();

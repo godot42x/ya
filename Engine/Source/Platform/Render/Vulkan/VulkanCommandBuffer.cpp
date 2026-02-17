@@ -17,10 +17,9 @@ static void collectRenderTargetTransitions(
     IRenderTarget*                              renderTarget,
     bool                                        useInitialLayout,
     std::vector<VulkanImage::LayoutTransition>& outTransitions,
-    EImageLayout::T                             colorOverrideLayout = EImageLayout::Undefined,
-    EImageLayout::T                             depthOverrideLayout = EImageLayout::Undefined,
-    EImageLayout::T                             resolveOverrideLayout = EImageLayout::Undefined
-)
+    EImageLayout::T                             colorOverrideLayout   = EImageLayout::Undefined,
+    EImageLayout::T                             depthOverrideLayout   = EImageLayout::Undefined,
+    EImageLayout::T                             resolveOverrideLayout = EImageLayout::Undefined)
 {
     if (!renderTarget) {
         return;
@@ -57,7 +56,7 @@ static void collectRenderTargetTransitions(
         }
     }
 
-    if (depthDesc){
+    if (depthDesc) {
         auto targetLayout = depthOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
             targetLayout = useInitialLayout ? depthDesc->initialLayout : depthDesc->finalLayout;
@@ -79,7 +78,7 @@ static void collectRenderTargetTransitions(
         }
     }
 
-    if(resolveDesc) {
+    if (resolveDesc) {
         auto targetLayout = resolveOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
             targetLayout = useInitialLayout ? resolveDesc->initialLayout : resolveDesc->finalLayout;
@@ -706,17 +705,26 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 
     auto colorAttachmentDescs = renderTarget->getColorAttachmentDescs();
 
+    auto resolveTexture = curFrameBuffer->getResolveTexture();
+
+
     for (uint32_t i = 0; i < colorTextures.size(); ++i) {
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
             .imageView   = colorTextures[i]->getImageView()->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .resolveMode = VK_RESOLVE_MODE_NONE,
-            .loadOp      = EAttachmentLoadOp::toVk(colorAttachmentDescs[i].loadOp),
-            .storeOp     = EAttachmentStoreOp::toVk(colorAttachmentDescs[i].storeOp),
-            .clearValue  = {
-                 .color = {{
+            // resolv ?
+            .resolveMode        = resolveTexture ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+            .resolveImageView   = resolveTexture
+                                    ? resolveTexture->getImageView()->getHandle().as<VkImageView>()
+                                    : VK_NULL_HANDLE,
+            .resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+
+            .loadOp     = EAttachmentLoadOp::toVk(colorAttachmentDescs[i].loadOp),
+            .storeOp    = EAttachmentStoreOp::toVk(colorAttachmentDescs[i].storeOp),
+            .clearValue = {
+                .color = {{
                     info.colorClearValues[i].color.r,
                     info.colorClearValues[i].color.g,
                     info.colorClearValues[i].color.b,
@@ -732,10 +740,11 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
     auto                       depthAttachmentDesc = renderTarget->getDepthAttachmentDesc();
     VkRenderingAttachmentInfo* pVkDepthAttach      = nullptr;
     if (depthAttachmentDesc) {
-        vkDepthAttach = {
-            .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .pNext       = nullptr,
-            .imageView   = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
+        vkDepthAttach = VkRenderingAttachmentInfo{
+            .sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .pNext     = nullptr,
+            .imageView = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
+            // TODO: depth or depth-stencil?
             .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
             .resolveMode = VK_RESOLVE_MODE_NONE,
             .loadOp      = EAttachmentLoadOp::toVk(depthAttachmentDesc->loadOp),
