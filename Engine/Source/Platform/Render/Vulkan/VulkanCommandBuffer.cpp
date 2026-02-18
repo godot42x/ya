@@ -84,7 +84,7 @@ static void collectRenderTargetTransitions(
             targetLayout = useInitialLayout ? resolveDesc->initialLayout : resolveDesc->finalLayout;
         }
         if (targetLayout != EImageLayout::Undefined) {
-            if (auto resolveTex = curFrameBuffer->getColorTexture(0)) {
+            if (auto resolveTex = curFrameBuffer->getResolveTexture()) {
                 if (auto resolveImage = resolveTex->getImage()) {
                     if (auto vkImage = dynamic_cast<VulkanImage*>(resolveImage)) {
                         outTransitions.emplace_back(vkImage, targetLayout);

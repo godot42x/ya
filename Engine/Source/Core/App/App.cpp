@@ -139,6 +139,11 @@ void App::onSceneViewportResized(Rect2D rect)
 
 bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 {
+    if (_render && _viewportRT) {
+        _render->waitIdle();
+    }
+    _viewportTexture = nullptr;
+
     RenderTargetCreateInfo viewportRTci = RenderTargetCreateInfo{
         .label            = "Viewport RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
@@ -196,6 +201,10 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
     }
 
     _viewportRT = ya::createRenderTarget(viewportRTci);
+    if (_viewportRT) {
+        auto fb = _viewportRT->getCurFrameBuffer();
+        _viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
+    }
     return _viewportRT != nullptr;
 }
 

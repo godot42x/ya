@@ -23,14 +23,14 @@ void ImGuiManager::initImGuiCore()
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO *io = &ImGui::GetIO();
+    ImGuiIO* io = &ImGui::GetIO();
     io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     ImGui::StyleColorsDark();
 
     // Load main font (JetBrains Mono)
-    ImFont *mainFont = nullptr;
+    ImFont* mainFont = nullptr;
     {
         ImFontConfig fontConfig;
         fontConfig.OversampleH = 2;
@@ -93,7 +93,7 @@ void ImGuiManager::initImGuiCore()
 }
 
 
-void ImGuiManager::init(IRender *render, IRenderPass *renderPass)
+void ImGuiManager::init(IRender* render, IRenderPass* renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
@@ -102,7 +102,7 @@ void ImGuiManager::init(IRender *render, IRenderPass *renderPass)
     switch (api) {
     case ERenderAPI::Vulkan:
     {
-        SDL_Window *window = render->getNativeWindow<SDL_Window *>();
+        SDL_Window* window = render->getNativeWindow<SDL_Window*>();
         initVulkan(window, render, renderPass);
     } break;
 
@@ -116,16 +116,16 @@ void ImGuiManager::init(IRender *render, IRenderPass *renderPass)
     }
 }
 
-void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *renderPass)
+void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
     initImGuiCore();
 
-    auto *vkRender = dynamic_cast<VulkanRender *>(render);
+    auto* vkRender = dynamic_cast<VulkanRender*>(render);
     YA_CORE_ASSERT(vkRender, "Render must be VulkanRender for Vulkan backend");
 
-    auto &queue = vkRender->getGraphicsQueues()[0];
+    auto& queue = vkRender->getGraphicsQueues()[0];
 
     const bool                    useDynamicRendering = (renderPass == nullptr);
     VkFormat                      swapchainFormat     = VK_FORMAT_UNDEFINED;
@@ -183,7 +183,7 @@ void ImGuiManager::initVulkan(SDL_Window *window, IRender *render, IRenderPass *
 }
 
 #if IMGUI_SDL3_GPU
-void ImGuiManager::initSDLGPU(SDL_Window *window, SDL_GPUDevice *device)
+void ImGuiManager::initSDLGPU(SDL_Window* window, SDL_GPUDevice* device)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
@@ -259,7 +259,7 @@ void ImGuiManager::submitVulkan(VkCommandBuffer cmdBuf, VkPipeline pipeline)
 }
 
 #if IMGUI_SDL3_GPU
-void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURenderPass *renderpass)
+void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* renderpass)
 {
     if (_drawData && _drawData->CmdListsCount > 0) {
         ImGui_ImplSDLGPU3_RenderDrawData(_drawData, commandBuffer, renderpass);
@@ -267,7 +267,7 @@ void ImGuiManager::submitSDLGPU(SDL_GPUCommandBuffer *commandBuffer, SDL_GPURend
 }
 #endif
 
-EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
+EventProcessState ImGuiManager::processEvents(const SDL_Event& event)
 {
     ImGui_ImplSDL3_ProcessEvent(&event);
 
@@ -299,7 +299,7 @@ EventProcessState ImGuiManager::processEvents(const SDL_Event &event)
     return EventProcessState::Continue;
 }
 
-EventProcessState ImGuiManager::processEvent(const Event &event)
+EventProcessState ImGuiManager::processEvent(const Event& event)
 {
     if (!bBlockEvents) {
         return EventProcessState::Continue;
@@ -318,17 +318,17 @@ EventProcessState ImGuiManager::processEvent(const Event &event)
 
 bool ImGuiManager::isWantInput() const
 {
-    ImGuiIO &io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
     return io.WantCaptureMouse || io.WantCaptureKeyboard;
 }
 
-ImGuiManager &ImGuiManager::get()
+ImGuiManager& ImGuiManager::get()
 {
     static ImGuiManager instance;
     return instance;
 }
 
-void *ImGuiManager::addTexture(IImageView *imageView, Sampler *sampler, EImageLayout::T layout)
+void* ImGuiManager::addTexture(IImageView* imageView, Sampler* sampler, EImageLayout::T layout)
 {
     if (!imageView || !sampler) {
         YA_CORE_ERROR("ImGuiManager::addTexture: Invalid imageView or sampler");
@@ -347,10 +347,10 @@ void *ImGuiManager::addTexture(IImageView *imageView, Sampler *sampler, EImageLa
         return nullptr;
     }
 
-    return static_cast<void *>(ds);
+    return static_cast<void*>(ds);
 }
 
-void ImGuiManager::removeTexture(void *textureID)
+void ImGuiManager::removeTexture(void* textureID)
 {
     if (!textureID) {
         return;
@@ -364,10 +364,10 @@ namespace
 {
 struct ImageCacheKey
 {
-    IImageView *imageView = nullptr;
-    Sampler    *sampler   = nullptr;
+    IImageView* imageView = nullptr;
+    Sampler*    sampler   = nullptr;
 
-    bool operator==(const ImageCacheKey &other) const
+    bool operator==(const ImageCacheKey& other) const
     {
         return imageView == other.imageView && sampler == other.sampler;
     }
@@ -375,10 +375,10 @@ struct ImageCacheKey
 
 struct ImageCacheKeyHash
 {
-    size_t operator()(const ImageCacheKey &key) const noexcept
+    size_t operator()(const ImageCacheKey& key) const noexcept
     {
-        size_t h1 = std::hash<void *>{}(key.imageView);
-        size_t h2 = std::hash<void *>{}(key.sampler);
+        size_t h1 = std::hash<void*>{}(key.imageView);
+        size_t h2 = std::hash<void*>{}(key.sampler);
         return h1 ^ (h2 << 1);
     }
 };
@@ -386,12 +386,12 @@ struct ImageCacheKeyHash
 struct ImageCacheEntry
 {
     ImageViewHandle handle = {};
-    void           *ds     = nullptr;
+    void*           ds     = nullptr;
 };
 
 std::unordered_map<ImageCacheKey, ImageCacheEntry, ImageCacheKeyHash> g_imageCache;
 
-void *getOrCreateDescriptorSet(IImageView *imageView, Sampler *sampler)
+void* getOrCreateDescriptorSet(IImageView* imageView, Sampler* sampler)
 {
     if (!imageView || !sampler) {
         return nullptr;
@@ -406,14 +406,14 @@ void *getOrCreateDescriptorSet(IImageView *imageView, Sampler *sampler)
             return it->second.ds;
         }
         if (it->second.ds) {
-            ImGuiManager::removeTexture(it->second.ds);
-            YA_CORE_TRACE("Invalidated ImGui descriptor set for imageView: {}, sampler: {}",
+            YA_CORE_TRACE("Invalidated ImGui descriptor set in cache, imageView: {}, sampler: {}. remove it",
                           handle.ptr,
                           sampler->getHandle().ptr);
+            ImGuiManager::removeTexture(it->second.ds);
         }
     }
 
-    void *ds = ImGuiManager::addTexture(imageView, sampler, EImageLayout::ShaderReadOnlyOptimal);
+    void* ds = ImGuiManager::addTexture(imageView, sampler, EImageLayout::ShaderReadOnlyOptimal);
     if (!ds) {
         return nullptr;
     }
@@ -425,16 +425,16 @@ void *getOrCreateDescriptorSet(IImageView *imageView, Sampler *sampler)
 
 namespace ImGuiHelper
 {
-bool Image(IImageView        *imageView,
-           Sampler           *sampler,
-           const std::string &alt,
-           const ImVec2      &size,
-           const ImVec2      &uv0,
-           const ImVec2      &uv1,
-           const ImVec4      &tint,
-           const ImVec4      &border)
+bool Image(IImageView*        imageView,
+           Sampler*           sampler,
+           const std::string& alt,
+           const ImVec2&      size,
+           const ImVec2&      uv0,
+           const ImVec2&      uv1,
+           const ImVec4&      tint,
+           const ImVec4&      border)
 {
-    void *ds = getOrCreateDescriptorSet(imageView, sampler);
+    void* ds = getOrCreateDescriptorSet(imageView, sampler);
     if (ds) {
         ImGui::Image(ds, size, uv0, uv1, tint, border);
         return true;
@@ -445,7 +445,7 @@ bool Image(IImageView        *imageView,
 
 void ClearImageCache()
 {
-    for (auto &entry : g_imageCache) {
+    for (auto& entry : g_imageCache) {
         if (entry.second.ds) {
             ImGuiManager::removeTexture(entry.second.ds);
         }
@@ -461,7 +461,7 @@ void ImGuiManager::setGizmoRect(float x, float y, float width, float height)
 
 
 using namespace ImGui;
-static void metricsHelpMarker(const char *desc)
+static void metricsHelpMarker(const char* desc)
 {
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
@@ -475,8 +475,8 @@ static void metricsHelpMarker(const char *desc)
 
 void ImGuiManager::onRenderGUI()
 {
-    auto &io    = ImGui::GetIO();
-    auto &style = ImGui::GetStyle();
+    auto& io    = ImGui::GetIO();
+    auto& style = ImGui::GetStyle();
 
 
     ShowFontSelector("Fonts##Selector");

@@ -43,9 +43,6 @@ struct VulkanRenderTarget : public IRenderTarget
     IRenderPass *_renderPass   = nullptr; // For RenderPass API (not owned)
     uint32_t     _subpassIndex = 0;
 
-    uint32_t _frameBufferCount = 0;
-
-
   public:
 
     VulkanRenderTarget(const VulkanRenderTarget&)            = delete;

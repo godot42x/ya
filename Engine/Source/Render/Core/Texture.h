@@ -41,6 +41,7 @@ struct Texture
 
     std::shared_ptr<IImage>     image;
     std::shared_ptr<IImageView> imageView;
+  public:
 
     static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "");
 

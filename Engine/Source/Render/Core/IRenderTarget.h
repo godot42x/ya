@@ -37,6 +37,7 @@ struct RenderTargetCreateInfo
     ERenderingMode::T renderingMode                 = ERenderingMode::DynamicRendering;
     bool              bSwapChainTarget              = false; // If true, use swapchain images instead of creating our own
     int32_t           swapChianColorAttachmentIndex = 0;
+
     Extent2D          extent                        = {.width = 800, .height = 600};
     uint32_t          frameBufferCount              = 1; // for custom render targets
 
@@ -68,6 +69,7 @@ struct IRenderTarget
 
     std::vector<stdptr<IFrameBuffer>> _frameBuffers;
     uint32_t                          _currentFrameIndex = 0;
+    uint32_t                          _frameBufferCount  = 1;
 
 
     bool bDirty = false;
@@ -98,6 +100,7 @@ struct IRenderTarget
         bSwapChainTarget              = ci.bSwapChainTarget;
         swapChianColorAttachmentIndex = ci.swapChianColorAttachmentIndex;
         _renderingMode                = ci.renderingMode;
+        _frameBufferCount             = ci.frameBufferCount;
 
         if (_renderingMode == ERenderingMode::RenderPass)
         {
@@ -134,6 +137,54 @@ struct IRenderTarget
         }
     }
 
+    void setFrameBufferCount(uint32_t frameBufferCount)
+    {
+        if (frameBufferCount == 0) {
+            frameBufferCount = 1;
+        }
+        if (_frameBufferCount != frameBufferCount) {
+            _frameBufferCount = frameBufferCount;
+            bDirty            = true;
+        }
+    }
+
+    bool setColorAttachmentSampleCount(uint32_t attachmentIndex, ESampleCount::T sampleCount)
+    {
+        if (attachmentIndex >= _colorAttachmentDescs.size()) {
+            return false;
+        }
+        auto& desc = _colorAttachmentDescs[attachmentIndex];
+        if (desc.samples != sampleCount) {
+            desc.samples = sampleCount;
+            bDirty       = true;
+        }
+        return true;
+    }
+
+    bool setDepthAttachmentSampleCount(ESampleCount::T sampleCount)
+    {
+        if (!_depthAttachmentDesc.has_value()) {
+            return false;
+        }
+        if (_depthAttachmentDesc->samples != sampleCount) {
+            _depthAttachmentDesc->samples = sampleCount;
+            bDirty                        = true;
+        }
+        return true;
+    }
+
+    bool setResolveAttachmentSampleCount(ESampleCount::T sampleCount)
+    {
+        if (!_resolveAttachmentDesc.has_value()) {
+            return false;
+        }
+        if (_resolveAttachmentDesc->samples != sampleCount) {
+            _resolveAttachmentDesc->samples = sampleCount;
+            bDirty                          = true;
+        }
+        return true;
+    }
+
     const Extent2D &getExtent() const { return _extent; }
 
     // ===== Attachment Access =====
@@ -147,7 +198,7 @@ struct IRenderTarget
     bool isSwapChainTarget() const { return bSwapChainTarget; }
 
     uint32_t getCurrentFrameIndex() const { return _currentFrameIndex; }
-    uint32_t getFrameBufferCount() const { return _frameBuffers.size(); }
+    uint32_t getFrameBufferCount() const { return _frameBufferCount; }
 
 
     [[nodiscard]] IRenderPass *getRenderPass() const { return _renderpass; }

@@ -407,23 +407,24 @@ VkResult VulkanSwapChain::acquireNextImage(VkSemaphore semaphore, VkFence fence,
                                             fence,
                                             &outImageIdx);
 
-    if (result == VK_SUCCESS) {
+    if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
         if (fence != VK_NULL_HANDLE) {
             VK_CALL(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
             VK_CALL(vkResetFences(device, 1, &fence));
         }
-    }
-    else
-    {
-        if (result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR) {
-            YA_CORE_ERROR("Failed to acquire next image: {}", result);
-            return result;
-        }
-        else {
+        if (result == VK_SUBOPTIMAL_KHR) {
             YA_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
         }
+        _curImageIndex = outImageIdx;
+        return result;
     }
-    _curImageIndex = outImageIdx;
+
+    if (result != VK_ERROR_OUT_OF_DATE_KHR) {
+        YA_CORE_ERROR("Failed to acquire next image: {}", result);
+        return result;
+    }
+
+    YA_CORE_WARN("Swap chain is out of date or suboptimal: {}", result);
     return result;
 }
 

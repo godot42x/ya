@@ -92,8 +92,8 @@ static VkPipelineStageFlags getStageMask(VkImageLayout layout, VkAccessFlags acc
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
-        VK_FREE(Memory, _render->getDevice(), _imageMemory);
         VK_DESTROY(Image, _render->getDevice(), _handle);
+        VK_FREE(Memory, _render->getDevice(), _imageMemory);
     }
 }
 

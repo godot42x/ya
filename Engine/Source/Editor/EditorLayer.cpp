@@ -708,7 +708,7 @@ void EditorLayer::debugWindow()
     }
 
     Text("Viewport Render Target (from framebuffer)");
-    auto viewportRTTexture = App::get()->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
+    auto viewportRTTexture = App::get()->_viewportTexture;
     ImGuiHelper::Image(viewportRTTexture->getImageView(),
                        TextureLibrary::get().getLinearSampler(),
                        "Viewport RT (from framebuffer)",

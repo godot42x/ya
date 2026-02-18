@@ -107,8 +107,10 @@ void VulkanRenderTarget::recreate()
 
 void VulkanRenderTarget::destroy()
 {
+    if (_vkRender) {
+        _vkRender->waitIdle();
+    }
     _frameBuffers.clear();
-    _vkRender->waitIdle();
 }
 
 void VulkanRenderTarget::beginFrame(ICommandBuffer* cmdBuf)
