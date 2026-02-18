@@ -189,6 +189,7 @@ struct App
     stdptr<IRenderSystem>                          _phongMaterialSystem      = nullptr;
     stdptr<IRenderSystem>                          _debugRenderSystem        = nullptr;
     stdptr<IRenderSystem>                          _skyboxSystem             = nullptr;
+    stdptr<IRenderSystem>                          _basicPostprocessingSystem = nullptr;
     Delegate<void()>                               _onRenderRenderSystemsGUI = {}; // TEMP
     Delegate<void(Delegate<void(IRenderSystem*)>)> _forEachSystem            = {}; // TEMP
 
@@ -203,14 +204,6 @@ struct App
     bool                  bHasMirror = false;
 
     bool bMSAA = false;
-
-    bool                     bBasicPostProcessor   = false;
-    int                      _postProcessingEffect = 0;
-    std::array<glm::vec4, 4> _postProcessingParams = []() {
-        auto ret = std::array<glm::vec4, 4>();
-        ret[0].x = 1.0 / 300.0; // kernel_sharpen defaults
-        return ret;
-    }();
 
 
     // Viewport texture for ImGui display (unified Texture semantics)
@@ -348,6 +341,7 @@ struct App
     }
     void beginFrame()
     {
+        _basicPostprocessingSystem->beginFrame();
         _skyboxSystem->beginFrame();
         _simpleMaterialSystem->beginFrame();
         _unlitMaterialSystem->beginFrame();

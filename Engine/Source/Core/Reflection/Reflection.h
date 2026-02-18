@@ -166,6 +166,8 @@ struct Visitor<void>
 
 
 #define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
+    using Super = BaseClass;                                                                                                                      \
+                                                                                                                                                  \
   private:                                                                                                                                        \
     struct reflection_detail;                                                                                                                     \
     using _reflect_helper_class = reflection_detail; /* const std::string ge*/                                                                    \

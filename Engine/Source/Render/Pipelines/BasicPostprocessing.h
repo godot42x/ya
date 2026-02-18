@@ -1,5 +1,6 @@
 #pragma once
 #include "Core/Base.h"
+#include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Sampler.h"
@@ -11,9 +12,9 @@ namespace ya
 
 
 
-struct BasicPostprocessing
+struct BasicPostprocessing : public IRenderSystem
 {
-    YA_REFLECT_BEGIN(BasicPostprocessing)
+    YA_REFLECT_BEGIN(BasicPostprocessing, IRenderSystem)
     YA_REFLECT_END()
 
     struct PostProcessingVertex
@@ -24,34 +25,35 @@ struct BasicPostprocessing
 
     struct PushConstant
     {
-        uint32_t effect;
+        uint32_t                 effect;
+        float                    padding[3] = {}; // Padding to make the size a multiple of 16 bytes (Vulkan requirement)
+        std::array<glm::vec4, 4> floatParams;
     };
 
-    struct FragPushConstant
-    {
-        std::array<glm::vec4, 4> floatParams;
-    } fragPC;
 
 
     enum EEffect
     {
-        Inversion           = 0,
-        Grayscale           = 1,
-        WeightedGrayscale   = 2,
-        KernalSharpen       = 3,
-        KernalBlur          = 4,
-        KernalEdgeDetection = 5,
-        ToneMapping         = 6,
-        Random              = 7, // shader do nothing, 老电视机花屏效果
+        None                = 0,
+        Inversion           = 1,
+        Grayscale           = 2,
+        WeightedGrayscale   = 3,
+        KernalSharpen       = 4,
+        KernalBlur          = 5,
+        KernalEdgeDetection = 6,
+        ToneMapping         = 7,
+        Random              = 8, // shader do nothing, 老电视机花屏效果
     };
 
-    struct RenderPayload
-    {
-        IImageView               *inputImageView;
-        Extent2D                  extent;
-        EEffect                   effect;
-        std::array<glm::vec4, 4> &floatParams;
-    };
+    EEffect effect             = EEffect::None;
+    std::array<glm::vec4, 4> floatParams = []() {
+        std::array<glm::vec4, 4> params{};
+        params[0].x = 1.0f / 300.0f; // kernel_sharpen defaults
+        return params;
+    }();
+
+    IImageView* _inputImageView = nullptr;
+    Extent2D    _renderExtent   = {.width = 0, .height = 0};
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "InversionSystem_PipelineLayout",
@@ -60,13 +62,7 @@ struct BasicPostprocessing
             PushConstantRange{
                 .offset     = 0,
                 .size       = sizeof(BasicPostprocessing::PushConstant),
-                .stageFlags = EShaderStage::Vertex,
-            },
-            // Fragment stage: offset after vertex PC
-            PushConstantRange{
-                .offset     = nextAligned(sizeof(BasicPostprocessing::PushConstant), 16),
-                .size       = sizeof(BasicPostprocessing::FragPushConstant),
-                .stageFlags = EShaderStage::Fragment,
+                .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
             },
         },
         .descriptorSetLayouts = {
@@ -86,30 +82,38 @@ struct BasicPostprocessing
     };
 
     stdptr<IPipelineLayout>   _pipelineLayout;
-    stdptr<IGraphicsPipeline> _pipeline;
+    // stdptr<IGraphicsPipeline> _pipeline;
 
     stdptr<IDescriptorSetLayout>     _dslInputTexture;
     std::shared_ptr<IDescriptorPool> _descriptorPool;
     DescriptorSetHandle              _descriptorSet;
 
-    ya::Ptr<Sampler> _sampler;
 
     // Current bound input image view (for descriptor update check)
     ImageViewHandle _currentInputImageViewHandle = nullptr;
 
+    BasicPostprocessing() : IRenderSystem("BasicPostprocessingSystem") {}
+
     ~BasicPostprocessing()
     {
         _descriptorPool.reset();
-        _pipeline.reset();
+        // _pipeline.reset();
         _dslInputTexture.reset();
         _pipelineLayout.reset();
-        _sampler.reset();
     }
 
-    void init();
-    void update() {}
+    void setInputTexture(IImageView* imageView, const Extent2D& extent)
+    {
+        _inputImageView = imageView;
+        _renderExtent   = extent;
+    }
 
-    void render(ICommandBuffer *cmdBuf, const RenderPayload &payload);
+    void onInitImpl(const InitParams& initParams) override;
+    void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
+    void onDestroy() override {}
+
+  protected:
+    void onRenderGUI() override;
 
     void reloadShader()
     {
@@ -118,3 +122,15 @@ struct BasicPostprocessing
 };
 
 }; // namespace ya
+
+YA_REFLECT_ENUM_BEGIN(ya::BasicPostprocessing::EEffect)
+YA_REFLECT_ENUM_VALUE(None)
+YA_REFLECT_ENUM_VALUE(Inversion)
+YA_REFLECT_ENUM_VALUE(Grayscale)
+YA_REFLECT_ENUM_VALUE(WeightedGrayscale)
+YA_REFLECT_ENUM_VALUE(KernalSharpen)
+YA_REFLECT_ENUM_VALUE(KernalBlur)
+YA_REFLECT_ENUM_VALUE(KernalEdgeDetection)
+YA_REFLECT_ENUM_VALUE(ToneMapping)
+YA_REFLECT_ENUM_VALUE(Random)
+YA_REFLECT_ENUM_END()

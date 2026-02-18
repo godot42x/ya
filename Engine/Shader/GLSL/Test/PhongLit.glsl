@@ -267,11 +267,14 @@ layout(location = 0) out vec4 fColor;
 
 float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
 {
-    #if BLING_PHONG_HALFWAY
+    #ifndef NOT_BLING_PHONG_HALFWAY
+    // #if 1
         vec3 halfwayDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
     #else
         vec3 reflectDir = reflect(-lightDir, norm);
+        // if reflectDir > 90 degree, view dot reflect will be negative, so max with 0.0
+        // pow(x, y) so that the spec will always be 0
         float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
     #endif
     return spec;

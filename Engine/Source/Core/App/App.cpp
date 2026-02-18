@@ -202,7 +202,7 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 
     _viewportRT = ya::createRenderTarget(viewportRTci);
     if (_viewportRT) {
-        auto fb = _viewportRT->getCurFrameBuffer();
+        auto fb          = _viewportRT->getCurFrameBuffer();
         _viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
     }
     return _viewportRT != nullptr;
@@ -220,7 +220,6 @@ void App::createRenderSystems()
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
-        .sampleCount = ESampleCount::Sample_1,
     });
 
     _unlitMaterialSystem = ya::makeShared<UnlitMaterialSystem>();
@@ -233,7 +232,6 @@ void App::createRenderSystems()
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
-        .sampleCount = ESampleCount::Sample_1,
     });
     _phongMaterialSystem = ya::makeShared<PhongMaterialSystem>();
     _phongMaterialSystem->init(IRenderSystem::InitParams{
@@ -245,7 +243,6 @@ void App::createRenderSystems()
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
-        .sampleCount = ESampleCount::Sample_1,
     });
     _debugRenderSystem = ya::makeShared<DebugRenderSystem>();
     _debugRenderSystem->init(IRenderSystem::InitParams{
@@ -257,7 +254,6 @@ void App::createRenderSystems()
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
-        .sampleCount = ESampleCount::Sample_1,
     });
 
 
@@ -271,7 +267,18 @@ void App::createRenderSystems()
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
-        .sampleCount = ESampleCount::Sample_1,
+    });
+
+    _basicPostprocessingSystem = ya::makeShared<BasicPostprocessing>();
+    _basicPostprocessingSystem->init(IRenderSystem::InitParams{
+        .renderPass            = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "BasicPostprocessing",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+            .depthAttachmentFormat   = EFormat::Undefined,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
     });
 
     _onRenderRenderSystemsGUI.set([this]() {
@@ -280,6 +287,7 @@ void App::createRenderSystems()
         _phongMaterialSystem->renderGUI();
         _debugRenderSystem->renderGUI();
         _skyboxSystem->renderGUI();
+        _basicPostprocessingSystem->renderGUI();
     });
     _forEachSystem.set([this](Delegate<void(IRenderSystem*)> func) {
         func(_simpleMaterialSystem.get());
@@ -287,6 +295,7 @@ void App::createRenderSystems()
         func(_phongMaterialSystem.get());
         func(_debugRenderSystem.get());
         func(_skyboxSystem.get());
+        func(_basicPostprocessingSystem.get());
     });
 }
 
@@ -424,6 +433,8 @@ void App::init(AppDesc ci)
         _debugRenderSystem.reset();
         _skyboxSystem->onDestroy();
         _skyboxSystem.reset();
+        _basicPostprocessingSystem->onDestroy();
+        _basicPostprocessingSystem.reset();
     });
 
     _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
@@ -1153,7 +1164,7 @@ void App::tickRender(float dt)
 
 
     // --- MARK: Postprocessing
-    if (bBasicPostProcessor && bViewPortRectValid)
+    if (_basicPostprocessingSystem->bEnabled && bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
         // 1. Inversion 反向
@@ -1189,31 +1200,14 @@ void App::tickRender(float dt)
         };
 
         cmdBuf->beginRendering(ri);
-        static auto basicPostprocessing = [&]() {
-            auto pl = new BasicPostprocessing();
-            pl->init();
-            _monitorPipelines.push_back({pl->_pipeline->getName(), pl->_pipeline.get()});
-
-            _deleter.push(" basic postprocessing pipeline", [pl](void*) { // Use value capture instead of reference
-                delete pl;
-            });
-
-            return pl;
-        }();
-
-        // Pass input imageView and output extent to render
 
         const auto& tex = bMSAA
                             ? _viewportRT->getCurFrameBuffer()->getResolveTexture()
                             : _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
-        BasicPostprocessing::RenderPayload payload{
-            .inputImageView = tex->getImageView(),
-            .extent         = Extent2D::fromVec2(_viewportRect.extent),
-            .effect         = (BasicPostprocessing::EEffect)_postProcessingEffect,
-            .floatParams    = _postProcessingParams,
-        };
-        basicPostprocessing->render(cmdBuf.get(), payload);
+        auto postprocessSystem = _basicPostprocessingSystem->as<BasicPostprocessing>();
+        postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_viewportRect.extent));
+        postprocessSystem->tick(cmdBuf.get(), dt, ctx);
         cmdBuf->endRendering(EndRenderingInfo{});
 
         // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling
@@ -1384,39 +1378,6 @@ void App::onRenderGUI(float dt)
             YA_CORE_ASSERT(sceneManager, "SceneManager is null");
             sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
                                           getSceneManager()->getActiveScene());
-        }
-        if (ImGui::TreeNode("Monitor Pipelines")) {
-            for (const auto& [name, pipeline] : _monitorPipelines) {
-                ImGui::Text("%s", name.c_str());
-                ImGui::SameLine();
-                if (ImGui::Button("reload")) {
-                    pipeline->reloadShaders();
-                }
-            }
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNode("Postprocessing")) {
-            ImGui::Checkbox("Basic Postprocessing", &bBasicPostProcessor);
-            if (!bBasicPostProcessor) {
-                ImGui::BeginDisabled();
-            }
-            {
-                ImGui::Combo("Effect",
-                             reinterpret_cast<int*>(&_postProcessingEffect),
-                             "Inversion\0Grayscale\0Weighted Grayscale\0"
-                             "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
-                             // frag shader do nothing, 老电视机花屏效果
-                             "Random\0");
-                for (const auto& [i, p] : ut::enumerate(_postProcessingParams)) {
-                    ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
-                }
-            }
-            if (!bBasicPostProcessor) {
-                ImGui::EndDisabled();
-            }
-
-            ImGui::TreePop();
         }
     }
 

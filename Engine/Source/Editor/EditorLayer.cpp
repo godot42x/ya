@@ -715,7 +715,7 @@ void EditorLayer::debugWindow()
                        constraintSize(viewportRTTexture->getExtent()));
 
     Text("Post-process Texture (from App)");
-    if (App::get()->bBasicPostProcessor) {
+    if (App::get()->_basicPostprocessingSystem && App::get()->_basicPostprocessingSystem->bEnabled) {
         auto postProcessTexture = App::get()->_postprocessTexture;
         ImGuiHelper::Image(postProcessTexture->getImageView(),
                            TextureLibrary::get().getLinearSampler(),

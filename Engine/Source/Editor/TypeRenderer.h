@@ -20,7 +20,7 @@ namespace ya
 // ============================================================================
 // MARK: Constants
 // ============================================================================
-static constexpr int   MAX_RECURSION_DEPTH  = 10;
+static constexpr int   MAX_RECURSION_DEPTH = 10;
 static constexpr float CHILD_CLASS_INDENT  = 8.0f;
 // static constexpr bool EXPERMENTIAL_ASYNC_PROPERTY_CHANGED = false;
 
@@ -168,7 +168,7 @@ struct PropertyId
     explicit PropertyId(uint64_t val) : id(val) {}
 
     // 从实例指针 + 属性路径生成唯一ID
-    static PropertyId make(const void *instance, const std::string &propPath)
+    static PropertyId make(const void* instance, const std::string& propPath)
     {
         // FNV-1a hash for property path
         uint64_t pathHash = 14695981039346656037ULL;
@@ -182,7 +182,7 @@ struct PropertyId
     }
 
     // 仅从属性路径生成ID（用于同类型属性的通用匹配）
-    static PropertyId fromPath(const std::string &propPath)
+    static PropertyId fromPath(const std::string& propPath)
     {
         uint64_t pathHash = 14695981039346656037ULL;
         for (char c : propPath) {
@@ -192,14 +192,14 @@ struct PropertyId
         return PropertyId{pathHash};
     }
 
-    bool operator==(const PropertyId &other) const { return id == other.id; }
-    bool operator!=(const PropertyId &other) const { return id != other.id; }
-    bool operator<(const PropertyId &other) const { return id < other.id; }
+    bool operator==(const PropertyId& other) const { return id == other.id; }
+    bool operator!=(const PropertyId& other) const { return id != other.id; }
+    bool operator<(const PropertyId& other) const { return id < other.id; }
 
     // For use in unordered containers
     struct Hash
     {
-        size_t operator()(const PropertyId &pid) const { return std::hash<uint64_t>{}(pid.id); }
+        size_t operator()(const PropertyId& pid) const { return std::hash<uint64_t>{}(pid.id); }
     };
 };
 
@@ -213,7 +213,7 @@ struct PropertyId
 struct RenderModificationRecord
 {
     PropertyId      propId; ///< Unique property identifier
-    const Property *prop = nullptr;
+    const Property* prop = nullptr;
     std::string     propPath;     ///< Full property path (e.g., "transform.position.x")
     std::string     oldValueJson; ///< Optional: old value for undo
     std::string     newValueJson; ///< Optional: new value
@@ -249,7 +249,7 @@ struct RenderContext
     std::unordered_set<uint64_t>          modifiedPathHashes; ///< O(1) lookup by path hash
 
     // ========== Instance & Path Tracking ==========
-    const void *currentInstance = nullptr; ///< Current root instance being rendered
+    const void* currentInstance = nullptr; ///< Current root instance being rendered
     std::string currentPath;               ///< Current property path for nested access
 
     // ========== Constructors ==========
@@ -267,7 +267,7 @@ struct RenderContext
      * 自动从 DeferredModificationQueue 收集该实例的所有延迟修改，
      * 合并到 modifications 列表中，使 isModified() 等查询也能感知异步修改。
      */
-    void beginInstance(const void *instance)
+    void beginInstance(const void* instance)
     {
         currentInstance = instance;
         currentPath.clear();
@@ -299,8 +299,8 @@ struct RenderContext
     }
 
     // ========== Modification Recording ==========
-    void addModification(const Property *prop, const std::string &propName,
-                         const std::string &oldVal = "", const std::string &newVal = "")
+    void addModification(const Property* prop, const std::string& propName,
+                         const std::string& oldVal = "", const std::string& newVal = "")
     {
         std::string fullPath = currentPath.empty() ? propName : (currentPath + "." + propName);
         PropertyId  pid      = PropertyId::make(currentInstance, fullPath);
@@ -316,7 +316,7 @@ struct RenderContext
     }
 
     // current propPath is modified, after the ScopedPath
-    void pushModified(const std::string &oldVal = "", const std::string &newVal = "")
+    void pushModified(const std::string& oldVal = "", const std::string& newVal = "")
     {
         if (currentPath.empty()) return;
         modifications.push_back({
@@ -340,16 +340,16 @@ struct RenderContext
 
     /// Check if a specific property path was modified (O(1) lookup)
     /// @param propPath Property path relative to current instance (e.g., "params", "diffuseTexture")
-    bool isModified(const std::string &propPath) const
+    bool isModified(const std::string& propPath) const
     {
         return modifiedPathHashes.contains(PropertyId::fromPath(propPath).id);
     }
 
     /// Check if any property starting with prefix was modified
     /// @param pathPrefix Path prefix to match (e.g., "params" matches "params.ambient", "params.diffuse")
-    bool isModifiedPrefix(const std::string &pathPrefix) const
+    bool isModifiedPrefix(const std::string& pathPrefix) const
     {
-        for (const auto &mod : modifications) {
+        for (const auto& mod : modifications) {
             if (mod.propPath.starts_with(pathPrefix)) {
                 return true;
             }
@@ -360,7 +360,7 @@ struct RenderContext
     /// Check if a specific property (by PropertyId) was modified
     bool isModified(PropertyId pid) const
     {
-        for (const auto &mod : modifications) {
+        for (const auto& mod : modifications) {
             if (mod.propId == pid) {
                 return true;
             }
@@ -369,10 +369,10 @@ struct RenderContext
     }
 
     /// Get all modifications matching a path prefix
-    std::vector<const RenderModificationRecord *> getModifications(const std::string &pathPrefix = "") const
+    std::vector<const RenderModificationRecord*> getModifications(const std::string& pathPrefix = "") const
     {
-        std::vector<const RenderModificationRecord *> result;
-        for (const auto &mod : modifications) {
+        std::vector<const RenderModificationRecord*> result;
+        for (const auto& mod : modifications) {
             if (pathPrefix.empty() || mod.propPath.starts_with(pathPrefix)) {
                 result.push_back(&mod);
             }
@@ -392,7 +392,7 @@ struct RenderContext
     class ScopedPath
     {
       public:
-        ScopedPath(RenderContext &ctx, const std::string &segment)
+        ScopedPath(RenderContext& ctx, const std::string& segment)
             : _ctx(ctx), _previousPath(ctx.currentPath)
         {
             if (ctx.currentPath.empty()) {
@@ -407,11 +407,11 @@ struct RenderContext
             _ctx.currentPath = std::move(_previousPath);
         }
         // Non-copyable
-        ScopedPath(const ScopedPath &)            = delete;
-        ScopedPath &operator=(const ScopedPath &) = delete;
+        ScopedPath(const ScopedPath&)            = delete;
+        ScopedPath& operator=(const ScopedPath&) = delete;
 
       private:
-        RenderContext &_ctx;
+        RenderContext& _ctx;
         std::string    _previousPath;
     };
 };
@@ -428,7 +428,7 @@ struct RenderContext
  * - 接收实例指针、属性缓存上下文、修改追踪上下文作为参数
  *
  * 注意：不持有任何状态，只是纯函数封装
- * 
+ *
  * @param instance 实例指针
  * @param propCtx 属性缓存上下文（只读，描述如何渲染）
  * @param ctx 修改追踪上下文（可写，记录哪些属性被修改）
@@ -436,12 +436,12 @@ struct RenderContext
 struct TypeRenderer
 {
     // RenderFunc now receives both PropertyRenderContext (readonly cache) and RenderContext (modification tracking)
-    using RenderFunc = std::function<void(void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx)>;
+    using RenderFunc = std::function<void(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx)>;
 
     std::string typeName;
     RenderFunc  renderFunc = nullptr;
 
-    void render(void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx) const
+    void render(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) const
     {
         if (renderFunc) {
             renderFunc(instance, propCtx, ctx);
@@ -464,14 +464,14 @@ struct TypeRenderer
 class TypeRenderRegistry
 {
   public:
-    static TypeRenderRegistry &instance();
+    static TypeRenderRegistry& instance();
 
     void registerRenderer(uint32_t typeIndex, TypeRenderer renderer)
     {
         _renderers[typeIndex] = renderer;
     }
 
-    const TypeRenderer *getRenderer(uint32_t typeIndex) const
+    const TypeRenderer* getRenderer(uint32_t typeIndex) const
     {
         auto it = _renderers.find(typeIndex);
         return it != _renderers.end() ? &it->second : nullptr;
@@ -499,18 +499,28 @@ class TypeRenderRegistry
  *
  * @note 不再返回 bool，改用 ctx.isModified() 系列方法查询修改状态
  */
-void renderReflectedType(const std::string &name, uint32_t typeIndex, void *instance, RenderContext &ctx, int depth = 0, const PropertyRenderContext *propCtx = nullptr);
+void renderReflectedType(const std::string& name, uint32_t typeIndex, void* instance, RenderContext& ctx, int depth = 0, const PropertyRenderContext* propCtx = nullptr);
+
+struct ReflectRender
+{
+    template <typename T>
+    static void render(const std::string& name, T& instance, const PropertyRenderContext& propCtx, RenderContext& ctx)
+    {
+        renderReflectedType(name, type_index_v<T>, &instance, ctx, 0, &propCtx);
+    }
+};
+
 
 /**
  * @brief 注册内置类型渲染器（int, float, string, vec3, vec4 等）
  */
 void registerBuiltinTypeRenderers();
 
-void pathWrapper(void *instance, const PropertyRenderContext &propCtx, RenderContext &ctx, auto internal);
+void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx, auto internal);
 
 
 
-bool renderPathPicker(std::string path, const std::string &typeName, auto internal)
+bool renderPathPicker(std::string path, const std::string& typeName, auto internal)
 {
     bool modified = false;
 
@@ -540,7 +550,7 @@ bool renderPathPicker(std::string path, const std::string &typeName, auto intern
     return modified;
 }
 
-struct EditorLayer *getEditor();
-struct FilePicker  *getFilePicker();
+struct EditorLayer* getEditor();
+struct FilePicker*  getFilePicker();
 
 } // namespace ya

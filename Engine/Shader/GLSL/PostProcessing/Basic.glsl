@@ -30,20 +30,22 @@ layout(location = 1) out vec3 vColor;
 #endif
 
 
-const uint INVERSION = 0;
-const uint GRAYSCALE = 1;
-const uint WEIGHTED_GRAYSCALE = 2;
-const uint KERNEL_SHARPEN = 3;
-const uint KERNEL_BLUR = 4;
-const uint KERNEL_EDGE_DETECTION = 5;
-const uint TONE_MAPPING = 6;
-const uint RANDOM = 7;
+const uint NONE = 0;
+const uint INVERSION = 1;
+const uint GRAYSCALE = 2;
+const uint WEIGHTED_GRAYSCALE = 3;
+const uint KERNEL_SHARPEN = 4;
+const uint KERNEL_BLUR = 5;
+const uint KERNEL_EDGE_DETECTION = 6;
+const uint TONE_MAPPING = 7;
+const uint RANDOM = 8;
 
 layout (push_constant) uniform PushConstants {
     uint effect; 
+    vec4 floatParams[4];  // offset must match Pipeline Layout (after vertex PC)
 } pc;
 
-const uint EFFECT_BEGIN = INVERSION;
+const uint EFFECT_BEGIN = NONE;
 const uint EFFECT_END = RANDOM;
 
 
@@ -82,19 +84,22 @@ layout(location = 1) in flat uint vEffect;
     layout(location = 1) in vec3 vColor;
 #endif
 
-layout (push_constant) uniform FragPushConstants {
-    layout(offset = 16) vec4 floatParams[4];  // offset must match Pipeline Layout (after vertex PC)
-} fragPC;
+layout (push_constant, std140) uniform PushConstants {
+    uint effect; 
+    // float padding[3];
+    vec4 floatParams[4];  // offset must match Pipeline Layout (after vertex PC)
+} pc;
 
 
-const uint INVERSION = 0;
-const uint GRAYSCALE = 1;
-const uint WEIGHTED_GRAYSCALE = 2;
-const uint KERNEL_SHARPEN = 3;
-const uint KERNEL_BLUR = 4;
-const uint KERNEL_EDGE_DETECTION = 5;
-const uint TONE_MAPPING = 6;
-const uint RANDOM = 7;
+const uint NONE = 0;
+const uint INVERSION = 1;
+const uint GRAYSCALE = 2;
+const uint WEIGHTED_GRAYSCALE = 3;
+const uint KERNEL_SHARPEN = 4;
+const uint KERNEL_BLUR = 5;
+const uint KERNEL_EDGE_DETECTION = 6;
+const uint TONE_MAPPING = 7;
+const uint RANDOM = 8;
 
 
 layout(location = 0) out vec4 fColor;
@@ -174,7 +179,7 @@ void main(){
     case  KERNEL_SHARPEN:
     {
         // const float offset = 1.0 / 300.0;
-        const float offset = fragPC.floatParams[0].x;
+        const float offset = pc.floatParams[0].x;
         const float kernel[9] = float[](
             -1.0, -1.0, -1.0,
             -1.0,  9.0, -1.0,
@@ -185,8 +190,8 @@ void main(){
     } break;
     case KERNEL_BLUR:
     {
-        const float offset = fragPC.floatParams[0].x;
-        const float alpha = fragPC.floatParams[0].y > 0.0 ? fragPC.floatParams[0].y : 16.0;
+        const float offset = pc.floatParams[0].x;
+        const float alpha = pc.floatParams[0].y > 0.0 ? pc.floatParams[0].y : 16.0;
         // 默认为16， 即3x3和为16再除以 16
         const float kernel[9] = float[](
             1.0 / alpha, 2.0 / alpha, 1.0 / alpha,
@@ -198,7 +203,7 @@ void main(){
     } break;
     case KERNEL_EDGE_DETECTION:
     {
-        const float offset = fragPC.floatParams[0].x;
+        const float offset = pc.floatParams[0].x;
          const float kernel[9] = float[](
             1,  1, 1,
             1, -8, 1,
@@ -212,7 +217,7 @@ void main(){
         vec4 color = texture(uScreenTexture, vTexCoord);
 
         fColor = vec4(acesApprox(color.rgb), 1.0);
-        if(fragPC.floatParams[3].x > 0){
+        if(pc.floatParams[3].x > 0){
             vec3 c = color.rgb;
             c = uncharted2ToneMap(c * 2.0f);  // Reduced from 4.5 to 2.0 for better brightness
             // Gamma correct
@@ -227,8 +232,9 @@ void main(){
     case RANDOM:{
         // Do nothing
     } break;
-    default: 
-        break;
+    default: {
+        fColor = texture(uScreenTexture, vTexCoord);
+    } break;
     }
     
 }

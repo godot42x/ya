@@ -1,18 +1,19 @@
 #include "BasicPostprocessing.h"
-#include "Core/App/App.h"
+#include "Render/Render.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
 #include "Resource/TextureLibrary.h"
+#include "utility.cc/ranges.h"
+
+#include "imgui.h"
 
 namespace ya
 
 {
 
-void BasicPostprocessing::init()
+void BasicPostprocessing::onInitImpl(const InitParams& initParams)
 {
-    auto app        = App::get();
-    auto render     = app->getRender();
-    auto viewPortRT = app->_viewportRT;
+    auto render = getRender();
 
 
 
@@ -28,13 +29,8 @@ void BasicPostprocessing::init()
         DSLs);
 
     auto _pipelineDesc = GraphicsPipelineCreateInfo{
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "BasicPostprocessing",
-            .colorAttachmentFormats = {
-                EFormat::R8G8B8A8_UNORM,
-            },
-        },
+        .renderPass            = initParams.renderPass,
+        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout = _pipelineLayout.get(),
         .shaderDesc     = ShaderDesc{
                 .shaderName        = "PostProcessing/Basic.glsl",
@@ -72,6 +68,13 @@ void BasicPostprocessing::init()
             .polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back,
             .frontFace = EFrontFaceType::CounterClockWise, // GL
         },
+        .depthStencilState = DepthStencilState{
+            .bDepthTestEnable       = false,
+            .bDepthWriteEnable      = false,
+            .depthCompareOp         = ECompareOp::Always,
+            .bDepthBoundsTestEnable = false,
+            .bStencilTestEnable     = false,
+        },
         .colorBlendState = ColorBlendState{
             .attachments = {
                 ColorBlendAttachmentState{
@@ -81,29 +84,14 @@ void BasicPostprocessing::init()
             },
         },
         .viewportState = ViewportState{
-            .viewports = {
-                {
-                    .x        = 0,
-                    .y        = 0,
-                    .width    = static_cast<float>(viewPortRT->getExtent().width),
-                    .height   = static_cast<float>(viewPortRT->getExtent().height),
-                    .minDepth = 0.0f,
-                    .maxDepth = 1.0f,
-                },
-            },
-            .scissors = {Scissor{
-                .offsetX = 0,
-                .offsetY = 0,
-                .width   = viewPortRT->getExtent().width,
-                .height  = viewPortRT->getExtent().height,
-            }},
+            .viewports = {Viewport::defaults()},
+            .scissors  = {Scissor::defaults()},
         },
     };
     _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(_pipelineDesc);
 
     // MARK: sampler
-    _sampler = TextureLibrary::get().getDefaultSampler();
 
     // MARK: descriptor pool
     DescriptorPoolCreateInfo poolCI{
@@ -126,18 +114,22 @@ void BasicPostprocessing::init()
     _descriptorSet = descriptorSets[0];
 }
 
-void BasicPostprocessing::render(ICommandBuffer *cmdBuf, const RenderPayload &payload)
+void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /*ctx*/)
 {
+    if (!_inputImageView || _renderExtent.width == 0 || _renderExtent.height == 0) {
+        return;
+    }
 
-    auto app    = App::get();
-    auto render = app->getRender();
+    auto render = getRender();
 
-    auto imageViewHandle = payload.inputImageView->getHandle();
+    auto imageViewHandle = _inputImageView->getHandle();
     // Update descriptor set only if input image view changed
     if (_currentInputImageViewHandle != imageViewHandle) {
         _currentInputImageViewHandle = imageViewHandle;
 
-        DescriptorImageInfo imageInfo(_sampler->getHandle(),
+        static auto sampler = TextureLibrary::get().getDefaultSampler();
+
+        DescriptorImageInfo imageInfo(sampler->getHandle(),
                                       _currentInputImageViewHandle,
                                       EImageLayout::ShaderReadOnlyOptimal);
 
@@ -154,7 +146,7 @@ void BasicPostprocessing::render(ICommandBuffer *cmdBuf, const RenderPayload &pa
     }
 
     cmdBuf->bindPipeline(_pipeline.get());
-    const auto &extent = payload.extent;
+    const auto& extent = _renderExtent;
     cmdBuf->setViewport(0, 0, (float)extent.width, (float)extent.height);
     cmdBuf->setScissor(0, 0, extent.width, extent.height);
 
@@ -165,27 +157,41 @@ void BasicPostprocessing::render(ICommandBuffer *cmdBuf, const RenderPayload &pa
                                {});
 
     // Push constants - two separate ranges
-    const auto &pr = _pipelineLayoutDesc.pushConstants;
+    const auto& pcs = _pipelineLayoutDesc.pushConstants;
 
     PushConstant pc{
-        .effect = static_cast<uint32_t>(payload.effect),
+        .effect      = static_cast<uint32_t>(effect),
+        .floatParams = floatParams,
     };
     cmdBuf->pushConstants(_pipelineLayout.get(),
-                          pr[0].stageFlags,
-                          pr[0].offset,
-                          pr[0].size,
+                          pcs[0].stageFlags,
+                          pcs[0].offset,
+                          pcs[0].size,
                           &pc);
 
-    FragPushConstant fragPC{
-        .floatParams = payload.floatParams,
-    };
-    cmdBuf->pushConstants(_pipelineLayout.get(),
-                          pr[1].stageFlags,
-                          pr[1].offset,
-                          pr[1].size,
-                          &fragPC);
+    // FragPushConstant fragPC{
+    //     .floatParams = payload.floatParams,
+    // };
+    // cmdBuf->pushConstants(_pipelineLayout.get(),
+    //                       pcs[1].stageFlags,
+    //                       pcs[1].offset,
+    //                       pcs[1].size,
+    //                       &fragPC);
 
     cmdBuf->draw(6, 1, 0, 0);
+}
+
+void BasicPostprocessing::onRenderGUI()
+{
+    Super::onRenderGUI();
+    ImGui::Combo("Effect",
+                 reinterpret_cast<int*>(&effect),
+                 "None\0Inversion\0Grayscale\0Weighted Grayscale\0"
+                 "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
+                 "Random\0");
+    for (const auto& [i, p] : ut::enumerate(floatParams)) {
+        ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
+    }
 }
 
 } // namespace ya
