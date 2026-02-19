@@ -70,12 +70,24 @@ class AssetManager : public IResourceCache
     std::shared_ptr<Model> getModel(const std::string& filepath) const;
     bool                   isModelLoaded(const std::string& filepath) const;
 
-    std::shared_ptr<Texture> loadTexture(const std::string& filepath);
+    std::shared_ptr<Texture> loadTexture(const std::string& filepath, bool bSRGB = true);
+    std::shared_ptr<Texture> loadTexture(const char* filepath, bool bSRGB = true)
+    {
+        YA_CORE_ASSERT(filepath, "filepath is null");
+        return loadTexture(std::string(filepath), bSRGB);
+    }
+
+    std::shared_ptr<Texture> loadTexture(const std::string& name, const std::string& filepath, bool bSRGB = true);
+    std::shared_ptr<Texture> loadTexture(const char* name, const char* filepath, bool bSRGB = true)
+    {
+        YA_CORE_ASSERT(name && filepath, "name or filepath is null");
+        return loadTexture(std::string(name), std::string(filepath), bSRGB);
+    }
+
     std::shared_ptr<Texture> getTextureByPath(const std::string& filepath) const
     {
         return isTextureLoaded(filepath) ? _textureViews.find(filepath)->second : nullptr;
     }
-    std::shared_ptr<Texture> loadTexture(const std::string& name, const std::string& filepath);
     std::shared_ptr<Texture> getTextureByName(const std::string& name) const
     {
         if (isTextureLoadedByName(name))

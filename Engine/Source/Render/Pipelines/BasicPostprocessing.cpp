@@ -1,9 +1,11 @@
 #include "BasicPostprocessing.h"
-#include "Render/Render.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Render.h"
 #include "Resource/TextureLibrary.h"
 #include "utility.cc/ranges.h"
+#include <algorithm>
+
 
 #include "imgui.h"
 
@@ -31,30 +33,30 @@ void BasicPostprocessing::onInitImpl(const InitParams& initParams)
     auto _pipelineDesc = GraphicsPipelineCreateInfo{
         .renderPass            = initParams.renderPass,
         .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
-        .pipelineLayout = _pipelineLayout.get(),
-        .shaderDesc     = ShaderDesc{
-                .shaderName        = "PostProcessing/Basic.glsl",
-                .bDeriveFromShader = false,
-                .vertexBufferDescs = {
+        .pipelineLayout        = _pipelineLayout.get(),
+        .shaderDesc            = ShaderDesc{
+                       .shaderName        = "PostProcessing/Basic.glsl",
+                       .bDeriveFromShader = false,
+                       .vertexBufferDescs = {
                 VertexBufferDescription{
-                        .slot  = 0,
-                        .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
+                               .slot  = 0,
+                               .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
                 },
             },
-                .vertexAttributes = {
+                       .vertexAttributes = {
                 // (location=0) in vec3 aPos,
                 VertexAttribute{
-                        .bufferSlot = 0,
-                        .location   = 0,
-                        .format     = EVertexAttributeFormat::Float3,
-                        .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
+                               .bufferSlot = 0,
+                               .location   = 0,
+                               .format     = EVertexAttributeFormat::Float3,
+                               .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
                 },
                 //  texcoord
                 VertexAttribute{
-                        .bufferSlot = 0, // same buffer slot
-                        .location   = 1,
-                        .format     = EVertexAttributeFormat::Float2,
-                        .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
+                               .bufferSlot = 0, // same buffer slot
+                               .location   = 1,
+                               .format     = EVertexAttributeFormat::Float2,
+                               .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
                 },
             },
         },
@@ -159,10 +161,9 @@ void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /
     // Push constants - two separate ranges
     const auto& pcs = _pipelineLayoutDesc.pushConstants;
 
-    PushConstant pc{
-        .effect      = static_cast<uint32_t>(effect),
-        .floatParams = floatParams,
-    };
+    pc.effect = static_cast<uint32_t>(effect);
+    pc.gamma  = _bOutputIsSRGB ? 1.0f : std::max(pc.gamma, 0.001f);
+    pc.floatParams = floatParams;
     cmdBuf->pushConstants(_pipelineLayout.get(),
                           pcs[0].stageFlags,
                           pcs[0].offset,
@@ -189,6 +190,9 @@ void BasicPostprocessing::onRenderGUI()
                  "None\0Inversion\0Grayscale\0Weighted Grayscale\0"
                  "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
                  "Random\0");
+    ImGui::BeginDisabled(_bOutputIsSRGB);
+    ImGui::DragFloat("Gamma", &pc.gamma, 0.01f, 0.1f, 10.0f);
+    ImGui::EndDisabled();
     for (const auto& [i, p] : ut::enumerate(floatParams)) {
         ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
     }

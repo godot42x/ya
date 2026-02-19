@@ -42,6 +42,7 @@ const uint RANDOM = 8;
 
 layout (push_constant) uniform PushConstants {
     uint effect; 
+    float gamma; // gamma correction value for tone mapping, default to 2.2
     vec4 floatParams[4];  // offset must match Pipeline Layout (after vertex PC)
 } pc;
 
@@ -86,6 +87,7 @@ layout(location = 1) in flat uint vEffect;
 
 layout (push_constant, std140) uniform PushConstants {
     uint effect; 
+    float gamma;
     // float padding[3];
     vec4 floatParams[4];  // offset must match Pipeline Layout (after vertex PC)
 } pc;
@@ -220,11 +222,7 @@ void main(){
         if(pc.floatParams[3].x > 0){
             vec3 c = color.rgb;
             c = uncharted2ToneMap(c * 2.0f);  // Reduced from 4.5 to 2.0 for better brightness
-            // Gamma correct
-            // TODO: select the VK_FORMAT_B8G8R8A8_SRGB surface format,
-            // there is no need to do gamma correction in the fragment shader
             c = c * (1.0f / uncharted2ToneMap(vec3(11.2f)));
-            c = vec3(pow(c.x, 1.0 / 2.2), pow(c.y, 1.0 / 2.2), pow(c.z, 1.0 / 2.2));
             fColor = vec4(c, 1.0);
         }
 
@@ -236,5 +234,8 @@ void main(){
         fColor = texture(uScreenTexture, vTexCoord);
     } break;
     }
+
+    fColor.rgb = pow(fColor.rgb, vec3(1.0 / max(pc.gamma, 0.001))); // single final gamma correction for UNORM output
+
     
 }

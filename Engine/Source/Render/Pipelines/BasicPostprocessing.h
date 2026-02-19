@@ -26,9 +26,10 @@ struct BasicPostprocessing : public IRenderSystem
     struct PushConstant
     {
         uint32_t                 effect;
-        float                    padding[3] = {}; // Padding to make the size a multiple of 16 bytes (Vulkan requirement)
+        float                    gamma      = 2.2f; // gamma correction value for tone mapping, default to 2.2
+        float                    padding[2] = {};   // Padding to make the size a multiple of 16 bytes (Vulkan requirement)
         std::array<glm::vec4, 4> floatParams;
-    };
+    } pc;
 
 
 
@@ -45,7 +46,7 @@ struct BasicPostprocessing : public IRenderSystem
         Random              = 8, // shader do nothing, 老电视机花屏效果
     };
 
-    EEffect effect             = EEffect::None;
+    EEffect                  effect      = EEffect::None;
     std::array<glm::vec4, 4> floatParams = []() {
         std::array<glm::vec4, 4> params{};
         params[0].x = 1.0f / 300.0f; // kernel_sharpen defaults
@@ -54,6 +55,7 @@ struct BasicPostprocessing : public IRenderSystem
 
     IImageView* _inputImageView = nullptr;
     Extent2D    _renderExtent   = {.width = 0, .height = 0};
+    bool        _bOutputIsSRGB  = false;
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "InversionSystem_PipelineLayout",
@@ -81,7 +83,7 @@ struct BasicPostprocessing : public IRenderSystem
         },
     };
 
-    stdptr<IPipelineLayout>   _pipelineLayout;
+    stdptr<IPipelineLayout> _pipelineLayout;
     // stdptr<IGraphicsPipeline> _pipeline;
 
     stdptr<IDescriptorSetLayout>     _dslInputTexture;
@@ -106,6 +108,11 @@ struct BasicPostprocessing : public IRenderSystem
     {
         _inputImageView = imageView;
         _renderExtent   = extent;
+    }
+
+    void setOutputColorSpace(bool bOutputIsSRGB)
+    {
+        _bOutputIsSRGB = bOutputIsSRGB;
     }
 
     void onInitImpl(const InitParams& initParams) override;

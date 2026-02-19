@@ -1206,6 +1206,9 @@ void App::tickRender(float dt)
                             : _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
         auto postprocessSystem = _basicPostprocessingSystem->as<BasicPostprocessing>();
+        auto swapchainFormat   = _render->getSwapchain()->getFormat();
+        bool bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
+        postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
         postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_viewportRect.extent));
         postprocessSystem->tick(cmdBuf.get(), dt, ctx);
         cmdBuf->endRendering(EndRenderingInfo{});
@@ -1343,6 +1346,9 @@ void App::onRenderGUI(float dt)
                 uint32_t height = _viewportRect.extent2D().height;
                 recreateViewPortRT(width, height);
             });
+        }
+        if(ImGui::Checkbox("Shadow Mapping", &bShadowMapping))
+        {
         }
 
         auto* swapchain = _render->getSwapchain();

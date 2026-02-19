@@ -43,8 +43,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     struct alignas(16) DirectionalLightData
     {
         alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        alignas(16) glm::vec3 ambient   = glm::vec3(97 / 256.0);
-        alignas(16) glm::vec3 diffuse   = glm::vec3(122 / 256.0);
+        alignas(16) glm::vec3 ambient   = glm::vec3(10 / 256.0);
+        alignas(16) glm::vec3 diffuse   = glm::vec3(30 / 256.0);
         alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
     };
 

@@ -423,7 +423,7 @@ void FileExplorer::renderListView(SelectionCallback                             
             }
         }
 
-        ImGui::PopStyleColor();
+        // ImGui::PopStyleColor();
     }
 
     // Render files

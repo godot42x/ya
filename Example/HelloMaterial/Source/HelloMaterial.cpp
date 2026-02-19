@@ -200,8 +200,8 @@ void HelloMaterial::createEntities(ya::Scene* scene)
     if (auto plane = scene->createNode3D("Plane")) {
         ya::Entity* entity = plane->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
-        tc->setScale(glm::vec3(1000.f, 10.f, 1000.f));
-        tc->setPosition(glm::vec3(0.f, -30.f, 0.f));
+        tc->setScale(glm::vec3(100.f, 10.f, 100.f));
+        tc->setPosition(glm::vec3(0.f, -10.f, 0.f));
 
         // Mesh and Material are now separate components
         auto mc = entity->addComponent<ya::MeshComponent>();
@@ -210,6 +210,11 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->createDefaultMaterial();
         lmc->getMaterial()->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
+        if (auto diffuse = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+                                               "Engine/ThirdParty/LearnOpenGL/resources/textures/wood.png")) {
+
+            diffuse->uvScale = {tc->getScale().x, tc->getScale().z}; // Match the plane's XZ scale for proper tiling
+        }
     }
 
 

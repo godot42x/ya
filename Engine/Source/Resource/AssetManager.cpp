@@ -364,13 +364,21 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
     return nullptr;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath)
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath, bool bSRGB)
 {
     if (isTextureLoaded(filepath)) {
-        return _textureViews.find(filepath)->second;
+        auto tex            = _textureViews.find(filepath)->second;
+        auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
+        if (tex && tex->getFormat() != expectedFormat) {
+            YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Reusing cached texture.",
+                         filepath,
+                         (int)tex->getFormat(),
+                         (int)expectedFormat);
+        }
+        return tex;
     }
 
-    auto texture = Texture::fromFile(filepath);
+    auto texture = Texture::fromFile(filepath, "", bSRGB);
     if (!texture) {
         YA_CORE_WARN("Failed to create texture: {}", filepath);
         return nullptr;
@@ -381,13 +389,21 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath)
     return texture;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name, const std::string& filepath)
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name, const std::string& filepath, bool bSRGB)
 {
     if (isTextureLoaded(name)) {
-        return _textureViews.find(name)->second;
+        auto tex            = _textureViews.find(name)->second;
+        auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
+        if (tex && tex->getFormat() != expectedFormat) {
+            YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Reusing cached texture.",
+                         name,
+                         (int)tex->getFormat(),
+                         (int)expectedFormat);
+        }
+        return tex;
     }
 
-    auto texture = Texture::fromFile(filepath, name);
+    auto texture = Texture::fromFile(filepath, name, bSRGB);
     if (!texture) {
         YA_CORE_WARN("Failed to create texture: {}", filepath);
     }

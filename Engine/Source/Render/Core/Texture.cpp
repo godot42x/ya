@@ -180,7 +180,7 @@ ITextureFactory *Texture::getTextureFactory()
     return textureFactory;
 }
 
-std::shared_ptr<Texture> Texture::fromFile(const std::string &filepath, const std::string &label)
+std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const std::string& label, bool bSRGB)
 {
     stdpath p = filepath;
     if (p.extension() == ".ktx" || p.extension() == ".ktx2") {
@@ -200,7 +200,11 @@ std::shared_ptr<Texture> Texture::fromFile(const std::string &filepath, const st
     texture->_filepath = filepath;
     texture->_label    = label.empty() ? filepath : label;
     texture->_channels = 4; // Force RGBA
-    texture->initFromData(pixels.get(), 0, (uint32_t)texWidth, (uint32_t)texHeight, EFormat::R8G8B8A8_UNORM);
+    texture->initFromData(pixels.get(),
+                          0,
+                          (uint32_t)texWidth,
+                          (uint32_t)texHeight,
+                          bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM);
 
     YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath, texWidth, texHeight, texChannels);
     return texture;

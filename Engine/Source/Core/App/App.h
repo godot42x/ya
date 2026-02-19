@@ -204,6 +204,7 @@ struct App
     bool                  bHasMirror = false;
 
     bool bMSAA = false;
+    bool bShadowMapping = true;
 
 
     // Viewport texture for ImGui display (unified Texture semantics)
