@@ -38,6 +38,13 @@ struct Resource
 
 class AssetManager : public IResourceCache
 {
+    public:
+        enum class ETextureColorSpace
+        {
+                SRGB,
+                Linear,
+        };
+
   private:
 
     // Cache for loaded models
@@ -70,19 +77,17 @@ class AssetManager : public IResourceCache
     std::shared_ptr<Model> getModel(const std::string& filepath) const;
     bool                   isModelLoaded(const std::string& filepath) const;
 
-    std::shared_ptr<Texture> loadTexture(const std::string& filepath, bool bSRGB = true);
-    std::shared_ptr<Texture> loadTexture(const char* filepath, bool bSRGB = true)
-    {
-        YA_CORE_ASSERT(filepath, "filepath is null");
-        return loadTexture(std::string(filepath), bSRGB);
-    }
+    std::shared_ptr<Texture> loadTexture(const std::string& filepath,
+                                         ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
 
-    std::shared_ptr<Texture> loadTexture(const std::string& name, const std::string& filepath, bool bSRGB = true);
-    std::shared_ptr<Texture> loadTexture(const char* name, const char* filepath, bool bSRGB = true)
-    {
-        YA_CORE_ASSERT(name && filepath, "name or filepath is null");
-        return loadTexture(std::string(name), std::string(filepath), bSRGB);
-    }
+    std::shared_ptr<Texture> loadTexture(const std::string& name,
+                                         const std::string& filepath,
+                                         ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
+    std::shared_ptr<Texture> loadTexture(const std::string& name,
+                                         const std::string& filepath,
+                                         const FName&       textureSemantic);
+
+    static ETextureColorSpace inferTextureColorSpace(const FName& textureSemantic);
 
     std::shared_ptr<Texture> getTextureByPath(const std::string& filepath) const
     {

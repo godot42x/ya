@@ -172,6 +172,7 @@ struct App
     // Render targets (simplified - only manage attachments, no RenderPass dependency)
     Rect2D _viewportRect;
     float  _viewportFrameBufferScale = 1.0f;
+    std::vector<glm::vec2> clicked;
 
     std::shared_ptr<IRenderPass>   _viewportRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
     std::shared_ptr<IRenderTarget> _viewportRT         = nullptr; // Offscreen RT for 3D scene
@@ -204,7 +205,9 @@ struct App
     bool                  bHasMirror = false;
 
     bool bMSAA = false;
+
     bool bShadowMapping = true;
+    stdptr<IRenderTarget> _shadowMapRT = nullptr;
 
 
     // Viewport texture for ImGui display (unified Texture semantics)
@@ -352,7 +355,6 @@ struct App
 
     void handleSystemSignals();
     bool recreateViewPortRT(uint32_t width, uint32_t height);
-    void createRenderSystems();
 };
 
 

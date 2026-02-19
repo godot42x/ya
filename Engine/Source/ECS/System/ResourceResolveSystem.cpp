@@ -254,7 +254,8 @@ void ResourceResolveSystem::initSharedMaterial(
     // Diffuse texture
     if (matData->hasTexture(MatTexture::Diffuse)) {
         std::string path    = matData->resolveTexturePath(MatTexture::Diffuse);
-        auto        texture = AssetManager::get()->loadTexture(path);
+        auto        texture = AssetManager::get()->loadTexture(path,
+                                                               AssetManager::inferTextureColorSpace(MatTexture::Diffuse));
         if (texture) {
             TextureView tv;
             tv.texture = texture;
@@ -266,7 +267,8 @@ void ResourceResolveSystem::initSharedMaterial(
     // Specular texture
     if (matData->hasTexture(MatTexture::Specular)) {
         std::string path    = matData->resolveTexturePath(MatTexture::Specular);
-        auto        texture = AssetManager::get()->loadTexture(path);
+        auto        texture = AssetManager::get()->loadTexture(path,
+                                                               AssetManager::inferTextureColorSpace(MatTexture::Specular));
         if (texture) {
             TextureView tv;
             tv.texture = texture;

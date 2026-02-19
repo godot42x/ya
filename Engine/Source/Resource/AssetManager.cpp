@@ -36,11 +36,11 @@ namespace
  */
 class VFSIOStream : public Assimp::IOStream
 {
-  public:
-    VFSIOStream(const std::string& path, std::string content)
-        : _path(path), _content(std::move(content)), _position(0)
-    {
-    }
+    public:
+        VFSIOStream(std::string path, std::string content)
+                : _path(std::move(path)), _content(std::move(content)), _position(0)
+        {
+        }
 
     ~VFSIOStream() override = default;
 
@@ -364,8 +364,30 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
     return nullptr;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath, bool bSRGB)
+AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FName& textureSemantic)
 {
+    if (textureSemantic == MatTexture::Diffuse ||
+        textureSemantic == MatTexture::Albedo ||
+        textureSemantic == MatTexture::Specular ||
+        textureSemantic == MatTexture::Emissive)
+    {
+        return ETextureColorSpace::SRGB;
+    }
+
+    if (textureSemantic == MatTexture::Normal ||
+        textureSemantic == MatTexture::Metallic ||
+        textureSemantic == MatTexture::Roughness ||
+        textureSemantic == MatTexture::AO)
+    {
+        return ETextureColorSpace::Linear;
+    }
+
+    return ETextureColorSpace::SRGB;
+}
+
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath, ETextureColorSpace colorSpace)
+{
+    bool bSRGB = (colorSpace == ETextureColorSpace::SRGB);
     if (isTextureLoaded(filepath)) {
         auto tex            = _textureViews.find(filepath)->second;
         auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
@@ -389,8 +411,11 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath, 
     return texture;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name, const std::string& filepath, bool bSRGB)
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name,
+                                                   const std::string& filepath,
+                                                   ETextureColorSpace colorSpace)
 {
+    bool bSRGB = (colorSpace == ETextureColorSpace::SRGB);
     if (isTextureLoaded(name)) {
         auto tex            = _textureViews.find(name)->second;
         auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
@@ -411,6 +436,13 @@ std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name, cons
     _textureViews[filepath] = texture;
     _textureName2Path[name] = filepath;
     return texture;
+}
+
+std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name,
+                                                   const std::string& filepath,
+                                                   const FName&       textureSemantic)
+{
+    return loadTexture(name, filepath, inferTextureColorSpace(textureSemantic));
 }
 
 std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string& filepath, const std::string& identifier)
