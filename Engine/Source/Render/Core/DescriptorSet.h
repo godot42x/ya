@@ -241,6 +241,16 @@ struct IDescriptorSetHelper
                               descriptorType,
                               {DescriptorBufferInfo(buf->getHandle(), 0, buf->getSize())});
     }
+
+    static WriteDescriptorSet writeOneUniformBuffer(
+        DescriptorSetHandle dstSet,
+        uint32_t            dstBinding,
+        IBuffer*            buf)
+    {
+        return genSingleBufferWrite(dstSet, dstBinding, EPipelineDescriptorType::UniformBuffer, buf);
+    }
+
+
     static WriteDescriptorSet genSingleTextureViewWrite(
         DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
@@ -253,6 +263,21 @@ struct IDescriptorSetHelper
                              descriptorType,
                              {DescriptorImageInfo(tv->getSampler()->getHandle(),
                                                   tv->texture->getImageView()->getHandle(),
+                                                  EImageLayout::ShaderReadOnlyOptimal)});
+    }
+
+    static WriteDescriptorSet writeOneImage(
+        DescriptorSetHandle dstSet,
+        uint32_t            dstBinding,
+        IImageView*         iv,
+        Sampler*            sampler)
+    {
+        return genImageWrite(dstSet,
+                             dstBinding,
+                             0,
+                             EPipelineDescriptorType::CombinedImageSampler,
+                             {DescriptorImageInfo(sampler->getHandle(),
+                                                  iv->getHandle(),
                                                   EImageLayout::ShaderReadOnlyOptimal)});
     }
 

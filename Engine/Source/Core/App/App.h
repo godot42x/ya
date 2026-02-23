@@ -34,6 +34,7 @@ struct IRenderPass;
 struct LuaScriptingSystem;
 struct Texture;
 struct Texture;
+struct Sampler;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -166,12 +167,13 @@ struct App
     glm::vec2 _lastMousePos = {0, 0};
 
 
-    static const auto COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
-    static const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
+    static const auto COLOR_FORMAT                       = EFormat::R8G8B8A8_UNORM;
+    static const auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
+    static const auto SHADOW_MAPPING_DEPTH_BUFFER_FORMAT = EFormat::D32_SFLOAT;
 
     // Render targets (simplified - only manage attachments, no RenderPass dependency)
-    Rect2D _viewportRect;
-    float  _viewportFrameBufferScale = 1.0f;
+    Rect2D                 _viewportRect;
+    float                  _viewportFrameBufferScale = 1.0f;
     std::vector<glm::vec2> clicked;
 
     std::shared_ptr<IRenderPass>   _viewportRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
@@ -184,15 +186,20 @@ struct App
     stdptr<IDescriptorPool>      _descriptorPool   = nullptr;
     stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
     DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
+    stdptr<IDescriptorSetLayout> _depthBufferDSL        = nullptr;
+    DescriptorSetHandle          _depthBufferFallbackDS = nullptr;
+    DescriptorSetHandle          _depthBufferShadowDS   = nullptr;
+    stdptr<Sampler>              _shadowSampler         = nullptr;
 
-    stdptr<IRenderSystem>                          _simpleMaterialSystem     = nullptr;
-    stdptr<IRenderSystem>                          _unlitMaterialSystem      = nullptr;
-    stdptr<IRenderSystem>                          _phongMaterialSystem      = nullptr;
-    stdptr<IRenderSystem>                          _debugRenderSystem        = nullptr;
-    stdptr<IRenderSystem>                          _skyboxSystem             = nullptr;
+    stdptr<IRenderSystem>                          _simpleMaterialSystem      = nullptr;
+    stdptr<IRenderSystem>                          _unlitMaterialSystem       = nullptr;
+    stdptr<IRenderSystem>                          _phongMaterialSystem       = nullptr;
+    stdptr<IRenderSystem>                          _debugRenderSystem         = nullptr;
+    stdptr<IRenderSystem>                          _skyboxSystem              = nullptr;
+    stdptr<IRenderSystem>                          _shadowMappingSystem       = nullptr;
     stdptr<IRenderSystem>                          _basicPostprocessingSystem = nullptr;
-    Delegate<void()>                               _onRenderRenderSystemsGUI = {}; // TEMP
-    Delegate<void(Delegate<void(IRenderSystem*)>)> _forEachSystem            = {}; // TEMP
+    Delegate<void()>                               _onRenderRenderSystemsGUI  = {}; // TEMP
+    Delegate<void(Delegate<void(IRenderSystem*)>)> _forEachSystem             = {}; // TEMP
 
 
     // other systems, eg: transform, resource resolve
@@ -201,13 +208,14 @@ struct App
     // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
     stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
 
-    stdptr<IRenderTarget> _mirrorRT  = nullptr;
-    bool                  bHasMirror = false;
+    stdptr<IRenderTarget> _mirrorRT     = nullptr;
+    bool                  bRenderMirror = false;
+    bool                  bHasMirror    = false;
 
     bool bMSAA = false;
 
-    bool bShadowMapping = true;
-    stdptr<IRenderTarget> _shadowMapRT = nullptr;
+    bool                  bShadowMapping = true;
+    stdptr<IRenderTarget> _depthRT       = nullptr;
 
 
     // Viewport texture for ImGui display (unified Texture semantics)
@@ -334,17 +342,10 @@ struct App
     void onSceneViewportResized(Rect2D rect);
 
 
-    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
-    {
-        _simpleMaterialSystem->tick(cmdBuf, dt, ctx);
-        _unlitMaterialSystem->tick(cmdBuf, dt, ctx);
-        _phongMaterialSystem->tick(cmdBuf, dt, ctx);
-        _debugRenderSystem->tick(cmdBuf, dt, ctx);
-        // early-z  to render skybox last ?
-        _skyboxSystem->tick(cmdBuf, dt, ctx);
-    }
+    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx);
     void beginFrame()
     {
+        _shadowMappingSystem->beginFrame();
         _basicPostprocessingSystem->beginFrame();
         _skyboxSystem->beginFrame();
         _simpleMaterialSystem->beginFrame();

@@ -1,9 +1,7 @@
 #type vertex
 #version 450
 
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec2 aTexcoord;
-layout(location = 2) in vec3 aNormal;
+
 
 layout(set =0, binding =0, std140) uniform FrameUBO {
     mat4 projMat;
@@ -14,6 +12,46 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
+struct DirectionalLight {
+    vec3  direction;    // 光源方向
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+};
+
+struct PointLight {
+    // attenuation factors
+    float   type; // 0 point, 1 spot
+    float constant;
+    float linear;
+    float quadratic;
+
+    vec3  position;      // 光源位置
+
+    vec3  ambient;
+    vec3  diffuse;
+    vec3  specular;
+
+    // spot light
+    vec3  spotDir;
+    // float innerAngle;
+    // float outerAngle;
+    float innerCutoff; // cos(innerAngle)
+    float outerCutoff; // cos(outerAngle)
+};
+
+#ifndef MAX_POINT_LIGHTS
+#define MAX_POINT_LIGHTS 6
+#endif
+
+
+layout(set =0, binding =1, std140) uniform LightUBO {
+    DirectionalLight dirLight;
+    uint numPointLights;   // collect from scene
+    PointLight pointLights[MAX_POINT_LIGHTS];
+    mat4 shadowLightSpaceMatrix;
+} uLit;
+
 layout(set = 0, binding =2, std140) uniform DebugUBO {
     bool bDebugNormal;
     bool bDebugDepth;
@@ -22,9 +60,14 @@ layout(set = 0, binding =2, std140) uniform DebugUBO {
 } uDebug;
 
 
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aTexcoord;
+layout(location = 2) in vec3 aNormal;
+
 layout(location = 0) out vec3 vPos;
 layout(location = 1) out vec2 vTexcoord;
 layout(location = 2) out vec3 vNormal;
+layout(location = 3) out vec4 vFragLightSpacePos;
 
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
@@ -45,6 +88,9 @@ void main (){
     mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
     vec3 worldNormal = normalMatrix * aNormal;
     vNormal = worldNormal;
+
+    // if mat is a ortho, vFragLightSpacePos will in [-1,1], otherwise need perspective divide in frag shader
+    vFragLightSpacePos = uLit.shadowLightSpaceMatrix * pos;
     
 }
 // MARK: ===========
@@ -58,10 +104,12 @@ layout(triangle_strip, max_vertices = 3) out;
 layout(location = 0) in vec3 vPos[];
 layout(location = 1) in vec2 vTexcoord[];
 layout(location = 2) in vec3 vNormal[];
+layout(location = 3) in vec4 vFragLightSpacePos[]; // from vertex shader
 
 layout(location = 0) out vec3 gPos;
 layout(location = 1) out vec2 gTexcoord;
 layout(location = 2) out vec3 gNormal;
+layout(location = 3) out vec4 gFragLightSpacePos;
 
 layout(set =0, binding =0, std140) uniform FrameUBO {
     mat4 projMat;
@@ -82,7 +130,6 @@ layout(set = 0, binding =2, std140) uniform DebugUBO {
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
 }pc;
-
 
 
 vec3 getNormal()
@@ -119,6 +166,11 @@ vec4 explode(vec4 position, vec3 normal)
 
     return position;
 }
+void passParam(int i){
+    gTexcoord = vTexcoord[i];
+    gNormal = vNormal[i];
+    gFragLightSpacePos = vFragLightSpacePos[i];
+}
 
 void explodeEffect()
 {
@@ -130,8 +182,8 @@ void explodeEffect()
         
         gl_Position = pos;
         gPos = pos.xyz;
-        gTexcoord = vTexcoord[i];
-        gNormal = vNormal[i];
+
+        passParam(i);
         EmitVertex();
     }
     
@@ -144,8 +196,7 @@ void defaultPass()
     for(int i = 0; i < 3; i++){
         gl_Position = gl_in[i].gl_Position;
         gPos = vPos[i];
-        gTexcoord = vTexcoord[i];
-        gNormal = vNormal[i];
+        passParam(i);
         EmitVertex();
     }
     
@@ -177,7 +228,6 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     vec3 cameraPos;  // 相机世界空间位置
 } uFrame;
 
-layout(std140) 
 struct DirectionalLight {
     vec3  direction;    // 光源方向
     vec3 ambient;
@@ -186,7 +236,6 @@ struct DirectionalLight {
 };
 
 
-layout(std140)
 struct PointLight {
     // attenuation factors
     float   type; // 0 point, 1 spot
@@ -210,13 +259,16 @@ struct PointLight {
 
 
 
-#define MAX_POINT_LIGHTS 4
+#ifndef MAX_POINT_LIGHTS
+#define MAX_POINT_LIGHTS 6
+#endif
 
 // MARK: frag uniform
 layout(set =0, binding =1, std140) uniform LightUBO {
     DirectionalLight dirLight;
     uint numPointLights;   // collect from scene
     PointLight pointLights[MAX_POINT_LIGHTS];
+    mat4 shadowLightSpaceMatrix;
 } uLit;
 
 
@@ -256,12 +308,14 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 
 
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
+layout(set =4, binding = 0) uniform sampler2D uShadowMap;
 
 
 // MARK: frag i/o, if have geometry shader, from geometry shader's out
 layout(location = 0) in vec3 vPos;
 layout(location = 1) in vec2 vTexcoord;
 layout(location = 2) in vec3 vNormal;
+layout(location = 3) in vec4 gFragLightSpacePos;
 
 layout(location = 0) out vec4 fColor;
 
@@ -280,6 +334,35 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
     return spec;
 }
 
+
+float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
+{
+    // perform perspective divide, could be ignored if using orthographic projection for shadow map
+    float w = fragLightSpacePos.w;
+    vec3 projCoords =  fragLightSpacePos.xyz / w;
+
+    vec2 uv = projCoords.xy * 0.5 + 0.5;
+    float curDepth = projCoords.z;
+
+    // tolerate both ZO [0,1] and NO [-1,1] depth conventions
+    // if (curDepth < 0.0 || curDepth > 1.0) {
+    //     curDepth = curDepth * 0.5 + 0.5;
+    // }
+
+    if (curDepth <= 0.0 || curDepth >= 1.0) {
+        return 0.0;
+    }
+    // if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    //     return 0.0;
+    // }
+
+    float closestDepth = texture(uShadowMap, uv).r; // determined by the sampler is nearest or linear
+    // float bias = 0.005;
+    float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
+    float shadow = (curDepth - bias )> closestDepth ? 1.0 : 0.0;
+    return shadow;
+}
+
 vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor) 
 {
     vec3 lightDir = normalize(-dirLight.direction);
@@ -291,7 +374,12 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     vec3 ambient = dirLight.ambient *  diffuseTexColor *  uParams.ambient;
     vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
     vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
-    return ambient + diffuse + specular;
+// #ifdef ENABLE_SHADOW
+    // vec4 projCoords = gFragLightSpacePos;
+    // vec4 projCoords = gFragLightSpacePos;
+    float shadow = calculateShadow(gFragLightSpacePos, norm, lightDir);
+    return ambient + (1-shadow)  * (diffuse + specular);
+// #endif
 }
 
 vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor)
@@ -367,10 +455,10 @@ void main ()
     vec3 viewDir = normalize(uFrame.cameraPos - vPos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
 
-    vec4 debugColor = vec4(uLit.pointLights[0].type, 0, 0, 1);
-    if (drawDebugFrag(vec2(100,100), vec2(30,30), debugColor)){
-        return;
-    }
+    // vec4 debugColor = vec4(uLit.pointLights[0].type, 0, 0, 1);
+    // if (drawDebugFrag(vec2(100,100), vec2(30,30), debugColor)){
+    //     return;
+    // }
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -386,10 +474,10 @@ void main ()
         fColor = vec4(vec3(d), 1.0);
         return;
     }
-    if(uLit.numPointLights == 0 ){
-        fColor = vec4(0,0,1,1);
-        return;
-    }
+    // if(uLit.numPointLights == 0 ){
+    //     fColor = vec4(0,0,1,1);
+    //     return;
+    // }
 
     vec2 uv0 = vTexcoord;
     vec2 uv1 = vTexcoord;

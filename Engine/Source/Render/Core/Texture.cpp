@@ -403,7 +403,7 @@ void Texture::initFromData(const void *pixels, size_t dataSize, uint32_t texWidt
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands();
+    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for texture upload");
 
     // Transition image layout: UNDEFINED -> TRANSFER_DST
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
@@ -534,7 +534,7 @@ void Texture::initFallbackTexture(const void *pixels, size_t dataSize, uint32_t 
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands();
+    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for fallback texture upload");
 
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
@@ -643,7 +643,7 @@ void Texture::initCubeMap(const CubeMapCreateInfo &ci)
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands();
+    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for cubemap upload");
 
     ImageSubresourceRange cubeRange{
         .aspectMask     = EImageAspect::Color,

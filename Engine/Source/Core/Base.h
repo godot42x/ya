@@ -45,13 +45,13 @@
 struct DefaultAllocator
 {
     template <typename T>
-    static T *allocate(std::size_t size)
+    static T* allocate(std::size_t size)
     {
-        return static_cast<T *>(malloc(size));
+        return static_cast<T*>(malloc(size));
     }
 
     template <typename T>
-    static void deallocate(T *ptr)
+    static void deallocate(T* ptr)
     {
         free(ptr);
     }
@@ -64,3 +64,11 @@ inline static DefaultAllocator defaultAllocator;
         return #x;
 
 
+
+#if _WIN32
+    #define DISABLE_PADDED_STRUCT_WARNING_BEGIN() __pragma(warning(push)) __pragma(warning(disable : 4324))
+    #define DISABLE_PADDED_STRUCT_WARNING_END() __pragma(warning(pop))
+#else
+    #define DISABLE_PADDED_STRUCT_WARNING_BEGIN()
+    #define DISABLE_PADDED_STRUCT_WARNING_END()
+#endif

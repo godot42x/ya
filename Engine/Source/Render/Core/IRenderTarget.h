@@ -110,6 +110,7 @@ struct IRenderTarget
         setExtent(ci.extent);
         bool ok = onInit(ci);
         if (ok) {
+            bDirty = false;
             if (_renderingMode == ERenderingMode::RenderPass) {
                 for (auto fb : _frameBuffers)
                 {

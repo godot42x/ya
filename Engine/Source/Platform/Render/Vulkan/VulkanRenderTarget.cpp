@@ -77,7 +77,7 @@ bool VulkanRenderTarget::onInit(const RenderTargetCreateInfo& ci)
                   label,
                   _colorAttachmentDescs.size(),
                   _depthAttachmentDesc.has_value() ? std::to_string(_depthAttachmentDesc->format) : "None");
-    return recreateImagesAndFrameBuffer(ci.frameBufferCount);
+    return recreateImagesAndFrameBuffer(_frameBufferCount);
 }
 
 void VulkanRenderTarget::recreate()
@@ -189,7 +189,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
 
 
 
-    for (uint32_t i = 0; i < frameBufferCount; ++i) {
+    for (uint32_t frameBufferIndex = 0; frameBufferIndex < frameBufferCount; ++frameBufferIndex) {
         std::vector<stdptr<IImage>> colorImages  = {};
         stdptr<IImage>              depthImage   = nullptr;
         stdptr<IImage>              resolveImage = nullptr;
@@ -200,16 +200,16 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
         // ===== Color Attachments =====
         for (uint32_t attachIdx = 0; attachIdx < colorAttachmentCount; ++attachIdx)
         {
+            YA_CORE_ASSERT(colorAttachments[attachIdx].usage & EImageUsage::ColorAttachment, "Swapchain color attachment must have ColorAttachment usage");
             if (bSwapChainTarget && attachIdx == (uint32_t)swapChianColorAttachmentIndex) {
                 // For swapchain targets, only the first color attachment comes from swapchain
 
                 // ensure the attachment-desc match the swapchains
                 YA_CORE_ASSERT(swapchain->getFormat() == colorAttachments[attachIdx].format, "Swapchain format must match color attachment format");
-                YA_CORE_ASSERT(colorAttachments[attachIdx].usage & EImageUsage::ColorAttachment, "Swapchain color attachment must have ColorAttachment usage");
                 YA_CORE_ASSERT(colorAttachments[attachIdx].samples == ESampleCount::Sample_1, "Swapchain color attachment must have 1 sample");
 
                 auto image    = VulkanImage::from(_vkRender,
-                                               swapchain->getVkImages()[i],
+                                               swapchain->getVkImages()[frameBufferIndex],
                                                swapchain->getSurfaceFormat(),
                                                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
                 image->bOwned = false; // manage by swapchain
@@ -220,7 +220,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 const auto& colorAttachment = colorAttachments[attachIdx];
                 // Create our own color image
                 ImageCreateInfo imageCI{
-                    .label  = std::format("{}_Color{}_{}", label, attachIdx, i),
+                    .label  = std::format("{}_Color{}_{}", label, attachIdx, frameBufferIndex),
                     .format = colorAttachment.format,
                     .extent = {
                         .width  = _extent.width,
@@ -229,8 +229,8 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     },
                     .mipLevels     = 1,
                     .samples       = colorAttachment.samples,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                    .initialLayout = EImageLayout::Undefined,
+                    .usage         = colorAttachment.usage,
+                    .initialLayout = colorAttachment.initialLayout,
                 };
                 auto image    = VulkanImage::create(_vkRender, imageCI);
                 image->bOwned = true;
@@ -241,7 +241,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
         // ===== Depth Attachment (if requested) =====
         if (depthAttachment) {
             ImageCreateInfo depthCI{
-                .label  = std::format("{}_Depth_{}", label, i),
+                .label  = std::format("{}_Depth_{}", label, frameBufferIndex),
                 .format = depthAttachment->format,
                 .extent = {
                     .width  = _extent.width,
@@ -250,15 +250,15 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 },
                 .mipLevels     = 1,
                 .samples       = depthAttachment->samples,
-                .usage         = EImageUsage::DepthStencilAttachment,
-                .initialLayout = EImageLayout::Undefined,
+                .usage         = depthAttachment->usage,
+                .initialLayout = depthAttachment->initialLayout,
             };
             depthImage = VulkanImage::create(_vkRender, depthCI);
         }
 
         if (resolveAttachment) {
             ImageCreateInfo resolveCI{
-                .label  = std::format("{}_Resolve_{}", label, i),
+                .label  = std::format("{}_Resolve_{}", label, frameBufferIndex),
                 .format = resolveAttachment->format,
                 .extent = {
                     .width  = _extent.width,
@@ -267,14 +267,14 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 },
                 .mipLevels     = 1,
                 .samples       = resolveAttachment->samples,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .initialLayout = EImageLayout::Undefined,
+                .usage         = resolveAttachment->usage,
+                .initialLayout = resolveAttachment->initialLayout,
             };
             resolveImage = VulkanImage::create(_vkRender, resolveCI);
         }
 
         FrameBufferCreateInfo fbCI{
-            .label        = std::format("{}_FrameBuffer_{}", label, i),
+            .label        = std::format("{}_FrameBuffer_{}", label, frameBufferIndex),
             .width        = _extent.width,
             .height       = _extent.height,
             .colorImages  = colorImages,

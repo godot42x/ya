@@ -12,9 +12,9 @@ namespace ya
 {
 
 // Forward declarations
-class Texture;
-class Model;
-class Mesh;
+struct Texture;
+struct Model;
+struct Mesh;
 
 /**
  * @brief Asset type enumeration

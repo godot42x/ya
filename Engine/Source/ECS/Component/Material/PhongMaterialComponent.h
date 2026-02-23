@@ -94,6 +94,8 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
             return &_diffuseSlot;
         case PhongMaterial::SpecularTexture:
             return &_specularSlot;
+        case PhongMaterial::ReflectionTexture:
+            return &_reflectionSlot;
         default:
             return nullptr;
         }

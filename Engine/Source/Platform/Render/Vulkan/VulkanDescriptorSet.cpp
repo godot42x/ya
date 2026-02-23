@@ -173,8 +173,6 @@ void VulkanDescriptorHelper::updateDescriptorSets(
     imageInfos.reserve(totalImageInfos);
 
     for (const auto &write : writes) {
-
-
         VkWriteDescriptorSet vkWrite{
             .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext            = nullptr,
@@ -259,7 +257,7 @@ void VulkanDescriptorHelper::updateDescriptorSets(
         vkWrites.data(),
         static_cast<uint32_t>(vkCopies.size()),
         vkCopies.data());
-    PFN_vkCmdPushDescriptorSet a;
+    // PFN_vkCmdPushDescriptorSet a;
 }
 
 } // namespace ya

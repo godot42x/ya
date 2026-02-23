@@ -165,7 +165,7 @@ struct ShaderDesc
     bool                                 bDeriveFromShader = false; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
-    std::vector<std::string>             defines{}; // #define in shader
+    std::vector<std::string>             defines = {}; // #define in shader
 };
 
 namespace EFrontFaceType
@@ -468,7 +468,7 @@ struct AttachmentDescription
     EImageLayout::T       finalLayout    = EImageLayout::ColorAttachmentOptimal;
 
     // declare here for RT/framebuffer
-    EImageUsage::T usage = EImageUsage::ColorAttachment;
+    EImageUsage::T usage;
 };
 
 
@@ -965,6 +965,26 @@ struct SamplerDesc
     float                  minLod                  = 0.0f;
     float                  maxLod                  = 1.0f;
     bool                   unnormalizedCoordinates = false;
+
+    enum EBorderColor
+    {
+        FloatTransparentBlack,
+        IntTransparentBlack,
+        FloatOpaqueBlack,
+        IntOpaqueBlack,
+        FloatOpaqueWhite,
+        IntOpaqueWhite,
+        Custom,
+    };
+    struct BorderColor
+    {
+        EBorderColor type;
+        glm::vec4    color = glm::vec4(0.0f); // Used if type == Custom
+    };
+
+    BorderColor borderColor = {.type = EBorderColor::IntOpaqueBlack, .color = glm::vec4(1.0f)};
+
+
 
     bool operator==(const SamplerDesc& other) const
     {

@@ -15,7 +15,7 @@ namespace ya
 
 static void collectRenderTargetTransitions(
     IRenderTarget*                              renderTarget,
-    bool                                        useInitialLayout,
+    bool                                        bInitial,
     std::vector<VulkanImage::LayoutTransition>& outTransitions,
     EImageLayout::T                             colorOverrideLayout   = EImageLayout::Undefined,
     EImageLayout::T                             depthOverrideLayout   = EImageLayout::Undefined,
@@ -39,10 +39,10 @@ static void collectRenderTargetTransitions(
     for (size_t i = 0; i < colorCount; ++i) {
         auto targetLayout = colorOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
-            targetLayout = useInitialLayout ? colorDescs[i].initialLayout : colorDescs[i].finalLayout;
+            targetLayout = bInitial ? colorDescs[i].initialLayout : colorDescs[i].finalLayout;
         }
         if (targetLayout == EImageLayout::Undefined) {
-            if (useInitialLayout) {
+            if (bInitial) {
                 targetLayout = EImageLayout::ColorAttachmentOptimal;
             }
             else {
@@ -59,14 +59,11 @@ static void collectRenderTargetTransitions(
     if (depthDesc) {
         auto targetLayout = depthOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
-            targetLayout = useInitialLayout ? depthDesc->initialLayout : depthDesc->finalLayout;
+            targetLayout = bInitial ? depthDesc->initialLayout : depthDesc->finalLayout;
         }
         if (targetLayout == EImageLayout::Undefined) {
-            if (useInitialLayout) {
+            if (bInitial) {
                 targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
-            }
-            else {
-                return;
             }
         }
         if (auto depthTex = curFrameBuffer->getDepthTexture()) {
@@ -81,7 +78,7 @@ static void collectRenderTargetTransitions(
     if (resolveDesc) {
         auto targetLayout = resolveOverrideLayout;
         if (targetLayout == EImageLayout::Undefined) {
-            targetLayout = useInitialLayout ? resolveDesc->initialLayout : resolveDesc->finalLayout;
+            targetLayout = bInitial ? resolveDesc->initialLayout : resolveDesc->finalLayout;
         }
         if (targetLayout != EImageLayout::Undefined) {
             if (auto resolveTex = curFrameBuffer->getResolveTexture()) {
@@ -269,17 +266,15 @@ void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo& info)
         else {
             YA_CORE_WARN("vkCmdEndRenderingKHR not available - VK_KHR_dynamic_rendering may not be enabled");
         }
-    }
 
-    if (info.renderTarget) {
-        if (_currentRenderingMode == ERenderingMode::DynamicRendering) {
+        if (info.renderTarget) {
             std::vector<VulkanImage::LayoutTransition> transitions;
             collectRenderTargetTransitions(info.renderTarget, false, transitions);
             if (!transitions.empty()) {
                 VulkanImage::transitionLayouts(_commandBuffer, transitions);
             }
+            info.renderTarget->endFrame(this);
         }
-        info.renderTarget->endFrame(this);
     }
 
     // Reset rendering mode
@@ -687,14 +682,10 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 {
     _currentRenderingMode = ERenderingMode::DynamicRendering;
 
-    if (s_vkCmdBeginRenderingKHR == nullptr) {
-        YA_CORE_WARN("vkCmdBeginRenderingKHR not available - VK_KHR_dynamic_rendering may not be enabled");
-        return;
-    }
-
-    transitionRenderTargetLayout(renderTarget,
-                                 EImageLayout::ColorAttachmentOptimal,
-                                 EImageLayout::DepthStencilAttachmentOptimal);
+    // if (s_vkCmdBeginRenderingKHR == nullptr) {
+    //     YA_CORE_WARN("vkCmdBeginRenderingKHR not available - VK_KHR_dynamic_rendering may not be enabled");
+    //     return;
+    // }
 
     auto curFrameBuffer = renderTarget->getCurFrameBuffer();
 
@@ -745,19 +736,21 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
             .pNext     = nullptr,
             .imageView = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
             // TODO: depth or depth-stencil?
-            .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            .resolveMode = VK_RESOLVE_MODE_NONE,
-            .loadOp      = EAttachmentLoadOp::toVk(depthAttachmentDesc->loadOp),
-            .storeOp     = EAttachmentStoreOp::toVk(depthAttachmentDesc->storeOp),
-            .clearValue  = {
+            .imageLayout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .resolveMode        = VK_RESOLVE_MODE_NONE,
+            .resolveImageView   = VK_NULL_HANDLE,
+            .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .loadOp             = EAttachmentLoadOp::toVk(depthAttachmentDesc->loadOp),
+            .storeOp            = EAttachmentStoreOp::toVk(depthAttachmentDesc->storeOp),
+            .clearValue         = {
                 info.depthClearValue.isDepthStencil
-                     ? VkClearValue{
-                           .depthStencil = {
-                               .depth   = info.depthClearValue.depthStencil.depth,
-                               .stencil = info.depthClearValue.depthStencil.stencil,
+                            ? VkClearValue{
+                                  .depthStencil = {
+                                      .depth   = info.depthClearValue.depthStencil.depth,
+                                      .stencil = info.depthClearValue.depthStencil.stencil,
                           },
                       }
-                     : VkClearValue{},
+                            : VkClearValue{},
             },
         };
         pVkDepthAttach = &vkDepthAttach;
@@ -871,10 +864,11 @@ void VulkanCommandBuffer::transitionImageLayoutAuto(IImage* image, EImageLayout:
 void VulkanCommandBuffer::transitionRenderTargetLayout(
     IRenderTarget*  renderTarget,
     EImageLayout::T colorLayout,
-    EImageLayout::T depthLayout)
+    EImageLayout::T depthLayout,
+    EImageLayout::T resolveLayout)
 {
     std::vector<VulkanImage::LayoutTransition> transitions;
-    collectRenderTargetTransitions(renderTarget, true, transitions, colorLayout, depthLayout);
+    collectRenderTargetTransitions(renderTarget, true, transitions, colorLayout, depthLayout, resolveLayout);
 
     if (!transitions.empty()) {
         VulkanImage::transitionLayouts(_commandBuffer, transitions);

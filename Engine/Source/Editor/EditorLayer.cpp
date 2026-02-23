@@ -695,11 +695,18 @@ void EditorLayer::debugWindow()
     auto constraintSize = [&panelSize](auto extent) {
         return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
     };
+    Text("Shadow Mapping(Depth Buffer)");
+    if (App::get()->bShadowMapping) {
+        auto shadowMapTexture = App::get()->_depthRT->getCurFrameBuffer()->getDepthTexture();
+        ImGuiHelper::Image(shadowMapTexture->getImageView(),
+                           TextureLibrary::get().getLinearSampler(),
+                           "Shadow Map",
+                           constraintSize(shadowMapTexture->getExtent()));
+    }
 
 
     Text("Mirror Render Target (from framebuffer)");
     if (App::get()->bHasMirror) {
-
         auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
         ImGuiHelper::Image(mirrorTexture->getImageView(),
                            TextureLibrary::get().getLinearSampler(),

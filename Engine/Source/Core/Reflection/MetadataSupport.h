@@ -24,10 +24,10 @@ namespace ya::reflection
 
 struct Meta
 {
-    static inline FName const Color       = "color";
-    static inline FName const Tooltip     = "tooltip";
-    static inline FName const Category    = "category";
-    static inline FName const DisplayName = "display_name";
+    static inline const FName Color       = "color";
+    static inline const FName Tooltip     = "tooltip";
+    static inline const FName Category    = "category";
+    static inline const FName DisplayName = "display_name";
 
     struct ManipulateSpec
     {
@@ -44,7 +44,7 @@ struct Meta
         float max  = 1.0f;
         float step = 0.1f;
 
-        static inline FName const name = "manipulator_spec";
+        static inline const FName name = "manipulator_spec";
     };
 };
 
@@ -67,7 +67,7 @@ struct MetaBuilder
     }
 
 
-    MetaBuilder &manipulate(float min, float max, float step = 0.1f, Meta::ManipulateSpec::Type type = Meta::ManipulateSpec::Slider)
+    MetaBuilder& manipulate(float min, float max, float step = 0.1f, Meta::ManipulateSpec::Type type = Meta::ManipulateSpec::Slider)
         requires std::is_arithmetic_v<T>
     {
         meta.set(Meta::ManipulateSpec::name,
@@ -80,7 +80,7 @@ struct MetaBuilder
         return *this;
     }
 
-    MetaBuilder &color()
+    MetaBuilder& color()
         requires std::is_same_v<T, glm::vec3> || std::is_same_v<T, glm::vec4>
     {
         meta.set(Meta::Color, true);
@@ -88,38 +88,46 @@ struct MetaBuilder
     }
 
 
-    MetaBuilder &tooltip(const std::string &text)
+    MetaBuilder& tooltip(const std::string& text)
     {
         meta.set(Meta::Tooltip, text);
         return *this;
     }
 
-    MetaBuilder &category(const std::string &category)
+    MetaBuilder& category(const std::string& category)
     {
         meta.set(Meta::Category, category);
         return *this;
     }
 
-    MetaBuilder &displayName(const std::string &name)
+    MetaBuilder& displayName(const std::string& name)
     {
         meta.set(Meta::DisplayName, name);
         return *this;
     }
-    MetaBuilder &transient()
+    MetaBuilder& transient()
     {
         addFlag(FieldFlags::Transient);
         return *this;
     }
 
-    MetaBuilder &notSerialized()
+    MetaBuilder& notSerialized()
     {
         addFlag(FieldFlags::NotSerialized);
         return *this;
     }
 
-    MetaBuilder &wrapper()
+    MetaBuilder& wrapper()
     {
         addFlag(FieldFlags::EditReadOnly);
+        return *this;
+    }
+
+    MetaBuilder& enableIf(const std::string& conditionExpr)
+    {
+        // TODO: implement condition expression parsing and evaluation in the editor
+        //  Use a scripts?
+        meta.set("enable_if", conditionExpr);
         return *this;
     }
 

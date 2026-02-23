@@ -30,6 +30,7 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     using material_param_t = PhongMaterial::ParamUBO;
 
+    DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     struct FrameUBO
     {
         glm::mat4 projection{1.f};
@@ -81,6 +82,9 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) DirectionalLightData dirLight;
         alignas(16) uint32_t numPointLights = 0;
         alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
+        glm::mat4 shadowLightSpaceMatrix{1.0f}; // 用于阴影映射
+
+        void setShadowLightSpaceMatrix(const glm::mat4& shadowLightSpaceMatrix_) { shadowLightSpaceMatrix = shadowLightSpaceMatrix_; }
     } uLight;
 
     // TODO: move to one debug layer system
@@ -98,6 +102,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     {
         glm::mat4 modelMat;
     };
+    DISABLE_PADDED_STRUCT_WARNING_END()
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "PhongMaterialSystem_PipelineLayout",
@@ -126,7 +131,7 @@ struct PhongMaterialSystem : public IMaterialSystem
                         .binding         = 1,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                     },
                     // Debug UBO for now
                     DescriptorSetLayoutBinding{
@@ -186,6 +191,18 @@ struct PhongMaterialSystem : public IMaterialSystem
                     },
                 },
             },
+            DescriptorSetLayoutDesc{
+                .label    = "ShadowMap_DSL",
+                .set      = 4,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            },
         },
     };
 
@@ -226,7 +243,7 @@ struct PhongMaterialSystem : public IMaterialSystem
 
 
     // material ubo's, dynamically extend
-    uint32_t                         _lastMaterialDSCount        = 0;
+    uint32_t                         _lastMaterialDSCount      = 0;
     bool                             _bDescriptorPoolRecreated = false;
     std::shared_ptr<IDescriptorPool> _materialDSP;
 
@@ -236,6 +253,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
     DescriptorSetHandle skyBoxCubeMapDS = nullptr;
+    DescriptorSetHandle depthBufferDS   = nullptr;
     std::string         _ctxEntityDebugStr;
 
   public:

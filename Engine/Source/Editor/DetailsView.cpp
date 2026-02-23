@@ -2,6 +2,7 @@
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/2D/UIComponent.h"
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
@@ -113,6 +114,7 @@ void DetailsView::drawComponents(Entity& entity)
         mc->invalidate();
     });
     drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
+    drawReflectedComponent<DirectionalLightComponent>("Directional Light", entity, [](DirectionalLightComponent* dlc) {});
 
     // 其他组件保持原有的自定义渲染逻辑
     drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent* smc) {

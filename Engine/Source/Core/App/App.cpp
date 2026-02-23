@@ -27,6 +27,7 @@
 
 
 // Render Core
+#include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 
 
@@ -61,6 +62,7 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
+#include "Render/Pipelines/ShadowMapping.h"
 #include "Render/Render.h"
 
 
@@ -95,6 +97,16 @@ App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
 
 
+
+void App::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
+{
+    _simpleMaterialSystem->tick(cmdBuf, dt, &ctx);
+    _unlitMaterialSystem->tick(cmdBuf, dt, &ctx);
+    _phongMaterialSystem->tick(cmdBuf, dt, &ctx);
+    _debugRenderSystem->tick(cmdBuf, dt, &ctx);
+    // early-z  to render skybox last ?
+    _skyboxSystem->tick(cmdBuf, dt, &ctx);
+}
 
 bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 {
@@ -219,6 +231,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "SimpleDepthShader.glsl"});
 
 
     RenderCreateInfo renderCI{
@@ -242,51 +255,51 @@ void App::init(AppDesc ci)
     _windowSize.x = static_cast<float>(winW);
     _windowSize.y = static_cast<float>(winH);
 
+
     // MARK: Render Resources
+    {
+        TextureLibrary::get().init();
 
-    // Allocate command buffers for swapchain (both scene and UI in same buffer)
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
-
-    _descriptorPool   = IDescriptorPool::create(_render,
-                                              DescriptorPoolCreateInfo{
-                                                    .label     = "Global Descriptor Pool",
-                                                    .maxSets   = 1, // max allow allocated
-                                                    .poolSizes = {
-                                                      // max iamge set allowed < maxSets
-                                                      DescriptorPoolSize{
-                                                            .type            = EPipelineDescriptorType::CombinedImageSampler,
-                                                            .descriptorCount = 1, // for skybox
-                                                      },
-                                                  },
-                                              });
-    _skyBoxCubeMapDSL = IDescriptorSetLayout::create(_render,
-                                                     DescriptorSetLayoutDesc{
-                                                         .label    = "Skybox_CubeMap_DSL",
-                                                         .bindings = {
-                                                             DescriptorSetLayoutBinding{
-                                                                 .binding         = 0,
-                                                                 .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                                                                 .descriptorCount = 1,
-                                                                 .stageFlags      = EShaderStage::Fragment,
-                                                             },
-                                                         },
-                                                     });
-    _skyBoxCubeMapDS  = _descriptorPool->allocateDescriptorSets(_skyBoxCubeMapDSL);
-    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
-
-    _deleter.push("SkyboxCubeMapDSL", [this](void*) {
-        _skyBoxCubeMapDSL.reset();
-    });
-    _deleter.push("DescriptorPool", [this](void*) {
-        _descriptorPool.reset();
-    });
+        // Register all resource caches with ResourceRegistry for unified cleanup
+        // Priority order: higher = cleared first (GPU resources before CPU resources)
+        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
+        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
+        ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
+        ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
+    }
 
 
-    // MARK: RTs/Textures
 
     // viewport
     _viewportRenderPass = nullptr;
     recreateViewPortRT(winW, winH);
+
+    _depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
+        .label            = "Shadow Map RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = false,
+        .extent           = {.width = 1024, .height = 1024},
+        .frameBufferCount = 1,
+        .attachments      = {
+
+            .depthAttach = AttachmentDescription{
+                .index          = 0,
+                .format         = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+            },
+        },
+    });
+    _deleter.push("DepthRT", [this](void*) {
+        _depthRT.reset();
+    });
+
 
     {
         _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
@@ -398,6 +411,79 @@ void App::init(AppDesc ci)
             });
     }
 
+    // MARK: Descriptors
+    // Allocate command buffers for swapchain (both scene and UI in same buffer)
+    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
+
+    _descriptorPool = IDescriptorPool::create(_render,
+                                              DescriptorPoolCreateInfo{
+                                                  .label     = "Global Descriptor Pool",
+                                                  .maxSets   = 3, // skybox + depth fallback + depth shadow
+                                                  .poolSizes = {
+                                                      // max iamge set allowed < maxSets
+                                                      DescriptorPoolSize{
+                                                          .type            = EPipelineDescriptorType::CombinedImageSampler,
+                                                          .descriptorCount = 1 + 2, // skybox + depth fallback + depth shadow
+                                                      },
+                                                  },
+                                              });
+    _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
+
+    // TODO: common resource skybox and depth buffer can be in one set?
+    _skyBoxCubeMapDSL = IDescriptorSetLayout::create(_render,
+                                                     DescriptorSetLayoutDesc{
+                                                         .label    = "Skybox_CubeMap_DSL",
+                                                         .bindings = {
+                                                             DescriptorSetLayoutBinding{
+                                                                 .binding         = 0,
+                                                                 .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                                                                 .descriptorCount = 1,
+                                                                 .stageFlags      = EShaderStage::Fragment,
+                                                             },
+                                                         },
+                                                     });
+    _skyBoxCubeMapDS  = _descriptorPool->allocateDescriptorSets(_skyBoxCubeMapDSL);
+    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
+    _deleter.push("SkyboxCubeMapDSL", [this](void*) { _skyBoxCubeMapDSL.reset(); });
+
+    _depthBufferDSL        = IDescriptorSetLayout::create(_render,
+                                                   DescriptorSetLayoutDesc{
+                                                              .label    = "DepthBuffer_DSL",
+                                                              .bindings = {
+                                                           DescriptorSetLayoutBinding{
+                                                                      .binding         = 0,
+                                                                      .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                                                                      .descriptorCount = 1,
+                                                                      .stageFlags      = EShaderStage::Fragment,
+                                                           },
+                                                       },
+                                                   });
+    _depthBufferFallbackDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
+    _depthBufferShadowDS   = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
+    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferFallbackDS.ptr, "DepthBuffer_Fallback_DS");
+    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
+    _deleter.push("DepthBufferDSL", [this](void*) { _depthBufferDSL.reset(); });
+
+    auto shadowAddresMode = ESamplerAddressMode::ClampToBorder;
+    _shadowSampler        = Sampler::create(
+        SamplerDesc{
+                   .label         = "shadow",
+                   .minFilter     = EFilter::Linear,
+                   .magFilter     = EFilter::Linear,
+                   .mipmapMode    = ESamplerMipmapMode::Linear,
+                   .addressModeU  = shadowAddresMode,
+                   .addressModeV  = shadowAddresMode,
+                   .addressModeW  = shadowAddresMode,
+                   .mipLodBias    = 0.0f,
+                   .maxAnisotropy = 1.0f,
+                   .borderColor   = SamplerDesc::BorderColor{
+                         .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
+                         .color = {1.0f, 1.0f, 1.0f, 1.0f},
+            },
+        });
+    YA_CORE_ASSERT(_shadowSampler, "Failed to create shadow sampler");
+    _deleter.push("ShadowSampler", [this](void*) { _shadowSampler.reset(); });
+
 
     // MARK: Render Systems
     {
@@ -460,6 +546,18 @@ void App::init(AppDesc ci)
             },
         });
 
+        _shadowMappingSystem = ya::makeShared<ShadowMapping>();
+        _shadowMappingSystem->init(IRenderSystem::InitParams{
+            .renderPass            = nullptr,
+            .pipelineRenderingInfo = PipelineRenderingInfo{
+                .label                   = "ShadowMapping Pipeline",
+                .viewMask                = 0,
+                .colorAttachmentFormats  = {},
+                .depthAttachmentFormat   = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+                .stencilAttachmentFormat = EFormat::Undefined,
+            },
+        });
+
         _basicPostprocessingSystem = ya::makeShared<BasicPostprocessing>();
         _basicPostprocessingSystem->init(IRenderSystem::InitParams{
             .renderPass            = nullptr,
@@ -478,6 +576,7 @@ void App::init(AppDesc ci)
             _phongMaterialSystem->renderGUI();
             _debugRenderSystem->renderGUI();
             _skyboxSystem->renderGUI();
+            _shadowMappingSystem->renderGUI();
             _basicPostprocessingSystem->renderGUI();
         });
         _forEachSystem.set([this](Delegate<void(IRenderSystem*)> func) {
@@ -486,6 +585,7 @@ void App::init(AppDesc ci)
             func(_phongMaterialSystem.get());
             func(_debugRenderSystem.get());
             func(_skyboxSystem.get());
+            func(_shadowMappingSystem.get());
             func(_basicPostprocessingSystem.get());
         });
 
@@ -500,39 +600,49 @@ void App::init(AppDesc ci)
             _debugRenderSystem.reset();
             _skyboxSystem->onDestroy();
             _skyboxSystem.reset();
+            _shadowMappingSystem->onDestroy();
+            _shadowMappingSystem.reset();
             _basicPostprocessingSystem->onDestroy();
             _basicPostprocessingSystem.reset();
         });
-
-        // Inject shared resources into render systems
-        _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
-        _phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
-        _debugRenderSystem->bEnabled                                     = false;
 
         // Initialize Render2D for dynamic rendering (depthTestEnable=false allows UI pass without depth)
         Render2D::init(_render);
     }
 
+    // MARK: Resource-Inject
+    // Inject shared resources into render systems
+    _render->waitIdle(); // wait something done
+
+    _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
+    _phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
+
+    auto cmdBuf       = _render->beginIsolateCommands("Init Depth Buffer Descriptor Set");
+    auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
+    cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
+    _render->endIsolateCommands(cmdBuf);
+    _render->waitIdle();
+
+    auto fallbackIV = TextureLibrary::get().getBlackTexture()->getImageView();
+    YA_CORE_ASSERT(fallbackIV && fallbackIV->getHandle(), "Fallback texture image view is null");
+    auto shadowIV = _depthRT->getCurFrameBuffer()->getDepthTexture()->getImageView();
+    YA_CORE_ASSERT(shadowIV && shadowIV->getHandle(), "Shadow map depth texture image view is null");
+    _render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneImage(_depthBufferFallbackDS, 0, fallbackIV, _shadowSampler.get()),
+            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, shadowIV, _shadowSampler.get()),
+        });
+    _shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(_depthRT);
+    _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferFallbackDS;
+
+    _debugRenderSystem->bEnabled = false;
+
+
+    // MARK: Render Init Done
     ImGuiManager::get().init(_render, nullptr);
 
-
-
-    // MARK: Resource/Scene
-    {
-        TextureLibrary::get().init();
-
-        // Register all resource caches with ResourceRegistry for unified cleanup
-        // Priority order: higher = cleared first (GPU resources before CPU resources)
-        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
-        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
-        ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
-        ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
-    }
-
-    {
-        YA_PROFILE_SCOPE_LOG("Inheritance Init");
-        onInit(ci);
-    }
+    _render->waitIdle(); // wait something done
 
 
     _sceneManager = new SceneManager();
@@ -540,17 +650,9 @@ void App::init(AppDesc ci)
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
 
-    // wait something done
-    _render->waitIdle();
 
     FPSControl::get()->bEnable = true;
     FPSControl::get()->setFPSLimit(120.f);
-
-    {
-        YA_PROFILE_SCOPE_LOG("Post Init");
-        onPostInit();
-    }
-
 
     auto sys = ya::makeShared<ResourceResolveSystem>();
     sys->init();
@@ -591,6 +693,18 @@ void App::init(AppDesc ci)
         delete _luaScriptingSystem;
         _luaScriptingSystem = nullptr;
     });
+
+
+    {
+        YA_PROFILE_SCOPE_LOG("Inheritance Init");
+        onInit(ci);
+    }
+
+    {
+        YA_PROFILE_SCOPE_LOG("Post Init");
+        onPostInit();
+    }
+
 
     loadScene(ci.defaultScenePath);
 
@@ -944,6 +1058,41 @@ void App::tickRender(float dt)
 
     beginFrame();
 
+    bool bShadowPassExecuted = false;
+    if (bShadowMapping && _depthRT && _shadowMappingSystem) {
+
+        RenderingInfo shadowMapRI{
+            .label      = "Shadow Map Pass",
+            .renderArea = Rect2D{
+                .pos    = {0, 0},
+                .extent = _depthRT->getExtent().toVec2(),
+            },
+            .depthClearValue = ClearValue(1.0f, 0),
+            .renderTarget    = _depthRT.get(),
+        };
+        cmdBuf->beginRendering(shadowMapRI);
+        {
+            // TODO: not use IRenderSystem framework?
+            FrameContext shadowCtx{};
+            shadowCtx.extent = _depthRT->getExtent();
+            _shadowMappingSystem->tick(cmdBuf.get(), dt, &shadowCtx);
+        }
+        cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
+        auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
+        cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
+        bShadowPassExecuted = true;
+    }
+
+    if (bShadowPassExecuted) {
+        // NOTICE: need to update descriptor set if depth RT recreated
+        auto phongSys                           = _phongMaterialSystem->as<PhongMaterialSystem>();
+        phongSys->depthBufferDS                 = _depthBufferShadowDS;
+        phongSys->uLight.shadowLightSpaceMatrix = _shadowMappingSystem->as<ShadowMapping>()->_uLightCameraData.viewProjection;
+    }
+    else {
+        _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferFallbackDS;
+    }
+
     FrameContext ctx;
     {
 
@@ -987,7 +1136,7 @@ void App::tickRender(float dt)
 
     // MARK: Mirror Rendering
     //  (Pre scene render some mirror entities and render to texture for later compositing) ---
-    // if (bViewPortRectValid)
+    if (bRenderMirror && bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("Mirror Pass")
         // Mirror / Rear-view mirror / Screen-in-screen rendering (TEMPORARY, for demo/testing only)
@@ -995,31 +1144,31 @@ void App::tickRender(float dt)
         auto         view  = scene->getRegistry().view<TransformComponent, MirrorComponent>();
         FrameContext ctxCopy;
         bHasMirror = false;
-        // for (auto [entity, tc, mc] : view.each())
-        // {
-        //     bHasMirror         = true;
-        //     ctxCopy.viewOwner  = entity;
-        //     ctxCopy.projection = ctx.projection;
+        for (auto [entity, tc, mc] : view.each())
+        {
+            bHasMirror         = true;
+            ctxCopy.viewOwner  = entity;
+            ctxCopy.projection = ctx.projection;
 
-        //     // Calculate mirror normal
-        //     const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
-        //     glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
-        //     glm::vec3       mirrorPos    = tc.getWorldPosition();
+            // Calculate mirror normal
+            const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
+            glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
+            glm::vec3       mirrorPos    = tc.getWorldPosition();
 
-        //     // Extract camera forward direction from view matrix
-        //     // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
-        //     glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
-        //     float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
-        //     // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
-        //     // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
-        //     glm::vec3 mirroredCameraPos = mirrorPos;
-        //     glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
-        //     ctxCopy.cameraPos           = mirroredCameraPos;
-        //     ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
-        //     ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
+            // Extract camera forward direction from view matrix
+            // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
+            glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
+            float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
+            // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
+            // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
+            glm::vec3 mirroredCameraPos = mirrorPos;
+            glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
+            ctxCopy.cameraPos           = mirroredCameraPos;
+            ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
+            ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
 
-        //     break;
-        // }
+            break;
+        }
 
         if (bHasMirror) {
             ctxCopy.extent = _mirrorRT->getExtent(); // Ensure material systems render with correct extent for mirror RT
@@ -1111,8 +1260,6 @@ void App::tickRender(float dt)
     if (_basicPostprocessingSystem->bEnabled && bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
-        // 1. Inversion 反向
-        // 2. Grayscale 灰度
         auto vkRender = render->as<VulkanRender>();
 
         vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
@@ -1154,7 +1301,7 @@ void App::tickRender(float dt)
         bool bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
         postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
         postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_viewportRect.extent));
-        postprocessSystem->tick(cmdBuf.get(), dt, ctx);
+        postprocessSystem->tick(cmdBuf.get(), dt, &ctx);
         cmdBuf->endRendering(EndRenderingInfo{});
 
         // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling

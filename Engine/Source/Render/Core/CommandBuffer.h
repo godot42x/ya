@@ -385,7 +385,8 @@ struct ICommandBuffer
     virtual void transitionRenderTargetLayout(
         IRenderTarget*  renderTarget,
         EImageLayout::T colorLayout,
-        EImageLayout::T depthLayout = EImageLayout::Undefined) = 0;
+        EImageLayout::T depthLayout   = EImageLayout::Undefined,
+        EImageLayout::T stencilLayout = EImageLayout::Undefined) = 0;
 
     #if YA_CMDBUF_RECORD_MODE
     // No-op in virtual mode - commands are executed immediately

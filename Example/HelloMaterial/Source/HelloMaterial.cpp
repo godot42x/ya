@@ -4,6 +4,7 @@
 #include "Resource/FontManager.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -13,6 +14,7 @@
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
 
 
 #include "ECS/Entity.h"
@@ -426,6 +428,24 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         // 添加 Lua 圆周运动脚本（新 API）
         auto lsc = entity->addComponent<ya::LuaScriptComponent>();
         lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
+    }
+
+    if (auto* dirLt = scene->createNode3D("Directional Light")) {
+        ya::Entity* entity = dirLt->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(0.0f, 10.0f, 0.0f));
+        tc->setRotation(glm::vec3(-45.0f, 45.0f, 0.0f));
+
+        auto dlc        = entity->addComponent<ya::DirectionalLightComponent>();
+        dlc->_ambient   = glm::vec3(10.0f / 256.0f);
+        dlc->_diffuse   = glm::vec3(30.0f / 256.0f);
+        dlc->_specular  = glm::vec3(31.0f / 256.0f);
+        dlc->_direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
+
+        auto pmc = entity->addComponent<ya::PhongMaterialComponent>();
     }
 
     // Create Phong sample cubes using new reflection-based approach

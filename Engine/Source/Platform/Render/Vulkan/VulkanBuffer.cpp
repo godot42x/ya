@@ -166,7 +166,7 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropert
 
 void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
 {
-    auto *cmdBuf = render->beginIsolateCommands();
+    auto *cmdBuf = render->beginIsolateCommands("transfer buffer");
     VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
     transfer(vkCmdBuf, srcBuffer, dstBuffer, size);
     render->endIsolateCommands(cmdBuf);

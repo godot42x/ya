@@ -41,6 +41,7 @@ struct Texture
 
     std::shared_ptr<IImage>     image;
     std::shared_ptr<IImageView> imageView;
+
   public:
 
     static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "", bool bSRGB = true);
@@ -137,7 +138,7 @@ struct Texture
      * @return ITextureFactory interface pointer
      * @throw If factory is not available
      */
-    static class ITextureFactory* getTextureFactory();
+    static struct ITextureFactory* getTextureFactory();
 };
 
 
@@ -155,6 +156,13 @@ struct TextureView
     bool bEnable = true;
 
     static TextureView create(stdptr<Texture> texture, stdptr<Sampler> sampler)
+    {
+        return TextureView{
+            .texture = texture,
+            .sampler = sampler,
+        };
+    }
+    static TextureView from(ya::Ptr<Texture> texture, ya::Ptr<Sampler> sampler)
     {
         return TextureView{
             .texture = texture,

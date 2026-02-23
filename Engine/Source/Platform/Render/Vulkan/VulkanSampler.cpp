@@ -5,10 +5,10 @@
 namespace ya
 {
 
-VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
+VulkanSampler::VulkanSampler(const ya::SamplerDesc& ci)
 {
     auto vkRender = ya::App::get()->getRender<VulkanRender>();
-    vkRender      = static_cast<VulkanRender *>(ya::App::get()->getRender());
+    vkRender      = static_cast<VulkanRender*>(ya::App::get()->getRender());
 
     VkSamplerCreateInfo vkCI{
         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -30,6 +30,46 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc &ci)
         .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
         .unnormalizedCoordinates = ci.unnormalizedCoordinates ? VK_TRUE : VK_FALSE,
     };
+
+    VkSamplerCustomBorderColorCreateInfoEXT customBorderInfo{};
+
+
+
+    if (ci.borderColor.type == SamplerDesc::EBorderColor::Custom) {
+        customBorderInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT;
+        // 自定义 RGBA 边界颜色（示例：半透明绿色）
+        customBorderInfo.format                       = VK_FORMAT_R32G32B32A32_SFLOAT; // 颜色格式
+        customBorderInfo.customBorderColor.float32[0] = ci.borderColor.color.r;
+        customBorderInfo.customBorderColor.float32[1] = ci.borderColor.color.g;
+        customBorderInfo.customBorderColor.float32[2] = ci.borderColor.color.b;
+        customBorderInfo.customBorderColor.float32[3] = ci.borderColor.color.a;
+        vkCI.pNext                                    = &customBorderInfo; // 链接扩展信息
+    }
+    else {
+        switch (ci.borderColor.type) {
+        case SamplerDesc::EBorderColor::FloatTransparentBlack:
+            vkCI.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+            break;
+        case SamplerDesc::EBorderColor::IntTransparentBlack:
+            vkCI.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+            break;
+        case SamplerDesc::EBorderColor::FloatOpaqueBlack:
+
+            vkCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+            break;
+        case SamplerDesc::EBorderColor::IntOpaqueBlack:
+            vkCI.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+            break;
+        case SamplerDesc::EBorderColor::FloatOpaqueWhite:
+            vkCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+            break;
+        case SamplerDesc::EBorderColor::IntOpaqueWhite:
+            vkCI.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+            break;
+        default:
+            UNREACHABLE();
+        }
+    }
 
     if (vkCI.anisotropyEnable == VK_TRUE)
     {

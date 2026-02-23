@@ -30,7 +30,7 @@ static VkImageAspectFlags getAspectMask(VkFormat format)
     }
 }
 
-static bool getAccessMask(VkImageLayout layout, VkAccessFlags &mask, bool isSrc)
+static bool getAccessMask(VkImageLayout layout, VkAccessFlags& mask, bool isSrc)
 {
     switch (layout) {
     case VK_IMAGE_LAYOUT_UNDEFINED:
@@ -97,13 +97,13 @@ VulkanImage::~VulkanImage()
     }
 }
 
-void VulkanImage::setDebugName(const std::string &name)
+void VulkanImage::setDebugName(const std::string& name)
 {
-    _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, (void *)_handle, name);
-    _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, (void *)_imageMemory, name + "_Memory");
+    _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, (void*)_handle, name);
+    _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, (void*)_imageMemory, name + "_Memory");
 }
 
-void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, VulkanImage *dstImage)
+void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer* srcBuffer, VulkanImage* dstImage)
 {
 
     VkBufferImageCopy copyRegion{
@@ -131,9 +131,9 @@ void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer *srcBuffer, Vulk
                            &copyRegion);
 }
 
-bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const image,
+bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage* const image,
                                    VkImageLayout oldLayout, VkImageLayout newLayout,
-                                   const VkImageSubresourceRange *subresourceRange)
+                                   const VkImageSubresourceRange* subresourceRange)
 {
     if (image == VK_NULL_HANDLE) {
         YA_CORE_ERROR("VulkanImage::transitionImageLayout image is null");
@@ -193,7 +193,7 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage *const im
     return true;
 }
 
-bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<LayoutTransition> &transitions)
+bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<LayoutTransition>& transitions)
 {
     if (transitions.empty()) {
         return true;
@@ -203,7 +203,7 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
     VkPipelineStageFlags              srcStages = 0;
     VkPipelineStageFlags              dstStages = 0;
 
-    for (const auto &transition : transitions) {
+    for (const auto& transition : transitions) {
         if (!transition.image) {
             continue;
         }
@@ -274,7 +274,7 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
 }
 
 // Helper function to check if a format is supported by the device
-static bool isFormatSupported(VulkanRender *vkRender, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
+static bool isFormatSupported(VulkanRender* vkRender, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
 {
     VkPhysicalDevice physicalDevice = vkRender->getPhysicalDevice();
 
@@ -362,7 +362,7 @@ bool VulkanImage::allocate()
         .sharingMode           = sharingMode,
         .queueFamilyIndexCount = queueFamilyCont,
         .pQueueFamilyIndices   = queueFamilyIndices,
-        .initialLayout         = toVk(_ci.initialLayout),
+        .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
     VK_CALL(vkCreateImage(_render->getDevice(), &imageCreateInfo, _render->getAllocator(), &_handle));
@@ -382,8 +382,13 @@ bool VulkanImage::allocate()
     VK_CALL(vkBindImageMemory(_render->getDevice(), _handle, _imageMemory, 0));
 
 
-    _layout = imageCreateInfo.initialLayout; // already transitioned by the createImage call
-    bOwned  = true;
+    _layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (_ci.initialLayout != EImageLayout::Undefined) {
+        auto cmdBuf = _render->beginIsolateCommands("ImageInitialLayout");
+        cmdBuf->transitionImageLayout(this, EImageLayout::Undefined, _ci.initialLayout);
+        _render->endIsolateCommands(cmdBuf);
+    }
+    bOwned = true;
     return true;
 }
 

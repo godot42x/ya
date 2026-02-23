@@ -30,16 +30,16 @@ struct IRender : public plat_base<IRender>
     virtual ~IRender() { YA_CORE_TRACE("IRender::~IRender()"); }
 
     // Delete copy operations
-    IRender(const IRender &)            = delete;
-    IRender &operator=(const IRender &) = delete;
+    IRender(const IRender&)            = delete;
+    IRender& operator=(const IRender&) = delete;
 
     // Default move operations
-    IRender(IRender &&)            = default;
-    IRender &operator=(IRender &&) = default;
+    IRender(IRender&&)            = default;
+    IRender& operator=(IRender&&) = default;
 
-    static IRender *create(const RenderCreateInfo &ci);
+    static IRender* create(const RenderCreateInfo& ci);
 
-    virtual bool init(const RenderCreateInfo &ci)
+    virtual bool init(const RenderCreateInfo& ci)
     {
         YA_CORE_TRACE("IRender::init()");
         _ci = ci;
@@ -47,15 +47,15 @@ struct IRender : public plat_base<IRender>
     }
     virtual void destroy() = 0;
 
-    virtual bool begin(int32_t *imageIndex)                                  = 0;
-    virtual bool end(int32_t imageIndex, std::vector<void *> CommandBuffers) = 0;
+    virtual bool begin(int32_t* imageIndex)                                 = 0;
+    virtual bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) = 0;
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
 
     /**
      * @brief Get window size from the render's window provider
      */
-    virtual void getWindowSize(int &width, int &height) const = 0;
+    virtual void getWindowSize(int& width, int& height) const = 0;
 
     /**
      * @brief Set VSync on the swapchain
@@ -80,7 +80,7 @@ struct IRender : public plat_base<IRender>
     /**
      * @brief Allocate command buffers (returns generic ICommandBuffer interface)
      */
-    virtual void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers) = 0;
+    virtual void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>>& outBuffers) = 0;
 
     /**
      * @brief Wait for the device to become idle
@@ -97,34 +97,43 @@ struct IRender : public plat_base<IRender>
         return static_cast<T>(getNativeWindowHandle());
     }
 
+    struct RAIICommandBuffer
+    {
+        IRender*        _render;
+        ICommandBuffer* _cmdBuf;
+        ICommandBuffer* operator->() const { return _cmdBuf; }
+
+        ~RAIICommandBuffer() { _render->endIsolateCommands(_cmdBuf); }
+    };
+
     /**
      * @brief Begin recording commands for isolated/immediate execution
      * @return Command buffer for recording
      */
-    virtual ICommandBuffer *beginIsolateCommands(const std::string& context = "") = 0;
+    virtual ICommandBuffer* beginIsolateCommands(const std::string& context = "") = 0;
 
     /**
      * @brief End and submit isolated commands
      * @param commandBuffer The command buffer to submit
      */
-    virtual void endIsolateCommands(ICommandBuffer *commandBuffer) = 0;
+    virtual void endIsolateCommands(ICommandBuffer* commandBuffer) = 0;
 
     /**
      * @brief Get the swapchain interface
      */
-    virtual ISwapchain *getSwapchain() = 0;
+    virtual ISwapchain* getSwapchain() = 0;
 
     /**
      * @brief Get the descriptor set helper for updating descriptor sets
      * @return Pointer to descriptor set helper interface
      */
-    virtual IDescriptorSetHelper *getDescriptorHelper() = 0;
+    virtual IDescriptorSetHelper* getDescriptorHelper() = 0;
 
     /**
      * @brief Get the texture factory for creating image resources
      * @return Pointer to texture factory interface
      */
-    virtual ITextureFactory *getTextureFactory() = 0;
+    virtual ITextureFactory* getTextureFactory() = 0;
 
     /**
      * @brief Submit command buffers to graphics queue with synchronization
@@ -134,10 +143,10 @@ struct IRender : public plat_base<IRender>
      * @param fence Optional fence to signal when complete
      */
     virtual void submitToQueue(
-        const std::vector<void *> &cmdBufs,
-        const std::vector<void *> &waitSemaphores,
-        const std::vector<void *> &signalSemaphores,
-        void                      *fence = nullptr) = 0;
+        const std::vector<void*>& cmdBufs,
+        const std::vector<void*>& waitSemaphores,
+        const std::vector<void*>& signalSemaphores,
+        void*                     fence = nullptr) = 0;
 
     /**
      * @brief Present swapchain image
@@ -145,17 +154,17 @@ struct IRender : public plat_base<IRender>
      * @param waitSemaphores Semaphores to wait on before presenting
      * @return VK_SUCCESS or error code
      */
-    virtual int presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores) = 0;
+    virtual int presentImage(int32_t imageIndex, const std::vector<void*>& waitSemaphores) = 0;
 
     /**
      * @brief Get current frame's image available semaphore
      */
-    virtual void *getCurrentImageAvailableSemaphore() = 0;
+    virtual void* getCurrentImageAvailableSemaphore() = 0;
 
     /**
      * @brief Get current frame's fence
      */
-    virtual void *getCurrentFrameFence() = 0;
+    virtual void* getCurrentFrameFence() = 0;
 
     /**
      * @brief Get current frame index
@@ -167,20 +176,20 @@ struct IRender : public plat_base<IRender>
      * @param imageIndex Swapchain image index
      * @return Semaphore that will be signaled when rendering to this image completes
      */
-    virtual void *getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
+    virtual void* getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
 
     /**
      * @brief Create a semaphore (for App-managed synchronization)
      * @param debugName Optional debug name for the semaphore
      * @return Opaque handle to semaphore
      */
-    virtual void *createSemaphore(const char *debugName = nullptr) = 0;
+    virtual void* createSemaphore(const char* debugName = nullptr) = 0;
 
     /**
      * @brief Destroy a semaphore created by createSemaphore
      * @param semaphore Semaphore to destroy
      */
-    virtual void destroySemaphore(void *semaphore) = 0;
+    virtual void destroySemaphore(void* semaphore) = 0;
 
     /**
      * @brief Advance to next frame (increment frame index)
@@ -191,7 +200,7 @@ struct IRender : public plat_base<IRender>
     /**
      * @brief Get the native window handle (backend-specific)
      */
-    virtual void *getNativeWindowHandle() const = 0;
+    virtual void* getNativeWindowHandle() const = 0;
 };
 
 } // namespace ya

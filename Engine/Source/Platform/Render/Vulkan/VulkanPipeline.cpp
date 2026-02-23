@@ -10,7 +10,6 @@
 
 
 
-
 namespace ya
 {
 
@@ -125,7 +124,7 @@ void VulkanPipeline::cleanup()
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 {
     YA_PROFILE_FUNCTION_LOG();
-    _ci             = ci;
+    _ci = ci;
     // TODO: precreate post create to avoid reentrance?
     _bDirty         = false;
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
@@ -234,9 +233,7 @@ void VulkanPipeline::renderGUI()
 
     if (bManualReload) {
         reloadShaders();
-        
     }
-
 }
 
 
@@ -549,12 +546,11 @@ void VulkanPipeline::createPipelineInternal()
     else
     {
         // WHY DELETER? RAII will destruct outside this case, extend this life cycle until created pipeline done
-        auto colorAttachmentRef = deleter.push("", new std::vector<VkFormat>(), [](void* handle) {
-            if (handle) {
-                delete static_cast<std::vector<VkFormat>*>(handle);
-            }
-        });
-        YA_CORE_ASSERT(_ci.pipelineRenderingInfo.colorAttachmentFormats.size() > 0, "Not a valid dyn rendering pipeline creation info");
+        auto colorAttachmentRef = deleter.push(
+            "",
+            new std::vector<VkFormat>(),
+            [](void* handle) { if (handle) { delete static_cast<std::vector<VkFormat>*>(handle); } });
+        // YA_CORE_ASSERT(_ci.pipelineRenderingInfo.colorAttachmentFormats.size() > 0, "Not a valid dyn rendering pipeline creation info");
         std::ranges::transform(
             _ci.pipelineRenderingInfo.colorAttachmentFormats,
             std::back_inserter(*colorAttachmentRef),
@@ -573,9 +569,10 @@ void VulkanPipeline::createPipelineInternal()
             .stencilAttachmentFormat = toVk(_ci.pipelineRenderingInfo.stencilAttachmentFormat),
         });
         // auto ref  = deleter.add(plRI, nullptr);
-        auto ref = deleter.push("", plRI, [](void* handle) {
-            delete static_cast<VkPipelineRenderingCreateInfo*>(handle);
-        });
+        auto ref = deleter.push(
+            "",
+            plRI,
+            [](void* handle) { delete static_cast<VkPipelineRenderingCreateInfo*>(handle); });
 
         // 关键：将动态渲染配置挂到 gplCI 的 pNext 上
         gplCI.pNext = ref;

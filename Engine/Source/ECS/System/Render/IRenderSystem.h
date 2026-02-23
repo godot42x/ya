@@ -92,12 +92,12 @@ struct IRenderSystem
             }
         }
     }
-    void tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext& ctx)
+    void tick(ICommandBuffer* cmdBuf, float deltaTime, const FrameContext* ctx)
     {
         if (!bEnabled) {
             return;
         }
-        onRender(cmdBuf, &ctx);
+        onRender(cmdBuf, ctx);
     }
 
 
