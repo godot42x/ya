@@ -4,6 +4,7 @@
 // Core
 #include "Core/App/App.h"
 #include "Core/App/SDLMisc.h"
+#include "Core/Debug/RenderDocCapture.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
@@ -43,6 +44,7 @@
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 
+#include "ECS/System/3D/SkyboxSystem.h"
 #include "ECS/System/Render/DebugRenderSystem.h"
 #include "ECS/System/Render/PhongMaterialSystem.h"
 #include "ECS/System/Render/SimpleMaterialSystem.h"
@@ -80,9 +82,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <filesystem>
+
 // SDL
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_misc.h>
 
 
 // Scene
@@ -91,6 +96,25 @@
 
 namespace ya
 {
+
+static void openDirectoryInOS(const std::string& filePath)
+{
+    if (filePath.empty()) {
+        YA_CORE_WARN("File path is empty, cannot open directory");
+        return;
+    }
+    auto dir = std::filesystem::path(filePath).parent_path();
+    if (dir.empty()) {
+        YA_CORE_WARN("Directory path is empty for file: {}", filePath);
+        return;
+    }
+    dir     = std::filesystem::absolute(dir);
+    auto p  = std::format("file:///{}", dir.string());
+    bool ok = SDL_OpenURL(p.c_str());
+    if (!ok) {
+        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
+    }
+}
 
 // Define the static member variable
 App*     App::_instance        = nullptr;
@@ -234,6 +258,37 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "SimpleDepthShader.glsl"});
 
 
+    // MARK: Render/Hook
+
+    if (_ci.bEnableRenderDoc) {
+        // before render init to hook apis
+        _renderDocCapture             = ya::makeShared<RenderDocCapture>();
+        _renderDocConfiguredDllPath   = _ci.renderDocDllPath;
+        _renderDocConfiguredOutputDir = _ci.renderDocCaptureOutputDir;
+        _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
+        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result) {
+            if (!result.bSuccess) {
+                return;
+            }
+
+            _renderDocLastCapturePath = result.capturePath;
+            switch (_renderDocOnCaptureAction) {
+            case 0:
+            case 1:
+                if (!_renderDocCapture->launchReplayUI(true, nullptr)) {
+                    YA_CORE_WARN("RenderDoc: failed to launch replay UI");
+                }
+                break;
+            case 2:
+                openDirectoryInOS(result.capturePath);
+                break;
+            default:
+                break;
+            }
+        });
+    }
+
+
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
@@ -255,8 +310,23 @@ void App::init(AppDesc ci)
     _windowSize.x = static_cast<float>(winW);
     _windowSize.y = static_cast<float>(winH);
 
+    if (_ci.bEnableRenderDoc) {
+        _renderDocCapture->setRenderContext({
+            .device    = _render->as<VulkanRender>()->getDevice(),
+            .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+        });
+        _render->getSwapchain()->onRecreate.addLambda(
+            this,
+            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+                _renderDocCapture->setRenderContext({
+                    .device    = _render->as<VulkanRender>()->getDevice(),
+                    .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+                });
+            });
+    }
 
-    // MARK: Render Resources
+
+    // MARK: Resources
     {
         TextureLibrary::get().init();
 
@@ -902,6 +972,12 @@ void ya::App::quit()
     _viewportRenderPass.reset();
 
     _deleter.clear();
+
+    if (_renderDocCapture) {
+        _renderDocCapture->shutdown();
+        _renderDocCapture.reset();
+    }
+
     // Unified cleanup of all resource caches in priority order
     ResourceRegistry::get().clearAll();
 
@@ -1053,6 +1129,10 @@ void App::tickRender(float dt)
     auto cmdBuf = _commandBuffers[imageIndex];
     cmdBuf->reset();
     cmdBuf->begin();
+
+    if (_renderDocCapture) {
+        _renderDocCapture->onFrameBegin();
+    }
 
     beginFrame();
 
@@ -1251,9 +1331,7 @@ void App::tickRender(float dt)
     if (_basicPostprocessingSystem->bEnabled && bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
-        auto vkRender = render->as<VulkanRender>();
-
-        vkRender->getDebugUtils()->cmdBeginLabel(cmdBuf->getHandle(), "Postprocessing");
+        cmdBuf->debugBeginLabel("Postprocessing");
         // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
         // Viewport RT is dynamic rendering
         cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
@@ -1301,7 +1379,7 @@ void App::tickRender(float dt)
                                           //   EImageLayout::Undefined,
                                           EImageLayout::ShaderReadOnlyOptimal);
 
-        vkRender->getDebugUtils()->cmdEndLabel(cmdBuf->getHandle());
+        cmdBuf->debugEndLabel();
 
         // Use postprocess texture directly (unified Texture semantics)
         _viewportTexture = _postprocessTexture.get();
@@ -1371,6 +1449,10 @@ void App::tickRender(float dt)
     // // Advance to next frame
     // render->advanceFrame();
     render->end(imageIndex, {cmdBuf->getHandle()});
+
+    if (_renderDocCapture) {
+        _renderDocCapture->onFrameEnd();
+    }
 }
 
 // MARK: Render GUI
@@ -1456,6 +1538,44 @@ void App::onRenderGUI(float dt)
         AppMode mode = _appMode;
         if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
             _appMode = mode;
+        }
+
+        if (ImGui::TreeNode("RenderDoc")) {
+            bool bAvailable = _renderDocCapture && _renderDocCapture->isAvailable();
+            ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
+            ImGui::TextWrapped("DLL Path: %s", _renderDocConfiguredDllPath.empty() ? "<default>" : _renderDocConfiguredDllPath.c_str());
+            ImGui::TextWrapped("Output Dir: %s", _renderDocConfiguredOutputDir.empty() ? "<default>" : _renderDocConfiguredOutputDir.c_str());
+            if (bAvailable) {
+                bool bCaptureEnabled = _renderDocCapture->isCaptureEnabled();
+                if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
+                    _renderDocCapture->setCaptureEnabled(bCaptureEnabled);
+                }
+
+                bool bHudVisible = _renderDocCapture->isHUDVisible();
+                if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
+                    _renderDocCapture->setHUDVisible(bHudVisible);
+                }
+
+                ImGui::Text("Capturing: %s", _renderDocCapture->isCapturing() ? "Yes" : "No");
+                ImGui::Text("Delay Frames: %u", _renderDocCapture->getDelayFrames());
+                ImGui::Combo("On Capture", &_renderDocOnCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
+                ImGui::TextWrapped("Last Capture: %s", _renderDocLastCapturePath.empty() ? "<none>" : _renderDocLastCapturePath.c_str());
+
+                bool bCanCapture = _renderDocCapture->isCaptureEnabled();
+                ImGui::BeginDisabled(!bCanCapture);
+                if (ImGui::Button("Capture Next Frame (F9)")) {
+                    _renderDocCapture->requestNextFrame();
+                }
+                if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
+                    _renderDocCapture->requestAfterFrames(120);
+                }
+                ImGui::EndDisabled();
+
+                if (ImGui::Button("Open Last Capture Folder") && !_renderDocLastCapturePath.empty()) {
+                    openDirectoryInOS(_renderDocLastCapturePath);
+                }
+            }
+            ImGui::TreePop();
         }
 
         std::string clickedPoints;

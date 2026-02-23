@@ -27,3 +27,4 @@ __pycache__
 build*
 
 Engine/Saved/Profiling/**
+Engine/Saved/RenderDoc/**

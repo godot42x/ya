@@ -34,22 +34,7 @@ void VulkanDebugUtils::initInstanceLevel()
 
 void VulkanDebugUtils::initDeviceLevel()
 {
-#define ASSIGN_VK_DEVICE_FUNCTION(v, func)                              \
-    v = (PFN_##func)vkGetDeviceProcAddr(_renderer->getDevice(), #func); \
-    if (nullptr == (v)) {                                               \
-        YA_CORE_WARN(#func " not available");                           \
-    }                                                                   \
-    else {                                                              \
-        YA_CORE_INFO(#func " loaded successfully");                     \
-    }
-
-    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdBeginDebugUtilsLabelEXT, vkCmdBeginDebugUtilsLabelEXT);
-    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdEndDebugUtilsLabelEXT, vkCmdEndDebugUtilsLabelEXT);
-    ASSIGN_VK_DEVICE_FUNCTION(pfnCmdInsertDebugUtilsLabelEXT, vkCmdInsertDebugUtilsLabelEXT);
-    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueBeginDebugUtilsLabelEXT, vkQueueBeginDebugUtilsLabelEXT);
-    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueEndDebugUtilsLabelEXT, vkQueueEndDebugUtilsLabelEXT);
-    ASSIGN_VK_DEVICE_FUNCTION(pfnQueueInsertDebugUtilsLabelEXT, vkQueueInsertDebugUtilsLabelEXT);
-#undef ASSIGN_VK_DEVICE_FUNCTION
+    // Device-level debug label function pointers are owned by VulkanCommandBuffer/VulkanRender.
 }
 
 void VulkanDebugUtils::rewriteDebugUtils()

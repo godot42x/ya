@@ -388,6 +388,9 @@ struct ICommandBuffer
         EImageLayout::T depthLayout   = EImageLayout::Undefined,
         EImageLayout::T stencilLayout = EImageLayout::Undefined) = 0;
 
+    virtual void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) = 0;
+    virtual void debugEndLabel()                                                          = 0;
+
     #if YA_CMDBUF_RECORD_MODE
     // No-op in virtual mode - commands are executed immediately
     virtual void executeAll() { recordedCommands.clear(); }

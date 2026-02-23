@@ -123,6 +123,9 @@ struct VulkanRender : public IRender
     VulkanDescriptorHelper               *_descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
     std::unique_ptr<VulkanTextureFactory> _textureFactory   = nullptr; // 纹理工厂
 
+    PFN_vkQueueBeginDebugUtilsLabelEXT _pfnQueueBeginDebugUtilsLabelEXT = nullptr;
+    PFN_vkQueueEndDebugUtilsLabelEXT   _pfnQueueEndDebugUtilsLabelEXT   = nullptr;
+
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
 
@@ -230,6 +233,8 @@ struct VulkanRender : public IRender
     void *createSemaphore(const char *debugName = nullptr) override;
     void  destroySemaphore(void *semaphore) override;
     void  advanceFrame() override { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
+    void  queueBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
+    void  queueEndLabel() override;
 
     // IRender interface: get texture factory
     ITextureFactory *getTextureFactory() override { return _textureFactory.get(); }

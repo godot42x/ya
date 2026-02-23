@@ -196,6 +196,14 @@ struct IRender : public plat_base<IRender>
      */
     virtual void advanceFrame() = 0;
 
+    virtual void queueBeginLabel(const char* labelName, const float* colorRGBA = nullptr)
+    {
+        (void)labelName;
+        (void)colorRGBA;
+    }
+
+    virtual void queueEndLabel() {}
+
   protected:
     /**
      * @brief Get the native window handle (backend-specific)

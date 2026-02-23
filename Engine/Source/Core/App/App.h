@@ -4,20 +4,18 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
-#include "Core/MessageBus.h"
 
 #include "Editor/EditorLayer.h"
 
 #include "Core/App/FPSCtrl.h"
 
-#include "ECS/System/3D/SkyboxSystem.h"
 #include "ECS/System/Render/IRenderSystem.h"
 
 #include "Render/Core/IRenderTarget.h"
-#include "Render/Core/Image.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Scene/SceneManager.h"
+#include <array>
 #include <glm/glm.hpp>
 
 
@@ -35,6 +33,7 @@ struct LuaScriptingSystem;
 struct Texture;
 struct Texture;
 struct Sampler;
+struct RenderDocCapture;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -80,6 +79,10 @@ struct AppDesc
     bool        fullscreen = false;
     std::string defaultScenePath;
 
+    bool        bEnableRenderDoc          = false;
+    std::string renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
+    std::string renderDocCaptureOutputDir = "Engine/Saved/RenderDoc";
+
 
 
     void init(int argc, char** argv)
@@ -89,12 +92,16 @@ struct AppDesc
             .opt<int>("w", {"width"}, "Window width")
             .opt<int>("h", {"height"}, "Window height")
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
+            .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
+            .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
             .parse(argc, argv);
 
         title = params._opt.program();
         params.tryGet<int>("width", width);
         params.tryGet<int>("height", height);
         params.tryGet<bool>("fullscreen", fullscreen);
+        params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
+        params.tryGet<std::string>("renderdoc-output", renderDocCaptureOutputDir);
     }
 };
 
@@ -183,12 +190,12 @@ struct App
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
 
-    stdptr<IDescriptorPool>      _descriptorPool   = nullptr;
-    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
-    DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
-    stdptr<IDescriptorSetLayout> _depthBufferDSL        = nullptr;
-    DescriptorSetHandle          _depthBufferShadowDS   = nullptr;
-    stdptr<Sampler>              _shadowSampler         = nullptr;
+    stdptr<IDescriptorPool>      _descriptorPool      = nullptr;
+    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL    = nullptr;
+    DescriptorSetHandle          _skyBoxCubeMapDS     = nullptr;
+    stdptr<IDescriptorSetLayout> _depthBufferDSL      = nullptr;
+    DescriptorSetHandle          _depthBufferShadowDS = nullptr;
+    stdptr<Sampler>              _shadowSampler       = nullptr;
 
     stdptr<IRenderSystem>                          _simpleMaterialSystem      = nullptr;
     stdptr<IRenderSystem>                          _unlitMaterialSystem       = nullptr;
@@ -225,7 +232,12 @@ struct App
 
     MulticastDelegate<void()> onScenePostInit;
 
-    LuaScriptingSystem* _luaScriptingSystem;
+    LuaScriptingSystem*      _luaScriptingSystem;
+    stdptr<RenderDocCapture> _renderDocCapture;
+    int                      _renderDocOnCaptureAction = 0; // 0: none, 1: open replay UI, 2: open capture folder
+    std::string              _renderDocLastCapturePath;
+    std::string              _renderDocConfiguredDllPath;
+    std::string              _renderDocConfiguredOutputDir;
 
 
   public:

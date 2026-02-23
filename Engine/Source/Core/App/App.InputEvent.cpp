@@ -1,5 +1,7 @@
 #include "App.h"
 
+#include "Core/Debug/RenderDocCapture.h"
+
 namespace ya
 {
 
@@ -57,6 +59,18 @@ bool App::onWindowResized(const WindowResizeEvent& event)
 
 bool App::onKeyReleased(const KeyReleasedEvent& event)
 {
+    // if (event.getKeyCode() == EKey::F9) {
+    //     if (_renderDocCapture && _renderDocCapture->isAvailable()) {
+    //         if (event.isCtrlPressed()) {
+    //             _renderDocCapture->requestAfterFrames(120);
+    //         }
+    //         else {
+    //             _renderDocCapture->requestNextFrame();
+    //         }
+    //         return true;
+    //     }
+    // }
+
     if (event.getKeyCode() == EKey::Escape) {
         YA_CORE_INFO("{}", event.toString());
         requestQuit();

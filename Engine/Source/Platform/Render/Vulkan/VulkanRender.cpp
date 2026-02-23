@@ -636,6 +636,10 @@ void VulkanRender::initExtensionFunctions()
 
     // Load VK_EXT_extended_dynamic_state3 extension function pointer
     ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT, vkCmdSetPolygonModeEXT);
+    ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdBeginDebugUtilsLabelEXT, vkCmdBeginDebugUtilsLabelEXT);
+    ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdEndDebugUtilsLabelEXT, vkCmdEndDebugUtilsLabelEXT);
+    ASSIGN_VK_FUNCTION(_pfnQueueBeginDebugUtilsLabelEXT, vkQueueBeginDebugUtilsLabelEXT);
+    ASSIGN_VK_FUNCTION(_pfnQueueEndDebugUtilsLabelEXT, vkQueueEndDebugUtilsLabelEXT);
     // ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdBeginRenderingKHR,  );
 
     // TODO: low vulkan sdk?
@@ -962,12 +966,39 @@ void VulkanRender::submitToQueue(
         vkSignalSemaphores.push_back(static_cast<VkSemaphore>(sem));
     }
 
+    queueBeginLabel("GraphicsSubmit");
     _graphicsQueues[0].submit(
         cmdBufs.data(),
         cmdBufs.size(),
         vkWaitSemaphores,
         vkSignalSemaphores,
         fence ? static_cast<VkFence>(fence) : VK_NULL_HANDLE);
+    queueEndLabel();
+}
+
+void VulkanRender::queueBeginLabel(const char* labelName, const float* colorRGBA)
+{
+    if (!_pfnQueueBeginDebugUtilsLabelEXT || _graphicsQueues.empty() || !labelName) {
+        return;
+    }
+
+    VkDebugUtilsLabelEXT label{
+        .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+        .pNext      = nullptr,
+        .pLabelName = labelName,
+    };
+    if (colorRGBA) {
+        std::memcpy(label.color, colorRGBA, sizeof(label.color));
+    }
+    _pfnQueueBeginDebugUtilsLabelEXT(_graphicsQueues[0].getHandle(), &label);
+}
+
+void VulkanRender::queueEndLabel()
+{
+    if (!_pfnQueueEndDebugUtilsLabelEXT || _graphicsQueues.empty()) {
+        return;
+    }
+    _pfnQueueEndDebugUtilsLabelEXT(_graphicsQueues[0].getHandle());
 }
 
 int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores)

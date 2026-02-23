@@ -34,6 +34,8 @@ class VulkanCommandBuffer : public ICommandBuffer
 
     // Static function pointer for VK_EXT_extended_dynamic_state3
     static PFN_vkCmdSetPolygonModeEXT s_vkCmdSetPolygonModeEXT;
+    static PFN_vkCmdBeginDebugUtilsLabelEXT s_vkCmdBeginDebugUtilsLabelEXT;
+    static PFN_vkCmdEndDebugUtilsLabelEXT   s_vkCmdEndDebugUtilsLabelEXT;
 
     friend struct VulkanRender; // Allow VulkanRender to initialize the function pointers
 
@@ -143,7 +145,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void transitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
                                const ImageSubresourceRange* subresourceRange) override;
     void transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange = nullptr) override;
-
+    void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
+    void debugEndLabel() override;
 
     // Helper: Transition all attachments of a RenderTarget to specified layouts
     void transitionRenderTargetLayout(

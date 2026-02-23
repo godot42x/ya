@@ -96,6 +96,8 @@ static void collectRenderTargetTransitions(
 PFN_vkCmdBeginRenderingKHR VulkanCommandBuffer::s_vkCmdBeginRenderingKHR = nullptr;
 PFN_vkCmdEndRenderingKHR   VulkanCommandBuffer::s_vkCmdEndRenderingKHR   = nullptr;
 PFN_vkCmdSetPolygonModeEXT VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = nullptr;
+PFN_vkCmdBeginDebugUtilsLabelEXT VulkanCommandBuffer::s_vkCmdBeginDebugUtilsLabelEXT = nullptr;
+PFN_vkCmdEndDebugUtilsLabelEXT   VulkanCommandBuffer::s_vkCmdEndDebugUtilsLabelEXT   = nullptr;
 
 VulkanCommandPool::VulkanCommandPool(VulkanRender* render, VulkanQueue* queue, VkCommandPoolCreateFlags flags)
 {
@@ -445,7 +447,7 @@ void VulkanCommandBuffer::executeAll()
                     beginRendering(arg.info);
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::EndRendering>) {
-                    executeEndRendering();
+                    endRendering({});
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::BindDescriptorSets>) {
                     executeBindDescriptorSets(arg.pipelineLayout, arg.firstSet, arg.descriptorSets, arg.dynamicOffsets);
@@ -521,6 +523,13 @@ void VulkanCommandBuffer::setPolygonMode(EPolygonMode::T polygonMode)
 
 void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
 {
+    const char* defaultRenderLabel = "Rendering";
+    const char* labelName          = defaultRenderLabel;
+    if (!info.label.empty() && info.label != "None") {
+        labelName = info.label.c_str();
+    }
+    debugBeginLabel(labelName);
+
     // === Mode 1: From RenderTarget (automatic mode selection) ===
     if (info.renderTarget != nullptr) {
         auto renderTarget = info.renderTarget;
@@ -815,6 +824,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 void VulkanCommandBuffer::endRendering(const EndRenderingInfo& info)
 {
     executeEndRendering(info);
+    debugEndLabel();
 }
 
 void VulkanCommandBuffer::bindDescriptorSets(
@@ -859,6 +869,27 @@ void VulkanCommandBuffer::transitionImageLayoutAuto(IImage* image, EImageLayout:
         transitionImageLayout(image, curLayout, newLayout, subresourceRange);
     }
     // already in the layout after cmdbuf execute
+}
+
+void VulkanCommandBuffer::debugBeginLabel(const char* labelName, const float* colorRGBA)
+{
+    VkDebugUtilsLabelEXT label{
+        .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+        .pNext      = nullptr,
+        .pLabelName = labelName,
+    };
+    if (colorRGBA) {
+        std::memcpy(label.color, colorRGBA, sizeof(label.color));
+    }
+    s_vkCmdBeginDebugUtilsLabelEXT(_commandBuffer, &label);
+}
+
+void VulkanCommandBuffer::debugEndLabel()
+{
+    // if (!s_vkCmdEndDebugUtilsLabelEXT) {
+    //     return;
+    // }
+    s_vkCmdEndDebugUtilsLabelEXT(_commandBuffer);
 }
 
 void VulkanCommandBuffer::transitionRenderTargetLayout(

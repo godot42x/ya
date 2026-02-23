@@ -85,7 +85,7 @@ struct VulkanBuffer : public ya::IBuffer
   private:
     void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
     void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
-    void setupDebugName(const std::string &name);
+    void setupDebugName(const std::string &inName);
 };
 
 } // namespace ya

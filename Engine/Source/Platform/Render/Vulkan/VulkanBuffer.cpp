@@ -117,11 +117,11 @@ void VulkanBuffer::mapInternal(void **ptr)
                         ptr));
 }
 
-void VulkanBuffer::setupDebugName(const std::string &name)
+void VulkanBuffer::setupDebugName(const std::string &inName)
 {
-    if (!name.empty()) {
-        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, name.c_str());
-        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", name).c_str());
+    if (!inName.empty()) {
+        _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, inName.c_str());
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, _memory, std::format("{}_Memory", inName).c_str());
     }
 }
 
