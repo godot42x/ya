@@ -155,6 +155,7 @@ void VulkanPipeline::tryUpdateShader()
         VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
         _pipeline           = _pendingNewPipeline;
         _pendingNewPipeline = VK_NULL_HANDLE;
+        _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, _pipeline, _name.toString().c_str());
         YA_CORE_TRACE("Vulkan graphics pipeline replaced successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
     }
 }

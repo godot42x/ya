@@ -7,6 +7,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/RenderDefines.h"
+#include <cstddef>
 
 
 
@@ -92,10 +93,11 @@ struct PhongMaterialSystem : public IMaterialSystem
     //   redraw ech obj in world? use defer rendering to avoid redraw
     struct DebugUBO
     {
-        alignas(4) bool bDebugNormal = false;
-        alignas(4) bool bDebugDepth  = false;
-        alignas(4) bool bDebugUV     = false;
-        glm::vec4 floatParam         = glm::vec4(0.0f);
+        uint32_t bDebugNormal            = 0;
+        uint32_t bDebugDepth             = 0;
+        uint32_t bDebugUV                = 0;
+        uint32_t _pad0                   = 0;
+        alignas(16) glm::vec4 floatParam = glm::vec4(0.0f);
     } uDebug;
 
     struct ModelPushConstant
@@ -252,8 +254,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
     std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
-    DescriptorSetHandle skyBoxCubeMapDS = nullptr;
-    DescriptorSetHandle depthBufferDS   = nullptr;
+    DescriptorSetHandle skyBoxCubeMapDS        = nullptr;
+    DescriptorSetHandle depthBufferDS          = nullptr;
     bool                _bShadowMappingEnabled = true;
     std::string         _ctxEntityDebugStr;
 

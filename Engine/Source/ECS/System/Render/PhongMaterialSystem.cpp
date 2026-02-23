@@ -511,9 +511,19 @@ void PhongMaterialSystem::onRenderGUI()
 
 
     if (ImGui::TreeNode("Debug Options")) {
-        ImGui::Checkbox("Debug Normal", &uDebug.bDebugNormal);
-        ImGui::Checkbox("Debug Depth", &uDebug.bDebugDepth);
-        ImGui::Checkbox("Debug UV", &uDebug.bDebugUV);
+        bool bDebugNormal = (uDebug.bDebugNormal != 0);
+        bool bDebugDepth  = (uDebug.bDebugDepth != 0);
+        bool bDebugUV     = (uDebug.bDebugUV != 0);
+
+        if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) {
+            uDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
+        }
+        if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) {
+            uDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
+        }
+        if (ImGui::Checkbox("Debug UV", &bDebugUV)) {
+            uDebug.bDebugUV = bDebugUV ? 1u : 0u;
+        }
         ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
         TreePop();
     }
@@ -526,7 +536,7 @@ void PhongMaterialSystem::setShadowMappingEnabled(bool enabled)
     }
     _bShadowMappingEnabled           = enabled;
     _pipelineDesc.shaderDesc.defines = buildPhongShaderDefines(_bShadowMappingEnabled);
-    _pipeline->markDirty();
+    _pipeline->updateDesc(_pipelineDesc);
 }
 
 
