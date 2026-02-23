@@ -100,6 +100,7 @@ struct IGraphicsPipeline : public IPipeline
      */
     virtual const std::string& getName() const = 0;
 
+    virtual void            updateDesc(GraphicsPipelineCreateInfo ci = {})                   = 0;
     virtual void            reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) = 0;
     virtual void            tryUpdateShader()                                                = 0;
     virtual void            setSampleCount(ESampleCount::T sampleCount)                      = 0;
@@ -108,6 +109,14 @@ struct IGraphicsPipeline : public IPipeline
     virtual ECullMode::T    getCullMode() const                                              = 0;
     virtual void            setPolygonMode(EPolygonMode::T polygonMode)                      = 0;
     virtual EPolygonMode::T getPolygonMode() const                                           = 0;
+
+    bool isDirty() const { return _bDirty; }
+    void markDirty() { _bDirty = true; }
+    void clearDirty() { _bDirty = false; }
+
+  protected:
+
+    bool _bDirty = false;
 };
 
 } // namespace ya

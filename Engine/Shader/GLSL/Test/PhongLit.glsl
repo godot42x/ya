@@ -335,6 +335,7 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
 }
 
 
+#if ENABLE_SHADOW
 float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
 {
     // perform perspective divide, could be ignored if using orthographic projection for shadow map
@@ -362,6 +363,7 @@ float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
     float shadow = (curDepth - bias )> closestDepth ? 1.0 : 0.0;
     return shadow;
 }
+#endif
 
 vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor) 
 {
@@ -374,12 +376,12 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     vec3 ambient = dirLight.ambient *  diffuseTexColor *  uParams.ambient;
     vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
     vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
-// #ifdef ENABLE_SHADOW
-    // vec4 projCoords = gFragLightSpacePos;
-    // vec4 projCoords = gFragLightSpacePos;
+#if ENABLE_SHADOW
     float shadow = calculateShadow(gFragLightSpacePos, norm, lightDir);
     return ambient + (1-shadow)  * (diffuse + specular);
-// #endif
+#else
+    return ambient + diffuse + specular;
+#endif
 }
 
 vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor)

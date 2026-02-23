@@ -227,7 +227,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/PhongLit.glsl"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
@@ -446,21 +446,19 @@ void App::init(AppDesc ci)
     _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
     _deleter.push("SkyboxCubeMapDSL", [this](void*) { _skyBoxCubeMapDSL.reset(); });
 
-    _depthBufferDSL        = IDescriptorSetLayout::create(_render,
+    _depthBufferDSL      = IDescriptorSetLayout::create(_render,
                                                    DescriptorSetLayoutDesc{
-                                                              .label    = "DepthBuffer_DSL",
-                                                              .bindings = {
+                                                            .label    = "DepthBuffer_DSL",
+                                                            .bindings = {
                                                            DescriptorSetLayoutBinding{
-                                                                      .binding         = 0,
-                                                                      .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                                                                      .descriptorCount = 1,
-                                                                      .stageFlags      = EShaderStage::Fragment,
+                                                                    .binding         = 0,
+                                                                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                                                                    .descriptorCount = 1,
+                                                                    .stageFlags      = EShaderStage::Fragment,
                                                            },
                                                        },
                                                    });
-    _depthBufferFallbackDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
-    _depthBufferShadowDS   = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
-    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferFallbackDS.ptr, "DepthBuffer_Fallback_DS");
+    _depthBufferShadowDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
     _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
     _deleter.push("DepthBufferDSL", [this](void*) { _depthBufferDSL.reset(); });
 
@@ -630,11 +628,11 @@ void App::init(AppDesc ci)
     _render
         ->getDescriptorHelper()
         ->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_depthBufferFallbackDS, 0, fallbackIV, _shadowSampler.get()),
             IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, shadowIV, _shadowSampler.get()),
         });
     _shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(_depthRT);
-    _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferFallbackDS;
+    _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferShadowDS;
+    _phongMaterialSystem->as<PhongMaterialSystem>()->setShadowMappingEnabled(bShadowMapping);
 
     _debugRenderSystem->bEnabled = false;
 
@@ -1058,7 +1056,6 @@ void App::tickRender(float dt)
 
     beginFrame();
 
-    bool bShadowPassExecuted = false;
     if (bShadowMapping && _depthRT && _shadowMappingSystem) {
 
         RenderingInfo shadowMapRI{
@@ -1080,18 +1077,12 @@ void App::tickRender(float dt)
         cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
         auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
         cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-        bShadowPassExecuted = true;
-    }
 
-    if (bShadowPassExecuted) {
-        // NOTICE: need to update descriptor set if depth RT recreated
+
         auto phongSys                           = _phongMaterialSystem->as<PhongMaterialSystem>();
-        phongSys->depthBufferDS                 = _depthBufferShadowDS;
         phongSys->uLight.shadowLightSpaceMatrix = _shadowMappingSystem->as<ShadowMapping>()->_uLightCameraData.viewProjection;
     }
-    else {
-        _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferFallbackDS;
-    }
+
 
     FrameContext ctx;
     {
@@ -1440,6 +1431,10 @@ void App::onRenderGUI(float dt)
         }
         if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping))
         {
+            taskManager.registerFrameTask([this]() {
+                auto* phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
+                phongSys->setShadowMappingEnabled(bShadowMapping);
+            });
         }
 
         auto* swapchain = _render->getSwapchain();

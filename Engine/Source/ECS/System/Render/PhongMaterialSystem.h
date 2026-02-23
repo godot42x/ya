@@ -254,6 +254,7 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     DescriptorSetHandle skyBoxCubeMapDS = nullptr;
     DescriptorSetHandle depthBufferDS   = nullptr;
+    bool                _bShadowMappingEnabled = true;
     std::string         _ctxEntityDebugStr;
 
   public:
@@ -266,6 +267,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void onRenderGUI() override;
     void resetFrameSlot() override { _passSlot = 0; }
+    void setShadowMappingEnabled(bool enabled);
 
 
   private:

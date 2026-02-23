@@ -187,7 +187,6 @@ struct App
     stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL = nullptr;
     DescriptorSetHandle          _skyBoxCubeMapDS  = nullptr;
     stdptr<IDescriptorSetLayout> _depthBufferDSL        = nullptr;
-    DescriptorSetHandle          _depthBufferFallbackDS = nullptr;
     DescriptorSetHandle          _depthBufferShadowDS   = nullptr;
     stdptr<Sampler>              _shadowSampler         = nullptr;
 

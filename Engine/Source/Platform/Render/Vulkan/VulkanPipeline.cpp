@@ -126,7 +126,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
     YA_PROFILE_FUNCTION_LOG();
     _ci = ci;
     // TODO: precreate post create to avoid reentrance?
-    _bDirty         = false;
+    clearDirty();
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
         createPipelineInternal();
@@ -141,11 +141,11 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 
 void VulkanPipeline::reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci)
 {
-    auto shaderStorage = ya::App::get()->getShaderStorage();
-    shaderStorage->removeCache(_ci.shaderDesc.shaderName);
     if (ci.has_value()) {
         _ci = ci.value();
     }
+    auto shaderStorage = ya::App::get()->getShaderStorage();
+    shaderStorage->removeCache(_ci.shaderDesc.shaderName);
     recreate(_ci);
 }
 
@@ -159,13 +159,22 @@ void VulkanPipeline::tryUpdateShader()
     }
 }
 
+void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
+{
+    _ci = ci;
+    ya::App::get()
+        ->getShaderStorage()
+        ->removeCache(_ci.shaderDesc.shaderName);
+    markDirty();
+}
+
 void VulkanPipeline::beginFrame()
 {
-    if (_bDirty) {
+    if (isDirty()) {
         auto pendingCI = _ci;
-        _bDirty        = false;
+        clearDirty();
         if (!recreate(pendingCI)) {
-            _bDirty = true;
+            markDirty();
         }
     }
     tryUpdateShader();
@@ -177,7 +186,7 @@ void VulkanPipeline::setSampleCount(ESampleCount::T sampleCount)
         return;
     }
     _ci.multisampleState.sampleCount = sampleCount;
-    _bDirty                          = true;
+    markDirty();
 }
 
 void VulkanPipeline::setCullMode(ECullMode::T cullMode)
@@ -186,7 +195,7 @@ void VulkanPipeline::setCullMode(ECullMode::T cullMode)
         return;
     }
     _ci.rasterizationState.cullMode = cullMode;
-    _bDirty                         = true;
+    markDirty();
 }
 
 void VulkanPipeline::setPolygonMode(EPolygonMode::T polygonMode)
@@ -195,7 +204,7 @@ void VulkanPipeline::setPolygonMode(EPolygonMode::T polygonMode)
         return;
     }
     _ci.rasterizationState.polygonMode = polygonMode;
-    _bDirty                            = true;
+    markDirty();
 }
 
 void VulkanPipeline::renderGUI()

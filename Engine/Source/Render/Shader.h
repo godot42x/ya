@@ -24,7 +24,7 @@ namespace std
 template <>
 struct formatter<spirv_cross::SPIRType> : formatter<std::string>
 {
-    auto format(const spirv_cross::SPIRType &type, std::format_context &ctx) const
+    auto format(const spirv_cross::SPIRType& type, std::format_context& ctx) const
     {
         return std::format_to(ctx.out(),
                               "[ SPIRType: {}, vecsize: {}, columns: {}, array size: {} ]",
@@ -110,14 +110,14 @@ struct ShaderResources
 };
 
 // Utility functions for shader reflection
-DataType SpirType2DataType(const spirv_cross::SPIRType &type);
+DataType SpirType2DataType(const spirv_cross::SPIRType& type);
 uint32_t getDataTypeSize(DataType type);
 } // namespace ShaderReflection
 
 struct SPIRVHelper
 {
-    static uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType &type);
-    static uint32_t getSpirvTypeSize(const spirv_cross::SPIRType &type);
+    static uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType& type);
+    static uint32_t getSpirvTypeSize(const spirv_cross::SPIRType& type);
 };
 
 
@@ -161,8 +161,8 @@ struct IShaderProcessor
   public:
 
 
-    virtual std::optional<stage2spirv_t>                    process(const ShaderDesc &ci)                                      = 0;
-    [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) = 0;
+    virtual std::optional<stage2spirv_t>                    process(const ShaderDesc& ci)                                      = 0;
+    [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) = 0;
 };
 
 
@@ -182,10 +182,10 @@ struct GLSLProcessor : public IShaderProcessor
 
   public:
 
-    std::optional<stage2spirv_t>      process(const ShaderDesc &ci) override;
-    ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t> &spirvData) override;
+    std::optional<stage2spirv_t>      process(const ShaderDesc& ci) override;
+    ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) override;
 
-    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string> &defines, std::vector<ir_t> &outSpv) -> bool;
+    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string>& defines, std::vector<ir_t>& outSpv) -> bool;
 
 
 
@@ -195,10 +195,10 @@ struct GLSLProcessor : public IShaderProcessor
     std::filesystem::path GetCacheMetaPath();
 
 
-    bool                                             processCombinedSource(const stdpath &filepath, const std::vector<std::string> &defines, stage2spirv_t &outSpvMap);
-    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath &filepath);
+    bool                                             processCombinedSource(const stdpath& filepath, const std::vector<std::string>& defines, stage2spirv_t& outSpvMap);
+    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath& filepath);
 
-    bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t &outSpvMap);
+    bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t& outSpvMap);
 };
 
 
@@ -213,7 +213,7 @@ struct ShaderStorage
 
     [[nodiscard]] std::shared_ptr<IShaderProcessor> getProcessor() const { return _processor; }
 
-    [[nodiscard]] const IShaderProcessor::stage2spirv_t *getCache(const std::string &key) const
+    [[nodiscard]] const IShaderProcessor::stage2spirv_t* getCache(const std::string& key) const
     {
         auto it = _shaderCache.find(key);
         if (it == _shaderCache.end()) {
@@ -223,7 +223,7 @@ struct ShaderStorage
         return &it->second;
     }
 
-    void removeCache(const std::string &key)
+    void removeCache(const std::string& key)
     {
         auto it = _shaderCache.find(key);
         if (it != _shaderCache.end()) {
@@ -232,7 +232,7 @@ struct ShaderStorage
         }
     }
 
-    const IShaderProcessor::stage2spirv_t *load(const ShaderDesc &ci)
+    const IShaderProcessor::stage2spirv_t* load(const ShaderDesc& ci)
     {
         // TODO: cache it
         // auto it = _shaderCache.find(ci.shaderName);
@@ -253,6 +253,15 @@ struct ShaderStorage
         _shaderCache[ci.shaderName.data()] = std::move(*opt);
         return &_shaderCache.at(ci.shaderName);
     }
+
+    auto validate(const ShaderDesc& ci)
+    {
+        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", ci.shaderName).c_str());
+        auto opt = getProcessor()->process(ci);
+        if (!opt.has_value()) {
+            throw std::runtime_error(std::format("Failed to process shader: {}", ci.shaderName));
+        }
+    }
 };
 
 
@@ -270,20 +279,20 @@ class ShaderProcessorFactory
     std::string cachedStoragePath;
     std::string shaderStoragePath;
 
-    Self &withProcessorType(EProcessorType type)
+    Self& withProcessorType(EProcessorType type)
     {
         processorType = type;
         return *this;
     }
 
 
-    Self &withCachedStoragePath(std::string_view dirPath)
+    Self& withCachedStoragePath(std::string_view dirPath)
     {
         cachedStoragePath = dirPath;
         return *this;
     }
 
-    Self &withShaderStoragePath(std::string_view dirPath)
+    Self& withShaderStoragePath(std::string_view dirPath)
     {
         shaderStoragePath = dirPath;
         return *this;

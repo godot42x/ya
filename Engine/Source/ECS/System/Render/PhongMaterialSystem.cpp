@@ -37,6 +37,17 @@
 namespace ya
 {
 
+static std::vector<std::string> buildPhongShaderDefines(bool bEnableShadow)
+{
+    std::vector<std::string> defines = {
+        std::format("MAX_POINT_LIGHTS {}", PhongMaterialSystem::MAX_POINT_LIGHTS),
+    };
+    if (bEnableShadow) {
+        defines.push_back("ENABLE_SHADOW 1");
+    }
+    return defines;
+}
+
 void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
 {
     YA_PROFILE_FUNCTION();
@@ -96,9 +107,8 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
                     .offset     = offsetof(ya::Vertex, normal),
                 },
             },
-            .defines = {
-                "MAX_POINT_LIGHTS=" + std::to_string(PhongMaterialSystem::MAX_POINT_LIGHTS),
-            }},
+            .defines = buildPhongShaderDefines(_bShadowMappingEnabled),
+        },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
             EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
@@ -491,7 +501,6 @@ void PhongMaterialSystem::onRenderGUI()
 {
     using namespace ImGui;
     IMaterialSystem::onRenderGUI();
-
     TextColored(ImColor(1.0f, 1.0f, 0.0f, 1.0f), "pass slot: %d", getPassSlot());
 
     // if (TreeNode("Directional Light")) {
@@ -508,7 +517,17 @@ void PhongMaterialSystem::onRenderGUI()
         ImGui::DragFloat4("Float Param", glm::value_ptr(uDebug.floatParam), 0.1f);
         TreePop();
     }
-};
+}
+
+void PhongMaterialSystem::setShadowMappingEnabled(bool enabled)
+{
+    if (_bShadowMappingEnabled == enabled) {
+        return;
+    }
+    _bShadowMappingEnabled           = enabled;
+    _pipelineDesc.shaderDesc.defines = buildPhongShaderDefines(_bShadowMappingEnabled);
+    _pipeline->markDirty();
+}
 
 
 // TODO: descriptor set can be shared if they use same layout and data

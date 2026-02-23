@@ -73,7 +73,6 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
-    bool                           _bDirty = false;
 
     VulkanRender         *_render         = nullptr;
     VulkanPipelineLayout *_pipelineLayout = nullptr;
@@ -125,6 +124,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     // TODO: sniff layout from ShaderReflection?
     void reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) override;
     void tryUpdateShader() override;
+    void updateDesc(GraphicsPipelineCreateInfo ci = {}) override;
     void beginFrame() override;
     void renderGUI() override;
 
