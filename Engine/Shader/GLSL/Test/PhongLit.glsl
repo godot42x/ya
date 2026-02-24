@@ -309,6 +309,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 layout(set =4, binding = 0) uniform sampler2D uShadowMap;
+// layout(set =4, binding = 1) uniform sampler2D uPointLightShadowMap[MAX_POINT_LIGHTS];
 
 
 // MARK: frag i/o, if have geometry shader, from geometry shader's out
@@ -334,6 +335,10 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
     return spec;
 }
 
+// PCF: percentage-closer filtering, see LearnOpenGL 2.5 Shadow Mapping
+#ifndef ENABLE_PCF_SHADOW
+    #define ENABLE_PCF_SHADOW 0
+#endif
 
 #if ENABLE_SHADOW
 float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
@@ -357,10 +362,25 @@ float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
     //     return 0.0;
     // }
 
-    float closestDepth = texture(uShadowMap, uv).r; // determined by the sampler is nearest or linear
     // float bias = 0.005;
     float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
-    float shadow = (curDepth - bias )> closestDepth ? 1.0 : 0.0;
+
+    float shadow = 0.0;
+#if ENABLE_PCF_SHADOW
+    // textureSize: return the dimensions of the texture at the specified LOD(mips) level as an ivec2.
+    vec2 texSize = 1.0 / textureSize(uShadowMap, 0); 
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            vec2 offset = vec2(x, y) * texSize;
+            float pcfDepth = texture(uShadowMap, uv + offset).r; // get depth from shadow map
+            shadow += (curDepth - bias) > pcfDepth ? 1.0 : 0.0; // compare depth with bias
+        }
+    }
+    shadow /= 9.0; // average the shadow factor
+#else
+    float closestDepth = texture(uShadowMap, uv).r; // determined by the sampler is nearest or linear
+    shadow = (curDepth - bias )> closestDepth ? 1.0 : 0.0;
+#endif
     return shadow;
 }
 #endif
