@@ -166,6 +166,18 @@ struct ShaderDesc
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
     std::vector<std::string>             defines = {}; // #define in shader
+
+    // TOD:
+    // 1. split the giant header file into each unit(pipe line relates to pipelines),
+    //    we are not a fixed API like vulkan api. It's hard to modify and recompile it
+    // 2. Make each macro by values m x n (by deps) to do a validation(is it valid to do?)
+    // struct Gate
+    // {
+    //     std::string              define;
+    //     std::vector<std::string> values;
+    //     std::vector<int>       dependGates;
+    // };
+    // std::vector<Gate> gates;
 };
 
 namespace EFrontFaceType

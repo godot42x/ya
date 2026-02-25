@@ -309,6 +309,15 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 layout(set =4, binding = 0) uniform sampler2D uShadowMap;
+
+/*
+* How implement point light shadow mapping:
+* 1. create MAX_POINT_LIGHTS texture(RT)
+* 2. use one shader(SimpleDepthShader.glsl) to render 1 depth attachment for directional light,
+*   and uLit.numPointLights *color* attachments for point lights, so that we can reuse model matrix.
+*   just pass each light's matrix to uniform, then pass to different attachment
+* 3. do material pass to calculate dirLight and pointLight shadow
+*/
 // layout(set =4, binding = 1) uniform sampler2D uPointLightShadowMap[MAX_POINT_LIGHTS];
 
 
@@ -335,13 +344,16 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
     return spec;
 }
 
+// #ifndef ENABLE_DIRECTIONAL_SHADOW
+//     #define ENABLE_DIRECTIONAL_SHADOW 1
+// #endif
 // PCF: percentage-closer filtering, see LearnOpenGL 2.5 Shadow Mapping
 #ifndef ENABLE_PCF_SHADOW
     #define ENABLE_PCF_SHADOW 0
 #endif
 
-#if ENABLE_SHADOW
-float calculateShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
+#if ENABLE_DIRECTIONAL_SHADOW
+float calculateDirectionalShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
 {
     // perform perspective divide, could be ignored if using orthographic projection for shadow map
     float w = fragLightSpacePos.w;
@@ -396,8 +408,8 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     vec3 ambient = dirLight.ambient *  diffuseTexColor *  uParams.ambient;
     vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
     vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
-#if ENABLE_SHADOW
-    float shadow = calculateShadow(gFragLightSpacePos, norm, lightDir);
+#if ENABLE_DIRECTIONAL_SHADOW
+    float shadow = calculateDirectionalShadow(gFragLightSpacePos, norm, lightDir);
     return ambient + (1-shadow)  * (diffuse + specular);
 #else
     return ambient + diffuse + specular;

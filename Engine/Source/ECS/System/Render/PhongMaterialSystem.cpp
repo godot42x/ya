@@ -37,13 +37,13 @@
 namespace ya
 {
 
-static std::vector<std::string> buildPhongShaderDefines(bool bEnableShadow)
+static std::vector<std::string> buildPhongShaderDefines(bool bEnableDirectionalShadow)
 {
     std::vector<std::string> defines = {
         std::format("MAX_POINT_LIGHTS {}", PhongMaterialSystem::MAX_POINT_LIGHTS),
     };
-    if (bEnableShadow) {
-        defines.push_back("ENABLE_SHADOW 1");
+    if (bEnableDirectionalShadow) {
+        defines.push_back("ENABLE_DIRECTIONAL_SHADOW 1");
     }
     return defines;
 }
@@ -107,7 +107,7 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
                     .offset     = offsetof(ya::Vertex, normal),
                 },
             },
-            .defines = buildPhongShaderDefines(_bShadowMappingEnabled),
+            .defines = buildPhongShaderDefines(_bDirectionalShadowMapping),
         },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
@@ -529,13 +529,13 @@ void PhongMaterialSystem::onRenderGUI()
     }
 }
 
-void PhongMaterialSystem::setShadowMappingEnabled(bool enabled)
+void PhongMaterialSystem::setDirectionalShadowMappingEnabled(bool enabled)
 {
-    if (_bShadowMappingEnabled == enabled) {
+    if (_bDirectionalShadowMapping == enabled) {
         return;
     }
-    _bShadowMappingEnabled           = enabled;
-    _pipelineDesc.shaderDesc.defines = buildPhongShaderDefines(_bShadowMappingEnabled);
+    _bDirectionalShadowMapping       = enabled;
+    _pipelineDesc.shaderDesc.defines = buildPhongShaderDefines(_bDirectionalShadowMapping);
     _pipeline->updateDesc(_pipelineDesc);
 }
 

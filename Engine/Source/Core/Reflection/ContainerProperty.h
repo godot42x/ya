@@ -762,7 +762,7 @@ std::unique_ptr<IContainerProperty> createContainerProperty()
         }
     }
 
-    return nullptr;
+    UNREACHABLE();
 }
 
 } // namespace ya::reflection

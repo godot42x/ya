@@ -47,7 +47,8 @@ struct ShadowMapping : public IRenderSystem
     float _farPlane        = 100.0f;
     float _lightDistance   = 20.0f;
 
-    uint32_t _index = 0;
+    bool     bHasDirectionalLight = false;
+    uint32_t _index               = 0;
 
     PipelineLayoutDesc _pipelineLayoutDesc = {
         .label         = "ShadowMapping_PipelineLayout",
@@ -101,11 +102,14 @@ struct ShadowMapping : public IRenderSystem
     void onRenderGUI() override;
 
   private:
-    void updateLightFromScene();
+    bool updateDirLightFromScene();
     void advance() { _index = (_index + 1) % SHADOW_PER_FRAME_SET; }
 
   public:
     const LightCameraData& getLightCameraData() const { return _uLightCameraData; }
+
+    bool hasDirectionalLight() const { return bHasDirectionalLight; }
+    void setHasDirectionalLight(bool bHasDirectionalLight_) { bHasDirectionalLight = bHasDirectionalLight_; }
 };
 
 } // namespace ya

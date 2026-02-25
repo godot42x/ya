@@ -240,12 +240,12 @@ void DebugRenderSystem::onRenderGUI()
             _pipelineCI.shaderDesc.defines = {
                 "DEBUG_NORMAL_DIR",
             };
-            reloadShaders(_pipelineCI);
+            _pipeline->updateDesc(_pipelineCI);
         }
         else {
             _pipelineCI.shaderDesc.defines = {};
             if (uDebug.mode == (int)EMode::NormalDir) {
-                reloadShaders(_pipelineCI);
+                _pipeline->updateDesc(_pipelineCI);
             }
         }
         uDebug.mode = (int)_mode;

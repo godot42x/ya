@@ -12,7 +12,7 @@ struct UnlitMaterial : public Material
   public:
     using Self = UnlitMaterial;
 
-    DISABLE_PADDED_STRUCT_WARNING_BEGIN()
+    YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     struct TextureParam
     {
         bool enable{false};
@@ -40,7 +40,7 @@ struct UnlitMaterial : public Material
         alignas(16) TextureParam textureParam0;
         alignas(16) TextureParam textureParam1;
     };
-    DISABLE_PADDED_STRUCT_WARNING_END()
+    YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
     // indicate the color in MaterialUBO param
     enum

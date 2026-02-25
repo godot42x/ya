@@ -305,7 +305,7 @@ void ReflectionSerializer::deserializeMapContainer(ya::reflection::IContainerPro
 
                         valueClass->destroyInstance(valuePtr);
                     }
-                    catch (const std::exception &e) {
+                    catch (const std::exception &) {
                         valueClass->destroyInstance(valuePtr);
                         throw;
                     }

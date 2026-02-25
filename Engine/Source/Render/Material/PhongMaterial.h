@@ -43,6 +43,7 @@ struct PhongMaterial : public Material
         Count,
     };
 
+YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     /// GPU UBO 结构 - 使用 std140 兼容类型，直接上传无需 pack
     struct ParamUBO
     {
@@ -53,6 +54,7 @@ struct PhongMaterial : public Material
 
         std::array<TextureParam, EResource::Count> textureParams;
     };
+YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
 
     // ========================================

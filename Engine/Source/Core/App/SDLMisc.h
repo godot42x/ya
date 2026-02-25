@@ -9,7 +9,7 @@ namespace ya
 {
 
 // Forward declaration
-class EditorLayer;
+struct EditorLayer;
 
 inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
 {

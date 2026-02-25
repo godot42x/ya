@@ -31,7 +31,7 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     using material_param_t = PhongMaterial::ParamUBO;
 
-    DISABLE_PADDED_STRUCT_WARNING_BEGIN()
+    YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     struct FrameUBO
     {
         glm::mat4 projection{1.f};
@@ -104,7 +104,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     {
         glm::mat4 modelMat;
     };
-    DISABLE_PADDED_STRUCT_WARNING_END()
+    YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "PhongMaterialSystem_PipelineLayout",
@@ -254,9 +254,9 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
     std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
 
-    DescriptorSetHandle skyBoxCubeMapDS        = nullptr;
-    DescriptorSetHandle depthBufferDS          = nullptr;
-    bool                _bShadowMappingEnabled = true;
+    DescriptorSetHandle skyBoxCubeMapDS            = nullptr;
+    DescriptorSetHandle depthBufferDS              = nullptr;
+    bool                _bDirectionalShadowMapping = true;
     std::string         _ctxEntityDebugStr;
 
   public:
@@ -269,7 +269,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void onRenderGUI() override;
     void resetFrameSlot() override { _passSlot = 0; }
-    void setShadowMappingEnabled(bool enabled);
+    void setDirectionalShadowMappingEnabled(bool enabled);
 
 
   private:

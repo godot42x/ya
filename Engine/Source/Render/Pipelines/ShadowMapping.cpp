@@ -14,7 +14,7 @@ namespace ya
 
 void ShadowMapping::onInitImpl(const InitParams& initParams)
 {
-    auto render = getRender();
+    auto render       = getRender();
     bReverseViewportY = false;
 
     auto DSLs    = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
@@ -130,7 +130,10 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         return;
     }
 
-    updateLightFromScene();
+    bHasDirectionalLight = updateDirLightFromScene();
+    if (!bHasDirectionalLight) {
+        return;
+    }
 
     FrameUBO frameData{
         .lightMatrix = _uLightCameraData.viewProjection,
@@ -213,11 +216,11 @@ void ShadowMapping::onRenderGUI()
     ImGui::DragFloat("Far Plane", &_farPlane, 0.1f, 1.0f, 500.0f);
 }
 
-void ShadowMapping::updateLightFromScene()
+bool ShadowMapping::updateDirLightFromScene()
 {
     auto* scene = getActiveScene();
     if (!scene) {
-        return;
+        return false;
     }
 
     glm::vec3 lightDir = _uLightCameraData.direction;
@@ -238,7 +241,7 @@ void ShadowMapping::updateLightFromScene()
     }
 
     if (!bFound) {
-        return;
+        return false;
     }
 
     _uLightCameraData.direction = lightDir;
@@ -260,6 +263,7 @@ void ShadowMapping::updateLightFromScene()
     // }
     _uLightCameraData.view           = glm::lookAt(-lightDir * _lightDistance, glm::vec3(0.0f), glm::vec3(0, 1, 0));
     _uLightCameraData.viewProjection = _uLightCameraData.projection * _uLightCameraData.view;
+    return true;
 }
 
 } // namespace ya

@@ -69,7 +69,6 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
     VkPipeline       _pipeline           = VK_NULL_HANDLE;
     VkDescriptorPool _descriptorPool     = VK_NULL_HANDLE;
-    VkPipeline       _pendingNewPipeline = VK_NULL_HANDLE;
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
@@ -120,11 +119,8 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
         vkCmdBindPipeline(commandBuffer, bindPoint, _pipeline);
     }
 
-    // 2025/1/10 @godot42: now can only reload shader calculating logics, not any unifrom/vertex layout change
-    // TODO: sniff layout from ShaderReflection?
-    void reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) override;
-    void tryUpdateShader() override;
-    void updateDesc(GraphicsPipelineCreateInfo ci = {}) override;
+    // 修改描述后仅标记 dirty，下一帧 beginFrame 重建 pipeline
+    void updateDesc(GraphicsPipelineCreateInfo ci) override;
     void beginFrame() override;
     void renderGUI() override;
 

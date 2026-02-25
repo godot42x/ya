@@ -104,13 +104,6 @@ struct IRenderSystem
 
     void renderGUI();
 
-    virtual void reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {})
-    {
-        if (_pipeline) {
-            _pipeline->reloadShaders(ci);
-        }
-    }
-
     App*     getApp() const;
     Scene*   getActiveScene() const;
     IRender* getRender() const;

@@ -702,7 +702,7 @@ void App::init(AppDesc ci)
         });
     _shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(_depthRT);
     _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferShadowDS;
-    _phongMaterialSystem->as<PhongMaterialSystem>()->setShadowMappingEnabled(bShadowMapping);
+    _phongMaterialSystem->as<PhongMaterialSystem>()->setDirectionalShadowMappingEnabled(bShadowMapping);
 
     _debugRenderSystem->bEnabled = false;
 
@@ -1115,6 +1115,10 @@ void App::tickRender(float dt)
         return;
     }
 
+    if (_renderDocCapture) {
+        _renderDocCapture->onFrameBegin();
+    }
+
     // ===== Get swapchain image index =====
     int32_t imageIndex = -1;
     if (!render->begin(&imageIndex)) {
@@ -1130,12 +1134,11 @@ void App::tickRender(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameBegin();
-    }
+
 
     beginFrame();
 
+    // MARK: shadow
     if (bShadowMapping && _depthRT && _shadowMappingSystem) {
 
         RenderingInfo shadowMapRI{
@@ -1158,9 +1161,15 @@ void App::tickRender(float dt)
         auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
         cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
 
-
-        auto phongSys                           = _phongMaterialSystem->as<PhongMaterialSystem>();
-        phongSys->uLight.shadowLightSpaceMatrix = _shadowMappingSystem->as<ShadowMapping>()->_uLightCameraData.viewProjection;
+        auto sys      = _shadowMappingSystem->as<ShadowMapping>();
+        auto phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
+        if (sys->hasDirectionalLight()) {
+            phongSys->setDirectionalShadowMappingEnabled(true);
+            phongSys->uLight.shadowLightSpaceMatrix = _shadowMappingSystem->as<ShadowMapping>()->_uLightCameraData.viewProjection;
+        }
+        else {
+            phongSys->setDirectionalShadowMappingEnabled(false);
+        }
     }
 
 
@@ -1513,10 +1522,8 @@ void App::onRenderGUI(float dt)
         }
         if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping))
         {
-            taskManager.registerFrameTask([this]() {
-                auto* phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
-                phongSys->setShadowMappingEnabled(bShadowMapping);
-            });
+            auto* phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
+            phongSys->setDirectionalShadowMappingEnabled(bShadowMapping);
         }
 
         auto* swapchain = _render->getSwapchain();

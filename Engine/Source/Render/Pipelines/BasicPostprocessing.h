@@ -124,7 +124,7 @@ struct BasicPostprocessing : public IRenderSystem
 
     void reloadShader()
     {
-        _pipeline->reloadShaders();
+        _pipeline->markDirty();
     }
 };
 

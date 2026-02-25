@@ -100,9 +100,7 @@ struct IGraphicsPipeline : public IPipeline
      */
     virtual const std::string& getName() const = 0;
 
-    virtual void            updateDesc(GraphicsPipelineCreateInfo ci = {})                   = 0;
-    virtual void            reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci = {}) = 0;
-    virtual void            tryUpdateShader()                                                = 0;
+    virtual void            updateDesc(GraphicsPipelineCreateInfo ci)                         = 0;
     virtual void            setSampleCount(ESampleCount::T sampleCount)                      = 0;
     virtual ESampleCount::T getSampleCount() const                                           = 0;
     virtual void            setCullMode(ECullMode::T cullMode)                               = 0;

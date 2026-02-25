@@ -27,4 +27,5 @@ void main()
 void main()
 {
     // do nothing
+    // gl_FragDepth = gl_FragCoord.z;
 }

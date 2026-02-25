@@ -66,9 +66,9 @@ inline static DefaultAllocator defaultAllocator;
 
 
 #if _WIN32
-    #define DISABLE_PADDED_STRUCT_WARNING_BEGIN() __pragma(warning(push)) __pragma(warning(disable : 4324))
-    #define DISABLE_PADDED_STRUCT_WARNING_END() __pragma(warning(pop))
+    #define YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN() __pragma(warning(push)) __pragma(warning(disable : 4324))
+    #define YA_DISABLE_PADDED_STRUCT_WARNING_END() __pragma(warning(pop))
 #else
-    #define DISABLE_PADDED_STRUCT_WARNING_BEGIN()
-    #define DISABLE_PADDED_STRUCT_WARNING_END()
+    #define YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
+    #define YA_DISABLE_PADDED_STRUCT_WARNING_END()
 #endif

@@ -139,27 +139,6 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
     return true;
 }
 
-void VulkanPipeline::reloadShaders(std::optional<GraphicsPipelineCreateInfo> ci)
-{
-    if (ci.has_value()) {
-        _ci = ci.value();
-    }
-    auto shaderStorage = ya::App::get()->getShaderStorage();
-    shaderStorage->removeCache(_ci.shaderDesc.shaderName);
-    recreate(_ci);
-}
-
-void VulkanPipeline::tryUpdateShader()
-{
-    if (_pendingNewPipeline) {
-        VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
-        _pipeline           = _pendingNewPipeline;
-        _pendingNewPipeline = VK_NULL_HANDLE;
-        _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, _pipeline, _name.toString().c_str());
-        YA_CORE_TRACE("Vulkan graphics pipeline replaced successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
-    }
-}
-
 void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
 {
     _ci = ci;
@@ -178,7 +157,6 @@ void VulkanPipeline::beginFrame()
             markDirty();
         }
     }
-    tryUpdateShader();
 }
 
 void VulkanPipeline::setSampleCount(ESampleCount::T sampleCount)
@@ -242,7 +220,7 @@ void VulkanPipeline::renderGUI()
     // }
 
     if (bManualReload) {
-        reloadShaders();
+        updateDesc(_ci);
     }
 }
 
@@ -264,6 +242,7 @@ void VulkanPipeline::createPipelineInternal()
         }
         catch (const std::exception& e) {
             YA_CORE_ERROR("Failed to load shader: {}", e.what());
+            YA_CORE_ASSERT(_pipeline != VK_NULL_HANDLE, "Pipeline should not be null even if shader loading(reload) failed");
             return;
         }
         if (!stage2Spirv) {
@@ -601,13 +580,8 @@ void VulkanPipeline::createPipelineInternal()
     YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
     YA_CORE_ASSERT(newPipeline != VK_NULL_HANDLE, "Failed to create graphics pipeline!");
 
-    // Destroy old pipeline
-    if (!_pipeline && !_pendingNewPipeline) {
-        _pipeline = newPipeline;
-    }
-    else {
-        _pendingNewPipeline = newPipeline;
-    }
+    VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
+    _pipeline = newPipeline;
 
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
 
