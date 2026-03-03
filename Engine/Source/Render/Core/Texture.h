@@ -46,11 +46,10 @@ struct Texture
 
     static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "", bool bSRGB = true);
 
-    static std::shared_ptr<Texture> fromData(
-        uint32_t                               width,
-        uint32_t                               height,
-        const std::vector<ColorRGBA<uint8_t>>& data,
-        const std::string&                     label = "");
+    static std::shared_ptr<Texture> fromData(uint32_t                               width,
+                                             uint32_t                               height,
+                                             const std::vector<ColorRGBA<uint8_t>>& data,
+                                             const std::string&                     label = "");
 
     static std::shared_ptr<Texture> fromData(uint32_t           width,
                                              uint32_t           height,
@@ -62,13 +61,6 @@ struct Texture
     static std::shared_ptr<Texture> createCubeMap(const CubeMapCreateInfo& ci);
 
     static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo& ci);
-
-    /**
-     * @brief Create a writable cubemap (e.g. point light depth/shadow buffer)
-     * @param ci Writable cubemap creation info
-     * @return Shared pointer to Texture (cubemap image + cubemap imageView)
-     */
-    static std::shared_ptr<Texture> createWritableCubeMap(const WritableCubeMapCreateInfo& ci);
 
     /**
      * @brief Wrap existing IImage/IImageView into a Texture
@@ -102,7 +94,6 @@ struct Texture
     // Internal initialization methods (called by factory)
     void initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels = 1);
     void initCubeMap(const CubeMapCreateInfo& ci);
-    void initWritableCubeMap(const WritableCubeMapCreateInfo& ci);
     void initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
   public:

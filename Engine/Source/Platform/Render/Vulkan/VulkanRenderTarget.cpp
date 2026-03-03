@@ -207,6 +207,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 // ensure the attachment-desc match the swapchains
                 YA_CORE_ASSERT(swapchain->getFormat() == colorAttachments[attachIdx].format, "Swapchain format must match color attachment format");
                 YA_CORE_ASSERT(colorAttachments[attachIdx].samples == ESampleCount::Sample_1, "Swapchain color attachment must have 1 sample");
+                YA_CORE_ASSERT(_layerCount == 1, "Swapchain does not support layered rendering");
 
                 auto image    = VulkanImage::from(_vkRender,
                                                swapchain->getVkImages()[frameBufferIndex],
@@ -228,6 +229,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                         .depth  = 1,
                     },
                     .mipLevels     = 1,
+                    .arrayLayers   = _layerCount,
                     .samples       = colorAttachment.samples,
                     .usage         = colorAttachment.usage,
                     .initialLayout = colorAttachment.initialLayout,

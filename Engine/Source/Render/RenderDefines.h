@@ -1034,6 +1034,63 @@ struct RenderHelper
 struct CommandBufferHandleTag
 {};
 using CommandBufferHandle = Handle<CommandBufferHandleTag>;
+
+
+
+// temp
+static inline constexpr int MAX_POINT_LIGHTS = 4;
+
+/**
+ * @brief Frame context containing per-frame camera data
+ */
+struct FrameContext
+{
+    // camera
+    glm::mat4 view       = glm::mat4(1.0f);
+    glm::mat4 projection = glm::mat4(1.0f);
+    glm::vec3 cameraPos  = glm::vec3(0.0f);
+
+    // directional lights
+    struct DirectionalLightData
+    {
+        glm::mat4 view;
+        glm::mat4 projection;
+        glm::mat4 viewProjection;
+        glm::vec3 direction;
+        glm::vec3 ambient;
+        glm::vec3 diffuse;
+        glm::vec3 specular;
+    } directionalLight;
+    bool bHasDirectionalLight = false;
+
+    struct PointLightData
+    {
+        // shadow
+        glm::mat4 view;
+        glm::mat4 projection;
+        glm::mat4 viewProjection;
+        glm::vec3 position;
+        // visual
+        float     type      = 0;
+        float     constant  = 1.0f;
+        float     linear    = 0.09f;
+        float     quadratic = 0.032f;
+        glm::vec3 ambient;
+        glm::vec3 diffuse;
+        glm::vec3 specular;
+
+        // for spot light
+        glm::vec3 spotDir;
+        float     innerCutOff = 0.0f;
+        float     outerCutOff = 0.0f;
+    };
+    uint32_t                                     numPointLights = 0;
+    std::array<PointLightData, MAX_POINT_LIGHTS> pointLights;
+
+    entt::entity viewOwner = entt::null;
+    Extent2D     extent    = {.width = 640, .height = 480};
+};
+
 } // namespace ya
 
 
@@ -1053,7 +1110,3 @@ YA_REFLECT_ENUM_VALUE(Sample_16)
 YA_REFLECT_ENUM_VALUE(Sample_32)
 YA_REFLECT_ENUM_VALUE(Sample_64)
 YA_REFLECT_ENUM_END()
-
-
-// temp
-static inline constexpr int MAX_POINT_LIGHTS = 4;

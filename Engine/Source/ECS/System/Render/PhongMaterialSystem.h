@@ -82,7 +82,8 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) DirectionalLightData dirLight;
         alignas(16) uint32_t numPointLights = 0;
         alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
-        glm::mat4 shadowLightSpaceMatrix{1.0f}; // 用于阴影映射
+        glm::mat4 shadowLightSpaceMatrix{1.0f}; // 用于阴影映射 TODO: move into the DirectionalLightData 
+        uint32_t  hasDirectionalLight = 0;      // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
 
         void setShadowLightSpaceMatrix(const glm::mat4& shadowLightSpaceMatrix_) { shadowLightSpaceMatrix = shadowLightSpaceMatrix_; }
     } uLight;

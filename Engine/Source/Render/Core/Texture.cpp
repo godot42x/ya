@@ -269,18 +269,6 @@ std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo& ci)
     return texture;
 }
 
-std::shared_ptr<Texture> Texture::createWritableCubeMap(const WritableCubeMapCreateInfo& ci)
-{
-    auto texture    = Texture::createShared();
-    texture->_label = ci.label;
-    texture->initWritableCubeMap(ci);
-
-    if (!texture->isValid()) {
-        return nullptr;
-    }
-
-    return texture;
-}
 
 std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo& ci)
 {
@@ -295,7 +283,8 @@ std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateI
             .height = ci.height,
             .depth  = 1,
         },
-        .mipLevels     = 1,
+        .mipLevels     = ci.mipLevels,
+        .arrayLayers   = ci.layerCount,
         .samples       = ci.samples,
         .usage         = ci.usage,
         .initialLayout = EImageLayout::Undefined,
@@ -696,53 +685,6 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
     render->endIsolateCommands(cmdBuf);
 
     YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, (int)CubeFace_Count);
-}
-
-void Texture::initWritableCubeMap(const WritableCubeMapCreateInfo& ci)
-{
-    auto textureFactory = getTextureFactory();
-
-    _width     = ci.size;
-    _height    = ci.size;
-    _format    = ci.format;
-    _mipLevels = 1;
-    _channels  = 1;
-
-    bool isDepth = (ci.format == EFormat::D32_SFLOAT ||
-                    ci.format == EFormat::D24_UNORM_S8_UINT ||
-                    ci.format == EFormat::D32_SFLOAT_S8_UINT);
-
-    ImageCreateInfo imageCI{
-        .label  = std::format("WritableCubeMap_{}", _label),
-        .format = ci.format,
-        .extent = {
-            .width  = ci.size,
-            .height = ci.size,
-            .depth  = 1,
-        },
-        .mipLevels     = 1,
-        .arrayLayers   = CubeFace_Count,
-        .samples       = ESampleCount::Sample_1,
-        .usage         = ci.usage,
-        .initialLayout = EImageLayout::Undefined,
-        .flags         = EImageCreateFlag::CubeCompatible,
-    };
-
-    image = textureFactory->createImage(imageCI);
-    if (!image || !image->getHandle()) {
-        YA_CORE_ERROR("Failed to create writable cubemap image: {}", _label);
-        return;
-    }
-
-    uint32_t aspectFlags = isDepth ? EImageAspect::Depth : EImageAspect::Color;
-    imageView = textureFactory->createCubeMapImageView(image, aspectFlags);
-    if (!imageView || !imageView->getHandle()) {
-        YA_CORE_ERROR("Failed to create writable cubemap image view: {}", _label);
-        image = nullptr;
-        return;
-    }
-
-    YA_CORE_INFO("Created writable cubemap: {} ({}x{}x{}, format: {})", _label, ci.size, ci.size, (int)CubeFace_Count, (int)ci.format);
 }
 
 } // namespace ya

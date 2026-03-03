@@ -16,56 +16,7 @@ struct ICommandBuffer;
 struct IRenderPass;
 
 
-/**
- * @brief Frame context containing per-frame camera data
- */
-struct FrameContext
-{
-    // camera
-    glm::mat4 view       = glm::mat4(1.0f);
-    glm::mat4 projection = glm::mat4(1.0f);
-    glm::vec3 cameraPos  = glm::vec3(0.0f);
 
-    // directional lights
-    struct DirectionalLightData
-    {
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::mat4 viewProjection;
-        glm::vec3 direction;
-        glm::vec3 ambient;
-        glm::vec3 diffuse;
-        glm::vec3 specular;
-    } directionalLight;
-    bool bHasDirectionalLight = false;
-
-    struct PointLightData
-    {
-        // shadow
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::mat4 viewProjection;
-        glm::vec3 position;
-        // visual
-        float     type       = 0;
-        float     constant   = 1.0f;
-        float     linear     = 0.09f;
-        float     quadratic  = 0.032f;
-        glm::vec3 ambient;
-        glm::vec3 diffuse;
-        glm::vec3 specular;
-
-        // for spot light
-        glm::vec3 spotDir;
-        float     innerCutOff = 0.0f;
-        float     outerCutOff = 0.0f;
-    };
-    uint32_t numPointLights = 0;
-    std::array<PointLightData, MAX_POINT_LIGHTS> pointLights;
-
-    entt::entity viewOwner = entt::null;
-    Extent2D     extent    = {.width = 640, .height = 480};
-};
 
 /**
  * @brief Configuration for creating a RenderTarget
@@ -80,6 +31,7 @@ struct RenderTargetCreateInfo
 
     Extent2D extent           = {.width = 800, .height = 600};
     uint32_t frameBufferCount = 1; // for custom render targets
+    uint32_t layerCount       = 1; // for array textures or cubemaps
 
     struct AttachmentSpec
     {
@@ -110,6 +62,7 @@ struct IRenderTarget
     std::vector<stdptr<IFrameBuffer>> _frameBuffers;
     uint32_t                          _currentFrameIndex = 0;
     uint32_t                          _frameBufferCount  = 1;
+    uint32_t                          _layerCount        = 1; // for array textures or cubemaps
 
 
     bool bDirty = false;
@@ -141,6 +94,7 @@ struct IRenderTarget
         swapChianColorAttachmentIndex = ci.swapChianColorAttachmentIndex;
         _renderingMode                = ci.renderingMode;
         _frameBufferCount             = ci.frameBufferCount;
+        _layerCount                   = ci.layerCount;
 
         if (_renderingMode == ERenderingMode::RenderPass)
         {

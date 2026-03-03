@@ -27,11 +27,11 @@ struct ImageViewCreateInfo;
 struct TextureDataCreateInfo
 {
     std::string label;
-    uint32_t    width    = 0;
-    uint32_t    height   = 0;
-    const void *data     = nullptr;
-    size_t      dataSize = 0;
-    EFormat::T  format   = EFormat::R8G8B8A8_UNORM;
+    uint32_t    width     = 0;
+    uint32_t    height    = 0;
+    const void* data      = nullptr;
+    size_t      dataSize  = 0;
+    EFormat::T  format    = EFormat::R8G8B8A8_UNORM;
     uint32_t    mipLevels = 1;
 };
 
@@ -42,12 +42,14 @@ struct TextureDataCreateInfo
 struct RenderTextureCreateInfo
 {
     std::string     label;
-    uint32_t        width    = 0;
-    uint32_t        height   = 0;
-    EFormat::T      format   = EFormat::R8G8B8A8_UNORM;
-    EImageUsage::T  usage    = EImageUsage::ColorAttachment;
-    ESampleCount::T samples  = ESampleCount::Sample_1;
-    bool            isDepth  = false;
+    uint32_t        width      = 0;
+    uint32_t        height     = 0;
+    EFormat::T      format     = EFormat::R8G8B8A8_UNORM;
+    EImageUsage::T  usage      = EImageUsage::ColorAttachment;
+    ESampleCount::T samples    = ESampleCount::Sample_1;
+    bool            isDepth    = false;
+    uint32_t        layerCount = 1; // For array textures or cubemaps
+    uint32_t        mipLevels  = 1; // Number of mip levels
 };
 
 /**
@@ -69,21 +71,11 @@ enum ECubeFace
  */
 struct CubeMapCreateInfo
 {
-    std::string                               label;
-    std::array<std::string, CubeFace_Count>   files;
-    bool                                      flipVertical = false;
+    std::string                             label;
+    std::array<std::string, CubeFace_Count> files;
+    bool                                    flipVertical = false;
 };
 
-/**
- * @brief Writable cubemap creation info (e.g. point light depth buffer / shadow cube)
- */
-struct WritableCubeMapCreateInfo
-{
-    std::string     label;
-    uint32_t        size    = 0; // width == height for cubemap faces
-    EFormat::T      format  = EFormat::D32_SFLOAT;
-    EImageUsage::T  usage   = static_cast<EImageUsage::T>(EImageUsage::DepthStencilAttachment | EImageUsage::Sampled);
-};
 
 /**
  * @brief ITextureFactory - RHI layer texture resource factory interface
@@ -116,7 +108,7 @@ struct ITextureFactory
      * @param ci Image creation info
      * @return Shared pointer to IImage interface
      */
-    virtual std::shared_ptr<IImage> createImage(const ImageCreateInfo &ci) = 0;
+    virtual std::shared_ptr<IImage> createImage(const ImageCreateInfo& ci) = 0;
 
     /**
      * @brief Create image from existing platform-specific handle
@@ -125,7 +117,7 @@ struct ITextureFactory
      * @param usage Image usage flags
      * @return Shared pointer to IImage interface
      */
-    virtual std::shared_ptr<IImage> createImageFromHandle(void *platformImage, EFormat::T format, EImageUsage::T usage) = 0;
+    virtual std::shared_ptr<IImage> createImageFromHandle(void* platformImage, EFormat::T format, EImageUsage::T usage) = 0;
 
     /**
      * @brief Create image view
@@ -141,7 +133,7 @@ struct ITextureFactory
      * @param ci Image view creation info
      * @return Shared pointer to IImageView interface
      */
-    virtual std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo &ci) = 0;
+    virtual std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo& ci) = 0;
 
     /**
      * @brief Create cubemap image view
@@ -165,7 +157,7 @@ struct ITextureFactory
      * @brief Get associated renderer
      * @return IRender interface pointer
      */
-    virtual IRender *getRender() const = 0;
+    virtual IRender* getRender() const = 0;
 
     /**
      * @brief Check if factory is valid
@@ -180,8 +172,8 @@ struct ITextureFactory
 struct ImageViewCreateInfo
 {
     std::string label;
-    uint32_t    viewType       = 0;    // Platform-specific view type
-    uint32_t    aspectFlags    = 0;    // Platform-specific aspect flags
+    uint32_t    viewType       = 0; // Platform-specific view type
+    uint32_t    aspectFlags    = 0; // Platform-specific aspect flags
     uint32_t    baseMipLevel   = 0;
     uint32_t    levelCount     = 1;
     uint32_t    baseArrayLayer = 0;
@@ -207,13 +199,13 @@ class TextureFactoryHelper
      * @brief Get current renderer's texture factory
      * @return ITextureFactory interface pointer, nullptr if not set
      */
-    static ITextureFactory *get();
+    static ITextureFactory* get();
 
     /**
      * @brief Set current renderer's texture factory
      * @param factory Texture factory interface
      */
-    static void set(ITextureFactory *factory);
+    static void set(ITextureFactory* factory);
 
     /**
      * @brief Check if texture factory is available
@@ -222,7 +214,7 @@ class TextureFactoryHelper
     static bool isAvailable();
 
   private:
-    static ITextureFactory *s_currentFactory;
+    static ITextureFactory* s_currentFactory;
 };
 
 } // namespace ya
