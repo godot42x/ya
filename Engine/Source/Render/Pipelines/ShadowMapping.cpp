@@ -1,12 +1,9 @@
 #include "ShadowMapping.h"
-#include "Core/Math/Math.h"
-#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Scene/Scene.h"
-#include "glm/gtc/matrix_transform.hpp"
 #include "imgui.h"
 
 namespace ya
@@ -30,20 +27,21 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
         .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
-                       .shaderName        = "SimpleDepthShader.glsl",
-                       .bDeriveFromShader = false,
-                       .vertexBufferDescs = {
+
+            .shaderName        = "DirectionalLightDepthBuffer.glsl",
+            .bDeriveFromShader = false,
+            .vertexBufferDescs = {
                 VertexBufferDescription{
-                               .slot  = 0,
-                               .pitch = sizeof(ya::Vertex),
+                    .slot  = 0,
+                    .pitch = sizeof(ya::Vertex),
                 },
             },
-                       .vertexAttributes = {
+            .vertexAttributes = {
                 VertexAttribute{
-                               .bufferSlot = 0,
-                               .location   = 0,
-                               .format     = EVertexAttributeFormat::Float3,
-                               .offset     = offsetof(ya::Vertex, position),
+                    .bufferSlot = 0,
+                    .location   = 0,
+                    .format     = EVertexAttributeFormat::Float3,
+                    .offset     = offsetof(ya::Vertex, position),
                 },
             },
         },
@@ -130,10 +128,14 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         return;
     }
 
-    bHasDirectionalLight = updateDirLightFromScene();
+    bHasDirectionalLight = ctx->bHasDirectionalLight;
     if (!bHasDirectionalLight) {
         return;
     }
+    _uLightCameraData.direction      = ctx->directionalLight.direction;
+    _uLightCameraData.view           = ctx->directionalLight.view;
+    _uLightCameraData.projection     = ctx->directionalLight.projection;
+    _uLightCameraData.viewProjection = ctx->directionalLight.viewProjection;
 
     FrameUBO frameData{
         .lightMatrix = _uLightCameraData.viewProjection,
@@ -209,61 +211,6 @@ void ShadowMapping::onRenderGUI()
     ImGui::Checkbox("Auto Viewport/Scissor", &_bAutoBindViewportScissor);
     ImGui::DragFloat("Depth Bias", &_bias, 0.0001f, 0.0f, 0.1f, "%.5f");
     ImGui::DragFloat("Normal Bias", &_normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
-    ImGui::DragFloat("Light Distance", &_lightDistance, 0.1f, 1.0f, 200.0f);
-    ImGui::DragFloat("Ortho HalfWidth", &_orthoHalfWidth, 0.1f, 0.1f, 200.0f);
-    ImGui::DragFloat("Ortho HalfHeight", &_orthoHalfHeight, 0.1f, 0.1f, 200.0f);
-    ImGui::DragFloat("Near Plane", &_nearPlane, 0.01f, 0.001f, 50.0f);
-    ImGui::DragFloat("Far Plane", &_farPlane, 0.1f, 1.0f, 500.0f);
-}
-
-bool ShadowMapping::updateDirLightFromScene()
-{
-    auto* scene = getActiveScene();
-    if (!scene) {
-        return false;
-    }
-
-    glm::vec3 lightDir = _uLightCameraData.direction;
-    bool      bFound   = false;
-
-    for (const auto& [entity, dlc, tc] : scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each()) {
-        lightDir = glm::normalize(tc.getForward());
-        bFound   = true;
-        break;
-    }
-
-    if (!bFound) {
-        for (const auto& [entity, dlc] : scene->getRegistry().view<DirectionalLightComponent>().each()) {
-            lightDir = glm::normalize(dlc._direction);
-            bFound   = true;
-            break;
-        }
-    }
-
-    if (!bFound) {
-        return false;
-    }
-
-    _uLightCameraData.direction = lightDir;
-    // if (bReverseViewportY) {
-    //     _uLightCameraData.projection = FMath::orthographic(-_orthoHalfWidth,
-    //                                                        _orthoHalfWidth,
-    //                                                        _orthoHalfHeight,
-    //                                                        -_orthoHalfHeight,
-    //                                                        _nearPlane,
-    //                                                        _farPlane);
-    // }
-    // else {
-    _uLightCameraData.projection = FMath::orthographic(-_orthoHalfWidth,
-                                                       _orthoHalfWidth,
-                                                       -_orthoHalfHeight,
-                                                       _orthoHalfHeight,
-                                                       _nearPlane,
-                                                       _farPlane);
-    // }
-    _uLightCameraData.view           = glm::lookAt(-lightDir * _lightDistance, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-    _uLightCameraData.viewProjection = _uLightCameraData.projection * _uLightCameraData.view;
-    return true;
 }
 
 } // namespace ya

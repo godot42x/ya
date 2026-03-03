@@ -5,11 +5,9 @@
 #include <algorithm>
 
 
-#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/MirrorComponent.h"
-#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
 
@@ -40,7 +38,7 @@ namespace ya
 static std::vector<std::string> buildPhongShaderDefines(bool bEnableDirectionalShadow)
 {
     std::vector<std::string> defines = {
-        std::format("MAX_POINT_LIGHTS {}", PhongMaterialSystem::MAX_POINT_LIGHTS),
+        std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
     };
     if (bEnableDirectionalShadow) {
         defines.push_back("ENABLE_DIRECTIONAL_SHADOW 1");
@@ -239,62 +237,29 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
-    auto scene = getActiveScene();
-    YA_CORE_ASSERT(scene, "PhongMaterialSystem::onUpdate - Scene is null");
-
-    {
-        bool bFoundDirectionalLight = false;
-        for (const auto& [entity, dlc, tc] : scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each()) {
-            uLight.dirLight.direction = glm::normalize(tc.getForward());
-            uLight.dirLight.ambient   = dlc._ambient;
-            uLight.dirLight.diffuse   = dlc._diffuse;
-            uLight.dirLight.specular  = dlc._specular;
-            bFoundDirectionalLight    = true;
-            break;
-        }
-
-        if (!bFoundDirectionalLight) {
-            for (const auto& [entity, dlc] : scene->getRegistry().view<DirectionalLightComponent>().each()) {
-                uLight.dirLight.direction = glm::normalize(dlc._direction);
-                uLight.dirLight.ambient   = dlc._ambient;
-                uLight.dirLight.diffuse   = dlc._diffuse;
-                uLight.dirLight.specular  = dlc._specular;
-                break;
-            }
-        }
+    if (ctx->bHasDirectionalLight) {
+        uLight.dirLight.direction = ctx->directionalLight.direction;
+        uLight.dirLight.ambient   = ctx->directionalLight.ambient;
+        uLight.dirLight.diffuse   = ctx->directionalLight.diffuse;
+        uLight.dirLight.specular  = ctx->directionalLight.specular;
     }
 
-    // grab all point lights from scene (support up to MAX_POINT_LIGHTS)
-    // Reset point light count
-    uLight.numPointLights = 0;
-    for (const auto& [entity, plc, tc] : scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
-        if (uLight.numPointLights >= MAX_POINT_LIGHTS) {
-            YA_CORE_WARN("Exceeded maximum point lights ({}), ignoring additional lights", MAX_POINT_LIGHTS);
-            break;
-        }
-
-        // Fill point light data
-        uLight.pointLights[uLight.numPointLights] = PointLightData{
-            .type      = (float)plc._type,
-            .constant  = plc._constant,
-            .linear    = plc._linear,
-            .quadratic = plc._quadratic,
-            .position  = tc._position,
-
-            .ambient  = plc._ambient,
-            .diffuse  = plc._diffuse,
-            .specular = plc._specular,
-
-            .spotDir     = tc.getForward(),
-            .innerCutOff = glm::cos(glm::radians(plc._innerConeAngle)),
-            .outerCutOff = glm::cos(glm::radians(plc._outerConeAngle)),
+    uLight.numPointLights = ctx->numPointLights;
+    for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
+        const auto& pl        = ctx->pointLights[i];
+        uLight.pointLights[i] = PointLightData{
+            .type        = pl.type,
+            .constant    = pl.constant,
+            .linear      = pl.linear,
+            .quadratic   = pl.quadratic,
+            .position    = pl.position,
+            .ambient     = pl.ambient,
+            .diffuse     = pl.diffuse,
+            .specular    = pl.specular,
+            .spotDir     = pl.spotDir,
+            .innerCutOff = pl.innerCutOff,
+            .outerCutOff = pl.outerCutOff,
         };
-        // YA_CORE_INFO("  Light {}: pos=({:.2f},{:.2f},{:.2f}), intensity={:.2f}, radius={:.2f}",
-        //              uLight.numPointLights,
-        //              lightData.position.x, lightData.position.y, lightData.position.z,
-        //              lightData.intensity, lightData.radius);
-
-        uLight.numPointLights++;
     }
     // This prevents descriptor set invalidation during the render loop
     {
@@ -456,31 +421,25 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
         }
 
         // bind descriptor set
-        {
-            YA_PROFILE_SCOPE("PhongMaterial::BindDescriptorSets");
-            cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
-                                       0,
-                                       {
-                                           _frameDSs[getPassSlot()],
-                                           resourceDS,
-                                           paramDS,
-                                           skyBoxCubeMapDS,
-                                           depthBufferDS,
-                                       });
-        }
+        cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
+                                   0,
+                                   {
+                                       _frameDSs[getPassSlot()],
+                                       resourceDS,
+                                       paramDS,
+                                       skyBoxCubeMapDS,
+                                       depthBufferDS,
+                                   });
 
         // update push constant
-        {
-            YA_PROFILE_SCOPE("PhongMaterial::PushConstants");
-            PhongMaterialSystem::ModelPushConstant pushConst{
-                .modelMat = tc->getTransform(),
-            };
-            cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  _pipelineLayoutDesc.pushConstants[0].stageFlags,
-                                  0,
-                                  sizeof(PhongMaterialSystem::ModelPushConstant),
-                                  &pushConst);
-        }
+        PhongMaterialSystem::ModelPushConstant pushConst{
+            .modelMat = tc->getTransform(),
+        };
+        cmdBuf->pushConstants(_pipelineLayout.get(),
+                              _pipelineLayoutDesc.pushConstants[0].stageFlags,
+                              0,
+                              sizeof(PhongMaterialSystem::ModelPushConstant),
+                              &pushConst);
 
         // draw mesh from MeshComponent (single mesh per component)
         {

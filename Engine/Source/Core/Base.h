@@ -1,7 +1,9 @@
 #pragma once
+
+#include "Core/Common/Warnings.h"
+
 #include "Common/FWD-std.h"
 #include "Common/FWD.h"
-
 
 
 #if _WIN32
@@ -62,13 +64,3 @@ inline static DefaultAllocator defaultAllocator;
 #define CASE_ENUM_TO_STR(x) \
     case x:                 \
         return #x;
-
-
-
-#if _WIN32
-    #define YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN() __pragma(warning(push)) __pragma(warning(disable : 4324))
-    #define YA_DISABLE_PADDED_STRUCT_WARNING_END() __pragma(warning(pop))
-#else
-    #define YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
-    #define YA_DISABLE_PADDED_STRUCT_WARNING_END()
-#endif

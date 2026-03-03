@@ -16,7 +16,7 @@ struct Entity;
 struct Model;
 struct MaterialData;
 struct Node;
-class PhongMaterial;
+struct PhongMaterial;
 
 /**
  * @brief ResourceResolveSystem - Unified resource loading system

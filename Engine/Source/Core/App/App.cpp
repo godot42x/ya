@@ -16,6 +16,7 @@
 // Managers/System
 #include "Core/Manager/Facade.h"
 
+#include "ECS/Component/PointLightComponent.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Scene/SceneManager.h"
@@ -36,9 +37,7 @@
 // ECS
 
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PlayerComponent.h"
-#include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/2D/UIComponentSytstem.h"
 #include "ECS/System/ComponentLinkageSystem.h"
@@ -241,6 +240,7 @@ void App::init(AppDesc ci)
 
     currentRenderAPI = ERenderAPI::Vulkan;
 
+    // validate shaders before render initialized
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
                                .withShaderStoragePath("Engine/Shader/GLSL")
@@ -255,7 +255,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "SimpleDepthShader.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "DirectionalLightDepthBuffer.glsl"});
 
 
     // MARK: Render/Hook
@@ -1097,371 +1097,7 @@ void App::tickLogic(float dt)
 // MARK: Render
 void App::tickRender(float dt)
 {
-    YA_PROFILE_FUNCTION()
-    auto render = getRender();
-
-    // Process pending viewport resize before rendering
-    if (_editorLayer) {
-        Rect2D pendingRect;
-        if (_editorLayer->getPendingViewportResize(pendingRect)) {
-            onSceneViewportResized(pendingRect);
-        }
-    }
-    // TODO: optimize the image recreation
-    render->waitIdle();
-
-    if (_windowSize.x <= 0 || _windowSize.y <= 0) {
-        YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
-        return;
-    }
-
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameBegin();
-    }
-
-    // ===== Get swapchain image index =====
-    int32_t imageIndex = -1;
-    if (!render->begin(&imageIndex)) {
-        return;
-    }
-    if (imageIndex < 0) {
-        YA_CORE_WARN("Invalid image index ({}), skipping frame render", imageIndex);
-        return;
-    }
-
-    // ===== Single CommandBuffer for both Scene and UI Passes =====
-    auto cmdBuf = _commandBuffers[imageIndex];
-    cmdBuf->reset();
-    cmdBuf->begin();
-
-
-
-    beginFrame();
-
-    // MARK: shadow
-    if (bShadowMapping && _depthRT && _shadowMappingSystem) {
-
-        RenderingInfo shadowMapRI{
-            .label      = "Shadow Map Pass",
-            .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _depthRT->getExtent().toVec2(),
-            },
-            .depthClearValue = ClearValue(1.0f, 0),
-            .renderTarget    = _depthRT.get(),
-        };
-        cmdBuf->beginRendering(shadowMapRI);
-        {
-            // TODO: not use IRenderSystem framework?
-            FrameContext shadowCtx{};
-            shadowCtx.extent = _depthRT->getExtent();
-            _shadowMappingSystem->tick(cmdBuf.get(), dt, &shadowCtx);
-        }
-        cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
-        auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
-        cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-
-        auto sys      = _shadowMappingSystem->as<ShadowMapping>();
-        auto phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
-        if (sys->hasDirectionalLight()) {
-            phongSys->setDirectionalShadowMappingEnabled(true);
-            phongSys->uLight.shadowLightSpaceMatrix = _shadowMappingSystem->as<ShadowMapping>()->_uLightCameraData.viewProjection;
-        }
-        else {
-            phongSys->setDirectionalShadowMappingEnabled(false);
-        }
-    }
-
-
-    FrameContext ctx;
-    {
-
-        // Get primary camera from ECS for runtime/simulation mode
-        Entity* runtimeCamera = getPrimaryCamera();
-        if (runtimeCamera && runtimeCamera->isValid())
-        {
-
-            auto cc = runtimeCamera->getComponent<CameraComponent>();
-            auto tc = runtimeCamera->getComponent<TransformComponent>();
-
-            const Extent2D& ext = _viewportRT->getExtent();
-            cameraController.update(*tc, *cc, inputManager, ext, dt);
-            // Update aspect ratio for runtime camera
-            cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-        }
-
-
-        bool bUseRuntimeCamera = (_appState == AppState::Runtime || _appState == AppState::Simulation) &&
-                                 runtimeCamera && runtimeCamera->isValid() &&
-                                 runtimeCamera->hasComponent<CameraComponent>();
-
-        if (bUseRuntimeCamera) {
-            // Use runtime camera (Entity with CameraComponent)
-            auto cc        = runtimeCamera->getComponent<CameraComponent>();
-            ctx.view       = cc->getFreeView();
-            ctx.projection = cc->getProjection();
-        }
-        else {
-            // Use editor camera (FreeCamera)
-            ctx.view       = camera.getViewMatrix();
-            ctx.projection = camera.getProjectionMatrix();
-        }
-
-        // Extract camera position from view matrix inverse
-        glm::mat4 invView = glm::inverse(ctx.view);
-        ctx.cameraPos     = glm::vec3(invView[3]);
-    }
-
-    bool bViewPortRectValid = _viewportRect.extent.x > 0 && _viewportRect.extent.y > 0;
-
-    // MARK: Mirror Rendering
-    //  (Pre scene render some mirror entities and render to texture for later compositing) ---
-    if (bRenderMirror && bViewPortRectValid)
-    {
-        YA_PROFILE_SCOPE("Mirror Pass")
-        // Mirror / Rear-view mirror / Screen-in-screen rendering (TEMPORARY, for demo/testing only)
-        auto         scene = getSceneManager()->getActiveScene();
-        auto         view  = scene->getRegistry().view<TransformComponent, MirrorComponent>();
-        FrameContext ctxCopy;
-        bHasMirror = false;
-        for (auto [entity, tc, mc] : view.each())
-        {
-            bHasMirror         = true;
-            ctxCopy.viewOwner  = entity;
-            ctxCopy.projection = ctx.projection;
-
-            // Calculate mirror normal
-            const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
-            glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
-            glm::vec3       mirrorPos    = tc.getWorldPosition();
-
-            // Extract camera forward direction from view matrix
-            // glm::vec3 cameraForward = -glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
-            glm::vec3 incomingDir = glm::normalize(ctx.cameraPos - mirrorPos);
-            float     dist        = glm::dot(ctx.cameraPos - mirrorPos, mirrorNormal);
-            // mirror normal is negative to camera dir, so subtracting moves camera to the other side of the mirror plane
-            // glm::vec3 mirroredCameraPos = ctx.cameraPos - 2.0f * dist * mirrorNormal;
-            glm::vec3 mirroredCameraPos = mirrorPos;
-            glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
-            ctxCopy.cameraPos           = mirroredCameraPos;
-            ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
-            ctxCopy.view                = glm::inverse(ctxCopy.view); // to another side of the mirror, so invert the view matrix to flip the handedness for correct culling
-
-            break;
-        }
-
-        if (bHasMirror) {
-            ctxCopy.extent = _mirrorRT->getExtent(); // Ensure material systems render with correct extent for mirror RT
-
-            RenderingInfo ri{
-                .label      = "ViewPort",
-                .renderArea = Rect2D{
-                    .pos    = {0, 0},
-                    .extent = _mirrorRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
-                },
-                .layerCount       = 1,
-                .colorClearValues = {colorClearValue},
-                .depthClearValue  = depthClearValue,
-                .renderTarget     = _mirrorRT.get(),
-            };
-            cmdBuf->beginRendering(ri);
-
-            renderScene(cmdBuf.get(), dt, ctxCopy);
-
-            cmdBuf->endRendering(EndRenderingInfo{
-                .renderTarget = _mirrorRT.get(),
-            });
-        }
-    }
-
-
-    // MARK: ViewPort Pass
-    if (bViewPortRectValid)
-    {
-        YA_PROFILE_SCOPE("ViewPort pass")
-
-        // from the editor layer's viewport size
-        // auto extent = _editorLayer.g
-
-        auto extent = Extent2D::fromVec2(_viewportRect.extent / _viewportFrameBufferScale);
-
-
-        _viewportRT->setExtent(extent);
-
-        RenderingInfo ri{
-            .label      = "ViewPort",
-            .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _viewportRT->getExtent().toVec2(), // Use actual RT extent for rendering, which may differ from viewportRect if retro rendering is enabled
-            },
-            .layerCount       = 1,
-            .colorClearValues = {colorClearValue},
-            .depthClearValue  = depthClearValue,
-            //
-            .renderTarget = _viewportRT.get(),
-        };
-
-        cmdBuf->beginRendering(ri);
-
-        ctx.extent = _viewportRT->getExtent(); // Update frame context with actual render extent for material systems
-
-        renderScene(cmdBuf.get(), dt, ctx);
-
-        {
-            YA_PROFILE_SCOPE("Render2D");
-            Render2D::begin(cmdBuf.get());
-
-            if (_appMode == AppMode::Drawing) {
-                for (const auto&& [idx, p] : ut::enumerate(clicked))
-                {
-                    auto tex = idx % 2 == 0
-                                 ? AssetManager::get()->getTextureByName("uv1")
-                                 : AssetManager::get()->getTextureByName("face");
-                    YA_CORE_ASSERT(tex, "Texture not found");
-                    glm::vec2 pos;
-                    _editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
-                    Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
-                }
-
-                Render2D::onRender();
-                UIManager::get()->render();
-                Render2D::onRenderGUI();
-                Render2D::end();
-            }
-        }
-
-        cmdBuf->endRendering(EndRenderingInfo{
-            .renderTarget = _viewportRT.get(),
-        });
-    }
-
-
-    // --- MARK: Postprocessing
-    if (_basicPostprocessingSystem->bEnabled && bViewPortRectValid)
-    {
-        YA_PROFILE_SCOPE("Postprocessing pass")
-        cmdBuf->debugBeginLabel("Postprocessing");
-        // Transition postprocess image from Undefined/ShaderReadOnly to ColorAttachmentOptimal
-        // Viewport RT is dynamic rendering
-        cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
-                                          //   EImageLayout::Undefined,
-                                          EImageLayout::ColorAttachmentOptimal);
-
-        // Build RenderingInfo from manual images
-        RenderingInfo ri{
-            .label      = "Postprocessing",
-            .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _viewportRect.extent, // Use viewport size for postprocess render area
-            },
-            .layerCount       = 1,
-            .colorClearValues = {colorClearValue},
-            .depthClearValue  = depthClearValue,
-            //
-            .colorAttachments = {
-                RenderingInfo::ImageSpec{
-                    .texture     = _postprocessTexture.get(), // ← 使用 App 层的 Texture 接口
-                    .sampleCount = ESampleCount::Sample_1,
-                    .loadOp      = EAttachmentLoadOp::Clear,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                },
-            },
-        };
-
-        cmdBuf->beginRendering(ri);
-
-        const auto& tex = bMSAA
-                            ? _viewportRT->getCurFrameBuffer()->getResolveTexture()
-                            : _viewportRT->getCurFrameBuffer()->getColorTexture(0);
-
-        auto postprocessSystem = _basicPostprocessingSystem->as<BasicPostprocessing>();
-        auto swapchainFormat   = _render->getSwapchain()->getFormat();
-        bool bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
-        postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
-        postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_viewportRect.extent));
-        postprocessSystem->tick(cmdBuf.get(), dt, &ctx);
-        cmdBuf->endRendering(EndRenderingInfo{});
-
-        // Transition postprocess image to ShaderReadOnlyOptimal for ImGui sampling
-        cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(),
-                                          //   EImageLayout::ColorAttachmentOptimal,
-                                          //   EImageLayout::Undefined,
-                                          EImageLayout::ShaderReadOnlyOptimal);
-
-        cmdBuf->debugEndLabel();
-
-        // Use postprocess texture directly (unified Texture semantics)
-        _viewportTexture = _postprocessTexture.get();
-    }
-    else {
-        // Create a Texture wrapper from framebuffer's color attachment for unified semantics
-        auto fb = _viewportRT->getCurFrameBuffer();
-        // _viewportTexture = fb->getColorTexture(0);
-        _viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
-    }
-    YA_CORE_ASSERT(_viewportTexture, "Failed to get viewport texture for postprocessing");
-
-    // Note: _postprocessTexture is now in ShaderReadOnlyOptimal, ready for EditorLayer viewport display
-
-    // --- MARK: Editor pass
-    {
-        YA_PROFILE_SCOPE("Screen pass")
-
-        RenderingInfo ri{
-            .label      = "Screen",
-            .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _screenRT->getExtent().toVec2(),
-            },
-            .layerCount       = 1,
-            .colorClearValues = {ClearValue::Black()},
-            //
-            .renderTarget = _screenRT.get(),
-        };
-
-        cmdBuf->beginRendering(ri);
-
-        // Render ImGui
-        auto& imManager = ImGuiManager::get();
-        imManager.beginFrame();
-        {
-            this->renderGUI(dt);
-        }
-        imManager.endFrame();
-        imManager.render();
-
-        if (render->getAPI() == ERenderAPI::Vulkan) {
-            imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
-        }
-
-        cmdBuf->endRendering(EndRenderingInfo{
-            .renderTarget = _screenRT.get(),
-        });
-    }
-    cmdBuf->end();
-
-    // TODO: multi-thread rendering
-    // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
-    // render->submitToQueue(
-    //     {cmdBuf->getHandle()},
-    //     {render->getCurrentImageAvailableSemaphore()},    // Wait for swapchain image
-    //     {render->getRenderFinishedSemaphore(imageIndex)}, // Signal when all rendering done
-    //     render->getCurrentFrameFence());                  // Signal fence when done
-
-    // // ===== Present: Wait on renderFinished =====
-    // int result = render->presentImage(imageIndex, {render->getRenderFinishedSemaphore(imageIndex)});
-
-    // // Check for swapchain recreation needed
-    // if (result == 2 /* VK_SUBOPTIMAL_KHR */) {
-    //     YA_CORE_INFO("Swapchain suboptimal detected in App, will recreate next frame");
-    // }
-    // // Advance to next frame
-    // render->advanceFrame();
-    render->end(imageIndex, {cmdBuf->getHandle()});
-
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameEnd();
-    }
+    tickRenderPipeline(dt);
 }
 
 // MARK: Render GUI
@@ -1492,8 +1128,42 @@ void App::onRenderGUI(float dt)
     _screenRT->onRenderGUI();
 
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
-        float fps = 1.0f / dt;
-        ImGui::Text("%s", std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f}", _frameIndex, dt * 1000.0f, fps).data());
+
+        {
+            static constexpr int ringBufSize = 120;         // 环形缓冲区大小，保持原有定义
+            static float         fpsRingBuf[ringBufSize]{}; // 存储每帧的FPS值
+            static int           fpsRingHead = 0;           // 缓冲区头指针（下一个要写入的位置）
+            static int           fpsRingFill = 0;           // 缓冲区已填充的元素数量
+            static float         fpsSum      = 0.0f;        // 新增：维护缓冲区所有元素的累加和，避免每次遍历求和
+            float currentFps = dt > 0.0f ? 1.0f / dt : 0.0f; // 计算当前帧的FPS（dt为帧间隔时间，单位：秒）
+
+            // 1. 处理旧值：缓冲区满时，先减去即将被覆盖的旧值
+            if (fpsRingFill >= ringBufSize) {
+                fpsSum -= fpsRingBuf[fpsRingHead]; // head指向的就是即将被覆盖的最旧元素
+            }
+            // 2. 写入新值并更新累加和
+            fpsRingBuf[fpsRingHead] = currentFps;
+            fpsSum += currentFps;
+
+            // 3. 更新环形缓冲区指针和填充数
+            fpsRingHead = (fpsRingHead + 1) % ringBufSize;
+            fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
+
+            // 4. 计算平均FPS（O(1)时间复杂度）
+            float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
+
+            // 输出FPS信息（简化当前帧FPS的获取，避免重复计算索引）
+            ImGui::Text("%s",
+                        std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f} (avg {}f: {:.1f})",
+                                    _frameIndex,
+                                    dt * 1000.0f,
+                                    currentFps,
+                                    fpsRingFill,
+                                    avgFps)
+                            .data());
+        }
+
+
         static int count = 0;
         if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
             count++;
@@ -1736,17 +1406,16 @@ Entity* App::getPrimaryCamera() const
 
     auto& registry = scene->getRegistry();
 
-    // Strategy 1: Find camera with PlayerComponent (fallback)
-    auto playerCameraView = registry.view<CameraComponent, PlayerComponent>();
-    for (auto entity : playerCameraView) {
+    // 1: Find first camera with PlayerComponent (fallback)
+    for (const auto& [entity, cameraComp, playerComp] :
+         registry.view<CameraComponent, PlayerComponent>().each()) {
         return scene->getEntityByEnttID(entity);
     }
 
-    // Strategy 2: Find camera with _primary == true
-    auto view = registry.view<CameraComponent>();
-    for (auto entity : view) {
-        auto& cc = view.get<CameraComponent>(entity);
-        if (cc.bPrimary) {
+    // 2: Find camera with _primary == true
+    for (const auto& [entity, cameraComp] :
+         registry.view<CameraComponent>().each()) {
+        if (cameraComp.bPrimary) {
             return scene->getEntityByEnttID(entity);
         }
     }

@@ -22,6 +22,23 @@ struct Extent2D
     }
 };
 
+struct Extent3D
+{
+    uint32_t width{0};
+    uint32_t height{0};
+    uint32_t depth{0};
+
+    glm::vec3       toVec3() const { return glm::vec3(width, height, depth); }
+    static Extent3D fromVec3(glm::vec3 v)
+    {
+        return Extent3D{
+            .width  = static_cast<uint32_t>(v.x),
+            .height = static_cast<uint32_t>(v.y),
+            .depth  = static_cast<uint32_t>(v.z),
+        };
+    }
+};
+
 
 
 struct FAssetPath
@@ -40,7 +57,7 @@ struct FSoftObjectReference
     YA_REFLECT_END()
 
     FAssetPath assetPath;
-    void      *object;
+    void*      object;
 };
 
 
@@ -57,21 +74,21 @@ struct Ptr
     // 2025/1/31 no sure to use shared ptr in some place? make a wrapper first
 
     // using type = stdptr<T>;
-    using type = T *;
+    using type = T*;
 
     type v;
 
     Ptr() : v(nullptr) {}
 
-    Ptr(T *p) : v(p) {}
-    Ptr(const stdptr<T> &p) : v(p.get()) {}
+    Ptr(T* p) : v(p) {}
+    Ptr(const stdptr<T>& p) : v(p.get()) {}
 
-    T *get() const { return v; }
+    T* get() const { return v; }
 
     type operator->() { return v; }
     type operator->() const { return v; }
 
-    operator T *() const { return v; }
+    operator T*() const { return v; }
 
     explicit operator bool() const { return v != nullptr; }
     void     reset()
@@ -87,7 +104,7 @@ struct Ptr
 
 
 template <typename T, typename... Args>
-std::shared_ptr<T> makeShared(Args &&...args)
+std::shared_ptr<T> makeShared(Args&&... args)
     // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
     requires std::is_constructible_v<T, Args...>
 {
@@ -95,7 +112,7 @@ std::shared_ptr<T> makeShared(Args &&...args)
 }
 
 template <typename T, typename... Args>
-std::shared_ptr<T> make_shared(Args &&...args)
+std::shared_ptr<T> make_shared(Args&&... args)
     // requires requires(T, Args... args) { new T(std::forward<Args>(args)...); }
     requires std::is_constructible_v<T, Args...>
 {
@@ -103,7 +120,7 @@ std::shared_ptr<T> make_shared(Args &&...args)
 }
 
 template <typename T, typename... Args>
-std::unique_ptr<T> makeUnique(Args &&...args)
+std::unique_ptr<T> makeUnique(Args&&... args)
     requires std::is_constructible_v<T, Args...>
 {
     return std::make_unique<T>(std::forward<Args>(args)...);
@@ -127,10 +144,10 @@ struct plat_base : public plat_base_tag
 {
 
     template <typename Derived>
-    Derived *as()
+    Derived* as()
     {
         static_assert(std::is_base_of_v<Base, Derived>, "T must be derived from plat_base");
-        return static_cast<Derived *>(this);
+        return static_cast<Derived*>(this);
     }
 
     // template <typename Derived>

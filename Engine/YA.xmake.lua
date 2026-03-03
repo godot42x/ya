@@ -84,6 +84,7 @@ do
     set_kind("static")
     local bEnableUnity = get_config("ya_enable_unity-build")
     if bEnableUnity then
+        print("-- ENABLE UNITY BUILD")
         add_rules("c++.unity_build", { batchsize = 2 })
         add_files("./Source/Core/**.cpp", { unity_group = "Core" })
         add_files("./Source/Bus/**.cpp", { unity_group = "Bus" })
@@ -95,7 +96,7 @@ do
         add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
-    add_files("./Source/*.cpp")
+    add_files("./Source/**.cpp")
     remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
 
     add_headerfiles("./Source/**.h")
@@ -153,14 +154,13 @@ do
         add_ldflags("/subsystem:console")
         add_defines("NOMINMAX") -- Disable min and max macros
         add_cxxflags("/utf-8")  -- Enable UTF-8 source code support for Unicode characters
-        --  fatal error C1202: recursive type or function dependency context too complex
-        -- add_cxxflags(
-        --     "/Zm1000"   -- the memory allocation for compiler increased to 1000MB
-        -- )
+        add_cxxflags( "/Zm1000") -- the memory allocation for compiler increased to 1000MB
         add_ldflags("/ignore:4099") -- warning LNK4099, eg: PDB 'ya.pdb' was not found with 'ya.exe'
 
         if bEnableUnity then
             add_cxxflags("/bigobj") -- allow to generate big obj for big module
+        else
+            add_cxxflags("/bigobj") -- App.cpp also so big now...
         end
         if is_mode("debug") then
             add_ldflags("/ignore:4324") -- eg:  warning C4324: 'ya::PhongMaterialSystem::PointLightData': structure was padded due to alignment specifier

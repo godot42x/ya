@@ -367,6 +367,9 @@ struct App
 
     void handleSystemSignals();
     bool recreateViewPortRT(uint32_t width, uint32_t height);
+
+    bool initRenderPipeline();
+    void tickRenderPipeline(float dt);
 };
 
 

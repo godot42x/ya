@@ -71,7 +71,6 @@ struct PhongMaterialSystem : public IMaterialSystem
         float outerCutOff;
     };
 
-    static constexpr uint32_t MAX_POINT_LIGHTS = 2 * 3; // reuse times * 3 frame buffer?
 
 
     // std140 布局规则（GLSL）：

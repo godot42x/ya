@@ -8,11 +8,11 @@ namespace ya
 {
 
 // Factory method to create descriptor set layout based on render backend
-std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *render, const DescriptorSetLayoutDesc &layout)
+std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender* render, const DescriptorSetLayoutDesc& layout)
 {
     switch (render->getAPI()) {
     case ERenderAPI::Vulkan:
-        return makeShared<VulkanDescriptorSetLayout>(static_cast<VulkanRender *>(render), layout);
+        return makeShared<VulkanDescriptorSetLayout>(static_cast<VulkanRender*>(render), layout);
     case ERenderAPI::None:
     default:
         YA_CORE_ERROR("Unsupported render API for descriptor set layout creation");
@@ -20,13 +20,13 @@ std::shared_ptr<IDescriptorSetLayout> IDescriptorSetLayout::create(IRender *rend
     }
 }
 
-std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender *render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts)
+std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender* render, std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts)
 {
     switch (render->getAPI()) {
     case ERenderAPI::Vulkan:
     {
         std::vector<stdptr<IDescriptorSetLayout>> vkLayouts;
-        for (const auto &layout : descriptorSetLayouts) {
+        for (const auto& layout : descriptorSetLayouts) {
             vkLayouts.push_back(makeShared<VulkanDescriptorSetLayout>(render->as<VulkanRender>(), layout));
         }
         return vkLayouts;
@@ -35,17 +35,17 @@ std::vector<stdptr<IDescriptorSetLayout>> IDescriptorSetLayout::create(IRender *
     case ERenderAPI::None:
     default:
         YA_CORE_ERROR("Unsupported render API for descriptor set layout creation");
+        UNREACHABLE();
         return {};
     }
-    return {};
 }
 
 // Factory method to create descriptor pool based on render backend
-std::shared_ptr<IDescriptorPool> IDescriptorPool::create(IRender *render, const DescriptorPoolCreateInfo &ci)
+std::shared_ptr<IDescriptorPool> IDescriptorPool::create(IRender* render, const DescriptorPoolCreateInfo& ci)
 {
     switch (render->getAPI()) {
     case ERenderAPI::Vulkan:
-        return makeShared<VulkanDescriptorPool>(static_cast<VulkanRender *>(render), ci);
+        return makeShared<VulkanDescriptorPool>(static_cast<VulkanRender*>(render), ci);
     case ERenderAPI::None:
     default:
         YA_CORE_ERROR("Unsupported render API for descriptor pool creation");

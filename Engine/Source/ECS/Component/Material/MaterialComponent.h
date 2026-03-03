@@ -5,6 +5,7 @@
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
 #include "Render/Material/Material.h"
+#include "Render/Material/MaterialFactory.h"
 
 
 namespace ya
@@ -33,7 +34,7 @@ struct MaterialComponent : public IComponent
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
-    MaterialType *_material        = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
+    MaterialType* _material        = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
     bool          _bSharedMaterial = false;   ///< If true, material is shared and should not be destroyed by this component
 
     std::string _materialPath;
@@ -62,20 +63,27 @@ struct MaterialComponent : public IComponent
         _material = nullptr;
     }
 
-    MaterialType *createDefaultMaterial();
+    MaterialType* createDefaultMaterial()
+    {
+        // if(_material)
+        std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(this));
+        _material            = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
+        _bSharedMaterial     = false; // Created our own material
+        return _material;
+    }
 
 
     /**
      * @brief Set a shared material (will not be destroyed by this component)
      */
-    void setSharedMaterial(MaterialType *material)
+    void setSharedMaterial(MaterialType* material)
     {
         setMaterial(material);
         _bSharedMaterial = true;
     }
 
-    MaterialType *getMaterial() const { return _material; }
-    MaterialType *getOrCreateMaterial() const
+    MaterialType* getMaterial() const { return _material; }
+    MaterialType* getOrCreateMaterial() const
     {
         if (!_material)
         {
@@ -85,7 +93,7 @@ struct MaterialComponent : public IComponent
     }
 
 
-    void setMaterial(MaterialType *material)
+    void setMaterial(MaterialType* material)
     {
         _material = material;
     }

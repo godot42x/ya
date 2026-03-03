@@ -12,6 +12,7 @@
 #pragma once
 
 #include "ContainerTraits.h"
+#include "Core/Common/Warnings.h"
 #include "Core/TypeIndex.h"
 #include <array>
 #include <memory>
@@ -762,7 +763,10 @@ std::unique_ptr<IContainerProperty> createContainerProperty()
         }
     }
 
-    UNREACHABLE();
+    YA_DISABLE_UNREACHABLE_CODE_WARNING_BEGIN();
+    // UNREACHABLE();
+    return nullptr;
+    YA_DISABLE_UNREACHABLE_CODE_WARNING_END();
 }
 
 } // namespace ya::reflection

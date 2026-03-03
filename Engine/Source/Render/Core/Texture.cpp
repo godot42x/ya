@@ -26,9 +26,9 @@ struct StbiImage
     std::shared_ptr<stbi_uc> data = nullptr;
 
     StbiImage() = default;
-    explicit StbiImage(stbi_uc *ptr)
+    explicit StbiImage(stbi_uc* ptr)
     {
-        data = std::shared_ptr<stbi_uc>(ptr, [](stbi_uc *ptr) {
+        data = std::shared_ptr<stbi_uc>(ptr, [](stbi_uc* ptr) {
             stbi_image_free(ptr);
         });
     }
@@ -36,8 +36,8 @@ struct StbiImage
     {
     }
     operator bool() const { return data != nullptr; }
-    const stbi_uc *get() const { return data.get(); }
-    stbi_uc       *get() { return data.get(); }
+    const stbi_uc* get() const { return data.get(); }
+    stbi_uc*       get() { return data.get(); }
 };
 
 class StbiFlipGuard
@@ -169,7 +169,7 @@ static bool isBlockCompressed(EFormat::T format)
 
 // ====== Static Factory Methods Implementation ======
 
-ITextureFactory *Texture::getTextureFactory()
+ITextureFactory* Texture::getTextureFactory()
 {
     auto render = ya::App::get()->getRender();
     YA_CORE_ASSERT(render, "Render is not initialized");
@@ -213,8 +213,8 @@ std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const st
 std::shared_ptr<Texture> Texture::fromData(
     uint32_t                               width,
     uint32_t                               height,
-    const std::vector<ColorRGBA<uint8_t>> &data,
-    const std::string                     &label)
+    const std::vector<ColorRGBA<uint8_t>>& data,
+    const std::string&                     label)
 {
     YA_CORE_ASSERT((uint32_t)data.size() == width * height, "Pixel data size does not match width * height");
 
@@ -230,10 +230,10 @@ std::shared_ptr<Texture> Texture::fromData(
 std::shared_ptr<Texture> Texture::fromData(
     uint32_t           width,
     uint32_t           height,
-    const void        *data,
+    const void*        data,
     size_t             dataSize,
     EFormat::T         format,
-    const std::string &label)
+    const std::string& label)
 {
     auto texture     = Texture::createShared();
     texture->_label  = label;
@@ -256,7 +256,7 @@ std::shared_ptr<Texture> Texture::fromData(
     return texture;
 }
 
-std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo &ci)
+std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo& ci)
 {
     auto texture    = Texture::createShared();
     texture->_label = ci.label;
@@ -269,7 +269,20 @@ std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo &ci)
     return texture;
 }
 
-std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo &ci)
+std::shared_ptr<Texture> Texture::createWritableCubeMap(const WritableCubeMapCreateInfo& ci)
+{
+    auto texture    = Texture::createShared();
+    texture->_label = ci.label;
+    texture->initWritableCubeMap(ci);
+
+    if (!texture->isValid()) {
+        return nullptr;
+    }
+
+    return texture;
+}
+
+std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo& ci)
 {
     auto textureFactory = getTextureFactory();
 
@@ -307,7 +320,7 @@ std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateI
 
 std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
                                        std::shared_ptr<IImageView> view,
-                                       const std::string          &label)
+                                       const std::string&          label)
 {
     YA_CORE_ASSERT(img && view, "Cannot wrap null IImage or IImageView");
 
@@ -328,7 +341,7 @@ std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
     return texture;
 }
 
-void Texture::setLabel(const std::string &label)
+void Texture::setLabel(const std::string& label)
 {
     _label = label;
     if (image) {
@@ -339,7 +352,7 @@ void Texture::setLabel(const std::string &label)
     }
 }
 
-void Texture::initFromData(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels)
+void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels)
 {
     _width     = texWidth;
     _height    = texHeight;
@@ -398,12 +411,12 @@ void Texture::initFromData(const void *pixels, size_t dataSize, uint32_t texWidt
         ya::BufferCreateInfo{
             .label         = std::format("StagingBuffer_Texture_{}", _filepath.empty() ? _label : _filepath),
             .usage         = EBufferUsage::TransferSrc,
-            .data          = (void *)pixels,
+            .data          = (void*)pixels,
             .size          = static_cast<uint32_t>(imageSize),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for texture upload");
+    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for texture upload");
 
     // Transition image layout: UNDEFINED -> TRANSFER_DST
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
@@ -486,7 +499,7 @@ void Texture::initFromData(const void *pixels, size_t dataSize, uint32_t texWidt
     render->endIsolateCommands(cmdBuf);
 }
 
-void Texture::initFallbackTexture(const void *pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)
+void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)
 {
     _width     = texWidth;
     _height    = texHeight;
@@ -529,12 +542,12 @@ void Texture::initFallbackTexture(const void *pixels, size_t dataSize, uint32_t 
         ya::BufferCreateInfo{
             .label         = std::format("StagingBuffer_Fallback_{}", _label),
             .usage         = EBufferUsage::TransferSrc,
-            .data          = (void *)pixels,
+            .data          = (void*)pixels,
             .size          = static_cast<uint32_t>(dataSize),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for fallback texture upload");
+    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for fallback texture upload");
 
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
@@ -564,37 +577,40 @@ void Texture::initFallbackTexture(const void *pixels, size_t dataSize, uint32_t 
     YA_CORE_WARN("Created fallback texture ({}x{}) for: {}", texWidth, texHeight, _filepath.empty() ? _label : _filepath);
 }
 
-void Texture::initCubeMap(const CubeMapCreateInfo &ci)
+void Texture::initCubeMap(const CubeMapCreateInfo& ci)
 {
     auto textureFactory = getTextureFactory();
     auto render         = textureFactory->getRender();
 
     std::array<StbiImage, CubeFace_Count> pixels{};
+    {
 
-    int width    = 0;
-    int height   = 0;
-    int channels = 0;
+        int width    = 0;
+        int height   = 0;
+        int channels = 0;
 
-    StbiFlipGuard flipGuard(ci.flipVertical);
-    for (size_t i = 0; i < CubeFace_Count; ++i) {
-        pixels[i] = StbiImage(stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha));
-        if (!pixels[i]) {
-            YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i]);
-            return;
-        }
-        if (i == 0) {
-            _width    = static_cast<uint32_t>(width);
-            _height   = static_cast<uint32_t>(height);
-            _channels = 4;
-        }
-        if (_width != static_cast<uint32_t>(width) || _height != static_cast<uint32_t>(height)) {
-            YA_CORE_ERROR("Cubemap faces must have the same dimensions");
-            return;
+        StbiFlipGuard flipGuard(ci.flipVertical);
+        for (size_t i = 0; i < CubeFace_Count; ++i) {
+            pixels[i] = StbiImage(stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha));
+            if (!pixels[i]) {
+                YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i]);
+                return;
+            }
+            if (i == 0) {
+                _width    = static_cast<uint32_t>(width);
+                _height   = static_cast<uint32_t>(height);
+                _channels = 4;
+            }
+            if (_width != static_cast<uint32_t>(width) || _height != static_cast<uint32_t>(height)) {
+                YA_CORE_ERROR("Cubemap faces must have the same dimensions");
+                return;
+            }
         }
     }
 
     _format    = EFormat::R8G8B8A8_UNORM;
     _mipLevels = 1;
+
 
     VkDeviceSize faceSize  = static_cast<VkDeviceSize>(_width) * static_cast<VkDeviceSize>(_height) * 4;
     VkDeviceSize totalSize = faceSize * CubeFace_Count;
@@ -643,7 +659,7 @@ void Texture::initCubeMap(const CubeMapCreateInfo &ci)
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    auto *cmdBuf = render->beginIsolateCommands("undefined->transferDst for cubemap upload");
+    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for cubemap upload");
 
     ImageSubresourceRange cubeRange{
         .aspectMask     = EImageAspect::Color,
@@ -680,6 +696,53 @@ void Texture::initCubeMap(const CubeMapCreateInfo &ci)
     render->endIsolateCommands(cmdBuf);
 
     YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, (int)CubeFace_Count);
+}
+
+void Texture::initWritableCubeMap(const WritableCubeMapCreateInfo& ci)
+{
+    auto textureFactory = getTextureFactory();
+
+    _width     = ci.size;
+    _height    = ci.size;
+    _format    = ci.format;
+    _mipLevels = 1;
+    _channels  = 1;
+
+    bool isDepth = (ci.format == EFormat::D32_SFLOAT ||
+                    ci.format == EFormat::D24_UNORM_S8_UINT ||
+                    ci.format == EFormat::D32_SFLOAT_S8_UINT);
+
+    ImageCreateInfo imageCI{
+        .label  = std::format("WritableCubeMap_{}", _label),
+        .format = ci.format,
+        .extent = {
+            .width  = ci.size,
+            .height = ci.size,
+            .depth  = 1,
+        },
+        .mipLevels     = 1,
+        .arrayLayers   = CubeFace_Count,
+        .samples       = ESampleCount::Sample_1,
+        .usage         = ci.usage,
+        .initialLayout = EImageLayout::Undefined,
+        .flags         = EImageCreateFlag::CubeCompatible,
+    };
+
+    image = textureFactory->createImage(imageCI);
+    if (!image || !image->getHandle()) {
+        YA_CORE_ERROR("Failed to create writable cubemap image: {}", _label);
+        return;
+    }
+
+    uint32_t aspectFlags = isDepth ? EImageAspect::Depth : EImageAspect::Color;
+    imageView = textureFactory->createCubeMapImageView(image, aspectFlags);
+    if (!imageView || !imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create writable cubemap image view: {}", _label);
+        image = nullptr;
+        return;
+    }
+
+    YA_CORE_INFO("Created writable cubemap: {} ({}x{}x{}, format: {})", _label, ci.size, ci.size, (int)CubeFace_Count, (int)ci.format);
 }
 
 } // namespace ya

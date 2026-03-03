@@ -65,13 +65,24 @@ enum ECubeFace
 };
 
 /**
- * @brief CubeMap creation info
+ * @brief CubeMap creation info (from 6 image files)
  */
 struct CubeMapCreateInfo
 {
     std::string                               label;
     std::array<std::string, CubeFace_Count>   files;
     bool                                      flipVertical = false;
+};
+
+/**
+ * @brief Writable cubemap creation info (e.g. point light depth buffer / shadow cube)
+ */
+struct WritableCubeMapCreateInfo
+{
+    std::string     label;
+    uint32_t        size    = 0; // width == height for cubemap faces
+    EFormat::T      format  = EFormat::D32_SFLOAT;
+    EImageUsage::T  usage   = static_cast<EImageUsage::T>(EImageUsage::DepthStencilAttachment | EImageUsage::Sampled);
 };
 
 /**

@@ -660,6 +660,14 @@ void EditorLayer::viewportWindow()
                         }
                     }
                 }
+                if (ctx.menuItem("Delete Selected"))
+                {
+                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    {
+                        scene->destroyNode(scene->getNodeByEntity(selectedEntity));
+                        setSelectedEntity(nullptr);
+                    }
+                }
             }
 
             ctx.end();

@@ -64,6 +64,13 @@ struct Texture
     static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo& ci);
 
     /**
+     * @brief Create a writable cubemap (e.g. point light depth/shadow buffer)
+     * @param ci Writable cubemap creation info
+     * @return Shared pointer to Texture (cubemap image + cubemap imageView)
+     */
+    static std::shared_ptr<Texture> createWritableCubeMap(const WritableCubeMapCreateInfo& ci);
+
+    /**
      * @brief Wrap existing IImage/IImageView into a Texture
      * @param img Existing image
      * @param view Existing image view
@@ -72,10 +79,9 @@ struct Texture
      *
      * Usage (internal): auto tex = Texture::wrap(vkImage, vkImageView, "label");
      */
-    static std::shared_ptr<Texture> wrap(
-        std::shared_ptr<IImage>     img,
-        std::shared_ptr<IImageView> view,
-        const std::string&          label = "");
+    static std::shared_ptr<Texture> wrap(std::shared_ptr<IImage>     img,
+                                         std::shared_ptr<IImageView> view,
+                                         const std::string&          label = "");
 
 
   private:
@@ -96,6 +102,7 @@ struct Texture
     // Internal initialization methods (called by factory)
     void initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels = 1);
     void initCubeMap(const CubeMapCreateInfo& ci);
+    void initWritableCubeMap(const WritableCubeMapCreateInfo& ci);
     void initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
   public:
@@ -121,16 +128,7 @@ struct Texture
     const std::string& getFilepath() const { return _filepath; }
     Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
-    /**
-     * @brief Check if texture is valid
-     */
     bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
-
-    /**
-     * @brief Get texture render API type
-     * @return Render API type
-     */
-    ERenderAPI::T getRenderAPI() const;
 
   private:
     /**

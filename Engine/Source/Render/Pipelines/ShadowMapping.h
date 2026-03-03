@@ -41,12 +41,6 @@ struct ShadowMapping : public IRenderSystem
     float _bias                     = 0.005f;
     float _normalBias               = 0.01f;
 
-    float _orthoHalfWidth  = 20.0f;
-    float _orthoHalfHeight = 20.0f;
-    float _nearPlane       = 0.1f;
-    float _farPlane        = 100.0f;
-    float _lightDistance   = 20.0f;
-
     bool     bHasDirectionalLight = false;
     uint32_t _index               = 0;
 
@@ -102,7 +96,6 @@ struct ShadowMapping : public IRenderSystem
     void onRenderGUI() override;
 
   private:
-    bool updateDirLightFromScene();
     void advance() { _index = (_index + 1) % SHADOW_PER_FRAME_SET; }
 
   public:
