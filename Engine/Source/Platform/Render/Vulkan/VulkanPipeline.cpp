@@ -142,9 +142,10 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
 {
     _ci = ci;
+    const auto shaderCacheKey = _ci.shaderDesc.cacheKey();
     ya::App::get()
         ->getShaderStorage()
-        ->removeCache(_ci.shaderDesc.shaderName);
+        ->removeCache(shaderCacheKey);
     markDirty();
 }
 
@@ -231,10 +232,12 @@ void VulkanPipeline::createPipelineInternal()
     Deleter deleter;
 
     // Process shader
-    _name = _ci.shaderDesc.shaderName;
+    const auto shaderCacheKey = _ci.shaderDesc.cacheKey();
+    YA_CORE_ASSERT(!shaderCacheKey.empty(), "Shader cache key is empty");
+    _name = shaderCacheKey;
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
     auto shaderStorage = ya::App::get()->getShaderStorage();
-    auto stage2Spirv   = shaderStorage->getCache(_ci.shaderDesc.shaderName);
+    auto stage2Spirv   = shaderStorage->getCache(shaderCacheKey);
     if (!stage2Spirv) {
         try {
 
@@ -246,11 +249,11 @@ void VulkanPipeline::createPipelineInternal()
             return;
         }
         if (!stage2Spirv) {
-            YA_CORE_ERROR("Failed to load shader: {}", _ci.shaderDesc.shaderName);
+            YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
             return;
         }
     }
-    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", _ci.shaderDesc.shaderName);
+    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", shaderCacheKey);
 
     // Create shader modules
     auto vertShaderModule = createShaderModule(stage2Spirv->at(EShaderStage::Vertex));
@@ -583,7 +586,7 @@ void VulkanPipeline::createPipelineInternal()
     VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
     _pipeline = newPipeline;
 
-    YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, _ci.shaderDesc.shaderName);
+    YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, shaderCacheKey);
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getVkHandle(), std::format("Pipeline_{}", _name.toString()).c_str());
 }

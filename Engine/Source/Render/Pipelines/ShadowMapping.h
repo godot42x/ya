@@ -18,7 +18,10 @@ struct ShadowMapping : public IRenderSystem
 
     struct FrameUBO
     {
-        glm::mat4 lightMatrix{1.0f};
+        glm::mat4 directionalLightMatrix;
+        glm::mat4 pointLightMatrices[6 * MAX_POINT_LIGHTS];
+        uint32_t  numPointLights      = 0;
+        uint32_t  hasDirectionalLight = false; // TODO: use macro to cut branch
     };
 
     struct ModelPushConstant
@@ -26,13 +29,6 @@ struct ShadowMapping : public IRenderSystem
         glm::mat4 model{1.0f};
     };
 
-    struct LightCameraData
-    {
-        glm::mat4 view           = glm::mat4(1.0f);
-        glm::mat4 projection     = glm::mat4(1.0f);
-        glm::mat4 viewProjection = glm::mat4(1.0f);
-        glm::vec3 direction      = glm::vec3(-0.5f, -1.0f, -0.3f);
-    } _uLightCameraData;
 
     stdptr<IRenderTarget> _shadowMapRT  = nullptr;
     Extent2D              _shadowExtent = {.width = 1024, .height = 1024};
@@ -41,8 +37,7 @@ struct ShadowMapping : public IRenderSystem
     float _bias                     = 0.005f;
     float _normalBias               = 0.01f;
 
-    bool     bHasDirectionalLight = false;
-    uint32_t _index               = 0;
+    uint32_t _index = 0;
 
     PipelineLayoutDesc _pipelineLayoutDesc = {
         .label         = "ShadowMapping_PipelineLayout",
@@ -62,7 +57,7 @@ struct ShadowMapping : public IRenderSystem
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry,
                     },
                 },
             },
@@ -99,10 +94,6 @@ struct ShadowMapping : public IRenderSystem
     void advance() { _index = (_index + 1) % SHADOW_PER_FRAME_SET; }
 
   public:
-    const LightCameraData& getLightCameraData() const { return _uLightCameraData; }
-
-    bool hasDirectionalLight() const { return bHasDirectionalLight; }
-    void setHasDirectionalLight(bool bHasDirectionalLight_) { bHasDirectionalLight = bHasDirectionalLight_; }
 };
 
 } // namespace ya

@@ -240,13 +240,15 @@ void App::init(AppDesc ci)
 
     currentRenderAPI = ERenderAPI::Vulkan;
 
-    // validate shaders before render initialized
+    // WHY: validate shaders before render initialized, avoid vk init(about > 3s) but shader error
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
                                .withShaderStoragePath("Engine/Shader/GLSL")
                                .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
                                .FactoryNew<GLSLProcessor>();
-
+    std::vector<std::string> commonDefines = {
+        std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
+    };
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
@@ -255,7 +257,9 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "DirectionalLightDepthBuffer.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowDepthGenerate.glsl", .defines = commonDefines});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl", .defines = commonDefines});
 
 
     // MARK: Render/Hook
@@ -339,17 +343,33 @@ void App::init(AppDesc ci)
     }
 
 
+    _descriptorPool = IDescriptorPool::create(_render,
+                                              DescriptorPoolCreateInfo{
+                                                  .label     = "Global Descriptor Pool",
+                                                  .maxSets   = 2, // skybox + depth shadow
+                                                  .poolSizes = {
+                                                      // max iamge set allowed < maxSets
+                                                      DescriptorPoolSize{
+                                                          .type            = EPipelineDescriptorType::CombinedImageSampler,
+                                                          .descriptorCount = 1 + 2, // skybox + depth shadow(point and directional)
+                                                      },
+                                                  },
+                                              });
+    _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
+
 
     // viewport
     _viewportRenderPass = nullptr;
     recreateViewPortRT(winW, winH);
 
+    // shadow mapping
     _depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Shadow Map RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
         .bSwapChainTarget = false,
         .extent           = {.width = 1024, .height = 1024},
         .frameBufferCount = 1,
+        .layerCount       = 1 + MAX_POINT_LIGHTS * 6, // 1 directional light + 6 faces for each point light
         .attachments      = {
 
             .depthAttach = AttachmentDescription{
@@ -366,8 +386,90 @@ void App::init(AppDesc ci)
             },
         },
     });
-    _deleter.push("DepthRT", [this](void*) {
-        _depthRT.reset();
+    _deleter.push("DepthRT", [this](void*) { _depthRT.reset(); });
+
+    _depthBufferDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "DepthBuffer_DSL",
+            .bindings = {
+                // directional light shadow map (2D)
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 1,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+            },
+        });
+    _depthBufferShadowDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
+    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
+    _deleter.push("DepthBufferDSL", [this](void*) { _depthBufferDSL.reset(); });
+
+    auto tf        = _render->getTextureFactory();
+    auto shadowImg = _depthRT->getCurFrameBuffer()->getDepthTexture()->getImageShared();
+    // TODO: use 6 array first then 1 array last can optimize performance?
+    _shadowDirectionalDepthIV = tf->createImageView(
+        shadowImg,
+        ImageViewCreateInfo{
+            .label        = "Shadow Map Directional Depth ImageView",
+            .viewType     = EImageViewType::View2D,
+            .aspectFlags  = EImageAspect::Depth,
+            .baseMipLevel = 0,
+            .levelCount   = 1,
+            // use 0 - 1 layers
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        });
+    _shadowPointDepthIV = tf->createImageView(
+        shadowImg,
+        ImageViewCreateInfo{
+            .label        = "Shadow Map Point Depth ImageView",
+            .viewType     = EImageViewType::View2DArray,
+            .aspectFlags  = EImageAspect::Depth,
+            .baseMipLevel = 0,
+            .levelCount   = 1,
+            // use 1 - nx6 layers
+            .baseArrayLayer = 1,
+            .layerCount     = 6 * MAX_POINT_LIGHTS,
+        });
+    YA_CORE_ASSERT(_shadowDirectionalDepthIV && _shadowDirectionalDepthIV->getHandle(), "Failed to create shadow map directional depth image view");
+    YA_CORE_ASSERT(_shadowPointDepthIV && _shadowPointDepthIV->getHandle(), "Failed to create shadow map point depth image view");
+    auto shadowAddresMode = ESamplerAddressMode::ClampToBorder;
+    _shadowSampler        = Sampler::create(
+        SamplerDesc{
+                   .label         = "shadow",
+                   .minFilter     = EFilter::Linear,
+                   .magFilter     = EFilter::Linear,
+                   .mipmapMode    = ESamplerMipmapMode::Linear,
+                   .addressModeU  = shadowAddresMode,
+                   .addressModeV  = shadowAddresMode,
+                   .addressModeW  = shadowAddresMode,
+                   .mipLodBias    = 0.0f,
+                   .maxAnisotropy = 1.0f,
+                   .borderColor   = SamplerDesc::BorderColor{
+                         .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
+                         .color = {1.0f, 1.0f, 1.0f, 1.0f},
+            },
+        });
+    YA_CORE_ASSERT(_shadowSampler, "Failed to create shadow sampler");
+    _deleter.push("ShadowSampler", [this](void*) { _shadowSampler.reset(); });
+
+    _render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, _shadowDirectionalDepthIV.get(), _shadowSampler.get()),
+            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 1, _shadowPointDepthIV.get(), _shadowSampler.get()),
+        });
+    _deleter.push("Shadow ImageViews", [this](void*) {
+        _shadowDirectionalDepthIV.reset();
+        _shadowPointDepthIV.reset();
     });
 
 
@@ -481,23 +583,8 @@ void App::init(AppDesc ci)
             });
     }
 
-    // MARK: Descriptors
-    // Allocate command buffers for swapchain (both scene and UI in same buffer)
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
 
-    _descriptorPool = IDescriptorPool::create(_render,
-                                              DescriptorPoolCreateInfo{
-                                                  .label     = "Global Descriptor Pool",
-                                                  .maxSets   = 3, // skybox + depth fallback + depth shadow
-                                                  .poolSizes = {
-                                                      // max iamge set allowed < maxSets
-                                                      DescriptorPoolSize{
-                                                          .type            = EPipelineDescriptorType::CombinedImageSampler,
-                                                          .descriptorCount = 1 + 2, // skybox + depth fallback + depth shadow
-                                                      },
-                                                  },
-                                              });
-    _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
 
     // TODO: common resource skybox and depth buffer can be in one set?
     _skyBoxCubeMapDSL = IDescriptorSetLayout::create(_render,
@@ -516,41 +603,6 @@ void App::init(AppDesc ci)
     _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
     _deleter.push("SkyboxCubeMapDSL", [this](void*) { _skyBoxCubeMapDSL.reset(); });
 
-    _depthBufferDSL      = IDescriptorSetLayout::create(_render,
-                                                   DescriptorSetLayoutDesc{
-                                                            .label    = "DepthBuffer_DSL",
-                                                            .bindings = {
-                                                           DescriptorSetLayoutBinding{
-                                                                    .binding         = 0,
-                                                                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                                                                    .descriptorCount = 1,
-                                                                    .stageFlags      = EShaderStage::Fragment,
-                                                           },
-                                                       },
-                                                   });
-    _depthBufferShadowDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
-    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
-    _deleter.push("DepthBufferDSL", [this](void*) { _depthBufferDSL.reset(); });
-
-    auto shadowAddresMode = ESamplerAddressMode::ClampToBorder;
-    _shadowSampler        = Sampler::create(
-        SamplerDesc{
-                   .label         = "shadow",
-                   .minFilter     = EFilter::Linear,
-                   .magFilter     = EFilter::Linear,
-                   .mipmapMode    = ESamplerMipmapMode::Linear,
-                   .addressModeU  = shadowAddresMode,
-                   .addressModeV  = shadowAddresMode,
-                   .addressModeW  = shadowAddresMode,
-                   .mipLodBias    = 0.0f,
-                   .maxAnisotropy = 1.0f,
-                   .borderColor   = SamplerDesc::BorderColor{
-                         .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
-                         .color = {1.0f, 1.0f, 1.0f, 1.0f},
-            },
-        });
-    YA_CORE_ASSERT(_shadowSampler, "Failed to create shadow sampler");
-    _deleter.push("ShadowSampler", [this](void*) { _shadowSampler.reset(); });
 
 
     // MARK: Render Systems
@@ -685,21 +737,6 @@ void App::init(AppDesc ci)
     _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
     _phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
 
-    auto cmdBuf       = _render->beginIsolateCommands("Init Depth Buffer Descriptor Set");
-    auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
-    cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-    _render->endIsolateCommands(cmdBuf);
-    _render->waitIdle();
-
-    auto fallbackIV = TextureLibrary::get().getBlackTexture()->getImageView();
-    YA_CORE_ASSERT(fallbackIV && fallbackIV->getHandle(), "Fallback texture image view is null");
-    auto shadowIV = _depthRT->getCurFrameBuffer()->getDepthTexture()->getImageView();
-    YA_CORE_ASSERT(shadowIV && shadowIV->getHandle(), "Shadow map depth texture image view is null");
-    _render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, shadowIV, _shadowSampler.get()),
-        });
     _shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(_depthRT);
     _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferShadowDS;
     _phongMaterialSystem->as<PhongMaterialSystem>()->setDirectionalShadowMappingEnabled(bShadowMapping);
@@ -1130,12 +1167,12 @@ void App::onRenderGUI(float dt)
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
 
         {
-            static constexpr int ringBufSize = 120;         // 环形缓冲区大小，保持原有定义
-            static float         fpsRingBuf[ringBufSize]{}; // 存储每帧的FPS值
-            static int           fpsRingHead = 0;           // 缓冲区头指针（下一个要写入的位置）
-            static int           fpsRingFill = 0;           // 缓冲区已填充的元素数量
-            static float         fpsSum      = 0.0f;        // 新增：维护缓冲区所有元素的累加和，避免每次遍历求和
-            float currentFps = dt > 0.0f ? 1.0f / dt : 0.0f; // 计算当前帧的FPS（dt为帧间隔时间，单位：秒）
+            static constexpr int ringBufSize = 120;                          // 环形缓冲区大小，保持原有定义
+            static float         fpsRingBuf[ringBufSize]{};                  // 存储每帧的FPS值
+            static int           fpsRingHead = 0;                            // 缓冲区头指针（下一个要写入的位置）
+            static int           fpsRingFill = 0;                            // 缓冲区已填充的元素数量
+            static float         fpsSum      = 0.0f;                         // 新增：维护缓冲区所有元素的累加和，避免每次遍历求和
+            float                currentFps  = dt > 0.0f ? 1.0f / dt : 0.0f; // 计算当前帧的FPS（dt为帧间隔时间，单位：秒）
 
             // 1. 处理旧值：缓冲区满时，先减去即将被覆盖的旧值
             if (fpsRingFill >= ringBufSize) {

@@ -106,8 +106,9 @@ struct Texture
     Texture& operator=(Texture&&)      = default;
 
     // Platform-independent accessors
-    IImage*     getImage() const { return image.get(); }
-    IImageView* getImageView() const { return imageView.get(); }
+    IImage*                 getImage() const { return image.get(); }
+    std::shared_ptr<IImage> getImageShared() const { return image; }
+    IImageView*             getImageView() const { return imageView.get(); }
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

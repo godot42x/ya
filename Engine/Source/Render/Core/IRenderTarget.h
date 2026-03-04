@@ -17,7 +17,6 @@ struct IRenderPass;
 
 
 
-
 /**
  * @brief Configuration for creating a RenderTarget
  * Supports multiple color attachments and both RenderPass/Dynamic Rendering modes
@@ -32,6 +31,8 @@ struct RenderTargetCreateInfo
     Extent2D extent           = {.width = 800, .height = 600};
     uint32_t frameBufferCount = 1; // for custom render targets
     uint32_t layerCount       = 1; // for array textures or cubemaps
+
+    [[deprecated("Unimplemented")]] uint32_t mipLevels = 1; // Number of mip levels for attachments
 
     struct AttachmentSpec
     {

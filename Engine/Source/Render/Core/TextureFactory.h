@@ -179,6 +179,8 @@ struct ImageViewCreateInfo
     uint32_t    baseArrayLayer = 0;
     uint32_t    layerCount     = 1;
 
+
+    [[deprecated("Unimplemented")]]
     // Component mapping (for format conversion)
     struct ComponentMapping
     {
@@ -186,7 +188,7 @@ struct ImageViewCreateInfo
         uint32_t g = 0;
         uint32_t b = 0;
         uint32_t a = 0;
-    } components;
+    } components = {};
 };
 
 /**

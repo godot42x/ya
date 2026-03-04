@@ -161,11 +161,44 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 struct ShaderDesc
 {
+    enum class ESourceMode
+    {
+        SingleShader, // use shaderName as a logical shader entry (supports combined or auto split by suffix)
+        StageFiles,   // use stageFiles as explicit N shader source files
+    };
+
+    struct StageFile
+    {
+        EShaderStage::T stage = EShaderStage::Vertex;
+        std::string     file;
+    };
+
+    ESourceMode                          sourceMode = ESourceMode::SingleShader;
     std::string                          shaderName;                // we use single glsl now
+    std::vector<StageFile>               stageFiles{};
     bool                                 bDeriveFromShader = false; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
     std::vector<std::string>             defines = {}; // #define in shader
+
+    [[nodiscard]] std::string cacheKey() const
+    {
+        if (!shaderName.empty()) {
+            return shaderName;
+        }
+        if (sourceMode != ESourceMode::StageFiles || stageFiles.empty()) {
+            return {};
+        }
+
+        std::string key = "stage-files:";
+        for (const auto& sf : stageFiles) {
+            key += std::to_string(static_cast<int>(sf.stage));
+            key += ":";
+            key += sf.file;
+            key += ";";
+        }
+        return key;
+    }
 
     // TOD:
     // 1. split the giant header file into each unit(pipe line relates to pipelines),

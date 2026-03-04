@@ -237,28 +237,32 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
+    // TODO: make FrameContext as a UBO to avoid this copy: ctx -> frameData -> frameUBO -> GPU
+    uLight.hasDirectionalLight = ctx->bHasDirectionalLight;
     if (ctx->bHasDirectionalLight) {
-        uLight.dirLight.direction = ctx->directionalLight.direction;
-        uLight.dirLight.ambient   = ctx->directionalLight.ambient;
-        uLight.dirLight.diffuse   = ctx->directionalLight.diffuse;
-        uLight.dirLight.specular  = ctx->directionalLight.specular;
+        uLight.dirLight.direction      = ctx->directionalLight.direction;
+        uLight.dirLight.ambient        = ctx->directionalLight.ambient;
+        uLight.dirLight.diffuse        = ctx->directionalLight.diffuse;
+        uLight.dirLight.specular       = ctx->directionalLight.specular;
+        uLight.dirLight.viewProjection = ctx->directionalLight.viewProjection;
     }
 
     uLight.numPointLights = ctx->numPointLights;
     for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
         const auto& pl        = ctx->pointLights[i];
         uLight.pointLights[i] = PointLightData{
-            .type        = pl.type,
-            .constant    = pl.constant,
-            .linear      = pl.linear,
-            .quadratic   = pl.quadratic,
-            .position    = pl.position,
-            .ambient     = pl.ambient,
-            .diffuse     = pl.diffuse,
-            .specular    = pl.specular,
-            .spotDir     = pl.spotDir,
-            .innerCutOff = pl.innerCutOff,
-            .outerCutOff = pl.outerCutOff,
+            .type           = pl.type,
+            .constant       = pl.constant,
+            .linear         = pl.linear,
+            .quadratic      = pl.quadratic,
+            .position       = pl.position,
+            .ambient        = pl.ambient,
+            .diffuse        = pl.diffuse,
+            .specular       = pl.specular,
+            .viewProjection = pl.viewProjection,
+            .spotDir        = pl.spotDir,
+            .innerCutOff    = pl.innerCutOff,
+            .outerCutOff    = pl.outerCutOff,
         };
     }
     // This prevents descriptor set invalidation during the render loop

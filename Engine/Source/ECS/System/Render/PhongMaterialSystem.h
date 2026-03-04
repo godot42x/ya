@@ -48,6 +48,7 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 ambient   = glm::vec3(10 / 256.0);
         alignas(16) glm::vec3 diffuse   = glm::vec3(30 / 256.0);
         alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
+        glm::mat4 viewProjection{1.0f}; // 用于阴影映射
     };
 
 
@@ -65,6 +66,8 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 diffuse  = glm::vec3(0.5f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
 
+        glm::mat4 viewProjection{1.0f}; // 用于阴影映射
+
         // spot light
         alignas(16) glm::vec3 spotDir;
         float innerCutOff;
@@ -80,12 +83,10 @@ struct PhongMaterialSystem : public IMaterialSystem
     struct alignas(16) LightUBO
     {
         alignas(16) DirectionalLightData dirLight;
-        alignas(16) uint32_t numPointLights = 0;
         alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
-        glm::mat4 shadowLightSpaceMatrix{1.0f}; // 用于阴影映射 TODO: move into the DirectionalLightData 
+        uint32_t numPointLights = 0;
         uint32_t  hasDirectionalLight = 0;      // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
 
-        void setShadowLightSpaceMatrix(const glm::mat4& shadowLightSpaceMatrix_) { shadowLightSpaceMatrix = shadowLightSpaceMatrix_; }
     } uLight;
 
     // TODO: move to one debug layer system
@@ -197,8 +198,16 @@ struct PhongMaterialSystem : public IMaterialSystem
                 .label    = "ShadowMap_DSL",
                 .set      = 4,
                 .bindings = {
+                    // directional shadow map
                     DescriptorSetLayoutBinding{
                         .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    // point shadow map
+                    DescriptorSetLayoutBinding{
+                        .binding         = 1,
                         .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,

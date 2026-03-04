@@ -17,11 +17,14 @@ if is_plat("windows") then
             , "/wd4100" --  unreferenced formal parameter
             , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
             , "/wd4819" --  character that cannot be represented in the current code page
+            , "/JMC"  -- only jump to my codes when f11(not into std codes)
+
         )
         add_ldflags(
         -- "/ignore:4099" -- PDB not found
         )
     end
+
 end
 
 if is_mode("debug") then

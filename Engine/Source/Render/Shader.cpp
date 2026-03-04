@@ -10,11 +10,13 @@
 #include "Shader.h"
 
 
+#include <array>
 #include <shaderc/shaderc.h>
 #include <shaderc/shaderc.hpp>
 #include <stdio.h>
 #include <string>
 #include <unordered_map>
+
 
 
 #include <spirv_cross/spirv.h>
@@ -693,56 +695,121 @@ bool GLSLProcessor::processCombinedSource(const stdpath& filepath, const std::ve
 
 std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc& ci)
 {
+    const auto cacheKey = ci.cacheKey();
+    YA_CORE_ASSERT(!cacheKey.empty(), "ShaderDesc cache key cannot be empty");
 
-    YA_CORE_ASSERT(ci.shaderName.ends_with(".glsl"), "Shader filename must end with .glsl, got: {}", ci.shaderName);
-
-    curFileName = ut::str::replace(ci.shaderName, ".glsl", "");
-
-    curFilePath = stdpath(shaderStoragePath) / ci.shaderName;
     stage2spirv_t ret;
 
-    // 1. detect file changed unimplemented for now
-    // TODO: use hash to detect shader source change, and output to "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" and a "xxx.metadata" file
+    auto compileStageFromFile = [&](EShaderStage::T stage, const std::string& stagePath, const char* errorTag) -> bool {
+        std::string stageSource;
+        if (!VirtualFileSystem::get()->readFileToString(stagePath, stageSource)) {
+            YA_CORE_ERROR("Failed to read {} shader source: {}", errorTag, stagePath);
+            return false;
+        }
 
-    // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
-    // auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
-    // auto fragFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Fragment));
-    // if (VirtualFileSystem::get()->isFileExists(vertFile) && VirtualFileSystem::get()->isFileExists(fragFile))
-    // {
-    //     if (processSpvFiles(vertFile, fragFile, ret)) {
-    //         return std::move(ret);
-    //     }
-    // }
+        std::vector<ir_t> spv;
+        if (!compileToSpv(stagePath, stageSource, stage, ci.defines, spv)) {
+            YA_CORE_ERROR("Failed to compile {} shader stage: {}", errorTag, stagePath);
+            return false;
+        }
 
+        ret[stage] = std::move(spv);
+        return true;
+    };
 
-    // TODO: use a config file as options to remap to different single shader file
-    // if (ci.shaderName.ends_with(".ya.shader")) {
-    //     try {
-    //         auto j    = nlohmann::json::parse(ci.shaderName);
-    //         auto type = j["type"];
-    //         if (type.is_string() && type.get<std::string>() == "splits") {
-    //             // load from  different single shader file
-    //             auto vertFile = j["vertex"];
-    //             auto fragFile = j["fragment"];
-    //             auto geomFile = j["geometry"];
-    //         }
-    //     }
-    //     catch (const std::exception& e)
-    //     {
-    //         YA_CORE_ERROR("Failed to parse shader config file: {}", e.what());
-    //         return {};
-    //     }
-    // }
+    auto hasRequiredGraphicsStages = [&]() {
+        return ret.contains(EShaderStage::Vertex) && ret.contains(EShaderStage::Fragment);
+    };
 
+    if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
+    {
+        for (const auto& stageFile : ci.stageFiles)
+        {
+            if (ret.contains(stageFile.stage)) {
+                YA_CORE_ERROR("Duplicate stage entry in ShaderDesc::stageFiles, stage={}", static_cast<int>(stageFile.stage));
+                return {};
+            }
 
-    ret.clear();
-    // 3. load it from sources
-    if (processCombinedSource(curFilePath, ci.defines, ret)) {
-        YA_CORE_INFO("Preprocessed shader source for {}: {} stages found", ci.shaderName, ret.size());
+            std::filesystem::path stagePath(stageFile.file);
+            if (!stagePath.is_absolute()) {
+                stagePath = stdpath(shaderStoragePath) / stagePath;
+            }
+
+            const auto stagePathStr = stagePath.generic_string();
+            if (!compileStageFromFile(stageFile.stage, stagePathStr, "explicit stage-file")) {
+                return {};
+            }
+        }
+
+        if (!hasRequiredGraphicsStages()) {
+            YA_CORE_ERROR("Explicit stage-files mode requires at least vertex and fragment stages: {}", cacheKey);
+            return {};
+        }
+
+        curFileName = cacheKey;
+        curFilePath = stdpath(shaderStoragePath) / cacheKey;
+        YA_CORE_INFO("Preprocessed explicit stage-files shader for {}: {} stages found", cacheKey, ret.size());
     }
-    else {
-        YA_CORE_ERROR("Failed to preprocess shader source: {}", ci.shaderName);
-        return {};
+    else
+    {
+        std::string shaderName = ci.shaderName;
+        YA_CORE_ASSERT(!shaderName.empty(), "SingleShader mode requires shaderName");
+        if (!shaderName.ends_with(".glsl")) {
+            shaderName += ".glsl";
+        }
+
+        curFileName = ut::str::replace(shaderName, ".glsl", "");
+        curFilePath = stdpath(shaderStoragePath) / shaderName;
+
+        // 1. detect file changed unimplemented for now
+        // TODO: use hash to detect shader source change, and output to "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" and a "xxx.metadata" file
+
+        // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
+        // auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
+        // auto fragFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Fragment));
+        // if (VirtualFileSystem::get()->isFileExists(vertFile) && VirtualFileSystem::get()->isFileExists(fragFile))
+        // {
+        //     if (processSpvFiles(vertFile, fragFile, ret)) {
+        //         return std::move(ret);
+        //     }
+        // }
+
+
+        // TODO: use a config file as options to remap to different single shader file
+        // if (ci.shaderName.ends_with(".ya.shader")) {
+        //     try {
+        //         auto j    = nlohmann::json::parse(ci.shaderName);
+        //         auto type = j["type"];
+        //         if (type.is_string() && type.get<std::string>() == "splits") {
+        //             // load from  different single shader file
+        //             auto vertFile = j["vertex"];
+        //             auto fragFile = j["fragment"];
+        //             auto geomFile = j["geometry"];
+        //         }
+        //     }
+        //     catch (const std::exception& e)
+        //     {
+        //         YA_CORE_ERROR("Failed to parse shader config file: {}", e.what());
+        //         return {};
+        //     }
+        // }
+
+
+        ret.clear();
+
+        // SingleShader mode only supports combined source with #type sections.
+        if (processCombinedSource(curFilePath, ci.defines, ret)) {
+            YA_CORE_INFO("Preprocessed shader source for {}: {} stages found", shaderName, ret.size());
+        }
+        else {
+            YA_CORE_ERROR("Failed to preprocess shader source: {}", shaderName);
+            return {};
+        }
+
+        if (!hasRequiredGraphicsStages()) {
+            YA_CORE_ERROR("SingleShader mode requires at least vertex and fragment stages: {}", shaderName);
+            return {};
+        }
     }
 
     // Validate SPIR-V magic number

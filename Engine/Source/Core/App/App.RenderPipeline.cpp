@@ -55,11 +55,6 @@ void App::tickRenderPipeline(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-
-
-    beginFrame();
-
-
     // update runtime camera
     Entity* runtimeCamera = getPrimaryCamera();
     if (runtimeCamera && runtimeCamera->isValid())
@@ -102,7 +97,7 @@ void App::tickRenderPipeline(float dt)
 
         // grab lights once
         ctx.bHasDirectionalLight = false;
-        auto scene = getSceneManager()->getActiveScene();
+        auto scene               = getSceneManager()->getActiveScene();
         for (const auto& [et, dlc, tc] :
              scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
         {
@@ -153,10 +148,21 @@ void App::tickRenderPipeline(float dt)
     }
 
 
+    auto phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
+    if (bShadowMapping && ctx.bHasDirectionalLight) {
+        phongSys->setDirectionalShadowMappingEnabled(true);
+    }
+    else {
+        phongSys->setDirectionalShadowMappingEnabled(false);
+    }
+
+    beginFrame();
+
+
 
     // MARK: shadow
-    if (bShadowMapping && _depthRT && _shadowMappingSystem) {
-
+    if (bShadowMapping)
+    {
         RenderingInfo shadowMapRI{
             .label      = "Shadow Map Pass",
             .renderArea = Rect2D{
@@ -172,17 +178,6 @@ void App::tickRenderPipeline(float dt)
             _shadowMappingSystem->tick(cmdBuf.get(), dt, &ctx);
         }
         cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
-        auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
-        cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-    }
-
-    auto phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
-    if (bShadowMapping && ctx.bHasDirectionalLight) {
-        phongSys->setDirectionalShadowMappingEnabled(true);
-        phongSys->uLight.shadowLightSpaceMatrix = ctx.directionalLight.viewProjection;
-    }
-    else {
-        phongSys->setDirectionalShadowMappingEnabled(false);
     }
 
 

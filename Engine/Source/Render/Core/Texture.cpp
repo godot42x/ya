@@ -386,6 +386,7 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
 
         // Create a fallback 1x1 magenta texture to indicate error
         uint32_t magentaPixel = 0xFFFF00FF; // RGBA: magenta
+        throw std::runtime_error("Failed to create image for texture: " + _label);
         initFallbackTexture(&magentaPixel, sizeof(magentaPixel), 1, 1);
         return;
     }

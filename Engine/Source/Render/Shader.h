@@ -234,6 +234,9 @@ struct ShaderStorage
 
     const IShaderProcessor::stage2spirv_t* load(const ShaderDesc& ci)
     {
+        const auto cacheKey = ci.cacheKey();
+        YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
+
         // TODO: cache it
         // auto it = _shaderCache.find(ci.shaderName);
         // if (it != _shaderCache.end()) {
@@ -245,21 +248,24 @@ struct ShaderStorage
         //     _shaderCache.erase(it);
         // }
 
-        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", ci.shaderName).c_str());
+        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", cacheKey).c_str());
         auto opt = getProcessor()->process(ci);
         if (!opt.has_value()) {
-            throw std::runtime_error(std::format("Failed to process shader: {}", ci.shaderName));
+            throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
-        _shaderCache[ci.shaderName.data()] = std::move(*opt);
-        return &_shaderCache.at(ci.shaderName);
+        _shaderCache[cacheKey] = std::move(*opt);
+        return &_shaderCache.at(cacheKey);
     }
 
     auto validate(const ShaderDesc& ci)
     {
-        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", ci.shaderName).c_str());
+        const auto cacheKey = ci.cacheKey();
+        YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
+
+        YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", cacheKey).c_str());
         auto opt = getProcessor()->process(ci);
         if (!opt.has_value()) {
-            throw std::runtime_error(std::format("Failed to process shader: {}", ci.shaderName));
+            throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
     }
 };

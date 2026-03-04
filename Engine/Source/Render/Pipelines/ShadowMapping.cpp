@@ -28,7 +28,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
 
-            .shaderName        = "DirectionalLightDepthBuffer.glsl",
+            .shaderName        = "Shadow/CombinedShadowDepthGenerate.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -92,9 +92,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
     std::vector<WriteDescriptorSet> writes;
     writes.resize(SHADOW_PER_FRAME_SET);
 
-    FrameUBO initialFrameData{
-        .lightMatrix = glm::mat4(1.0f),
-    };
+    FrameUBO initialFrameData{};
 
     for (uint32_t i = 0; i < SHADOW_PER_FRAME_SET; ++i) {
         _dsPerFrame[i] = frameSets[i];
@@ -119,27 +117,27 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
 
 void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
-    if (!_shadowMapRT || !ctx || !cmdBuf) {
+    if (!ctx) {
+        return;
+    }
+    if (ctx->extent.width <= 0 || ctx->extent.height <= 0) {
+        return;
+    }
+    auto* scene = getActiveScene();
+    if (!scene) {
         return;
     }
 
-    _shadowExtent = _shadowMapRT->getExtent();
-    if (_shadowExtent.width == 0 || _shadowExtent.height == 0) {
-        return;
-    }
 
-    bHasDirectionalLight = ctx->bHasDirectionalLight;
-    if (!bHasDirectionalLight) {
-        return;
-    }
-    _uLightCameraData.direction      = ctx->directionalLight.direction;
-    _uLightCameraData.view           = ctx->directionalLight.view;
-    _uLightCameraData.projection     = ctx->directionalLight.projection;
-    _uLightCameraData.viewProjection = ctx->directionalLight.viewProjection;
-
+    // TODO: make the frameCtx as one descriptor set to avoid copy: ctx -> frameData -> frameUBO -> GPU
     FrameUBO frameData{
-        .lightMatrix = _uLightCameraData.viewProjection,
+        .directionalLightMatrix = ctx->directionalLight.viewProjection,
+        .numPointLights         = ctx->numPointLights,
+        .hasDirectionalLight    = ctx->bHasDirectionalLight,
     };
+    for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
+        frameData.pointLightMatrices[i] = ctx->pointLights[i].viewProjection;
+    }
     _frameUBO[_index]->writeData(&frameData, sizeof(FrameUBO), 0);
 
     cmdBuf->bindPipeline(_pipeline.get());
@@ -161,12 +159,6 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
                                {
                                    _dsPerFrame[_index],
                                });
-
-    auto* scene = getActiveScene();
-    if (!scene) {
-        advance();
-        return;
-    }
 
     auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
     for (const auto& [entity, mc, tc] : view.each()) {
@@ -207,7 +199,6 @@ void ShadowMapping::onRenderGUI()
     Super::onRenderGUI();
     ImGui::Text("ShadowMapping Scaffold");
     ImGui::Text("RT: %ux%u", _shadowExtent.width, _shadowExtent.height);
-    ImGui::Text("Light Dir: %.3f %.3f %.3f", _uLightCameraData.direction.x, _uLightCameraData.direction.y, _uLightCameraData.direction.z);
     ImGui::Checkbox("Auto Viewport/Scissor", &_bAutoBindViewportScissor);
     ImGui::DragFloat("Depth Bias", &_bias, 0.0001f, 0.0f, 0.1f, "%.5f");
     ImGui::DragFloat("Normal Bias", &_normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
