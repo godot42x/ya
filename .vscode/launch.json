@@ -13,11 +13,27 @@
             }
         },
         {
-            "id": "remember.target",
+            "id": "debug.target",
             "type": "command",
-            "command": "extension.commandvariable.remember",
+            "command": "extension.commandvariable.pickStringRemember",
             "args": {
-                "key": "target"
+                "key": "target",
+                // "desc": "Input the target name to debug(xmake l targets)",
+                "addLabelToTop": "${remeber.target}",
+                "options": [
+                    "HelloMaterial",
+                    {
+                        "label": "Other...",
+                        "description": "Input the target name to debug(xmake l targets)",
+                        "value": "${promptStringRemember:customTarget}"
+                    }
+                ],
+                "promptStringRemember": {
+                    "customTarget": {
+                        "key": "target",
+                        "description": "Enter build target name:"
+                    }
+                }
             }
         },
     ],
@@ -51,7 +67,7 @@
             "type": "cppvsdbg",
             "name": "debug EXE MSVC with build",
             "request": "launch",
-            "program": "${workspaceFolder}/build/windows/x64/debug/${input:remember.target}.exe",
+            "program": "${workspaceFolder}/build/windows/x64/debug/${input:debug.target}.exe",
             "logging": {
                 "moduleLoad": true,
                 "threadExit": true,

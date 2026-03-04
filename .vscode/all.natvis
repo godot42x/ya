@@ -13,6 +13,9 @@ More information at: https://docs.microsoft.com/en-us/visualstudio/debugger/crea
 
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
+<!-- MARK: ImGUI
+-->
+
 <Type Name="ImVector&lt;*&gt;">
   <DisplayString>{{Size={Size} Capacity={Capacity}}}</DisplayString>
   <Expand>
@@ -94,6 +97,8 @@ More information at: https://docs.microsoft.com/en-us/visualstudio/debugger/crea
   See also https://docs.microsoft.com/en-us/visualstudio/debugger/create-custom-views-of-native-objects 
 -->
 
+<!-- MARK: GLM
+ -->
 <!-- <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010"> -->
 
   <Type Name="glm::vec&lt;1,*,*&gt;">
