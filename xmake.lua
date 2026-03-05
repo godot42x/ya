@@ -3,7 +3,7 @@ set_languages("c++20")
 
 if is_plat("windows") then
     set_exceptions("cxx")
-    set_runtimes("MT") -- use static link and no debug runtime library
+    set_runtimes("MD") -- use dynamic CRT to match VulkanSDK prebuilt libs (shaderc_combined etc.)
 end
 
 

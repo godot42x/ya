@@ -1,6 +1,7 @@
 includes("./Plugins/Plugins.xmake.lua")
-includes("./Shader/xmake.lua")
+includes("./Shader/Shader.xmake.lua")
 includes("./Test/xmake.lua")
+includes("./Programs/Programs.xmake.lua")
 includes("./ThirdParty/ThirdParty.xmake.lua")
 -- includes("./Source/Editor/xmake.lua")
 
@@ -20,11 +21,7 @@ add_requires(
 add_requireconfs("freetype", {
     system = false,
 })
-add_requires("spirv-cross", {
-    configs = {
-        shared = true,
-    }
-})
+
 
 add_requires("libsdl3", {
     configs = {
@@ -34,34 +31,29 @@ add_requires("libsdl3", {
 add_requires("assimp", {
     configs = {
         shared = false,
-        -- runtimes = is_mode("debug") and "MTd" or "MT",
-        runtimes = "MT",
+        runtimes = "MD",
         cxxflags = "-std=c++20",
     }
 })
 
 
 
-add_requires("shaderc", {
-    configs = {
-        shared = false,
-        -- runtimes = "MT",
-    }
-})
-if is_plat("windows") then
-    add_requireconfs("shaderc",
-        {
-            configs = {
-                shared = false,
-                -- runtimes = "MT",
-            },
-        })
-end
+
 
 add_requires("vulkansdk", {
     configs = {
         utils = {
-            "VkLayer_khronos_validation", -- import layer
+            -- "VkLayer_khronos_validation", -- import layer
+            "slang",
+            "shaderc",
+            "shaderc_util",
+            "shaderc_combined",
+            "shaderc_shared",
+            "spirv-cross-core",
+            "spirv-cross-util",
+            "spirv-cross-reflect",
+            "spirv-cross-glsl",
+
 
         }
     }
@@ -104,6 +96,10 @@ do
 
     add_includedirs("./Source", { public = true })
 
+    add_deps("shader")
+    -- Include generated Slang headers (auto-generated from .slang files)
+    add_includedirs("./Shader/Slang/Generated", { public = true })
+
     add_deps("utility.cc")
     add_deps("log.cc")
     add_deps("reflect.cc")
@@ -112,10 +108,7 @@ do
     add_deps("imguizmo-local")
 
 
-    -- Add math library for exp2 and log2 functions
     if is_plat("windows") then
-        add_ldflags("/NODEFAULTLIB:LIBCMT") -- Fix runtime library conflict
-
         -- Debug 模式下禁用链接器优化，保留所有代码（包括静态初始化）
         if is_mode("debug") then
             add_ldflags("/OPT:NOREF", "/OPT:NOICF", { force = true })
@@ -132,13 +125,8 @@ do
     add_packages("assimp")
     add_packages("ktx")
 
-    do
-        --NOTICE: must before vulkansdk or it will cause error
-        -- because vulkansdk's linkdir contains those libs like ["shaderc.lib", "spirv-cross.lib"]
-        add_packages("shaderc")
-        add_packages("spirv-cross", { public = true })
-        add_packages("vulkansdk", { public = true })
-    end
+   
+    add_packages("vulkansdk", { public = true })
     add_packages("glad")
     add_packages("cxxopts", { public = true })
     add_packages("entt", { public = true })
@@ -173,4 +161,6 @@ do
         print("removing sdl log files")
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
+
+
 end

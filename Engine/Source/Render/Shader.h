@@ -64,12 +64,13 @@ GENERATED_ENUM_MISC(DataType);
 
 struct StageIOData
 {
-    std::string           name;
-    DataType              type;
-    uint32_t              location;
-    uint32_t              offset;
-    uint32_t              size;
-    spirv_cross::SPIRType format;
+    std::string name;
+    DataType     type;
+    uint32_t     location;
+    uint32_t     offset;
+    uint32_t     size;
+    uint32_t     vecsize  = 0;  // from SPIRType
+    uint32_t     basetype = 0;  // from SPIRType
 };
 
 struct UniformBufferMember
@@ -202,16 +203,83 @@ struct GLSLProcessor : public IShaderProcessor
 };
 
 
+// ============================================================
+// SlangProcessor: compiles .slang source files to SPIR-V via
+// the Slang runtime API, and reflects shader resources using
+// SPIRV-Cross (same as GLSLProcessor).
+// ============================================================
+struct SlangProcessor : public IShaderProcessor
+{
+    friend class ShaderProcessorFactory;
+
+  public:
+    std::optional<stage2spirv_t>      process(const ShaderDesc& ci) override;
+    ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) override;
+
+  private:
+    // Compile a single .slang source file + entry point to SPIR-V.
+    // `source`    – full source text (read from VFS)
+    // `filePath`  – path used for error messages and #include resolution
+    // `entryName` – entry point function name (e.g. "vertMain")
+    // `stage`     – shader stage
+    // `defines`   – preprocessor macro definitions
+    // `outSpv`    – output SPIR-V words
+    bool compileToSpv(std::string_view source,
+                      std::string_view filePath,
+                      std::string_view entryName,
+                      EShaderStage::T  stage,
+                      const std::vector<std::string>& defines,
+                      std::vector<ir_t>&              outSpv);
+};
+
+
 struct ShaderStorage
 {
     std::shared_ptr<IShaderProcessor>                                _processor;
+    std::shared_ptr<IShaderProcessor>                                _slangProcessor; // optional, for .slang files
     std::unordered_map<std::string, IShaderProcessor::stage2spirv_t> _shaderCache;
 
     ShaderStorage(std::shared_ptr<IShaderProcessor> processor)
         : _processor(std::move(processor)) {}
 
+    /// Attach an optional Slang processor.  When set, any ShaderDesc whose
+    /// shaderName ends with ".slang" (or whose stageFiles all end with ".slang")
+    /// will be routed to this processor instead of the default one.
+    void setSlangProcessor(std::shared_ptr<IShaderProcessor> slangProc)
+    {
+        _slangProcessor = std::move(slangProc);
+    }
 
     [[nodiscard]] std::shared_ptr<IShaderProcessor> getProcessor() const { return _processor; }
+
+    /// Select the appropriate processor for a given ShaderDesc.
+    [[nodiscard]] std::shared_ptr<IShaderProcessor> selectProcessor(const ShaderDesc& ci) const
+    {
+        if (_slangProcessor)
+        {
+            // SingleShader mode: check shaderName extension
+            if (ci.sourceMode == ShaderDesc::ESourceMode::SingleShader &&
+                !ci.shaderName.empty())
+            {
+                auto name = ci.shaderName;
+                if (!name.ends_with(".slang"))
+                    name += ".slang"; // mimic GLSLProcessor's ".glsl" append logic
+                // Only route to Slang if the original name already had .slang
+                if (ci.shaderName.ends_with(".slang"))
+                    return _slangProcessor;
+            }
+            // StageFiles mode: route to Slang if any stage file ends with .slang
+            if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
+            {
+                for (const auto& sf : ci.stageFiles)
+                {
+                    if (sf.file.ends_with(".slang"))
+                        return _slangProcessor;
+                }
+            }
+        }
+        return _processor;
+    }
 
     [[nodiscard]] const IShaderProcessor::stage2spirv_t* getCache(const std::string& key) const
     {
@@ -237,19 +305,8 @@ struct ShaderStorage
         const auto cacheKey = ci.cacheKey();
         YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
 
-        // TODO: cache it
-        // auto it = _shaderCache.find(ci.shaderName);
-        // if (it != _shaderCache.end()) {
-        //     YA_CORE_INFO("Shader already in cache: {}", ci.shaderName);
-        //     if (!ci.bDirty) {
-        //         return &it->second;
-        //     }
-        //     YA_CORE_INFO("Shader is dirty, reloading: {}", ci.shaderName);
-        //     _shaderCache.erase(it);
-        // }
-
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", cacheKey).c_str());
-        auto opt = getProcessor()->process(ci);
+        auto opt = selectProcessor(ci)->process(ci);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
@@ -263,7 +320,7 @@ struct ShaderStorage
         YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
 
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", cacheKey).c_str());
-        auto opt = getProcessor()->process(ci);
+        auto opt = selectProcessor(ci)->process(ci);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
@@ -280,6 +337,7 @@ class ShaderProcessorFactory
     {
         GLSL,
         HLSL,
+        Slang,
     } processorType;
 
     std::string cachedStoragePath;
@@ -308,11 +366,14 @@ class ShaderProcessorFactory
     template <typename T>
     std::shared_ptr<T> FactoryNew()
     {
-        std::shared_ptr<T> processor;
+        std::shared_ptr<IShaderProcessor> processor;
 
         switch (processorType) {
         case GLSL:
             processor = std::make_shared<GLSLProcessor>();
+            break;
+        case Slang:
+            processor = std::make_shared<SlangProcessor>();
             break;
         case HLSL:
             throw std::runtime_error("HLSL not supported yet");
@@ -322,7 +383,7 @@ class ShaderProcessorFactory
         processor->shaderStoragePath       = shaderStoragePath;
         processor->intermediateStoragePath = cachedStoragePath;
 
-        return processor;
+        return std::dynamic_pointer_cast<T>(processor);
     }
 };
 

@@ -333,7 +333,7 @@ void VulkanPipeline::createPipelineInternal()
             vertexAttributeDescriptions.push_back({
                 .location = input.location,
                 .binding  = 0,
-                .format   = spirvType2VulkanFormat(input.format),
+                .format   = spirvType2VulkanFormat(input),
                 .offset   = input.offset,
             });
         }

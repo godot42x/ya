@@ -7,10 +7,14 @@
 
 #include <glm/glm.hpp>
 
-
+// Single source of truth: MAX_POINT_LIGHTS is defined in PhongLit.slang,
+// auto-generated into PhongLit.slang.h by slang_gen_header.py.
+#include "PhongLit.slang.h"
 
 namespace ya
 {
+
+using slang_types::MAX_POINT_LIGHTS;
 
 // enum bit flags support
 template <typename T>
@@ -1070,8 +1074,8 @@ using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 
 
 
-// temp
-static inline constexpr int MAX_POINT_LIGHTS = 4;
+// MAX_POINT_LIGHTS is now sourced from PhongLit.slang via ya::slang_types::MAX_POINT_LIGHTS
+// (see #include above and `using` declaration at the top of this namespace)
 
 /**
  * @brief Frame context containing per-frame camera data

@@ -28,3 +28,6 @@ build*
 
 Engine/Saved/Profiling/**
 Engine/Saved/RenderDoc/**
+
+# 暂时屏蔽，后续采用 link 的方式来集成 skill 到一个地方
+.codebuddy 

@@ -1,0 +1,1 @@
+includes("./ShaderCompiler/xmake.lua")

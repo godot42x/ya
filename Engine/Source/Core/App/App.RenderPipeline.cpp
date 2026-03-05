@@ -23,6 +23,18 @@ void App::tickRenderPipeline(float dt)
     YA_PROFILE_FUNCTION()
     auto render = getRender();
 
+
+    if (_windowSize.x <= 0 || _windowSize.y <= 0) {
+        YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
+        return;
+    }
+
+    // BUG: crash on resizing while renderdoc open
+    //  How to fix it?
+    if (_renderDocCapture) {
+        _renderDocCapture->onFrameBegin();
+    }
+
     // Process pending viewport resize before rendering
     if (_editorLayer) {
         Rect2D pendingRect;
@@ -31,14 +43,10 @@ void App::tickRenderPipeline(float dt)
         }
     }
 
-    if (_windowSize.x <= 0 || _windowSize.y <= 0) {
-        YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
-        return;
-    }
+    // this can avoid bunch black mosaic when resizing
+    // remove this if swapchain size == every rt's size
+    _render->waitIdle();
 
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameBegin();
-    }
 
     // ===== Get swapchain image index =====
     int32_t imageIndex = -1;

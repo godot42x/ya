@@ -38,6 +38,8 @@ void App::onSceneViewportResized(Rect2D rect)
             .isDepth = false,
         });
         // }
+        // avoid race condition
+        _render->waitIdle();
     }
 }
 

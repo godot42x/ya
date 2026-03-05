@@ -79,7 +79,7 @@ struct AppDesc
     bool        fullscreen = false;
     std::string defaultScenePath;
 
-    bool        bEnableRenderDoc          = true;
+    bool        bEnableRenderDoc          = false;
     std::string renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
     std::string renderDocCaptureOutputDir = "Engine/Saved/RenderDoc";
 

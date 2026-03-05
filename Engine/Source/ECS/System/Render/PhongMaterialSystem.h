@@ -9,6 +9,7 @@
 #include "Render/RenderDefines.h"
 #include <cstddef>
 
+#include "PhongLit.slang.h"
 
 
 struct VulkanPipelineLayout;
@@ -32,51 +33,52 @@ struct PhongMaterialSystem : public IMaterialSystem
     using material_param_t = PhongMaterial::ParamUBO;
 
     YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
-    struct FrameUBO
-    {
-        glm::mat4 projection{1.f};
-        glm::mat4 view{1.f};
-        alignas(8) glm::ivec2 resolution;
-        alignas(4) uint32_t frameIndex = 0;
-        alignas(4) float time;
-        alignas(16) glm::vec3 cameraPos; // 相机世界空间位置
-    };
+    // struct FrameUBO
+    // {
+    //     glm::mat4 projection{1.f};
+    //     glm::mat4 view{1.f};
+    //     alignas(8) glm::ivec2 resolution;
+    //     alignas(4) uint32_t frameIndex = 0;
+    //     alignas(4) float time;
+    //     alignas(16) glm::vec3 cameraPos; // 相机世界空间位置
+    // };
 
-    struct alignas(16) DirectionalLightData
-    {
-        alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
-        alignas(16) glm::vec3 ambient   = glm::vec3(10 / 256.0);
-        alignas(16) glm::vec3 diffuse   = glm::vec3(30 / 256.0);
-        alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
-        alignas(16) glm::mat4 directionalLightMatrix{1.0f}; // directional shadow matrix
-    };
+    using FrameUBO = slang_types::FrameData;
 
-    void __dummy()
-    {
-        static_assert(offsetof(DirectionalLightData, directionalLightMatrix) == 64,
-                      "DirectionalLightData::directionalLightMatrix must match GLSL std140 offset (64)");
-    }
+    // struct alignas(16) DirectionalLightData
+    // {
+    //     alignas(16) glm::vec3 direction = glm::vec3(-0.5f, -1.0f, -0.3f);
+    //     alignas(16) glm::vec3 ambient   = glm::vec3(10 / 256.0);
+    //     alignas(16) glm::vec3 diffuse   = glm::vec3(30 / 256.0);
+    //     alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
+    //     alignas(16) glm::mat4 directionalLightMatrix{1.0f}; // directional shadow matrix
+    // };
+
+    using DirectionalLightData = slang_types::DirectionalLight;
 
 
-    struct alignas(16) PointLightData
-    {
-        float type = 0;
-        // attenuation factors
-        float constant  = 1.0f;
-        float linear    = 0.09f;
-        float quadratic = 0.032f;
 
-        alignas(16) glm::vec3 position;
+    // struct alignas(16) PointLightData
+    // {
+    //     float type = 0;
+    //     // attenuation factors
+    //     float constant  = 1.0f;
+    //     float linear    = 0.09f;
+    //     float quadratic = 0.032f;
 
-        alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
-        alignas(16) glm::vec3 diffuse  = glm::vec3(0.5f);
-        alignas(16) glm::vec3 specular = glm::vec3(1.0f);
+    //     alignas(16) glm::vec3 position;
 
-        // spot light
-        alignas(16) glm::vec3 spotDir;
-        float innerCutOff;
-        float outerCutOff;
-    };
+    //     alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
+    //     alignas(16) glm::vec3 diffuse  = glm::vec3(0.5f);
+    //     alignas(16) glm::vec3 specular = glm::vec3(1.0f);
+
+    //     // spot light
+    //     alignas(16) glm::vec3 spotDir;
+    //     float innerCutOff;
+    //     float outerCutOff;
+    // };
+
+    using PointLightData = slang_types::PointLight;
 
 
 
@@ -84,26 +86,32 @@ struct PhongMaterialSystem : public IMaterialSystem
     // - vec3 自身占12字节，但按16字节对齐（下一个变量从16字节边界开始）
     // - scalar (float/uint) 按4字节对齐
     // - 数组元素按最大成员对齐（vec3数组元素按16字节）
-    struct alignas(16) LightUBO
-    {
-        alignas(16) DirectionalLightData dirLight;
-        alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
-        uint32_t numPointLights      = 0;
-        uint32_t hasDirectionalLight = 0; // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
+    // struct alignas(16) LightUBO
+    // {
+    //     alignas(16) DirectionalLightData dirLight;
+    //     alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
+    //     uint32_t numPointLights      = 0;
+    //     uint32_t hasDirectionalLight = 0; // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
 
-    } uLight;
+    // } uLight;
+
+    using LightUBO = slang_types::LightData;
+    LightUBO uLight;
 
     // TODO: move to one debug layer system
     //   another pipeline to draw debug effect to the output iamge(or another RT)
     //   redraw ech obj in world? use defer rendering to avoid redraw
-    struct DebugUBO
-    {
-        uint32_t bDebugNormal            = 0;
-        uint32_t bDebugDepth             = 0;
-        uint32_t bDebugUV                = 0;
-        uint32_t _pad0                   = 0;
-        alignas(16) glm::vec4 floatParam = glm::vec4(0.0f);
-    } uDebug;
+    // struct DebugUBO
+    // {
+    //     uint32_t bDebugNormal            = 0;
+    //     uint32_t bDebugDepth             = 0;
+    //     uint32_t bDebugUV                = 0;
+    //     uint32_t _pad0                   = 0;
+    //     alignas(16) glm::vec4 floatParam = glm::vec4(0.0f);
+    // } uDebug;
+
+    using DebugUBO = slang_types::DebugData;
+    DebugUBO uDebug;
 
     struct ModelPushConstant
     {

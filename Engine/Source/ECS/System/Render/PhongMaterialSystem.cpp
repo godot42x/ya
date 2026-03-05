@@ -74,7 +74,7 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
-            .shaderName        = "PhongLit/PhongLit.glsl",
+            .shaderName        = "PhongLit.slang",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -193,6 +193,7 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
 
     std::vector<WriteDescriptorSet> writes;
     for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
+
         _frameUBOs[i] = IBuffer::create(
             render,
             ya::BufferCreateInfo{
@@ -226,6 +227,9 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
     render->getDescriptorHelper()->updateDescriptorSets(writes, {});
     render->waitIdle();
     // where to create pipeline? -> on frame begin -> bDirty
+    uDebug.bDebugDepth  = 0;
+    uDebug.bDebugNormal = 0;
+    uDebug.bDebugUV     = 0;
 }
 
 void PhongMaterialSystem::onDestroy()
@@ -251,17 +255,17 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
     for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
         const auto& pl        = ctx->pointLights[i];
         uLight.pointLights[i] = PointLightData{
-            .type           = pl.type,
-            .constant       = pl.constant,
-            .linear         = pl.linear,
-            .quadratic      = pl.quadratic,
-            .position       = pl.position,
-            .ambient        = pl.ambient,
-            .diffuse        = pl.diffuse,
-            .specular       = pl.specular,
-            .spotDir        = pl.spotDir,
-            .innerCutOff    = pl.innerCutOff,
-            .outerCutOff    = pl.outerCutOff,
+            .type        = pl.type,
+            .constant    = pl.constant,
+            .linear      = pl.linear,
+            .quadratic   = pl.quadratic,
+            .position    = pl.position,
+            .ambient     = pl.ambient,
+            .diffuse     = pl.diffuse,
+            .specular    = pl.specular,
+            .spotDir     = pl.spotDir,
+            .innerCutOff = pl.innerCutOff,
+            .outerCutOff = pl.outerCutOff,
         };
     }
     // This prevents descriptor set invalidation during the render loop
@@ -508,17 +512,13 @@ void PhongMaterialSystem::updateFrameDS(const FrameContext* ctx)
     auto render = getRender();
 
     // Use passed camera context
-    FrameUBO uFrame{
-        .projection = ctx->projection,
-        .view       = ctx->view,
-        .resolution = {
-            ctx->extent.width,
-            ctx->extent.height,
-        },
-        .frameIndex = app->getFrameIndex(),
-        .time       = (float)app->getElapsedTimeMS() / 1000.0f,
-        .cameraPos  = ctx->cameraPos,
-    };
+    FrameUBO uFrame{};
+    uFrame.projMat    = ctx->projection;
+    uFrame.viewMat    = ctx->view;
+    uFrame.resolution = glm::ivec2(ctx->extent.width, ctx->extent.height);
+    uFrame.frameIdx   = app->getFrameIndex();
+    uFrame.time       = (float)app->getElapsedTimeMS() / 1000.0f;
+    uFrame.cameraPos  = ctx->cameraPos;
 
     // TODO: handle the rotation  of radians in shader
     // auto light               = uLight;

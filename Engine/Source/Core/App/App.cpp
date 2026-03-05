@@ -250,6 +250,14 @@ void App::init(AppDesc ci)
         std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
     };
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
+
+    // Register Slang processor for .slang shader files (hot-reload supported)
+    auto slangProcessor = ShaderProcessorFactory()
+                              .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
+                              .withShaderStoragePath("Engine/Shader/Slang")
+                              .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
+                              .FactoryNew<SlangProcessor>();
+    _shaderStorage->setSlangProcessor(slangProcessor);
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
@@ -260,6 +268,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowDepthGenerate.glsl", .defines = commonDefines});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl", .defines = commonDefines});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang", .defines = commonDefines});
 
 
     // MARK: Render/Hook
