@@ -253,7 +253,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});

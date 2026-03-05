@@ -178,6 +178,8 @@ void App::tickRenderPipeline(float dt)
             _shadowMappingSystem->tick(cmdBuf.get(), dt, &ctx);
         }
         cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
+        auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
+        cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
     }
 
 

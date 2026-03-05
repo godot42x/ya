@@ -705,11 +705,14 @@ void EditorLayer::debugWindow()
     };
     Text("Shadow Mapping(Depth Buffer)");
     if (App::get()->bShadowMapping) {
-        auto shadowMapTexture = App::get()->_depthRT->getCurFrameBuffer()->getDepthTexture();
-        ImGuiHelper::Image(shadowMapTexture->getImageView(),
+        // auto shadowMapTexture = App::get()->_depthRT->getCurFrameBuffer()->getDepthTexture();
+        auto depthExtent        = App::get()->_depthRT->getExtent();
+        auto directionalDepthIV = App::get()->_shadowDirectionalDepthIV;
+        ImGuiHelper::Image(directionalDepthIV.get(),
                            TextureLibrary::get().getLinearSampler(),
                            "Shadow Map",
-                           constraintSize(shadowMapTexture->getExtent()));
+                           constraintSize(depthExtent));
+        // MAX_POINT_LIGHTS cubemap, how to visualize? Show one face or all 6 faces in a grid?
     }
 
 

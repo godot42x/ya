@@ -28,6 +28,7 @@ void main (){
     vPos = pos.xyz;
     vTexcoord = aTexcoord;
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
+    vFragLightSpacePos = vec4(0.0);
     
     //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性。
     mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
@@ -37,7 +38,7 @@ void main (){
     // if mat is a ortho, vFragLightSpacePos will in [-1,1], otherwise need perspective divide in frag shader
     if(uLit.hasDirectionalLight == 1) 
     {
-        vFragLightSpacePos = uLit.dirLight.viewProjection * pos;
+        vFragLightSpacePos = uLit.dirLight.directionalLightMatrix * pos;
     }
     
 }
@@ -183,7 +184,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 layout(set =4, binding = 0) uniform sampler2D uDirectionalLightShadowMap;
-layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
+// layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
 
 
 // MARK: frag i/o, if have geometry shader, from geometry shader's out
@@ -193,6 +194,9 @@ layout(location = 2) in vec3 vNormal;
 layout(location = 3) in vec4 gFragLightSpacePos;
 
 layout(location = 0) out vec4 fColor;
+
+bool bDebug = false;
+vec4 debugColor = vec4(1,0,0,1);
 
 float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
 {
@@ -222,15 +226,21 @@ float calculateDirectionalShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDi
 {
     // perform perspective divide, could be ignored if using orthographic projection for shadow map
     float w = fragLightSpacePos.w;
+    if (abs(w) < 1e-6) {
+        return 0.0;
+    }
     vec3 projCoords =  fragLightSpacePos.xyz / w;
 
     vec2 uv = projCoords.xy * 0.5 + 0.5;
     float curDepth = projCoords.z;
 
     // tolerate both ZO [0,1] and NO [-1,1] depth conventions
-    // if (curDepth < 0.0 || curDepth > 1.0) {
-    //     curDepth = curDepth * 0.5 + 0.5;
-    // }
+    if (curDepth < 0.0 || curDepth > 1.0) {
+        float curDepth01 = curDepth * 0.5 + 0.5;
+        if (curDepth01 >= 0.0 && curDepth01 <= 1.0) {
+            curDepth = curDepth01;
+        }
+    }
 
     if (curDepth <= 0.0 || curDepth >= 1.0) {
         return 0.0;
@@ -354,10 +364,7 @@ void main ()
     vec3 viewDir = normalize(uFrame.cameraPos - vPos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
 
-    // vec4 debugColor = vec4(uLit.pointLights[0].type, 0, 0, 1);
-    // if (drawDebugFrag(vec2(100,100), vec2(30,30), debugColor)){
-    //     return;
-    // }
+  
     
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
@@ -452,4 +459,8 @@ void main ()
     float a = 1.0f;
     
     fColor = vec4(lighting, a);
+
+    if(bDebug){
+        drawDebugFrag(vec2(100,100), vec2(30,30), debugColor);
+    }
 }

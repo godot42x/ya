@@ -22,6 +22,7 @@ void main()
 layout(triangles) in;
 layout(triangle_strip, max_vertices = (MAX_POINT_LIGHTS * 6 +1) *3) out;
 
+// layout (location = 0) out float gLinearDepth; // for directional light shadow depth
 
 layout (set =0, binding = 0) uniform FrameData{
     mat4 directionalLightMatrix;
@@ -32,14 +33,15 @@ layout (set =0, binding = 0) uniform FrameData{
 
 void main()
 {
-    vec4 worldPos = gl_in[0].gl_Position;
 
     // directional light shadow depth
-    if (uFrame.hasDirectionalLight != 0) {
+    if (uFrame.hasDirectionalLight == 1) {
         gl_Layer = 0;
-        for (int i = 0; i < 3; ++i)
+        for (int vertIdx = 0; vertIdx < 3; ++vertIdx)
         {
+            vec4 worldPos = gl_in[vertIdx].gl_Position;
             gl_Position = uFrame.directionalLightMatrix * worldPos;
+            // gLinearDepth = gl_Position.z / gl_Position.w; // store linear depth in [0,1] range
             EmitVertex();
         }
         EndPrimitive();
@@ -53,7 +55,9 @@ void main()
             gl_Layer = int(1 + lightIdx * 6 + faceIdx);
             for (uint vertIdx = 0; vertIdx < 3; ++vertIdx)
             {
+                vec4 worldPos = gl_in[vertIdx].gl_Position;
                 gl_Position = uFrame.pointLightMatrices[lightIdx * 6 + faceIdx] * worldPos;
+                // gLinearDepth = gl_Position.z / gl_Position.w; // store linear depth in [0,1] range
                 EmitVertex();
             }
             EndPrimitive();
@@ -67,6 +71,6 @@ void main()
 
 void main()
 {
-    // do nothing
+    // do nothing, driver already do this before fragment shader:
     // gl_FragDepth = gl_FragCoord.z;
 }

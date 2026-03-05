@@ -74,7 +74,7 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Test/PhongLit.glsl",
+            .shaderName        = "PhongLit/PhongLit.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -240,11 +240,11 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
     // TODO: make FrameContext as a UBO to avoid this copy: ctx -> frameData -> frameUBO -> GPU
     uLight.hasDirectionalLight = ctx->bHasDirectionalLight;
     if (ctx->bHasDirectionalLight) {
-        uLight.dirLight.direction      = ctx->directionalLight.direction;
-        uLight.dirLight.ambient        = ctx->directionalLight.ambient;
-        uLight.dirLight.diffuse        = ctx->directionalLight.diffuse;
-        uLight.dirLight.specular       = ctx->directionalLight.specular;
-        uLight.dirLight.viewProjection = ctx->directionalLight.viewProjection;
+        uLight.dirLight.direction              = ctx->directionalLight.direction;
+        uLight.dirLight.ambient                = ctx->directionalLight.ambient;
+        uLight.dirLight.diffuse                = ctx->directionalLight.diffuse;
+        uLight.dirLight.specular               = ctx->directionalLight.specular;
+        uLight.dirLight.directionalLightMatrix = ctx->directionalLight.viewProjection;
     }
 
     uLight.numPointLights = ctx->numPointLights;
@@ -259,7 +259,6 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
             .ambient        = pl.ambient,
             .diffuse        = pl.diffuse,
             .specular       = pl.specular,
-            .viewProjection = pl.viewProjection,
             .spotDir        = pl.spotDir,
             .innerCutOff    = pl.innerCutOff,
             .outerCutOff    = pl.outerCutOff,
@@ -296,10 +295,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
     }
     // auto view2 = scene->getRegistry().view<UIComponent,TransformComponent>();
 
-    {
-        YA_PROFILE_SCOPE("PhongMaterial::BindPipeline");
-        cmdBuf->bindPipeline(_pipeline.get());
-    }
+    cmdBuf->bindPipeline(_pipeline.get());
 
     // Get viewport extent from App (since we no longer have direct RT access)
     uint32_t width  = ctx->extent.width;

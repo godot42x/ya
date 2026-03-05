@@ -48,8 +48,14 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 ambient   = glm::vec3(10 / 256.0);
         alignas(16) glm::vec3 diffuse   = glm::vec3(30 / 256.0);
         alignas(16) glm::vec3 specular  = glm::vec3(31 / 256.0);
-        glm::mat4 viewProjection{1.0f}; // 用于阴影映射
+        alignas(16) glm::mat4 directionalLightMatrix{1.0f}; // directional shadow matrix
     };
+
+    void __dummy()
+    {
+        static_assert(offsetof(DirectionalLightData, directionalLightMatrix) == 64,
+                      "DirectionalLightData::directionalLightMatrix must match GLSL std140 offset (64)");
+    }
 
 
     struct alignas(16) PointLightData
@@ -65,8 +71,6 @@ struct PhongMaterialSystem : public IMaterialSystem
         alignas(16) glm::vec3 ambient  = glm::vec3(0.1f);
         alignas(16) glm::vec3 diffuse  = glm::vec3(0.5f);
         alignas(16) glm::vec3 specular = glm::vec3(1.0f);
-
-        glm::mat4 viewProjection{1.0f}; // 用于阴影映射
 
         // spot light
         alignas(16) glm::vec3 spotDir;
@@ -84,8 +88,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     {
         alignas(16) DirectionalLightData dirLight;
         alignas(16) PointLightData pointLights[MAX_POINT_LIGHTS];
-        uint32_t numPointLights = 0;
-        uint32_t  hasDirectionalLight = 0;      // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
+        uint32_t numPointLights      = 0;
+        uint32_t hasDirectionalLight = 0; // 是否有方向光  TODO: move into the DirectionalLightData, and use it in shader to determine whether to apply directional lighting or not
 
     } uLight;
 

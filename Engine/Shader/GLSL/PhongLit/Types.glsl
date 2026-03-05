@@ -3,7 +3,7 @@ struct DirectionalLight {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
-    mat4 viewProjection; // 用于阴影映射
+    mat4 directionalLightMatrix;
 };
 
 struct PointLight {
@@ -18,8 +18,6 @@ struct PointLight {
     vec3  ambient;
     vec3  diffuse;
     vec3  specular;
-
-    mat4 viewProjection; // 用于阴影映射
 
     // spot light
     vec3  spotDir;
@@ -49,8 +47,8 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 layout(set =0, binding =1, std140) uniform LightUBO {
     DirectionalLight dirLight;
-    uint numPointLights;   // collect from scene
     PointLight pointLights[MAX_POINT_LIGHTS];
+    uint numPointLights;   // collect from scene
     uint hasDirectionalLight; // TODO: use macro to cut branch
 } uLit;
 
