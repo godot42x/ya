@@ -289,6 +289,28 @@ void VulkanSwapChain::handleCIChanged(SwapchainCreateInfo const &newCI, bool bIm
     onRecreate.broadcast(old, now, bImageRecreated);
 }
 
+void VulkanSwapChain::markRecreateDirty(const SwapchainCreateInfo &ci)
+{
+    _pendingCI        = ci;
+    _bSwapchainDirty  = true;
+}
+
+bool VulkanSwapChain::flushDirtyRecreateAtFrameBegin()
+{
+    if (!_bSwapchainDirty) {
+        return true;
+    }
+
+    const SwapchainCreateInfo pendingCI = _pendingCI;
+    if (!recreate(pendingCI)) {
+        return false;
+    }
+
+    const bool bApplied = (_ci.presentMode == pendingCI.presentMode) && (_ci.bVsync == pendingCI.bVsync);
+    _bSwapchainDirty    = !bApplied;
+    return true;
+}
+
 bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
 {
     YA_CORE_TRACE("======================================================");

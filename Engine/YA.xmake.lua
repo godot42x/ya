@@ -11,7 +11,7 @@ add_requires(
     , "glm"
     , "stb"
     , "cxxopts"
-    , "lua"
+    , "lua v5.4.8"
     , "freetype"
     , "nlohmann_json v3.12.0"
     , "sol2"

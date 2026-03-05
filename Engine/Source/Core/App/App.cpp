@@ -578,16 +578,17 @@ void App::init(AppDesc ci)
                     .height = now.extent.height,
                 };
 
-                if (bImageRecreated) {
+                const bool bExtentChanged = (now.extent.width != old.extent.width ||
+                                             now.extent.height != old.extent.height);
+                const bool bPresentModeChanged = (old.presentMode != now.presentMode);
+
+                if (bExtentChanged) {
                     // _viewportRT->setExtent(newExtent); // see App::onSceneViewportResized
                     _screenRT->setExtent(newExtent);
                 }
-                if ((now.extent.width != old.extent.width ||
-                     now.extent.height != old.extent.height ||
-                     old.presentMode != now.presentMode))
-                {
-                    // _viewportRT->setExtent(newExtent); // see App::onSceneViewportResized
-                    _screenRT->setExtent(newExtent);
+
+                if (bImageRecreated || bPresentModeChanged) {
+                    _screenRT->recreate();
                 }
             });
     }
@@ -1245,9 +1246,7 @@ void App::onRenderGUI(float dt)
         auto* swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
-            taskManager.registerFrameTask([swapchain, bVsync]() {
-                swapchain->setVsync(bVsync);
-            });
+            swapchain->setVsync(bVsync);
         }
 
         EPresentMode::T presentMode  = swapchain->getPresentMode();

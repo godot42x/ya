@@ -220,9 +220,9 @@ struct App
 
     bool bMSAA = false;
 
-    bool                  bShadowMapping     = true;
-    stdptr<IRenderTarget> _depthRT           = nullptr;
-    stdptr<IRenderTarget> _pointLightDepthRT = nullptr;
+    bool                  bShadowMapping            = true;
+    stdptr<IRenderTarget> _depthRT                  = nullptr;
+    stdptr<IRenderTarget> _pointLightDepthRT        = nullptr;
     stdptr<IImageView>    _shadowDirectionalDepthIV = nullptr;
     stdptr<IImageView>    _shadowPointDepthIV       = nullptr;
 

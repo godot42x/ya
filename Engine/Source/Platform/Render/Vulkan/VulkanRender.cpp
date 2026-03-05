@@ -873,6 +873,17 @@ bool VulkanRender::begin(int32_t *outImageIndex)
 
     auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 
+    if (!vkSwapChain->flushDirtyRecreateAtFrameBegin()) {
+        YA_CORE_ERROR("Failed to apply pending swapchain recreate at frame begin");
+        return false;
+    }
+
+    if (vkSwapChain->getImageSize() == 0) {
+        YA_CORE_WARN("Swapchain has no images (window minimized), skipping frame");
+        *outImageIndex = -1;
+        return true;
+    }
+
 
     uint32_t imageIndex = 0;
     VkResult ret        = vkSwapChain->acquireNextImage(

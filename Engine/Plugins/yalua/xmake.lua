@@ -1,4 +1,4 @@
-add_requires("lua")
+add_requires("lua v5.4.8")
 
 includes("./yalua_test/")
 

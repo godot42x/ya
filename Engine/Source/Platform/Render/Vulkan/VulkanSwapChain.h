@@ -45,6 +45,8 @@ struct VulkanSwapChain : public ISwapchain
     bool             bVsync             = true;
 
     SwapchainCreateInfo _ci;
+    SwapchainCreateInfo _pendingCI;
+    bool                _bSwapchainDirty = false;
 
     uint32_t _curImageIndex = 0;
 
@@ -83,6 +85,7 @@ struct VulkanSwapChain : public ISwapchain
     bool createSwapchainAndImages(const VkSwapchainCreateInfoKHR &vkCI, bool &bImageRecreated);
     void updateMemberVariables(const SwapchainCreateInfo &ci);
     void handleCIChanged(SwapchainCreateInfo const &newCI, bool bImageRecreated);
+    void markRecreateDirty(const SwapchainCreateInfo &ci);
 
   public:
 
@@ -102,6 +105,7 @@ struct VulkanSwapChain : public ISwapchain
     void *getHandle() const override { return static_cast<void *>(m_swapChain); }
 
     bool     recreate(const ya::SwapchainCreateInfo &ci) override;
+    bool     flushDirtyRecreateAtFrameBegin();
     Extent2D getExtent() const override
     {
         return {
@@ -122,7 +126,7 @@ struct VulkanSwapChain : public ISwapchain
         auto newCI        = _ci;
         newCI.bVsync      = bVsync;
         newCI.presentMode = bVsync ? EPresentMode::FIFO : EPresentMode::Immediate;
-        recreate(newCI);
+        markRecreateDirty(newCI);
     }
 
     void setPresentMode(EPresentMode::T presentMode) override
@@ -130,7 +134,8 @@ struct VulkanSwapChain : public ISwapchain
         auto ci        = _ci;
         ci.presentMode = presentMode;
         ci.bVsync      = (presentMode == EPresentMode::FIFO);
-        recreate(ci);
+        bVsync         = ci.bVsync;
+        markRecreateDirty(ci);
     }
 
     EPresentMode::T getPresentMode() const override;

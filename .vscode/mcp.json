@@ -1,0 +1,12 @@
+{
+	"servers": {
+		// "blender-mcp": {
+		// 	"command": "uvx",
+		// 	"args": [
+		// 		"blender-mcp"
+		// 	],
+		// 	"env": {}
+		// }
+	},
+	"inputs": []
+}
