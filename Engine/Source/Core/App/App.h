@@ -79,9 +79,10 @@ struct AppDesc
     bool        fullscreen = false;
     std::string defaultScenePath;
 
-    bool        bEnableRenderDoc          = false;
-    std::string renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
-    std::string renderDocCaptureOutputDir = "Engine/Saved/RenderDoc";
+    bool                     bEnableRenderDoc          = false;
+    std::string              renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
+    std::string              renderDocCaptureOutputDir = "Engine/Saved/RenderDoc";
+    std::vector<std::string> disabledGraphicsCards; // e.g. ["NVIDIA GeForce RTX 3060"]
 
 
 
@@ -288,7 +289,7 @@ struct App
     template <typename T>
     [[nodiscard]] T* getRender() { return static_cast<T*>(getRender()); }
 
-    [[nodiscard]] const AppDesc&                 getCI() const { return _ci; }
+    [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
 
     // Getters for subsystems

@@ -156,7 +156,7 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
                     .storeOp        = EAttachmentStoreOp::Store,
                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::ShaderReadOnlyOptimal,
+                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
                     .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
@@ -167,8 +167,8 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
                 .samples        = ESampleCount::Sample_1,
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                .stencilStoreOp = EAttachmentStoreOp::Store,
                 .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
                 .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
                 .usage          = EImageUsage::DepthStencilAttachment,
@@ -188,7 +188,7 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
             .storeOp        = EAttachmentStoreOp::Store,
             .stencilLoadOp  = EAttachmentLoadOp::DontCare,
             .stencilStoreOp = EAttachmentStoreOp::DontCare,
-            .initialLayout  = EImageLayout::Undefined,
+            .initialLayout  = EImageLayout::ColorAttachmentOptimal,
             .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
             .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         };
@@ -231,12 +231,27 @@ void App::init(AppDesc ci)
             ClassRegistry::instance().executeAllPostStaticInitializers();
             profiling::StaticInitProfiler::recordEnd();
         }
-        Logger::init();
         VirtualFileSystem::init();
+        // TODO: move to config system
+        {
+            std::string s;
+            if (VFS::get()->readFileToString("Engine/Config/Engine.json", s)) {
+                nlohmann::json j = nlohmann::json::parse(s);
+                if (j.contains("disableGraphicsCards")) {
+                    auto disabledCards = j["disableGraphicsCards"];
+                    if (disabledCards.is_array()) {
+                        std::vector<std::string> disabledCardsVec = disabledCards.get<std::vector<std::string>>();
+                        _ci.disabledGraphicsCards                 = std::move(disabledCardsVec);
+                    }
+                }
+            }
+        }
+        Logger::init();
         FileWatcher::init();
         // 反射系统已通过静态初始化自动注册（YA_REFLECT 宏）
         MaterialFactory::init();
     }
+
 
     currentRenderAPI = ERenderAPI::Vulkan;
 
@@ -578,7 +593,7 @@ void App::init(AppDesc ci)
                     .height = now.extent.height,
                 };
 
-                const bool bExtentChanged = (now.extent.width != old.extent.width ||
+                const bool bExtentChanged      = (now.extent.width != old.extent.width ||
                                              now.extent.height != old.extent.height);
                 const bool bPresentModeChanged = (old.presentMode != now.presentMode);
 
@@ -1139,6 +1154,11 @@ void App::tickLogic(float dt)
     inputManager.preUpdate();
     // Update Editor camera (FreeCamera)
     cameraController.update(camera, inputManager, dt);
+
+    auto        vkRender       = _render->as<VulkanRender>();
+    auto        windowProvider = vkRender->_windowProvider;
+    std::string title          = std::format("{}({})", _ci.title, vkRender->_selectedDeviceInfo.deviceName);
+    SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
 }
 
 // MARK: Render
