@@ -177,8 +177,9 @@ void App::tickRenderPipeline(float dt)
                 .pos    = {0, 0},
                 .extent = _depthRT->getExtent().toVec2(),
             },
-            .depthClearValue = ClearValue(1.0f, 0),
-            .renderTarget    = _depthRT.get(),
+            .colorClearValues = {},
+            .depthClearValue  = ClearValue(1.0f, 0),
+            .renderTarget     = _depthRT.get(),
         };
         cmdBuf->beginRendering(shadowMapRI);
         {
@@ -186,8 +187,6 @@ void App::tickRenderPipeline(float dt)
             _shadowMappingSystem->tick(cmdBuf.get(), dt, &ctx);
         }
         cmdBuf->endRendering(EndRenderingInfo{.renderTarget = _depthRT.get()});
-        auto depthTexture = _depthRT->getCurFrameBuffer()->getDepthTexture();
-        cmdBuf->transitionImageLayoutAuto(depthTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
     }
 
 

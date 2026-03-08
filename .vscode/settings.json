@@ -35,6 +35,7 @@
         "Lsizeiptr",
         "luavar",
         "makeShared",
+        "maxvertexcount",
         "MSAA",
         "nlohmann",
         "Octree",

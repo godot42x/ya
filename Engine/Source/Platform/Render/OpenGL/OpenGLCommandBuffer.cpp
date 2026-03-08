@@ -173,6 +173,18 @@ void OpenGLCommandBuffer::executeSetPolygonMode(EPolygonMode::T polygonMode)
     glPolygonMode(GL_FRONT_AND_BACK, glMode);
 }
 
+void OpenGLCommandBuffer::setDepthBias(float constantFactor, float clamp, float slopeFactor)
+{
+    // OpenGL uses glPolygonOffset for depth bias
+    if (constantFactor != 0.0f || slopeFactor != 0.0f) {
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(slopeFactor, constantFactor);
+    } else {
+        glDisable(GL_POLYGON_OFFSET_FILL);
+    }
+    (void)clamp;
+}
+
 void OpenGLCommandBuffer::executeBindDescriptorSets(
     IPipelineLayout                        *pipelineLayout,
     uint32_t                                firstSet,

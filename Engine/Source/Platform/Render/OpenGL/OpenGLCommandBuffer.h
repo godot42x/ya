@@ -98,6 +98,7 @@ class OpenGLCommandBuffer : public ICommandBuffer
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
     void setCullMode(ECullMode::T cullMode) override;
     void setPolygonMode(EPolygonMode::T polygonMode) override;
+    void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
     void bindDescriptorSets(
         IPipelineLayout                        *pipelineLayout,
         uint32_t                                firstSet,

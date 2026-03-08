@@ -53,6 +53,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
     void executeSetCullMode(ECullMode::T cullMode);
     void executeSetPolygonMode(EPolygonMode::T polygonMode);
+    void executeSetDepthBias(float constantFactor, float clamp, float slopeFactor);
 
     // === Rendering helpers ===
     void beginRenderingWithRenderPass(IRenderTarget* renderTarget, const RenderingInfo& info);
@@ -127,6 +128,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
     void setCullMode(ECullMode::T cullMode) override;
     void setPolygonMode(EPolygonMode::T polygonMode) override;
+    void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
     void bindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                             uint32_t                                firstSet,
                             const std::vector<DescriptorSetHandle>& descriptorSets,

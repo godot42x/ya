@@ -178,7 +178,7 @@ struct ShaderDesc
     };
 
     ESourceMode                          sourceMode = ESourceMode::SingleShader;
-    std::string                          shaderName;                // we use single glsl now
+    std::string                          shaderName; // we use single glsl now
     std::vector<StageFile>               stageFiles{};
     bool                                 bDeriveFromShader = false; // whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs{};
@@ -674,6 +674,7 @@ enum T
     Scissor,
     CullMode,
     PolygonMode,
+    DepthBias,
     Count
 };
 }
@@ -1013,7 +1014,7 @@ struct SamplerDesc
     bool                   compareEnable           = false;
     ECompareOp::T          compareOp               = ECompareOp::Always;
     float                  minLod                  = 0.0f;
-    float                  maxLod                  = 1.0f;
+    float                  maxLod                  = 0.0f; // VK_LOD_CLAMP_NONE: clamped by image view's levelCount, safe for single-mip RTs
     bool                   unnormalizedCoordinates = false;
 
     enum EBorderColor

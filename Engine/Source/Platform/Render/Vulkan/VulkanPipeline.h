@@ -130,6 +130,8 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     ECullMode::T getCullMode() const override { return _ci.rasterizationState.cullMode; }
     void setPolygonMode(EPolygonMode::T polygonMode) override;
     EPolygonMode::T getPolygonMode() const override { return _ci.rasterizationState.polygonMode; }
+    void setDepthBiasEnable(bool enable) override;
+    void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
 
     ::VkPipeline getVkHandle() const { return _pipeline; }
 

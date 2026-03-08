@@ -187,6 +187,23 @@ void VulkanPipeline::setPolygonMode(EPolygonMode::T polygonMode)
     markDirty();
 }
 
+void VulkanPipeline::setDepthBiasEnable(bool enable)
+{
+    if (_ci.rasterizationState.bDepthBiasEnable == enable) {
+        return;
+    }
+    _ci.rasterizationState.bDepthBiasEnable = enable;
+    markDirty();
+}
+
+void VulkanPipeline::setDepthBias(float constantFactor, float clamp, float slopeFactor)
+{
+    _ci.rasterizationState.depthBiasConstantFactor = constantFactor;
+    _ci.rasterizationState.depthBiasClamp          = clamp;
+    _ci.rasterizationState.depthBiasSlopeFactor    = slopeFactor;
+    markDirty();
+}
+
 void VulkanPipeline::renderGUI()
 {
     bool bManualReload = false;
@@ -203,6 +220,23 @@ void VulkanPipeline::renderGUI()
     int polygonMode = static_cast<int>(_ci.rasterizationState.polygonMode);
     if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
         setPolygonMode(static_cast<EPolygonMode::T>(polygonMode));
+    }
+
+    bool bDepthBiasEnable = _ci.rasterizationState.bDepthBiasEnable;
+    if (ImGui::Checkbox("Depth Bias Enable", &bDepthBiasEnable)) {
+        setDepthBiasEnable(bDepthBiasEnable);
+    }
+    if (_ci.rasterizationState.bDepthBiasEnable) {
+        float constantFactor = _ci.rasterizationState.depthBiasConstantFactor;
+        float clamp          = _ci.rasterizationState.depthBiasClamp;
+        float slopeFactor    = _ci.rasterizationState.depthBiasSlopeFactor;
+        bool  changed        = false;
+        changed |= ImGui::DragFloat("Depth Bias Constant", &constantFactor, 0.1f, -10.0f, 10.0f, "%.2f");
+        changed |= ImGui::DragFloat("Depth Bias Clamp",    &clamp,          0.001f, -1.0f, 1.0f, "%.4f");
+        changed |= ImGui::DragFloat("Depth Bias Slope",    &slopeFactor,    0.1f, -10.0f, 10.0f, "%.2f");
+        if (changed) {
+            setDepthBias(constantFactor, clamp, slopeFactor);
+        }
     }
 
 
@@ -494,6 +528,8 @@ void VulkanPipeline::createPipelineInternal()
                 return VK_DYNAMIC_STATE_CULL_MODE;
             case EPipelineDynamicFeature::PolygonMode:
                 return VK_DYNAMIC_STATE_POLYGON_MODE_EXT;
+            case EPipelineDynamicFeature::DepthBias:
+                return VK_DYNAMIC_STATE_DEPTH_BIAS;
             default:
                 return VK_DYNAMIC_STATE_MAX_ENUM; // Invalid, will be filtered out
             }

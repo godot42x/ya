@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Core/App/App.h"
 #include "VulkanUtils.h"
 
 
@@ -89,8 +90,8 @@ void VulkanRender::createInstance()
     std::vector<DeviceFeature> requestExtensions = _instanceExtensions;
     std::vector<DeviceFeature> requestLayers     = _instanceLayers;
 
-    const auto &required = onGetRequiredInstanceExtensions.executeIfBound();
-    for (const auto &ext : required) {
+    const auto& required = onGetRequiredInstanceExtensions.executeIfBound();
+    for (const auto& ext : required) {
         requestExtensions.push_back(ext);
     }
     if (m_EnableValidationLayers)
@@ -112,8 +113,8 @@ void VulkanRender::createInstance()
     std::vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-    std::vector<const char *> extensionNames;
-    std::vector<const char *> layerNames;
+    std::vector<const char*> extensionNames;
+    std::vector<const char*> layerNames;
 
     bool bSupported = isFeatureSupported(
         "Vulkan instance",
@@ -216,7 +217,9 @@ void VulkanRender::findPhysicalDevice()
         return score;
     };
 
-    for (const auto &device : devices) {
+    auto desc = App::get()->getDesc();
+
+    for (const auto& device : devices) {
         PhysicalDeviceCandidate candidate;
 
         candidate.device = device;
@@ -232,6 +235,19 @@ void VulkanRender::findPhysicalDevice()
                      VK_VERSION_MINOR(candidate.properties.apiVersion),
                      VK_VERSION_PATCH(candidate.properties.apiVersion));
 
+        bool bSkip = false;
+        for (const auto& disabledCard : desc.disabledGraphicsCards) {
+            if (std::string(candidate.properties.deviceName).find(disabledCard) != std::string::npos) {
+                YA_CORE_WARN("Skipping device {} because it matches disabled graphics card '{}'", candidate.properties.deviceName, disabledCard);
+                bSkip = true;
+                break;
+            }
+        }
+        if (bSkip) {
+            continue;
+        }
+
+
         candidate.score = getDeviceScore(device);
 
         uint32_t formatCount = 0;
@@ -239,7 +255,7 @@ void VulkanRender::findPhysicalDevice()
         if (formatCount > 0) {
             std::vector<VkSurfaceFormatKHR> formats(formatCount);
             VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(device, _surface, &formatCount, formats.data()));
-            for (const auto &format : formats) {
+            for (const auto& format : formats) {
                 if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                     candidate.score += 100;
                     break;
@@ -260,7 +276,7 @@ void VulkanRender::findPhysicalDevice()
         std::vector<QueueFamilyIndices> presentQueueFamilies;
 
         int32_t familyIndex = 0;
-        for (const auto &queueFamily : families) {
+        for (const auto& queueFamily : families) {
             if (queueFamily.queueCount == 0) {
                 ++familyIndex;
                 continue;
@@ -296,8 +312,8 @@ void VulkanRender::findPhysicalDevice()
 
 
         bool foundSeparate = false;
-        for (const auto &graphicsQueueFamily : graphicsQueueFamilies) {
-            for (const auto &presentQueueFamily : presentQueueFamilies) {
+        for (const auto& graphicsQueueFamily : graphicsQueueFamilies) {
+            for (const auto& presentQueueFamily : presentQueueFamilies) {
                 if (graphicsQueueFamily.queueFamilyIndex != presentQueueFamily.queueFamilyIndex) {
                     candidate.graphicsQueue = graphicsQueueFamily;
                     candidate.presentQueue  = presentQueueFamily;
@@ -317,7 +333,7 @@ void VulkanRender::findPhysicalDevice()
 
         _deviceCandidates.push_back(candidate);
     }
-    std::ranges::sort(_deviceCandidates, [](const PhysicalDeviceCandidate &a, const PhysicalDeviceCandidate &b) {
+    std::ranges::sort(_deviceCandidates, [](const PhysicalDeviceCandidate& a, const PhysicalDeviceCandidate& b) {
         return a.score > b.score;
     });
 
@@ -326,10 +342,11 @@ void VulkanRender::findPhysicalDevice()
         return;
     }
 
-    const auto &selected = _deviceCandidates.front();
-    m_PhysicalDevice     = selected.device;
-    _graphicsQueueFamily = selected.graphicsQueue;
-    _presentQueueFamily  = selected.presentQueue;
+    const auto& selected           = _deviceCandidates.front();
+    m_PhysicalDevice               = selected.device;
+    _graphicsQueueFamily           = selected.graphicsQueue;
+    _presentQueueFamily            = selected.presentQueue;
+    _selectedDeviceInfo.deviceName = selected.properties.deviceName;
 
     YA_CORE_INFO("Selected physical device: {}", (uintptr_t)m_PhysicalDevice);
     YA_CORE_INFO("Graphics queue idx: {} count: {}", _graphicsQueueFamily.queueFamilyIndex, _graphicsQueueFamily.queueCount);
@@ -356,7 +373,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return false;
     }
 
-    auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate &candidate) -> VkResult {
+    auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate& candidate) -> VkResult {
         m_PhysicalDevice     = candidate.device;
         _graphicsQueueFamily = candidate.graphicsQueue;
         _presentQueueFamily  = candidate.presentQueue;
@@ -467,8 +484,8 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         std::vector<VkLayerProperties> availableLayers(layerCount);
         VK_CALL(vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, availableLayers.data()));
 
-        std::vector<const char *> extensionNames;
-        std::vector<const char *> layerNames;
+        std::vector<const char*> extensionNames;
+        std::vector<const char*> layerNames;
 
         bool bSupported = isFeatureSupported(
             "Vulkan device",
@@ -574,7 +591,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return VK_SUCCESS;
     };
 
-    for (const auto &candidate : _deviceCandidates) {
+    for (const auto& candidate : _deviceCandidates) {
         YA_CORE_INFO("Trying device: {}", candidate.properties.deviceName);
         VkResult ret = tryCreateForCandidate(candidate);
         if (ret == VK_SUCCESS) {
@@ -618,7 +635,7 @@ void VulkanRender::createPipelineCache()
     _descriptorHelper = new VulkanDescriptorHelper(this);
 }
 
-IDescriptorSetHelper *VulkanRender::getDescriptorHelper()
+IDescriptorSetHelper* VulkanRender::getDescriptorHelper()
 {
     return _descriptorHelper;
 }
@@ -647,7 +664,7 @@ void VulkanRender::initExtensionFunctions()
     VulkanCommandBuffer::s_vkCmdEndRenderingKHR   = vkCmdEndRendering;
 }
 
-void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer> &outCommandBuffers)
+void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBuffer>& outCommandBuffers)
 {
     outCommandBuffers.resize(size, VK_NULL_HANDLE);
     for (uint32_t i = 0; i < size; ++i) {
@@ -660,7 +677,7 @@ void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBu
 }
 
 // IRender interface implementation
-void VulkanRender::allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers)
+void VulkanRender::allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>>& outBuffers)
 {
     std::vector<VkCommandBuffer> vkCommandBuffers;
     allocateCommandBuffers(count, vkCommandBuffers);
@@ -674,12 +691,12 @@ void VulkanRender::allocateCommandBuffers(uint32_t count, std::vector<std::share
 
 bool VulkanRender::isFeatureSupported(
     std::string_view                          contextStr,
-    const std::vector<VkExtensionProperties> &availableExtensions,
-    const std::vector<VkLayerProperties>     &availableLayers,
-    const std::vector<DeviceFeature>         &requestExtensions,
-    const std::vector<DeviceFeature>         &requestLayers,
-    std::vector<const char *>                &outExtensionNames,
-    std::vector<const char *>                &outLayerNames,
+    const std::vector<VkExtensionProperties>& availableExtensions,
+    const std::vector<VkLayerProperties>&     availableLayers,
+    const std::vector<DeviceFeature>&         requestExtensions,
+    const std::vector<DeviceFeature>&         requestLayers,
+    std::vector<const char*>&                 outExtensionNames,
+    std::vector<const char*>&                 outLayerNames,
     bool                                      bDebug)
 {
 
@@ -710,13 +727,13 @@ bool VulkanRender::isFeatureSupported(
     outExtensionNames.clear();
     outLayerNames.clear();
 
-    for (const auto &feat : requestExtensions) {
+    for (const auto& feat : requestExtensions) {
         if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) != outExtensionNames.end()) {
             continue;
         }
         if (!std::any_of(availableExtensions.begin(),
                          availableExtensions.end(),
-                         [&feat](const VkExtensionProperties &ext) {
+                         [&feat](const VkExtensionProperties& ext) {
                              return std::strcmp(ext.extensionName, feat.name.c_str()) == 0;
                          }))
         {
@@ -729,14 +746,14 @@ bool VulkanRender::isFeatureSupported(
         outExtensionNames.push_back(feat.name.c_str());
     }
 
-    for (const auto &feat : requestLayers) {
+    for (const auto& feat : requestLayers) {
         if (std::find(outExtensionNames.begin(), outExtensionNames.end(), feat.name.c_str()) != outExtensionNames.end()) {
             continue;
         }
         if (!std::any_of(
                 availableLayers.begin(),
                 availableLayers.end(),
-                [&feat](const VkLayerProperties &layer) {
+                [&feat](const VkLayerProperties& layer) {
                     return std::string(layer.layerName) == feat.name;
                 }))
         {
@@ -831,7 +848,7 @@ void VulkanRender::releaseSyncResources()
 
 
 
-const VkAllocationCallbacks *VulkanRender::getAllocator()
+const VkAllocationCallbacks* VulkanRender::getAllocator()
 {
     // static VkAllocationCallbacks allocator{
     //     .pUserData     = nullptr,
@@ -856,7 +873,7 @@ const VkAllocationCallbacks *VulkanRender::getAllocator()
 
 
 // MARK: Being/End
-bool VulkanRender::begin(int32_t *outImageIndex)
+bool VulkanRender::begin(int32_t* outImageIndex)
 {
     YA_PROFILE_FUNCTION()
 
@@ -927,7 +944,7 @@ bool VulkanRender::begin(int32_t *outImageIndex)
     return true;
 }
 
-bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
+bool VulkanRender::end(int32_t imageIndex, std::vector<void*> cmdBufs)
 {
     YA_PROFILE_FUNCTION()
     // If cmdBufs is not empty, use legacy single-pass mode
@@ -959,10 +976,10 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void *> cmdBufs)
 }
 
 void VulkanRender::submitToQueue(
-    const std::vector<void *> &cmdBufs,
-    const std::vector<void *> &waitSemaphores,
-    const std::vector<void *> &signalSemaphores,
-    void                      *fence)
+    const std::vector<void*>& cmdBufs,
+    const std::vector<void*>& waitSemaphores,
+    const std::vector<void*>& signalSemaphores,
+    void*                     fence)
 {
     std::vector<VkSemaphore> vkWaitSemaphores;
     std::vector<VkSemaphore> vkSignalSemaphores;
@@ -1012,7 +1029,7 @@ void VulkanRender::queueEndLabel()
     _pfnQueueEndDebugUtilsLabelEXT(_graphicsQueues[0].getHandle());
 }
 
-int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void *> &waitSemaphores)
+int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void*>& waitSemaphores)
 {
     std::vector<VkSemaphore> vkWaitSemaphores;
     vkWaitSemaphores.reserve(waitSemaphores.size());
@@ -1025,7 +1042,7 @@ int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void *> &wa
     return static_cast<int>(result);
 }
 
-void *VulkanRender::createSemaphore(const char *debugName)
+void* VulkanRender::createSemaphore(const char* debugName)
 {
     VkSemaphoreCreateInfo semaphoreInfo{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -1044,7 +1061,7 @@ void *VulkanRender::createSemaphore(const char *debugName)
     return semaphore;
 }
 
-void VulkanRender::destroySemaphore(void *semaphore)
+void VulkanRender::destroySemaphore(void* semaphore)
 {
     if (semaphore) {
         vkDestroySemaphore(getDevice(), static_cast<VkSemaphore>(semaphore), getAllocator());
@@ -1070,7 +1087,7 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
     return -1;
 }
 
-void VulkanRender::initWindow(const RenderCreateInfo &ci)
+void VulkanRender::initWindow(const RenderCreateInfo& ci)
 {
 #if USE_SDL
     _windowProvider = new SDLWindowProvider();
@@ -1081,18 +1098,18 @@ void VulkanRender::initWindow(const RenderCreateInfo &ci)
         .height    = ci.swapchainCI.height,
     });
 
-    auto sdlWindow = static_cast<SDLWindowProvider *>(_windowProvider);
+    auto sdlWindow = static_cast<SDLWindowProvider*>(_windowProvider);
     YA_CORE_ASSERT(sdlWindow, "SDLWindowProvider is not initialized correctly");
 
-    onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
+    onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface) {
         return sdlWindow->onCreateVkSurface(instance, surface);
     });
-    onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR *surface) {
+    onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface) {
         sdlWindow->onDestroyVkSurface(instance, surface);
     });
     onGetRequiredInstanceExtensions.set([sdlWindow]() {
         std::vector<DeviceFeature> extensions;
-        for (const char *ext : sdlWindow->onGetVkInstanceExtensions()) {
+        for (const char* ext : sdlWindow->onGetVkInstanceExtensions()) {
             extensions.push_back({
                 .name      = ext,
                 .bRequired = true,

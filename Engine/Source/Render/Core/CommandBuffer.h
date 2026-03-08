@@ -338,6 +338,7 @@ struct ICommandBuffer
     virtual void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)                   = 0;
     virtual void setCullMode(ECullMode::T cullMode)                                                  = 0;
     virtual void setPolygonMode(EPolygonMode::T polygonMode)                                         = 0;
+    virtual void setDepthBias(float constantFactor, float clamp, float slopeFactor)                  = 0;
     virtual void bindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                                     uint32_t                                firstSet,
                                     const std::vector<DescriptorSetHandle>& descriptorSets,

@@ -107,6 +107,8 @@ struct IGraphicsPipeline : public IPipeline
     virtual ECullMode::T    getCullMode() const                                              = 0;
     virtual void            setPolygonMode(EPolygonMode::T polygonMode)                      = 0;
     virtual EPolygonMode::T getPolygonMode() const                                           = 0;
+    virtual void            setDepthBiasEnable(bool enable)                                  = 0;
+    virtual void            setDepthBias(float constantFactor, float clamp, float slopeFactor) = 0;
 
     bool isDirty() const { return _bDirty; }
     void markDirty() { _bDirty = true; }

@@ -200,8 +200,8 @@ void ShadowMapping::onRenderGUI()
     ImGui::Text("ShadowMapping Scaffold");
     ImGui::Text("RT: %ux%u", _shadowExtent.width, _shadowExtent.height);
     ImGui::Checkbox("Auto Viewport/Scissor", &_bAutoBindViewportScissor);
-    ImGui::DragFloat("Depth Bias", &_bias, 0.0001f, 0.0f, 0.1f, "%.5f");
-    ImGui::DragFloat("Normal Bias", &_normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
+    ImGui::DragFloat("Receiver Depth Bias", &_bias, 0.0001f, 0.0f, 0.1f, "%.5f");
+    ImGui::DragFloat("Receiver Normal Bias", &_normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
 }
 
 } // namespace ya

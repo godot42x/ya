@@ -521,6 +521,16 @@ void VulkanCommandBuffer::setPolygonMode(EPolygonMode::T polygonMode)
     executeSetPolygonMode(polygonMode);
 }
 
+void VulkanCommandBuffer::executeSetDepthBias(float constantFactor, float clamp, float slopeFactor)
+{
+    vkCmdSetDepthBias(_commandBuffer, constantFactor, clamp, slopeFactor);
+}
+
+void VulkanCommandBuffer::setDepthBias(float constantFactor, float clamp, float slopeFactor)
+{
+    executeSetDepthBias(constantFactor, clamp, slopeFactor);
+}
+
 void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
 {
     const char* defaultRenderLabel = "Rendering";
