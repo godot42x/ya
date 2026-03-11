@@ -45,7 +45,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // };
 
     // using FrameUBO = slang_types::FrameData;
-    using FrameUBO = glsl_types::FrameData;
+    using FrameUBO = glsl_types::PhongLit::Types::FrameData;
 
     // struct alignas(16) DirectionalLightData
     // {
@@ -57,7 +57,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // };
 
     // using DirectionalLightData = slang_types::DirectionalLight;
-    using DirectionalLightData = glsl_types::DirectionalLight;
+    using DirectionalLightData = glsl_types::PhongLit::Types::DirectionalLight;
 
 
 
@@ -82,7 +82,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // };
 
     // using PointLightData = slang_types::PointLight;
-    using PointLightData = glsl_types::PointLight;
+    using PointLightData = glsl_types::PhongLit::Types::PointLight;
 
 
 
@@ -100,7 +100,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // } uLight;
 
     // using LightUBO = slang_types::LightData;
-    using LightUBO = glsl_types::LightData;
+    using LightUBO = glsl_types::PhongLit::Types::LightData;
     LightUBO uLight;
 
     // TODO: move to one debug layer system
@@ -116,7 +116,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     // } uDebug;
 
     // using DebugUBO = slang_types::DebugData;
-    using DebugUBO = glsl_types::DebugData;
+    using DebugUBO = glsl_types::PhongLit::Types::DebugData;
     DebugUBO uDebug;
 
     struct ModelPushConstant

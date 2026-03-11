@@ -16,7 +16,7 @@ namespace ya
 {
 
 // using slang_types::MAX_POINT_LIGHTS;
-using glsl_types::MAX_POINT_LIGHTS;
+using glsl_types::PhongLit::Types::MAX_POINT_LIGHTS;
 
 // enum bit flags support
 template <typename T>

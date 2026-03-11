@@ -381,16 +381,10 @@ def _emit_header(
         lines.append("};")
         lines.append(f'static_assert(sizeof({struct_name}) == {struct_size}, "Size mismatch for {struct_name}");')
         for lf in layout:
-            if lf["array_count"] is not None:
-                lines.append(
-                    f'static_assert(GLSL_OFFSETOF({struct_name}, {lf["name"]}) == {lf["offset"]}, '
-                    f'"Offset mismatch for {struct_name}::{lf["name"]}");'
-                )
-            else:
-                lines.append(
-                    f'static_assert(GLSL_OFFSETOF({struct_name}, {lf["name"]}) == {lf["offset"]}, '
-                    f'"Offset mismatch for {struct_name}::{lf["name"]}");'
-                )
+            lines.append(
+                f'static_assert(GLSL_OFFSETOF({struct_name}, {lf["name"]}) == {lf["offset"]}, '
+                f'"Offset mismatch for {struct_name}::{lf["name"]}");'
+            )
         lines.append("")
 
     lines.append(f"}} // namespace {namespace}")
@@ -401,6 +395,20 @@ def _emit_header(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def _file_sub_namespace(input_path: Path) -> str:
+    """Derive a C++ sub-namespace from the GLSL file's parent directory and stem.
+
+    Shadow/CombinedShadowMappingGenerate.glsl -> Shadow::CombinedShadowMappingGenerate
+    PhongLit/Types.glsl                       -> PhongLit::Types
+    PhongLit/PhongLit.glsl (stem == parent)   -> PhongLit
+    """
+    parent = input_path.parent.name
+    stem   = input_path.stem
+    if stem.lower() == parent.lower():
+        return parent
+    return f"{parent}::{stem}"
+
 
 def _process_one_glsl(input_path: Path, output_dir: Path, namespace: str, force: bool):
     parent = input_path.parent.name
@@ -430,7 +438,8 @@ def _process_one_glsl(input_path: Path, output_dir: Path, namespace: str, force:
         print(f"WARNING: no structs found in {input_path}", file=sys.stderr)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    header = _emit_header(structs, defines, namespace, [input_path.name])
+    full_ns = f"{namespace}::{_file_sub_namespace(input_path)}"
+    header = _emit_header(structs, defines, full_ns, [input_path.name])
     header_path.write_text(header, encoding="utf-8")
     print(f"[glsl-gen] Generated: {header_path}")
 
