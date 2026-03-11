@@ -37,9 +37,7 @@ namespace ya
 
 static std::vector<std::string> buildPhongShaderDefines(bool bEnableDirectionalShadow)
 {
-    std::vector<std::string> defines = {
-        std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
-    };
+    std::vector<std::string> defines;
     if (bEnableDirectionalShadow) {
         defines.push_back("ENABLE_DIRECTIONAL_SHADOW 1");
     }

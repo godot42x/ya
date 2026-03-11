@@ -19,9 +19,7 @@ void main()
 #type geometry
 #version 450
 
-#ifndef MAX_POINT_LIGHTS
-    #define MAX_POINT_LIGHTS 4
-#endif
+#include "Common/Limits.glsl"
 
 layout(triangles) in;
 layout(triangle_strip, max_vertices = (MAX_POINT_LIGHTS * 6 +1) *3) out;

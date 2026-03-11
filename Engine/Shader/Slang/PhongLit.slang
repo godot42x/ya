@@ -8,7 +8,7 @@
 // A C++ header is auto-generated from this file by slang_gen_header.py.
 // ============================================================
 
-#define MAX_POINT_LIGHTS 4
+#include "Common/Limits.slang"
 
 
 struct DirectionalLight

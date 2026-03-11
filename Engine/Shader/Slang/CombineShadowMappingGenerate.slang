@@ -1,5 +1,5 @@
 // @gen-skip: slangc crashes on this file (maxvertexcount macro arithmetic, see slang#10506)
-#define MAX_POINT_LIGHTS 4
+#include "Common/Limits.slang"
 
 struct PushConstants
 {

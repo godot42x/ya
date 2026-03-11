@@ -27,9 +27,7 @@ struct PointLight {
     float outerCutOff; // cos(outerAngle)
 };
 
-#ifndef MAX_POINT_LIGHTS
-#define MAX_POINT_LIGHTS 6
-#endif
+#include "Common/Limits.glsl"
 
 
 

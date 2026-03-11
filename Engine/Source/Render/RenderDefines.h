@@ -7,16 +7,14 @@
 
 #include <glm/glm.hpp>
 
-// Single source of truth: MAX_POINT_LIGHTS is defined in PhongLit.slang,
-// auto-generated into PhongLit.slang.h by slang_gen_header.py.
-// #include "PhongLit.slang.h"
-#include "PhongLit.Types.glsl.h"
+// Single source of truth: MAX_POINT_LIGHTS lives in Engine/Shader/GLSL/Common/Limits.glsl.
+// The code generator emits it to ya::glsl_types::Common::Limits::MAX_POINT_LIGHTS.
+#include "Common.Limits.glsl.h"
 
 namespace ya
 {
 
-// using slang_types::MAX_POINT_LIGHTS;
-using glsl_types::PhongLit::Types::MAX_POINT_LIGHTS;
+using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
 
 // enum bit flags support
 template <typename T>
@@ -1094,10 +1092,6 @@ struct CommandBufferHandleTag
 {};
 using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 
-
-
-// MAX_POINT_LIGHTS is now sourced from PhongLit.slang via ya::slang_types::MAX_POINT_LIGHTS
-// (see #include above and `using` declaration at the top of this namespace)
 
 /**
  * @brief Frame context containing per-frame camera data

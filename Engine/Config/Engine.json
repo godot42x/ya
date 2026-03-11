@@ -1,0 +1,7 @@
+{
+    "shader": {
+        "defines": {
+            "MAX_POINT_LIGHTS": 6
+        }
+    }
+}

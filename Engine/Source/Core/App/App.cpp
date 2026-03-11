@@ -261,9 +261,6 @@ void App::init(AppDesc ci)
                                .withShaderStoragePath("Engine/Shader/GLSL")
                                .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
                                .FactoryNew<GLSLProcessor>();
-    std::vector<std::string> commonDefines = {
-        std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
-    };
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
 
     // Register Slang processor for .slang shader files (hot-reload supported)
@@ -281,10 +278,10 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl", .defines = commonDefines});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl", .defines = commonDefines});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang", .defines = commonDefines});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang", .defines = commonDefines});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
 
 
     // MARK: Render/Hook

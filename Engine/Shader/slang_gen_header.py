@@ -320,7 +320,14 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
         f.write("\n".join(lines))
 
 
-def _process_one_slang(slang_file: Path, output_dir: Path, namespace: str, entry: str, force: bool):
+def _process_one_slang(
+    slang_file: Path,
+    output_dir: Path,
+    namespace: str,
+    entry: str,
+    force: bool,
+    include_dirs: list[Path] | None = None,
+):
     basename = slang_file.stem
     json_path = output_dir / f"{basename}.reflection.json"
     header_path = output_dir / f"{basename}.slang.h"
@@ -350,6 +357,9 @@ def _process_one_slang(slang_file: Path, output_dir: Path, namespace: str, entry
         "-target", "spirv",
         "-o", str(spv_path),
     ]
+    # Prefer compiler-native include search paths (-I)
+    for inc in (include_dirs or []):
+        cmd.extend(["-I", str(inc)])
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"WARNING: slangc failed (exit {result.returncode}) for {slang_file}, skipping header gen:", file=sys.stderr)
@@ -379,11 +389,14 @@ def main():
                         help="C++ namespace for generated types (default: ya::slang_types)")
     parser.add_argument("--entry", default="vertMain",
                         help="Entry point name for reflection (default: vertMain)")
+    parser.add_argument("--include-dir", action="append", dest="include_dirs", metavar="DIR",
+                        help="Extra include directory passed to slangc via -I (repeatable)")
     parser.add_argument("--force", action="store_true",
                         help="Force regeneration even if header is up-to-date")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
+    include_dirs = [Path(d) for d in (args.include_dirs or [])]
     t_start = time.perf_counter()
     count = 0
     for input_path in args.inputs:
@@ -391,7 +404,7 @@ def main():
         if not slang_file.exists():
             print(f"ERROR: Slang source not found: {slang_file}", file=sys.stderr)
             continue
-        _process_one_slang(slang_file, output_dir, args.namespace, args.entry, args.force)
+        _process_one_slang(slang_file, output_dir, args.namespace, args.entry, args.force, include_dirs)
         count += 1
 
     elapsed_ms = int((time.perf_counter() - t_start) * 1000)

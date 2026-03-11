@@ -73,8 +73,8 @@ struct PointLight {
     float radius;       // 光照范围（用于衰减计算）
 };
 
-// 最多支持 4 个点光源
-#define MAX_POINT_LIGHTS 4
+// 最多支持的点光源数量（由 Engine/Config/Engine.json 管理）
+#include "Common/Limits.glsl"
 
 layout(set =0, binding =1, std140) uniform LightUBO {
     vec3  directionalLightDir;

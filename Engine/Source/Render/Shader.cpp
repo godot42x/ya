@@ -489,6 +489,11 @@ struct ShadercIncludeResultData
 
 struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
 {
+    // Extra base directories searched when relative include resolution fails.
+    // Populated with "Engine/Shader/GLSL" so that #include "Common/Limits.glsl"
+    // works from any sub-directory shader.
+    static constexpr std::string_view kGlslBaseDir = "Engine/Shader/GLSL";
+
     shaderc_include_result* GetInclude(const char* requested_source,
                                        shaderc_include_type /*type*/,
                                        const char* requesting_source,
@@ -509,8 +514,15 @@ struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
 
         data->sourceName = resolvedPath.generic_string();
         if (!VirtualFileSystem::get()->readFileToString(data->sourceName, data->content)) {
-            data->content = std::format("#error \"Failed to include file: {}\"\n", data->sourceName);
-            YA_CORE_ERROR("Shader include failed: '{}' requested by '{}'", data->sourceName, requesting_source ? requesting_source : "");
+            // Fallback: search Engine/Shader/GLSL base directory
+            auto fallback = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
+            auto fallbackName = fallback.generic_string();
+            if (VirtualFileSystem::get()->readFileToString(fallbackName, data->content)) {
+                data->sourceName = fallbackName;
+            } else {
+                data->content = std::format("#error \"Failed to include file: {}\"\n", data->sourceName);
+                YA_CORE_ERROR("Shader include failed: '{}' requested by '{}'", data->sourceName, requesting_source ? requesting_source : "");
+            }
         }
 
         data->result.source_name        = data->sourceName.c_str();

@@ -29,6 +29,59 @@ description: YA Engine 渲染架构与模块边界
 2. 后端差异仅在平台层扩散，不反向污染上层接口。
 3. 管线问题先查初始化顺序与资源生命周期，再查 shader / 状态配置。
 
+## Shader 处理流程（配置 → Shader → C++ 头 → C++ 使用）
+
+目标：让 shader 常量与布局定义能被 C++ 侧稳定复用，避免“运行时值 / 头文件值 / shader 值”三份漂移。
+
+```
+Engine/Config/Engine.json
+  └─ shader.defines（例如 MAX_POINT_LIGHTS）
+  ↓
+Engine/Shader/Shader.xmake.lua (Step 0)
+  └─ 生成 Engine/Shader/GLSL/Common/Limits.glsl
+  └─ 生成 Engine/Shader/Slang/Common/Limits.slang
+  ↓
+GLSL/Slang 源文件通过 #include 引入 Limits
+  ↓
+glsl_gen_header.py / slang_gen_header.py 生成 C++ 头
+  └─ Engine/Shader/GLSL/Generated/*.h
+  └─ Engine/Shader/Slang/Generated/*.h
+  ↓
+C++（如 RenderDefines.h）include 生成头并 using 常量/结构体
+```
+
+推荐做法：
+- C++ 仅引用生成头里的常量（例如 `Common.Limits.glsl.h`），不要再手写重复常量。
+- shader 编译参数避免重复注入同名宏（例如 MAX_POINT_LIGHTS），防止覆盖统一源。
+
+## Shader.xmake.lua 设计思路
+
+`target("shader")` 的职责不是“编译业务代码”，而是“生成与同步 shader 相关中间产物”。
+
+分层设计：
+1. **Step 0（配置落盘）**：从 `Engine.json` 生成 `Common/Limits.*`，做统一常量出口。
+2. **Step 1（Slang 头生成）**：批量调用 `slang_gen_header.py` 产出反射头。
+3. **Step 2（GLSL 头生成）**：批量调用 `glsl_gen_header.py` 产出 std140 对齐头。
+
+实现原则：
+- **批处理优先**：一次 Python 进程处理多文件，减少启动开销。
+- **增量优先**：只在内容变化时写文件，减少无意义 mtime 变化。
+- **职责单一**：xmake 负责 orchestrate（编排），脚本负责 parse/generate（解析与生成）。
+
+## 统一数据源思路（Single Source of Truth）
+
+核心：同一个配置值只能有一个权威来源，其余路径只“消费”不“重定义”。
+
+以 `MAX_POINT_LIGHTS` 为例：
+- 权威来源：`Engine/Config/Engine.json`
+- 派生文件：`Common/Limits.glsl` / `Common/Limits.slang`
+- C++ 来源：`Common.Limits.glsl.h` 中的 `constexpr`
+
+落地规则：
+1. 不在各 shader 文件中硬编码重复值。
+2. 不在 C++ shader desc 里重复注入同名宏覆盖配置值。
+3. 当值变更时，只改 `Engine.json`，其余由生成链自动收敛。
+
 ## Image 与 RenderTarget 的 Layout 完整生命周期
 
 > 实现文件：`VulkanImage.cpp`、`VulkanRenderTarget.cpp`、`VulkanCommandBuffer.cpp`

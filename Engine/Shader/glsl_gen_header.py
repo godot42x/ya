@@ -17,9 +17,12 @@ that C++ consumer code can switch between backends without changes.
 """
 
 import argparse
+import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -184,7 +187,7 @@ def _parse_uniform_blocks(src: str, defines: dict[str, int]) -> list[tuple[str, 
 # Resolve includes
 # ---------------------------------------------------------------------------
 
-def _load_source(path: Path, visited: set[Path]) -> str:
+def _load_source(path: Path, visited: set[Path], include_dirs: list[Path] | None = None) -> str:
     """Load a GLSL file, recursively resolving #include directives."""
     if path in visited:
         return ""
@@ -195,12 +198,62 @@ def _load_source(path: Path, visited: set[Path]) -> str:
     # Resolve includes
     def replace_include(m: re.Match) -> str:
         inc_name = m.group(1)
+        # 1. Relative to current file
         inc_path = path.parent / inc_name
         if inc_path.exists():
-            return _load_source(inc_path, visited)
+            return _load_source(inc_path, visited, include_dirs)
+        # 2. Try extra include dirs (e.g. Engine/Shader/GLSL)
+        if include_dirs:
+            for base in include_dirs:
+                alt = base / inc_name
+                if alt.exists():
+                    return _load_source(alt, visited, include_dirs)
         return f"// include not found: {inc_name}\n"
     combined = re.sub(r'#\s*include\s+"([^"]+)"', replace_include, raw)
     return combined
+
+
+def _preprocess_with_glslc(path: Path, include_dirs: list[Path] | None = None) -> str | None:
+    """Preprocess a GLSL file using glslc native -I include search.
+
+    Returns preprocessed source on success, or None when glslc is unavailable/fails.
+    """
+    raw = path.read_text(encoding="utf-8")
+
+    # Only use glslc for single-stage, self-contained GLSL units.
+    # This project has many combined shaders with custom '#type' sections and
+    # some include-only snippets without '#version'; these are intentionally
+    # handled by our script resolver instead.
+    has_type_markers = re.search(r'^\s*#\s*type\b', raw, flags=re.MULTILINE) is not None
+    version_count = len(re.findall(r'^\s*#\s*version\b', raw, flags=re.MULTILINE))
+    if has_type_markers or version_count != 1:
+        return None
+
+    # glslc does not understand project-specific '#type xxx' markers.
+    stripped = re.sub(r'#\s*type\s+\w+', '', raw)
+
+    with tempfile.TemporaryDirectory(prefix="ya-glsl-gen-") as td:
+        tmp_path = Path(td) / path.name
+        tmp_path.write_text(stripped, encoding="utf-8")
+
+        cmd = [
+            "glslc",
+            "-E",
+            str(tmp_path),
+            "-I", str(path.parent),
+        ]
+        for inc in (include_dirs or []):
+            cmd.extend(["-I", str(inc)])
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            return None
+
+        if result.returncode != 0:
+            # Keep fallback silent for non-critical tooling path.
+            return None
+        return result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -410,7 +463,14 @@ def _file_sub_namespace(input_path: Path) -> str:
     return f"{parent}::{stem}"
 
 
-def _process_one_glsl(input_path: Path, output_dir: Path, namespace: str, force: bool):
+def _process_one_glsl(
+    input_path: Path,
+    output_dir: Path,
+    namespace: str,
+    force: bool,
+    include_dirs: list[Path] | None = None,
+    config_defines: dict[str, int] | None = None,
+):
     parent = input_path.parent.name
     file_stem = input_path.stem
     stem = (
@@ -425,10 +485,15 @@ def _process_one_glsl(input_path: Path, output_dir: Path, namespace: str, force:
             print(f"[glsl-gen] {header_path.name} is up-to-date, skipping.")
             return
 
-    visited: set[Path] = set()
-    combined_src = _load_source(input_path.resolve(), visited)
+    combined_src = _preprocess_with_glslc(input_path.resolve(), include_dirs)
+    if combined_src is None:
+        visited: set[Path] = set()
+        combined_src = _load_source(input_path.resolve(), visited, include_dirs)
     clean = _strip_comments(combined_src)
     defines = _extract_defines(combined_src)
+    # Config overrides take priority over in-shader fallback values
+    if config_defines:
+        defines.update(config_defines)
     structs = _parse_structs(clean, defines)
     for block_name, fields in _parse_uniform_blocks(clean, defines):
         if block_name not in structs:
@@ -446,12 +511,28 @@ def _process_one_glsl(input_path: Path, output_dir: Path, namespace: str, force:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate C++ headers from GLSL files")
-    parser.add_argument("inputs",       nargs="+", help="Input .glsl file(s)")
-    parser.add_argument("--output-dir", required=True, help="Output directory for the generated header")
-    parser.add_argument("--namespace",  default="ya::glsl_types", help="C++ namespace")
-    parser.add_argument("--output",     default=None, help="Override output filename (single-file merge mode only)")
-    parser.add_argument("--force",      action="store_true", help="Re-generate even if header is newer than sources")
+    parser.add_argument("inputs",        nargs="+",         help="Input .glsl file(s)")
+    parser.add_argument("--output-dir",  required=True,     help="Output directory for the generated header")
+    parser.add_argument("--namespace",   default="ya::glsl_types", help="C++ namespace")
+    parser.add_argument("--output",      default=None,      help="Override output filename (single-file merge mode only)")
+    parser.add_argument("--force",       action="store_true", help="Re-generate even if header is newer than sources")
+    parser.add_argument("--config",      default=None,     help="Path to Engine.json for shader defines")
+    parser.add_argument("--include-dir", action="append",  dest="include_dirs", metavar="DIR",
+                        help="Extra base directories for #include resolution (repeatable)")
     args = parser.parse_args()
+
+    # Load config defines (Engine.json shader.defines)
+    config_defines: dict[str, int] = {}
+    if args.config:
+        config_path = Path(args.config)
+        if config_path.exists():
+            with open(config_path, encoding="utf-8") as f:
+                cfg = json.load(f)
+            config_defines = {k: int(v) for k, v in cfg.get("shader", {}).get("defines", {}).items()}
+        else:
+            print(f"WARNING: --config file not found: {args.config}", file=sys.stderr)
+
+    include_dirs = [Path(d) for d in (args.include_dirs or [])]
 
     input_paths = [Path(p) for p in args.inputs]
     for p in input_paths:
@@ -474,12 +555,17 @@ def main():
                 elapsed_ms = int((time.perf_counter() - t_start) * 1000)
                 print(f"[glsl-gen] {count} file(s) processed in {elapsed_ms}ms")
                 return
-        visited: set[Path] = set()
         combined_src = ""
         for p in input_paths:
-            combined_src += _load_source(p.resolve(), visited) + "\n"
+            preprocessed = _preprocess_with_glslc(p.resolve(), include_dirs)
+            if preprocessed is None:
+                visited: set[Path] = set()
+                preprocessed = _load_source(p.resolve(), visited, include_dirs)
+            combined_src += preprocessed + "\n"
         clean = _strip_comments(combined_src)
         defines = _extract_defines(combined_src)
+        if config_defines:
+            defines.update(config_defines)
         structs = _parse_structs(clean, defines)
         for block_name, fields in _parse_uniform_blocks(clean, defines):
             if block_name not in structs:
@@ -494,7 +580,7 @@ def main():
     else:
         # Batch mode: process each file independently
         for p in input_paths:
-            _process_one_glsl(p, output_dir, args.namespace, args.force)
+            _process_one_glsl(p, output_dir, args.namespace, args.force, include_dirs, config_defines)
             count += 1
 
     elapsed_ms = int((time.perf_counter() - t_start) * 1000)
