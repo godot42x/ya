@@ -75,11 +75,13 @@ void main()
 #type fragment
 #version 450
 
+#include "Common/Limits.glsl"
+
 void main()
 {
     // do nothing, driver already do this before fragment shader:
-    // gl_FragDepth = gl_FragCoord.z;
-    // if(gl_Layer > 1) {
-    //     gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
-    // }
+    gl_FragDepth = gl_FragCoord.z;
+    if(gl_Layer > 0) {
+        gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
+    }
 }

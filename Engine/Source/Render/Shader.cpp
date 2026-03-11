@@ -31,8 +31,9 @@
 #include "Core/System/VirtualFileSystem.h"
 
 // Slang runtime API
-#include <slang/slang.h>
 #include <slang/slang-com-ptr.h>
+#include <slang/slang.h>
+
 
 
 static const char* eolFlag =
@@ -513,13 +514,34 @@ struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
         }
 
         data->sourceName = resolvedPath.generic_string();
-        if (!VirtualFileSystem::get()->readFileToString(data->sourceName, data->content)) {
+        bool ok          = false;
+        if (VFS::get()->isFileExists(data->sourceName))
+        {
+            ok = VirtualFileSystem::get()->readFileToString(data->sourceName, data->content);
+        }
+
+        if (!ok) {
             // Fallback: search Engine/Shader/GLSL base directory
-            auto fallback = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
+            auto fallback     = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
             auto fallbackName = fallback.generic_string();
             if (VirtualFileSystem::get()->readFileToString(fallbackName, data->content)) {
                 data->sourceName = fallbackName;
-            } else {
+                ok               = true;
+            }
+            if (!ok) {
+                data->content = std::format("#error \"Failed to include file: {}\"\n or fallback file: {}", data->sourceName, fallbackName);
+                YA_CORE_ERROR("Shader include failed: '{}' or '{}' requested by '{}'", data->sourceName, fallbackName, requesting_source ? requesting_source : "");
+            }
+        }
+
+        if (!VirtualFileSystem::get()->readFileToString(data->sourceName, data->content)) {
+            // Fallback: search Engine/Shader/GLSL base directory
+            auto fallback     = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
+            auto fallbackName = fallback.generic_string();
+            if (VirtualFileSystem::get()->readFileToString(fallbackName, data->content)) {
+                data->sourceName = fallbackName;
+            }
+            else {
                 data->content = std::format("#error \"Failed to include file: {}\"\n", data->sourceName);
                 YA_CORE_ERROR("Shader include failed: '{}' requested by '{}'", data->sourceName, requesting_source ? requesting_source : "");
             }
@@ -853,14 +875,14 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 struct SlangVfsFileSystem : public ISlangFileSystem
 {
     // ISlangUnknown
-    uint32_t addRef()  override { return ++_refCount; }
+    uint32_t addRef() override { return ++_refCount; }
     uint32_t release() override
     {
         uint32_t rc = --_refCount;
         if (rc == 0) delete this;
         return rc;
     }
-    SlangResult queryInterface(SlangUUID const& uuid, void** outObject) override
+    SlangResult queryInterface(const SlangUUID& uuid, void** outObject) override
     {
         if (uuid == ISlangFileSystem::getTypeGuid() ||
             uuid == ISlangUnknown::getTypeGuid())
@@ -885,7 +907,7 @@ struct SlangVfsFileSystem : public ISlangFileSystem
     }
 
     // ISlangFileSystem
-    SlangResult loadFile(char const* path, ISlangBlob** outBlob) override
+    SlangResult loadFile(const char* path, ISlangBlob** outBlob) override
     {
         std::string content;
         if (!VirtualFileSystem::get()->readFileToString(path, content))
@@ -897,17 +919,17 @@ struct SlangVfsFileSystem : public ISlangFileSystem
         // Wrap content in a simple blob
         struct StringBlob : public ISlangBlob
         {
-            std::string data;
+            std::string           data;
             std::atomic<uint32_t> rc{1};
 
-            uint32_t addRef()  override { return ++rc; }
+            uint32_t addRef() override { return ++rc; }
             uint32_t release() override
             {
                 uint32_t r = --rc;
                 if (r == 0) delete this;
                 return r;
             }
-            SlangResult queryInterface(SlangUUID const& uuid, void** out) override
+            SlangResult queryInterface(const SlangUUID& uuid, void** out) override
             {
                 if (uuid == ISlangBlob::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid())
                 {
@@ -918,8 +940,8 @@ struct SlangVfsFileSystem : public ISlangFileSystem
                 *out = nullptr;
                 return SLANG_E_NO_INTERFACE;
             }
-            void const* getBufferPointer() override { return data.data(); }
-            size_t      getBufferSize()    override { return data.size(); }
+            const void* getBufferPointer() override { return data.data(); }
+            size_t      getBufferSize() override { return data.size(); }
         };
 
         auto* blob = new StringBlob();
@@ -939,10 +961,14 @@ static SlangStage toSlangStage(EShaderStage::T stage)
 {
     switch (stage)
     {
-    case EShaderStage::Vertex:   return SLANG_STAGE_VERTEX;
-    case EShaderStage::Fragment: return SLANG_STAGE_FRAGMENT;
-    case EShaderStage::Geometry: return SLANG_STAGE_GEOMETRY;
-    case EShaderStage::Compute:  return SLANG_STAGE_COMPUTE;
+    case EShaderStage::Vertex:
+        return SLANG_STAGE_VERTEX;
+    case EShaderStage::Fragment:
+        return SLANG_STAGE_FRAGMENT;
+    case EShaderStage::Geometry:
+        return SLANG_STAGE_GEOMETRY;
+    case EShaderStage::Compute:
+        return SLANG_STAGE_COMPUTE;
     default:
         YA_CORE_ASSERT(false, "Unknown shader stage");
         return SLANG_STAGE_NONE;
@@ -952,10 +978,10 @@ static SlangStage toSlangStage(EShaderStage::T stage)
 // ---------------------------------------------------------------------------
 // SlangProcessor::compileToSpv
 // ---------------------------------------------------------------------------
-bool SlangProcessor::compileToSpv(std::string_view source,
-                                  std::string_view filePath,
-                                  std::string_view entryName,
-                                  EShaderStage::T  stage,
+bool SlangProcessor::compileToSpv(std::string_view                source,
+                                  std::string_view                filePath,
+                                  std::string_view                entryName,
+                                  EShaderStage::T                 stage,
                                   const std::vector<std::string>& defines,
                                   std::vector<ir_t>&              outSpv)
 {
@@ -1001,13 +1027,13 @@ bool SlangProcessor::compileToSpv(std::string_view source,
     const char* searchPaths[] = {shaderStoragePath.string().c_str()};
 
     slang::SessionDesc sessionDesc{};
-    sessionDesc.targets              = &targetDesc;
-    sessionDesc.targetCount          = 1;
-    sessionDesc.preprocessorMacros  = macros.data();
-    sessionDesc.preprocessorMacroCount = static_cast<SlangInt>(macros.size());
-    sessionDesc.fileSystem           = vfsFs;
-    sessionDesc.searchPaths          = searchPaths;
-    sessionDesc.searchPathCount      = 1;
+    sessionDesc.targets                 = &targetDesc;
+    sessionDesc.targetCount             = 1;
+    sessionDesc.preprocessorMacros      = macros.data();
+    sessionDesc.preprocessorMacroCount  = static_cast<SlangInt>(macros.size());
+    sessionDesc.fileSystem              = vfsFs;
+    sessionDesc.searchPaths             = searchPaths;
+    sessionDesc.searchPathCount         = 1;
     sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
 
     Slang::ComPtr<slang::ISession> session;
@@ -1026,18 +1052,28 @@ bool SlangProcessor::compileToSpv(std::string_view source,
     // Wrap source in a blob
     struct SourceBlob : public ISlangBlob
     {
-        std::string data;
+        std::string           data;
         std::atomic<uint32_t> rc{1};
-        uint32_t addRef()  override { return ++rc; }
-        uint32_t release() override { uint32_t r = --rc; if (r == 0) delete this; return r; }
-        SlangResult queryInterface(SlangUUID const& uuid, void** out) override
+        uint32_t              addRef() override { return ++rc; }
+        uint32_t              release() override
+        {
+            uint32_t r = --rc;
+            if (r == 0) delete this;
+            return r;
+        }
+        SlangResult queryInterface(const SlangUUID& uuid, void** out) override
         {
             if (uuid == ISlangBlob::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid())
-            { addRef(); *out = static_cast<ISlangBlob*>(this); return SLANG_OK; }
-            *out = nullptr; return SLANG_E_NO_INTERFACE;
+            {
+                addRef();
+                *out = static_cast<ISlangBlob*>(this);
+                return SLANG_OK;
+            }
+            *out = nullptr;
+            return SLANG_E_NO_INTERFACE;
         }
-        void const* getBufferPointer() override { return data.data(); }
-        size_t      getBufferSize()    override { return data.size(); }
+        const void* getBufferPointer() override { return data.data(); }
+        size_t      getBufferSize() override { return data.size(); }
     };
     auto* srcBlob = new SourceBlob();
     srcBlob->data = std::string(source);
@@ -1075,7 +1111,7 @@ bool SlangProcessor::compileToSpv(std::string_view source,
     }
 
     // 5. Link: compose module + entry point
-    slang::IComponentType* components[] = {slangModule, entryPoint};
+    slang::IComponentType*               components[] = {slangModule, entryPoint};
     Slang::ComPtr<slang::IComponentType> composedProgram;
     Slang::ComPtr<slang::IBlob>          linkDiag;
     if (SLANG_FAILED(session->createCompositeComponentType(
@@ -1128,10 +1164,9 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
     stage2spirv_t ret;
 
     // Helper: read source from VFS and compile one stage
-    auto compileStage = [&](EShaderStage::T stage,
-                             const std::string& stagePath,
-                             const std::string& entryName) -> bool
-    {
+    auto compileStage = [&](EShaderStage::T    stage,
+                            const std::string& stagePath,
+                            const std::string& entryName) -> bool {
         std::string source;
         if (!VirtualFileSystem::get()->readFileToString(stagePath, source))
         {
@@ -1155,10 +1190,10 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         // Each StageFile specifies an explicit source file.
         // Entry point convention: "vertMain" / "fragMain" / "geomMain"
         static const std::unordered_map<EShaderStage::T, std::string> stageEntryNames = {
-            {EShaderStage::Vertex,   "vertMain"},
+            {EShaderStage::Vertex, "vertMain"},
             {EShaderStage::Fragment, "fragMain"},
             {EShaderStage::Geometry, "geomMain"},
-            {EShaderStage::Compute,  "compMain"},
+            {EShaderStage::Compute, "compMain"},
         };
 
         for (const auto& sf : ci.stageFiles)
@@ -1173,7 +1208,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             if (!stagePath.is_absolute())
                 stagePath = stdpath(shaderStoragePath) / stagePath;
 
-            auto entryIt = stageEntryNames.find(sf.stage);
+            auto              entryIt   = stageEntryNames.find(sf.stage);
             const std::string entryName = (entryIt != stageEntryNames.end()) ? entryIt->second : "main";
 
             if (!compileStage(sf.stage, stagePath.generic_string(), entryName))
@@ -1211,8 +1246,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         // Compile vertex stage
         {
             std::vector<ir_t> spv;
-            if (!compileToSpv(source, curFilePath.generic_string(), "vertMain",
-                              EShaderStage::Vertex, ci.defines, spv))
+            if (!compileToSpv(source, curFilePath.generic_string(), "vertMain", EShaderStage::Vertex, ci.defines, spv))
             {
                 YA_CORE_ERROR("[Slang] Failed to compile vertex stage: {}", shaderName);
                 return {};
@@ -1223,8 +1257,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         // Compile fragment stage
         {
             std::vector<ir_t> spv;
-            if (!compileToSpv(source, curFilePath.generic_string(), "fragMain",
-                              EShaderStage::Fragment, ci.defines, spv))
+            if (!compileToSpv(source, curFilePath.generic_string(), "fragMain", EShaderStage::Fragment, ci.defines, spv))
             {
                 YA_CORE_ERROR("[Slang] Failed to compile fragment stage: {}", shaderName);
                 return {};
@@ -1241,7 +1274,8 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         if (spirv.empty() || spirv[0] != 0x07230203)
         {
             YA_CORE_ERROR("[Slang] Invalid SPIR-V magic for stage {}: {}",
-                          EShaderStage::T2Strings[stage], cacheKey);
+                          EShaderStage::T2Strings[stage],
+                          cacheKey);
             YA_CORE_ASSERT(false, "SPIR-V validation failed");
         }
     }
@@ -1252,7 +1286,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
 // ---------------------------------------------------------------------------
 // SlangProcessor::reflect  — reuse GLSLProcessor's SPIRV-Cross based reflect
 // ---------------------------------------------------------------------------
-ShaderReflection::ShaderResources SlangProcessor::reflect(EShaderStage::T stage,
+ShaderReflection::ShaderResources SlangProcessor::reflect(EShaderStage::T          stage,
                                                           const std::vector<ir_t>& spirvData)
 {
     // Delegate to the same SPIRV-Cross reflection logic used by GLSLProcessor.

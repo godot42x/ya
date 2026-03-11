@@ -44,9 +44,6 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
                     .format     = EVertexAttributeFormat::Float3,
                     .offset     = offsetof(ya::Vertex, position),
                 },
-            },
-            .defines = {
-                std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
             }},
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
@@ -139,7 +136,46 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         .hasDirectionalLight    = ctx->bHasDirectionalLight,
     };
     for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
-        frameData.pointLightMatrices[i] = ctx->pointLights[i].viewProjection;
+        const glm::vec3&       pos       = ctx->pointLights[i].position;
+        static const float     nearPlane = 0.1f;
+        static const float     farPlane  = 100.0f;
+        static const float     aspect    = 1.0f; // TODO: read from shadow map rt extent
+        static const glm::mat4 faceProj  = FMath::perspective(glm::radians(90.0f), aspect, nearPlane, farPlane);
+
+        for (int face = ECubeFace::CubeFace_PosX; face < ECubeFace::CubeFace_Count; ++face)
+        {
+            glm::mat4       view{};
+            constexpr auto& up = FMath::Vector::WorldUp;
+            if constexpr (FMath::Vector::IsRightHanded) {
+                switch ((ECubeFace)face)
+                {
+                case CubeFace_PosX:
+                    view = FMath::lookAt(pos, pos + glm::vec3(1, 0, 0), up);
+                    break;
+                case CubeFace_NegX:
+                    view = FMath::lookAt(pos, pos + glm::vec3(-1, 0, 0), up);
+                    break;
+                case CubeFace_PosY:
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, -1)); // look up, so forward is -z
+                    break;
+                case CubeFace_NegY:
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, 1)); // look down, so forward is +z
+                    break;
+                case CubeFace_PosZ:
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, 1), up);
+                    break;
+                case CubeFace_NegZ:
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, -1), up);
+                    break;
+                case CubeFace_Count:
+                    UNREACHABLE();
+                }
+            }
+            else {
+                UNIMPLEMENTED();
+            }
+            frameData.pointLightMatrices[i * ECubeFace::CubeFace_Count + face] = faceProj * view;
+        }
     }
     _frameUBO[_index]->writeData(&frameData, sizeof(FrameUBO), 0);
 

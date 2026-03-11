@@ -7,6 +7,7 @@
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 
+#include "Shadow.CombinedShadowMappingGenerate.glsl.h"
 
 namespace ya
 {
@@ -16,18 +17,22 @@ struct ShadowMapping : public IRenderSystem
     using Super                                    = IRenderSystem;
     static constexpr uint32_t SHADOW_PER_FRAME_SET = 4;
 
-    struct FrameUBO
-    {
-        glm::mat4 directionalLightMatrix;
-        glm::mat4 pointLightMatrices[6 * MAX_POINT_LIGHTS];
-        uint32_t  numPointLights      = 0;
-        uint32_t  hasDirectionalLight = false; // TODO: use macro to cut branch
-    };
+    // struct FrameUBO
+    // {
+    //     glm::mat4 directionalLightMatrix;
+    //     glm::mat4 pointLightMatrices[6 * MAX_POINT_LIGHTS]; // uses engine's MAX_POINT_LIGHTS (from Common/Limits.glsl)
+    //     uint32_t  numPointLights      = 0;
+    //     uint32_t  hasDirectionalLight = 0;
+    //     float     pointLightFarPlane  = 0.0f;
+    //     uint32_t  _pad                = 0;
+    // };
+    using FrameUBO = glsl_types::Shadow::CombinedShadowMappingGenerate::FrameData;
 
-    struct ModelPushConstant
-    {
-        glm::mat4 model{1.0f};
-    };
+    // struct ModelPushConstant
+    // {
+    //     glm::mat4 model{1.0f};
+    // };
+    using ModelPushConstant = glsl_types::Shadow::CombinedShadowMappingGenerate::PushConstant;
 
 
     stdptr<IRenderTarget> _shadowMapRT  = nullptr;
