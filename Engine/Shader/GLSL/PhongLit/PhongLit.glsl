@@ -307,7 +307,7 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
     if (pointLight.type == 1){
         // 
         float theta = dot(lightDir, normalize(-pointLight.spotDir));
-        float epsilon = pointLight.innerCutoff - pointLight.outerCutoff;
+        float epsilon = pointLight.innerCutOff - pointLight.outerCutOff;
         // see LearnOpenGL 2.5
         /* LearnOpenGL 2.5. Michael Qiao:
             边缘平滑公式可以这样理解:
@@ -317,12 +317,12 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
             3. 如果x>12,公式小于0, clamp为(0).
             其实就是从内光切到外光切求1到0的插值
         */
-        float intensity =   clamp( (theta - pointLight.outerCutoff) / epsilon, 0.0, 1.0);
+        float intensity =   clamp( (theta - pointLight.outerCutOff) / epsilon, 0.0, 1.0);
 
         //  这样不求边缘的衰减
         // innerCutOff = cos(innerConeAngle)
-        // fag->light 在 spotDir 的投影 长度 大于 innerCutoff 
-        // if (theta > light.innerCutoff){
+        // fag->light 在 spotDir 的投影 长度 大于 innerCutOff 
+        // if (theta > light.innerCutOff){
         //     // do normal calculation
         // }else{
         //     // only ambient

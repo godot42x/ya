@@ -99,6 +99,7 @@ do
     add_deps("shader")
     -- Include generated Slang headers (auto-generated from .slang files)
     add_includedirs("./Shader/Slang/Generated", { public = true })
+    add_includedirs("./Shader/GLSL/Generated", { public = true })
 
     add_deps("utility.cc")
     add_deps("log.cc")

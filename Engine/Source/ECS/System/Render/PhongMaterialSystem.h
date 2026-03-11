@@ -9,7 +9,8 @@
 #include "Render/RenderDefines.h"
 #include <cstddef>
 
-#include "PhongLit.slang.h"
+// #include "PhongLit.slang.h"
+#include "PhongLit.Types.glsl.h"
 
 
 struct VulkanPipelineLayout;
@@ -43,7 +44,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     //     alignas(16) glm::vec3 cameraPos; // 相机世界空间位置
     // };
 
-    using FrameUBO = slang_types::FrameData;
+    // using FrameUBO = slang_types::FrameData;
+    using FrameUBO = glsl_types::FrameData;
 
     // struct alignas(16) DirectionalLightData
     // {
@@ -54,7 +56,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     //     alignas(16) glm::mat4 directionalLightMatrix{1.0f}; // directional shadow matrix
     // };
 
-    using DirectionalLightData = slang_types::DirectionalLight;
+    // using DirectionalLightData = slang_types::DirectionalLight;
+    using DirectionalLightData = glsl_types::DirectionalLight;
 
 
 
@@ -78,7 +81,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     //     float outerCutOff;
     // };
 
-    using PointLightData = slang_types::PointLight;
+    // using PointLightData = slang_types::PointLight;
+    using PointLightData = glsl_types::PointLight;
 
 
 
@@ -95,7 +99,8 @@ struct PhongMaterialSystem : public IMaterialSystem
 
     // } uLight;
 
-    using LightUBO = slang_types::LightData;
+    // using LightUBO = slang_types::LightData;
+    using LightUBO = glsl_types::LightData;
     LightUBO uLight;
 
     // TODO: move to one debug layer system
@@ -110,7 +115,8 @@ struct PhongMaterialSystem : public IMaterialSystem
     //     alignas(16) glm::vec4 floatParam = glm::vec4(0.0f);
     // } uDebug;
 
-    using DebugUBO = slang_types::DebugData;
+    // using DebugUBO = slang_types::DebugData;
+    using DebugUBO = glsl_types::DebugData;
     DebugUBO uDebug;
 
     struct ModelPushConstant

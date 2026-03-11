@@ -74,7 +74,8 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
-            .shaderName        = "PhongLit.slang",
+            // .shaderName        = "PhongLit.slang",
+            .shaderName        = "PhongLit/PhongLit.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{

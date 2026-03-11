@@ -281,9 +281,9 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowDepthGenerate.glsl", .defines = commonDefines});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl", .defines = commonDefines});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl", .defines = commonDefines});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang", .defines = commonDefines});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang", .defines = commonDefines});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang", .defines = commonDefines});
 
 
@@ -398,16 +398,17 @@ void App::init(AppDesc ci)
         .attachments      = {
 
             .depthAttach = AttachmentDescription{
-                .index          = 0,
-                .format         = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+                .index            = 0,
+                .format           = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+                .samples          = ESampleCount::Sample_1,
+                .loadOp           = EAttachmentLoadOp::Clear,
+                .storeOp          = EAttachmentStoreOp::Store,
+                .stencilLoadOp    = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp   = EAttachmentStoreOp::DontCare,
+                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
+                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
             },
         },
     });

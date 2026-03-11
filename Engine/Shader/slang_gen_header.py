@@ -20,7 +20,18 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+_builtin_print = print
+def print(*args, **kwargs):
+    filename = sys._getframe(1).f_code.co_filename
+    lineno = sys._getframe(1).f_lineno
+    try:
+        rel = os.path.relpath(filename)
+    except ValueError:
+        rel = filename
+    return _builtin_print(f"{rel}:{lineno}", *args, **kwargs)
 
 # ---------------------------------------------------------------------------
 # Slang scalar type -> C++ type mapping
@@ -309,12 +320,61 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
         f.write("\n".join(lines))
 
 
+def _process_one_slang(slang_file: Path, output_dir: Path, namespace: str, entry: str, force: bool):
+    basename = slang_file.stem
+    json_path = output_dir / f"{basename}.reflection.json"
+    header_path = output_dir / f"{basename}.slang.h"
+    stamp_path = output_dir / f"{basename}.stamp"
+    spv_path = output_dir / f"{basename}.spv"
+
+    src_mtime = slang_file.stat().st_mtime
+    if not force:
+        # Skip if header is newer than source (success path)
+        if header_path.exists() and src_mtime <= header_path.stat().st_mtime:
+            print(f"[slang-gen] {basename} is up-to-date, skipping.")
+            return
+        # Skip if stamp is newer than source (previous attempt unchanged, e.g. known slangc failure)
+        if stamp_path.exists() and src_mtime <= stamp_path.stat().st_mtime:
+            print(f"[slang-gen] {basename} unchanged since last attempt, skipping.")
+            return
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[slang-gen] Generating C++ header for {slang_file} ...")
+
+    cmd = [
+        "slangc",
+        str(slang_file),
+        "-reflection-json", str(json_path),
+        "-entry", entry,
+        "-stage", "vertex",
+        "-target", "spirv",
+        "-o", str(spv_path),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"WARNING: slangc failed (exit {result.returncode}) for {slang_file}, skipping header gen:", file=sys.stderr)
+        print(f"  cmd: {' '.join(cmd)}", file=sys.stderr)
+        if result.stdout.strip():
+            print(result.stdout, file=sys.stdout)
+        if result.stderr.strip():
+            print(result.stderr, file=sys.stderr)
+        else:
+            print("  (slangc produced no output — try running the cmd above manually)", file=sys.stderr)
+        # Write stamp so next build skips this file if source hasn't changed
+        stamp_path.touch()
+        return
+
+    slang_source = slang_file.read_text(encoding="utf-8")
+    generate_header(str(json_path), str(header_path), namespace, slang_source)
+    print(f"[slang-gen] Generated: {header_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate C++ headers from Slang reflection JSON."
     )
-    parser.add_argument("input", help="Path to the .slang source file")
-    parser.add_argument("output_dir", help="Directory for generated files")
+    parser.add_argument("inputs", nargs="+", help="Path to .slang source file(s)")
+    parser.add_argument("--output-dir", required=True, help="Directory for generated files")
     parser.add_argument("--namespace", default="ya::slang_types",
                         help="C++ namespace for generated types (default: ya::slang_types)")
     parser.add_argument("--entry", default="vertMain",
@@ -323,50 +383,19 @@ def main():
                         help="Force regeneration even if header is up-to-date")
     args = parser.parse_args()
 
-    slang_file = Path(args.input)
     output_dir = Path(args.output_dir)
+    t_start = time.perf_counter()
+    count = 0
+    for input_path in args.inputs:
+        slang_file = Path(input_path)
+        if not slang_file.exists():
+            print(f"ERROR: Slang source not found: {slang_file}", file=sys.stderr)
+            continue
+        _process_one_slang(slang_file, output_dir, args.namespace, args.entry, args.force)
+        count += 1
 
-    if not slang_file.exists():
-        print(f"ERROR: Slang source not found: {slang_file}", file=sys.stderr)
-        sys.exit(1)
-
-    basename = slang_file.stem  # e.g. "Types"
-    json_path = output_dir / f"{basename}.reflection.json"
-    header_path = output_dir / f"{basename}.slang.h"
-    spv_path = output_dir / f"{basename}.spv"
-
-    # Incremental: skip if header is newer than source
-    if (not args.force
-            and header_path.exists()
-            and slang_file.stat().st_mtime <= header_path.stat().st_mtime):
-        print(f"[slang-gen] {basename} is up-to-date, skipping.")
-        return
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[slang-gen] Generating C++ header for {slang_file} ...")
-
-    # Step 1: run slangc to produce reflection JSON
-    cmd = [
-        "slangc",
-        str(slang_file),
-        "-reflection-json", str(json_path),
-        "-entry", args.entry,
-        "-stage", "vertex",
-        "-target", "spirv",
-        "-o", str(spv_path),
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"ERROR: slangc failed for {slang_file}:", file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
-        sys.exit(1)
-
-    # Read .slang source for macro extraction
-    slang_source = slang_file.read_text(encoding="utf-8")
-
-    # Step 2: parse JSON and emit C++ header
-    generate_header(str(json_path), str(header_path), args.namespace, slang_source)
-    print(f"[slang-gen] Generated: {header_path}")
+    elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+    print(f"[slang-gen] {count} file(s) processed in {elapsed_ms}ms")
 
 
 if __name__ == "__main__":

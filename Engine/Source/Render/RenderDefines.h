@@ -9,12 +9,14 @@
 
 // Single source of truth: MAX_POINT_LIGHTS is defined in PhongLit.slang,
 // auto-generated into PhongLit.slang.h by slang_gen_header.py.
-#include "PhongLit.slang.h"
+// #include "PhongLit.slang.h"
+#include "PhongLit.Types.glsl.h"
 
 namespace ya
 {
 
-using slang_types::MAX_POINT_LIGHTS;
+// using slang_types::MAX_POINT_LIGHTS;
+using glsl_types::MAX_POINT_LIGHTS;
 
 // enum bit flags support
 template <typename T>
@@ -364,6 +366,24 @@ enum T
 };
 }; // namespace EImageUsage
 
+namespace EImageCreateFlag
+{
+enum T : uint32_t
+{
+    None            = 0,
+    CubeCompatible  = 1 << 0, // 支持立方体贴图
+    MutableFormat   = 1 << 1, // 可变格式
+    SparseBinding   = 1 << 2, // 稀疏绑定
+    SparseResidency = 1 << 3, // 稀疏驻留
+    SparseAliased   = 1 << 4, // 稀疏别名
+    Protected       = 1 << 5, // 受保护图像
+    ExtendedUsage   = 1 << 6, // 扩展使用
+    Disjoint        = 1 << 7, // 不相关平面
+
+    ForCubeMap = CubeCompatible, // 用于立方体贴图
+};
+} // namespace EImageCreateFlag
+
 namespace ECompareOp
 {
 enum T
@@ -518,7 +538,8 @@ struct AttachmentDescription
     EImageLayout::T       finalLayout    = EImageLayout::ColorAttachmentOptimal;
 
     // declare here for RT/framebuffer
-    EImageUsage::T usage;
+    EImageUsage::T       usage;
+    EImageCreateFlag::T  imageCreateFlags = EImageCreateFlag::None;
 };
 
 
@@ -1104,9 +1125,6 @@ struct FrameContext
     struct PointLightData
     {
         // shadow
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::mat4 viewProjection;
         glm::vec3 position;
         // visual
         float     type      = 0;
@@ -1121,6 +1139,10 @@ struct FrameContext
         glm::vec3 spotDir;
         float     innerCutOff = 0.0f;
         float     outerCutOff = 0.0f;
+
+        struct 
+        std::array<glm::mat4, 6> shadowView; // for point light shadow mapping (cubemap)
+        glm::mat4 shadowProjection;
     };
     uint32_t                                     numPointLights = 0;
     std::array<PointLightData, MAX_POINT_LIGHTS> pointLights;

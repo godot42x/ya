@@ -29,6 +29,7 @@ layout (set =0, binding = 0) uniform FrameData{
     mat4 pointLightMatrices[6 * MAX_POINT_LIGHTS];
     uint numPointLights;
     uint hasDirectionalLight; // TODO: use macro to cut branch
+    float pointLightFarPlane;
 } uFrame;
 
 void main()
@@ -48,14 +49,14 @@ void main()
     }
 
     // point light shadow depths
-    // for (uint lightIdx = 0; lightIdx < uFrame.numPointLights; ++lightIdx)
-    for (uint lightIdx = 0; lightIdx < MAX_POINT_LIGHTS; ++lightIdx)
+    for (uint lightIdx = 0; lightIdx < uFrame.numPointLights; ++lightIdx)
+    // for (uint lightIdx = 0; lightIdx < MAX_POINT_LIGHTS; ++lightIdx)
     {
         // pos_x -> neg_x -> pos_y -> neg_y -> pos_z -> neg_z
         for (uint faceIdx = 0; faceIdx < 6; ++faceIdx)
         {
             uint index = lightIdx * 6 + faceIdx;
-            gl_Layer = int(1 + index);
+            gl_Layer  = int(1+index);
             for (uint vertIdx = 0; vertIdx < 3; ++vertIdx)
             {
                 vec4 worldPos = gl_in[vertIdx].gl_Position;
@@ -75,8 +76,8 @@ void main()
 void main()
 {
     // do nothing, driver already do this before fragment shader:
-    gl_FragDepth = gl_FragCoord.z;
-    if(gl_Layer > 0) {
-        gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
-    }
+    // gl_FragDepth = gl_FragCoord.z;
+    // if(gl_Layer > 1) {
+    //     gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
+    // }
 }

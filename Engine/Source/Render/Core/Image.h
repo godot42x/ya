@@ -42,26 +42,6 @@ enum T : uint32_t
 };
 }
 
-// 图像创建标志（RHI层）
-namespace EImageCreateFlag
-{
-enum T : uint32_t
-{
-    None            = 0,
-    CubeCompatible  = 1 << 0, // 支持立方体贴图
-    MutableFormat   = 1 << 1, // 可变格式
-    SparseBinding   = 1 << 2, // 稀疏绑定
-    SparseResidency = 1 << 3, // 稀疏驻留
-    SparseAliased   = 1 << 4, // 稀疏别名
-    Protected       = 1 << 5, // 受保护图像
-    ExtendedUsage   = 1 << 6, // 扩展使用
-    Disjoint        = 1 << 7, // 不相关平面
-
-    // 特定用途标志
-    ForCubeMap = CubeCompatible, // 用于立方体贴图
-};
-}
-
 struct ImageHandleTag
 {};
 using ImageHandle = Handle<ImageHandleTag>;

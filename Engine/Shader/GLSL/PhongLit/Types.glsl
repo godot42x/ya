@@ -23,8 +23,8 @@ struct PointLight {
     vec3  spotDir;
     // float innerAngle;
     // float outerAngle;
-    float innerCutoff; // cos(innerAngle)
-    float outerCutoff; // cos(outerAngle)
+    float innerCutOff; // cos(innerAngle)
+    float outerCutOff; // cos(outerAngle)
 };
 
 #ifndef MAX_POINT_LIGHTS
@@ -33,7 +33,7 @@ struct PointLight {
 
 
 
-layout(set =0, binding =0, std140) uniform FrameUBO {
+layout(set =0, binding =0, std140) uniform FrameData {
     mat4 projMat;
     mat4 viewMat;
     ivec2 resolution;
@@ -45,14 +45,14 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 
 
 
-layout(set =0, binding =1, std140) uniform LightUBO {
+layout(set =0, binding =1, std140) uniform LightData {
     DirectionalLight dirLight;
     PointLight pointLights[MAX_POINT_LIGHTS];
     uint numPointLights;   // collect from scene
     uint hasDirectionalLight; // TODO: use macro to cut branch
 } uLit;
 
-layout(set = 0, binding =2, std140) uniform DebugUBO {
+layout(set = 0, binding =2, std140) uniform DebugData {
     bool bDebugNormal;
     bool bDebugDepth;
     bool bDebugUV;

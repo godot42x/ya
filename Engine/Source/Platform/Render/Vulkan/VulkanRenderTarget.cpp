@@ -233,6 +233,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     .samples       = colorAttachment.samples,
                     .usage         = colorAttachment.usage,
                     .initialLayout = colorAttachment.initialLayout,
+                    .flags         = colorAttachment.imageCreateFlags,
                 };
                 auto image    = VulkanImage::create(_vkRender, imageCI);
                 image->bOwned = true;
@@ -255,6 +256,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 .samples       = depthAttachment->samples,
                 .usage         = depthAttachment->usage,
                 .initialLayout = depthAttachment->initialLayout,
+                .flags         = depthAttachment->imageCreateFlags,
             };
             depthImage = VulkanImage::create(_vkRender, depthCI);
         }

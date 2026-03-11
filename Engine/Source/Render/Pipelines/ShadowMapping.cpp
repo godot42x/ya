@@ -28,7 +28,8 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
 
-            .shaderName        = "Shadow/CombinedShadowDepthGenerate.glsl",
+            .shaderName = "Shadow/CombinedShadowMappingGenerate.glsl",
+            // .shaderName        = "CombineShadowMappingGenerate.slang",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -44,7 +45,9 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
                     .offset     = offsetof(ya::Vertex, position),
                 },
             },
-        },
+            .defines = {
+                std::format("MAX_POINT_LIGHTS {}", MAX_POINT_LIGHTS),
+            }},
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
             EPipelineDynamicFeature::Scissor,
