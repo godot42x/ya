@@ -284,6 +284,7 @@ void App::init(AppDesc ci)
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowDepthGenerate.glsl", .defines = commonDefines});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl", .defines = commonDefines});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang", .defines = commonDefines});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang", .defines = commonDefines});
 
 
     // MARK: Render/Hook
@@ -438,6 +439,11 @@ void App::init(AppDesc ci)
 
     auto tf        = _render->getTextureFactory();
     auto shadowImg = _depthRT->getCurFrameBuffer()->getDepthTexture()->getImageShared();
+
+    // _render->waitIdle(); // wait image creat finish and layout transition finish before create image view
+    // auto cmdBuf = _render->beginIsolateCommands("Create Shadow Map ImageViews");
+    // cmdBuf->transitionRenderTargetLayout(_depthRT.get(), EImageLayout::ShaderReadOnlyOptimal);
+
     // TODO: use 6 array first then 1 array last can optimize performance?
     _shadowDirectionalDepthIV = tf->createImageView(
         shadowImg,
@@ -465,6 +471,34 @@ void App::init(AppDesc ci)
         });
     YA_CORE_ASSERT(_shadowDirectionalDepthIV && _shadowDirectionalDepthIV->getHandle(), "Failed to create shadow map directional depth image view");
     YA_CORE_ASSERT(_shadowPointDepthIV && _shadowPointDepthIV->getHandle(), "Failed to create shadow map point depth image view");
+
+    // Editor visualization views – created once at init
+    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        _shadowPointCubeIVs[i] = tf->createImageView(
+            shadowImg,
+            ImageViewCreateInfo{
+                .label          = std::format("Shadow Point[{}] CubeIV", i),
+                .viewType       = EImageViewType::ViewCube,
+                .aspectFlags    = EImageAspect::Depth,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 1 + i * 6,
+                .layerCount     = 6,
+            });
+        for (uint32_t f = 0; f < 6; ++f) {
+            _shadowPointFaceIVs[i][f] = tf->createImageView(
+                shadowImg,
+                ImageViewCreateInfo{
+                    .label          = std::format("Shadow Point[{}] Face[{}]", i, f),
+                    .viewType       = EImageViewType::View2D,
+                    .aspectFlags    = EImageAspect::Depth,
+                    .baseMipLevel   = 0,
+                    .levelCount     = 1,
+                    .baseArrayLayer = 1 + i * 6 + f,
+                    .layerCount     = 1,
+                });
+        }
+    }
     auto shadowAddresMode = ESamplerAddressMode::ClampToBorder;
     _shadowSampler        = Sampler::create(
         SamplerDesc{
@@ -494,6 +528,9 @@ void App::init(AppDesc ci)
     _deleter.push("Shadow ImageViews", [this](void*) {
         _shadowDirectionalDepthIV.reset();
         _shadowPointDepthIV.reset();
+        for (auto& iv : _shadowPointCubeIVs) iv.reset();
+        for (auto& faces : _shadowPointFaceIVs)
+            for (auto& iv : faces) iv.reset();
     });
 
 

@@ -712,8 +712,74 @@ void EditorLayer::debugWindow()
                            TextureLibrary::get().getLinearSampler(),
                            "Shadow Map",
                            constraintSize(depthExtent));
-        // MAX_POINT_LIGHTS cubemap, how to visualize? Show one face or all 6 faces in a grid?
+        // Per-face View2D: pre-created in App, just index
+        static int selectedPointLight = 0;
+        static int cubeFace           = ECubeFace::CubeFace_NegY;
+        {
+            static std::string pointLightComboStr = []() {
+                std::string ret{};
+                for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+                    ret += "Point Light " + std::to_string(i) + '\0';
+                }
+                return ret;
+            }();
+            Combo(std::format("Point Light {}", selectedPointLight).c_str(),
+                  &selectedPointLight,
+                  pointLightComboStr.c_str());
+            ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
+        }
+
+        auto& faceIV = App::get()->_shadowPointFaceIVs[selectedPointLight][cubeFace];
+        if (faceIV) {
+            ImGuiHelper::Image(faceIV.get(),
+                               TextureLibrary::get().getLinearSampler(),
+                               "Point Light Shadow Map",
+                               constraintSize(depthExtent));
+        }
+
+        // auto cubeImagesView = [](int layerStart, int numCube) {
+        //     static int selectedCube = 0;
+        //     static int selectedFace = 0;
+        //     for (int i = 0; i < numCube; ++i) {
+        //         if (Button(std::format("Cube %s", i).c_str())) {
+        //             selectedCube = i;
+        //         }
+        //         if (i < numCube - 1) {
+        //             SameLine();
+        //         }
+        //     }
+        //     static const auto idxToFaceName = [](int idx) {
+        //         switch (idx) {
+        //         case 0:
+        //             return "PosX";
+        //         case 1:
+        //             return "NegX";
+        //         case 2:
+        //             return "PosY";
+        //         case 3:
+        //             return "Neg";
+        //         case 4:
+        //             return "PosZ";
+        //         case 5:
+        //             return "NegZ";
+        //         default:
+        //             return "Unknown";
+        //         };
+        //     };
+
+        //     for (int i = 0; i < 6; ++i)
+        //     {
+        //         if (Button(std::format("Face {}", idxToFaceName(i)).c_str())) {
+        //             selectedFace = i;
+        //         }
+        //         if (i < 6 - 1) {
+        //             SameLine();
+        //         }
+        //     }
+
+        // };
     }
+
 
 
     Text("Mirror Render Target (from framebuffer)");

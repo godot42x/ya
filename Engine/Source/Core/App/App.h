@@ -225,7 +225,11 @@ struct App
     stdptr<IRenderTarget> _depthRT                  = nullptr;
     stdptr<IRenderTarget> _pointLightDepthRT        = nullptr;
     stdptr<IImageView>    _shadowDirectionalDepthIV = nullptr;
-    stdptr<IImageView>    _shadowPointDepthIV       = nullptr;
+    stdptr<IImageView>    _shadowPointDepthIV       = nullptr; // View2DArray, used for shadow shader DS
+
+    // Editor visualization: pre-created at init, never recreated per-frame
+    std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                    _shadowPointCubeIVs{};  // N x ViewCube
+    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS>     _shadowPointFaceIVs{}; // N*6 x View2D
 
 
     // Viewport texture for ImGui display (unified Texture semantics)

@@ -634,6 +634,7 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
         return;
     }
 
+    // TODO: remove this, only copy ptrs?
     std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
     for (size_t i = 0; i < CubeFace_Count; ++i) {
         std::memcpy(stagingData.data() + (i * faceSize), pixels[i].get(), static_cast<size_t>(faceSize));

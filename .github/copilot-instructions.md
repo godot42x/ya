@@ -17,6 +17,7 @@
 - RENDER_ARCH : `./skills/render-arch/SKILL.md`
 - CPP_STYLE : `./skills/cpp-style/SKILL.md`
 - DEBUG_REVIEW : `./skills/debug-review/SKILL.md`
+- VSCODE : `./skills/vscode/SKILL.md`
 
 ### Skill 抉择方案（触发条件 -> 选择）
 
@@ -25,10 +26,11 @@
 3. **渲染管线/后端/材质系统边界问题** -> 优先 **RENDER_ARCH**。
 4. **C++ 新增/重构/风格统一/生命周期约束** -> 优先 **CPP_STYLE**。
 5. **崩溃排查、日志定位、提交前自检/Review** -> 优先 **DEBUG_REVIEW**。
+6. **VS Code 任务/调试/插件/settings/clangd 配置** -> 优先 **VSCODE**。
 
 ### 优先级与冲突规则
 
-- 单一任务命中多个技能时，按：`BUILD > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW > SOUL`。
+- 单一任务命中多个技能时，按：`BUILD > VSCODE > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW > SOUL`。
 - 若问题本身不清晰，先执行 `SOUL` 澄清，再按上面的优先级切换。
 - 一个任务可串行切换多个技能，但每一步只使用一个主技能，避免规则混杂。
 

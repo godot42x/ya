@@ -157,9 +157,9 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage* const im
         .subresourceRange    = {
                .aspectMask     = getAspectMask(image->_format),
                .baseMipLevel   = 0,
-               .levelCount     = 1,
+               .levelCount     = VK_REMAINING_MIP_LEVELS,
                .baseArrayLayer = 0,
-               .layerCount     = 1,
+               .layerCount     = VK_REMAINING_ARRAY_LAYERS,
         },
     };
     if (subresourceRange) {
@@ -226,14 +226,19 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
             .subresourceRange    = {},
         };
 
-        barrier.subresourceRange.aspectMask     = getAspectMask(transition.image->getVkFormat());
-        barrier.subresourceRange.baseMipLevel   = transition.range.baseMipLevel;
-        barrier.subresourceRange.levelCount     = transition.range.levelCount;
-        barrier.subresourceRange.baseArrayLayer = transition.range.baseArrayLayer;
-        barrier.subresourceRange.layerCount     = transition.range.layerCount;
-
+        barrier.subresourceRange.aspectMask = getAspectMask(transition.image->getVkFormat());
         if (transition.useRange) {
-            barrier.subresourceRange.aspectMask = transition.range.aspectMask;
+            barrier.subresourceRange.aspectMask     = transition.range.aspectMask;
+            barrier.subresourceRange.baseMipLevel   = transition.range.baseMipLevel;
+            barrier.subresourceRange.levelCount     = transition.range.levelCount;
+            barrier.subresourceRange.baseArrayLayer = transition.range.baseArrayLayer;
+            barrier.subresourceRange.layerCount     = transition.range.layerCount;
+        } else {
+            // No explicit range: cover the entire image
+            barrier.subresourceRange.baseMipLevel   = 0;
+            barrier.subresourceRange.levelCount     = VK_REMAINING_MIP_LEVELS;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount     = VK_REMAINING_ARRAY_LAYERS;
         }
 
         if (!getAccessMask(barrier.oldLayout, barrier.srcAccessMask, true) || !getAccessMask(barrier.newLayout, barrier.dstAccessMask, false)) {

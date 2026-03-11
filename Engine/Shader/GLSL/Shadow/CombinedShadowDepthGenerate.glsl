@@ -48,16 +48,19 @@ void main()
     }
 
     // point light shadow depths
-    for (uint lightIdx = 0; lightIdx < uFrame.numPointLights; ++lightIdx)
+    // for (uint lightIdx = 0; lightIdx < uFrame.numPointLights; ++lightIdx)
+    for (uint lightIdx = 0; lightIdx < MAX_POINT_LIGHTS; ++lightIdx)
     {
+        // pos_x -> neg_x -> pos_y -> neg_y -> pos_z -> neg_z
         for (uint faceIdx = 0; faceIdx < 6; ++faceIdx)
         {
-            gl_Layer = int(1 + lightIdx * 6 + faceIdx);
+            uint index = lightIdx * 6 + faceIdx;
+            gl_Layer = int(1 + index);
             for (uint vertIdx = 0; vertIdx < 3; ++vertIdx)
             {
                 vec4 worldPos = gl_in[vertIdx].gl_Position;
-                gl_Position = uFrame.pointLightMatrices[lightIdx * 6 + faceIdx] * worldPos;
-                // gLinearDepth = gl_Position.z / gl_Position.w; // store linear depth in [0,1] range
+                gl_Position = uFrame.pointLightMatrices[index] * worldPos;
+                // gLinearDepth = 1;
                 EmitVertex();
             }
             EndPrimitive();
@@ -72,5 +75,8 @@ void main()
 void main()
 {
     // do nothing, driver already do this before fragment shader:
-    // gl_FragDepth = gl_FragCoord.z;
+    gl_FragDepth = gl_FragCoord.z;
+    if(gl_Layer > 0) {
+        gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
+    }
 }
