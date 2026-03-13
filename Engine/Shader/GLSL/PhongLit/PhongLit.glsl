@@ -290,6 +290,13 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     return ambient + diffuse + specular;
 }
 
+
+
+#ifndef ENABLE_POINT_LIGHT_SHADOW_PCF
+    #define ENABLE_POINT_LIGHT_SHADOW_PCF 0
+#endif
+
+
 vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor, uint pointLightIndex)
 {
     vec3 lightDir = normalize(pointLight.position - fragPos);
@@ -334,13 +341,44 @@ vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  ve
     }
 
     // SHADOW
-    // float shadow = calculatePointLightShadow()
-    vec3 fragToLight = fragPos - pointLight.position;
-    float closestDepth = texture(uPointLightShadowMapArray[pointLightIndex], fragToLight ).r;
-    closestDepth *= pointLight.farPlane;
-    float currentDepth = length(fragToLight);
     float bias = 0.05;
-    float shadow = (currentDepth - bias) > closestDepth? 1.0: 0.0;
+    vec3 fragToLight = fragPos - pointLight.position;
+    float currentDepth = length(fragToLight);
+    #define DEPTH_BUFFER uPointLightShadowMapArray[pointLightIndex]
+
+    #if !ENABLE_POINT_LIGHT_SHADOW_PCF
+        float closestDepth = texture(DEPTH_BUFFER, fragToLight ).r;
+        closestDepth *= pointLight.farPlane;
+        float shadow = (currentDepth - bias) > closestDepth? 1.0: 0.0;
+    #else
+        // #ifndef POINT_LIGHT_PCF_SAMPLES
+
+        const vec3 sampleOffsetDirections[20] = vec3[]
+        (
+            vec3( 1,  1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1,  1,  1), 
+            vec3( 1,  1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1,  1, -1),
+            vec3( 1,  1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1,  1,  0),
+            vec3( 1,  0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1,  0, -1),
+            vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)
+        );
+
+        float shadow = 0.0;
+        int samples = 20;
+        float offset = 0.1;
+        float diskRadius = 0.05;
+        for(int i =0; i< samples ; ++i)
+        {
+            // float closestDepth = texture(depthBuffer, fragToLight + vec3 (x, y, z)).r; // sample by 3 dimension
+            float closestDepth = texture(DEPTH_BUFFER, fragToLight + sampleOffsetDirections[i] * diskRadius ).r;
+            closestDepth *= pointLight.farPlane;
+            if((currentDepth - bias) > closestDepth){
+                shadow += 1.0;
+            }
+        }
+        shadow/= float(samples);
+        
+    #endif
+
 
     // 计算衰减
     float distance = length(pointLight.position - fragPos);
