@@ -13,13 +13,18 @@ namespace ya
 struct Entity;
 struct IComponent
 {
-    Entity *_owner;
+
+    YA_REFLECT_BEGIN(IComponent)
+    YA_REFLECT_END()
+
+    Entity* _owner;
     virtual ~IComponent() = default;
 
-    void                  setOwner(Entity *entity) { _owner = entity; }
-    [[nodiscard]] Entity *getOwner() const { return _owner; }
+    void                  setOwner(Entity* entity) { _owner = entity; }
+    [[nodiscard]] Entity* getOwner() const { return _owner; }
 
     virtual void onPostSerialize() {}
+    virtual void onEdit() {}
 };
 
 // Basic component for entity identification
@@ -27,8 +32,8 @@ struct IDComponent : public IComponent
 {
     UUID _id = UUID(0);
 
-    IDComponent()                    = default;
-    IDComponent(const IDComponent &) = default;
+    IDComponent()                   = default;
+    IDComponent(const IDComponent&) = default;
     IDComponent(UUID id) : _id(id) {}
     IDComponent(uint64_t id) : _id(id) {}
 };
@@ -44,8 +49,8 @@ struct AudioSourceComponent : public IComponent
     float    _pitch        = 1.0f;
     float    _spatialBlend = 0.0f; // 0 = 2D, 1 = 3D
 
-    AudioSourceComponent()                             = default;
-    AudioSourceComponent(const AudioSourceComponent &) = default;
+    AudioSourceComponent()                            = default;
+    AudioSourceComponent(const AudioSourceComponent&) = default;
     AudioSourceComponent(uint32_t clipId) : _audioClipID(clipId) {}
 };
 

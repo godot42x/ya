@@ -8,7 +8,7 @@ layout(location = 2) in vec2 aTexCoord;
 layout(location = 3) in uint aTextureIdx;
 
 layout(set = 0, binding = 0) uniform FrameUBO {
-    mat4 matViewProj;
+    mat4 camViewProj;
 } uFrame;
 
 layout(location = 0) out vec4 vColor;
@@ -17,9 +17,12 @@ layout(location = 2) out flat uint vTextureIdx;
 
 void main()
 {
-    gl_Position = uFrame.matViewProj * vec4(aPosition, 1.0);
+    gl_Position = uFrame.camViewProj * vec4(aPosition, 1.0);
     vColor = aColor;
-    vTexcoord = aTexCoord;
+    // World-space quads have Y+ pointing up, but the quad's vertex layout
+    // maps increasing Y to increasing V (texture bottom). Flip V so the
+    // texture is right-side-up when rendered in world space.
+    vTexcoord = vec2(aTexCoord.x, 1.0 - aTexCoord.y);
     vTextureIdx = aTextureIdx;
 }
 
@@ -52,4 +55,3 @@ void main()
 
     fColor = texColor * vColor;
 }
-

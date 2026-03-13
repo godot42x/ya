@@ -3,6 +3,8 @@
 #include "Core/Debug/RenderDocCapture.h"
 #include "Core/Math/Math.h"
 #include "Core/UI/UIManager.h"
+
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -102,6 +104,8 @@ void App::tickRenderPipeline(float dt)
         // Extract camera position from view matrix inverse
         glm::mat4 invView = glm::inverse(ctx.view);
         ctx.cameraPos     = glm::vec3(invView[3]);
+
+        auto cameraForward = glm::vec3(ctx.view[0][2], ctx.view[1][2], ctx.view[2][2]);
 
         // grab lights once
         ctx.bHasDirectionalLight = false;
@@ -288,7 +292,20 @@ void App::tickRenderPipeline(float dt)
 
         {
             YA_PROFILE_SCOPE("Render2D");
-            Render2D::begin(cmdBuf.get());
+            FRender2dContext render2dCtx{
+                .cmdBuf       = cmdBuf.get(),
+                .windowWidth  = ctx.extent.width,
+                .windowHeight = ctx.extent.height,
+                .cam          = {
+
+                    .position       = ctx.cameraPos,
+                    .view           = ctx.view,
+                    .projection     = ctx.projection,
+                    .viewProjection = ctx.projection * ctx.view,
+                },
+            };
+
+            Render2D::begin(render2dCtx);
 
             if (_appMode == AppMode::Drawing) {
                 for (const auto&& [idx, p] : ut::enumerate(clicked))
@@ -301,12 +318,54 @@ void App::tickRenderPipeline(float dt)
                     _editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
                     Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
                 }
-
-                Render2D::onRender();
-                UIManager::get()->render();
-                Render2D::onRenderGUI();
-                Render2D::end();
             }
+
+            const glm::vec2 screenSize(30, 30);
+            const float     viewPortHeight = ctx.extent.height;
+            const float     scaleFactor    = screenSize.x / viewPortHeight;
+
+            for (const auto& [entity, billboard, transfCompp] :
+                 getSceneManager()->getActiveScene()->getRegistry().view<BillboardComponent, TransformComponent>().each())
+            {
+                auto texture = billboard.image.isValid() ? billboard.image.textureRef.getShared() : nullptr;
+
+                const auto& pos = transfCompp.getWorldPosition();
+
+                glm::vec3 billboardToCamera = ctx.cameraPos - pos;
+                float     distance          = glm::length(billboardToCamera);
+                billboardToCamera           = glm::normalize(billboardToCamera);
+
+                if constexpr (1) {
+                    // Build billboard rotation matrix with stable world-up constraint
+                    // Forward: billboard faces camera
+                    glm::vec3 forward = billboardToCamera;
+                    glm::vec3 worldUp = glm::vec3(0, 1, 0);
+                    glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
+                    glm::vec3 up      = glm::cross(forward, right);
+
+                    glm::mat4 rot(1.0f);
+                    rot[0] = glm::vec4(right, 0.0f);
+                    rot[1] = glm::vec4(up, 0.0f);
+                    rot[2] = glm::vec4(forward, 0.0f);
+
+                    // scale
+                    float     factor = scaleFactor * distance * 2.0f;
+                    glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
+
+                    glm::mat4 trans = glm::mat4(1.0);
+                    trans           = glm::translate(trans, pos);
+                    trans           = trans * rot;
+                    trans           = glm::scale(trans, scale);
+
+                    Render2D::makeWorldSprite(trans, texture);
+                }
+            }
+
+
+            Render2D::onRender();
+            UIManager::get()->render();
+            Render2D::onRenderGUI();
+            Render2D::end();
         }
 
         cmdBuf->endRendering(EndRenderingInfo{

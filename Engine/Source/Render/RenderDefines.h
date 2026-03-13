@@ -180,7 +180,7 @@ struct ShaderDesc
     ESourceMode                          sourceMode = ESourceMode::SingleShader;
     std::string                          shaderName; // we use single glsl now
     std::vector<StageFile>               stageFiles{};
-    bool                                 bDeriveFromShader = false; // whether to use vertex layout by the shader's reflection
+    bool                                 bDeriveFromShader = false; // UNIMPLEMENTED: whether to use vertex layout by the shader's reflection
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
     std::vector<std::string>             defines = {}; // #define in shader

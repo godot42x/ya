@@ -101,9 +101,8 @@ struct FMath
 
     static glm::mat4 build_transform_mat4(glm::vec3 translation, glm::vec3 rotationDeg, glm::vec3 scale)
     {
-        // glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), scale);
-        // glm::mat4 rotMat   = glm::yawPitchRoll(glm::radians(rotationDeg.y), glm::radians(rotationDeg.x), glm::radians(rotationDeg.z));
-        // glm::mat4 transMat = glm::translate(glm::mat4(1.0f), translation
+        // glm::translate(glm::mat4(1.0), translation) *glm::rotation()
+
         return glm::mat4(1.0f); // 临时返回单位矩阵，避免编译错误
     }
 

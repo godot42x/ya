@@ -1,12 +1,13 @@
 #include "ResourceResolveSystem.h"
 #include "Core/App/App.h"
-#include "ECS/Component/2D/UIComponent.h"
 #include "Resource/AssetManager.h"
 #include "Scene/Node.h"
 #include "Scene/SceneManager.h"
 
 
 
+#include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
@@ -15,6 +16,7 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Model.h"
 #include "Resource/TextureLibrary.h"
+
 
 
 
@@ -72,6 +74,11 @@ void ResourceResolveSystem::onUpdate(float dt)
             uiComponent.view.textureRef.resolve();
         }
     });
+    for (const auto& [entity, comp] : registry.view<BillboardComponent>().each()) {
+        if (comp.bDirty) {
+            comp.resolve();
+        }
+    }
 
     // Add more component types here as needed:
     // - PBRMaterialComponent
@@ -255,7 +262,7 @@ void ResourceResolveSystem::initSharedMaterial(
     if (matData->hasTexture(MatTexture::Diffuse)) {
         std::string path    = matData->resolveTexturePath(MatTexture::Diffuse);
         auto        texture = AssetManager::get()->loadTexture(path,
-                                                               AssetManager::inferTextureColorSpace(MatTexture::Diffuse));
+                                                        AssetManager::inferTextureColorSpace(MatTexture::Diffuse));
         if (texture) {
             TextureView tv;
             tv.texture = texture;
@@ -268,7 +275,7 @@ void ResourceResolveSystem::initSharedMaterial(
     if (matData->hasTexture(MatTexture::Specular)) {
         std::string path    = matData->resolveTexturePath(MatTexture::Specular);
         auto        texture = AssetManager::get()->loadTexture(path,
-                                                               AssetManager::inferTextureColorSpace(MatTexture::Specular));
+                                                        AssetManager::inferTextureColorSpace(MatTexture::Specular));
         if (texture) {
             TextureView tv;
             tv.texture = texture;

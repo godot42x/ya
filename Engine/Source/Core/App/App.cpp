@@ -272,7 +272,8 @@ void App::init(AppDesc ci)
     _shaderStorage->setSlangProcessor(slangProcessor);
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_World.glsl"});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
@@ -1218,6 +1219,7 @@ void App::onRenderGUI(float dt)
 {
     YA_PROFILE_FUNCTION()
     auto& io = ImGui::GetIO();
+    (void)io;
     if (!ImGui::Begin("App Info"))
     {
         ImGui::End();

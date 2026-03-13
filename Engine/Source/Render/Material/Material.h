@@ -58,6 +58,11 @@ struct TextureSlot
         bEnable = tv.bEnable;
     }
 
+    void fromPath(const std::string &path)
+    {
+        textureRef.set(path, nullptr);
+    }
+
     bool resolve() { return textureRef.resolve(); }
     bool isLoaded() const { return textureRef.isLoaded(); }
     bool isValid() const { return textureRef.hasPath(); }

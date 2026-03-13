@@ -12,6 +12,7 @@
 
 
 #include "ECS/Component.h"
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -19,6 +20,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
 
 
 #include "EditorLayer.h"
@@ -101,6 +103,28 @@ void DetailsView::drawComponents(Entity& entity)
         }
     }
     ImGui::PopID();
+    std::set<ya::type_index_t> hasDraw;
+
+    // TODO: support function reflection
+    // for (const auto& [name, ti] : ECSRegistry::get().getTypeIndexCache()) {
+    //     if (hasDraw.contains(ti)) {
+    //         continue;
+    //     }
+    //     auto component = ECSRegistry::get().getComponent(ti, scene->getRegistry(), entity);
+    //     if (!component) {
+    //         continue;
+    //     }
+
+    //     ya::RenderContext ctx;
+    //     ctx.beginInstance(component);
+    //     ya::renderReflectedType(name, ti, component, ctx, 0);
+    //     bool bComponentDirty = ctx.hasModifications();
+    //     if constexpr (std::is_invocable_v<decltype(onComponentDirty), T*>) {
+    //         if (bComponentDirty) {
+    //             onComponentDirty(component);
+    //         }
+    //     }
+    // }
 
     drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent* tc) {
         // Mark both local and world as dirty, then propagate to children
@@ -131,6 +155,9 @@ void DetailsView::drawComponents(Entity& entity)
 
     drawReflectedComponent<RenderComponent>("Render Component", entity, [](RenderComponent* rc) {
         // TODO: implement render component details
+    });
+    drawReflectedComponent<BillboardComponent>("Billboard", entity, [](BillboardComponent* bc) {
+        bc->invalidate();
     });
 
     drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc) {

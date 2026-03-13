@@ -1,4 +1,5 @@
 #include "HelloMaterial.h"
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 #include "Resource/FontManager.h"
@@ -421,6 +422,9 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto plc = entity->addComponent<ya::PointLightComponent>();
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
+        auto* bc = entity->addComponent<ya::BillboardComponent>();
+        bc->image.fromPath("Engine/Content/TestTextures/icons8-light-64.png");
+
         auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
         umc->setMaterial(pointLightMat);
         // umc.add
@@ -442,6 +446,9 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         // Material component
         auto plc = entity->addComponent<ya::PointLightComponent>();
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
+
+        auto* bc = entity->addComponent<ya::BillboardComponent>();
+        bc->image.fromPath("Engine/Content/TestTextures/icons8-light-64.png");
 
         auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
         umc->setMaterial(pointLightMat);

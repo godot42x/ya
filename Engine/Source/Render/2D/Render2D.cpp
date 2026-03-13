@@ -1,12 +1,10 @@
 #include "Render2D.h"
 
-#include "Core/MessageBus.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderPass.h"
-#include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
 #include "imgui.h"
@@ -15,33 +13,19 @@
 
 #include "utility.cc/ranges.h"
 
-#define DYN_CULL 1
-
 namespace ya
 {
 
 FRender2dData Render2D::data;
-FQuadRender  *Render2D::quadData = nullptr;
+FQuadRender*  Render2D::quadData = nullptr;
 
-auto &data2D = Render2D::data;
+auto& data2D = Render2D::data;
 
 
-void Render2D::init(IRender *render)
+void Render2D::init(IRender* render)
 {
-    auto *swapchain = render->getSwapchain();
-    auto  extent    = swapchain->getExtent();
-
-    data.windowWidth  = extent.width;
-    data.windowHeight = extent.height;
-
-    MessageBus::get()->subscribe<WindowResizeEvent>([render](const WindowResizeEvent &ev) {
-        auto *swapchain = render->getSwapchain();
-        auto  extent    = swapchain->getExtent();
-        YA_CORE_INFO("Window resized, swapchain extend: {}x{}, event: {}x{}", extent.width, extent.height, ev.GetWidth(), ev.GetHeight());
-        data.windowWidth  = extent.width;
-        data.windowHeight = extent.height;
-        return false;
-    });
+    // windowWidth/Height are now set per-frame in begin() from the actual render target extent,
+    // instead of from the swapchain. This unifies the data source.
 
     quadData = new FQuadRender();
     quadData->init(render);
@@ -69,83 +53,82 @@ void Render2D::onRender()
     // }
 }
 
+void Render2D::begin(const FRender2dContext& ctx)
+{
+    data.curCmdBuf    = ctx.cmdBuf;
+    data.cam          = ctx.cam;
+    data.windowHeight = ctx.windowHeight;
+    data.windowWidth  = ctx.windowWidth;
+    Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
+    quadData->begin(extent);
+}
+
 void Render2D::onImGui()
 {
-#if DYN_CULL
-    int cull = (int)(data.cullMode);
-    if (ImGui::Combo("Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
+    ImGui::Checkbox("bReverseViewPort", &data2D.bReverseViewport);
+
+    // Debug: cull mode override for world-space pipeline (useful for inspecting front/back faces)
+    int cull = (int)(data.worldCullMode);
+    if (ImGui::Combo("World Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
         switch (cull) {
         case 0:
-            data.cullMode = ECullMode::None;
+            data.worldCullMode = ECullMode::None;
             break;
         case 1:
-            data.cullMode = ECullMode::Front;
+            data.worldCullMode = ECullMode::Front;
             break;
         case 2:
-            data.cullMode = ECullMode::Back;
+            data.worldCullMode = ECullMode::Back;
             break;
         case 3:
-            data.cullMode = ECullMode::FrontAndBack;
+            data.worldCullMode = ECullMode::FrontAndBack;
             break;
         default:
-            data.cullMode = ECullMode::Back;
+            data.worldCullMode = ECullMode::Front;
             break;
         }
     }
-#endif
+    cull = (int)data.screenCullMode;
+    if (ImGui::Combo("Screen Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
+        switch (cull) {
+        case 0:
+            data.screenCullMode = ECullMode::None;
+            break;
+        case 1:
+            data.screenCullMode = ECullMode::Front;
+            break;
+        case 2:
+            data.screenCullMode = ECullMode::Back;
+            break;
+        case 3:
+            data.screenCullMode = ECullMode::FrontAndBack;
+            break;
+        default:
+            data.screenCullMode = ECullMode::Front;
+            break;
+        }
+    }
 
     ImGui::InputInt("Text Layout Mode", &data2D.TextLayoutMode);
-    ImGui::InputInt("View Matrix Mode", &data2D.viewMatrixMode);
-
-
     quadData->onImGui();
 }
 
 
 // MARK: quad init
 
-void FQuadRender::init(IRender *render)
+void FQuadRender::init(IRender* render)
 {
     _render = render;
 
-    _pipelineDesc = PipelineLayoutDesc{
-        .pushConstants        = {},
-        .descriptorSetLayouts = {
-            DescriptorSetLayoutDesc{
-                .label    = "Frame_UBO",
-                .set      = 0,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex,
-                    },
-                },
-            },
-            DescriptorSetLayoutDesc{
-                .label    = "CombinedImageSampler",
-                .set      = 0,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = TEXTURE_SET_SIZE,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-        },
-    };
 
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 2,
+            .maxSets   = 3,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 1,
+                    .descriptorCount = 2,
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
@@ -161,7 +144,20 @@ void FQuadRender::init(IRender *render)
     _frameUBOBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_FrameUBO",
+            .label         = "Sprite2D_Screen_FrameUBO",
+            .usage         = EBufferUsage::UniformBuffer,
+            .size          = sizeof(FrameUBO),
+            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+        });
+
+    // World-space FrameUBO (separate buffer to avoid GPU read hazard when both paths flush in the same frame)
+    descriptorSets.clear();
+    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
+    _worldFrameUboDS     = descriptorSets[0];
+    _worldFrameUBOBuffer = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .label         = "Sprite2D_World_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
@@ -191,16 +187,16 @@ void FQuadRender::init(IRender *render)
         .pipelineLayout = _pipelineLayout.get(),
 
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Sprite2D.glsl",
+            .shaderName        = "Sprite2D_Screen.glsl",
             .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
-                    .slot = 0,
-                    // ??? no copy pasted!!! error
+                    .slot  = 0,
                     .pitch = sizeof(FQuadRender::Vertex),
                 },
             },
             // MARK: vertex attributes
+
             .vertexAttributes = {
                 // (layout binding = 0, set = 0) in vec3 aPos,
                 VertexAttribute{
@@ -239,9 +235,7 @@ void FQuadRender::init(IRender *render)
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
             EPipelineDynamicFeature::Scissor,
-#if DYN_CULL
             EPipelineDynamicFeature::CullMode,
-#endif
         },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
@@ -294,10 +288,118 @@ void FQuadRender::init(IRender *render)
         },
     });
 
+    // MARK: world-space pipeline
+    _worldPipeline = IGraphicsPipeline::create(render);
+    _worldPipeline->recreate(GraphicsPipelineCreateInfo{
+        .subPassRef            = 0,
+        .renderPass            = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                  = "Sprite2D_World_Pipeline",
+            .viewMask               = 0,
+            .colorAttachmentFormats = {App::get()->COLOR_FORMAT},
+            .depthAttachmentFormat  = App::get()->DEPTH_FORMAT,
+        },
+        .pipelineLayout = _pipelineLayout.get(),
+
+        .shaderDesc = ShaderDesc{
+            .shaderName        = "Sprite2D_World.glsl",
+            .bDeriveFromShader = false,
+            .vertexBufferDescs = {
+                VertexBufferDescription{
+                    .slot  = 0,
+                    .pitch = sizeof(FQuadRender::Vertex),
+                },
+            },
+            .vertexAttributes = {
+                VertexAttribute{
+                    .bufferSlot = 0,
+                    .location   = 0,
+                    .format     = EVertexAttributeFormat::Float3,
+                    .offset     = offsetof(Vertex, pos),
+                },
+                VertexAttribute{
+                    .bufferSlot = 0,
+                    .location   = 1,
+                    .format     = EVertexAttributeFormat::Float4,
+                    .offset     = offsetof(Vertex, color),
+                },
+                VertexAttribute{
+                    .bufferSlot = 0,
+                    .location   = 2,
+                    .format     = EVertexAttributeFormat::Float2,
+                    .offset     = offsetof(Vertex, texCoord),
+                },
+                VertexAttribute{
+                    .bufferSlot = 0,
+                    .location   = 3,
+                    .format     = EVertexAttributeFormat::Uint,
+                    .offset     = offsetof(Vertex, textureIdx),
+                },
+            },
+            .defines = {
+                std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
+            },
+        },
+        .dynamicFeatures = {
+            EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::Scissor,
+            EPipelineDynamicFeature::CullMode,
+        },
+        .primitiveType      = EPrimitiveType::TriangleList,
+        .rasterizationState = RasterizationState{
+            .polygonMode = EPolygonMode::Fill,
+            .cullMode    = ECullMode::Back,
+            .frontFace   = EFrontFaceType::CounterClockWise,
+        },
+        .multisampleState  = MultisampleState{},
+        .depthStencilState = DepthStencilState{
+            .bDepthTestEnable       = true,
+            .bDepthWriteEnable      = true,
+            .depthCompareOp         = ECompareOp::Less,
+            .bDepthBoundsTestEnable = false,
+            .bStencilTestEnable     = false,
+            .minDepthBounds         = 0.0f,
+            .maxDepthBounds         = 1.0f,
+        },
+        .colorBlendState = ColorBlendState{
+            .bLogicOpEnable = false,
+            .attachments    = {
+                ColorBlendAttachmentState{
+                       .index               = 0,
+                       .bBlendEnable        = false,
+                       .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                       .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                       .colorBlendOp        = EBlendOp::Add,
+                       .srcAlphaBlendFactor = EBlendFactor::One,
+                       .dstAlphaBlendFactor = EBlendFactor::Zero,
+                       .alphaBlendOp        = EBlendOp::Add,
+                       .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                },
+            },
+        },
+        .viewportState = ViewportState{
+            .viewports = {Viewport{
+                .x        = 0.0f,
+                .y        = 0.0f,
+                .width    = static_cast<float>(Render2D::data.windowWidth),
+                .height   = static_cast<float>(Render2D::data.windowHeight),
+                .minDepth = 0.0f,
+                .maxDepth = 1.0f,
+            }},
+            .scissors  = {Scissor{
+                 .offsetX = 0,
+                 .offsetY = 0,
+                 .width   = Render2D::data.windowWidth,
+                 .height  = Render2D::data.windowHeight,
+            }},
+        },
+    });
+
+    // Screen-space vertex buffer
     _vertexBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_VertexBuffer",
+            .label         = "Sprite2D_Screen_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
             .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
             .memProperties = EMemoryProperty::HostVisible,
@@ -305,6 +407,19 @@ void FQuadRender::init(IRender *render)
 
     vertexPtr     = _vertexBuffer->map<FQuadRender::Vertex>();
     vertexPtrHead = vertexPtr;
+
+    // World-space vertex buffer
+    _worldVertexBuffer = IBuffer::create(
+        render,
+        ya::BufferCreateInfo{
+            .label         = "Sprite2D_World_VertexBuffer",
+            .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+            .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+            .memProperties = EMemoryProperty::HostVisible,
+        });
+
+    worldVertexPtr     = _worldVertexBuffer->map<FQuadRender::Vertex>();
+    worldVertexPtrHead = worldVertexPtr;
 
 
     std::vector<uint32_t> indices;
@@ -314,14 +429,17 @@ void FQuadRender::init(IRender *render)
 
         uint32_t vertexIndex = (i / 6) * 4;
 
-        // quad-> 2 triangle-> counter-clockwise
+        // quad -> 2 triangles -> CCW when viewed from +Z (camera looks down -Z)
+        // Vertices: 0=(0,0) 1=(1,0) 2=(0,1) 3=(1,1)
+        // From +Z: 0→3→1 = (0,0)→(1,1)→(1,0) = CCW
+        //          0→2→3 = (0,0)→(0,1)→(1,1) = CCW
         indices[i + 0] = vertexIndex + 0;
         indices[i + 1] = vertexIndex + 3;
         indices[i + 2] = vertexIndex + 1;
 
-        indices[i + 3] = vertexIndex + 0; // 0;
-        indices[i + 4] = vertexIndex + 2; // 2;
-        indices[i + 5] = vertexIndex + 3; // 3;
+        indices[i + 3] = vertexIndex + 0;
+        indices[i + 4] = vertexIndex + 2;
+        indices[i + 5] = vertexIndex + 3;
     }
 
     _indexBuffer = IBuffer::create(
@@ -345,17 +463,20 @@ void FQuadRender::destroy()
     // Note: White texture and default sampler are now managed by TextureLibrary
 
     _vertexBuffer.reset();
+    _worldVertexBuffer.reset();
     _indexBuffer.reset();
 
     _frameUBOBuffer.reset();
+    _worldFrameUBOBuffer.reset();
     _frameUboDSL.reset();
 
     _descriptorPool.reset();
     _pipeline.reset();
+    _worldPipeline.reset();
     _pipelineLayout.reset();
 }
 
-void FQuadRender::begin()
+void FQuadRender::begin(const Extent2D& extent)
 {
     _textureViews.clear();
     _textureLabel2Idx.clear();
@@ -366,8 +487,8 @@ void FQuadRender::begin()
         });
 
 
-    float w      = (float)Render2D::data.windowWidth;
-    float h      = (float)Render2D::data.windowHeight;
+    float w      = (float)extent.width;
+    float h      = (float)extent.height;
     float aspect = w / h;
     if (w > h) {
         h = w / aspect;
@@ -400,50 +521,37 @@ void FQuadRender::begin()
      * x++ 向下 y++ 向右 z++ 向屏幕外
      */
 
-    glm::mat4 proj = glm::orthoRH_ZO(0.0f,
-                                     w,
-                                     0.0f,
-                                     h,
-                                     -1.0f,
-                                     1.0f);
-    switch (data2D.viewMatrixMode) {
-    case 1:
-    {
-        // center at (w/2, h/2)
-        proj = glm::orthoRH_ZO(0.0f,
-                               w,
-                               h,
-                               0.0f,
-                               -1.0f,
-                               1.0f);
-    } break;
-    }
-    // flip y axis
-    // proj[1][1] *= -1;
-
-    updateFrameUBO(glm::mat4(1.0) * proj);
+    // Screen-space ortho: (0,0) at top-left, (w,h) at bottom-right.
+    // top=0, bottom=h flips Y so Y+ goes downward — standard UI convention.
+    // No viewport flip needed for screen-space path.
+    _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, 0.0f, h, -1.0f, 1.0f);
 }
 
 void FQuadRender::end()
 {
+    // World-space first, then screen-space on top (UI overlays scene)
+    flushWorld(Render2D::data.curCmdBuf);
     flush(Render2D::data.curCmdBuf);
 }
 
 
-// MARK: quad flush
-void FQuadRender::flush(ICommandBuffer *cmdBuf)
+// MARK: quad flush — screen-space
+void FQuadRender::flush(ICommandBuffer* cmdBuf)
 {
     if (vertexCount <= 0) {
         return;
     }
     updateResources();
 
+    // Update FrameUBO with screen-space ortho projection
+    updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj);
+
     _vertexBuffer->flush();
 
-    // Pipeline bind using abstract command buffer interface
+    // Bind screen-space pipeline
     cmdBuf->bindPipeline(_pipeline.get());
 
-    // Set viewport, scissor and cull mode using abstract interface
+    // Screen-space always uses normal viewport (y=0, h=height) and Back cull
     cmdBuf->setViewport(0.0f,
                         0.0f,
                         static_cast<float>(Render2D::data.windowWidth),
@@ -451,15 +559,13 @@ void FQuadRender::flush(ICommandBuffer *cmdBuf)
                         0.0f,
                         1.0f);
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
-#if DYN_CULL
-    cmdBuf->setCullMode(Render2D::data.cullMode);
-#endif
+    cmdBuf->setCullMode(data2D.screenCullMode);
 
-    // Bind descriptor sets using abstract interface
+    // Bind descriptor sets
     std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
 
-    // Bind vertex and index buffers using abstract interface
+    // Bind vertex and index buffers
     cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
 
@@ -471,19 +577,63 @@ void FQuadRender::flush(ICommandBuffer *cmdBuf)
     indexCount  = 0;
 }
 
-void FQuadRender::updateFrameUBO(glm::mat4 viewProj)
+// MARK: quad flush — world-space
+void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
+{
+    if (worldVertexCount <= 0) {
+        return;
+    }
+    updateResources();
+
+    // Update FrameUBO with camera view-projection
+    updateFrameUBO(_worldFrameUBOBuffer, _worldFrameUboDS, data2D.cam.viewProjection);
+
+    _worldVertexBuffer->flush();
+
+    // Bind world-space pipeline
+    cmdBuf->bindPipeline(_worldPipeline.get());
+
+    // World-space viewport & cull mode depend on bReverseViewport
+    cmdBuf->setViewport(0.0f,
+                        static_cast<float>(Render2D::data.windowHeight),
+                        static_cast<float>(Render2D::data.windowWidth),
+                        -static_cast<float>(Render2D::data.windowHeight),
+                        0.0f,
+                        1.0f);
+    // Reversed viewport flips winding order, use configurable cull mode (default: Front to compensate)
+    cmdBuf->setCullMode(Render2D::data.worldCullMode);
+    cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+
+    // Bind descriptor sets (world-space uses its own FrameUBO DS)
+    std::vector<DescriptorSetHandle> descriptorSets = {_worldFrameUboDS, _resourceDS};
+    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
+
+    // Bind world vertex buffer but shared index buffer
+    cmdBuf->bindVertexBuffer(0, _worldVertexBuffer.get(), 0);
+    cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
+
+    // Draw indexed
+    cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, 0, 0);
+
+    worldVertexPtr   = worldVertexPtrHead;
+    worldVertexCount = 0;
+    worldIndexCount  = 0;
+}
+
+void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, glm::mat4 viewProj)
 {
     FrameUBO ubo{
-        .matViewProj = viewProj,
+        .viewProj = viewProj,
     };
-    _frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
+    uboBuffer->writeData(&ubo, sizeof(ubo), 0);
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
+    DescriptorBufferInfo bufferInfo(BufferHandle(uboBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
 
-    auto *descriptorHelper = _render->getDescriptorHelper();
+    // TODO: only update once
+    auto* descriptorHelper = _render->getDescriptorHelper();
     descriptorHelper->updateDescriptorSets(
         {
-            IDescriptorSetHelper::genBufferWrite(_frameUboDS,
+            IDescriptorSetHelper::genBufferWrite(dsHandle,
                                                  0,
                                                  0,
                                                  EPipelineDescriptorType::UniformBuffer,
@@ -505,7 +655,7 @@ void FQuadRender::updateResources()
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
 
         if (i < _textureViews.size()) {
-            auto *tv = &_textureViews[i];
+            auto* tv = &_textureViews[i];
             imageInfos.emplace_back(
                 tv->getTexture()->getImageView()->getHandle(),
                 tv->getSampler()->getHandle(),
@@ -536,55 +686,18 @@ void FQuadRender::updateResources()
 
 
 // MARK: quad  interface
-void FQuadRender::drawTexture(const glm::vec3 &position,
-                              const glm::vec2 &size,
-                              ya::Ptr<Texture> texture,
-                              const glm::vec4 &tint,
-                              const glm::vec2 &uvScale)
+
+
+void FQuadRender::drawTextureInternal(const glm::mat4& transform,
+                                      uint32_t textureIdx, const glm::vec3 tint,
+                                      const glm::vec2& uvScale,
+                                      const glm::vec2& uvTranslation)
 {
-    if (shouldFlush()) {
-        flush(Render2D::data.curCmdBuf);
-    }
-
-    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
-                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-
-
-    uint32_t textureIdx = findOrAddTexture(texture);
-
     for (int i = 0; i < 4; i++) {
-        // rotation -> scale -> offset
-        *vertexPtr = FQuadRender::Vertex{
-            .pos        = model * FQuadRender::vertices[i],
-            .color      = tint,
-            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureIdx = textureIdx,
-        };
-        ++vertexPtr;
-    }
-
-    vertexCount += 4;
-    indexCount += 6;
-}
-
-void FQuadRender::drawTexture(const glm::mat4 &transform,
-                              ya::Ptr<Texture> texture,
-                              const glm::vec4 &tint,
-                              const glm::vec2 &uvScale)
-{
-
-    if (shouldFlush()) {
-        flush(Render2D::data.curCmdBuf);
-    }
-
-    uint32_t textureIdx = findOrAddTexture(texture);
-
-    for (int i = 0; i < 4; i++) {
-        // rotation -> scale -> offset
         *vertexPtr = FQuadRender::Vertex{
             .pos        = transform * FQuadRender::vertices[i],
-            .color      = tint,
-            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
+            .color      = {tint, 1.0f},
+            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
             .textureIdx = textureIdx,
         };
         ++vertexPtr;
@@ -594,11 +707,29 @@ void FQuadRender::drawTexture(const glm::mat4 &transform,
     indexCount += 6;
 }
 
-void FQuadRender::drawSubTexture(const glm::vec3 &position,
-                                 const glm::vec2 &size,
-                                 ya::Ptr<Texture> texture,
-                                 const glm::vec4 &tint,
-                                 const glm::vec4 &uvRect)
+void FQuadRender::drawWorldTextureInternal(const glm::mat4& transform,
+                                           uint32_t textureIdx, const glm::vec3 tint,
+                                           const glm::vec2& uvScale)
+{
+    for (int i = 0; i < 4; i++) {
+        *worldVertexPtr = FQuadRender::Vertex{
+            .pos        = transform * FQuadRender::vertices[i],
+            .color      = {tint, 1.0f},
+            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
+            .textureIdx = textureIdx,
+        };
+        ++worldVertexPtr;
+    }
+
+    worldVertexCount += 4;
+    worldIndexCount += 6;
+}
+
+void FQuadRender::drawTexture(const glm::vec3& position,
+                              const glm::vec2& size,
+                              ya::Ptr<Texture> texture,
+                              const glm::vec4& tint,
+                              const glm::vec2& uvScale)
 {
     if (shouldFlush()) {
         flush(Render2D::data.curCmdBuf);
@@ -606,25 +737,60 @@ void FQuadRender::drawSubTexture(const glm::vec3 &position,
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-    // TODO: check texture full after findOrAddTexture, maybe use same white texture/ same sub texture
-    uint32_t textureIdx = findOrAddTexture(texture);
-    for (int i = 0; i < 4; i++) {
-        glm::vec2 uv = FQuadRender::defaultTexcoord[i] * glm::vec2(uvRect.z, uvRect.w) + glm::vec2(uvRect.x, uvRect.y);
-        *vertexPtr   = FQuadRender::Vertex{
-              .pos        = model * FQuadRender::vertices[i],
-              .color      = tint,
-              .texCoord   = uv,
-              .textureIdx = textureIdx,
-        };
-        ++vertexPtr;
-    }
 
-    vertexCount += 4;
-    indexCount += 6;
+
+    uint32_t textureIdx = findOrAddTexture(texture);
+    drawTextureInternal(model, textureIdx, tint, uvScale);
 }
 
 
-void FQuadRender::drawText(const std::string &text, const glm::vec3 &position, const glm::vec4 &color, Font *font)
+void FQuadRender::drawTexture(const glm::mat4& transform,
+                              ya::Ptr<Texture> texture,
+                              const glm::vec4& tint,
+                              const glm::vec2& uvScale)
+{
+    if (shouldFlush()) {
+        flush(Render2D::data.curCmdBuf);
+    }
+
+    uint32_t textureIdx = findOrAddTexture(texture);
+    drawTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y});
+}
+
+void FQuadRender::drawWorldTexture(const glm::mat4& transform,
+                                   ya::Ptr<Texture> texture,
+                                   const glm::vec4& tint,
+                                   const glm::vec2& uvScale)
+{
+    if (shouldFlushWorld()) {
+        flushWorld(Render2D::data.curCmdBuf);
+    }
+
+    uint32_t textureIdx = findOrAddTexture(texture);
+    drawWorldTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y});
+}
+
+void FQuadRender::drawSubTexture(const glm::vec3& position,
+                                 const glm::vec2& size,
+                                 ya::Ptr<Texture> texture,
+                                 const glm::vec4& tint,
+                                 const glm::vec4& uvRect)
+{
+    if (shouldFlush()) {
+        flush(Render2D::data.curCmdBuf);
+    }
+
+    // TODO: check texture full after findOrAddTexture, maybe use same white texture/ same sub texture
+    uint32_t textureIdx = findOrAddTexture(texture);
+
+    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
+                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+
+    drawTextureInternal(model, textureIdx, tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
+}
+
+
+void FQuadRender::drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
 {
     float cursorX = position.x;
     float cursorY = position.y;
@@ -635,7 +801,7 @@ void FQuadRender::drawText(const std::string &text, const glm::vec3 &position, c
 
     for (size_t i = 0; i < text.size(); ++i) {
         char             ch        = text[i];
-        const Character &character = font->getCharacter(ch);
+        const Character& character = font->getCharacter(ch);
 
         // Skip rendering for space (but still advance cursor)
         if (ch == ' ') {
