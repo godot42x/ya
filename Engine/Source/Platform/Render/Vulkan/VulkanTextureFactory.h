@@ -27,7 +27,7 @@ class VulkanTextureFactory : public ITextureFactory
 
     std::shared_ptr<IImage>     createImage(const ImageCreateInfo &ci) override;
     std::shared_ptr<IImage>     createImageFromHandle(void *platformImage, EFormat::T format, EImageUsage::T usage) override;
-    std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags) override;
+    // std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags) override;
     std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo &ci) override;
     std::shared_ptr<IImageView> createCubeMapImageView(
         std::shared_ptr<IImage> image,

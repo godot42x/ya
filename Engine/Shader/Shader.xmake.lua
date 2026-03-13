@@ -1,10 +1,9 @@
-
-target("shader")
+task("ya-shader")
 do
-    set_kind("object")
-    set_group("shader")
+    set_menu {
+    }
 
-    on_build(function(target)
+    on_run(function()
         -- Step 0: generate Common/Limits.glsl from Engine.json (shader.defines)
         do
             import("core.base.json")
@@ -61,7 +60,7 @@ do
         do
             local script    = "Engine/Shader/slang_gen_header.py"
             local outputDir = "Engine/Shader/Slang/Generated"
-            local args = {
+            local args      = {
                 script,
                 "--output-dir", outputDir,
                 "--include-dir", "Engine/Shader/Slang",
@@ -78,11 +77,11 @@ do
         do
             local script    = "Engine/Shader/glsl_gen_header.py"
             local outputDir = "Engine/Shader/GLSL/Generated"
-            local args = {
+            local args      = {
                 script,
                 "--output-dir", outputDir,
-                "--namespace",  "ya::glsl_types",
-                "--config",     "Engine/Config/Engine.json",
+                "--namespace", "ya::glsl_types",
+                "--config", "Engine/Config/Engine.json",
                 "--include-dir", "Engine/Shader/GLSL",
             }
             for _, f in ipairs(os.files("Engine/Shader/GLSL/**.glsl")) do
@@ -92,4 +91,3 @@ do
         end
     end)
 end
-

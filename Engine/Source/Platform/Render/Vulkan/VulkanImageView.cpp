@@ -50,12 +50,6 @@ void VulkanImageView::setDebugName(const std::string &name)
     _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE_VIEW, (void *)_handle, name);
 }
 
-stdptr<VulkanImageView> VulkanImageView::create(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags)
-{
-    CreateInfo ci{};
-    ci.aspectFlags = aspectFlags;
-    return create(render, image, ci);
-}
 
 stdptr<VulkanImageView> VulkanImageView::create(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci)
 {

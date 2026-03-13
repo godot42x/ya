@@ -482,7 +482,7 @@ def _process_one_glsl(
 
     if not force and header_path.exists():
         if input_path.stat().st_mtime <= header_path.stat().st_mtime:
-            print(f"[glsl-gen] {header_path.name} is up-to-date, skipping.")
+            # print(f"[glsl-gen] {header_path.name} is up-to-date, skipping.")
             return
 
     combined_src = _preprocess_with_glslc(input_path.resolve(), include_dirs)

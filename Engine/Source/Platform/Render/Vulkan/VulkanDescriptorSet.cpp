@@ -208,10 +208,10 @@ void VulkanDescriptorHelper::updateDescriptorSets(
         case EPipelineDescriptorType::StorageImage:
         {
             int startIdx = static_cast<int>(imageInfos.size());
-            for (const auto &imgInfo : write.imageInfos) {
+            for (const DescriptorImageInfo& imgInfo : write.imageInfos) {
                 imageInfos.push_back(VkDescriptorImageInfo{
-                    .sampler     = (VkSampler)(uintptr_t)imgInfo.sampler.as<void *>(),
-                    .imageView   = (VkImageView)(uintptr_t)imgInfo.imageView.as<void *>(),
+                    .sampler     = (VkSampler)(uintptr_t)imgInfo.sampler,
+                    .imageView   = (VkImageView)(uintptr_t)imgInfo.imageView,
                     .imageLayout = toVk(imgInfo.imageLayout),
                 });
             }

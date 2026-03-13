@@ -52,13 +52,19 @@ struct VulkanImage : public IImage
 
         return ret;
     }
-    static std::shared_ptr<VulkanImage> from(VulkanRender *render, VkImage image, VkFormat format, VkImageUsageFlags usages)
+    static std::shared_ptr<VulkanImage> from(VulkanRender *render, VkImage image, VkFormat format, VkImageUsageFlags usages,
+                                              uint32_t width = 0, uint32_t height = 0,
+                                              uint32_t mipLevels = 1, uint32_t arrayLayers = 1)
     {
         auto ret         = std::make_shared<VulkanImage>();
         ret->_render     = render;
         ret->_handle     = image;
         ret->_format     = format;
         ret->_usageFlags = usages;
+        ret->_ci.format      = EFormat::fromVk(format);
+        ret->_ci.extent      = {width, height, 1};
+        ret->_ci.mipLevels   = mipLevels;
+        ret->_ci.arrayLayers = arrayLayers;
         return ret;
     }
 
@@ -68,6 +74,8 @@ struct VulkanImage : public IImage
     [[nodiscard]] uint32_t       getHeight() const override { return static_cast<uint32_t>(_ci.extent.height); }
     [[nodiscard]] EFormat::T     getFormat() const override { return _ci.format; }
     [[nodiscard]] EImageUsage::T getUsage() const override { return _ci.usage; }
+    [[nodiscard]] uint32_t       getMipLevels() const override { return _ci.mipLevels; }
+    [[nodiscard]] uint32_t       getArrayLayers() const override { return _ci.arrayLayers; }
     EImageLayout::T              getLayout() const override { return EImageLayout::fromVk(_layout); }
 
     // Vulkan-specific accessors

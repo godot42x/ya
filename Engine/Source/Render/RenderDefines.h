@@ -536,8 +536,8 @@ struct AttachmentDescription
     EImageLayout::T       finalLayout    = EImageLayout::ColorAttachmentOptimal;
 
     // declare here for RT/framebuffer
-    EImageUsage::T       usage;
-    EImageCreateFlag::T  imageCreateFlags = EImageCreateFlag::None;
+    EImageUsage::T      usage;
+    EImageCreateFlag::T imageCreateFlags = EImageCreateFlag::None;
 };
 
 
@@ -975,8 +975,8 @@ struct ImageCreateInfo
     EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
     uint32_t        queueFamilyIndexCount = 0;
     const uint32_t* pQueueFamilyIndices   = nullptr;
-    EImageLayout::T initialLayout         = EImageLayout::Undefined;
-    uint32_t        flags                 = 0;
+    EImageLayout::T     initialLayout = EImageLayout::Undefined;
+    EImageCreateFlag::T flags         = EImageCreateFlag::None;
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
@@ -1134,9 +1134,8 @@ struct FrameContext
         float     innerCutOff = 0.0f;
         float     outerCutOff = 0.0f;
 
-        struct 
         std::array<glm::mat4, 6> shadowView; // for point light shadow mapping (cubemap)
-        glm::mat4 shadowProjection;
+        glm::mat4                shadowProjection;
     };
     uint32_t                                     numPointLights = 0;
     std::array<PointLightData, MAX_POINT_LIGHTS> pointLights;

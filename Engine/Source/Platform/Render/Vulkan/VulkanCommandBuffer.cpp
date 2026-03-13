@@ -782,7 +782,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
         .offset = {0, 0},
         .extent = {renderTarget->getExtent().width, renderTarget->getExtent().height},
     };
-    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, 1);
+    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, renderTarget->_layerCount);
 }
 
 void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingInfo& info)

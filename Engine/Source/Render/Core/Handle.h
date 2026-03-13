@@ -8,7 +8,7 @@
 
 // C++20 Concepts for type checking
 template <typename T>
-concept PtrHasGetHandle = requires(const T &obj) {
+concept PtrHasGetHandle = requires(const T& obj) {
     {
         obj->getHandle()
     };
@@ -17,7 +17,8 @@ concept PtrHasGetHandle = requires(const T &obj) {
 template <typename Tag>
 struct Handle
 {
-    void *ptr = nullptr;
+    using tag = Tag;
+    void* ptr = nullptr;
 
     Handle() = default;
     Handle(std::nullptr_t) {}
@@ -31,22 +32,25 @@ struct Handle
 
     // Constructor 3: Accept other Handle instances
     template <typename OtherTag>
-    Handle(const Handle<OtherTag> &other) : ptr(other.ptr)
+    Handle(const Handle<OtherTag>& other)
     {
+        static_assert(std::is_same_v<tag, OtherTag>, "unsupport other handle");
+        ptr = other.ptr;
     }
 
+    // Conversion to target type
     template <typename T>
     T as() const { return static_cast<T>(ptr); }
 
     // Conversion to void* and uintptr_t
-    operator void *() const { return ptr; }
+    operator void*() const { return ptr; }
     operator uintptr_t() const { return reinterpret_cast<uintptr_t>(ptr); }
 
     explicit operator bool() const { return ptr != nullptr; }
 
     // Comparison operators
-    bool operator==(const Handle &other) const { return ptr == other.ptr; }
-    bool operator!=(const Handle &other) const { return ptr != other.ptr; }
-    bool operator==(void *p) const { return ptr == p; }
-    bool operator!=(void *p) const { return ptr != p; }
+    bool operator==(const Handle& other) const { return ptr == other.ptr; }
+    bool operator!=(const Handle& other) const { return ptr != other.ptr; }
+    bool operator==(void* p) const { return ptr == p; }
+    bool operator!=(void* p) const { return ptr != p; }
 };

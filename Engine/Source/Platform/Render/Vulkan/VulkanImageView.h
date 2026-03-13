@@ -46,7 +46,6 @@ struct VulkanImageView : public IImageView
         uint32_t           layerCount     = 1;
     };
 
-    static stdptr<VulkanImageView> create(VulkanRender *render, stdptr<VulkanImage> image, VkImageAspectFlags aspectFlags);
     static stdptr<VulkanImageView> create(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci);
 
   private:

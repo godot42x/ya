@@ -96,7 +96,6 @@ do
 
     add_includedirs("./Source", { public = true })
 
-    add_deps("shader")
     -- Include generated Slang headers (auto-generated from .slang files)
     add_includedirs("./Shader/Slang/Generated", { public = true })
     add_includedirs("./Shader/GLSL/Generated", { public = true })
@@ -156,6 +155,12 @@ do
             add_cxxflags("/O0")         -- disable optimization
         end
     end
+
+    before_build(function (target)
+        print(target:name())
+        os.exec("xmake ya-shader")
+        
+    end)
 
     before_run(function(target)
         print("before run", target:name())

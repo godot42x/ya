@@ -59,8 +59,25 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createTexture(
         return nullptr;
     }
 
-    // Create VulkanImageView for the external image
-    auto vkImageView = VulkanImageView::create(render, vkImage, aspect);
+    // Determine view type based on image properties
+    uint32_t layerCount = vkImage->getArrayLayers();
+    uint32_t mipLevels  = vkImage->getMipLevels();
+    VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
+    if (layerCount == 6 && (vkImage->_ci.flags & EImageCreateFlag::CubeCompatible)) {
+        viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    } else if (layerCount > 1) {
+        viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    }
+
+    VulkanImageView::CreateInfo viewCI{
+        .viewType       = viewType,
+        .aspectFlags    = aspect,
+        .baseMipLevel   = 0,
+        .levelCount     = mipLevels,
+        .baseArrayLayer = 0,
+        .layerCount     = layerCount,
+    };
+    auto vkImageView = VulkanImageView::create(render, vkImage, viewCI);
     if (!vkImageView) {
         YA_CORE_ERROR("Failed to create image view for external image: {}", label);
         return nullptr;
@@ -78,8 +95,9 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createTexture(
 bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
 {
     clean();
-    _width  = ci.width;
-    _height = ci.height;
+    _width         = ci.width;
+    _height        = ci.height;
+    _maxLayerCount = 1;
 
     // Determine which mode to use
     // bool useExternalImages = !ci.colorImages.empty();
@@ -100,6 +118,7 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
             return false;
         }
         _colorTextures.push_back(std::move(texture));
+        _maxLayerCount = std::max(_maxLayerCount, ci.colorImages[i]->getArrayLayers());
     }
 
     // Depth attachment from external if provided
@@ -114,6 +133,7 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
             YA_CORE_ERROR("Failed to wrap external depth image for framebuffer: {}", ci.label);
             return false;
         }
+        _maxLayerCount = std::max(_maxLayerCount, ci.depthImages->getArrayLayers());
     }
 
     _resolveTexture.reset();
@@ -185,7 +205,7 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
         .pAttachments    = vkImageViews.data(),
         .width           = _width,
         .height          = _height,
-        .layers          = 1,
+        .layers          = _maxLayerCount,
 
     };
     VkResult result = vkCreateFramebuffer(render->getDevice(),

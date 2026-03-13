@@ -143,8 +143,8 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
             },
         },
         // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
-                            EPipelineDynamicFeature::Viewport},
+        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+                               EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
@@ -502,19 +502,13 @@ void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Unlit
     const TextureView* tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
     const TextureView* tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
 
-    DescriptorImageInfo imageInfo0(SamplerHandle(tv0->sampler->getHandle()),
-                                   tv0->texture->getImageView()->getHandle(),
-                                   EImageLayout::ShaderReadOnlyOptimal);
-    DescriptorImageInfo imageInfo1(SamplerHandle(tv1->sampler->getHandle()),
-                                   tv1->texture->getImageView()->getHandle(),
-                                   EImageLayout::ShaderReadOnlyOptimal);
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo0}),
-                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {imageInfo1}),
+                IDescriptorSetHelper::writeOneImage(ds, 0, tv0->texture->getImageView(), tv0->sampler.get()),
+                IDescriptorSetHelper::writeOneImage(ds, 1, tv1->texture->getImageView(), tv1->sampler.get()),
             },
             {});
 }

@@ -24,15 +24,15 @@ struct VulkanUtils
 
     static bool createBuffer(VkDevice device, VkPhysicalDevice physicalDevice,
                              VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-                             VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
+                             VkBuffer& outBuffer, VkDeviceMemory& outBufferMemory);
 
     static void createImage(VkDevice device, VkPhysicalDevice physicalDevice,
                             uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usageBits,
-                            VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &imageMemory);
+                            VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
     static VkImageView createImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 
-    static void transitionImageLayout(VulkanCommandPool *pool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    static void transitionImageLayout(VulkanCommandPool* pool, VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 
     static void copyBufferToImage(VkDevice device, VkCommandPool commandPool, VkQueue graphicsQueue,
                                   VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -44,12 +44,12 @@ struct VulkanUtils
                            VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
     static VkFormat findSupportedImageFormat(VkPhysicalDevice             physicalDevice,
-                                             const std::vector<VkFormat> &candidates,
+                                             const std::vector<VkFormat>& candidates,
                                              VkImageTiling                tiling,
                                              VkFormatFeatureFlags         features);
 
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
-                                   const char *path, VkImage &outImage, VkDeviceMemory &outImageMemory);
+                                   const char* path, VkImage& outImage, VkDeviceMemory& outImageMemory);
 
     static bool isDepthOnlyFormat(VkFormat format) { return format == VK_FORMAT_D16_UNORM || format == VK_FORMAT_D32_SFLOAT; }
     static bool isDepthStencilFormat(VkFormat format) { return format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT; }
@@ -879,8 +879,34 @@ inline auto toVk(T mode) -> VkSamplerAddressMode
 }
 } // namespace ESamplerAddressMode
 
+namespace EImageViewType
+{
+inline auto toVk(T t) -> VkImageViewType
+{
+    switch (t) {
+    case View1D:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_1D;
+
+    case View2D:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_2D;
+    case View3D:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_3D;
+    case ViewCube:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE;
+    case View1DArray:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    case View2DArray:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    case ViewCubeArray:
+        return VkImageViewType::VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    }
+    UNREACHABLE();
+    return {};
+}
+} // namespace EImageViewType
 
 } // namespace ya
+
 
 // MARK: to string
 
@@ -898,7 +924,7 @@ std::string to_string(VkObjectType v);
 template <>
 struct std::formatter<VkResult> : formatter<std::string>
 {
-    auto format(const VkResult &type, std::format_context &ctx) const
+    auto format(const VkResult& type, std::format_context& ctx) const
     {
         return std::format_to(ctx.out(), "{}({})", std::to_string(type), static_cast<int32_t>(type));
     }

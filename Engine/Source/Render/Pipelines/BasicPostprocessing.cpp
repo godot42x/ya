@@ -131,8 +131,8 @@ void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /
 
         static auto sampler = TextureLibrary::get().getDefaultSampler();
 
-        DescriptorImageInfo imageInfo(sampler->getHandle(),
-                                      _currentInputImageViewHandle,
+        DescriptorImageInfo imageInfo(_currentInputImageViewHandle,
+                                      sampler->getHandle(),
                                       EImageLayout::ShaderReadOnlyOptimal);
 
         render->getDescriptorHelper()->updateDescriptorSets(
@@ -161,8 +161,8 @@ void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /
     // Push constants - two separate ranges
     const auto& pcs = _pipelineLayoutDesc.pushConstants;
 
-    pc.effect = static_cast<uint32_t>(effect);
-    pc.gamma  = _bOutputIsSRGB ? 1.0f : std::max(pc.gamma, 0.001f);
+    pc.effect      = static_cast<uint32_t>(effect);
+    pc.gamma       = _bOutputIsSRGB ? 1.0f : std::max(pc.gamma, 0.001f);
     pc.floatParams = floatParams;
     cmdBuf->pushConstants(_pipelineLayout.get(),
                           pcs[0].stageFlags,

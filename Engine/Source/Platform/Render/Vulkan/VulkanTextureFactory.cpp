@@ -9,34 +9,34 @@ namespace ya
 
 // ====== Low-level IImage/IImageView API Implementation ======
 
-IRender *VulkanTextureFactory::getRender() const
+IRender* VulkanTextureFactory::getRender() const
 {
-    return reinterpret_cast<IRender *>(_render);
+    return reinterpret_cast<IRender*>(_render);
 }
 
-std::shared_ptr<IImage> VulkanTextureFactory::createImage(const ImageCreateInfo &ci)
+std::shared_ptr<IImage> VulkanTextureFactory::createImage(const ImageCreateInfo& ci)
 {
     return VulkanImage::create(_render, ci);
 }
 
-std::shared_ptr<IImage> VulkanTextureFactory::createImageFromHandle(void *platformImage, EFormat::T format, EImageUsage::T usage)
+std::shared_ptr<IImage> VulkanTextureFactory::createImageFromHandle(void* platformImage, EFormat::T format, EImageUsage::T usage)
 {
-    VkImage           vkImage = static_cast<VkImage>(platformImage);
-    VkImageUsageFlags vkUsage = toVk(usage);
+    VkImage           vkImage  = static_cast<VkImage>(platformImage);
+    VkImageUsageFlags vkUsage  = toVk(usage);
     VkFormat          vkFormat = toVk(format);
 
     return VulkanImage::from(_render, vkImage, vkFormat, vkUsage);
 }
 
-std::shared_ptr<IImageView> VulkanTextureFactory::createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags)
-{
-    auto vkImage = std::dynamic_pointer_cast<VulkanImage>(image);
-    YA_CORE_ASSERT(vkImage, "Cannot create image view from non-Vulkan image");
+// std::shared_ptr<IImageView> VulkanTextureFactory::createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags)
+// {
+//     auto vkImage = std::dynamic_pointer_cast<VulkanImage>(image);
+//     YA_CORE_ASSERT(vkImage, "Cannot create image view from non-Vulkan image");
 
-    return VulkanImageView::create(_render, vkImage, aspectFlags);
-}
+//     return VulkanImageView::create(_render, vkImage, aspectFlags);
+// }
 
-std::shared_ptr<IImageView> VulkanTextureFactory::createImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo &ci)
+std::shared_ptr<IImageView> VulkanTextureFactory::createImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo& ci)
 {
     auto vkImage = std::dynamic_pointer_cast<VulkanImage>(image);
     YA_CORE_ASSERT(vkImage, "Cannot create image view from non-Vulkan image");
@@ -65,7 +65,7 @@ std::shared_ptr<IImageView> VulkanTextureFactory::createCubeMapImageView(
     YA_CORE_ASSERT(vkImage, "Cannot create cubemap image view from non-Vulkan image");
 
     VulkanImageView::CreateInfo ci{};
-    ci.viewType       = VK_IMAGE_VIEW_TYPE_CUBE;
+    ci.viewType       = toVk(EImageViewType::ViewCube);
     ci.aspectFlags    = aspectFlags;
     ci.baseMipLevel   = baseMipLevel;
     ci.levelCount     = levelCount;

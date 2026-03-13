@@ -16,6 +16,7 @@ struct VulkanFrameBuffer : public IFrameBuffer
     VulkanRender* render{};
     uint32_t      _width{};
     uint32_t      _height{};
+    uint32_t      _maxLayerCount{1};
 
     // renderpass api optional
     VkFramebuffer _framebuffer = VK_NULL_HANDLE;
