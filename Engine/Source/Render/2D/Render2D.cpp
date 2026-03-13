@@ -507,14 +507,14 @@ void FQuadRender::updateResources()
         if (i < _textureViews.size()) {
             auto *tv = &_textureViews[i];
             imageInfos.emplace_back(
-                tv->getSampler()->getHandle(),
                 tv->getTexture()->getImageView()->getHandle(),
+                tv->getSampler()->getHandle(),
                 EImageLayout::ShaderReadOnlyOptimal);
         }
         else {
             imageInfos.emplace_back(
-                defaultSampler->getHandle(),
                 whiteTexture->getImageView()->getHandle(),
+                defaultSampler->getHandle(),
                 EImageLayout::ShaderReadOnlyOptimal);
         }
     }

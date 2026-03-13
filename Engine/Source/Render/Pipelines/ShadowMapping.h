@@ -62,7 +62,7 @@ struct ShadowMapping : public IRenderSystem
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
                     },
                 },
             },

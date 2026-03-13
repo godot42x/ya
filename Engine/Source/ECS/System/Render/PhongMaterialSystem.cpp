@@ -259,6 +259,7 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
             .linear      = pl.linear,
             .quadratic   = pl.quadratic,
             .position    = pl.position,
+            .farPlane    = 100.0f, // must match ShadowMapping::onRender farPlane
             .ambient     = pl.ambient,
             .diffuse     = pl.diffuse,
             .specular    = pl.specular,

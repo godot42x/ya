@@ -41,13 +41,9 @@ struct DescriptorBufferInfo
 // Image info for descriptor updates
 struct DescriptorImageInfo
 {
-    SamplerHandle   sampler;   // Backend-specific sampler handle
     ImageViewHandle imageView; // Backend-specific image view handle
+    SamplerHandle   sampler;   // Backend-specific sampler handle
     EImageLayout::T imageLayout = EImageLayout::Undefined;
-
-    DescriptorImageInfo() = default;
-    DescriptorImageInfo(SamplerHandle samp, ImageViewHandle view, EImageLayout::T layout)
-        : sampler(samp), imageView(view), imageLayout(layout) {}
 };
 
 // Descriptor write operation
@@ -261,9 +257,10 @@ struct IDescriptorSetHelper
                              dstBinding,
                              0,
                              descriptorType,
-                             {DescriptorImageInfo(tv->getSampler()->getHandle(),
-                                                  tv->texture->getImageView()->getHandle(),
-                                                  EImageLayout::ShaderReadOnlyOptimal)});
+                             {DescriptorImageInfo(
+                                 tv->texture->getImageView()->getHandle(),
+                                 tv->getSampler()->getHandle(),
+                                 EImageLayout::ShaderReadOnlyOptimal)});
     }
 
     static WriteDescriptorSet writeOneImage(
@@ -276,9 +273,10 @@ struct IDescriptorSetHelper
                              dstBinding,
                              0,
                              EPipelineDescriptorType::CombinedImageSampler,
-                             {DescriptorImageInfo(sampler->getHandle(),
-                                                  iv->getHandle(),
-                                                  EImageLayout::ShaderReadOnlyOptimal)});
+                             {DescriptorImageInfo(
+                                 iv->getHandle(),
+                                 sampler->getHandle(),
+                                 EImageLayout::ShaderReadOnlyOptimal)});
     }
 
     /**

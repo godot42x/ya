@@ -125,7 +125,7 @@ struct ITextureFactory
      * @param aspectFlags Aspect flags for the view
      * @return Shared pointer to IImageView interface
      */
-    virtual std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags) = 0;
+    // virtual std::shared_ptr<IImageView> createImageView(std::shared_ptr<IImage> image, uint32_t aspectFlags) = 0;
 
     /**
      * @brief Create image view with detailed config
@@ -171,13 +171,13 @@ struct ITextureFactory
  */
 struct ImageViewCreateInfo
 {
-    std::string label;
-    uint32_t    viewType       = 0; // Platform-specific view type
-    uint32_t    aspectFlags    = 0; // Platform-specific aspect flags
-    uint32_t    baseMipLevel   = 0;
-    uint32_t    levelCount     = 1;
-    uint32_t    baseArrayLayer = 0;
-    uint32_t    layerCount     = 1;
+    std::string        label;
+    EImageViewType::T  viewType    = EImageViewType::View2D;
+    EImageAspect::T    aspectFlags = EImageAspect::None;
+    uint32_t        baseMipLevel   = 0;
+    uint32_t        levelCount     = 1;
+    uint32_t        baseArrayLayer = 0;
+    uint32_t        layerCount     = 1;
 
 
     [[deprecated("Unimplemented")]]

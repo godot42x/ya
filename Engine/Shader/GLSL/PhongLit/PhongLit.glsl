@@ -30,7 +30,7 @@ void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     vFragLightSpacePos = vec4(0.0);
     
-    //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性。
+    //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性.
     mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
     vec3 worldNormal = normalMatrix * aNormal;
     vNormal = worldNormal;
@@ -182,11 +182,6 @@ layout(set = 2, binding = 0) uniform ParamUBO {
 
 
 
-layout(set =3, binding = 0) uniform samplerCube uSkyBox;
-layout(set =4, binding = 0) uniform sampler2D uDirectionalLightShadowMap;
-// layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
-
-
 // MARK: frag i/o, if have geometry shader, from geometry shader's out
 layout(location = 0) in vec3 vPos;
 layout(location = 1) in vec2 vTexcoord;
@@ -232,6 +227,10 @@ float calculateDirectionalShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDi
     vec3 projCoords =  fragLightSpacePos.xyz / w;
 
     vec2 uv = projCoords.xy * 0.5 + 0.5;
+    // Compensate viewport Y-flip (bReverseViewportY=true) used during shadow map generation
+#ifndef NOT_FLIP_SHADOW_UV
+    uv.y = 1.0 - uv.y;
+#endif
     float curDepth = projCoords.z;
 
     // tolerate both ZO [0,1] and NO [-1,1] depth conventions
@@ -291,7 +290,7 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     return ambient + diffuse + specular;
 }
 
-vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor)
+vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor, uint pointLightIndex)
 {
     vec3 lightDir = normalize(pointLight.position - fragPos);
 
@@ -334,6 +333,15 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
         specular *= intensity;
     }
 
+    // SHADOW
+    // float shadow = calculatePointLightShadow()
+    vec3 fragToLight = fragPos - pointLight.position;
+    float closestDepth = texture(uPointLightShadowMapArray[pointLightIndex], fragToLight ).r;
+    closestDepth *= pointLight.farPlane;
+    float currentDepth = length(fragToLight);
+    float bias = 0.05;
+    float shadow = (currentDepth - bias) > closestDepth? 1.0: 0.0;
+
     // 计算衰减
     float distance = length(pointLight.position - fragPos);
     float attenuation = 1.0 / (
@@ -343,7 +351,8 @@ vec3 calculatePointLight(PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 
     );
 
 
-    return (ambient + diffuse + specular) * attenuation;
+
+    return (ambient + (1-shadow) * ( diffuse + specular)) * attenuation;
 }
 
 bool drawDebugFrag(vec2 pos, vec2 size, vec4 color)
@@ -440,7 +449,9 @@ void main ()
     // TODO: need this numPointLights? or make a const to do simd optimization?
     for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) 
     {
-        lighting += calculatePointLight(uLit.pointLights[i], vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz);
+        lighting += calculatePointLight(uLit.pointLights[i],
+            vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz,
+            i);
     }
 
 

@@ -14,6 +14,7 @@ struct PointLight {
     float quadratic;
 
     vec3  position;      // 光源位置
+    float farPlane; // TODO: use one farPlane for each point light
 
     vec3  ambient;
     vec3  diffuse;
@@ -56,3 +57,10 @@ layout(set = 0, binding =2, std140) uniform DebugData {
     bool bDebugUV;
     vec4 floatParam;
 } uDebug;
+
+
+layout(set =3, binding = 0) uniform samplerCube uSkyBox;
+
+layout(set =4, binding = 0) uniform sampler2D uDirectionalLightShadowMap;
+// layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
+layout(set =4, binding = 1) uniform samplerCube uPointLightShadowMapArray[MAX_POINT_LIGHTS];

@@ -429,6 +429,44 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto lsc = entity->addComponent<ya::LuaScriptComponent>();
         lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
     }
+    if (auto* pointLt = scene->createNode3D("Point Light 2")) {
+        ya::Entity* entity = pointLt->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(-10.0, 5.f, 0.f));
+        _pointLightEntity = entity;
+
+        // Mesh component
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
+        // Material component
+        auto plc = entity->addComponent<ya::PointLightComponent>();
+        auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
+
+        auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
+        umc->setMaterial(pointLightMat);
+        // umc.add
+
+        // 添加 Lua 圆周运动脚本（新 API）
+        // auto lsc = entity->addComponent<ya::LuaScriptComponent>();
+        // lsc->addScript("Engine/Content/Lua/TestPointLight.lua");
+    }
+    if (auto* wall = scene->createNode3D("Wall")) {
+        ya::Entity* entity = wall->getEntity();
+        auto        tc     = entity->getComponent<ya::TransformComponent>();
+        tc->setPosition(glm::vec3(10.0f, 0.0f, -10.0f));
+        tc->setScale(glm::vec3(10.0f, 10.0f, 0.3f));
+        tc->setRotation({0, -90, 0});
+
+        // Mesh component
+        auto mc = entity->addComponent<ya::MeshComponent>();
+        mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
+
+        // Material component
+        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        lmc->createDefaultMaterial();
+        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall.jpg");
+    }
 
     if (auto* dirLt = scene->createNode3D("Directional Light")) {
         ya::Entity* entity = dirLt->getEntity();

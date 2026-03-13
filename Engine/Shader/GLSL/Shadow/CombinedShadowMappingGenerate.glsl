@@ -24,14 +24,21 @@ void main()
 layout(triangles) in;
 layout(triangle_strip, max_vertices = (MAX_POINT_LIGHTS * 6 +1) *3) out;
 
-// layout (location = 0) out float gLinearDepth; // for directional light shadow depth
+layout(location =0) out flat int pointLightIndex;
+layout(location =1) out vec4 fragPos;
+
+struct PointLightData{
+    mat4 matrix[6];
+    vec3 pos;
+    float farPlane;
+
+};
 
 layout (set =0, binding = 0) uniform FrameData{
     mat4 directionalLightMatrix;
-    mat4 pointLightMatrices[6 * MAX_POINT_LIGHTS];
+    PointLightData pointLights[ MAX_POINT_LIGHTS];
     uint numPointLights;
     uint hasDirectionalLight; // TODO: use macro to cut branch
-    float pointLightFarPlane;
 } uFrame;
 
 void main()
@@ -44,7 +51,8 @@ void main()
         {
             vec4 worldPos = gl_in[vertIdx].gl_Position;
             gl_Position = uFrame.directionalLightMatrix * worldPos;
-            // gLinearDepth = gl_Position.z / gl_Position.w; // store linear depth in [0,1] range
+            pointLightIndex = -1;
+            fragPos = worldPos;
             EmitVertex();
         }
         EndPrimitive();
@@ -52,7 +60,6 @@ void main()
 
     // point light shadow depths
     for (uint lightIdx = 0; lightIdx < uFrame.numPointLights; ++lightIdx)
-    // for (uint lightIdx = 0; lightIdx < MAX_POINT_LIGHTS; ++lightIdx)
     {
         // pos_x -> neg_x -> pos_y -> neg_y -> pos_z -> neg_z
         for (uint faceIdx = 0; faceIdx < 6; ++faceIdx)
@@ -62,8 +69,9 @@ void main()
             for (uint vertIdx = 0; vertIdx < 3; ++vertIdx)
             {
                 vec4 worldPos = gl_in[vertIdx].gl_Position;
-                gl_Position = uFrame.pointLightMatrices[index] * worldPos;
-                // gLinearDepth = 1;
+                fragPos = worldPos;
+                gl_Position = uFrame.pointLights[lightIdx].matrix[faceIdx] * worldPos;
+                pointLightIndex =  int(lightIdx);
                 EmitVertex();
             }
             EndPrimitive();
@@ -77,11 +85,32 @@ void main()
 
 #include "Common/Limits.glsl"
 
+struct PointLightData{
+    mat4 matrix[6];
+    vec3 pos;
+    float farPlane;
+};
+
+layout (set =0, binding = 0) uniform FrameData{
+    mat4 directionalLightMatrix;
+    PointLightData pointLights[ MAX_POINT_LIGHTS];
+    uint numPointLights;
+    uint hasDirectionalLight; // TODO: use macro to cut branch
+} uFrame;
+
+layout(location =0) in flat int pointLightIndex;
+layout(location =1) in vec4 fragPos;
+
+
 void main()
 {
-    // do nothing, driver already do this before fragment shader:
-    gl_FragDepth = gl_FragCoord.z;
-    if(gl_Layer > 0) {
-        gl_FragDepth = gl_Layer / (1 + 6* MAX_POINT_LIGHTS);
+    if(pointLightIndex == -1) {
+        // directional light: use hardware depth
+        gl_FragDepth = gl_FragCoord.z;
+    } else {
+        // point light: use linear distance
+        float lightDistance = length( fragPos.xyz - uFrame.pointLights[pointLightIndex].pos);
+        lightDistance = lightDistance / uFrame.pointLights[pointLightIndex].farPlane;
+        gl_FragDepth =  lightDistance;
     }
 }

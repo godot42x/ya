@@ -365,18 +365,19 @@ void App::init(AppDesc ci)
     }
 
 
-    _descriptorPool = IDescriptorPool::create(_render,
-                                              DescriptorPoolCreateInfo{
-                                                  .label     = "Global Descriptor Pool",
-                                                  .maxSets   = 2, // skybox + depth shadow
-                                                  .poolSizes = {
-                                                      // max iamge set allowed < maxSets
-                                                      DescriptorPoolSize{
-                                                          .type            = EPipelineDescriptorType::CombinedImageSampler,
-                                                          .descriptorCount = 1 + 2, // skybox + depth shadow(point and directional)
-                                                      },
-                                                  },
-                                              });
+    _descriptorPool = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "Global Descriptor Pool",
+            .maxSets   = 200, // skybox + depth shadow
+            .poolSizes = {
+                // max iamge set allowed < maxSets
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1 + (1 + MAX_POINT_LIGHTS), // skybox + depth shadow(point and directional)
+                },
+            },
+        });
     _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
 
 
@@ -426,7 +427,7 @@ void App::init(AppDesc ci)
                 DescriptorSetLayoutBinding{
                     .binding         = 1,
                     .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1,
+                    .descriptorCount = MAX_POINT_LIGHTS,
                     .stageFlags      = EShaderStage::Fragment,
                 },
             },
@@ -455,20 +456,7 @@ void App::init(AppDesc ci)
             .baseArrayLayer = 0,
             .layerCount     = 1,
         });
-    _shadowPointDepthIV = tf->createImageView(
-        shadowImg,
-        ImageViewCreateInfo{
-            .label        = "Shadow Map Point Depth ImageView",
-            .viewType     = EImageViewType::View2DArray,
-            .aspectFlags  = EImageAspect::Depth,
-            .baseMipLevel = 0,
-            .levelCount   = 1,
-            // use 1 - nx6 layers
-            .baseArrayLayer = 1,
-            .layerCount     = 6 * MAX_POINT_LIGHTS,
-        });
     YA_CORE_ASSERT(_shadowDirectionalDepthIV && _shadowDirectionalDepthIV->getHandle(), "Failed to create shadow map directional depth image view");
-    YA_CORE_ASSERT(_shadowPointDepthIV && _shadowPointDepthIV->getHandle(), "Failed to create shadow map point depth image view");
 
     // Editor visualization views – created once at init
     for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
@@ -517,15 +505,38 @@ void App::init(AppDesc ci)
     YA_CORE_ASSERT(_shadowSampler, "Failed to create shadow sampler");
     _deleter.push("ShadowSampler", [this](void*) { _shadowSampler.reset(); });
 
+    _render->waitIdle(); // ensure all image and imageview create success
+
+    std::vector<DescriptorImageInfo> dsImageInfos;
+    dsImageInfos.resize(MAX_POINT_LIGHTS);
+    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) 
+    {
+        dsImageInfos[i] = DescriptorImageInfo{
+            .imageView   = _shadowPointCubeIVs[i]->getHandle(),
+            .sampler     = _shadowSampler->getHandle(),
+            .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
+        };
+    }
+
+    WriteDescriptorSet writeCubeMaps{
+        .dstSet           = _depthBufferShadowDS,
+        .dstBinding       = 1,
+        .dstArrayElement  = 0,
+        .descriptorType   = EPipelineDescriptorType::CombinedImageSampler,
+        .descriptorCount  = MAX_POINT_LIGHTS,
+        .bufferInfos      = {},
+        .imageInfos       = dsImageInfos,
+        .texelBufferViews = {},
+    };
+
     _render
         ->getDescriptorHelper()
         ->updateDescriptorSets({
             IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, _shadowDirectionalDepthIV.get(), _shadowSampler.get()),
-            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 1, _shadowPointDepthIV.get(), _shadowSampler.get()),
+            writeCubeMaps,
         });
     _deleter.push("Shadow ImageViews", [this](void*) {
         _shadowDirectionalDepthIV.reset();
-        _shadowPointDepthIV.reset();
         for (auto& iv : _shadowPointCubeIVs) iv.reset();
         for (auto& faces : _shadowPointFaceIVs)
             for (auto& iv : faces) iv.reset();

@@ -12,7 +12,7 @@ namespace ya
 void ShadowMapping::onInitImpl(const InitParams& initParams)
 {
     auto render       = getRender();
-    bReverseViewportY = false;
+    bReverseViewportY = true; // must match engine convention: Vulkan Y-down needs viewport flip
 
     auto DSLs    = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
     _dslPerFrame = DSLs[0];
@@ -144,8 +144,10 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 
         for (int face = ECubeFace::CubeFace_PosX; face < ECubeFace::CubeFace_Count; ++face)
         {
-            glm::mat4       view{};
-            constexpr auto& up = FMath::Vector::WorldUp;
+            glm::mat4 view{};
+            // Cube map convention: Y is flipped (down), matching OpenGL/Vulkan cube map spec
+            // we do this so won't use 1-v in shader
+            constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
             if constexpr (FMath::Vector::IsRightHanded) {
                 switch ((ECubeFace)face)
                 {
@@ -156,10 +158,10 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
                     view = FMath::lookAt(pos, pos + glm::vec3(-1, 0, 0), up);
                     break;
                 case CubeFace_PosY:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, -1)); // look up, so forward is -z
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
                     break;
                 case CubeFace_NegY:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, 1)); // look down, so forward is +z
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
                     break;
                 case CubeFace_PosZ:
                     view = FMath::lookAt(pos, pos + glm::vec3(0, 0, 1), up);
@@ -174,7 +176,9 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
             else {
                 UNIMPLEMENTED();
             }
-            frameData.pointLightMatrices[i * ECubeFace::CubeFace_Count + face] = faceProj * view;
+            frameData.pointLights[i].matrix[face] = faceProj * view;
+            frameData.pointLights[i].pos          = pos;
+            frameData.pointLights[i].farPlane     = farPlane; // TODO: reduce memory by use same one far plane?
         }
     }
     _frameUBO[_index]->writeData(&frameData, sizeof(FrameUBO), 0);

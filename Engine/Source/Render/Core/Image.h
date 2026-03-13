@@ -89,6 +89,18 @@ struct IImage : public plat_base<IImage>
     virtual EFormat::T getFormat() const = 0;
 
     /**
+     * @brief Get the number of mip levels of the image
+     * @return uint32_t Mip level count
+     */
+    virtual uint32_t getMipLevels() const = 0;
+
+    /**
+     * @brief Get the number of array layers of the image
+     * @return uint32_t Array layer count
+     */
+    virtual uint32_t getArrayLayers() const = 0;
+
+    /**
      * @brief Get the usage flags of the image
      * @return EImageUsage::T Image usage flags
      */

@@ -297,8 +297,13 @@ std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateI
     }
 
     // Create image view
-    uint32_t aspectFlags = ci.isDepth ? EImageAspect::Depth : EImageAspect::Color;
-    auto     imageView   = textureFactory->createImageView(image, aspectFlags);
+    ImageViewCreateInfo viewCI{
+        .label       = std::format("RenderTexture_ImageView_{}", ci.label),
+        .aspectFlags = static_cast<EImageAspect::T>(ci.isDepth ? EImageAspect::Depth : EImageAspect::Color),
+        .levelCount  = ci.mipLevels,
+        .layerCount  = ci.layerCount,
+    };
+    auto imageView = textureFactory->createImageView(image, viewCI);
     if (!imageView) {
         YA_CORE_ERROR("Failed to create render target image view: {}", ci.label);
         return nullptr;
@@ -392,7 +397,12 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
     }
 
     // Create image view using texture factory
-    imageView = textureFactory->createImageView(image, EImageAspect::Color);
+    ImageViewCreateInfo viewCI{
+        .label       = std::format("Texture_ImageView_{}", _label),
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = mipLevels,
+    };
+    imageView = textureFactory->createImageView(image, viewCI);
     YA_CORE_ASSERT(imageView, "Failed to create image view for texture: {} (format: {}, {}x{})", _filepath.empty() ? _label : _filepath, (int)format, texWidth, texHeight);
 
     // Create staging buffer
@@ -520,7 +530,11 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
         return;
     }
 
-    imageView = textureFactory->createImageView(image, EImageAspect::Color);
+    ImageViewCreateInfo fallbackViewCI{
+        .label       = std::format("Texture_Fallback_ImageView_{}", _label),
+        .aspectFlags = EImageAspect::Color,
+    };
+    imageView = textureFactory->createImageView(image, fallbackViewCI);
     if (!imageView || !imageView->getHandle()) {
         YA_CORE_ERROR("Failed to create fallback texture image view!");
         image = nullptr;

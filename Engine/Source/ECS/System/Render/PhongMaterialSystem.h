@@ -227,7 +227,7 @@ struct PhongMaterialSystem : public IMaterialSystem
                     DescriptorSetLayoutBinding{
                         .binding         = 1,
                         .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
+                        .descriptorCount = MAX_POINT_LIGHTS,
                         .stageFlags      = EShaderStage::Fragment,
                     },
                 },
@@ -328,7 +328,7 @@ struct PhongMaterialSystem : public IMaterialSystem
         }
 
 
-        DescriptorImageInfo imageInfo0(samplerHandle, imageViewHandle, EImageLayout::ShaderReadOnlyOptimal);
+        DescriptorImageInfo imageInfo0(imageViewHandle, samplerHandle, EImageLayout::ShaderReadOnlyOptimal);
         return imageInfo0;
     }
 
