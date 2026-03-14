@@ -155,6 +155,8 @@ void App::tickRenderPipeline(float dt)
             pl.spotDir     = tc.getForward();
             pl.innerCutOff = glm::cos(glm::radians(plc._innerConeAngle));
             pl.outerCutOff = glm::cos(glm::radians(plc._outerConeAngle));
+            pl.nearPlane   = plc.nearPlane;
+            pl.farPlane    = plc.farPlane;
             ++ctx.numPointLights;
         }
     }

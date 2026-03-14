@@ -3,5 +3,6 @@
         "defines": {
             "MAX_POINT_LIGHTS": 6
         }
-    }
+    },
+    "enableRenderDoc": false
 }

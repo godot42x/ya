@@ -969,14 +969,14 @@ struct ImageCreateInfo
         uint32_t height = 0;
         uint32_t depth  = 1;
     } extent;
-    uint32_t        mipLevels             = 1;
-    uint32_t        arrayLayers           = 1;
-    ESampleCount::T samples               = ESampleCount::Sample_1;
-    EImageUsage::T  usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
-    uint32_t        queueFamilyIndexCount = 0;
-    const uint32_t* pQueueFamilyIndices   = nullptr;
-    EImageLayout::T     initialLayout = EImageLayout::Undefined;
-    EImageCreateFlag::T flags         = EImageCreateFlag::None;
+    uint32_t            mipLevels             = 1;
+    uint32_t            arrayLayers           = 1;
+    ESampleCount::T     samples               = ESampleCount::Sample_1;
+    EImageUsage::T      usage                 = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst);
+    uint32_t            queueFamilyIndexCount = 0;
+    const uint32_t*     pQueueFamilyIndices   = nullptr;
+    EImageLayout::T     initialLayout         = EImageLayout::Undefined;
+    EImageCreateFlag::T flags                 = EImageCreateFlag::None;
     // TODO: manual conversion
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
@@ -1133,6 +1133,9 @@ struct FrameContext
         glm::vec3 spotDir;
         float     innerCutOff = 0.0f;
         float     outerCutOff = 0.0f;
+
+        float nearPlane = 0.1f;
+        float farPlane  = 100.f;
 
         std::array<glm::mat4, 6> shadowView; // for point light shadow mapping (cubemap)
         glm::mat4                shadowProjection;

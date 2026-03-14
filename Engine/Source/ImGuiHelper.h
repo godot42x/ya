@@ -163,6 +163,8 @@ using ImguiState = ImGuiManager;
 
 namespace ImGuiHelper
 {
+void BeginFrame();
+
 bool Image(IImageView        *imageView,
            Sampler           *sampler,
            const std::string &alt,

@@ -21,7 +21,8 @@ void IRenderSystem::renderGUI()
     if (!bOpen) {
         return;
     }
-    ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY);
+    if(ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY)){
+    }
     bool bEnabledLocal = this->bEnabled;
     if (ImGui::Checkbox("Enabled", &bEnabledLocal)) {
         App::get()->taskManager.registerFrameTask([this, bEnabledLocal]() {

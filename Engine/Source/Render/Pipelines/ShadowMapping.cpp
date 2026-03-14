@@ -12,7 +12,7 @@ namespace ya
 void ShadowMapping::onInitImpl(const InitParams& initParams)
 {
     auto render       = getRender();
-    bReverseViewportY = true; // must match engine convention: Vulkan Y-down needs viewport flip
+    bReverseViewportY = false; // Vulkan Y-down NDC: flip viewport so shadow cubemap Y matches OpenGL convention (up=(0,-1,0))
 
     auto DSLs    = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
     _dslPerFrame = DSLs[0];
@@ -52,7 +52,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .cullMode    = ECullMode::Back,
+            .cullMode    = ECullMode::Front, // then the point light's self's mesh won't block other depth
             .frontFace   = EFrontFaceType::CounterClockWise,
         },
         .depthStencilState = DepthStencilState{
@@ -138,36 +138,41 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
     for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
         const glm::vec3&       pos       = ctx->pointLights[i].position;
         static const float     nearPlane = 0.1f;
-        static const float     farPlane  = 100.0f;
         static const float     aspect    = 1.0f; // TODO: read from shadow map rt extent
-        static const glm::mat4 faceProj  = FMath::perspective(glm::radians(90.0f), aspect, nearPlane, farPlane);
+        static const glm::mat4 faceProj  = FMath::perspective(glm::radians(90.0f),
+                                                             aspect,
+                                                             ctx->pointLights[i].nearPlane,
+                                                             ctx->pointLights[i].farPlane);
 
         for (int face = ECubeFace::CubeFace_PosX; face < ECubeFace::CubeFace_Count; ++face)
         {
             glm::mat4 view{};
             // Cube map convention: Y is flipped (down), matching OpenGL/Vulkan cube map spec
             // we do this so won't use 1-v in shader
-            constexpr glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+            // glm::vec3 down     = bReverseViewportY ? glm::vec3{0, 1, 0} : glm::vec3(0, -1, 0);
+            glm::vec3 down     = glm::vec3{0, 1, 0};
+            glm::vec3 backward = {0, 0, 1};
+            // glm::vec3 forward = bReverseViewportY ? glm::vec3{0, 0, 1} : glm::vec3(0, 0, -1);
             if constexpr (FMath::Vector::IsRightHanded) {
                 switch ((ECubeFace)face)
                 {
                 case CubeFace_PosX:
-                    view = FMath::lookAt(pos, pos + glm::vec3(1, 0, 0), up);
+                    view = FMath::lookAt(pos, pos + glm::vec3(1, 0, 0), down);
                     break;
                 case CubeFace_NegX:
-                    view = FMath::lookAt(pos, pos + glm::vec3(-1, 0, 0), up);
+                    view = FMath::lookAt(pos, pos + glm::vec3(-1, 0, 0), down);
                     break;
                 case CubeFace_PosY:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, 1, 0), glm::vec3(0, 0, 1));
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 1, 0), backward);
                     break;
                 case CubeFace_NegY:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, -1, 0), glm::vec3(0, 0, -1));
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, -1, 0), -backward);
                     break;
                 case CubeFace_PosZ:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, 1), up);
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, 1), down);
                     break;
                 case CubeFace_NegZ:
-                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, -1), up);
+                    view = FMath::lookAt(pos, pos + glm::vec3(0, 0, -1), down);
                     break;
                 case CubeFace_Count:
                     UNREACHABLE();
@@ -176,9 +181,10 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
             else {
                 UNIMPLEMENTED();
             }
+
             frameData.pointLights[i].matrix[face] = faceProj * view;
             frameData.pointLights[i].pos          = pos;
-            frameData.pointLights[i].farPlane     = farPlane; // TODO: reduce memory by use same one far plane?
+            frameData.pointLights[i].farPlane     = ctx->pointLights[i].farPlane; // TODO: reduce memory by use same one far plane?
         }
     }
     _frameUBO[_index]->writeData(&frameData, sizeof(FrameUBO), 0);

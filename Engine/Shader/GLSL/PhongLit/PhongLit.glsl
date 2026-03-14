@@ -227,10 +227,10 @@ float calculateDirectionalShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDi
     vec3 projCoords =  fragLightSpacePos.xyz / w;
 
     vec2 uv = projCoords.xy * 0.5 + 0.5;
-    // Compensate viewport Y-flip (bReverseViewportY=true) used during shadow map generation
-#ifndef NOT_FLIP_SHADOW_UV
-    uv.y = 1.0 - uv.y;
-#endif
+    // No Y-flip needed: shadow RT uses bReverseViewportY=false (Vulkan native).
+// #ifndef VK_NOT_FLIP_VIEWPORT
+//     uv.y = 1 - uv.y;
+// #endif
     float curDepth = projCoords.z;
 
     // tolerate both ZO [0,1] and NO [-1,1] depth conventions
@@ -342,12 +342,14 @@ vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  ve
 
     // SHADOW
     float bias = 0.05;
-    vec3 fragToLight = fragPos - pointLight.position;
-    float currentDepth = length(fragToLight);
+    // direction from light to frag (world space) — selects the correct cubemap face
+    vec3 sampleDir = fragPos - pointLight.position;
+    // vec3 sampleDir =  pointLight.position - fragPos ;
+    float currentDepth = length(sampleDir);
     #define DEPTH_BUFFER uPointLightShadowMapArray[pointLightIndex]
 
     #if !ENABLE_POINT_LIGHT_SHADOW_PCF
-        float closestDepth = texture(DEPTH_BUFFER, fragToLight ).r;
+        float closestDepth = texture(DEPTH_BUFFER, sampleDir ).r;
         closestDepth *= pointLight.farPlane;
         float shadow = (currentDepth - bias) > closestDepth? 1.0: 0.0;
     #else
@@ -368,8 +370,8 @@ vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  ve
         float diskRadius = 0.05;
         for(int i =0; i< samples ; ++i)
         {
-            // float closestDepth = texture(depthBuffer, fragToLight + vec3 (x, y, z)).r; // sample by 3 dimension
-            float closestDepth = texture(DEPTH_BUFFER, fragToLight + sampleOffsetDirections[i] * diskRadius ).r;
+            // float closestDepth = texture(depthBuffer, sampleDir + vec3 (x, y, z)).r; // sample by 3 dimension
+            float closestDepth = texture(DEPTH_BUFFER, sampleDir + sampleOffsetDirections[i] * diskRadius ).r;
             closestDepth *= pointLight.farPlane;
             if((currentDepth - bias) > closestDepth){
                 shadow += 1.0;

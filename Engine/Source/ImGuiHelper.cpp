@@ -2,6 +2,7 @@
 #include "Render/Core/Image.h"
 
 #include <unordered_map>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 
@@ -18,6 +19,12 @@
 
 namespace ya
 {
+
+namespace
+{
+constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE        = 512;
+constexpr uint64_t IMGUI_DESCRIPTOR_GC_DELAY_FRAMES = 8;
+}
 
 void ImGuiManager::initImGuiCore()
 {
@@ -151,7 +158,7 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
         .QueueFamily        = queue.getFamilyIndex(),
         .Queue              = queue.getHandle(),
         .DescriptorPool     = nullptr,
-        .DescriptorPoolSize = 64,
+        .DescriptorPoolSize = IMGUI_DESCRIPTOR_POOL_SIZE,
         .MinImageCount      = 2,
         .ImageCount         = vkRender->getSwapchainImageCount(),
         .PipelineCache      = nullptr,
@@ -167,7 +174,7 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
         .Allocator                = vkRender->getAllocator(),
         .CheckVkResultFn          = [](VkResult err) {
             if (err != VK_SUCCESS) {
-                YA_CORE_ERROR("Vulkan error in ImGui: {}", static_cast<int>(err));
+                YA_CORE_ERROR("Vulkan error in ImGui: {} -> {}", static_cast<int>(err), std::to_string(err));
             }
         },
         .MinAllocationSize          = static_cast<VkDeviceSize>(1024 * 1024),
@@ -225,6 +232,8 @@ void ImGuiManager::beginFrame()
 {
     YA_PROFILE_FUNCTION()
     YA_CORE_ASSERT(_initialized, "ImGuiManager not initialized");
+
+    ImGuiHelper::BeginFrame();
 
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplVulkan_NewFrame();
@@ -387,9 +396,64 @@ struct ImageCacheEntry
 {
     ImageViewHandle handle = {};
     void*           ds     = nullptr;
+    uint64_t        lastUsedFrame = 0;
+};
+
+struct RetiredDescriptorSet
+{
+    void*    ds          = nullptr;
+    uint64_t retireFrame = 0;
 };
 
 std::unordered_map<ImageCacheKey, ImageCacheEntry, ImageCacheKeyHash> g_imageCache;
+std::vector<RetiredDescriptorSet>                                     g_retiredDescriptorSets;
+uint64_t                                                              g_imguiFrameIndex = 0;
+
+void retireDescriptorSet(void* descriptorSet)
+{
+    if (!descriptorSet) {
+        return;
+    }
+    g_retiredDescriptorSets.push_back(RetiredDescriptorSet{
+        .ds          = descriptorSet,
+        .retireFrame = g_imguiFrameIndex,
+    });
+}
+
+void collectRetiredDescriptorSets()
+{
+    auto it = g_retiredDescriptorSets.begin();
+    while (it != g_retiredDescriptorSets.end()) {
+        if (it->retireFrame + IMGUI_DESCRIPTOR_GC_DELAY_FRAMES > g_imguiFrameIndex) {
+            ++it;
+            continue;
+        }
+        ImGuiManager::removeTexture(it->ds);
+        it = g_retiredDescriptorSets.erase(it);
+    }
+}
+
+void pruneStaleImageCacheEntries()
+{
+    auto it = g_imageCache.begin();
+    while (it != g_imageCache.end()) {
+        if (it->second.lastUsedFrame + IMGUI_DESCRIPTOR_GC_DELAY_FRAMES > g_imguiFrameIndex) {
+            ++it;
+            continue;
+        }
+        if (it->second.ds) {
+            ImGuiManager::removeTexture(it->second.ds);
+        }
+        it = g_imageCache.erase(it);
+    }
+}
+
+void beginImageCacheFrame()
+{
+    ++g_imguiFrameIndex;
+    collectRetiredDescriptorSets();
+    pruneStaleImageCacheEntries();
+}
 
 void* getOrCreateDescriptorSet(IImageView* imageView, Sampler* sampler)
 {
@@ -403,13 +467,14 @@ void* getOrCreateDescriptorSet(IImageView* imageView, Sampler* sampler)
     auto it = g_imageCache.find(key);
     if (it != g_imageCache.end()) {
         if (it->second.ds && it->second.handle == handle) {
+            it->second.lastUsedFrame = g_imguiFrameIndex;
             return it->second.ds;
         }
         if (it->second.ds) {
             YA_CORE_TRACE("Invalidated ImGui descriptor set in cache, imageView: {}, sampler: {}. remove it",
                           handle.ptr,
                           sampler->getHandle().ptr);
-            ImGuiManager::removeTexture(it->second.ds);
+            retireDescriptorSet(it->second.ds);
         }
     }
 
@@ -418,13 +483,22 @@ void* getOrCreateDescriptorSet(IImageView* imageView, Sampler* sampler)
         return nullptr;
     }
 
-    g_imageCache[key] = ImageCacheEntry{handle, ds};
+    g_imageCache[key] = ImageCacheEntry{
+        .handle        = handle,
+        .ds            = ds,
+        .lastUsedFrame = g_imguiFrameIndex,
+    };
     return ds;
 }
 } // namespace
 
 namespace ImGuiHelper
 {
+void BeginFrame()
+{
+    beginImageCacheFrame();
+}
+
 bool Image(IImageView*        imageView,
            Sampler*           sampler,
            const std::string& alt,
@@ -451,6 +525,13 @@ void ClearImageCache()
         }
     }
     g_imageCache.clear();
+
+    for (auto& entry : g_retiredDescriptorSets) {
+        if (entry.ds) {
+            ImGuiManager::removeTexture(entry.ds);
+        }
+    }
+    g_retiredDescriptorSets.clear();
 }
 } // namespace ImGuiHelper
 

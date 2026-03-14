@@ -26,6 +26,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from shader_config import extract_shader_defines
+
 _builtin_print = print
 def print(*args, **kwargs):
     filename = sys._getframe(1).f_code.co_filename
@@ -516,7 +518,7 @@ def main():
     parser.add_argument("--namespace",   default="ya::glsl_types", help="C++ namespace")
     parser.add_argument("--output",      default=None,      help="Override output filename (single-file merge mode only)")
     parser.add_argument("--force",       action="store_true", help="Re-generate even if header is newer than sources")
-    parser.add_argument("--config",      default=None,     help="Path to Engine.json for shader defines")
+    parser.add_argument("--config",      default=None,     help="Path to Engine.jsonc for shader defines")
     parser.add_argument("--include-dir", action="append",  dest="include_dirs", metavar="DIR",
                         help="Extra base directories for #include resolution (repeatable)")
     args = parser.parse_args()
@@ -526,9 +528,7 @@ def main():
     if args.config:
         config_path = Path(args.config)
         if config_path.exists():
-            with open(config_path, encoding="utf-8") as f:
-                cfg = json.load(f)
-            config_defines = {k: int(v) for k, v in cfg.get("shader", {}).get("defines", {}).items()}
+            config_defines = {k: int(v) for k, v in extract_shader_defines(config_path).items()}
         else:
             print(f"WARNING: --config file not found: {args.config}", file=sys.stderr)
 

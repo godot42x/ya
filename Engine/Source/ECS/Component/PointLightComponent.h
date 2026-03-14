@@ -18,6 +18,9 @@ struct PointLightComponent : public IComponent
     YA_REFLECT_FIELD(_diffuse, .color())
     YA_REFLECT_FIELD(_specular, .color())
 
+    YA_REFLECT_FIELD(nearPlane);
+    YA_REFLECT_FIELD(farPlane);
+
     YA_REFLECT_FIELD(_innerConeAngle, .manipulate(0.0f, 90.0f, 0.1f, ya::reflection::ManipulatorType::Slider))
     YA_REFLECT_FIELD(_outerConeAngle, .manipulate(0.0f, 90.0f, 0.1f, ya::reflection::ManipulatorType::Slider))
     YA_REFLECT_END()
@@ -43,6 +46,8 @@ struct PointLightComponent : public IComponent
 
     float _innerConeAngle = 30.0f; // For spot lights
     float _outerConeAngle = 45.0f; // For spot lights
+    float nearPlane = 0.1f;
+    float farPlane = 100.0f;
 
     PointLightComponent()                            = default;
     PointLightComponent(const PointLightComponent &) = default;

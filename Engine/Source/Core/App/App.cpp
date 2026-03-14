@@ -61,7 +61,6 @@
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
-#include "Render/Mesh.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/Pipelines/ShadowMapping.h"
 #include "Render/Render.h"
@@ -223,6 +222,7 @@ void App::init(AppDesc ci)
     handleSystemSignals();
 
 
+    nlohmann::json engineConfig;
     {
         YA_PROFILE_SCOPE_LOG("App Init Subsystems");
         {
@@ -233,18 +233,10 @@ void App::init(AppDesc ci)
         }
         VirtualFileSystem::init();
         // TODO: move to config system
-        {
-            std::string s;
-            if (VFS::get()->readFileToString("Engine/Config/Engine.json", s)) {
-                nlohmann::json j = nlohmann::json::parse(s);
-                if (j.contains("disableGraphicsCards")) {
-                    auto disabledCards = j["disableGraphicsCards"];
-                    if (disabledCards.is_array()) {
-                        std::vector<std::string> disabledCardsVec = disabledCards.get<std::vector<std::string>>();
-                        _ci.disabledGraphicsCards                 = std::move(disabledCardsVec);
-                    }
-                }
-            }
+        std::string s;
+        if (VFS::get()->readFileToString("Engine/Config/Engine.jsonc", s)) {
+            // jsonc or json5 comments...
+            engineConfig = nlohmann::json::parse(s, nullptr, true, true);
         }
         Logger::init();
         FileWatcher::init();
@@ -287,7 +279,12 @@ void App::init(AppDesc ci)
 
     // MARK: Render/Hook
 
-    if (_ci.bEnableRenderDoc) {
+    bool enableRenderDoc = false;
+    if (engineConfig.contains("enableRenderDoc")) {
+        enableRenderDoc = engineConfig["enableRenderDoc"].get<bool>();
+    }
+    enableRenderDoc = enableRenderDoc || _ci.bEnableRenderDoc;
+    if (enableRenderDoc) {
         // before render init to hook apis
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();
         _renderDocConfiguredDllPath   = _ci.renderDocDllPath;
@@ -315,6 +312,13 @@ void App::init(AppDesc ci)
         });
     }
 
+    if (engineConfig.contains("disableGraphicsCards")) {
+        auto disabledCards = engineConfig["disableGraphicsCards"];
+        if (disabledCards.is_array()) {
+            std::vector<std::string> disabledCardsVec = disabledCards.get<std::vector<std::string>>();
+            _ci.disabledGraphicsCards                 = std::move(disabledCardsVec);
+        }
+    }
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
@@ -337,7 +341,7 @@ void App::init(AppDesc ci)
     _windowSize.x = static_cast<float>(winW);
     _windowSize.y = static_cast<float>(winH);
 
-    if (_ci.bEnableRenderDoc) {
+    if (enableRenderDoc) {
         _renderDocCapture->setRenderContext({
             .device    = _render->as<VulkanRender>()->getDevice(),
             .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
@@ -391,7 +395,7 @@ void App::init(AppDesc ci)
         .label            = "Shadow Map RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
         .bSwapChainTarget = false,
-        .extent           = {.width = 1024, .height = 1024},
+        .extent           = {.width = 512, .height = 512},
         .frameBufferCount = 1,
         .layerCount       = 1 + MAX_POINT_LIGHTS * 6, // 1 directional light + 6 faces for each point light
         .attachments      = {
@@ -510,7 +514,7 @@ void App::init(AppDesc ci)
 
     std::vector<DescriptorImageInfo> dsImageInfos;
     dsImageInfos.resize(MAX_POINT_LIGHTS);
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) 
+    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i)
     {
         dsImageInfos[i] = DescriptorImageInfo{
             .imageView   = _shadowPointCubeIVs[i]->getHandle(),
