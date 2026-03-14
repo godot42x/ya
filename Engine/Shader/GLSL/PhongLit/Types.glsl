@@ -59,8 +59,51 @@ layout(set = 0, binding =2, std140) uniform DebugData {
 } uDebug;
 
 
+layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
+layout(set =1, binding = 1) uniform sampler2D uTexSpecular;
+layout(set =1, binding = 2) uniform sampler2D uTexReflection;
+layout(set =1, binding = 3) uniform sampler2D uTexNormal;
+
+// struct TextureParam{
+//     bool bEnable;
+//     float uvRotation;
+//     vec4  uvTransform; // x,y: scale, z,w: translate
+// };
+
+struct TextureParam{
+    bool bEnable;
+    mat3 uvTransform;
+};
+
+layout(set = 2, binding = 0) uniform ParamUBO {
+    vec3 ambient; 
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+
+    TextureParam texParams[3];
+} uParams;
+
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
 
 layout(set =4, binding = 0) uniform sampler2D uDirectionalLightShadowMap;
 // layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
 layout(set =4, binding = 1) uniform samplerCube uPointLightShadowMapArray[MAX_POINT_LIGHTS];
+
+
+struct VertexOutput{
+    vec3 pos ;
+    vec2 uv  ;
+    vec3 normal ;
+    vec3 tangent ;
+    vec4 posInDirLightSpace ;
+    mat3 TBN ;
+};
+
+struct GeometryOutput{
+    vec3 pos ;
+    vec2 uv  ;
+    vec3 normal ;
+    vec4 posInDirLightSpace;
+    // mat3 TBN : location = 4;
+};

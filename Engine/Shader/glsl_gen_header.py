@@ -139,11 +139,14 @@ StructMap = dict[str, list[Field]]
 def _parse_fields(body: str, defines: dict[str, int]) -> list[Field]:
     """Parse the body of a struct or uniform block into a list of Fields."""
     fields: list[Field] = []
-    # Each statement: <type> <name>[<size>]; — allow whitespace variations
+    # Each statement:
+    #   <type> <name>[<size>] [: semantic = value] ;
+    # Semantic suffix (e.g. `: location = 0`) is ignored for C++ layout generation.
     stmt_re = re.compile(
         r'\b([A-Za-z_][A-Za-z0-9_]*(?:\s*\[\s*\d+\s*\])*)\s+'  # type (with optional old-style array dim)
         r'([A-Za-z_][A-Za-z0-9_]*)'                              # field name
         r'(?:\s*\[\s*([^\]]+?)\s*\])?'                           # optional array [size]
+        r'(?:\s*:\s*[^;]+)?'                                          # optional semantic annotation
         r'\s*;',
         re.DOTALL,
     )
@@ -166,7 +169,11 @@ def _parse_structs(src: str, defines: dict[str, int]) -> StructMap:
     for m in struct_re.finditer(src):
         name = m.group(1)
         body = m.group(2)
-        structs[name] = _parse_fields(body, defines)
+        fields = _parse_fields(body, defines)
+        # Skip non-std140 helper structs (e.g. stage I/O structs with semantics)
+        # that do not produce parseable C++ layout fields.
+        if fields:
+            structs[name] = fields
     return structs
 
 
@@ -483,7 +490,11 @@ def _process_one_glsl(
     header_path = output_dir / stem
 
     if not force and header_path.exists():
-        if input_path.stat().st_mtime <= header_path.stat().st_mtime:
+        src_mtime = input_path.stat().st_mtime
+        hdr_mtime = header_path.stat().st_mtime
+        gen_mtime = Path(__file__).stat().st_mtime
+        # Re-generate if source changed OR generator script changed.
+        if src_mtime <= hdr_mtime and gen_mtime <= hdr_mtime:
             # print(f"[glsl-gen] {header_path.name} is up-to-date, skipping.")
             return
 

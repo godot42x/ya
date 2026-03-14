@@ -4,15 +4,13 @@
 #include "Types.glsl"
 
 
-
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec2 aTexcoord;
 layout(location = 2) in vec3 aNormal;
+layout(location = 3) in vec3 aTangent;
 
-layout(location = 0) out vec3 vPos;
-layout(location = 1) out vec2 vTexcoord;
-layout(location = 2) out vec3 vNormal;
-layout(location = 3) out vec4 vFragLightSpacePos;
+layout(location =0 ) out  VertexOutput OUT;
+
 
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
@@ -25,20 +23,26 @@ layout(push_constant) uniform PushConstants{
 // MARK: Vertex Main
 void main (){
     vec4 pos =  pc.modelMat * vec4(aPos, 1.0);
-    vPos = pos.xyz;
-    vTexcoord = aTexcoord;
+    OUT.pos = pos.xyz;
+    OUT.uv = aTexcoord;
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
-    vFragLightSpacePos = vec4(0.0);
+    OUT.posInDirLightSpace = vec4(0.0);
     
     //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性.
+
     mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
     vec3 worldNormal = normalMatrix * aNormal;
-    vNormal = worldNormal;
+    OUT.normal = worldNormal;
+
+    vec3 T = normalize(vec3(pc.modelMat * vec4(aTangent, 0)));
+    vec3 N = normalize(vec3(pc.modelMat * vec4(aNormal, 0)));
+    vec3 B = cross(T,N);
+    OUT.TBN =  mat3(T,B,N);
 
     // if mat is a ortho, vFragLightSpacePos will in [-1,1], otherwise need perspective divide in frag shader
     if(uLit.hasDirectionalLight == 1) 
     {
-        vFragLightSpacePos = uLit.dirLight.directionalLightMatrix * pos;
+        OUT.posInDirLightSpace = uLit.dirLight.directionalLightMatrix * pos;
     }
     
 }
@@ -52,15 +56,8 @@ void main (){
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
 
-layout(location = 0) in vec3 vPos[];
-layout(location = 1) in vec2 vTexcoord[];
-layout(location = 2) in vec3 vNormal[];
-layout(location = 3) in vec4 vFragLightSpacePos[]; // from vertex shader
-
-layout(location = 0) out vec3 gPos;
-layout(location = 1) out vec2 gTexcoord;
-layout(location = 2) out vec3 gNormal;
-layout(location = 3) out vec4 gFragLightSpacePos;
+layout(location = 0) in VertexOutput IN[];
+layout(location = 0 ) out GeometryOutput OUT;
 
 layout(push_constant) uniform PushConstants{
     mat4 modelMat;
@@ -69,8 +66,8 @@ layout(push_constant) uniform PushConstants{
 
 vec3 getNormal()
 {
-   vec3 a = vPos[1] - vPos[0];
-   vec3 b = vPos[2] - vPos[1];
+   vec3 a = IN[1].pos - IN[0].pos;
+   vec3 b = IN[2].pos - IN[1].pos;
    return normalize(cross(a, b));
 }
 
@@ -86,7 +83,7 @@ vec4 explode(vec4 position, vec3 normal)
     }
     else if(explodeType == 1) // based on triangle
     {
-        vec3 triangleCenter = (vPos[0] + vPos[1] + vPos[2]) / 3.0;
+        vec3 triangleCenter = (IN[0].pos + IN[1].pos + IN[2].pos) / 3.0;
         // get model world pos by model matrix
         // vec3 modelWorldPos =  pc.modelMat[3].xyz;
         vec3 modelWorldPos = vec3(
@@ -102,9 +99,9 @@ vec4 explode(vec4 position, vec3 normal)
     return position;
 }
 void passParam(int i){
-    gTexcoord = vTexcoord[i];
-    gNormal = vNormal[i];
-    gFragLightSpacePos = vFragLightSpacePos[i];
+    OUT.uv = IN[i].uv;
+    OUT.normal = IN[i].normal;
+    OUT.posInDirLightSpace = IN[i].posInDirLightSpace;
 }
 
 void explodeEffect()
@@ -112,11 +109,11 @@ void explodeEffect()
     vec3 normal = getNormal();
     mat4 /*m*/vp = uFrame.projMat * uFrame.viewMat; //* pc.modelMat; see vertex shader already transformed by the model matrix
     for(int i = 0; i < 3; i++){
-        vec4 pos =  vec4(vPos[i], 1.0);  // world-pos
+        vec4 pos =  vec4(IN[i].pos, 1.0);  // world-pos
         pos =  /*m*/vp * explode( pos, normal);
         
         gl_Position = pos;
-        gPos = pos.xyz;
+        OUT.pos = pos.xyz;
 
         passParam(i);
         EmitVertex();
@@ -130,7 +127,7 @@ void defaultPass()
 {
     for(int i = 0; i < 3; i++){
         gl_Position = gl_in[i].gl_Position;
-        gPos = vPos[i];
+        OUT.pos  = IN[i].pos;
         passParam(i);
         EmitVertex();
     }
@@ -155,38 +152,11 @@ void main()
 #include "Types.glsl"
 
 
-layout(set =1, binding = 0) uniform sampler2D uTexDiffuse;
-layout(set =1, binding = 1) uniform sampler2D uTexSpecular;
-layout(set =1, binding = 2) uniform sampler2D uTexReflection;
 
-// struct TextureParam{
-//     bool bEnable;
-//     float uvRotation;
-//     vec4  uvTransform; // x,y: scale, z,w: translate
-// };
+// MARK: frag i/o
+// if have geometry shader, from geometry shader's out
 
-struct TextureParam{
-    bool bEnable;
-    mat3 uvTransform;
-};
-
-
-layout(set = 2, binding = 0) uniform ParamUBO {
-    vec3 ambient; 
-    vec3 diffuse;
-    vec3 specular;
-    float shininess;
-
-    TextureParam texParams[3];
-} uParams;
-
-
-
-// MARK: frag i/o, if have geometry shader, from geometry shader's out
-layout(location = 0) in vec3 vPos;
-layout(location = 1) in vec2 vTexcoord;
-layout(location = 2) in vec3 vNormal;
-layout(location = 3) in vec4 gFragLightSpacePos;
+layout(location = 0) in GeometryOutput IN;
 
 layout(location = 0) out vec4 fColor;
 
@@ -217,17 +187,16 @@ float calculateSpec(vec3 norm, vec3 lightDir, vec3 viewDir, float shininess)
 #endif
 
 // #if ENABLE_DIRECTIONAL_SHADOW
-float calculateDirectionalShadow(vec4 fragLightSpacePos, vec3 norm, vec3 lightDir)
+float calculateDirectionalShadow(vec4 posInDirLightSpace, vec3 norm, vec3 lightDir)
 {
     // perform perspective divide, could be ignored if using orthographic projection for shadow map
-    float w = fragLightSpacePos.w;
+    float w = posInDirLightSpace.w;
     if (abs(w) < 1e-6) {
         return 0.0;
     }
-    vec3 projCoords =  fragLightSpacePos.xyz / w;
+    vec3 projCoords =  posInDirLightSpace.xyz / w;
 
     vec2 uv = projCoords.xy * 0.5 + 0.5;
-    // No Y-flip needed: shadow RT uses bReverseViewportY=false (Vulkan native).
 // #ifndef VK_NOT_FLIP_VIEWPORT
 //     uv.y = 1 - uv.y;
 // #endif
@@ -284,7 +253,7 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
     vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
 // #if ENABLE_SHADOW
     // enable by defaults, TODO: make it a switch to turn on/off shadow calculation
-    float shadow = calculateDirectionalShadow(gFragLightSpacePos, norm, lightDir);
+    float shadow = calculateDirectionalShadow(IN.posInDirLightSpace, norm, lightDir);
     return ambient + (1-shadow)  * (diffuse + specular);
 // #endif
     return ambient + diffuse + specular;
@@ -409,8 +378,8 @@ bool drawDebugFrag(vec2 pos, vec2 size, vec4 color)
 // MARK: Fragment Main
 void main ()
 {
-    vec3 norm = normalize(vNormal);
-    vec3 viewDir = normalize(uFrame.cameraPos - vPos); // from fragment to camera(eye)
+    vec3 norm = normalize(IN.normal);
+    vec3 viewDir = normalize(uFrame.cameraPos - IN.pos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
 
   
@@ -434,12 +403,12 @@ void main ()
     //     return;
     // }
 
-    vec2 uv0 = vTexcoord;
-    vec2 uv1 = vTexcoord;
-    vec2 uv2 = vTexcoord;
+    vec2 uv0 = IN.uv;
+    vec2 uv1 = IN.uv;
+    vec2 uv2 = IN.uv;
 
 #define GET_UV(to, index)  \
-    to = (uParams.texParams[index].uvTransform * vec3(vTexcoord, 1.0)).xy;
+    to = (uParams.texParams[index].uvTransform * vec3(IN.uv, 1.0)).xy;
 
     GET_UV(uv0, 0);
     GET_UV(uv1, 1);
@@ -490,7 +459,7 @@ void main ()
     for (uint i = 0u; i < uLit.numPointLights && i < MAX_POINT_LIGHTS; ++i) 
     {
         lighting += calculatePointLight(uLit.pointLights[i],
-            vPos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz,
+            IN.pos, norm, viewDir, diffuseTexColor.xyz, specularTexColor.xyz,
             i);
     }
 
