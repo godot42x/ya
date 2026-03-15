@@ -150,7 +150,7 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
             // Cube map convention: Y is flipped (down), matching OpenGL/Vulkan cube map spec
             // we do this so won't use 1-v in shader
             // glm::vec3 down     = bReverseViewportY ? glm::vec3{0, 1, 0} : glm::vec3(0, -1, 0);
-            glm::vec3 down     = glm::vec3{0, 1, 0};
+            glm::vec3 down     = glm::vec3{0, -1, 0};
             glm::vec3 backward = {0, 0, 1};
             // glm::vec3 forward = bReverseViewportY ? glm::vec3{0, 0, 1} : glm::vec3(0, 0, -1);
             if constexpr (FMath::Vector::IsRightHanded) {
