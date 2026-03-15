@@ -6,14 +6,50 @@
 namespace ya
 {
 
+auto generateTangentSpace(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
+{
+    // Iterate over triangles
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        uint32_t i0 = indices[i];
+        uint32_t i1 = indices[i + 1];
+        uint32_t i2 = indices[i + 2];
+
+        const Vertex& v0 = vertices[i0];
+        const Vertex& v1 = vertices[i1];
+        const Vertex& v2 = vertices[i2];
+
+        glm::vec3 edge1 = v1.position - v0.position;
+        glm::vec3 edge2 = v2.position - v0.position;
+
+        glm::vec2 deltaUV1 = v1.texCoord0 - v0.texCoord0;
+        glm::vec2 deltaUV2 = v2.texCoord0 - v0.texCoord0;
+
+        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+        glm::vec3 tangent;
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        tangent   = glm::normalize(tangent);
+
+        vertices[i0].tangent += tangent;
+        vertices[i1].tangent += tangent;
+        vertices[i2].tangent += tangent;
+    }
+
+    // Normalize tangents
+    for (auto& vertex : vertices) {
+        vertex.tangent = glm::normalize(vertex.tangent);
+    }
+}
 
 
-void PrimitiveGeometry::createCube(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCube(std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     createCube(glm::vec3(1.0f), outVertices, outIndices);
 }
 
-void PrimitiveGeometry::createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createCube(const glm::vec3& size, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     float hw = size.x * 0.5f; // half width
     float hh = size.y * 0.5f; // half height
@@ -72,10 +108,12 @@ void PrimitiveGeometry::createCube(const glm::vec3 &size, std::vector<Vertex> &o
         20, 21, 22, 22, 23, 20   // Top
     };
     // clang-format on
+
+    generateTangentSpace(outVertices, outIndices);
 }
 
 void PrimitiveGeometry::createSphere(float radius, uint32_t slices, uint32_t stacks,
-                                     std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+                                     std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -118,10 +156,11 @@ void PrimitiveGeometry::createSphere(float radius, uint32_t slices, uint32_t sta
             outIndices.push_back(first + 1);
         }
     }
+    generateTangentSpace(outVertices, outIndices);
 }
 
 void PrimitiveGeometry::createPlane(float width, float depth, float uRepeat, float vRepeat,
-                                    std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+                                    std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     float hw = width * 0.5f;
     float hd = depth * 0.5f;
@@ -133,10 +172,11 @@ void PrimitiveGeometry::createPlane(float width, float depth, float uRepeat, flo
         {.position = {-hw, 0.0f, hd}, .texCoord0 = {0.0f, vRepeat}, .normal = {0.0f, 1.0f, 0.0f}}};
 
     outIndices = {0, 1, 2, 2, 3, 0};
+    generateTangentSpace(outVertices, outIndices);
 }
 
 void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segments,
-                                       std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+                                       std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -220,10 +260,11 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
         outIndices.push_back(capStartIdx + i * 2 + 1);
         outIndices.push_back(capStartIdx + (i + 1) * 2 + 1);
     }
+    generateTangentSpace(outVertices, outIndices);
 }
 
 void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments,
-                                   std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+                                   std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     outVertices.clear();
     outIndices.clear();
@@ -271,9 +312,10 @@ void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments
         outIndices.push_back(next);
         outIndices.push_back(current);
     }
+    generateTangentSpace(outVertices, outIndices);
 }
 
-void PrimitiveGeometry::createFullscreenQuad(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices)
+void PrimitiveGeometry::createFullscreenQuad(std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices)
 {
     // NDC coordinates, suitable for post-processing
     outVertices = {
@@ -284,6 +326,7 @@ void PrimitiveGeometry::createFullscreenQuad(std::vector<Vertex> &outVertices, s
 
     outIndices = {0, 1, 2, 2, 3, 0};
     outIndices.insert(outIndices.end(), {0, 3, 2, 0, 2, 1}); // back face
+    generateTangentSpace(outVertices, outIndices);
 }
 
 

@@ -141,7 +141,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 
 void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
 {
-    _ci = ci;
+    _ci                       = ci;
     const auto shaderCacheKey = _ci.shaderDesc.cacheKey();
     ya::App::get()
         ->getShaderStorage()
@@ -232,8 +232,8 @@ void VulkanPipeline::renderGUI()
         float slopeFactor    = _ci.rasterizationState.depthBiasSlopeFactor;
         bool  changed        = false;
         changed |= ImGui::DragFloat("Depth Bias Constant", &constantFactor, 0.1f, -10.0f, 10.0f, "%.2f");
-        changed |= ImGui::DragFloat("Depth Bias Clamp",    &clamp,          0.001f, -1.0f, 1.0f, "%.4f");
-        changed |= ImGui::DragFloat("Depth Bias Slope",    &slopeFactor,    0.1f, -10.0f, 10.0f, "%.2f");
+        changed |= ImGui::DragFloat("Depth Bias Clamp", &clamp, 0.001f, -1.0f, 1.0f, "%.4f");
+        changed |= ImGui::DragFloat("Depth Bias Slope", &slopeFactor, 0.1f, -10.0f, 10.0f, "%.2f");
         if (changed) {
             setDepthBias(constantFactor, clamp, slopeFactor);
         }
@@ -375,7 +375,7 @@ void VulkanPipeline::createPipelineInternal()
         if (!vertexAttributeDescriptions.empty()) {
             vertexBindingDescriptions.push_back({
                 .binding   = 0,
-                .stride    = vertexReflectInfo.inputs.back().offset + vertexReflectInfo.inputs.back().size,
+                .stride    = static_cast<uint32_t>(vertexReflectInfo.inputs.back().offset + vertexReflectInfo.inputs.back().size),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
             });
         }
@@ -385,7 +385,7 @@ void VulkanPipeline::createPipelineInternal()
         for (const auto& bufferDesc : config.vertexBufferDescs) {
             vertexBindingDescriptions.push_back({
                 .binding   = bufferDesc.slot,
-                .stride    = bufferDesc.pitch,
+                .stride    = static_cast<uint32_t>(bufferDesc.pitch),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
             });
         }
@@ -395,7 +395,7 @@ void VulkanPipeline::createPipelineInternal()
                 .location = attr.location,
                 .binding  = attr.bufferSlot,
                 .format   = toVk(attr.format),
-                .offset   = attr.offset,
+                .offset   = static_cast<uint32_t>(attr.offset),
             });
         }
     }

@@ -764,7 +764,6 @@ std::unique_ptr<IContainerProperty> createContainerProperty()
     }
 
     YA_DISABLE_UNREACHABLE_CODE_WARNING_BEGIN();
-    // UNREACHABLE();
     return nullptr;
     YA_DISABLE_UNREACHABLE_CODE_WARNING_END();
 }

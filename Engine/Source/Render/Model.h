@@ -25,6 +25,7 @@ struct ModelVertex
     glm::vec3 normal;
     glm::vec2 texCoord;
     glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec3 tangent;
 };
 
 
@@ -77,6 +78,7 @@ inline const FName DoubleSided  = "doubleSided";
  */
 namespace MatTexture
 {
+using T = FName;
 inline const FName Diffuse   = "diffuse";
 inline const FName Albedo    = "albedo"; // PBR alias for diffuse
 inline const FName Specular  = "specular";
@@ -188,11 +190,12 @@ struct MeshData
     stdptr<Mesh> createMesh(const std::string& meshName, CoordinateSystem sourceCoordSystem)
     {
         std::vector<ya::Vertex> engineVertices;
-        for (const auto& v : vertices) {
+        for (const ModelVertex& v : vertices) {
             ya::Vertex vertex;
             vertex.position  = v.position;
             vertex.normal    = v.normal;
             vertex.texCoord0 = v.texCoord;
+            vertex.tangent  = v.tangent;
             engineVertices.push_back(vertex);
         }
 

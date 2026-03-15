@@ -124,7 +124,7 @@ struct VertexAttribute
     uint32_t                  bufferSlot;
     uint32_t                  location;
     EVertexAttributeFormat::T format;
-    uint32_t                  offset;
+    size_t                    offset;
 };
 
 
@@ -723,7 +723,8 @@ struct PushConstantRange
 
 struct PipelineLayoutDesc
 {
-    std::string                          label = "None";
+    std::string                          label            = "None";
+    std::vector<VertexAttribute>         vertexAttributes = {};
     std::vector<PushConstantRange>       pushConstants;
     std::vector<DescriptorSetLayoutDesc> descriptorSetLayouts;
 };

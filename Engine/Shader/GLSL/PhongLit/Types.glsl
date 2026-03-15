@@ -81,7 +81,7 @@ layout(set = 2, binding = 0) uniform ParamUBO {
     vec3 specular;
     float shininess;
 
-    TextureParam texParams[3];
+    TextureParam texParams[4];
 } uParams;
 
 layout(set =3, binding = 0) uniform samplerCube uSkyBox;
@@ -90,12 +90,17 @@ layout(set =4, binding = 0) uniform sampler2D uDirectionalLightShadowMap;
 // layout(set =4, binding = 1) uniform samplerCubeArray uPointLightShadowMapArray;
 layout(set =4, binding = 1) uniform samplerCube uPointLightShadowMapArray[MAX_POINT_LIGHTS];
 
+// struct TangentSpec{
+//     vec3 lightPos[MAX_POINT_LIGHT];
+//     vec3 viewPos;
+//     vec3 fragPos;
+// };
+
 
 struct VertexOutput{
     vec3 pos ;
     vec2 uv  ;
     vec3 normal ;
-    vec3 tangent ;
     vec4 posInDirLightSpace ;
     mat3 TBN ;
 };
@@ -105,5 +110,5 @@ struct GeometryOutput{
     vec2 uv  ;
     vec3 normal ;
     vec4 posInDirLightSpace;
-    // mat3 TBN : location = 4;
+    mat3 TBN;
 };

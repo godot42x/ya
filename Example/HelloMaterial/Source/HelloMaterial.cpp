@@ -473,6 +473,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->createDefaultMaterial();
         lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall.jpg");
+        lmc->setTextureSlot(ya::PhongMaterial::NormalTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall_normal.jpg");
     }
 
     if (auto* dirLt = scene->createNode3D("Directional Light")) {

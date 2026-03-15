@@ -42,6 +42,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     YA_REFLECT_FIELD(_diffuseSlot)
     YA_REFLECT_FIELD(_specularSlot)
     YA_REFLECT_FIELD(_reflectionSlot)
+    YA_REFLECT_FIELD(_normalSlot)
     YA_REFLECT_END()
 
 
@@ -51,6 +52,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     TextureSlot _diffuseSlot;
     TextureSlot _specularSlot;
     TextureSlot _reflectionSlot;
+    TextureSlot _normalSlot;
 
   public:
     PhongMaterialComponent()
@@ -69,6 +71,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         _diffuseSlot.textureRef.onModified.addLambda(this, f);
         _specularSlot.textureRef.onModified.addLambda(this, f);
         _reflectionSlot.textureRef.onModified.addLambda(this, f);
+        _normalSlot.textureRef.onModified.addLambda(this, f);
     }
 
   public:
@@ -96,10 +99,20 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
             return &_specularSlot;
         case PhongMaterial::ReflectionTexture:
             return &_reflectionSlot;
+        case PhongMaterial::NormalTexture:
+            return &_normalSlot;
         default:
             return nullptr;
         }
     }
+
+    // TextureSlot* getTextureSlot(MatTexture::T type)
+    // {
+    //     if(type == MatTexture::Diffuse){
+    //         return &_diffuseSlot;
+    //     }
+    // }
+
     TextureSlot* setTextureSlot(PhongMaterial::EResource resourceEnum, const std::string& path)
     {
         // _textureSlots[resourceEnum].textureRef = TextureRef(path);
@@ -111,6 +124,12 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
             break;
         case PhongMaterial::SpecularTexture:
             _specularSlot.textureRef.setPath(path);
+            break;
+        case PhongMaterial::ReflectionTexture:
+            _reflectionSlot.textureRef.setPath(path);
+            break;
+        case PhongMaterial::NormalTexture:
+            _normalSlot.textureRef.setPath(path);
             break;
         default:
             break;

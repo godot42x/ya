@@ -5,6 +5,7 @@
 #include "Material.h"
 #include "Render/Core/Std140Types.h"
 
+#include "PhongLit.Types.glsl.h"
 
 namespace ya
 {
@@ -39,6 +40,7 @@ struct PhongMaterial : public Material
         DiffuseTexture    = 0,
         SpecularTexture   = 1,
         ReflectionTexture = 2,
+        NormalTexture = 3,
         // Extend here for normal map, etc.
         Count,
     };
@@ -54,6 +56,9 @@ YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
 
         std::array<TextureParam, EResource::Count> textureParams;
     };
+
+    // 暂时需要反射查看实际value，不去动头文件生成逻辑(未来反射框架定下来之后可以做拓展也生产代码代码)
+    // using ParamData = glsl_types::PhongLit::Types::ParamUBO
 YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
 

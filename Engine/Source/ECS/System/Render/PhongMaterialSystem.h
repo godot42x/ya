@@ -126,7 +126,37 @@ struct PhongMaterialSystem : public IMaterialSystem
     YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
     PipelineLayoutDesc _pipelineLayoutDesc{
-        .label         = "PhongMaterialSystem_PipelineLayout",
+        .label            = "PhongMaterialSystem_PipelineLayout",
+        .vertexAttributes = {
+            // (location=0) in vec3 aPos,
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 0,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(ya::Vertex, position),
+            },
+            //  texcoord
+            VertexAttribute{
+                .bufferSlot = 0, // same buffer slot
+                .location   = 1,
+                .format     = EVertexAttributeFormat::Float2,
+                .offset     = offsetof(ya::Vertex, texCoord0),
+            },
+            // normal
+            VertexAttribute{
+                .bufferSlot = 0, // same buffer slot
+                .location   = 2,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(ya::Vertex, normal),
+            },
+            // tangent
+            VertexAttribute{
+                .bufferSlot = 0, // same buffer slot
+                .location   = 3,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(ya::Vertex, tangent),
+            },
+        },
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
@@ -186,6 +216,13 @@ struct PhongMaterialSystem : public IMaterialSystem
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
                     },
+                    // normal texture
+                    DescriptorSetLayoutBinding{
+                        .binding         = 3,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
                 },
             },
             DescriptorSetLayoutDesc{
@@ -196,7 +233,7 @@ struct PhongMaterialSystem : public IMaterialSystem
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                     },
                 },
             },

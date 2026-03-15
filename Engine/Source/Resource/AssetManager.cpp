@@ -36,11 +36,11 @@ namespace
  */
 class VFSIOStream : public Assimp::IOStream
 {
-    public:
-        VFSIOStream(std::string path, std::string content)
-                : _path(std::move(path)), _content(std::move(content)), _position(0)
-        {
-        }
+  public:
+    VFSIOStream(std::string path, std::string content)
+        : _path(std::move(path)), _content(std::move(content)), _position(0)
+    {
+    }
 
     ~VFSIOStream() override = default;
 
@@ -687,7 +687,13 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string& filepath, 
                 vertex.color = glm::vec4(1.0f);
             }
 
-            // if(mesh.texture)
+            if (mesh->HasTangentsAndBitangents()) {
+                vertex.tangent = {
+                    mesh->mTangents[j].x,
+                    mesh->mTangents[j].y,
+                    mesh->mTangents[j].z,
+                };
+            }
 
             meshData.vertices.push_back(std::move(vertex));
         }

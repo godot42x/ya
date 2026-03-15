@@ -28,16 +28,24 @@ void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pos;
     OUT.posInDirLightSpace = vec4(0.0);
     
-    //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性.
 
-    mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
-    vec3 worldNormal = normalMatrix * aNormal;
-    OUT.normal = worldNormal;
-
-    vec3 T = normalize(vec3(pc.modelMat * vec4(aTangent, 0)));
-    vec3 N = normalize(vec3(pc.modelMat * vec4(aNormal, 0)));
-    vec3 B = cross(T,N);
-    OUT.TBN =  mat3(T,B,N);
+    // TODO: use macro to gen 2 shader, one with normal map pass, one with out normal map pass?
+    if(uParams.texParams[3].bEnable){
+        vec3 T = normalize(vec3(pc.modelMat * vec4(aTangent, 0)));
+        vec3 N = normalize(vec3(pc.modelMat * vec4(aNormal, 0)));
+        vec3 B = cross(N,T);
+        // 正交矩阵的逆即为转置矩阵，所以TBN矩阵的逆就是TBN的转置矩阵
+        mat3 TBN =  transpose(mat3(T,B,N));
+        // for(int i =0; i< MAX_POINT_LIGHTS){
+        //     OUT.tangentSpec.lightPos = TBN * uLit.pointLights[i].position;
+        // }
+        OUT.TBN = TBN;
+    }else{
+        //生成一个 专门用于变换法向量的矩阵，确保法向量在经过模型矩阵的缩放、旋转等操作后，依然垂直于物体表面，从而保证光照计算的正确性.
+        mat3 normalMatrix = transpose(inverse(mat3(pc.modelMat)));
+        vec3 worldNormal = normalMatrix * aNormal;
+        OUT.normal = worldNormal;
+    }
 
     // if mat is a ortho, vFragLightSpacePos will in [-1,1], otherwise need perspective divide in frag shader
     if(uLit.hasDirectionalLight == 1) 
@@ -46,7 +54,7 @@ void main (){
     }
     
 }
-// MARK: ===========
+// MARK: =========
 
 #type geometry
 #version 450
@@ -102,6 +110,7 @@ void passParam(int i){
     OUT.uv = IN[i].uv;
     OUT.normal = IN[i].normal;
     OUT.posInDirLightSpace = IN[i].posInDirLightSpace;
+    OUT.TBN = IN[i].TBN;
 }
 
 void explodeEffect()
@@ -145,7 +154,7 @@ void main()
 
 
 
-// MARK: ===========
+// MARK: =========
 #type fragment
 #version 450
 
@@ -378,16 +387,38 @@ bool drawDebugFrag(vec2 pos, vec2 size, vec4 color)
 // MARK: Fragment Main
 void main ()
 {
-    vec3 norm = normalize(IN.normal);
+    vec2 uv0 = IN.uv;
+    vec2 uv1 = IN.uv;
+    vec2 uv2 = IN.uv;
+    vec2 uv3 = IN.uv;
+
+#define GET_UV(to, index)  \
+    to = (uParams.texParams[index].uvTransform * vec3(IN.uv, 1.0)).xy;
+
+    GET_UV(uv0, 0);
+    GET_UV(uv1, 1);
+    GET_UV(uv2, 2);
+    GET_UV(uv3, 3);
+
+
+    vec3 norm;
+    if(uParams.texParams[3].bEnable){
+        vec3 tangentNormal = texture(uTexNormal, uv3).rgb;
+        tangentNormal = tangentNormal * 2.0 - 1.0; // [0,1] -> [-1,1]
+        tangentNormal = normalize(IN.TBN * tangentNormal);
+        norm =  tangentNormal;
+    }else{
+        norm = normalize(IN.normal);
+    }
     vec3 viewDir = normalize(uFrame.cameraPos - IN.pos); // from fragment to camera(eye)
     float shininess =  uParams.shininess;
 
-  
-    
+      
     if(uDebug.bDebugNormal){
         fColor = vec4(norm * 0.5 + 0.5, 1.0);
         return;
     }
+
     if(uDebug.bDebugDepth){
         const float near = 0.1;
         const float far = 100.0;
@@ -403,16 +434,7 @@ void main ()
     //     return;
     // }
 
-    vec2 uv0 = IN.uv;
-    vec2 uv1 = IN.uv;
-    vec2 uv2 = IN.uv;
 
-#define GET_UV(to, index)  \
-    to = (uParams.texParams[index].uvTransform * vec3(IN.uv, 1.0)).xy;
-
-    GET_UV(uv0, 0);
-    GET_UV(uv1, 1);
-    GET_UV(uv2, 2);
 
     // 调试用：手动构建变换矩阵 (与 CPU FMath::build_transform_mat3 一致)
     // vec2 transform = vec2(0,0);

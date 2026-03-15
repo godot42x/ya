@@ -61,6 +61,7 @@ struct Vertex
     glm::vec3 position;
     glm::vec2 texCoord0;
     glm::vec3 normal;
+    glm::vec3 tangent;
 };
 
 
@@ -77,13 +78,13 @@ struct PrimitiveGeometry
      * @param outVertices 输出顶点数组
      * @param outIndices 输出索引数组
      */
-    static void createCube(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+    static void createCube(std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成缩放立方体
      * @param size 立方体的尺寸 (x, y, z)
      */
-    static void createCube(const glm::vec3 &size, std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+    static void createCube(const glm::vec3& size, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成球体 (UV球)
@@ -92,7 +93,7 @@ struct PrimitiveGeometry
      * @param stacks 纬线数量 (纵向分段)
      */
     static void createSphere(float radius, uint32_t slices, uint32_t stacks,
-                             std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+                             std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成平面 (XZ平面，法线向上+Y)
@@ -102,7 +103,7 @@ struct PrimitiveGeometry
      * @param vRepeat V方向UV重复次数
      */
     static void createPlane(float width, float depth, float uRepeat, float vRepeat,
-                            std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+                            std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成圆柱体
@@ -111,7 +112,7 @@ struct PrimitiveGeometry
      * @param segments 圆周分段数
      */
     static void createCylinder(float radius, float height, uint32_t segments,
-                               std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+                               std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成圆锥体
@@ -120,13 +121,13 @@ struct PrimitiveGeometry
      * @param segments 圆周分段数
      */
     static void createCone(float radius, float height, uint32_t segments,
-                           std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+                           std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 
     /**
      * @brief 生成全屏四边形 (用于后处理)
      * NDC坐标 [-1,1], UV [0,1]
      */
-    static void createFullscreenQuad(std::vector<Vertex> &outVertices, std::vector<uint32_t> &outIndices);
+    static void createFullscreenQuad(std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
 };
 
 
@@ -156,8 +157,8 @@ struct Plane
     glm::vec3 normal;
     float     d;
 
-    Plane(const glm::vec3 &normal, float d) : normal(normal), d(d) {}
-    [[nodiscard]] float distanceTo(const glm::vec3 &point) const
+    Plane(const glm::vec3& normal, float d) : normal(normal), d(d) {}
+    [[nodiscard]] float distanceTo(const glm::vec3& point) const
     {
         return glm::dot(normal, point) + d;
     }

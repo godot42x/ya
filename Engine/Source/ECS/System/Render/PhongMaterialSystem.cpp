@@ -81,30 +81,8 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
                     .pitch = sizeof(ya::Vertex),
                 },
             },
-            .vertexAttributes = {
-                // (location=0) in vec3 aPos,
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 0,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(ya::Vertex, position),
-                },
-                //  texcoord
-                VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 1,
-                    .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(ya::Vertex, texCoord0),
-                },
-                // normal
-                VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 2,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(ya::Vertex, normal),
-                },
-            },
-            .defines = buildPhongShaderDefines(_bDirectionalShadowMapping),
+            .vertexAttributes = _pipelineLayoutDesc.vertexAttributes,
+            .defines          = buildPhongShaderDefines(_bDirectionalShadowMapping),
         },
         // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
@@ -594,6 +572,18 @@ void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMat
         reflectionTexParam.bEnable = false;
     }
 
+    auto& normalTextureParam = params.textureParams[PhongMaterial::EResource::NormalTexture];
+    if (auto* slot = component.getTextureSlot(PhongMaterial::EResource::NormalTexture); slot && slot->isValid()) {
+        normalTextureParam.uvTransform = FMath::build_transform_mat3(
+            slot->uvOffset,
+            slot->uvRotation,
+            slot->uvScale);
+        normalTextureParam.bEnable = slot->bEnable;
+    }
+    else {
+        normalTextureParam.bEnable = false;
+    }
+
     auto paramUBO = _materialParamsUBOs[material->getIndex()];
     paramUBO->writeData(&params, sizeof(material_param_t), 0);
 
@@ -622,10 +612,12 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
     auto diffuseTV    = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
     auto specularTV   = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
     auto reflectionTV = material->getTextureView(PhongMaterial::EResource::ReflectionTexture);
+    auto normalTV     = material->getTextureView(PhongMaterial::EResource::NormalTexture);
 
     DescriptorImageInfo diffuseTexture    = getDescriptorImageInfo(diffuseTV);
     DescriptorImageInfo specularTexture   = getDescriptorImageInfo(specularTV);
     DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(reflectionTV);
+    DescriptorImageInfo normalTexture     = getDescriptorImageInfo(normalTV);
     //  mirror or other rt?
     if (bOverrideDiffuse && App::get()->bHasMirror) {
         auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
@@ -639,6 +631,7 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
                 IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuseTexture}),
                 IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specularTexture}),
                 IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflectionTexture}),
+                IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normalTexture}),
             },
             {});
 }
@@ -671,8 +664,10 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
     if (_materialDSP) {
         _materialDSP->resetPool();
     }
+    const uint32_t textureCount = _pipelineLayoutDesc.descriptorSetLayouts[1].bindings.size();
+
     DescriptorPoolCreateInfo poolCI{
-        .maxSets   = newDescriptorSetCount * (1 + 3),
+        .maxSets   = newDescriptorSetCount * (1 + textureCount),
         .poolSizes = {
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::UniformBuffer,
@@ -680,7 +675,7 @@ void PhongMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
             },
             DescriptorPoolSize{
                 .type            = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = newDescriptorSetCount * 3, // tex0 + tex1  + tex2 for each material param in one set
+                .descriptorCount = newDescriptorSetCount * textureCount, // tex0 + tex1  + tex2 for each material param in one set
             },
         },
     };

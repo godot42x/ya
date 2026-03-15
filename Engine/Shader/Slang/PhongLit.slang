@@ -33,6 +33,9 @@ struct PointLight
     float3 diffuse;
     float3 specular;
 
+    float nearPlane;
+    float farPlane;
+
     float3 spotDir;
     float  innerCutOff;  // cos(innerAngle)
     float  outerCutOff;  // cos(outerAngle)
@@ -77,6 +80,7 @@ struct DebugData
 [[vk::binding(0, 1)]]  Sampler2D    uTexDiffuse;
 [[vk::binding(1, 1)]]  Sampler2D    uTexSpecular;
 [[vk::binding(2, 1)]]  Sampler2D    uTexReflection;
+[[vk::binding(2, 1)]]  Sampler2D    uTexNormal;
 
 // set=2 : Material parameters
 struct TextureParam
@@ -104,6 +108,7 @@ struct ParamUBO
 
 // set=4 : Shadow maps (combined image sampler)
 [[vk::binding(0, 4)]]  Sampler2D    uDirectionalLightShadowMap;
+[[vk::binding(1, 4)]]  SamplerCube  uPointLightCubeArray[MAX_POINT_LIGHTS];
 
 // Push constants
 struct PushConstants
@@ -137,6 +142,7 @@ float3x3 inverse3x3(float3x3 m)
 // ============================================================
 struct VSOutput
 {
+    float4 sv_position          : SV_Position;
     float3 worldPos            : WorldPos;
     float2 texcoord            : Texcoord;
     float3 normal              : Normal;
@@ -154,7 +160,7 @@ struct VSInput
 };
 
 [shader("vertex")]
-VSOutput vertMain(VSInput input, out float4 sv_position : SV_Position)
+VSOutput vertMain(VSInput input) 
 {
     float4 pos = mul(pc.modelMat, float4(input.aPos, 1.0));
 
@@ -163,7 +169,7 @@ VSOutput vertMain(VSInput input, out float4 sv_position : SV_Position)
     output.texcoord  = input.aTexcoord;
     output.fragLightSpacePos = float4(0.0, 0.0, 0.0, 0.0);
 
-    sv_position = mul(uFrame.projMat, mul(uFrame.viewMat, pos));
+    output.sv_position = mul(uFrame.projMat, mul(uFrame.viewMat, pos));
 
     // Normal matrix = transpose(inverse(mat3(modelMat)))
     float3x3 modelMat3 = float3x3(
@@ -186,14 +192,6 @@ VSOutput vertMain(VSInput input, out float4 sv_position : SV_Position)
 // ============================================================
 // MARK: Geometry Shader
 // ============================================================
-struct GSInput
-{
-    float3 worldPos          : WorldPos;
-    float2 texcoord          : Texcoord;
-    float3 normal            : Normal;
-    float4 fragLightSpacePos : LightSpacePos;
-    float4 sv_position       : SV_Position;
-};
 
 struct GSOutput
 {
@@ -207,7 +205,7 @@ struct GSOutput
 [shader("geometry")]
 [maxvertexcount(3)]
 [instance(1)]
-void geomMain(triangle GSInput input[3], inout TriangleStream<GSOutput> outStream)
+void geomMain(triangle VSOutput input[3], inout TriangleStream<GSOutput> outStream)
 {
     // Default pass-through (explode effect is commented out in original GLSL)
     for (int i = 0; i < 3; i++)
@@ -260,6 +258,7 @@ float calculateDirectionalShadow(float4 fragLightSpacePos, float3 norm, float3 l
     // Simple shadow (non-PCF)
     float closestDepth = uDirectionalLightShadowMap.Sample( uv).r;
     float shadow = (curDepth - bias) > closestDepth ? 1.0 : 0.0;
+
     return shadow;
 }
 
@@ -284,9 +283,10 @@ float3 calculateDirLight(
 }
 
 float3 calculatePointLight(
-    PointLight pointLight,
+    in PointLight pointLight,
     float3 fragPos, float3 norm, float3 viewDir,
-    float3 diffuseTexColor, float3 specularTexColor)
+    float3 diffuseTexColor, float3 specularTexColor,
+    int pointLightIndex)
 {
     float3 lightDir = normalize(pointLight.position - fragPos);
 
@@ -307,33 +307,34 @@ float3 calculatePointLight(
         specular *= intensity;
     }
 
+    // Shadow
+    float3 sampleDir = fragPos - pointLight.position;
+    float currentDepth = length(sampleDir);
+    float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
+    closestDepth *= pointLight.farPlane;
+    float bias = 0.05;
+    float shadow = (currentDepth - bias > closestDepth)? 1.0: 0.0;
+
     // Attenuation
-    float distance    = length(pointLight.position - fragPos);
+    float distance = currentDepth;
     float attenuation = 1.0 / (
         pointLight.constant +
         pointLight.linear    * distance +
         pointLight.quadratic * distance * distance
     );
 
-    return (ambient + diffuse + specular) * attenuation;
+    return (ambient + (1-shadow) * (diffuse + specular)) * attenuation;
 }
 
 // ============================================================
 // MARK: Fragment Shader
 // ============================================================
-struct FSInput
-{
-    float3 worldPos          : WorldPos;
-    float2 texcoord          : Texcoord;
-    float3 normal            : Normal;
-    float4 fragLightSpacePos : LightSpacePos;
-};
 
 // Module-level variable for shadow calculation (set in fragMain, read in calculateDirLight)
 static float _fragLightSpacePos_shadow = 0.0;
 
 [shader("fragment")]
-float4 fragMain(FSInput input) : SV_Target
+float4 fragMain(GSOutput input) : SV_Target
 {
     float3 norm    = normalize(input.normal);
     float3 viewDir = normalize(uFrame.cameraPos - input.worldPos);
@@ -392,7 +393,7 @@ float4 fragMain(FSInput input) : SV_Target
     {
         lighting += calculatePointLight(
             uLit.pointLights[i], input.worldPos, norm, viewDir,
-            diffuseTexColor.xyz, specularTexColor.xyz);
+            diffuseTexColor.xyz, specularTexColor.xyz, i);
     }
 
     // Reflection (environment map)
