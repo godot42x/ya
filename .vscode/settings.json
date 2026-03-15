@@ -5,6 +5,7 @@
         "batchcmds",
         "blendfactor",
         "BLENDOP",
+        "Blinn",
         "buildcmd",
         "bvec",
         "cindex",
@@ -125,4 +126,14 @@
         "**/Engine/ThirdParty/imguizmo/example": true,
         "**/Engine/ThirdParty/Vulkan-Samples-Assets": true
     },
+    "glsllint.glslangValidatorPath": "uv",
+    "glsllint.glslangValidatorArgs": [
+        "run",
+        "python",
+        "Script/ya_glslang_validator.py",
+        "-V"
+    ],
+    "glsllint.fallBackStage": "vert",
+    "glsllint.linkShader": false,
+    "glsllint.useIncludeDirOfFile": true,
 }

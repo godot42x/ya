@@ -1,7 +1,8 @@
 {
     "shader": {
         "defines": {
-            "MAX_POINT_LIGHTS": 6
+            "MAX_POINT_LIGHTS": 6,
+            "MAX_POINT_LIGHTS_DEFERRED": 32
         }
     },
     "enableRenderDoc": false

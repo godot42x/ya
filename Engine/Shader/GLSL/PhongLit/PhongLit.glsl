@@ -35,6 +35,7 @@ void main (){
         vec3 N = normalize(vec3(pc.modelMat * vec4(aNormal, 0)));
         vec3 B = cross(N,T);
         // 正交矩阵的逆即为转置矩阵，所以TBN矩阵的逆就是TBN的转置矩阵
+        // inverse mat, then IN.TBN * normalMapNormal, so normal from tangent space to world-space
         mat3 TBN =  transpose(mat3(T,B,N));
         // for(int i =0; i< MAX_POINT_LIGHTS){
         //     OUT.tangentSpec.lightPos = TBN * uLit.pointLights[i].position;

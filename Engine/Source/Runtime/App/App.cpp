@@ -199,6 +199,8 @@ void App::init(AppDesc ci)
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
 
 
     // MARK: Render/Hook

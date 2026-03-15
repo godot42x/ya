@@ -481,6 +481,23 @@ auto getOption(bool bOptimized)
     return options;
 }
 
+static const char* getStageMacroName(EShaderStage::T stage)
+{
+    switch (stage)
+    {
+    case EShaderStage::Vertex:
+        return "SHADER_STAGE_VERTEX";
+    case EShaderStage::Fragment:
+        return "SHADER_STAGE_FRAGMENT";
+    case EShaderStage::Geometry:
+        return "SHADER_STAGE_GEOMETRY";
+    case EShaderStage::Compute:
+        return "SHADER_STAGE_COMPUTE";
+    default:
+        return nullptr;
+    }
+}
+
 struct ShadercIncludeResultData
 {
     shaderc_include_result result{};
@@ -573,9 +590,40 @@ bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view con
 
     auto options = getOption(false);
     options.SetIncluder(std::make_unique<ShadercVfsIncluder>());
+
+    if (const char* stageMacro = getStageMacroName(stage))
+    {
+        options.AddMacroDefinition(stageMacro, "1");
+    }
+
     for (const auto& def : defines)
     {
-        options.AddMacroDefinition(def);
+        auto eq = def.find('=');
+        if (eq != std::string::npos)
+        {
+            auto name = ut::str::trim(std::string_view(def).substr(0, eq));
+            auto val  = ut::str::trim(std::string_view(def).substr(eq + 1));
+            if (!name.empty()) {
+                options.AddMacroDefinition(std::string(name), std::string(val.empty() ? "1" : val));
+            }
+            continue;
+        }
+
+        auto ws = def.find_first_of(" \t");
+        if (ws != std::string::npos)
+        {
+            auto name = ut::str::trim(std::string_view(def).substr(0, ws));
+            auto val  = ut::str::trim(std::string_view(def).substr(ws + 1));
+            if (!name.empty()) {
+                options.AddMacroDefinition(std::string(name), std::string(val.empty() ? "1" : val));
+            }
+            continue;
+        }
+
+        auto name = ut::str::trim(std::string_view(def));
+        if (!name.empty()) {
+            options.AddMacroDefinition(std::string(name), "1");
+        }
     }
 
     // recompile
@@ -612,6 +660,37 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
 
 
     std::string_view source(contentStr.begin(), contentStr.end());
+
+    const bool hasTypeToken = source.find("#type", 0) != std::string::npos;
+
+    // Mode 2: Macro-gated single source (no #type), e.g. #ifdef SHADER_STAGE_VERTEX
+    // Compile the same source for each declared stage; compileToSpv injects SHADER_STAGE_*.
+    if (!hasTypeToken)
+    {
+        auto hasStageMacro = [&](std::string_view macro) {
+            return source.find(macro) != std::string::npos;
+        };
+
+        if (hasStageMacro("SHADER_STAGE_VERTEX")) {
+            shaderSources[EShaderStage::Vertex] = contentStr;
+        }
+        if (hasStageMacro("SHADER_STAGE_FRAGMENT")) {
+            shaderSources[EShaderStage::Fragment] = contentStr;
+        }
+        if (hasStageMacro("SHADER_STAGE_GEOMETRY")) {
+            shaderSources[EShaderStage::Geometry] = contentStr;
+        }
+        if (hasStageMacro("SHADER_STAGE_COMPUTE")) {
+            shaderSources[EShaderStage::Compute] = contentStr;
+        }
+
+        if (!shaderSources.empty()) {
+            return shaderSources;
+        }
+
+        YA_CORE_ERROR("Shader source '{}' has no '#type' markers and no SHADER_STAGE_* macros", filepath.string());
+        return {};
+    }
 
 
     // We split the source by "#type <vertex/fragment>" preprocessing directives
@@ -874,6 +953,9 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 // ---------------------------------------------------------------------------
 struct SlangVfsFileSystem : public ISlangFileSystem
 {
+    static constexpr std::string_view kSlangBaseDir = "Engine/Shader/Slang";
+
+    virtual ~SlangVfsFileSystem() = default;
     // ISlangUnknown
     uint32_t addRef() override { return ++_refCount; }
     uint32_t release() override
@@ -910,9 +992,13 @@ struct SlangVfsFileSystem : public ISlangFileSystem
     SlangResult loadFile(const char* path, ISlangBlob** outBlob) override
     {
         std::string content;
+        if (!VFS::get()->isFileExists(path)) {
+            return SLANG_E_NOT_FOUND;
+        }
         if (!VirtualFileSystem::get()->readFileToString(path, content))
         {
             YA_CORE_ERROR("[SlangVFS] Failed to load: {}", path);
+            throw "1";
             return SLANG_E_NOT_FOUND;
         }
 
@@ -1017,33 +1103,41 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
         {
             macroStorage.push_back({def, "1"});
         }
-        macros.push_back({macroStorage.back().first.c_str(), macroStorage.back().second.c_str()});
+        macros.push_back({
+            .name  = macroStorage.back().first.c_str(),
+            .value = macroStorage.back().second.c_str(),
+        });
     }
 
     // VFS-backed file system for #include / import resolution
-    auto* vfsFs = new SlangVfsFileSystem();
+    auto* slangVfs = new SlangVfsFileSystem();
 
-    // Search paths: shader storage root
-    const char* searchPaths[] = {shaderStoragePath.string().c_str()};
+    // Search paths: shader storage root + slang root fallback
+    std::string searchPath0   = shaderStoragePath.string();
+    std::string searchPath1   = "Engine/Shader/Slang";
+    const char* searchPaths[] = {
+        searchPath0.c_str(),
+        searchPath1.c_str(),
+    };
 
     slang::SessionDesc sessionDesc{};
     sessionDesc.targets                 = &targetDesc;
     sessionDesc.targetCount             = 1;
     sessionDesc.preprocessorMacros      = macros.data();
     sessionDesc.preprocessorMacroCount  = static_cast<SlangInt>(macros.size());
-    sessionDesc.fileSystem              = vfsFs;
+    sessionDesc.fileSystem              = slangVfs;
     sessionDesc.searchPaths             = searchPaths;
-    sessionDesc.searchPathCount         = 1;
+    sessionDesc.searchPathCount         = static_cast<SlangInt>(sizeof(searchPaths) / sizeof(searchPaths[0]));
     sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
 
     Slang::ComPtr<slang::ISession> session;
     if (SLANG_FAILED(globalSession->createSession(sessionDesc, session.writeRef())))
     {
         YA_CORE_ERROR("[Slang] Failed to create session for: {}", filePath);
-        vfsFs->release();
+        slangVfs->release();
         return false;
     }
-    vfsFs->release(); // session holds a ref
+    slangVfs->release(); // session holds a ref
 
     // 3. Load module from source string
     Slang::ComPtr<slang::IBlob> diagBlob;
@@ -1052,6 +1146,7 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     // Wrap source in a blob
     struct SourceBlob : public ISlangBlob
     {
+        virtual ~SourceBlob() = default;
         std::string           data;
         std::atomic<uint32_t> rc{1};
         uint32_t              addRef() override { return ++rc; }
