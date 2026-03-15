@@ -16,6 +16,7 @@ struct SceneManager;
 struct EditorLayer;
 struct Texture;
 struct Sampler;
+struct PhongScenePassResources;
 
 struct ForwardRenderPipeline
 {
@@ -73,6 +74,10 @@ struct ForwardRenderPipeline
     stdptr<IRenderSystem> shadowMappingSystem       = nullptr;
     stdptr<IRenderSystem> basicPostprocessingSystem = nullptr;
 
+    stdptr<IBuffer> _phongSharedLightUBO = nullptr;
+    stdptr<PhongScenePassResources> _phongMirrorPassResources   = nullptr;
+    stdptr<PhongScenePassResources> _phongViewportPassResources = nullptr;
+
     stdptr<IRenderTarget> mirrorRT     = nullptr;
     bool                  bRenderMirror = false;
     bool                  bHasMirror    = false;
@@ -99,7 +104,7 @@ struct ForwardRenderPipeline
     Extent2D getViewportExtent() const;
 
   private:
-    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx);
+    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx, const stdptr<PhongScenePassResources>& phongScenePassResources);
     void beginFrame();
 };
 

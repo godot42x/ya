@@ -23,6 +23,16 @@ namespace ya
 
 struct PhongMaterial;
 
+struct PhongScenePassResources
+{
+    std::string             label;
+    stdptr<IDescriptorPool> frameDSP = nullptr;
+    DescriptorSetHandle     frameDS  = nullptr;
+    stdptr<IBuffer>         frameUBO = nullptr;
+    stdptr<IBuffer>         lightUBO = nullptr;
+    stdptr<IBuffer>         debugUBO = nullptr;
+};
+
 static constexpr uint32_t NUM_MATERIAL_BATCH     = 16;
 static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
@@ -283,28 +293,7 @@ struct PhongMaterialSystem : public IMaterialSystem
     std::shared_ptr<IPipelineLayout> _pipelineLayout;
     // std::shared_ptr<IGraphicsPipeline> _pipeline; // temp move to IMaterialSystem
 
-    // TODO: Consider using single UBO with dynamic offsets (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
-    //       instead of multiple slot buffers for better cache locality and reduced resource count.
-    //       Current multi-slot approach: 12 buffers + 4 descriptor sets
-    //       Dynamic UBO approach: 3 buffers + 1 descriptor set (with dynamic offsets)
-    //       Performance impact: <1% for 2-4 passes, but code simplification benefit is significant.
-    //       Blocked by: Would require DSL redesign and descriptor handling refactor.
-
-    // Ring buffer slots for multi-pass rendering (mirror + viewport).
-    // When _passSlot >= MAX_PASS_SLOTS, it wraps around: getPassSlot() = _passSlot % MAX_PASS_SLOTS
-    // WARNING: If more than MAX_PASS_SLOTS passes reuse this system in one frame,
-    //          GPU data hazard may occur if earlier passes haven't finished execution.
-    static constexpr uint32_t MAX_PASS_SLOTS = 8;
-    uint32_t                  _passSlot      = 0;
-    stdptr<IDescriptorPool>   _frameDSP;
-    DescriptorSetHandle       _frameDSs[MAX_PASS_SLOTS];
-    stdptr<IBuffer>           _frameUBOs[MAX_PASS_SLOTS];
-    stdptr<IBuffer>           _lightUBOs[MAX_PASS_SLOTS];
-    stdptr<IBuffer>           _debugUBOs[MAX_PASS_SLOTS];
-
-    // TODO: Add GPU event/timeline tracking to detect wrap-around stalls at runtime
-    uint32_t getPassSlot() const { return _passSlot % MAX_PASS_SLOTS; }
-    void     advanceSlot() { _passSlot = (_passSlot + 1) % MAX_PASS_SLOTS; }
+    stdptr<PhongScenePassResources> _currentScenePassResources = nullptr;
 
 
 
@@ -327,18 +316,23 @@ struct PhongMaterialSystem : public IMaterialSystem
     PhongMaterialSystem() : IMaterialSystem("PhongMaterialSystem") {}
 
     // optional?
+    stdptr<PhongScenePassResources> createScenePassResources(const std::string& label, const stdptr<IBuffer>& sharedLightUBO = nullptr);
+
+    void setScenePassResources(const stdptr<PhongScenePassResources>& resources);
+    void uploadSharedLightUBO(const FrameContext* ctx, IBuffer* sharedLightUBO);
     void onInitImpl(const InitParams& initParams) override;
     void onDestroy() override;
     void preTick(float deltaTime, const FrameContext* ctx);
     void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void onRenderGUI() override;
-    void resetFrameSlot() override { _passSlot = 0; }
+    void resetFrameSlot() override { _currentScenePassResources.reset(); }
     void setDirectionalShadowMappingEnabled(bool enabled);
 
 
   private:
     // void recreateMaterialDescPool(uint32_t count);
 
+    void fillLightUBOFromFrameContext(const FrameContext* ctx);
     void updateFrameDS(const FrameContext* ctx);
     void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent& component, bool bOverrideMirrorMaterial, bool bRecreated);
     void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material, bool bOverrideDiffuse);

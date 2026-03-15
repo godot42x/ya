@@ -147,62 +147,8 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
     _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(_pipelineDesc);
 
-
-    _frameDSP = IDescriptorPool::create(
-        render,
-        DescriptorPoolCreateInfo{
-            .maxSets   = MAX_PASS_SLOTS,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 3 * MAX_PASS_SLOTS, // (frame + lighting + debug) * slots
-                },
-            },
-        });
-    std::vector<ya::DescriptorSetHandle> sets;
-    _frameDSP->allocateDescriptorSets(_materialFrameDSL, MAX_PASS_SLOTS, sets);
-    for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
-        _frameDSs[i] = sets[i];
-    }
-
     // TODO: create a auto extend descriptor pool class to support recreate
     recreateMaterialDescPool(NUM_MATERIAL_BATCH);
-
-    std::vector<WriteDescriptorSet> writes;
-    for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
-
-        _frameUBOs[i] = IBuffer::create(
-            render,
-            ya::BufferCreateInfo{
-                .label         = std::format("Lit_Frame_UBO_{}", i),
-                .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(PhongMaterialSystem::FrameUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-            });
-        _lightUBOs[i] = IBuffer::create(
-            render,
-            ya::BufferCreateInfo{
-                .label         = std::format("Lit_Light_UBO_{}", i),
-                .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(PhongMaterialSystem::LightUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-            });
-        _debugUBOs[i] = IBuffer::create(
-            render,
-            ya::BufferCreateInfo{
-                .label         = std::format("Lit_Debug_UBO_{}", i),
-                .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(PhongMaterialSystem::DebugUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-            });
-
-        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 0, EPipelineDescriptorType::UniformBuffer, _frameUBOs[i].get()));
-        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 1, EPipelineDescriptorType::UniformBuffer, _lightUBOs[i].get()));
-        writes.push_back(IDescriptorSetHelper::genSingleBufferWrite(_frameDSs[i], 2, EPipelineDescriptorType::UniformBuffer, _debugUBOs[i].get()));
-    }
-
-    render->getDescriptorHelper()->updateDescriptorSets(writes, {});
-    render->waitIdle();
     // where to create pipeline? -> on frame begin -> bDirty
     uDebug.bDebugDepth  = 0;
     uDebug.bDebugNormal = 0;
@@ -211,14 +157,89 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
 
 void PhongMaterialSystem::onDestroy()
 {
+    _currentScenePassResources.reset();
 }
 
-// MARK: grab resources
-void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
+stdptr<PhongScenePassResources> PhongMaterialSystem::createScenePassResources(const std::string& label, const stdptr<IBuffer>& sharedLightUBO)
 {
-    YA_PROFILE_FUNCTION();
+    auto render      = getRender();
+    auto resources   = makeShared<PhongScenePassResources>();
+    resources->label = label;
 
-    // TODO: make FrameContext as a UBO to avoid this copy: ctx -> frameData -> frameUBO -> GPU
+    resources->frameDSP = IDescriptorPool::create(
+        render,
+        DescriptorPoolCreateInfo{
+            .maxSets   = 1,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = 3,
+                },
+            },
+        });
+
+    std::vector<DescriptorSetHandle> sets;
+    resources->frameDSP->allocateDescriptorSets(_materialFrameDSL, 1, sets);
+    YA_CORE_ASSERT(!sets.empty(), "Failed to allocate Phong scene pass descriptor set: {}", label);
+    resources->frameDS = sets[0];
+
+    resources->frameUBO = IBuffer::create(
+        render,
+        BufferCreateInfo{
+            .label         = std::format("{}_Frame_UBO", label),
+            .usage         = EBufferUsage::UniformBuffer,
+            .size          = sizeof(FrameUBO),
+            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+        });
+    resources->lightUBO = sharedLightUBO;
+    if (!resources->lightUBO) {
+        resources->lightUBO = IBuffer::create(
+            render,
+            BufferCreateInfo{
+                .label         = std::format("{}_Light_UBO", label),
+                .usage         = EBufferUsage::UniformBuffer,
+                .size          = sizeof(LightUBO),
+                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            });
+    }
+    resources->debugUBO = IBuffer::create(
+        render,
+        BufferCreateInfo{
+            .label         = std::format("{}_Debug_UBO", label),
+            .usage         = EBufferUsage::UniformBuffer,
+            .size          = sizeof(DebugUBO),
+            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+        });
+
+    render->getDescriptorHelper()->updateDescriptorSets(
+        {
+            IDescriptorSetHelper::genSingleBufferWrite(resources->frameDS, 0, EPipelineDescriptorType::UniformBuffer, resources->frameUBO.get()),
+            IDescriptorSetHelper::genSingleBufferWrite(resources->frameDS, 1, EPipelineDescriptorType::UniformBuffer, resources->lightUBO.get()),
+            IDescriptorSetHelper::genSingleBufferWrite(resources->frameDS, 2, EPipelineDescriptorType::UniformBuffer, resources->debugUBO.get()),
+        },
+        {});
+
+    return resources;
+}
+
+void PhongMaterialSystem::setScenePassResources(const stdptr<PhongScenePassResources>& resources)
+{
+    _currentScenePassResources = resources;
+}
+
+void PhongMaterialSystem::uploadSharedLightUBO(const FrameContext* ctx, IBuffer* sharedLightUBO)
+{
+    YA_CORE_ASSERT(ctx, "FrameContext is null when uploading shared light UBO");
+    YA_CORE_ASSERT(sharedLightUBO, "Shared light UBO is null");
+
+    fillLightUBOFromFrameContext(ctx);
+    sharedLightUBO->writeData(&uLight, sizeof(LightUBO), 0);
+}
+
+void PhongMaterialSystem::fillLightUBOFromFrameContext(const FrameContext* ctx)
+{
+    YA_CORE_ASSERT(ctx, "FrameContext is null when filling light UBO");
+
     uLight.hasDirectionalLight = ctx->bHasDirectionalLight;
     if (ctx->bHasDirectionalLight) {
         uLight.dirLight.direction              = ctx->directionalLight.direction;
@@ -230,22 +251,31 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
 
     uLight.numPointLights = ctx->numPointLights;
     for (uint32_t i = 0; i < ctx->numPointLights; ++i) {
-        const auto& pl        = ctx->pointLights[i];
-        uLight.pointLights[i] = PointLightData{
-            .type        = pl.type,
-            .constant    = pl.constant,
-            .linear      = pl.linear,
-            .quadratic   = pl.quadratic,
-            .position    = pl.position,
-            .farPlane    = pl.farPlane,
-            .ambient     = pl.ambient,
-            .diffuse     = pl.diffuse,
-            .specular    = pl.specular,
-            .spotDir     = pl.spotDir,
-            .innerCutOff = pl.innerCutOff,
-            .outerCutOff = pl.outerCutOff,
-        };
+        const auto& pl = ctx->pointLights[i];
+        auto&       dst = uLight.pointLights[i];
+        dst            = {};
+        dst.type        = pl.type;
+        dst.constant    = pl.constant;
+        dst.linear      = pl.linear;
+        dst.quadratic   = pl.quadratic;
+        dst.position    = pl.position;
+        dst.farPlane    = pl.farPlane;
+        dst.ambient     = pl.ambient;
+        dst.diffuse     = pl.diffuse;
+        dst.specular    = pl.specular;
+        dst.spotDir     = pl.spotDir;
+        dst.innerCutOff = pl.innerCutOff;
+        dst.outerCutOff = pl.outerCutOff;
     }
+}
+
+// MARK: grab resources
+void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
+{
+    YA_PROFILE_FUNCTION();
+    (void)deltaTime;
+    (void)ctx;
+
     // This prevents descriptor set invalidation during the render loop
     {
         uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
@@ -261,6 +291,8 @@ void PhongMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
 void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
+
+    YA_CORE_ASSERT(_currentScenePassResources, "PhongMaterialSystem requires explicit scene pass resources before render");
 
     Scene* scene = getActiveScene();
     if (!scene) {
@@ -406,7 +438,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
         cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
                                    0,
                                    {
-                                       _frameDSs[getPassSlot()],
+                                       _currentScenePassResources->frameDS,
                                        resourceDS,
                                        paramDS,
                                        skyBoxCubeMapDS,
@@ -435,14 +467,15 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
 
     // Reset force update flag after rendering
     _bDescriptorPoolRecreated = false;
-    advanceSlot(); // Advance pass slot for next frame (ring buffer)
 }
 
 void PhongMaterialSystem::onRenderGUI()
 {
     using namespace ImGui;
     IMaterialSystem::onRenderGUI();
-    TextColored(ImColor(1.0f, 1.0f, 0.0f, 1.0f), "pass slot: %d", getPassSlot());
+    TextColored(ImColor(1.0f, 1.0f, 0.0f, 1.0f),
+                "scene pass: %s",
+                _currentScenePassResources ? _currentScenePassResources->label.c_str() : "<unbound>");
 
     // if (TreeNode("Directional Light")) {
     //     ya::RenderContext ctx;
@@ -486,8 +519,9 @@ void PhongMaterialSystem::updateFrameDS(const FrameContext* ctx)
 {
     YA_PROFILE_FUNCTION();
 
+    YA_CORE_ASSERT(_currentScenePassResources, "PhongMaterialSystem frame resources are not bound");
+
     auto app    = getApp();
-    auto render = getRender();
 
     // Use passed camera context
     FrameUBO uFrame{};
@@ -502,31 +536,15 @@ void PhongMaterialSystem::updateFrameDS(const FrameContext* ctx)
     // auto light               = uLight;
     // light.dirLight.direction = glm::radians(light.dirLight.direction);
 
-    uint32_t slot = getPassSlot();
-
-    _frameUBOs[slot]->writeData(&uFrame, sizeof(FrameUBO), 0);
-    _lightUBOs[slot]->writeData(&uLight, sizeof(LightUBO), 0);
-    _debugUBOs[slot]->writeData(&uDebug, sizeof(DebugUBO), 0);
-
-
-    if (_bDescriptorPoolRecreated) {
-        for (uint32_t i = 0; i < MAX_PASS_SLOTS; ++i) {
-            render
-                ->getDescriptorHelper()
-                ->updateDescriptorSets(
-                    {
-                        IDescriptorSetHelper::writeOneUniformBuffer(_frameDSs[i], 0, _frameUBOs[i].get()),
-                        IDescriptorSetHelper::writeOneUniformBuffer(_frameDSs[i], 1, _lightUBOs[i].get()),
-                        IDescriptorSetHelper::writeOneUniformBuffer(_frameDSs[i], 2, _debugUBOs[i].get()),
-                    },
-                    {});
-        }
-    }
+    _currentScenePassResources->frameUBO->writeData(&uFrame, sizeof(FrameUBO), 0);
+    _currentScenePassResources->debugUBO->writeData(&uDebug, sizeof(DebugUBO), 0);
 }
 
 void PhongMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, PhongMaterialComponent& component, bool bOverrideDiffuse, bool bRecreated)
 {
     YA_PROFILE_FUNCTION();
+    (void)bOverrideDiffuse;
+    (void)bRecreated;
 
     auto render = getRender();
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);

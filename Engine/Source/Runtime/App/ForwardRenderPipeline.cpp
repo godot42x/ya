@@ -14,6 +14,7 @@
 #include "Resource/AssetManager.h"
 #include "Platform/Render/Vulkan//VulkanRender.h"
 #include "Render/2D/Render2D.h"
+#include "Render/Core/Buffer.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
@@ -288,6 +289,17 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                 .stencilAttachmentFormat = EFormat::Undefined,
             },
         });
+        auto* phongSys = phongMaterialSystem->as<PhongMaterialSystem>();
+        _phongSharedLightUBO = IBuffer::create(
+            _render,
+            BufferCreateInfo{
+                .label         = "Phong_Shared_Light_UBO",
+                .usage         = EBufferUsage::UniformBuffer,
+                .size          = sizeof(PhongMaterialSystem::LightUBO),
+                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            });
+        _phongMirrorPassResources   = phongSys->createScenePassResources("Phong_MirrorPass", _phongSharedLightUBO);
+        _phongViewportPassResources = phongSys->createScenePassResources("Phong_ViewportPass", _phongSharedLightUBO);
 
         debugRenderSystem = ya::makeShared<DebugRenderSystem>();
         debugRenderSystem->init(IRenderSystem::InitParams{
@@ -431,8 +443,9 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         ++ctx.numPointLights;
     }
 
-    auto phongSys = phongMaterialSystem->as<PhongMaterialSystem>();
+    auto* phongSys = phongMaterialSystem->as<PhongMaterialSystem>();
     phongSys->setDirectionalShadowMappingEnabled(bShadowMapping && ctx.bHasDirectionalLight);
+    phongSys->uploadSharedLightUBO(&ctx, _phongSharedLightUBO.get());
 
     beginFrame();
 
@@ -500,7 +513,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             };
             desc.cmdBuf->beginRendering(ri);
 
-            renderScene(desc.cmdBuf, desc.dt, ctxCopy);
+            renderScene(desc.cmdBuf, desc.dt, ctxCopy, _phongMirrorPassResources);
 
             desc.cmdBuf->endRendering(EndRenderingInfo{
                 .renderTarget = mirrorRT.get(),
@@ -530,7 +543,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         desc.cmdBuf->beginRendering(ri);
 
         ctx.extent = viewportRT->getExtent();
-        renderScene(desc.cmdBuf, desc.dt, ctx);
+        renderScene(desc.cmdBuf, desc.dt, ctx, _phongViewportPassResources);
 
         {
             YA_PROFILE_SCOPE("Render2D");
@@ -562,7 +575,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             }
 
             const glm::vec2 screenSize(30, 30);
-            const float     viewPortHeight = ctx.extent.height;
+            const float     viewPortHeight = static_cast<float>(ctx.extent.height);
             const float     scaleFactor    = screenSize.x / viewPortHeight;
 
             for (const auto& [entity, billboard, transfCompp] :
@@ -800,10 +813,11 @@ Extent2D ForwardRenderPipeline::getViewportExtent() const
     return {};
 }
 
-void ForwardRenderPipeline::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
+void ForwardRenderPipeline::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx, const stdptr<PhongScenePassResources>& phongScenePassResources)
 {
     simpleMaterialSystem->tick(cmdBuf, dt, &ctx);
     unlitMaterialSystem->tick(cmdBuf, dt, &ctx);
+    phongMaterialSystem->as<PhongMaterialSystem>()->setScenePassResources(phongScenePassResources);
     phongMaterialSystem->tick(cmdBuf, dt, &ctx);
     debugRenderSystem->tick(cmdBuf, dt, &ctx);
     skyboxSystem->tick(cmdBuf, dt, &ctx);
