@@ -1,5 +1,5 @@
 #include "Mesh.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
 namespace ya

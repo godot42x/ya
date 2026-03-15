@@ -1,7 +1,7 @@
 #include "Entity.h"
 #include "Component.h"
 
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Scene/SceneManager.h"
 
 

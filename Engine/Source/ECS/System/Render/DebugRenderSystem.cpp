@@ -1,6 +1,6 @@
 #include "DebugRenderSystem.h"
 
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Swapchain.h"

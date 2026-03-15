@@ -8,7 +8,7 @@
 #include "ECS/Component/RenderComponent.h"
 #include "Scene/Scene.h"
 
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "entt/entt.hpp"
 
 

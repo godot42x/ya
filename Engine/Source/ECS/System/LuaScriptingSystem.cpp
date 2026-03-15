@@ -1,5 +1,5 @@
 #include "LuaScriptingSystem.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"

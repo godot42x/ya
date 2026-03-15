@@ -1,5 +1,5 @@
 #include "IRenderTarget.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 
 
 // Platform-specific includes

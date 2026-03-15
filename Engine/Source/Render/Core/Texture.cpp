@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "stb/stb_image.h"
 
 #include <cstddef>

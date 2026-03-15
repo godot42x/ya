@@ -3,7 +3,7 @@
 #include "HelloMaterial.h"
 
 #define YA_ENTRY_POINT
-#include "Core/App/EntryPoint.h"
+#include "Runtime/App/EntryPoint.h"
 
 
 ya::App *createApp()

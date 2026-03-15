@@ -1,6 +1,6 @@
 #include "App.h"
 
-#include "Core/App/ForwardRenderPipeline.h"
+#include "Runtime/App/ForwardRenderPipeline.h"
 
 #include "Core/Debug/RenderDocCapture.h"
 

@@ -1,6 +1,6 @@
 #include "TextureFactory.h"
 
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Render/Render.h"
 
 namespace ya

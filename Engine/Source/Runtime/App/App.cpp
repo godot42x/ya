@@ -2,9 +2,9 @@
 
 
 // Core
-#include "Core/App/App.h"
-#include "Core/App/ForwardRenderPipeline.h"
-#include "Core/App/SDLMisc.h"
+#include "Runtime/App/App.h"
+#include "Runtime/App/ForwardRenderPipeline.h"
+#include "Runtime/App/SDLMisc.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"

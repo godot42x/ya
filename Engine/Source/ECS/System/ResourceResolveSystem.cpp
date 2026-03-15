@@ -1,5 +1,5 @@
 #include "ResourceResolveSystem.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Resource/AssetManager.h"
 #include "Scene/Node.h"
 #include "Scene/SceneManager.h"

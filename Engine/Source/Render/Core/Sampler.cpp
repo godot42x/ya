@@ -1,5 +1,5 @@
 #include "Sampler.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Platform/Render/Vulkan/VulkanSampler.h"
 
 namespace ya

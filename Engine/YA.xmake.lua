@@ -85,6 +85,7 @@ do
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
         add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
+        add_files("./Source/Runtime/**.cpp", { unity_group = "Runtime" })
         add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
@@ -125,7 +126,7 @@ do
     add_packages("assimp")
     add_packages("ktx")
 
-   
+
     add_packages("vulkansdk", { public = true })
     add_packages("glad")
     add_packages("cxxopts", { public = true })
@@ -140,9 +141,9 @@ do
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then
         add_ldflags("/subsystem:console")
-        add_defines("NOMINMAX") -- Disable min and max macros
-        add_cxxflags("/utf-8")  -- Enable UTF-8 source code support for Unicode characters
-        add_cxxflags( "/Zm1000") -- the memory allocation for compiler increased to 1000MB
+        add_defines("NOMINMAX")     -- Disable min and max macros
+        add_cxxflags("/utf-8")      -- Enable UTF-8 source code support for Unicode characters
+        add_cxxflags("/Zm1000")     -- the memory allocation for compiler increased to 1000MB
         add_ldflags("/ignore:4099") -- warning LNK4099, eg: PDB 'ya.pdb' was not found with 'ya.exe'
 
         if bEnableUnity then
@@ -156,10 +157,9 @@ do
         end
     end
 
-    before_build(function (target)
+    before_build(function(target)
         print(target:name())
         os.exec("xmake ya-shader")
-        
     end)
 
     before_run(function(target)
@@ -167,6 +167,4 @@ do
         print("removing sdl log files")
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
-
-
 end

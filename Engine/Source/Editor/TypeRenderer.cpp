@@ -1,7 +1,7 @@
 #include "TypeRenderer.h"
 
 #include "ContainerPropertyRenderer.h"
-#include "Core/App/App.h"
+#include "Runtime/App/App.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"

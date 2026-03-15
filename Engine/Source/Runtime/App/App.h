@@ -9,7 +9,7 @@
 
 #include "Editor/EditorLayer.h"
 
-#include "Core/App/FPSCtrl.h"
+#include "Runtime/App/FPSCtrl.h"
 
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
