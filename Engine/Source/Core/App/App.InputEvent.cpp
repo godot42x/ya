@@ -1,5 +1,7 @@
 #include "App.h"
 
+#include "Core/App/ForwardRenderPipeline.h"
+
 #include "Core/Debug/RenderDocCapture.h"
 
 namespace ya
@@ -11,35 +13,8 @@ void App::onSceneViewportResized(Rect2D rect)
     float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
     camera.setAspectRatio(aspectRatio);
 
-    Extent2D newExtent{
-        .width  = static_cast<uint32_t>(rect.extent.x),
-        .height = static_cast<uint32_t>(rect.extent.y),
-    };
-
-    _viewportRT->setExtent(newExtent);
-
-    // TODO: this should just be a framebuffer?
-    //      but framebuffer depend on the renderpass
-    // Recreate postprocess image when viewport size changes
-    if (_render && newExtent.width > 0 && newExtent.height > 0) {
-
-        // Wait for GPU to finish using old resources before destroying them
-        if (_postprocessTexture) {
-            _render->waitIdle();
-        }
-        _postprocessTexture.reset();
-        _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "PostprocessRenderTarget",
-            .width   = newExtent.width,
-            .height  = newExtent.height,
-            .format  = EFormat::R8G8B8A8_UNORM,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        // }
-        // avoid race condition
-        _render->waitIdle();
+    if (_pipeline) {
+        _pipeline->onViewportResized(rect);
     }
 }
 

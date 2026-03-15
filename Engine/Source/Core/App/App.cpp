@@ -3,6 +3,7 @@
 
 // Core
 #include "Core/App/App.h"
+#include "Core/App/ForwardRenderPipeline.h"
 #include "Core/App/SDLMisc.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "Core/Event.h"
@@ -118,87 +119,10 @@ static void openDirectoryInOS(const std::string& filePath)
 App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
 
-
-
-void App::renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx)
-{
-    _simpleMaterialSystem->tick(cmdBuf, dt, &ctx);
-    _unlitMaterialSystem->tick(cmdBuf, dt, &ctx);
-    _phongMaterialSystem->tick(cmdBuf, dt, &ctx);
-    _debugRenderSystem->tick(cmdBuf, dt, &ctx);
-    // early-z  to render skybox last ?
-    _skyboxSystem->tick(cmdBuf, dt, &ctx);
-}
-
 bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 {
-    if (_render && _viewportRT) {
-        _render->waitIdle();
-    }
-    _viewportTexture = nullptr;
-
-    RenderTargetCreateInfo viewportRTci = RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        // update when viewport resized
-        .extent           = {.width = width, .height = height},
-        .frameBufferCount = 1,
-        .attachments      = {
-
-            .colorAttach = {
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = COLOR_FORMAT,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-            .depthAttach = AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                .stencilStoreOp = EAttachmentStoreOp::Store,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
-            },
-        } // namespace ya
-    };
-
-    if (bMSAA) {
-        viewportRTci.attachments.colorAttach[0].samples = ESampleCount::Sample_4;
-        viewportRTci.attachments.depthAttach->samples   = ESampleCount::Sample_4;
-
-        viewportRTci.attachments.resolveAttach = AttachmentDescription{
-            .index          = 2,
-            .format         = COLOR_FORMAT,
-            .samples        = ESampleCount::Sample_1,
-            .loadOp         = EAttachmentLoadOp::DontCare,
-            .storeOp        = EAttachmentStoreOp::Store,
-            .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-            .stencilStoreOp = EAttachmentStoreOp::DontCare,
-            .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-            .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
-    }
-
-    _viewportRT = ya::createRenderTarget(viewportRTci);
-    if (_viewportRT) {
-        auto fb          = _viewportRT->getCurFrameBuffer();
-        _viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
-    }
-    return _viewportRT != nullptr;
+    YA_CORE_ASSERT(_pipeline, "ForwardRenderPipeline not initialized");
+    return _pipeline->recreateViewportRT(width, height);
 }
 
 
@@ -335,6 +259,8 @@ void App::init(AppDesc ci)
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
 
+    _pipeline = ya::makeShared<ForwardRenderPipeline>();
+
     // Get window size
     int winW = 0, winH = 0;
     _render->getWindowSize(winW, winH);
@@ -385,229 +311,17 @@ void App::init(AppDesc ci)
         });
     _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
 
+    _pipeline->init(ForwardRenderPipeline::InitDesc{
+        .render         = _render,
+        .descriptorPool = _descriptorPool.get(),
+        .sceneManager   = nullptr,
+        .windowW        = winW,
+        .windowH        = winH,
+    });
+
 
     // viewport
-    _viewportRenderPass = nullptr;
     recreateViewPortRT(winW, winH);
-
-    // shadow mapping
-    _depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Shadow Map RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = 512, .height = 512},
-        .frameBufferCount = 1,
-        .layerCount       = 1 + MAX_POINT_LIGHTS * 6, // 1 directional light + 6 faces for each point light
-        .attachments      = {
-
-            .depthAttach = AttachmentDescription{
-                .index            = 0,
-                .format           = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
-                .samples          = ESampleCount::Sample_1,
-                .loadOp           = EAttachmentLoadOp::Clear,
-                .storeOp          = EAttachmentStoreOp::Store,
-                .stencilLoadOp    = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp   = EAttachmentStoreOp::DontCare,
-                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
-            },
-        },
-    });
-    _deleter.push("DepthRT", [this](void*) { _depthRT.reset(); });
-
-    _depthBufferDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "DepthBuffer_DSL",
-            .bindings = {
-                // directional light shadow map (2D)
-                DescriptorSetLayoutBinding{
-                    .binding         = 0,
-                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1,
-                    .stageFlags      = EShaderStage::Fragment,
-                },
-                DescriptorSetLayoutBinding{
-                    .binding         = 1,
-                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = MAX_POINT_LIGHTS,
-                    .stageFlags      = EShaderStage::Fragment,
-                },
-            },
-        });
-    _depthBufferShadowDS = _descriptorPool->allocateDescriptorSets(_depthBufferDSL);
-    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
-    _deleter.push("DepthBufferDSL", [this](void*) { _depthBufferDSL.reset(); });
-
-    auto tf        = _render->getTextureFactory();
-    auto shadowImg = _depthRT->getCurFrameBuffer()->getDepthTexture()->getImageShared();
-
-    // _render->waitIdle(); // wait image creat finish and layout transition finish before create image view
-    // auto cmdBuf = _render->beginIsolateCommands("Create Shadow Map ImageViews");
-    // cmdBuf->transitionRenderTargetLayout(_depthRT.get(), EImageLayout::ShaderReadOnlyOptimal);
-
-    // TODO: use 6 array first then 1 array last can optimize performance?
-    _shadowDirectionalDepthIV = tf->createImageView(
-        shadowImg,
-        ImageViewCreateInfo{
-            .label        = "Shadow Map Directional Depth ImageView",
-            .viewType     = EImageViewType::View2D,
-            .aspectFlags  = EImageAspect::Depth,
-            .baseMipLevel = 0,
-            .levelCount   = 1,
-            // use 0 - 1 layers
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-    YA_CORE_ASSERT(_shadowDirectionalDepthIV && _shadowDirectionalDepthIV->getHandle(), "Failed to create shadow map directional depth image view");
-
-    // Editor visualization views – created once at init
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
-        _shadowPointCubeIVs[i] = tf->createImageView(
-            shadowImg,
-            ImageViewCreateInfo{
-                .label          = std::format("Shadow Point[{}] CubeIV", i),
-                .viewType       = EImageViewType::ViewCube,
-                .aspectFlags    = EImageAspect::Depth,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 1 + i * 6,
-                .layerCount     = 6,
-            });
-        for (uint32_t f = 0; f < 6; ++f) {
-            _shadowPointFaceIVs[i][f] = tf->createImageView(
-                shadowImg,
-                ImageViewCreateInfo{
-                    .label          = std::format("Shadow Point[{}] Face[{}]", i, f),
-                    .viewType       = EImageViewType::View2D,
-                    .aspectFlags    = EImageAspect::Depth,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = 1 + i * 6 + f,
-                    .layerCount     = 1,
-                });
-        }
-    }
-    auto shadowAddresMode = ESamplerAddressMode::ClampToBorder;
-    _shadowSampler        = Sampler::create(
-        SamplerDesc{
-                   .label         = "shadow",
-                   .minFilter     = EFilter::Linear,
-                   .magFilter     = EFilter::Linear,
-                   .mipmapMode    = ESamplerMipmapMode::Linear,
-                   .addressModeU  = shadowAddresMode,
-                   .addressModeV  = shadowAddresMode,
-                   .addressModeW  = shadowAddresMode,
-                   .mipLodBias    = 0.0f,
-                   .maxAnisotropy = 1.0f,
-                   .borderColor   = SamplerDesc::BorderColor{
-                         .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
-                         .color = {1.0f, 1.0f, 1.0f, 1.0f},
-            },
-        });
-    YA_CORE_ASSERT(_shadowSampler, "Failed to create shadow sampler");
-    _deleter.push("ShadowSampler", [this](void*) { _shadowSampler.reset(); });
-
-    _render->waitIdle(); // ensure all image and imageview create success
-
-    std::vector<DescriptorImageInfo> dsImageInfos;
-    dsImageInfos.resize(MAX_POINT_LIGHTS);
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i)
-    {
-        dsImageInfos[i] = DescriptorImageInfo{
-            .imageView   = _shadowPointCubeIVs[i]->getHandle(),
-            .sampler     = _shadowSampler->getHandle(),
-            .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
-        };
-    }
-
-    WriteDescriptorSet writeCubeMaps{
-        .dstSet           = _depthBufferShadowDS,
-        .dstBinding       = 1,
-        .dstArrayElement  = 0,
-        .descriptorType   = EPipelineDescriptorType::CombinedImageSampler,
-        .descriptorCount  = MAX_POINT_LIGHTS,
-        .bufferInfos      = {},
-        .imageInfos       = dsImageInfos,
-        .texelBufferViews = {},
-    };
-
-    _render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_depthBufferShadowDS, 0, _shadowDirectionalDepthIV.get(), _shadowSampler.get()),
-            writeCubeMaps,
-        });
-    _deleter.push("Shadow ImageViews", [this](void*) {
-        _shadowDirectionalDepthIV.reset();
-        for (auto& iv : _shadowPointCubeIVs) iv.reset();
-        for (auto& faces : _shadowPointFaceIVs)
-            for (auto& iv : faces) iv.reset();
-    });
-
-
-    {
-        _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "PostprocessRenderTarget",
-            .width   = static_cast<uint32_t>(winW),
-            .height  = static_cast<uint32_t>(winH),
-            .format  = EFormat::R8G8B8A8_UNORM,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        _deleter.push("PostprocessTexture", [this](void*) {
-            _postprocessTexture.reset();
-        });
-    }
-
-    // mirror
-    {
-        _mirrorRT = ya::createRenderTarget(RenderTargetCreateInfo{
-            .label            = "Mirror RenderTarget",
-            .renderingMode    = ERenderingMode::DynamicRendering,
-            .bSwapChainTarget = false,
-            .extent           = {
-                          .width  = static_cast<uint32_t>(winW),
-                          .height = static_cast<uint32_t>(winH),
-            },
-            .frameBufferCount = 1,
-            .attachments      = {
-
-                .colorAttach = {
-                    AttachmentDescription{
-                        .index          = 0,
-                        .format         = EFormat::R8G8B8A8_UNORM,
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::Undefined,
-                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal, // For sampling
-                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                    },
-                },
-                .depthAttach = AttachmentDescription{
-                    .index          = 1,
-                    .format         = DEPTH_FORMAT,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                    .usage          = EImageUsage::DepthStencilAttachment,
-                },
-            },
-        });
-        _deleter.push("MirrorRT", [this](void*) {
-            _mirrorRT.reset();
-        });
-    }
 
     // Screen/Editor
     {
@@ -661,165 +375,6 @@ void App::init(AppDesc ci)
 
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
 
-
-    // TODO: common resource skybox and depth buffer can be in one set?
-    _skyBoxCubeMapDSL = IDescriptorSetLayout::create(_render,
-                                                     DescriptorSetLayoutDesc{
-                                                         .label    = "Skybox_CubeMap_DSL",
-                                                         .bindings = {
-                                                             DescriptorSetLayoutBinding{
-                                                                 .binding         = 0,
-                                                                 .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                                                                 .descriptorCount = 1,
-                                                                 .stageFlags      = EShaderStage::Fragment,
-                                                             },
-                                                         },
-                                                     });
-    _skyBoxCubeMapDS  = _descriptorPool->allocateDescriptorSets(_skyBoxCubeMapDSL);
-    _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
-    _deleter.push("SkyboxCubeMapDSL", [this](void*) { _skyBoxCubeMapDSL.reset(); });
-
-
-
-    // MARK: Render Systems
-    {
-        _simpleMaterialSystem = ya::makeShared<SimpleMaterialSystem>();
-        _simpleMaterialSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "SimpleMaterial Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = DEPTH_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
-        _unlitMaterialSystem = ya::makeShared<UnlitMaterialSystem>();
-        _unlitMaterialSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "UnlitMaterial Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = DEPTH_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-        _phongMaterialSystem = ya::makeShared<PhongMaterialSystem>();
-        _phongMaterialSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "PhongMaterial Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = DEPTH_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-        _debugRenderSystem = ya::makeShared<DebugRenderSystem>();
-        _debugRenderSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "DebugRender Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = DEPTH_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
-
-        _skyboxSystem = ya::makeShared<SkyBoxSystem>();
-        _skyboxSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "Skybox Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = DEPTH_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
-        _shadowMappingSystem = ya::makeShared<ShadowMapping>();
-        _shadowMappingSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "ShadowMapping Pipeline",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {},
-                .depthAttachmentFormat   = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
-        _basicPostprocessingSystem = ya::makeShared<BasicPostprocessing>();
-        _basicPostprocessingSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "BasicPostprocessing",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = EFormat::Undefined,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
-        _onRenderRenderSystemsGUI.set([this]() {
-            _simpleMaterialSystem->renderGUI();
-            _unlitMaterialSystem->renderGUI();
-            _phongMaterialSystem->renderGUI();
-            _debugRenderSystem->renderGUI();
-            _skyboxSystem->renderGUI();
-            _shadowMappingSystem->renderGUI();
-            _basicPostprocessingSystem->renderGUI();
-        });
-        _forEachSystem.set([this](Delegate<void(IRenderSystem*)> func) {
-            func(_simpleMaterialSystem.get());
-            func(_unlitMaterialSystem.get());
-            func(_phongMaterialSystem.get());
-            func(_debugRenderSystem.get());
-            func(_skyboxSystem.get());
-            func(_shadowMappingSystem.get());
-            func(_basicPostprocessingSystem.get());
-        });
-
-        _deleter.push("RenderSystems", [this](void*) {
-            _simpleMaterialSystem->onDestroy();
-            _simpleMaterialSystem.reset();
-            _unlitMaterialSystem->onDestroy();
-            _unlitMaterialSystem.reset();
-            _phongMaterialSystem->onDestroy();
-            _phongMaterialSystem.reset();
-            _debugRenderSystem->onDestroy();
-            _debugRenderSystem.reset();
-            _skyboxSystem->onDestroy();
-            _skyboxSystem.reset();
-            _shadowMappingSystem->onDestroy();
-            _shadowMappingSystem.reset();
-            _basicPostprocessingSystem->onDestroy();
-            _basicPostprocessingSystem.reset();
-        });
-
-        // Initialize Render2D for dynamic rendering (depthTestEnable=false allows UI pass without depth)
-        Render2D::init(_render);
-    }
-
-    // MARK: Resource-Inject
-    // Inject shared resources into render systems
-    _render->waitIdle(); // wait something done
-
-    _skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = _skyBoxCubeMapDS;
-    _phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = _skyBoxCubeMapDS;
-
-    _shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(_depthRT);
-    _phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = _depthBufferShadowDS;
-    _phongMaterialSystem->as<PhongMaterialSystem>()->setDirectionalShadowMappingEnabled(bShadowMapping);
-
-    _debugRenderSystem->bEnabled = false;
-
-
     // MARK: Render Init Done
     ImGuiManager::get().init(_render, nullptr);
 
@@ -827,6 +382,7 @@ void App::init(AppDesc ci)
 
 
     _sceneManager = new SceneManager();
+    _pipeline->_sceneManager = _sceneManager;
     _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
@@ -901,6 +457,64 @@ int App::dispatchEvent(const T& event)
         MessageBus::get()->publish(event);
     }
     return 0;
+}
+
+ForwardRenderPipeline* App::getForwardPipeline() const
+{
+    return _pipeline.get();
+}
+
+bool App::isShadowMappingEnabled() const
+{
+    return _pipeline ? _pipeline->bShadowMapping : false;
+}
+
+bool App::isMirrorRenderingEnabled() const
+{
+    return _pipeline ? _pipeline->bRenderMirror : false;
+}
+
+bool App::hasMirrorRenderResult() const
+{
+    return _pipeline ? _pipeline->bHasMirror : false;
+}
+
+IRenderTarget* App::getShadowDepthRT() const
+{
+    return _pipeline && _pipeline->depthRT ? _pipeline->depthRT.get() : nullptr;
+}
+
+IImageView* App::getShadowDirectionalDepthIV() const
+{
+    return _pipeline && _pipeline->shadowDirectionalDepthIV ? _pipeline->shadowDirectionalDepthIV.get() : nullptr;
+}
+
+IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+{
+    if (!_pipeline) return nullptr;
+    if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
+    auto& iv = _pipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
+    return iv ? iv.get() : nullptr;
+}
+
+Texture* App::getViewportOutputTexture() const
+{
+    return _pipeline ? _pipeline->viewportTexture : nullptr;
+}
+
+Texture* App::getPostprocessOutputTexture() const
+{
+    return _pipeline && _pipeline->postprocessTexture ? _pipeline->postprocessTexture.get() : nullptr;
+}
+
+IRenderTarget* App::getMirrorRenderTarget() const
+{
+    return _pipeline && _pipeline->mirrorRT ? _pipeline->mirrorRT.get() : nullptr;
+}
+
+bool App::isPostprocessingEnabled() const
+{
+    return _pipeline && _pipeline->basicPostprocessingSystem && _pipeline->basicPostprocessingSystem->bEnabled;
 }
 
 void App::renderGUI(float dt)
@@ -1070,19 +684,17 @@ void ya::App::quit()
 
     // Cleanup material systems (managed externally now)
 
-    // Cleanup render targets before render passes (dependency order)
-    if (_viewportRT) {
-        _viewportRT->destroy();
-        _viewportRT.reset();
-    }
-
     if (_screenRT) {
         _screenRT->destroy();
         _screenRT.reset();
     }
 
     _screenRenderPass.reset();
-    _viewportRenderPass.reset();
+
+    if (_pipeline) {
+        _pipeline->shutdown();
+        _pipeline.reset();
+    }
 
     _deleter.clear();
 
@@ -1239,11 +851,13 @@ void App::onRenderGUI(float dt)
         // RenderTargetPool::get().onRenderGUI();
     }
 
-    if (ImGui::CollapsingHeader("Render Systems", ImGuiTreeNodeFlags_DefaultOpen)) {
-        _onRenderRenderSystemsGUI.executeIfBound();
+    if (_pipeline) {
+        _pipeline->renderGUI();
     }
 
-    _viewportRT->onRenderGUI();
+    if (_pipeline && _pipeline->viewportRT) {
+        _pipeline->viewportRT->onRenderGUI();
+    }
     _screenRT->onRenderGUI();
 
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1295,26 +909,6 @@ void App::onRenderGUI(float dt)
         }
 
         ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
-        if (ImGui::Checkbox("MSAA", &bMSAA)) {
-            taskManager.registerFrameTask([this]() {
-                auto sampleCount = bMSAA ? ESampleCount::Sample_4 : ESampleCount::Sample_1;
-                _simpleMaterialSystem->getPipeline()->setSampleCount(sampleCount);
-                _unlitMaterialSystem->getPipeline()->setSampleCount(sampleCount);
-                _phongMaterialSystem->getPipeline()->setSampleCount(sampleCount);
-                _debugRenderSystem->getPipeline()->setSampleCount(sampleCount);
-                _skyboxSystem->getPipeline()->setSampleCount(sampleCount);
-
-                uint32_t width  = _viewportRect.extent2D().width;
-                uint32_t height = _viewportRect.extent2D().height;
-                recreateViewPortRT(width, height);
-            });
-        }
-        if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping))
-        {
-            auto* phongSys = _phongMaterialSystem->as<PhongMaterialSystem>();
-            phongSys->setDirectionalShadowMappingEnabled(bShadowMapping);
-        }
-
         auto* swapchain = _render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {

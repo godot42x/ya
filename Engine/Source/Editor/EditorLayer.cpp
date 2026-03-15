@@ -534,7 +534,8 @@ void EditorLayer::viewportWindow()
         Sampler* sampler = _viewPortSamplerType == Linear
                              ? TextureLibrary::get().getLinearSampler()
                              : TextureLibrary::get().getNearestSampler();
-        if (ImGuiHelper::Image(App::get()->_viewportTexture->getImageView(),
+        auto* viewportTexture = App::get()->getViewportOutputTexture();
+        if (viewportTexture && ImGuiHelper::Image(viewportTexture->getImageView(),
                                sampler,
                                "Viewport Texture ",
                                viewportPanelSize,
@@ -704,11 +705,15 @@ void EditorLayer::debugWindow()
         return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
     };
     Text("Shadow Mapping(Depth Buffer)");
-    if (App::get()->bShadowMapping) {
-        // auto shadowMapTexture = App::get()->_depthRT->getCurFrameBuffer()->getDepthTexture();
-        auto depthExtent        = App::get()->_depthRT->getExtent();
-        auto directionalDepthIV = App::get()->_shadowDirectionalDepthIV;
-        ImGuiHelper::Image(directionalDepthIV.get(),
+    if (App::get()->isShadowMappingEnabled()) {
+        auto* depthRT            = App::get()->getShadowDepthRT();
+        auto* directionalDepthIV = App::get()->getShadowDirectionalDepthIV();
+        if (!depthRT || !directionalDepthIV) {
+            ImGui::Text("Shadow resources unavailable");
+        }
+        else {
+            auto depthExtent = depthRT->getExtent();
+            ImGuiHelper::Image(directionalDepthIV,
                            TextureLibrary::get().getLinearSampler(),
                            "Shadow Map",
                            constraintSize(depthExtent));
@@ -729,12 +734,13 @@ void EditorLayer::debugWindow()
             ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
         }
 
-        auto& faceIV = App::get()->_shadowPointFaceIVs[selectedPointLight][cubeFace];
-        if (faceIV) {
-            ImGuiHelper::Image(faceIV.get(),
+            auto* faceIV = App::get()->getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace));
+            if (faceIV) {
+                ImGuiHelper::Image(faceIV,
                                TextureLibrary::get().getLinearSampler(),
                                "Point Light Shadow Map",
                                constraintSize(depthExtent));
+            }
         }
 
         // auto cubeImagesView = [](int layerStart, int numCube) {
@@ -783,28 +789,35 @@ void EditorLayer::debugWindow()
 
 
     Text("Mirror Render Target (from framebuffer)");
-    if (App::get()->bHasMirror) {
-        auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
+    if (App::get()->hasMirrorRenderResult()) {
+        auto* mirrorRT = App::get()->getMirrorRenderTarget();
+        auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
+        if (mirrorTexture) {
         ImGuiHelper::Image(mirrorTexture->getImageView(),
                            TextureLibrary::get().getLinearSampler(),
                            "Mirror RT",
                            constraintSize(mirrorTexture->getExtent()));
+        }
     }
 
     Text("Viewport Render Target (from framebuffer)");
-    auto viewportRTTexture = App::get()->_viewportTexture;
-    ImGuiHelper::Image(viewportRTTexture->getImageView(),
-                       TextureLibrary::get().getLinearSampler(),
-                       "Viewport RT (from framebuffer)",
-                       constraintSize(viewportRTTexture->getExtent()));
+    auto viewportRTTexture = App::get()->getViewportOutputTexture();
+    if (viewportRTTexture) {
+        ImGuiHelper::Image(viewportRTTexture->getImageView(),
+                           TextureLibrary::get().getLinearSampler(),
+                           "Viewport RT (from framebuffer)",
+                           constraintSize(viewportRTTexture->getExtent()));
+    }
 
     Text("Post-process Texture (from App)");
-    if (App::get()->_basicPostprocessingSystem && App::get()->_basicPostprocessingSystem->bEnabled) {
-        auto postProcessTexture = App::get()->_postprocessTexture;
-        ImGuiHelper::Image(postProcessTexture->getImageView(),
-                           TextureLibrary::get().getLinearSampler(),
-                           "Post-process texture",
-                           constraintSize(postProcessTexture->getExtent()));
+    if (App::get()->isPostprocessingEnabled()) {
+        auto postProcessTexture = App::get()->getPostprocessOutputTexture();
+        if (postProcessTexture) {
+            ImGuiHelper::Image(postProcessTexture->getImageView(),
+                               TextureLibrary::get().getLinearSampler(),
+                               "Post-process texture",
+                               constraintSize(postProcessTexture->getExtent()));
+        }
     }
 
     ImGui::End();

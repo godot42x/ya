@@ -363,7 +363,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
         DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
 
         // TODO: 拆分更新 descriptor set 和 draw call 为两个循环？ 能否优化效率?
-        if (App::get()->bRenderMirror) {
+        if (App::get()->isMirrorRenderingEnabled()) {
             if (!updatedMaterial[materialInstanceIndex]) {
                 // FIXME: hack for now update the mirror material every time
                 bool bOverrideMirrorMaterial = (entity == mirrorID);
@@ -619,9 +619,12 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
     DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(reflectionTV);
     DescriptorImageInfo normalTexture     = getDescriptorImageInfo(normalTV);
     //  mirror or other rt?
-    if (bOverrideDiffuse && App::get()->bHasMirror) {
-        auto mirrorTexture = App::get()->_mirrorRT->getCurFrameBuffer()->getColorTexture(0);
-        diffuseTexture     = getDescriptorImageInfo(mirrorTexture->getImageView(), nullptr);
+    if (bOverrideDiffuse && App::get()->hasMirrorRenderResult()) {
+        auto* mirrorRT      = App::get()->getMirrorRenderTarget();
+        auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
+        if (mirrorTexture) {
+            diffuseTexture = getDescriptorImageInfo(mirrorTexture->getImageView(), nullptr);
+        }
     }
 
     render

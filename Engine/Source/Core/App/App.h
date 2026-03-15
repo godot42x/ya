@@ -4,12 +4,12 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
+#include "Core/System/System.h"
+#include "ECS/System/Render/IRenderSystem.h"
 
 #include "Editor/EditorLayer.h"
 
 #include "Core/App/FPSCtrl.h"
-
-#include "ECS/System/Render/IRenderSystem.h"
 
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
@@ -34,6 +34,7 @@ struct Texture;
 struct Texture;
 struct Sampler;
 struct RenderDocCapture;
+struct ForwardRenderPipeline;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -141,6 +142,7 @@ struct App
 
     std::shared_ptr<ShaderStorage>                                   _shaderStorage = nullptr;
     std::vector<std::pair<std::string /*name*/, IGraphicsPipeline*>> _monitorPipelines;
+    stdptr<ForwardRenderPipeline>                                     _pipeline      = nullptr;
 
     // Runtime state
     bool          bRunning         = true;
@@ -184,56 +186,18 @@ struct App
     float                  _viewportFrameBufferScale = 1.0f;
     std::vector<glm::vec2> clicked;
 
-    std::shared_ptr<IRenderPass>   _viewportRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
-    std::shared_ptr<IRenderTarget> _viewportRT         = nullptr; // Offscreen RT for 3D scene
-
     std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
 
-    stdptr<IDescriptorPool>      _descriptorPool      = nullptr;
-    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL    = nullptr;
-    DescriptorSetHandle          _skyBoxCubeMapDS     = nullptr;
-    stdptr<IDescriptorSetLayout> _depthBufferDSL      = nullptr;
-    DescriptorSetHandle          _depthBufferShadowDS = nullptr;
-    stdptr<Sampler>              _shadowSampler       = nullptr;
-
-    stdptr<IRenderSystem>                          _simpleMaterialSystem      = nullptr;
-    stdptr<IRenderSystem>                          _unlitMaterialSystem       = nullptr;
-    stdptr<IRenderSystem>                          _phongMaterialSystem       = nullptr;
-    stdptr<IRenderSystem>                          _debugRenderSystem         = nullptr;
-    stdptr<IRenderSystem>                          _skyboxSystem              = nullptr;
-    stdptr<IRenderSystem>                          _shadowMappingSystem       = nullptr;
-    stdptr<IRenderSystem>                          _basicPostprocessingSystem = nullptr;
-    Delegate<void()>                               _onRenderRenderSystemsGUI  = {}; // TEMP
-    Delegate<void(Delegate<void(IRenderSystem*)>)> _forEachSystem             = {}; // TEMP
+    stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
 
     // other systems, eg: transform, resource resolve
     std::vector<stdptr<ISystem>> _systems;
 
-    // Postprocess attachment storage (for dynamic rendering, with deferred destruction)
-    stdptr<Texture> _postprocessTexture = nullptr; // ← 使用 App 层的 Texture 抽象
+    bool bRenderMirror = false;
 
-    stdptr<IRenderTarget> _mirrorRT     = nullptr;
-    bool                  bRenderMirror = false;
-    bool                  bHasMirror    = false;
-
-    bool bMSAA = false;
-
-    bool                  bShadowMapping            = true;
-    stdptr<IRenderTarget> _depthRT                  = nullptr;
-    stdptr<IRenderTarget> _pointLightDepthRT        = nullptr;
-    stdptr<IImageView>    _shadowDirectionalDepthIV = nullptr;
-
-    // Editor visualization: pre-created at init, never recreated per-frame
-    std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                    _shadowPointCubeIVs{};  // N x ViewCube
-    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS>     _shadowPointFaceIVs{}; // N*6 x View2D
-
-
-    // Viewport texture for ImGui display (unified Texture semantics)
-    // This is set to either _postprocessTexture or _viewportRT's color attachment
-    Texture* _viewportTexture = nullptr;
 
     EditorLayer* _editorLayer;
 
@@ -294,6 +258,18 @@ struct App
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
+
+    [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
+    [[nodiscard]] bool                   isShadowMappingEnabled() const;
+    [[nodiscard]] bool                   isMirrorRenderingEnabled() const;
+    [[nodiscard]] bool                   hasMirrorRenderResult() const;
+    [[nodiscard]] IRenderTarget*         getShadowDepthRT() const;
+    [[nodiscard]] IImageView*            getShadowDirectionalDepthIV() const;
+    [[nodiscard]] IImageView*            getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] Texture*               getViewportOutputTexture() const;
+    [[nodiscard]] Texture*               getPostprocessOutputTexture() const;
+    [[nodiscard]] IRenderTarget*         getMirrorRenderTarget() const;
+    [[nodiscard]] bool                   isPostprocessingEnabled() const;
 
     // Getters for subsystems
     [[nodiscard]] SceneManager* getSceneManager() const { return _sceneManager; }
@@ -359,18 +335,6 @@ struct App
     bool onMouseScrolled(const MouseScrolledEvent& event);
     void onSceneViewportResized(Rect2D rect);
 
-
-    void renderScene(ICommandBuffer* cmdBuf, float dt, FrameContext& ctx);
-    void beginFrame()
-    {
-        _shadowMappingSystem->beginFrame();
-        _basicPostprocessingSystem->beginFrame();
-        _skyboxSystem->beginFrame();
-        _simpleMaterialSystem->beginFrame();
-        _unlitMaterialSystem->beginFrame();
-        _phongMaterialSystem->beginFrame();
-        _debugRenderSystem->beginFrame();
-    }
 
     void handleSystemSignals();
     bool recreateViewPortRT(uint32_t width, uint32_t height);
