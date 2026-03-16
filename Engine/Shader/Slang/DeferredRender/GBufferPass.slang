@@ -10,6 +10,7 @@ struct VertexInput{
 };
 
 struct VertexOutput{
+    float4 sv_position: SV_Position;
     float3 pos :Position;
     float2 uv   :UV;
     float3 normal :Normal;
@@ -30,6 +31,7 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     float4 pos = mul( pc.modelMat , float4(IN.pos,1.0));
     OUT.pos = pos.xyz;
     OUT.uv = IN.uv;
+    OUT.sv_position = pos;
 
     // vec3 T = normalize(pc.modelMat * vec4(aTangent, 0.0));
     // vec3 N = normalize (pc.modelMat * vec4(aNormal, 0.0));

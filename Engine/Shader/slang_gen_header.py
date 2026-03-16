@@ -320,6 +320,31 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
         f.write("\n".join(lines))
 
 
+def _file_sub_namespace(slang_file: Path, slang_root: Path | None) -> tuple[str, str]:
+    """Derive a dot-separated file stem and C++ sub-namespace from the .slang file path.
+
+    Uses the path relative to *slang_root* (if provided) to build a hierarchy.
+
+    Examples (slang_root = Engine/Shader/Slang):
+        DeferredRender/GBufferPass.slang  -> ("DeferredRender.GBufferPass", "DeferredRender::GBufferPass")
+        PhongLit.slang                    -> ("PhongLit",                   "PhongLit")
+        Common/Helper.slang               -> ("Common.Helper",              "Common::Helper")
+    """
+    if slang_root is not None:
+        try:
+            rel = slang_file.resolve().relative_to(slang_root.resolve())
+        except ValueError:
+            rel = Path(slang_file.stem)
+    else:
+        rel = Path(slang_file.stem)
+
+    # rel is e.g. DeferredRender/GBufferPass.slang — drop the .slang suffix
+    parts = list(rel.parent.parts) + [rel.stem]
+    dot_stem = ".".join(parts)        # DeferredRender.GBufferPass
+    ns_suffix = "::".join(parts)      # DeferredRender::GBufferPass
+    return dot_stem, ns_suffix
+
+
 def _process_one_slang(
     slang_file: Path,
     output_dir: Path,
@@ -327,10 +352,12 @@ def _process_one_slang(
     entry: str,
     force: bool,
     include_dirs: list[Path] | None = None,
+    slang_root: Path | None = None,
 ):
-    basename = slang_file.stem
+    dot_stem, ns_suffix = _file_sub_namespace(slang_file, slang_root)
+    basename = slang_file.stem  # still used for slangc intermediate files
     json_path = output_dir / f"{basename}.reflection.json"
-    header_path = output_dir / f"{basename}.slang.h"
+    header_path = output_dir / f"{dot_stem}.slang.h"
     stamp_path = output_dir / f"{basename}.stamp"
     spv_path = output_dir / f"{basename}.spv"
 
@@ -375,7 +402,8 @@ def _process_one_slang(
         return
 
     slang_source = slang_file.read_text(encoding="utf-8")
-    generate_header(str(json_path), str(header_path), namespace, slang_source)
+    full_ns = f"{namespace}::{ns_suffix}" if ns_suffix else namespace
+    generate_header(str(json_path), str(header_path), full_ns, slang_source)
     print(f"[slang-gen] Generated: {header_path}")
 
 
@@ -391,12 +419,15 @@ def main():
                         help="Entry point name for reflection (default: vertMain)")
     parser.add_argument("--include-dir", action="append", dest="include_dirs", metavar="DIR",
                         help="Extra include directory passed to slangc via -I (repeatable)")
+    parser.add_argument("--slang-root", default=None,
+                        help="Root directory of .slang sources (used to compute relative path for namespaces)")
     parser.add_argument("--force", action="store_true",
                         help="Force regeneration even if header is up-to-date")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     include_dirs = [Path(d) for d in (args.include_dirs or [])]
+    slang_root = Path(args.slang_root) if args.slang_root else None
     t_start = time.perf_counter()
     count = 0
     for input_path in args.inputs:
@@ -404,7 +435,7 @@ def main():
         if not slang_file.exists():
             print(f"ERROR: Slang source not found: {slang_file}", file=sys.stderr)
             continue
-        _process_one_slang(slang_file, output_dir, args.namespace, args.entry, args.force, include_dirs)
+        _process_one_slang(slang_file, output_dir, args.namespace, args.entry, args.force, include_dirs, slang_root)
         count += 1
 
     elapsed_ms = int((time.perf_counter() - t_start) * 1000)

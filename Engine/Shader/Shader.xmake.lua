@@ -4,10 +4,10 @@ do
     }
 
     on_run(function()
-        local now  = os.mclock()
+        local now    = os.mclock()
         local python = "python"
-        local useUv = os.execv("uv", { "--version" }, { stdout = os.nuldev(), stderr = os.nuldev() }) == 0
-     
+        local useUv  = os.execv("uv", { "--version" }, { stdout = os.nuldev(), stderr = os.nuldev() }) == 0
+
         local function run_python(script, args)
             if useUv then
                 local uvArgs = {
@@ -49,11 +49,10 @@ do
             local args      = {
                 "--output-dir", outputDir,
                 "--include-dir", "Engine/Shader/Slang",
+                "--slang-root", "Engine/Shader/Slang",
             }
             for _, f in ipairs(os.files("Engine/Shader/Slang/**.slang")) do
-                if not f:find("[/\\]Common[/\\]") then
-                    table.insert(args, f)
-                end
+                table.insert(args, f)
             end
             run_python(script, args)
         end
