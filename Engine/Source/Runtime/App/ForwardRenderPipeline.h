@@ -27,7 +27,6 @@ struct ForwardRenderPipeline
     struct InitDesc
     {
         IRender*          render         = nullptr;
-        IDescriptorPool*  descriptorPool = nullptr;
         SceneManager*     sceneManager   = nullptr;
         int               windowW        = 0;
         int               windowH        = 0;
@@ -50,8 +49,9 @@ struct ForwardRenderPipeline
     Deleter _deleter;
 
     IRender*         _render         = nullptr;
-    IDescriptorPool* _descriptorPool = nullptr;
     SceneManager*    _sceneManager   = nullptr;
+
+    stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
     std::shared_ptr<IRenderPass>   viewportRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> viewportRT         = nullptr;

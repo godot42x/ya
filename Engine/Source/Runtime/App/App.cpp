@@ -298,24 +298,9 @@ void App::init(AppDesc ci)
     }
 
 
-    _descriptorPool = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Global Descriptor Pool",
-            .maxSets   = 200, // skybox + depth shadow
-            .poolSizes = {
-                // max iamge set allowed < maxSets
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1 + (1 + MAX_POINT_LIGHTS), // skybox + depth shadow(point and directional)
-                },
-            },
-        });
-    _deleter.push("DescriptorPool", [this](void*) { _descriptorPool.reset(); });
 
     _pipeline->init(ForwardRenderPipeline::InitDesc{
         .render         = _render,
-        .descriptorPool = _descriptorPool.get(),
         .sceneManager   = nullptr,
         .windowW        = winW,
         .windowH        = winH,

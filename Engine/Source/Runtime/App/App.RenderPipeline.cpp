@@ -50,11 +50,11 @@ void App::tickRenderPipeline(float dt)
         return;
     }
 
-    // ===== Single CommandBuffer for both Scene and UI Passes =====
     auto cmdBuf = _commandBuffers[imageIndex];
     cmdBuf->reset();
     cmdBuf->begin();
 
+    // MARK: Resource grab
     Entity* runtimeCamera = getPrimaryCamera();
     if (runtimeCamera && runtimeCamera->isValid())
     {

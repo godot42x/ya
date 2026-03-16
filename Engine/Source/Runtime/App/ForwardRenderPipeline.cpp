@@ -30,9 +30,8 @@ namespace ya
 
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
-    _render         = desc.render;
-    _descriptorPool = desc.descriptorPool;
-    _sceneManager   = desc.sceneManager;
+    _render       = desc.render;
+    _sceneManager = desc.sceneManager;
 
     postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
         .label   = "PostprocessRenderTarget",
@@ -116,7 +115,22 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     });
     _deleter.push("DepthRT", [this](void*) { depthRT.reset(); });
 
-    if (_descriptorPool) {
+    // Create internal descriptor pool (owns skybox + shadow map descriptors)
+    _descriptorPool = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "ForwardPipeline Descriptor Pool",
+            .maxSets   = 200,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1 + (1 + MAX_POINT_LIGHTS), // skybox + depth shadow(point and directional)
+                },
+            },
+        });
+    _deleter.push("OwnedDescriptorPool", [this](void*) { _descriptorPool.reset(); });
+
+    {
         skyBoxCubeMapDSL = IDescriptorSetLayout::create(
             _render,
             DescriptorSetLayoutDesc{

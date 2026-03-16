@@ -189,10 +189,6 @@ struct App
     std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
-
-    stdptr<IDescriptorPool> _descriptorPool = nullptr;
-
-
     // other systems, eg: transform, resource resolve
     std::vector<stdptr<ISystem>> _systems;
 
