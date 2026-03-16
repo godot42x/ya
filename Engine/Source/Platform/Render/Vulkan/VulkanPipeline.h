@@ -76,6 +76,10 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     VulkanRender         *_render         = nullptr;
     VulkanPipelineLayout *_pipelineLayout = nullptr;
 
+    // Shader-derived resources (auto-created when bDeriveFromShader=true)
+    std::shared_ptr<IPipelineLayout>                   _derivedPipelineLayout;
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> _derivedDSLs;
+
   public:
     VulkanPipeline(VulkanRender *render)
     {
@@ -134,6 +138,12 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
 
     ::VkPipeline getVkHandle() const { return _pipeline; }
+
+    /// Get the auto-derived pipeline layout (valid when bDeriveFromShader=true)
+    const std::shared_ptr<IPipelineLayout>& getDerivedPipelineLayout() const { return _derivedPipelineLayout; }
+
+    /// Get the auto-derived descriptor set layouts (valid when bDeriveFromShader=true)
+    const std::vector<std::shared_ptr<IDescriptorSetLayout>>& getDerivedDSLs() const { return _derivedDSLs; }
 
   private:
     // Pipeline creation helpers

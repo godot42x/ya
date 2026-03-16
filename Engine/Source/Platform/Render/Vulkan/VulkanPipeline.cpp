@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <array>
 
 #include "Runtime/App/App.h"
 #include "Core/Log.h"
 #include "ImGui.h"
+#include "Render/Core/DescriptorSet.h"
 #include "Render/RenderDefines.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
@@ -350,35 +352,100 @@ void VulkanPipeline::createPipelineInternal()
     const auto& config = _ci.shaderDesc;
 
     if (_ci.shaderDesc.bDeriveFromShader) {
-        // Get vertex input info from shader reflection
-        auto vertexReflectInfo = shaderStorage->getProcessor()->reflect(EShaderStage::Vertex, stage2Spirv->at(EShaderStage::Vertex));
+        // Reflect all shader stages
+        auto processor = shaderStorage->selectProcessor(_ci.shaderDesc);
+        std::vector<ShaderReflection::ShaderResources> allStageResources;
 
+        for (const auto& [stage, spirv] : *stage2Spirv) {
+            auto res = processor->reflect(stage, spirv);
+            allStageResources.push_back(std::move(res));
+        }
+
+        // Merge reflection data from all stages
+        auto merged = ShaderReflection::merge(allStageResources);
+
+        // --- Vertex Input from merged reflection ---
         auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat {
-            if (type.vecsize == 3 && type.basetype == 0)
-                return VK_FORMAT_R32G32B32_SFLOAT;
-            if (type.vecsize == 4 && type.basetype == 0)
-                return VK_FORMAT_R32G32B32A32_SFLOAT;
-            if (type.vecsize == 2 && type.basetype == 0)
-                return VK_FORMAT_R32G32_SFLOAT;
+            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Float)) {
+                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
+                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
+                if (type.vecsize == 2) return VK_FORMAT_R32G32_SFLOAT;
+                if (type.vecsize == 1) return VK_FORMAT_R32_SFLOAT;
+            }
+            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Int)) {
+                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SINT;
+                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SINT;
+                if (type.vecsize == 2) return VK_FORMAT_R32G32_SINT;
+                if (type.vecsize == 1) return VK_FORMAT_R32_SINT;
+            }
+            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::UInt)) {
+                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_UINT;
+                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_UINT;
+                if (type.vecsize == 2) return VK_FORMAT_R32G32_UINT;
+                if (type.vecsize == 1) return VK_FORMAT_R32_UINT;
+            }
             return VK_FORMAT_R32G32B32_SFLOAT; // Default fallback
         };
 
-        for (auto& input : vertexReflectInfo.inputs) {
-            vertexAttributeDescriptions.push_back({
-                .location = input.location,
-                .binding  = 0,
-                .format   = spirvType2VulkanFormat(input),
-                .offset   = input.offset,
-            });
+        // Allow manual vertex layout override
+        if (!config.vertexBufferDescs.empty()) {
+            // Use provided vertex layout configuration (override)
+            for (const auto& bufferDesc : config.vertexBufferDescs) {
+                vertexBindingDescriptions.push_back({
+                    .binding   = bufferDesc.slot,
+                    .stride    = static_cast<uint32_t>(bufferDesc.pitch),
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                });
+            }
+            for (const auto& attr : config.vertexAttributes) {
+                vertexAttributeDescriptions.push_back({
+                    .location = attr.location,
+                    .binding  = attr.bufferSlot,
+                    .format   = toVk(attr.format),
+                    .offset   = static_cast<uint32_t>(attr.offset),
+                });
+            }
+        }
+        else {
+            // Auto-derive from shader reflection
+            uint32_t maxStride = 0;
+            for (const auto& input : merged.vertexInputs) {
+                vertexAttributeDescriptions.push_back({
+                    .location = input.location,
+                    .binding  = 0,
+                    .format   = spirvType2VulkanFormat(input),
+                    .offset   = input.offset,
+                });
+                maxStride = std::max(maxStride, input.offset + input.size);
+            }
+            // Align stride to 4 bytes
+            maxStride = (maxStride + 3u) & ~3u;
+            if (!vertexAttributeDescriptions.empty()) {
+                vertexBindingDescriptions.push_back({
+                    .binding   = 0,
+                    .stride    = maxStride,
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                });
+            }
         }
 
-        if (!vertexAttributeDescriptions.empty()) {
-            vertexBindingDescriptions.push_back({
-                .binding   = 0,
-                .stride    = static_cast<uint32_t>(vertexReflectInfo.inputs.back().offset + vertexReflectInfo.inputs.back().size),
-                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-            });
+        // --- Auto-create Descriptor Set Layouts and Pipeline Layout ---
+        _derivedDSLs.clear();
+        std::vector<stdptr<IDescriptorSetLayout>> dslPtrs;
+        for (const auto& dslDesc : merged.descriptorSetLayouts) {
+            auto dsl = IDescriptorSetLayout::create(reinterpret_cast<IRender*>(_render), dslDesc);
+            _derivedDSLs.push_back(dsl);
+            dslPtrs.push_back(dsl);
         }
+
+        _derivedPipelineLayout = IPipelineLayout::create(
+            reinterpret_cast<IRender*>(_render),
+            std::format("Derived_PipelineLayout_{}", shaderCacheKey),
+            merged.pushConstants,
+            dslPtrs);
+
+        // Override the pipeline layout pointer so the rest of the pipeline creation uses it
+        _pipelineLayout = _derivedPipelineLayout->as<VulkanPipelineLayout>();
     }
     else {
         // Use provided vertex layout configuration

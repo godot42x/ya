@@ -90,12 +90,19 @@ struct UniformBuffer
     std::vector<UniformBufferMember> members;
 };
 
+struct PushConstantBuffer
+{
+    std::string name;
+    uint32_t    size = 0; // Declared struct size in bytes
+};
+
 struct Resource
 {
     std::string name;
-    uint32_t    binding;
-    uint32_t    set;
-    DataType    type;
+    uint32_t    binding   = 0;
+    uint32_t    set       = 0;
+    DataType    type      = DataType::Unknown;
+    uint32_t    arraySize = 1; // 1 for non-array, >1 for array (e.g. samplerCube[MAX_POINT_LIGHTS])
 };
 
 struct ShaderResources
@@ -105,10 +112,27 @@ struct ShaderResources
     std::vector<StageIOData>   outputs;
     std::vector<UniformBuffer> uniformBuffers;
     std::vector<Resource>      sampledImages;
+    std::vector<PushConstantBuffer> pushConstantBuffers;
 
     // Original SPIRV-Cross resources
     spirv_cross::ShaderResources spirvResources;
 };
+
+/// Result of merging reflection data from multiple shader stages.
+struct MergedResources
+{
+    /// Push constant ranges (stageFlags merged across stages).
+    std::vector<PushConstantRange>                pushConstants;
+    /// Descriptor set layouts built from all stages, ordered by set index.
+    std::vector<DescriptorSetLayoutDesc>          descriptorSetLayouts;
+    /// Vertex attributes extracted from the vertex stage.
+    std::vector<StageIOData>                      vertexInputs;
+};
+
+/// Merge reflection data from multiple shader stages into a single
+/// pipeline-layout description.  Each element in `stageResources` must
+/// carry a distinct `stage` value.
+MergedResources merge(const std::vector<ShaderResources>& stageResources);
 
 // Utility functions for shader reflection
 DataType SpirType2DataType(const spirv_cross::SPIRType& type);

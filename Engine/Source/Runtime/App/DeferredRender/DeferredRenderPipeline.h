@@ -2,8 +2,11 @@
 #pragma once
 
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/PipelineBuilder.h"
 #include "Render/Render.h"
 
+#include "DeferredRender.GBufferPass.slang.h"
+// #include "DeferredRender.LightPass.glsl.h"
 namespace ya
 {
 
@@ -17,6 +20,12 @@ struct DeferredRenderPipeline
 
     const EFormat::T COLOR_FORMAT = EFormat::R8G8B8A8_SRGB;
 
+    // Shader-driven pipeline (auto-derived from GBufferPass.slang)
+    PipelineBuilder::CreateDesc _gBufferCreateDesc;
+    PipelineBuilder::Result     _gBufferPassResult;
+    bool                        _bGBufferPipelineDirty = false;
+
+  public:
     void init()
     {
         Extent2D extent{
@@ -91,5 +100,11 @@ struct DeferredRenderPipeline
     }
 
     void tick(ICommandBuffer* cmdBuf);
+    void renderGUI();
+
+
+
+  private:
+    void createGBufferPipeline();
 };
 } // namespace ya

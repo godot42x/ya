@@ -10,7 +10,9 @@
 #include "Shader.h"
 
 
+#include <algorithm>
 #include <array>
+#include <map>
 #include <shaderc/shaderc.h>
 #include <shaderc/shaderc.hpp>
 #include <stdio.h>
@@ -451,17 +453,42 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
         uint32_t    set     = compiler.get_decoration(resource.id, spv::DecorationDescriptorSet);
         const auto& type    = compiler.get_type(resource.type_id);
 
+        // Determine array size (1 for non-array, >1 for array descriptors)
+        uint32_t arraySize = 1;
+        if (!type.array.empty()) {
+            arraySize = type.array[0]; // First dimension of the array
+            if (arraySize == 0) {
+                arraySize = 1; // Runtime-sized arrays default to 1
+            }
+        }
+
         // Create resource
         ShaderReflection::Resource sampledImage;
-        sampledImage.name    = resource.name;
-        sampledImage.binding = binding;
-        sampledImage.set     = set;
-        sampledImage.type    = ShaderReflection::getSpirvBaseType(type);
+        sampledImage.name      = resource.name;
+        sampledImage.binding   = binding;
+        sampledImage.set       = set;
+        sampledImage.type      = ShaderReflection::getSpirvBaseType(type);
+        sampledImage.arraySize = arraySize;
 
         // Add to resources
         resources.sampledImages.push_back(sampledImage);
 
-        YA_CORE_TRACE("\tSampled Image: {0} (binding: {1}, set: {2}, type: {3})", resource.name, binding, set, ShaderReflection::DataType2Strings[sampledImage.type]);
+        YA_CORE_TRACE("\tSampled Image: {0} (binding: {1}, set: {2}, type: {3}, arraySize: {4})", resource.name, binding, set, ShaderReflection::DataType2Strings[sampledImage.type], arraySize);
+    }
+
+    // Process push constant buffers
+    YA_CORE_TRACE("Push constant buffers:");
+    for (const auto& resource : spirvResources.push_constant_buffers) {
+        const auto& bufferType = compiler.get_type(resource.base_type_id);
+        uint32_t    bufferSize = compiler.get_declared_struct_size(bufferType);
+
+        ShaderReflection::PushConstantBuffer pcBuffer;
+        pcBuffer.name = resource.name;
+        pcBuffer.size = bufferSize;
+
+        resources.pushConstantBuffers.push_back(pcBuffer);
+
+        YA_CORE_TRACE("\tPush Constant: {0} (size: {1})", resource.name, bufferSize);
     }
 
     return resources;
@@ -1376,6 +1403,138 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
     }
 
     return {std::move(ret)};
+}
+
+// ============================================================
+// ShaderReflection::merge — combine per-stage reflection into
+// a single pipeline-layout description
+// ============================================================
+ShaderReflection::MergedResources ShaderReflection::merge(
+    const std::vector<ShaderReflection::ShaderResources>& stageResources)
+{
+    MergedResources result;
+
+    // -----------------------------------------------------------
+    // 1. Push Constants: merge across stages (union stageFlags,
+    //    use max size across all stages).
+    // -----------------------------------------------------------
+    uint32_t        pcMaxSize   = 0;
+    EShaderStage::T pcStageFlags = static_cast<EShaderStage::T>(0);
+    bool            hasPushConstant = false;
+
+    for (const auto& res : stageResources) {
+        for (const auto& pc : res.pushConstantBuffers) {
+            hasPushConstant = true;
+            pcMaxSize       = std::max(pcMaxSize, pc.size);
+            pcStageFlags    = pcStageFlags | res.stage;
+        }
+    }
+
+    if (hasPushConstant) {
+        result.pushConstants.push_back(PushConstantRange{
+            .offset     = 0,
+            .size       = pcMaxSize,
+            .stageFlags = pcStageFlags,
+        });
+    }
+
+    // -----------------------------------------------------------
+    // 2. Descriptor Set Layouts: merge uniform buffers and sampled
+    //    images by (set, binding), merging stageFlags when the
+    //    same binding appears in multiple stages.
+    // -----------------------------------------------------------
+    // Key: (set, binding) → accumulated binding info
+    struct BindingKey
+    {
+        uint32_t set;
+        uint32_t binding;
+        bool operator<(const BindingKey& o) const
+        {
+            return set < o.set || (set == o.set && binding < o.binding);
+        }
+    };
+    struct BindingInfo
+    {
+        EPipelineDescriptorType::T type;
+        uint32_t                   descriptorCount;
+        EShaderStage::T            stageFlags;
+        std::string                name;
+    };
+    std::map<BindingKey, BindingInfo> bindingMap;
+
+    auto mergeBinding = [&](uint32_t set, uint32_t binding,
+                            EPipelineDescriptorType::T descType,
+                            uint32_t                   count,
+                            EShaderStage::T            stage,
+                            const std::string&         name) {
+        BindingKey key{set, binding};
+        auto       it = bindingMap.find(key);
+        if (it == bindingMap.end()) {
+            bindingMap[key] = BindingInfo{descType, count, stage, name};
+        }
+        else {
+            // Validate type consistency
+            if (it->second.type != descType) {
+                YA_CORE_ERROR("ShaderReflection::merge: binding (set={}, binding={}) "
+                              "has conflicting types: {} vs {}",
+                              set, binding,
+                              static_cast<int>(it->second.type),
+                              static_cast<int>(descType));
+            }
+            it->second.stageFlags    = it->second.stageFlags | stage;
+            it->second.descriptorCount = std::max(it->second.descriptorCount, count);
+        }
+    };
+
+    for (const auto& res : stageResources) {
+        // Uniform buffers → UniformBuffer descriptor type
+        for (const auto& ubo : res.uniformBuffers) {
+            mergeBinding(ubo.set, ubo.binding,
+                         EPipelineDescriptorType::UniformBuffer,
+                         1, res.stage, ubo.name);
+        }
+        // Sampled images → CombinedImageSampler descriptor type
+        for (const auto& img : res.sampledImages) {
+            mergeBinding(img.set, img.binding,
+                         EPipelineDescriptorType::CombinedImageSampler,
+                         img.arraySize, res.stage, img.name);
+        }
+    }
+
+    // Group bindings by set index and build DescriptorSetLayoutDesc
+    std::map<uint32_t, DescriptorSetLayoutDesc> setMap;
+    for (const auto& [key, info] : bindingMap) {
+        auto& dsl = setMap[key.set];
+        dsl.set   = static_cast<int32_t>(key.set);
+        dsl.label = std::format("AutoDSL_Set{}", key.set);
+        dsl.bindings.push_back(DescriptorSetLayoutBinding{
+            .binding         = key.binding,
+            .descriptorType  = info.type,
+            .descriptorCount = info.descriptorCount,
+            .stageFlags      = info.stageFlags,
+        });
+    }
+
+    // Sort by set index and produce final vector
+    for (auto& [setIdx, dsl] : setMap) {
+        // Sort bindings within each set
+        std::ranges::sort(dsl.bindings, [](const auto& a, const auto& b) {
+            return a.binding < b.binding;
+        });
+        result.descriptorSetLayouts.push_back(std::move(dsl));
+    }
+
+    // -----------------------------------------------------------
+    // 3. Vertex Inputs: extract from the vertex stage
+    // -----------------------------------------------------------
+    for (const auto& res : stageResources) {
+        if (res.stage == EShaderStage::Vertex) {
+            result.vertexInputs = res.inputs;
+            break;
+        }
+    }
+
+    return result;
 }
 
 // ---------------------------------------------------------------------------
