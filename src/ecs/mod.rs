@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use bytemuck::Pod;
+mod dense_map;
 
 /**
  * A simple ECS (Entity-Component-System) implementation.

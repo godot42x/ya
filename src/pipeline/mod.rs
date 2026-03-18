@@ -36,4 +36,5 @@ pub trait CommonPipeline {
     fn init(&mut self, init_func: impl Fn(&mut Self)) {
         init_func(self);
     }
+    fn recreate(&mut self, device: &wgpu::Device, textures: &TextureSet) {}
 }

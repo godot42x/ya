@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, path::PathBuf, rc::Rc};
 
-use assimp::import::Importer;
+// use assimp::import::Importer;
 use bytemuck::{Pod, Zeroable};
 use gltf::json::path;
 use log::{error, info, warn};
@@ -9,9 +9,6 @@ use wgpu::{naga, util::DeviceExt};
 use crate::pipeline::pl_3d;
 
 pub struct AssetManager {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-
     pub models: HashMap<String, Rc<Model>>,
     pub textures: HashMap<String, Rc<wgpu::Texture>>,
     // leave here for future use: reflection, custom shaders, etc.
@@ -26,7 +23,7 @@ pub trait CommonVertex {
     fn buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a>;
 }
 
-pub trait CommonPushConstant: bytemuck::Pod {
+pub trait CommonImmediateData: bytemuck::Pod {
     fn to_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
@@ -40,18 +37,22 @@ pub struct Mesh {
 }
 
 impl AssetManager {
-    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+    pub fn new() -> Self {
         Self {
-            device,
-            queue,
             models: HashMap::new(),
             textures: HashMap::new(),
             shader_sources: HashMap::new(),
         }
     }
 
-    pub fn load_model(&mut self, name: &str, path: &PathBuf) -> Option<Rc<Model>> {
-        match Model::load(&self.device, &self.queue, path) {
+    pub fn load_model(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        name: &str,
+        path: &PathBuf,
+    ) -> Option<Rc<Model>> {
+        match Model::load(device, queue, path) {
             Ok(model) => {
                 self.models.insert(name.to_string(), Rc::new(model));
                 info!(
@@ -68,7 +69,13 @@ impl AssetManager {
         }
     }
 
-    pub fn load_texture(&mut self, name: &str, path: &PathBuf) -> Option<Rc<wgpu::Texture>> {
+    pub fn load_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        name: &str,
+        path: &PathBuf,
+    ) -> Option<Rc<wgpu::Texture>> {
         let f = File::open(path);
         if f.is_err() {
             error!("Failed to open texture file: {}", path.display());
@@ -91,7 +98,7 @@ impl AssetManager {
         let img = img.unwrap().to_rgba8();
         let dimensions = img.dimensions();
 
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&format!("Texture {}", name)),
             size: wgpu::Extent3d {
                 width: dimensions.0,
@@ -106,7 +113,7 @@ impl AssetManager {
             view_formats: &[],
         });
 
-        self.queue.write_texture(
+        queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
@@ -161,42 +168,42 @@ impl Model {
 
         info!("File extension: {}", extension);
 
-        info!("Try to using assimp library to load");
+        // info!("Try to using assimp library to load");
         // 创建 assimp 导入器并设置后处理标志
-        let mut importer = Importer::new();
+        // let mut importer = Importer::new();
 
-        // 设置导入标志以提高兼容性
-        importer.triangulate(true);
-        importer.join_identical_vertices(true);
-        importer.generate_normals(|x| x.enable = true);
+        // // 设置导入标志以提高兼容性
+        // importer.triangulate(true);
+        // importer.join_identical_vertices(true);
+        // importer.generate_normals(|x| x.enable = true);
 
-        let ret = importer.read_file(path.to_str().unwrap());
-        if ret.is_ok() {
-            // 尝试读取文件
-            let scene = importer.read_file(path.to_str().unwrap()).map_err(|e| {
-                let error_msg =
-                    format!("Failed to load mesh from file '{}': {}", path.display(), e);
-                error!("{}", error_msg);
-                error_msg
-            })?;
+        // let ret = importer.read_file(path.to_str().unwrap());
+        // if ret.is_ok() {
+        //     // 尝试读取文件
+        //     let scene = importer.read_file(path.to_str().unwrap()).map_err(|e| {
+        //         let error_msg =
+        //             format!("Failed to load mesh from file '{}': {}", path.display(), e);
+        //         error!("{}", error_msg);
+        //         error_msg
+        //     })?;
 
-            let mut meshes = Vec::new();
+        //     let mut meshes = Vec::new();
 
-            // 处理场景中的每个网格
-            for (i, mesh) in scene.mesh_iter().enumerate() {
-                info!(
-                    "Processing mesh {}: {} vertices, {} faces",
-                    i, mesh.num_vertices, mesh.num_faces
-                );
+        //     // 处理场景中的每个网格
+        //     for (i, mesh) in scene.mesh_iter().enumerate() {
+        //         info!(
+        //             "Processing mesh {}: {} vertices, {} faces",
+        //             i, mesh.num_vertices, mesh.num_faces
+        //         );
 
-                let m = Mesh::from_raw_mesh(mesh, device, queue)?;
-                meshes.push(m);
-            }
+        //         let m = Mesh::from_raw_mesh(mesh, device, queue)?;
+        //         meshes.push(m);
+        //     }
 
-            info!("Successfully loaded {} meshes", meshes.len());
-            return Ok(Self { meshes });
-        }
-        warn!("Assimp failed to load the model, falling back to format-specific loader");
+        //     info!("Successfully loaded {} meshes", meshes.len());
+        //     return Ok(Self { meshes });
+        // }
+        // warn!("Assimp failed to load the model, falling back to format-specific loader");
 
         // 根据文件扩展名选择加载器
         match extension.as_str() {
@@ -341,94 +348,94 @@ impl Mesh {
         }
     }
 
-    fn from_raw_mesh(
-        mesh: assimp::scene::Mesh,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> Result<Self, String> {
-        let vertices: Vec<pl_3d::Vertex> = mesh
-            .vertex_iter()
-            .into_iter()
-            .zip(mesh.normal_iter().into_iter())
-            .zip(mesh.texture_coords_iter(0).into_iter())
-            .map(|((v, n), tex)| {
-                return pl_3d::Vertex {
-                    position: [v.x, v.y, v.z],
-                    color: [1.0, 1.0, 1.0, 1.0], // Default white color
-                    normal: [n.x, n.y, n.z],
-                    uv: [tex.x, tex.y],
-                };
-            })
-            .collect();
+    // fn from_raw_mesh(
+    //     mesh: assimp::scene::Mesh,
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    // ) -> Result<Self, String> {
+    //     let vertices: Vec<pl_3d::Vertex> = mesh
+    //         .vertex_iter()
+    //         .into_iter()
+    //         .zip(mesh.normal_iter().into_iter())
+    //         .zip(mesh.texture_coords_iter(0).into_iter())
+    //         .map(|((v, n), tex)| {
+    //             return pl_3d::Vertex {
+    //                 position: [v.x, v.y, v.z],
+    //                 color: [1.0, 1.0, 1.0, 1.0], // Default white color
+    //                 normal: [n.x, n.y, n.z],
+    //                 uv: [tex.x, tex.y],
+    //             };
+    //         })
+    //         .collect();
 
-        let size = mesh.num_vertices as usize * std::mem::size_of::<pl_3d::Vertex>();
+    //     let size = mesh.num_vertices as usize * std::mem::size_of::<pl_3d::Vertex>();
 
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Mesh Buffer"),
-            size: size as u64,
-            usage: wgpu::BufferUsages::VERTEX,
-            mapped_at_creation: false,
-        });
+    //     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+    //         label: Some("Mesh Buffer"),
+    //         size: size as u64,
+    //         usage: wgpu::BufferUsages::VERTEX,
+    //         mapped_at_creation: false,
+    //     });
 
-        let stage_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Mesh Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::COPY_SRC,
-        });
+    //     let stage_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    //         label: Some("Mesh Vertex Buffer"),
+    //         contents: bytemuck::cast_slice(&vertices),
+    //         usage: wgpu::BufferUsages::COPY_SRC,
+    //     });
 
-        let mut indices: Vec<u32> = vec![];
-        mesh.face_iter().for_each(|face| {
-            unsafe { std::slice::from_raw_parts(face.indices, face.num_indices as usize) }
-                .iter()
-                .for_each(|idx| {
-                    indices.push(idx.clone());
-                });
-        });
+    //     let mut indices: Vec<u32> = vec![];
+    //     mesh.face_iter().for_each(|face| {
+    //         unsafe { std::slice::from_raw_parts(face.indices, face.num_indices as usize) }
+    //             .iter()
+    //             .for_each(|idx| {
+    //                 indices.push(idx.clone());
+    //             });
+    //     });
 
-        let size = indices.len() * std::mem::size_of::<u32>();
+    //     let size = indices.len() * std::mem::size_of::<u32>();
 
-        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Mesh Index Buffer"),
-            size: size as u64,
-            usage: wgpu::BufferUsages::INDEX,
-            mapped_at_creation: false,
-        });
+    //     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+    //         label: Some("Mesh Index Buffer"),
+    //         size: size as u64,
+    //         usage: wgpu::BufferUsages::INDEX,
+    //         mapped_at_creation: false,
+    //     });
 
-        let stage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Mesh Index Staging Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::COPY_SRC,
-        });
+    //     let stage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    //         label: Some("Mesh Index Staging Buffer"),
+    //         contents: bytemuck::cast_slice(&indices),
+    //         usage: wgpu::BufferUsages::COPY_SRC,
+    //     });
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Mesh Command Encoder"),
-        });
-        encoder.copy_buffer_to_buffer(
-            &stage_buf,
-            0,
-            &vertex_buffer,
-            0,
-            (vertices.len() * std::mem::size_of::<pl_3d::Vertex>()) as u64,
-        );
-        encoder.copy_buffer_to_buffer(&stage_buffer, 0, &index_buffer, 0, size as u64);
+    //     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+    //         label: Some("Mesh Command Encoder"),
+    //     });
+    //     encoder.copy_buffer_to_buffer(
+    //         &stage_buf,
+    //         0,
+    //         &vertex_buffer,
+    //         0,
+    //         (vertices.len() * std::mem::size_of::<pl_3d::Vertex>()) as u64,
+    //     );
+    //     encoder.copy_buffer_to_buffer(&stage_buffer, 0, &index_buffer, 0, size as u64);
 
-        queue.submit([encoder.finish()]);
-        let mesh = Mesh {
-            vertex_buffer,
-            index_count: indices.len() as u32,
-            index_buffer,
-            vertex_count: vertices.len() as u32,
-        };
-        Ok(mesh)
-    }
+    //     queue.submit([encoder.finish()]);
+    //     let mesh = Mesh {
+    //         vertex_buffer,
+    //         index_count: indices.len() as u32,
+    //         index_buffer,
+    //         vertex_count: vertices.len() as u32,
+    //     };
+    //     Ok(mesh)
+    // }
 }
 
 impl Model {
-    pub fn draw<T: CommonPushConstant>(&self, rp: &mut wgpu::RenderPass<'_>, pc: &T) {
+    pub fn draw<T: CommonImmediateData>(&self, rp: &mut wgpu::RenderPass<'_>, pc: &T) {
         for mesh in &self.meshes {
             rp.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             rp.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            rp.set_push_constants(wgpu::ShaderStages::all(), 0, pc.to_bytes());
+            rp.set_immediates(0, pc.to_bytes());
             rp.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
     }

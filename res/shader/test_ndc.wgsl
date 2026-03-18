@@ -16,7 +16,7 @@ struct PushConstant {
     proj: mat4x4<f32>,
 }
 
-var<push_constant> pc: PushConstant;
+var<immediate> pc: PushConstant;
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, vi: VertexInput) -> VertexOutput {

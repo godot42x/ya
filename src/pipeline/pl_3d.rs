@@ -6,11 +6,11 @@ use std::{
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, PipelineCompilationOptions, PushConstantRange,
+    BindGroupLayoutEntry, PipelineCompilationOptions,
 };
 
 use crate::{
-    asset::{CommonPushConstant, CommonVertex},
+    asset::{CommonImmediateData, CommonVertex},
     pipeline::{pl_2d, CommonPipeline, TextureSet},
 };
 
@@ -26,7 +26,7 @@ pub struct Vertex {
 
 #[repr(C, align(16))]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct PushConstant {
+pub struct ImmediateData {
     pub model: glam::Mat4,
     pub color: glam::Vec4,
 }
@@ -44,7 +44,7 @@ pub struct UniformsPerObject {
     pub model: glam::Mat4,
 }
 
-impl CommonPushConstant for PushConstant {}
+impl CommonImmediateData for ImmediateData {}
 
 pub struct Material {
     pub tex_view: Option<wgpu::TextureView>,
@@ -63,6 +63,20 @@ pub struct Pipeline {
 
     pub material: Material,
     frame_ubo: wgpu::Buffer,
+}
+
+struct DSResources {
+    // set 0 per frame
+    pub frame_dsl: wgpu::BindGroupLayout,
+    pub frame_ds_vec: Vec<wgpu::BindGroup>,
+
+    // set 1 per material
+    pub material_dsl: wgpu::BindGroupLayout,
+    pub material_ds_vec: Vec<wgpu::BindGroup>,
+
+    // set 2 per object/mesh
+    pub object_dsl: wgpu::BindGroupLayout,
+    pub object_ds_vec: Vec<wgpu::BindGroup>,
 }
 
 impl CommonVertex for Vertex {
@@ -161,10 +175,7 @@ impl CommonPipeline for Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&dsl_0_perframe, &dsl_1_perobject, &dsl_2_per_resouce],
-            push_constant_ranges: &[PushConstantRange {
-                stages: wgpu::ShaderStages::all(),
-                range: 0..std::mem::size_of::<PushConstant>() as u32,
-            }],
+            immediate_size: std::mem::size_of::<ImmediateData>() as u32,
         });
 
         let pl = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -207,7 +218,7 @@ impl CommonPipeline for Pipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

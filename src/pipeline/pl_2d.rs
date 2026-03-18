@@ -1,7 +1,7 @@
 use std::mem::offset_of;
 
 use bytemuck::{Pod, Zeroable};
-use wgpu::{include_wgsl, PipelineCompilationOptions, PushConstantRange};
+use wgpu::{include_wgsl, PipelineCompilationOptions};
 
 use crate::{
     asset::CommonVertex,
@@ -18,7 +18,7 @@ pub struct Vertex {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct PushConstant {
+pub struct ImmediateData {
     pub proj: glam::Mat4,
 }
 pub struct Pipeline {
@@ -63,10 +63,7 @@ impl CommonPipeline for Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("2D Pipeline Layout"),
             bind_group_layouts: &[],
-            push_constant_ranges: &[PushConstantRange {
-                stages: wgpu::ShaderStages::all(),
-                range: 0..std::mem::size_of::<PushConstant>() as u32,
-            }],
+            immediate_size: std::mem::size_of::<ImmediateData>() as u32,
         });
 
         let pl = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -110,7 +107,7 @@ impl CommonPipeline for Pipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

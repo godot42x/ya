@@ -38,7 +38,7 @@ var diffuse_sampler: sampler;
 @group(2) @binding(1)
 var diffuse_texture: texture_2d<f32>;
 
-var<push_constant> pc: PushConstant;
+var<immediate> pc: PushConstant;
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32, vi: VertexInput) -> VertexOutput {

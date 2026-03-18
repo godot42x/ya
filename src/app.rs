@@ -1,12 +1,7 @@
 use std::{path::PathBuf, rc::Rc, sync::Arc};
 
-use assimp::Mesh;
 pub(crate) use log::info;
-use wgpu::{
-    naga::{self, valid},
-    util::DeviceExt,
-    Color,
-};
+use wgpu::{naga, util::DeviceExt};
 use winit::{
     application::ApplicationHandler,
     event_loop,
@@ -19,7 +14,7 @@ use crate::{
     camera::{Camera, OrthorCamera},
     geo,
     pipeline::pl_2d,
-    state::State,
+    state::{RenderTechnique, Renderer},
 };
 pub struct AppSettings {
     pub title: String,
@@ -33,21 +28,30 @@ pub(crate) enum CustomEvent {
 
 pub struct AppContext {
     pub asset_manager: Option<AssetManager>,
+    pub mouse_pos: (f32, f32),
+    pub models: Vec<Rc<Model>>,
+    pub vertices: Vec<pl_2d::Vertex>,
+    pub(crate) camera: Box<dyn Camera>,
+    pub(crate) ortho_camera: OrthorCamera,
+    pub selected_texture: String,
+    pub texture_dirty: bool,
 }
 
 pub(crate) struct RenderContext {
     pub vertices: Vec<pl_2d::Vertex>,
-    pub indices: Vec<u16>,
-    pub mouse_pos: (f32, f32),
     pub models: Vec<Rc<Model>>,
-    pub(crate) camera: Box<dyn Camera>,
-    pub(crate) ortho_camera: OrthorCamera,
+    pub cube_model: Option<Rc<Model>>,
+    pub camera_view: glam::Mat4,
+    pub camera_proj: glam::Mat4,
+    pub ortho_proj: glam::Mat4,
+    pub pending_texture_view: Option<wgpu::TextureView>,
+    pub texture_dirty: bool,
 }
 
 pub struct App {
     settings: AppSettings,
 
-    render_state: Option<State>,
+    renderer: Option<Renderer>,
 
     pub app_ctx: AppContext,
     pub render_ctx: RenderContext,
@@ -61,7 +65,7 @@ pub struct App {
 impl App {
     pub fn new(settings: AppSettings) -> Self {
         Self {
-            render_state: None,
+            renderer: None,
             // missed_size: Arc::new(PhysicalSize::new(
             //     settings.width.clone(),
             //     settings.height.clone(),
@@ -69,12 +73,9 @@ impl App {
             last_frame_time: std::time::Instant::now(),
             app_ctx: AppContext {
                 asset_manager: None,
-            },
-            render_ctx: RenderContext {
-                vertices: vec![],
-                indices: vec![],
                 mouse_pos: (0.0, 0.0),
                 models: vec![],
+                vertices: vec![],
                 camera: Box::new(crate::camera::FreeCamera {
                     pos: glam::Vec3::new(0.0, 0.0, -5.0),
                     rotation: glam::Vec3::new(0.0, 0.0, 0.0),
@@ -102,6 +103,18 @@ impl App {
                     z_near: 0.0,
                     z_far: 1.0,
                 },
+                selected_texture: "arch".to_string(),
+                texture_dirty: true,
+            },
+            render_ctx: RenderContext {
+                vertices: vec![],
+                models: vec![],
+                cube_model: None,
+                camera_view: glam::Mat4::IDENTITY,
+                camera_proj: glam::Mat4::IDENTITY,
+                ortho_proj: glam::Mat4::IDENTITY,
+                pending_texture_view: None,
+                texture_dirty: false,
             },
             settings: settings,
             space_count: 0,
@@ -110,6 +123,27 @@ impl App {
 
     pub fn get_asset_manager(&mut self) -> &mut AssetManager {
         self.app_ctx.asset_manager.as_mut().unwrap()
+    }
+
+    fn sync_render_context(&mut self) {
+        self.render_ctx.vertices = self.app_ctx.vertices.clone();
+        self.render_ctx.models = self.app_ctx.models.clone();
+        self.render_ctx.camera_view = self.app_ctx.camera.get_view();
+        self.render_ctx.camera_proj = self.app_ctx.camera.get_projection();
+        self.render_ctx.ortho_proj = self.app_ctx.ortho_camera.get_projection();
+
+        if let Some(asset_manager) = &self.app_ctx.asset_manager {
+            self.render_ctx.cube_model = asset_manager.models.get("cube").cloned();
+
+            if self.app_ctx.texture_dirty {
+                if let Some(tex) = asset_manager.textures.get(&self.app_ctx.selected_texture) {
+                    self.render_ctx.pending_texture_view =
+                        Some(tex.create_view(&wgpu::TextureViewDescriptor::default()));
+                    self.render_ctx.texture_dirty = true;
+                }
+                self.app_ctx.texture_dirty = false;
+            }
+        }
     }
 }
 
@@ -141,37 +175,54 @@ impl ApplicationHandler<CustomEvent> for App {
                 //     }
                 // });
             }else{
-                let state = pollster::block_on(State::new(window.clone()));
-                self.render_state = Some(state);
+                let renderer = pollster::block_on(Renderer::new(window.clone()));
+                self.renderer = Some(renderer);
             }
         }
 
-        let asset_manager = AssetManager::new(
-            self.render_state.as_ref().unwrap().device.clone(),
-            self.render_state.as_ref().unwrap().queue.clone(),
-        );
+        let asset_manager = AssetManager::new();
         self.app_ctx.asset_manager = Some(asset_manager);
+
+        let (device, queue) = {
+            let renderer = self.renderer.as_ref().unwrap();
+            (renderer.device.clone(), renderer.queue.clone())
+        };
 
         let model = self
             .get_asset_manager()
-            .load_model("suzanne", &PathBuf::from("res/model/suzanne.glb"))
+            .load_model(
+                &device,
+                &queue,
+                "suzanne",
+                &PathBuf::from("res/model/suzanne.glb"),
+            )
             .unwrap();
 
         self.get_asset_manager()
-            .load_texture("tree", &PathBuf::from("res/texture/happy-tree.png"))
+            .load_texture(
+                &device,
+                &queue,
+                "tree",
+                &PathBuf::from("res/texture/happy-tree.png"),
+            )
             .expect("failed to load texture ");
         self.get_asset_manager()
-            .load_texture("arch", &PathBuf::from("res/texture/arch.png"))
+            .load_texture(
+                &device,
+                &queue,
+                "arch",
+                &PathBuf::from("res/texture/arch.png"),
+            )
             .expect("failed to load texture ");
 
-        self.render_ctx.models.push(model);
+        self.app_ctx.models.push(model);
 
-        if let (Some(state), Some(asset_manager)) =
-            (&mut self.render_state, &mut self.app_ctx.asset_manager)
+        if let (Some(renderer), Some(asset_manager)) =
+            (&mut self.renderer, &mut self.app_ctx.asset_manager)
         {
             {
-                let tex = state.device.create_texture_with_data(
-                    &state.queue,
+                let tex = renderer.device.create_texture_with_data(
+                    &renderer.queue,
                     &wgpu::TextureDescriptor {
                         label: Some("white texture"),
                         size: wgpu::Extent3d {
@@ -196,7 +247,7 @@ impl ApplicationHandler<CustomEvent> for App {
                 let (vertices, indices) = geo::make_cube();
 
                 let cube_mesh = crate::asset::Mesh {
-                    vertex_buffer: state.device.create_buffer_init(
+                    vertex_buffer: renderer.device.create_buffer_init(
                         &wgpu::util::BufferInitDescriptor {
                             label: Some("Cube Vertex Buffer"),
                             contents: bytemuck::cast_slice(&vertices),
@@ -204,7 +255,7 @@ impl ApplicationHandler<CustomEvent> for App {
                         },
                     ),
                     vertex_count: vertices.len() as u32,
-                    index_buffer: state.device.create_buffer_init(
+                    index_buffer: renderer.device.create_buffer_init(
                         &wgpu::util::BufferInitDescriptor {
                             label: Some("Cube Index Buffer"),
                             contents: bytemuck::cast_slice(&indices),
@@ -222,10 +273,7 @@ impl ApplicationHandler<CustomEvent> for App {
             }
         }
 
-        self.render_state
-            .as_mut()
-            .unwrap()
-            .post_init(&mut self.app_ctx);
+        self.sync_render_context();
 
         window.request_redraw();
         info!("Window created and state initialized"); // 添加调试
@@ -254,10 +302,11 @@ impl ApplicationHandler<CustomEvent> for App {
                 let dt = now.duration_since(self.last_frame_time).as_secs_f32();
                 self.last_frame_time = now;
 
-                self.render_ctx.camera.update(dt);
-                if let Some(state) = &mut self.render_state {
-                    state.render(&self.app_ctx, &self.render_ctx);
-                    state.window.request_redraw();
+                self.app_ctx.camera.update(dt);
+                self.sync_render_context();
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.render(&mut self.render_ctx);
+                    renderer.window.request_redraw();
                 }
             }
             WindowEvent::Resized(size) => {
@@ -266,36 +315,30 @@ impl ApplicationHandler<CustomEvent> for App {
                     // Minimized
                 }
 
-                if let Some(state) = &mut self.render_state {
-                    state.resize(*size);
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.resize(*size);
                 }
-                self.render_ctx.ortho_camera.resize(size.width, size.height);
-                self.render_ctx.camera.resize(size.width, size.height);
+                self.app_ctx.ortho_camera.resize(size.width, size.height);
+                self.app_ctx.camera.resize(size.width, size.height);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // println!("Cursor moved to: {:?}", position);
-                self.render_ctx.mouse_pos = (position.x as f32, position.y as f32);
+                self.app_ctx.mouse_pos = (position.x as f32, position.y as f32);
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 // info!("Mouse Input: {:?} {:?}", button, state);
                 if *button == winit::event::MouseButton::Left
                     && *state == winit::event::ElementState::Released
                 {
-                    let cur_pos = self.render_ctx.mouse_pos;
+                    let cur_pos = self.app_ctx.mouse_pos;
                     info!("Mouse Left Click at position: {:?}", cur_pos);
 
-                    self.render_ctx.vertices.push(pl_2d::Vertex {
+                    self.app_ctx.vertices.push(pl_2d::Vertex {
                         position: [cur_pos.0, cur_pos.1, 0.0],
                         color: [1.0, 0.0, 0.0, 1.0],
                         uv: [0.0, 0.0],
                     });
-                    let state = self.render_state.as_mut().unwrap();
-                    state.queue.write_buffer(
-                        &state.pipeline_2d.as_mut().unwrap().vertex_buffer,
-                        0,
-                        bytemuck::cast_slice(&self.render_ctx.vertices),
-                    );
-                    info!("Total vertices: {}", self.render_ctx.vertices.len());
+                    info!("Total vertices: {}", self.app_ctx.vertices.len());
                 }
             }
             WindowEvent::KeyboardInput {
@@ -314,24 +357,29 @@ impl ApplicationHandler<CustomEvent> for App {
                         }
                         self.space_count += 1;
                         info!("Space released, changing texture. {}", self.space_count);
-
-                        if let Some(state) = &mut self.render_state {
-                            if let Some(pl_3d) = &mut state.pipeline_3d {
-                                let tex = self
-                                    .app_ctx
-                                    .asset_manager
-                                    .as_ref()
-                                    .unwrap()
-                                    .textures
-                                    .get(if self.space_count % 2 == 0 {
-                                        "tree"
-                                    } else {
-                                        "arch"
-                                    })
-                                    .unwrap();
-                                let tv = tex.create_view(&wgpu::TextureViewDescriptor::default());
-                                pl_3d.material.set_texture_view(Some(tv));
-                            }
+                        self.app_ctx.selected_texture = if self.space_count % 2 == 0 {
+                            "tree".to_string()
+                        } else {
+                            "arch".to_string()
+                        };
+                        self.app_ctx.texture_dirty = true;
+                    }
+                    Key::Named(NamedKey::F1) => {
+                        if key_event.state.is_pressed() {
+                            return;
+                        }
+                        if let Some(renderer) = &mut self.renderer {
+                            renderer.set_technique(RenderTechnique::Forward);
+                            info!("Render technique switched to Forward");
+                        }
+                    }
+                    Key::Named(NamedKey::F2) => {
+                        if key_event.state.is_pressed() {
+                            return;
+                        }
+                        if let Some(renderer) = &mut self.renderer {
+                            renderer.set_technique(RenderTechnique::Deferred);
+                            info!("Render technique switched to Deferred (fallback active)");
                         }
                     }
                     _ => {
@@ -344,7 +392,7 @@ impl ApplicationHandler<CustomEvent> for App {
             }
         }
 
-        self.render_ctx.camera.on_window_event(&event);
+        self.app_ctx.camera.on_window_event(&event);
     }
 
     fn device_event(
@@ -353,7 +401,7 @@ impl ApplicationHandler<CustomEvent> for App {
         _device_id: winit::event::DeviceId,
         event: winit::event::DeviceEvent,
     ) {
-        self.render_ctx.camera.on_device_event(&event);
+        self.app_ctx.camera.on_device_event(&event);
         match event {
             winit::event::DeviceEvent::MouseMotion { delta: _ } => {
                 // println!("mouse move: {:?}", delta);
@@ -366,7 +414,7 @@ impl ApplicationHandler<CustomEvent> for App {
 fn validate_shader(name: &str, content: &str) {
     let mut v = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::PUSH_CONSTANT,
+        naga::valid::Capabilities::IMMEDIATES,
     );
 
     let module = naga::front::wgsl::parse_str(content)
