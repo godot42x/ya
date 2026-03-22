@@ -345,6 +345,47 @@ def _file_sub_namespace(slang_file: Path, slang_root: Path | None) -> tuple[str,
     return dot_stem, ns_suffix
 
 
+def _detect_entry_and_stage(slang_source: str, preferred_entry: str) -> tuple[str, str] | None:
+    """Detect a valid (entry, stage) pair from slang source.
+
+    Priority:
+      1) The user-provided preferred entry name if present in source.
+      2) Common defaults (vertMain/fragMain/geomMain/compMain).
+      3) Any [shader("stage")] function declaration discovered by regex.
+    """
+    stage_by_entry = {
+        "vertMain": "vertex",
+        "fragMain": "fragment",
+        "geomMain": "geometry",
+        "compMain": "compute",
+    }
+
+    def has_func(name: str) -> bool:
+        return re.search(rf"\b{re.escape(name)}\s*\(", slang_source) is not None
+
+    if preferred_entry in stage_by_entry and has_func(preferred_entry):
+        return preferred_entry, stage_by_entry[preferred_entry]
+
+    for entry, stage in stage_by_entry.items():
+        if has_func(entry):
+            return entry, stage
+
+    # Generic fallback: match [shader("...")] <ret> <name>(...)
+    # Supports simple signatures used in this repo.
+    pattern = re.compile(
+        r"\[\s*shader\s*\(\s*\"(?P<stage>[a-zA-Z_]+)\"\s*\)\s*\]"
+        r"\s*[\w:<>\[\]\s]+?\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
+        re.MULTILINE,
+    )
+    for m in pattern.finditer(slang_source):
+        stage = m.group("stage").lower()
+        name = m.group("name")
+        if stage in {"vertex", "fragment", "geometry", "compute"}:
+            return name, stage
+
+    return None
+
+
 def _process_one_slang(
     slang_file: Path,
     output_dir: Path,
@@ -360,12 +401,25 @@ def _process_one_slang(
     header_path = output_dir / f"{dot_stem}.slang.h"
     stamp_path = output_dir / f"{basename}.stamp"
     spv_path = output_dir / f"{basename}.spv"
+    slang_source = slang_file.read_text(encoding="utf-8")
+
+    if "@gen-skip" in slang_source:
+        print(f"[slang-gen] {basename} marked with @gen-skip, skipping.")
+        stamp_path.touch()
+        return
+
+    entry_stage = _detect_entry_and_stage(slang_source, entry)
+    if entry_stage is None:
+        print(f"[slang-gen] {basename} has no usable shader entry, skipping.")
+        stamp_path.touch()
+        return
+    resolved_entry, resolved_stage = entry_stage
 
     src_mtime = slang_file.stat().st_mtime
     if not force:
         # Skip if header is newer than source (success path)
         if header_path.exists() and src_mtime <= header_path.stat().st_mtime:
-            print(f"[slang-gen] {basename} is up-to-date, skipping.")
+            # print(f"[slang-gen] {basename} is up-to-date, skipping.")
             return
         # Skip if stamp is newer than source (previous attempt unchanged, e.g. known slangc failure)
         if stamp_path.exists() and src_mtime <= stamp_path.stat().st_mtime:
@@ -379,8 +433,8 @@ def _process_one_slang(
         "slangc",
         str(slang_file),
         "-reflection-json", str(json_path),
-        "-entry", entry,
-        "-stage", "vertex",
+        "-entry", resolved_entry,
+        "-stage", resolved_stage,
         "-target", "spirv",
         "-o", str(spv_path),
     ]
@@ -401,7 +455,6 @@ def _process_one_slang(
         stamp_path.touch()
         return
 
-    slang_source = slang_file.read_text(encoding="utf-8")
     full_ns = f"{namespace}::{ns_suffix}" if ns_suffix else namespace
     generate_header(str(json_path), str(header_path), full_ns, slang_source)
     print(f"[slang-gen] Generated: {header_path}")

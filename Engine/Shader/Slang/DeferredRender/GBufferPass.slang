@@ -14,7 +14,7 @@ struct VertexOutput{
     float3 pos :Position;
     float2 uv   :UV;
     float3 normal :Normal;
-    // mat3 TBN;
+    float3x3 TBN;
 };
 
 
@@ -23,7 +23,25 @@ struct PushConstants
     float4x4 modelMat;
 };
 
+struct TextureParams{
+    bool bEnable;
+    mat3 uvTransform;
+};
+
+
+struct ParamsData{
+    TextureParams textures[ETextureSlot::Count];
+};
+
+
 [[vk::push_constant]] PushConstants pc;
+
+[[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
+[[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
+[[vk::binding(2, 1)]]  Sampler2D  uTexNormal;
+
+[[vk::binding(0, 2)]] ConstantBuffer<ParamsData,Std140DataLayout> uParams;
+
 
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
@@ -33,10 +51,10 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     OUT.uv = IN.uv;
     OUT.sv_position = pos;
 
-    // vec3 T = normalize(pc.modelMat * vec4(aTangent, 0.0));
-    // vec3 N = normalize (pc.modelMat * vec4(aNormal, 0.0));
-    // vec3 B = cross(N,T);
-    // mat3 TBN = mat3(T, B, N);
+    // float3 T = normalize( (pc.modelMat * float4(IN.tangent, 0.0)).xyz);
+    // float3 N = normalize( (pc.modelMat * float4(IN.normal, 0.0)).xyz);
+    // float3 B = cross(N,T);
+    // float3x3 TBN = float3x3(T, B, N);
     // TBN =  transpose(TBN); // now TBN is the TBN^-1
     // OUT.TBN = TBN;
 
@@ -56,16 +74,19 @@ struct FragmentOutput{
 };
 
 
-[[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
-[[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
 
 
 [shader("fragment")]
-void fragMain(in VertexInput IN, out FragmentOutput OUT)
+void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
     OUT.pos = IN.pos;
-    OUT.normal = normalize(IN.normal);
+
+    // normal
+    // vec2 uv = (IN.TBN *  vec3(IN.uv, 0)).xy;
+    // OUT.normal =  normalize(uTexNormal.Sample(uv).rgb * 2.0 - 1.0); // normal map is in [0,1], need to remap to [-1,1]
+    OUT.normal = IN.normal;
+
     float3 albedo = uTexDiffuse.Sample(IN.uv).rgb;
-    float specular = uTexSpecular.Sample(IN.uv).r;
+    float specular = uTexSpecular.Sample(IN.uv).r; // TODO: no specular texture use 1.0 by default?
     OUT.albedoSpecular = float4(albedo, specular);
 }

@@ -1,8 +1,14 @@
 #include "DeferredRenderPipeline.h"
 #include "Runtime/App/App.h"
 
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
+#include "Core/Math/Math.h"
+#include "Render/Material/MaterialFactory.h"
+#include "Render/Material/PhongMaterial.h"
+#include "Resource/TextureLibrary.h"
 
 #include <imgui.h>
 namespace ya
@@ -11,11 +17,7 @@ namespace ya
 
 void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
 {
-    // Flush dirty pipeline at frame begin (auto-recreate if GUI changed params last frame)
-    if (_bGBufferPipelineDirty) {
-        _bGBufferPipelineDirty = false;
-        _gBufferPassResult     = PipelineBuilder::create(_render, _gBufferCreateDesc);
-    }
+    _gBufferPipeline->beginFrame();
 
     auto app   = App::get();
     auto scene = app->getSceneManager()->getActiveScene();
@@ -41,17 +43,63 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
     });
 
 
-    cmdBuf->bindPipeline(_gBufferPassResult.pipeline.get());
-    // _gBufferPassResult.pipelineLayout
+    cmdBuf->bindPipeline(_gBufferPipeline.get());
     // cmdBuf->bindDescriptorSets()
     using PC = slang_types::DeferredRender::GBufferPass::PushConstants;
-    auto pl  = _gBufferPassResult.pipelineLayout;
+    auto pl  = _gBufferPipelineLayout;
 
-    for (const auto& [entity, mc, tc] :
-         scene->getRegistry().view<MeshComponent, TransformComponent>().each())
+    uint32_t materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
+    bool     force         = _matPool.ensureCapacity(materialCount);
+
+    auto view = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
+    for (const auto& [entity, mc, tc, pmc] : view.each())
     {
+        PhongMaterial* material = pmc.getMaterial();
+        if (!material || material->getIndex() < 0)
+            continue;
+
+        uint32_t idx = static_cast<uint32_t>(material->getIndex());
+
+        _matPool.flushDirty(
+            material,
+            force,
+            [](IBuffer* ubo, PhongMaterial* mat) {
+                using PD = slang_types::DeferredRender::GBufferPass::ParamsData;
+                PD params{};
+                const auto& src = mat->getParams().textureParams;
+                for (int i = 0; i < PhongMaterial::EResource::Count; ++i) {
+                    params.textures[i].bEnable     = src[i].bEnable.value ? 1u : 0u;
+                    params.textures[i].uvTransform = src[i].uvTransform.value;
+                }
+                ubo->writeData(&params, sizeof(PD), 0);
+            },
+            [this](DescriptorSetHandle ds, PhongMaterial* mat) {
+                auto& texLib      = TextureLibrary::get();
+                auto  getImageInfo = [&](TextureView* tv) -> DescriptorImageInfo {
+
+                    auto ivh = (tv && tv->isValid())
+                                   ? tv->texture->getImageView()->getHandle()
+                                   : texLib.getWhiteTexture()->getImageView()->getHandle();
+                    auto sh  = (tv && tv->isValid())
+                                   ? tv->sampler->getHandle()
+                                   : texLib.getDefaultSampler()->getHandle();
+                    return DescriptorImageInfo(ivh, sh, EImageLayout::ShaderReadOnlyOptimal);
+                };
+                _render->getDescriptorHelper()->updateDescriptorSets(
+                    {
+                        IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler,
+                                                           {getImageInfo(mat->getTextureView(PhongMaterial::EResource::DiffuseTexture))}),
+                        IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler,
+                                                           {getImageInfo(mat->getTextureView(PhongMaterial::EResource::SpecularTexture))}),
+                    },
+                    {}); });
+
+        // set 1 = resource (textures), set 2 = params UBO
+        cmdBuf->bindDescriptorSets(pl.get(), 1, {_matPool.resourceDS(idx), _matPool.paramDS(idx)});
+
         PC pc{
-            .modelMat = tc.getTransform()};
+            .modelMat = tc.getTransform(),
+        };
         cmdBuf->pushConstants(pl.get(),
                               EShaderStage::Vertex,
                               0,
@@ -64,70 +112,13 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
     cmdBuf->endRendering({.renderTarget = _gBufferRT.get()});
 }
 
-void DeferredRenderPipeline::createGBufferPipeline()
-{
-    // The entire pipeline is derived from the shader:
-    //   - Push constants: [[vk::push_constant]] PushConstants in GBufferPass.slang
-    //   - Descriptor sets: [[vk::binding(0, 1)]] Sampler2D etc.
-    //   - Vertex inputs:   VertexInput struct
-    _gBufferCreateDesc = PipelineBuilder::CreateDesc{
-        .shaderName        = "DeferredRender/GBufferPass.slang",
-        .renderTarget      = _gBufferRT.get(),
-        .depthStencilState = DepthStencilState{
-            .bDepthTestEnable  = true,
-            .bDepthWriteEnable = true,
-            .depthCompareOp    = ECompareOp::Less,
-        },
-    };
-    _gBufferPassResult = PipelineBuilder::create(_render, _gBufferCreateDesc);
-}
 
 void DeferredRenderPipeline::renderGUI()
 {
     if (!ImGui::CollapsingHeader("GBuffer Pipeline")) {
         return;
     }
-
-    bool dirty = false;
-
-    // -- Rasterization State --
-    if (ImGui::TreeNode("Rasterization")) {
-        int cullMode = static_cast<int>(_gBufferCreateDesc.rasterizationState.cullMode);
-        if (ImGui::Combo("Cull Mode", &cullMode, "None\0Front\0Back\0")) {
-            _gBufferCreateDesc.rasterizationState.cullMode = static_cast<ECullMode::T>(cullMode);
-            dirty                                          = true;
-        }
-
-        int polyMode = static_cast<int>(_gBufferCreateDesc.rasterizationState.polygonMode);
-        if (ImGui::Combo("Polygon Mode", &polyMode, "Fill\0Line\0Point\0")) {
-            _gBufferCreateDesc.rasterizationState.polygonMode = static_cast<EPolygonMode::T>(polyMode);
-            dirty                                             = true;
-        }
-
-        ImGui::TreePop();
-    }
-
-    // -- Depth Stencil State --
-    if (ImGui::TreeNode("Depth Stencil")) {
-        if (ImGui::Checkbox("Depth Test", &_gBufferCreateDesc.depthStencilState.bDepthTestEnable)) {
-            dirty = true;
-        }
-        if (ImGui::Checkbox("Depth Write", &_gBufferCreateDesc.depthStencilState.bDepthWriteEnable)) {
-            dirty = true;
-        }
-
-        int depthOp = static_cast<int>(_gBufferCreateDesc.depthStencilState.depthCompareOp);
-        if (ImGui::Combo("Depth Compare Op", &depthOp, "Never\0Less\0Equal\0LessOrEqual\0Greater\0NotEqual\0GreaterOrEqual\0Always\0")) {
-            _gBufferCreateDesc.depthStencilState.depthCompareOp = static_cast<ECompareOp::T>(depthOp);
-            dirty                                               = true;
-        }
-
-        ImGui::TreePop();
-    }
-
-    if (dirty) {
-        _bGBufferPipelineDirty = true;
-    }
+    _gBufferPipeline->renderGUI();
 }
 
 } // namespace ya

@@ -1,6 +1,14 @@
 
+module Helper;
 
-float3x3 inverse3x3(float3x3 m)
+public typealias mat3 = float3x3;
+public typealias mat4 = float4x4;
+public typealias vec2 = float2;
+public typealias vec3 = float3;
+public typealias vec4 = float4;
+
+
+public float3x3 inverse3x3(float3x3 m)
 {
     float3 c0 = m[0], c1 = m[1], c2 = m[2];
     float3 t0 = cross(c1, c2);
@@ -15,3 +23,22 @@ float3x3 inverse3x3(float3x3 m)
         float3(t0.z, t1.z, t2.z) * invDet
     );
 }
+
+// typedef matrix<float,4,4> float4x4;
+// support 
+public inline float4 operator*(float4x4 mat, float4 vec)
+{
+    return mul(mat, vec);
+}
+public inline float3 operator*(float3x3 mat, float3 vec)
+{
+    return mul(mat, vec);
+}
+
+enum  ETextureSlot{
+    Diffuse = 0,
+    Specular,
+    Reflection,
+    Normal,
+    Count
+};
