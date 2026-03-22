@@ -1,6 +1,6 @@
 #include "App.h"
 
-#include "Runtime/App/ForwardRenderPipeline.h"
+#include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
 #include "Core/Debug/RenderDocCapture.h"
 
@@ -13,8 +13,8 @@ void App::onSceneViewportResized(Rect2D rect)
     float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
     camera.setAspectRatio(aspectRatio);
 
-    if (_pipeline) {
-        _pipeline->onViewportResized(rect);
+    if (_forwardPipeline) {
+        _forwardPipeline->onViewportResized(rect);
     }
 }
 

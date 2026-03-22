@@ -1,7 +1,16 @@
 
 #include "App.h"
-#include "Runtime/App/ForwardRenderPipeline.h"
 #include "Core/Debug/RenderDocCapture.h"
+#include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
+
+#include "ImGuiHelper.h"
+#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/Swapchain.h"
+#include "Resource/AssetManager.h"
+#include "Resource/FontManager.h"
+#include "Resource/PrimitiveMeshCache.h"
+#include "Resource/ResourceRegistry.h"
+#include "Resource/TextureLibrary.h"
 
 
 namespace ya
@@ -9,7 +18,218 @@ namespace ya
 extern ClearValue colorClearValue;
 extern ClearValue depthClearValue;
 
+// forward declaration - defined in App.cpp
+static void openDirectoryInOS(const std::string& filePath);
 
+// MARK: Init
+void App::initRenderPipeline()
+{
+    currentRenderAPI = ERenderAPI::Vulkan;
+
+    // WHY: validate shaders before render initialized, avoid vk init(about > 3s) but shader error
+    auto shaderProcessor = ShaderProcessorFactory()
+                               .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
+                               .withShaderStoragePath("Engine/Shader/GLSL")
+                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
+                               .FactoryNew<GLSLProcessor>();
+    _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
+
+    // Register Slang processor for .slang shader files (hot-reload supported)
+    auto slangProcessor = ShaderProcessorFactory()
+                              .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
+                              .withShaderStoragePath("Engine/Shader/Slang")
+                              .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
+                              .FactoryNew<SlangProcessor>();
+    _shaderStorage->setSlangProcessor(slangProcessor);
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_World.glsl"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
+    _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
+    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
+
+    // MARK: Render doc hook
+    if (_ci.bEnableRenderDoc) {
+        // before render init to hook apis
+        _renderDocCapture             = ya::makeShared<RenderDocCapture>();
+        _renderDocConfiguredDllPath   = _ci.renderDocDllPath;
+        _renderDocConfiguredOutputDir = _ci.renderDocCaptureOutputDir;
+        _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
+        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result) {
+            if (!result.bSuccess) {
+                return;
+            }
+            _renderDocLastCapturePath = result.capturePath;
+            switch (_renderDocOnCaptureAction) {
+            case 0:
+            case 1:
+                if (!_renderDocCapture->launchReplayUI(true, nullptr)) {
+                    YA_CORE_WARN("RenderDoc: failed to launch replay UI");
+                }
+                break;
+            case 2:
+                openDirectoryInOS(result.capturePath);
+                break;
+            default:
+                break;
+            }
+        });
+    }
+
+    RenderCreateInfo renderCI{
+        .renderAPI   = currentRenderAPI,
+        .swapchainCI = SwapchainCreateInfo{
+            .imageFormat   = COLOR_FORMAT,
+            .bVsync        = false,
+            .minImageCount = 3,
+            .width         = static_cast<uint32_t>(_ci.width),
+            .height        = static_cast<uint32_t>(_ci.height),
+        },
+    };
+
+    _render = IRender::create(renderCI);
+    YA_CORE_ASSERT(_render, "Failed to create IRender instance");
+    _render->init(renderCI);
+
+    _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
+
+    // Get window size
+    int winW = 0, winH = 0;
+    _render->getWindowSize(winW, winH);
+    _windowSize.x = static_cast<float>(winW);
+    _windowSize.y = static_cast<float>(winH);
+
+    if (_ci.bEnableRenderDoc) {
+        _renderDocCapture->setRenderContext({
+            .device    = _render->as<VulkanRender>()->getDevice(),
+            .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+        });
+        _render->getSwapchain()->onRecreate.addLambda(
+            this,
+            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+                _renderDocCapture->setRenderContext({
+                    .device    = _render->as<VulkanRender>()->getDevice(),
+                    .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+                });
+            });
+    }
+
+    // MARK: Resources
+    {
+        TextureLibrary::get().init();
+
+        // Priority order: higher = cleared first (GPU resources before CPU resources)
+        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
+        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
+        ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
+        ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
+    }
+
+    _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
+        .render       = _render,
+        .sceneManager = nullptr,
+        .windowW      = winW,
+        .windowH      = winH,
+    });
+
+    recreateViewPortRT(winW, winH);
+
+    // Screen RT (swapchain target for ImGui/editor)
+    {
+        _screenRenderPass = nullptr;
+
+        _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
+            .label            = "Final RenderTarget",
+            .renderingMode    = ERenderingMode::DynamicRendering,
+            .bSwapChainTarget = true,
+            .attachments      = {
+                     .colorAttach = {
+                    AttachmentDescription{
+                             .index          = 0,
+                             .format         = _render->getSwapchain()->getFormat(),
+                             .samples        = ESampleCount::Sample_1,
+                             .loadOp         = EAttachmentLoadOp::Clear,
+                             .storeOp        = EAttachmentStoreOp::Store,
+                             .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                             .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                             .initialLayout  = EImageLayout::Undefined,
+                             .finalLayout    = EImageLayout::PresentSrcKHR,
+                             .usage          = EImageUsage::ColorAttachment,
+                    },
+                },
+            },
+        });
+
+        _render->getSwapchain()->onRecreate.addLambda(
+            this,
+            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+                const bool bExtentChanged      = (now.extent.width != old.extent.width ||
+                                             now.extent.height != old.extent.height);
+                const bool bPresentModeChanged = (old.presentMode != now.presentMode);
+
+                if (bExtentChanged) {
+                    _screenRT->setExtent(Extent2D{now.extent.width, now.extent.height});
+                }
+
+                if (bImageRecreated || bPresentModeChanged) {
+                    _screenRT->recreate();
+                }
+            });
+    }
+
+    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
+
+    ImGuiManager::get().init(_render, nullptr);
+
+    _render->waitIdle();
+}
+
+// MARK: Shutdown
+void App::shutdownRenderPipeline()
+{
+    ImGuiManager::get().shutdown();
+
+    if (_screenRT) {
+        _screenRT->destroy();
+        _screenRT.reset();
+    }
+
+    _screenRenderPass.reset();
+
+    if (_forwardPipeline) {
+        _forwardPipeline->shutdown();
+        _forwardPipeline.reset();
+    }
+
+    if (_renderDocCapture) {
+        _renderDocCapture->shutdown();
+        _renderDocCapture.reset();
+    }
+
+    // Unified cleanup of all resource caches in priority order
+    ResourceRegistry::get().clearAll();
+
+    if (_render) {
+        _render->waitIdle();
+        _commandBuffers.clear();
+
+        _render->destroy();
+        delete _render;
+        _render = nullptr;
+    }
+}
+
+
+// MARK: Tick
 void App::tickRenderPipeline(float dt)
 {
     YA_PROFILE_FUNCTION()
@@ -61,42 +281,50 @@ void App::tickRenderPipeline(float dt)
         auto cc = runtimeCamera->getComponent<CameraComponent>();
         auto tc = runtimeCamera->getComponent<TransformComponent>();
 
-        const Extent2D ext = _pipeline->getViewportExtent();
+        const Extent2D ext = _forwardPipeline->getViewportExtent();
         cameraController.update(*tc, *cc, inputManager, ext, dt);
         cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
     }
 
+    glm::vec3 cameraPos;
     glm::mat4 view;
     glm::mat4 projection;
-    bool bUseRuntimeCamera = _appState == AppState::Runtime &&
+    bool      bUseRuntimeCamera = _appState == AppState::Runtime &&
                              runtimeCamera && runtimeCamera->isValid() &&
                              runtimeCamera->hasComponent<CameraComponent>();
     if (bUseRuntimeCamera) {
-        auto cc   = runtimeCamera->getComponent<CameraComponent>();
+        auto cc    = runtimeCamera->getComponent<CameraComponent>();
+        auto tc    = runtimeCamera->getComponent<TransformComponent>();
         view       = cc->getFreeView();
         projection = cc->getProjection();
+        cameraPos  = tc->getWorldPosition();
     }
     else {
         view       = camera.getViewMatrix();
         projection = camera.getProjectionMatrix();
+        cameraPos  = camera.getPosition();
     }
-    glm::mat4 invView = glm::inverse(view);
-    glm::vec3 cameraPos(invView[3]);
 
-    _pipeline->bRenderMirror = bRenderMirror;
-    _pipeline->tick(ForwardRenderPipeline::TickDesc{
-        .cmdBuf                   = cmdBuf.get(),
-        .dt                       = dt,
-        .view                     = view,
-        .projection               = projection,
-        .cameraPos                = cameraPos,
-        .viewportRect             = _viewportRect,
-        .viewportFrameBufferScale = _viewportFrameBufferScale,
-        .appMode                  = static_cast<int>(_appMode),
-        .clicked                  = &clicked,
-        .editorLayer              = _editorLayer,
-    });
-    YA_CORE_ASSERT(_pipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+    if (1) {
+        // Forward
+        _forwardPipeline->bRenderMirror = bRenderMirror;
+        _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
+            .cmdBuf                   = cmdBuf.get(),
+            .dt                       = dt,
+            .view                     = view,
+            .projection               = projection,
+            .cameraPos                = cameraPos,
+            .viewportRect             = _viewportRect,
+            .viewportFrameBufferScale = _viewportFrameBufferScale,
+            .appMode                  = static_cast<int>(_appMode),
+            .clicked                  = &clicked,
+            .editorLayer              = _editorLayer,
+        });
+        YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+    }
+    else {
+        // Deferred
+    }
 
     // --- MARK: Editor pass
     {

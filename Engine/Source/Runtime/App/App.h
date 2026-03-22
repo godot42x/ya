@@ -35,6 +35,7 @@ struct Texture;
 struct Sampler;
 struct RenderDocCapture;
 struct ForwardRenderPipeline;
+struct DeferredRenderPipeline;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -142,7 +143,9 @@ struct App
 
     std::shared_ptr<ShaderStorage>                                   _shaderStorage = nullptr;
     std::vector<std::pair<std::string /*name*/, IGraphicsPipeline*>> _monitorPipelines;
-    stdptr<ForwardRenderPipeline>                                     _pipeline      = nullptr;
+
+    stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
+    stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
     // Runtime state
     bool          bRunning         = true;
@@ -313,7 +316,6 @@ struct App
     virtual void onSimulationResumed() {}
 
   private:
-
     // temp
     [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
@@ -335,7 +337,8 @@ struct App
     void handleSystemSignals();
     bool recreateViewPortRT(uint32_t width, uint32_t height);
 
-    bool initRenderPipeline();
+    void initRenderPipeline();
+    void shutdownRenderPipeline();
     void tickRenderPipeline(float dt);
 };
 

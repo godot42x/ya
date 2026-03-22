@@ -2,15 +2,16 @@
 
 
 // Core
-#include "Runtime/App/App.h"
-#include "Runtime/App/ForwardRenderPipeline.h"
-#include "Runtime/App/SDLMisc.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Runtime/App/App.h"
+#include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
+#include "Runtime/App/SDLMisc.h"
+
 
 
 
@@ -121,8 +122,8 @@ uint32_t App::App::_frameIndex = 0;
 
 bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 {
-    YA_CORE_ASSERT(_pipeline, "ForwardRenderPipeline not initialized");
-    return _pipeline->recreateViewportRT(width, height);
+    YA_CORE_ASSERT(_forwardPipeline, "ForwardRenderPipeline not initialized");
+    return _forwardPipeline->recreateViewportRT(width, height);
 }
 
 
@@ -169,207 +170,21 @@ void App::init(AppDesc ci)
     }
 
 
-    currentRenderAPI = ERenderAPI::Vulkan;
-
-    // WHY: validate shaders before render initialized, avoid vk init(about > 3s) but shader error
-    auto shaderProcessor = ShaderProcessorFactory()
-                               .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
-                               .withShaderStoragePath("Engine/Shader/GLSL")
-                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-                               .FactoryNew<GLSLProcessor>();
-    _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-
-    // Register Slang processor for .slang shader files (hot-reload supported)
-    auto slangProcessor = ShaderProcessorFactory()
-                              .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
-                              .withShaderStoragePath("Engine/Shader/Slang")
-                              .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
-                              .FactoryNew<SlangProcessor>();
-    _shaderStorage->setSlangProcessor(slangProcessor);
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_World.glsl"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
-
-
-    // MARK: Render/Hook
-
-    bool enableRenderDoc = false;
     if (engineConfig.contains("enableRenderDoc")) {
-        enableRenderDoc = engineConfig["enableRenderDoc"].get<bool>();
+        _ci.bEnableRenderDoc = _ci.bEnableRenderDoc || engineConfig["enableRenderDoc"].get<bool>();
     }
-    enableRenderDoc = enableRenderDoc || _ci.bEnableRenderDoc;
-    if (enableRenderDoc) {
-        // before render init to hook apis
-        _renderDocCapture             = ya::makeShared<RenderDocCapture>();
-        _renderDocConfiguredDllPath   = _ci.renderDocDllPath;
-        _renderDocConfiguredOutputDir = _ci.renderDocCaptureOutputDir;
-        _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
-        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result) {
-            if (!result.bSuccess) {
-                return;
-            }
-
-            _renderDocLastCapturePath = result.capturePath;
-            switch (_renderDocOnCaptureAction) {
-            case 0:
-            case 1:
-                if (!_renderDocCapture->launchReplayUI(true, nullptr)) {
-                    YA_CORE_WARN("RenderDoc: failed to launch replay UI");
-                }
-                break;
-            case 2:
-                openDirectoryInOS(result.capturePath);
-                break;
-            default:
-                break;
-            }
-        });
-    }
-
     if (engineConfig.contains("disableGraphicsCards")) {
         auto disabledCards = engineConfig["disableGraphicsCards"];
         if (disabledCards.is_array()) {
-            std::vector<std::string> disabledCardsVec = disabledCards.get<std::vector<std::string>>();
-            _ci.disabledGraphicsCards                 = std::move(disabledCardsVec);
+            _ci.disabledGraphicsCards = disabledCards.get<std::vector<std::string>>();
         }
     }
 
-    RenderCreateInfo renderCI{
-        .renderAPI   = currentRenderAPI,
-        .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = COLOR_FORMAT,
-            .bVsync        = false,
-            .minImageCount = 3,
-            .width         = static_cast<uint32_t>(_ci.width),
-            .height        = static_cast<uint32_t>(_ci.height),
-        },
-    };
-
-    _render = IRender::create(renderCI);
-    YA_CORE_ASSERT(_render, "Failed to create IRender instance");
-    _render->init(renderCI);
-
-    _pipeline = ya::makeShared<ForwardRenderPipeline>();
-
-    // Get window size
-    int winW = 0, winH = 0;
-    _render->getWindowSize(winW, winH);
-    _windowSize.x = static_cast<float>(winW);
-    _windowSize.y = static_cast<float>(winH);
-
-    if (enableRenderDoc) {
-        _renderDocCapture->setRenderContext({
-            .device    = _render->as<VulkanRender>()->getDevice(),
-            .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-        });
-        _render->getSwapchain()->onRecreate.addLambda(
-            this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
-                _renderDocCapture->setRenderContext({
-                    .device    = _render->as<VulkanRender>()->getDevice(),
-                    .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-                });
-            });
-    }
+    initRenderPipeline();
 
 
-    // MARK: Resources
-    {
-        TextureLibrary::get().init();
-
-        // Register all resource caches with ResourceRegistry for unified cleanup
-        // Priority order: higher = cleared first (GPU resources before CPU resources)
-        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
-        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
-        ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
-        ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
-    }
-
-
-
-    _pipeline->init(ForwardRenderPipeline::InitDesc{
-        .render         = _render,
-        .sceneManager   = nullptr,
-        .windowW        = winW,
-        .windowH        = winH,
-    });
-
-
-    // viewport
-    recreateViewPortRT(winW, winH);
-
-    // Screen/Editor
-    {
-        _screenRenderPass = nullptr;
-
-        _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
-            .label            = "Final RenderTarget",
-            .renderingMode    = ERenderingMode::DynamicRendering,
-            .bSwapChainTarget = true,
-            .attachments      = {
-
-                .colorAttach = {
-                    AttachmentDescription{
-                        .index          = 0,
-                        .format         = _render->getSwapchain()->getFormat(),
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::Undefined,
-                        .finalLayout    = EImageLayout::PresentSrcKHR,
-                        .usage          = EImageUsage::ColorAttachment,
-                    },
-                },
-            },
-        });
-
-        _render->getSwapchain()->onRecreate.addLambda(
-            this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
-                Extent2D newExtent{
-                    .width  = now.extent.width,
-                    .height = now.extent.height,
-                };
-
-                const bool bExtentChanged      = (now.extent.width != old.extent.width ||
-                                             now.extent.height != old.extent.height);
-                const bool bPresentModeChanged = (old.presentMode != now.presentMode);
-
-                if (bExtentChanged) {
-                    // _viewportRT->setExtent(newExtent); // see App::onSceneViewportResized
-                    _screenRT->setExtent(newExtent);
-                }
-
-                if (bImageRecreated || bPresentModeChanged) {
-                    _screenRT->recreate();
-                }
-            });
-    }
-
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
-
-    // MARK: Render Init Done
-    ImGuiManager::get().init(_render, nullptr);
-
-    _render->waitIdle(); // wait something done
-
-
-    _sceneManager = new SceneManager();
-    _pipeline->_sceneManager = _sceneManager;
+    _sceneManager                   = new SceneManager();
+    _forwardPipeline->_sceneManager = _sceneManager;
     _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
@@ -448,60 +263,60 @@ int App::dispatchEvent(const T& event)
 
 ForwardRenderPipeline* App::getForwardPipeline() const
 {
-    return _pipeline.get();
+    return _forwardPipeline.get();
 }
 
 bool App::isShadowMappingEnabled() const
 {
-    return _pipeline ? _pipeline->bShadowMapping : false;
+    return _forwardPipeline ? _forwardPipeline->bShadowMapping : false;
 }
 
 bool App::isMirrorRenderingEnabled() const
 {
-    return _pipeline ? _pipeline->bRenderMirror : false;
+    return _forwardPipeline ? _forwardPipeline->bRenderMirror : false;
 }
 
 bool App::hasMirrorRenderResult() const
 {
-    return _pipeline ? _pipeline->bHasMirror : false;
+    return _forwardPipeline ? _forwardPipeline->bHasMirror : false;
 }
 
 IRenderTarget* App::getShadowDepthRT() const
 {
-    return _pipeline && _pipeline->depthRT ? _pipeline->depthRT.get() : nullptr;
+    return _forwardPipeline && _forwardPipeline->depthRT ? _forwardPipeline->depthRT.get() : nullptr;
 }
 
 IImageView* App::getShadowDirectionalDepthIV() const
 {
-    return _pipeline && _pipeline->shadowDirectionalDepthIV ? _pipeline->shadowDirectionalDepthIV.get() : nullptr;
+    return _forwardPipeline && _forwardPipeline->shadowDirectionalDepthIV ? _forwardPipeline->shadowDirectionalDepthIV.get() : nullptr;
 }
 
 IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
-    if (!_pipeline) return nullptr;
+    if (!_forwardPipeline) return nullptr;
     if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    auto& iv = _pipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
+    auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
     return iv ? iv.get() : nullptr;
 }
 
 Texture* App::getViewportOutputTexture() const
 {
-    return _pipeline ? _pipeline->viewportTexture : nullptr;
+    return _forwardPipeline ? _forwardPipeline->viewportTexture : nullptr;
 }
 
 Texture* App::getPostprocessOutputTexture() const
 {
-    return _pipeline && _pipeline->postprocessTexture ? _pipeline->postprocessTexture.get() : nullptr;
+    return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;
 }
 
 IRenderTarget* App::getMirrorRenderTarget() const
 {
-    return _pipeline && _pipeline->mirrorRT ? _pipeline->mirrorRT.get() : nullptr;
+    return _forwardPipeline && _forwardPipeline->mirrorRT ? _forwardPipeline->mirrorRT.get() : nullptr;
 }
 
 bool App::isPostprocessingEnabled() const
 {
-    return _pipeline && _pipeline->basicPostprocessingSystem && _pipeline->basicPostprocessingSystem->bEnabled;
+    return _forwardPipeline && _forwardPipeline->basicPostprocessingSystem && _forwardPipeline->basicPostprocessingSystem->bEnabled;
 }
 
 void App::renderGUI(float dt)
@@ -664,43 +479,9 @@ void ya::App::quit()
 
     Render2D::destroy();
 
-    // Cleanup managers
-    // if (ImGuiManager::get()) {
-    ImGuiManager::get().shutdown();
-    // }
-
-    // Cleanup material systems (managed externally now)
-
-    if (_screenRT) {
-        _screenRT->destroy();
-        _screenRT.reset();
-    }
-
-    _screenRenderPass.reset();
-
-    if (_pipeline) {
-        _pipeline->shutdown();
-        _pipeline.reset();
-    }
-
     _deleter.clear();
 
-    if (_renderDocCapture) {
-        _renderDocCapture->shutdown();
-        _renderDocCapture.reset();
-    }
-
-    // Unified cleanup of all resource caches in priority order
-    ResourceRegistry::get().clearAll();
-
-    if (_render) {
-        _render->waitIdle();
-        _commandBuffers.clear();
-
-        _render->destroy();
-        delete _render;
-        _render = nullptr;
-    }
+    shutdownRenderPipeline();
 }
 
 
@@ -838,12 +619,12 @@ void App::onRenderGUI(float dt)
         // RenderTargetPool::get().onRenderGUI();
     }
 
-    if (_pipeline) {
-        _pipeline->renderGUI();
+    if (_forwardPipeline) {
+        _forwardPipeline->renderGUI();
     }
 
-    if (_pipeline && _pipeline->viewportRT) {
-        _pipeline->viewportRT->onRenderGUI();
+    if (_forwardPipeline && _forwardPipeline->viewportRT) {
+        _forwardPipeline->viewportRT->onRenderGUI();
     }
     _screenRT->onRenderGUI();
 
