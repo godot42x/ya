@@ -28,6 +28,15 @@ enum class EAssetType : uint8_t
     // Extensible for future asset types
 };
 
+enum class EAssetResolveState : uint8_t
+{
+    Empty = 0,
+    Dirty,
+    Loading,
+    Ready,
+    Failed,
+};
+
 struct AssetRefBase
 {
     YA_REFLECT_BEGIN(AssetRefBase)
@@ -93,6 +102,7 @@ struct TAssetRef : public AssetRefBase
 
     // TODO: Add reflection support for template classes
     ya::Ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
+    EAssetResolveState _resolveState = EAssetResolveState::Empty;
 
     // Constructors
     TAssetRef() = default;
@@ -100,11 +110,12 @@ struct TAssetRef : public AssetRefBase
     TAssetRef(const std::string &path, ya::Ptr<T> ptr)
         : AssetRefBase(path), _cachedPtr(std::move(ptr))
     {
+        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
     }
 
     // Copy and move
     TAssetRef(const TAssetRef &other)
-        : AssetRefBase(other), _cachedPtr(other._cachedPtr)
+        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState)
     {
         // Note: onModified delegate is NOT copied intentionally
         // because it should not be shared between references
@@ -115,6 +126,7 @@ struct TAssetRef : public AssetRefBase
         if (this != &other) {
             AssetRefBase::operator=(other);
             _cachedPtr = other._cachedPtr;
+            _resolveState = other._resolveState;
         }
         return *this;
     }
@@ -129,7 +141,8 @@ struct TAssetRef : public AssetRefBase
     // T       &operator*() const { return *_cachedPtr; }
     // explicit operator bool() const { return _cachedPtr != nullptr; }
 
-    bool isLoaded() const { return _cachedPtr != nullptr; }
+    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
+    EAssetResolveState getResolveState() const { return _resolveState; }
 
 
     /**
@@ -142,6 +155,7 @@ struct TAssetRef : public AssetRefBase
     void invalidate() override
     {
         _cachedPtr.reset();
+        _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
     }
 
     /**
@@ -151,6 +165,7 @@ struct TAssetRef : public AssetRefBase
     {
         _path      = path;
         _cachedPtr = std::move(ptr);
+        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
     }
 
     /**
@@ -235,17 +250,22 @@ template <>
 inline bool TAssetRef<Texture>::resolve()
 {
     if (getPath().empty()) {
+        _resolveState = EAssetResolveState::Empty;
         return false;
     }
     if (_cachedPtr) {
+        _resolveState = EAssetResolveState::Ready;
         return true; // Already loaded
     }
 
+    _resolveState = EAssetResolveState::Loading;
     _cachedPtr = AssetManager::get()->loadTexture(_path);
     if (!_cachedPtr) {
+        _resolveState = EAssetResolveState::Failed;
         YA_CORE_WARN("TAssetRef<Texture>: Failed to load texture from path '{}'", _path);
         return false;
     }
+    _resolveState = EAssetResolveState::Ready;
     return true;
 }
 
@@ -253,17 +273,22 @@ template <>
 inline bool TAssetRef<Model>::resolve()
 {
     if (_path.empty()) {
+        _resolveState = EAssetResolveState::Empty;
         return false;
     }
     if (_cachedPtr) {
+        _resolveState = EAssetResolveState::Ready;
         return true; // Already loaded
     }
 
+    _resolveState = EAssetResolveState::Loading;
     _cachedPtr = AssetManager::get()->loadModel(_path);
     if (!_cachedPtr) {
+        _resolveState = EAssetResolveState::Failed;
         YA_CORE_WARN("TAssetRef<Model>: Failed to load model from path '{}'", _path);
         return false;
     }
+    _resolveState = EAssetResolveState::Ready;
     // char a = "🫡";
     return true;
 }
@@ -272,6 +297,7 @@ template <>
 inline bool TAssetRef<Mesh>::resolve()
 {
     // Mesh loading not implemented yet
+    _resolveState = EAssetResolveState::Failed;
     UNIMPLEMENTED();
     return true;
 }

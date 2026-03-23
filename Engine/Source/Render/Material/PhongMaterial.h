@@ -27,10 +27,10 @@ struct PhongMaterial : public Material
     // Nested Types
     // ========================================
 
-    struct alignas(16)
+    struct alignas(16   )
         TextureParam
     {
-        std140::b32  bEnable{true};
+        std140::b32  bEnable{false};
         std140::mat3 uvTransform{1.0f};
     };
 
@@ -120,6 +120,19 @@ YA_DISABLE_PADDED_STRUCT_WARNING_END()
         setParamDirty();
     }
 
+    void setTextureParam(EResource type, bool bEnable, const glm::mat3& uvTransform)
+    {
+        auto& param        = _params.textureParams[static_cast<size_t>(type)];
+        param.bEnable      = bEnable;
+        param.uvTransform  = uvTransform;
+        setParamDirty();
+    }
+
+    void disableTextureParam(EResource type)
+    {
+        setTextureParam(type, false, glm::mat3(1.0f));
+    }
+
     // ========================================
     // Runtime TextureView Access (For Rendering)
     // ========================================
@@ -141,6 +154,13 @@ YA_DISABLE_PADDED_STRUCT_WARNING_END()
         _textureViews[static_cast<int>(type)] = tv;
         setResourceDirty();
         return &_textureViews[static_cast<int>(type)];
+    }
+
+    void clearTextureView(EResource type)
+    {
+        if (_textureViews.erase(static_cast<int>(type)) > 0) {
+            setResourceDirty();
+        }
     }
 
     /**

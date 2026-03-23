@@ -137,7 +137,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     void setDepthBiasEnable(bool enable) override;
     void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
 
-    ::VkPipeline getVkHandle() const { return _pipeline; }
+    VkPipeline getVkHandle() const { return _pipeline; }
 
     /// Get the auto-derived pipeline layout (valid when bDeriveFromShader=true)
     const std::shared_ptr<IPipelineLayout>& getDerivedPipelineLayout() const { return _derivedPipelineLayout; }

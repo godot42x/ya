@@ -51,6 +51,7 @@
 #include "ECS/System/Render/SimpleMaterialSystem.h"
 #include "ECS/System/Render/UnlitMaterialSystem.h"
 
+#include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
 
@@ -193,15 +194,18 @@ void App::init(AppDesc ci)
     FPSControl::get()->bEnable = true;
     FPSControl::get()->setFPSLimit(120.f);
 
-    auto sys = ya::makeShared<ResourceResolveSystem>();
+    auto sys = ya::makeShared<ModelInstantiationSystem>();
     sys->init();
     _systems.push_back(sys);
-    auto sys2 = ya::makeShared<TransformSystem>();
+    auto sys2 = ya::makeShared<ResourceResolveSystem>();
     sys2->init();
     _systems.push_back(sys2);
-    auto sys3 = ya::makeShared<ComponentLinkageSystem>();
+    auto sys3 = ya::makeShared<TransformSystem>();
     sys3->init();
     _systems.push_back(sys3);
+    auto sys4 = ya::makeShared<ComponentLinkageSystem>();
+    sys4->init();
+    _systems.push_back(sys4);
     _deleter.push("Systems", [this](void*) {
         for (auto& sys : _systems) {
             sys->shutdown();
@@ -273,12 +277,12 @@ bool App::isShadowMappingEnabled() const
 
 bool App::isMirrorRenderingEnabled() const
 {
-    return _forwardPipeline ? _forwardPipeline->bRenderMirror : false;
+    return false;
 }
 
 bool App::hasMirrorRenderResult() const
 {
-    return _forwardPipeline ? _forwardPipeline->bHasMirror : false;
+    return false;
 }
 
 IRenderTarget* App::getShadowDepthRT() const
@@ -311,7 +315,7 @@ Texture* App::getPostprocessOutputTexture() const
 
 IRenderTarget* App::getMirrorRenderTarget() const
 {
-    return _forwardPipeline && _forwardPipeline->mirrorRT ? _forwardPipeline->mirrorRT.get() : nullptr;
+    return nullptr;
 }
 
 bool App::isPostprocessingEnabled() const

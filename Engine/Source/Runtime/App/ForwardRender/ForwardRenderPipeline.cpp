@@ -9,7 +9,6 @@
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/MirrorComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "Resource/AssetManager.h"
 #include "Platform/Render/Vulkan//VulkanRender.h"
@@ -44,49 +43,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     });
     _deleter.push("PostprocessTexture", [this](void*) {
         postprocessTexture.reset();
-    });
-
-    mirrorRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Mirror RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {
-                      .width  = static_cast<uint32_t>(desc.windowW),
-                      .height = static_cast<uint32_t>(desc.windowH),
-        },
-        .frameBufferCount = 1,
-        .attachments      = {
-
-            .colorAttach = {
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = EFormat::R8G8B8A8_UNORM,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-            .depthAttach = AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::Undefined,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
-            },
-        },
-    });
-    _deleter.push("MirrorRT", [this](void*) {
-        mirrorRT.reset();
     });
 
     depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
@@ -312,7 +268,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                 .size          = sizeof(PhongMaterialSystem::LightUBO),
                 .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
             });
-        _phongMirrorPassResources   = phongSys->createScenePassResources("Phong_MirrorPass", _phongSharedLightUBO);
         _phongViewportPassResources = phongSys->createScenePassResources("Phong_ViewportPass", _phongSharedLightUBO);
 
         debugRenderSystem = ya::makeShared<DebugRenderSystem>();
@@ -485,56 +440,6 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
 
     bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
 
-    if (bRenderMirror && bViewPortRectValid)
-    {
-        YA_PROFILE_SCOPE("Mirror Pass")
-        auto         view = scene->getRegistry().view<TransformComponent, MirrorComponent>();
-        FrameContext ctxCopy;
-        bHasMirror = false;
-        for (auto [entity, tc, mc] : view.each())
-        {
-            bHasMirror         = true;
-            ctxCopy.viewOwner  = entity;
-            ctxCopy.projection = ctx.projection;
-
-            const glm::quat rotQuat      = glm::quat(glm::radians(tc.getWorldRotation()));
-            glm::vec3       mirrorNormal = glm::normalize(rotQuat * FMath::Vector::WorldForward);
-            glm::vec3       mirrorPos    = tc.getWorldPosition();
-
-            glm::vec3 incomingDir      = glm::normalize(ctx.cameraPos - mirrorPos);
-            glm::vec3 mirroredCameraPos = mirrorPos;
-            glm::vec3 reflectedDir      = glm::reflect(incomingDir, mirrorNormal);
-            ctxCopy.cameraPos           = mirroredCameraPos;
-            ctxCopy.view                = glm::lookAt(mirroredCameraPos, mirroredCameraPos + reflectedDir, glm::vec3(0, 1, 0));
-            ctxCopy.view                = glm::inverse(ctxCopy.view);
-
-            break;
-        }
-
-        if (bHasMirror) {
-            ctxCopy.extent = mirrorRT->getExtent();
-
-            RenderingInfo ri{
-                .label      = "ViewPort",
-                .renderArea = Rect2D{
-                    .pos    = {0, 0},
-                    .extent = mirrorRT->getExtent().toVec2(),
-                },
-                .layerCount       = 1,
-                .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-                .depthClearValue  = ClearValue(1.0f, 0),
-                .renderTarget     = mirrorRT.get(),
-            };
-            desc.cmdBuf->beginRendering(ri);
-
-            renderScene(desc.cmdBuf, desc.dt, ctxCopy, _phongMirrorPassResources);
-
-            desc.cmdBuf->endRendering(EndRenderingInfo{
-                .renderTarget = mirrorRT.get(),
-            });
-        }
-    }
-
     if (bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("ViewPort pass")
@@ -595,7 +500,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             for (const auto& [entity, billboard, transfCompp] :
                  scene->getRegistry().view<BillboardComponent, TransformComponent>().each())
             {
-                auto texture = billboard.image.isValid() ? billboard.image.textureRef.getShared() : nullptr;
+                auto texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
                 const auto& pos = transfCompp.getWorldPosition();
 
                 glm::vec3 billboardToCamera = ctx.cameraPos - pos;

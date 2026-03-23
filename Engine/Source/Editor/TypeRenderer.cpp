@@ -36,8 +36,8 @@ void renderReflectedType(const std::string& name,
 {
     YA_PROFILE_SCOPE(std::format("renderReflectedType(ctx), {}, typeIndex: {}", name, typeIndex));
 
-    // Use ScopedPath to automatically track property path
-    RenderContext::ScopedPath scopedPath(ctx, name);
+    const std::string& pathSegment = propRenderCache ? propRenderCache->fieldName : std::string{};
+    RenderContext::ScopedPath scopedPath(ctx, pathSegment);
 
     if (depth >= MAX_RECURSION_DEPTH) {
         ImGui::TextDisabled("%s: [max recursion depth reached]", name.c_str());
@@ -68,7 +68,12 @@ void renderReflectedType(const std::string& name,
                          (int)cache->enumMisc.positionToValue.size())) {
             int64_t newVal = cache->enumMisc.positionToValue[currentIndex];
             cache->enumMisc.enumPtr->setValue(instance, newVal);
-            ctx.addModification(nullptr, name);
+            if (ctx.currentPath.empty()) {
+                ctx.addModification(nullptr, propRenderCache ? propRenderCache->fieldName : name);
+            }
+            else {
+                ctx.pushModified();
+            }
         }
         return;
     }
@@ -122,7 +127,7 @@ void renderReflectedType(const std::string& name,
                         if (pointee) {
                             // Has valid pointee - render it with indirection indicator
                             std::string ptrLabel = prettyName + " (->)";
-                            renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, nullptr);
+                            renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, &propCtxCache);
                         }
                         else {
                             // Null pointer - show placeholder

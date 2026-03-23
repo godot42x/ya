@@ -25,8 +25,19 @@
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Model.h" // For MaterialData
 
+#include <array>
+#include <vector>
+
 namespace ya
 {
+
+enum class EMaterialResolveState : uint8_t
+{
+    Dirty = 0,
+    Resolving,
+    Ready,
+    Failed,
+};
 
 
 /**
@@ -37,8 +48,23 @@ namespace ya
  */
 struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 {
+    struct AuthoringParams
+    {
+        YA_REFLECT_BEGIN(AuthoringParams)
+        YA_REFLECT_FIELD(ambient, .color())
+        YA_REFLECT_FIELD(diffuse, .color())
+        YA_REFLECT_FIELD(specular, .color())
+        YA_REFLECT_FIELD(shininess, .manipulate(1.0f, 256.0f))
+        YA_REFLECT_END()
+
+        glm::vec3 ambient{1.0f};
+        glm::vec3 diffuse{1.0f};
+        glm::vec3 specular{1.0f};
+        float     shininess{32.0f};
+    };
+
     YA_REFLECT_BEGIN(PhongMaterialComponent, MaterialComponent<PhongMaterial>)
-    // YA_REFLECT_FIELD(_textureSlots)
+    YA_REFLECT_FIELD(_params)
     YA_REFLECT_FIELD(_diffuseSlot)
     YA_REFLECT_FIELD(_specularSlot)
     YA_REFLECT_FIELD(_reflectionSlot)
@@ -46,7 +72,8 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     YA_REFLECT_END()
 
 
-    bool _bResolved = false;
+    EMaterialResolveState _resolveState = EMaterialResolveState::Dirty;
+    AuthoringParams _params;
 
     // TextureSlotMap _textureSlots;
     TextureSlot _diffuseSlot;
@@ -62,6 +89,13 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 
 
   private:
+    struct EditorChangeSummary
+    {
+        std::array<bool, PhongMaterial::EResource::Count> touchedSlots{};
+        bool                                              hasTextureSlotChange     = false;
+        bool                                              hasTextureResourceChange = false;
+    };
+
     void setupCallbacks()
     {
         auto f = [this]() {
@@ -74,9 +108,18 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         _normalSlot.textureRef.onModified.addLambda(this, f);
     }
 
+    TextureSlot* getTextureSlotInternal(PhongMaterial::EResource resourceEnum);
+    const TextureSlot* getTextureSlotInternal(PhongMaterial::EResource resourceEnum) const;
+    void syncParamsToMaterial();
+    void syncTextureSlot(PhongMaterial::EResource resourceEnum);
+    void importParamsFromDescriptor(const MaterialData& matData);
+    static EditorChangeSummary summarizeEditorChanges(const std::vector<std::string>& propPaths);
+
   public:
 
     bool resolve() override;
+    void onEditorPropertyChanged(const std::string& propPath);
+    void onEditorPropertiesChanged(const std::vector<std::string>& propPaths);
 
     void invalidate()
     {
@@ -85,25 +128,16 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         // {
         //     slot.invalidate();
         // }
-        _bResolved = false;
+        _resolveState = EMaterialResolveState::Dirty;
     }
-    bool isResolved() const { return _bResolved; }
+    bool isResolved() const { return _resolveState == EMaterialResolveState::Ready; }
+    bool needsResolve() const { return _resolveState == EMaterialResolveState::Dirty || _resolveState == EMaterialResolveState::Failed; }
+    EMaterialResolveState getResolveState() const { return _resolveState; }
+    void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
     TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum)
     {
-        // return _textureSlots[resourceEnum];
-        switch (resourceEnum) {
-        case PhongMaterial::DiffuseTexture:
-            return &_diffuseSlot;
-        case PhongMaterial::SpecularTexture:
-            return &_specularSlot;
-        case PhongMaterial::ReflectionTexture:
-            return &_reflectionSlot;
-        case PhongMaterial::NormalTexture:
-            return &_normalSlot;
-        default:
-            return nullptr;
-        }
+        return getTextureSlotInternal(resourceEnum);
     }
 
     // TextureSlot* getTextureSlot(MatTexture::T type)

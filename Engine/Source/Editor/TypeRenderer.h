@@ -234,10 +234,10 @@ struct RenderModificationRecord
  * renderReflectedType("Material", typeIndex, materialPtr, ctx, 0);
  *
  * // 高效查询特定属性是否修改
- * if (ctx.isModified("params")) {
+ * if (ctx.isModified("_params")) {
  *     material->setParamsDirty();
  * }
- * if (ctx.isModified("diffuseTexture")) {
+ * if (ctx.isModified("_diffuseTexture")) {
  *     material->setResourceDirty();
  * }
  * ```
@@ -380,6 +380,18 @@ struct RenderContext
         return result;
     }
 
+    std::vector<std::string> getModificationPaths(const std::string& pathPrefix = "") const
+    {
+        std::vector<std::string> result;
+        result.reserve(modifications.size());
+        for (const auto& mod : modifications) {
+            if (pathPrefix.empty() || mod.propPath.starts_with(pathPrefix)) {
+                result.push_back(mod.propPath);
+            }
+        }
+        return result;
+    }
+
     void clear()
     {
         modifications.clear();
@@ -395,6 +407,9 @@ struct RenderContext
         ScopedPath(RenderContext& ctx, const std::string& segment)
             : _ctx(ctx), _previousPath(ctx.currentPath)
         {
+            if (segment.empty()) {
+                return;
+            }
             if (ctx.currentPath.empty()) {
                 ctx.currentPath = segment;
             }

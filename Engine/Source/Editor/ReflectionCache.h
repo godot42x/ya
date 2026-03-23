@@ -34,6 +34,7 @@ struct PropertyRenderContext
     bool                            bPointer          = false; ///< True if property is a pointer type
     uint32_t                        pointeeTypeIndex  = 0;     ///< Type index of pointee (if bPointer)
     reflection::IContainerProperty *containerAccessor = nullptr;
+    std::string                     fieldName;
     std::string                     prettyName;
 
     // 元数据（仅对基础类型有效）

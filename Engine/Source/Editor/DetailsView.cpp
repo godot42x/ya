@@ -6,8 +6,6 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ReflectionCache.h"
-#include "Resource/TextureLibrary.h"
 #include "TypeRenderer.h"
 
 
@@ -28,11 +26,17 @@
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
-#include <imgui.h>
 
 
 namespace ya
 {
+
+namespace
+{
+
+constexpr size_t DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
+
+} // namespace
 
 DetailsView::DetailsView(EditorLayer* owner) : _owner(owner)
 {
@@ -210,18 +214,9 @@ void DetailsView::drawComponents(Entity& entity)
         }
     });
 
-    drawComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent* pmc) {
-        ya::RenderContext ctx;
-        ctx.beginInstance(pmc);
-        ya::renderReflectedType("PhongMaterialComponent", type_index_v<PhongMaterialComponent>, pmc, ctx, 0);
-
-        // Unified modification handling: both sync and async modifications
+    drawReflectedComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent* pmc, const ya::RenderContext& ctx) {
         if (ctx.hasModifications()) {
-            if (ctx.isModifiedPrefix("_diffuseSlot") || ctx.isModifiedPrefix("_specularSlot")) {
-                pmc->invalidate();
-            }
-            // UV params changed -> mark param dirty
-            pmc->getMaterial()->setParamDirty();
+            pmc->onEditorPropertiesChanged(ctx.getModificationPaths());
         }
         if (ImGui::Button("Invalidate")) {
             pmc->invalidate();
@@ -245,11 +240,11 @@ void DetailsView::drawComponents(Entity& entity)
         ImGui::Separator();
 
         // List all scripts
-        int indexToRemove = -1;
+        size_t indexToRemove = std::numeric_limits<size_t>::max();
         for (size_t i = 0; i < lsc->scripts.size(); ++i) {
             auto& script = lsc->scripts[i];
 
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
 
             // Script header with enable/disable checkbox
             bool headerOpen = ImGui::CollapsingHeader(
@@ -354,8 +349,9 @@ void DetailsView::drawComponents(Entity& entity)
         }
 
         // Remove marked script
-        if (indexToRemove >= 0) {
-            lsc->scripts.erase(lsc->scripts.begin() + indexToRemove);
+        if (indexToRemove != std::numeric_limits<size_t>::max()) {
+            auto eraseIt = lsc->scripts.begin() + static_cast<std::ptrdiff_t>(indexToRemove);
+            lsc->scripts.erase(eraseIt);
         }
     });
 
@@ -640,10 +636,10 @@ void DetailsView::testNewRenderInterface(Entity& entity)
         ya::renderReflectedType("Transform", ya::type_index_v<TransformComponent>, transform, ctx, 0);
 
         // 新的API用法：高效查询特定属性是否被修改
-        if (ctx.isModified("position")) {
+        if (ctx.isModified("_position")) {
             YA_CORE_INFO("Position was modified!");
         }
-        if (ctx.isModifiedPrefix("rotation")) {
+        if (ctx.isModifiedPrefix("_rotation")) {
             YA_CORE_INFO("Some rotation property was modified!");
         }
 

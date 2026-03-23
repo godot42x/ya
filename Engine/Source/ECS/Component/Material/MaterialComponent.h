@@ -28,7 +28,6 @@ struct MaterialComponent : public IComponent
     using material_t = MaterialType;
     YA_REFLECT_BEGIN(MaterialComponent<MaterialType>, IComponent)
     YA_REFLECT_FIELD(_materialPath)
-    YA_REFLECT_FIELD(_material)
     YA_REFLECT_END()
 
     // ========================================

@@ -1,21 +1,14 @@
 #pragma once
 
-#include "ContainerPropertyRenderer.h"
 #include "ECS/Entity.h"
 #include "FilePicker.h"
-#include "ReflectionCache.h"
 #include "TypeRenderer.h"
-#include <imgui.h>
-#include <memory>
+#include <ImGui.h>
 #include <sol/sol.hpp>
-
-#include "Core/Debug/Instrumentor.h"
+#include <type_traits>
 
 namespace ya
 {
-
-// Constants
-constexpr size_t DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
 
 struct Scene;
 struct EditorLayer;
@@ -113,7 +106,10 @@ struct DetailsView
             ctx.beginInstance(component);
             ya::renderReflectedType(name, typeIndex, component, ctx, 0);
             bool bComponentDirty = ctx.hasModifications();
-            if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *>) {
+            if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *, const ya::RenderContext &>) {
+                onComponentDirty(component, ctx);
+            }
+            else if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *>) {
                 if (bComponentDirty) {
                     onComponentDirty(component);
                 }

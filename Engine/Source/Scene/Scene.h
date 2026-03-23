@@ -141,7 +141,7 @@ struct [[refl]] Scene
     // === Internal ECS API (Engine Systems Only) ===
     /**
      * @brief Create raw Entity without Node wrapper
-     * @note Only for internal systems (Serialization, ResourceResolve, etc.)
+    * @note Only for internal systems (Serialization, ModelInstantiation, ResourceResolve, etc.)
      * @note Application code should use createNode() instead
      */
     Entity* createEntity(const std::string& name = "Entity");
@@ -156,6 +156,7 @@ struct [[refl]] Scene
 
     // Allow internal systems to access createEntity
     friend class SceneSerializer;
+    friend struct ModelInstantiationSystem;
     friend class ResourceResolveSystem;
 };
 

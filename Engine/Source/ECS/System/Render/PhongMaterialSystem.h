@@ -5,6 +5,7 @@
 #include "ECS/System/Render/IMaterialSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/RenderDefines.h"
 #include <cstddef>
@@ -297,15 +298,8 @@ struct PhongMaterialSystem : public IMaterialSystem
 
 
 
-    // material ubo's, dynamically extend
-    uint32_t                         _lastMaterialDSCount      = 0;
-    bool                             _bDescriptorPoolRecreated = false;
-    std::shared_ptr<IDescriptorPool> _materialDSP;
-
-    // object ubo
-    std::vector<std::shared_ptr<IBuffer>> _materialParamsUBOs;
-    std::vector<DescriptorSetHandle>      _materialParamDSs;    // each material instance
-    std::vector<DescriptorSetHandle>      _materialResourceDSs; // each material's texture
+    MaterialDescPool<PhongMaterial, PhongMaterial::ParamUBO> _matPool;
+    bool                                                      _bDescriptorPoolRecreated = false;
 
     DescriptorSetHandle skyBoxCubeMapDS            = nullptr;
     DescriptorSetHandle depthBufferDS              = nullptr;
@@ -330,15 +324,11 @@ struct PhongMaterialSystem : public IMaterialSystem
 
 
   private:
-    // void recreateMaterialDescPool(uint32_t count);
 
     void fillLightUBOFromFrameContext(const FrameContext* ctx);
     void updateFrameDS(const FrameContext* ctx);
-    void updateMaterialParamDS(DescriptorSetHandle ds, struct PhongMaterialComponent& component, bool bOverrideMirrorMaterial, bool bRecreated);
-    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material, bool bOverrideDiffuse);
-
-
-    void recreateMaterialDescPool(uint32_t _materialCount);
+    void updateMaterialParamUBO(IBuffer* paramUBO, PhongMaterial* material);
+    void updateMaterialResourceDS(DescriptorSetHandle ds, PhongMaterial* material);
 
     DescriptorImageInfo getDescriptorImageInfo(IImageView* iv, Sampler* sampler)
     {

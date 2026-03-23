@@ -307,7 +307,6 @@ void App::tickRenderPipeline(float dt)
 
     if (1) {
         // Forward
-        _forwardPipeline->bRenderMirror = bRenderMirror;
         _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
             .cmdBuf                   = cmdBuf.get(),
             .dt                       = dt,

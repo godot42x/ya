@@ -10,8 +10,8 @@
  *
  * Data Flow:
  * 1. User sets ModelComponent._modelRef on an Entity
- * 2. ResourceResolveSystem loads the Model
- * 3. System creates child entities for each mesh in the Model
+ * 2. ModelInstantiationSystem loads the Model and creates child entities
+ * 3. ResourceResolveSystem resolves runtime resources for those child components
  * 4. Each child entity is self-contained (can be rendered independently)
  */
 #pragma once
@@ -108,7 +108,7 @@ struct ModelComponent : public IComponent
     {
         _modelRef.invalidate();
         _bResolved = false;
-        // Note: Child entity cleanup should be handled by ResourceResolveSystem
+        // Note: Child entity cleanup should be handled by ModelInstantiationSystem
     }
 
     /**

@@ -110,6 +110,8 @@ PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache *owner, 
         }
     }
 
+    ctx.fieldName = propName;
+
     // 格式化显示名称（移除前缀 _ 和 m_）
     auto sv = std::string_view(propName);
     if (sv.starts_with("_")) {

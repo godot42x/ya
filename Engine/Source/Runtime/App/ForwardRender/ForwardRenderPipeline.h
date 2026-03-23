@@ -75,12 +75,7 @@ struct ForwardRenderPipeline
     stdptr<IRenderSystem> basicPostprocessingSystem = nullptr;
 
     stdptr<IBuffer> _phongSharedLightUBO = nullptr;
-    stdptr<PhongScenePassResources> _phongMirrorPassResources   = nullptr;
     stdptr<PhongScenePassResources> _phongViewportPassResources = nullptr;
-
-    stdptr<IRenderTarget> mirrorRT     = nullptr;
-    bool                  bRenderMirror = false;
-    bool                  bHasMirror    = false;
 
     bool bMSAA = false;
 

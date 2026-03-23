@@ -6,10 +6,10 @@ namespace ya
 
 bool BillboardComponent::resolve()
 {
-    if (image.isValid()) {
+    if (image.hasPath()) {
         image.invalidate();
     }
-    if (image.isValid() && !image.isLoaded()) {
+    if (image.hasPath() && !image.isReady()) {
         if (!image.resolve()) {
             YA_CORE_WARN("Billboard texture resolve failed");
         }

@@ -64,6 +64,12 @@ struct TextureSlot
     }
 
     bool resolve() { return textureRef.resolve(); }
+    bool hasPath() const { return textureRef.hasPath(); }
+    bool isReady() const { return textureRef.isLoaded(); }
+    bool needsResolve() const { return hasPath() && !isReady(); }
+    EAssetResolveState getResolveState() const { return textureRef.getResolveState(); }
+
+    // Legacy compatibility accessors. Prefer hasPath()/isReady()/needsResolve().
     bool isLoaded() const { return textureRef.isLoaded(); }
     bool isValid() const { return textureRef.hasPath(); }
 
@@ -122,8 +128,10 @@ struct Material
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
-    bool _bParamDirty    = true; ///< Material parameters changed
-    bool _bResourceDirty = true; ///< Texture resources changed
+    bool     _bParamDirty       = true; ///< Compatibility flag for legacy callers
+    bool     _bResourceDirty    = true; ///< Compatibility flag for legacy callers
+    uint64_t _paramVersion      = 1;
+    uint64_t _resourceVersion   = 1;
 
     std::unordered_map<int, TextureView> _textureViews;
     // ========================================
@@ -141,11 +149,25 @@ struct Material
     // ========================================
     // Dirty Flags (Unified Interface)
     // ========================================
-    void               setParamDirty(bool bInDirty = true) { _bParamDirty = bInDirty; }
+    void               setParamDirty(bool bInDirty = true)
+    {
+        _bParamDirty = bInDirty;
+        if (bInDirty) {
+            ++_paramVersion;
+        }
+    }
     [[nodiscard]] bool isParamDirty() const { return _bParamDirty; }
+    [[nodiscard]] uint64_t getParamVersion() const { return _paramVersion; }
 
-    void               setResourceDirty(bool bInDirty = true) { _bResourceDirty = bInDirty; }
+    void               setResourceDirty(bool bInDirty = true)
+    {
+        _bResourceDirty = bInDirty;
+        if (bInDirty) {
+            ++_resourceVersion;
+        }
+    }
     [[nodiscard]] bool isResourceDirty() const { return _bResourceDirty; }
+    [[nodiscard]] uint64_t getResourceVersion() const { return _resourceVersion; }
 
     // ========================================
     // Virtual Interface for Derived Classes
@@ -157,7 +179,11 @@ struct Material
      * @param name The slot name from JSON
      * @return Resource enum value, or -1 if not found
      */
-    virtual int getTextureSlotEnum(const std::string &name) const { return -1; }
+    virtual int getTextureSlotEnum(const std::string &name) const
+    {
+        (void)name;
+        return -1;
+    }
 
     /**
      * @brief Resolve all texture resources

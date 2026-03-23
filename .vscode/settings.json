@@ -85,6 +85,7 @@
         "subresource",
         "SWAPCHAINCOMPOSITION",
         "Swapchains",
+        "typealias",
         "UBO",
         "uvec",
         "vertexbuffer",
@@ -136,4 +137,6 @@
     "glsllint.fallBackStage": "vert",
     "glsllint.linkShader": false,
     "glsllint.useIncludeDirOfFile": true,
+    "trae.tab.enableRename": false,
+    "trae.tab.enableAutoImport": false,
 }
