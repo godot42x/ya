@@ -7,7 +7,11 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Texture.h"
+#include "Render/Material/MaterialDescPool.h"
+#include "Render/Material/UnlitMaterial.h"
 #include "Render/RenderDefines.h"
+
+#include "Test.Unlit.glsl.h"
 
 
 namespace ya
@@ -19,15 +23,11 @@ struct UnlitMaterial;
 struct UnlitMaterialSystem : public IMaterialSystem
 {
 
+    using material_param_t = UnlitMaterial::ParamUBO;
 
-    struct FrameUBO
-    {
-        glm::mat4 projection{1.f};
-        glm::mat4 view{1.f};
-        alignas(8) glm::ivec2 resolution;
-        alignas(4) uint32_t frameIndex = 0;
-        alignas(4) float time;
-    };
+    // Use shader companion types directly for non-material UBOs (avoids alignment bugs)
+    using FrameUBO = glsl_types::Test::Unlit::FrameUBO;
+
     struct PushConstant
     {
         alignas(16) glm::mat4 modelMatrix{1.0f};
@@ -39,9 +39,7 @@ struct UnlitMaterialSystem : public IMaterialSystem
     static constexpr uint32_t NUM_MATERIAL_BATCH_MAX = 2048;
 
     GraphicsPipelineCreateInfo _pipelineDesc;
-    // std::shared_ptr<IGraphicsPipeline> _pipelineOwner;
-    // IGraphicsPipeline                 *_pipeline       = nullptr; // temp move to IMaterialSystem
-    stdptr<IPipelineLayout> _pipelineLayout = nullptr;
+    stdptr<IPipelineLayout>    _pipelineLayout = nullptr;
 
 
     std::shared_ptr<IDescriptorSetLayout> _materialFrameUboDSL; // set0
@@ -58,12 +56,9 @@ struct UnlitMaterialSystem : public IMaterialSystem
     uint32_t getSlot() const { return _frameSlot; }
     void     advanceSlot() { _frameSlot = (_frameSlot + 1) % MAX_FRAME_SLOTS; }
 
-    // material ubo's, dynamically extend
-    uint32_t                                  _lastMaterialDSCount = 0;
-    std::shared_ptr<ya::IDescriptorPool>      _materialDSP;
-    std::vector<std::shared_ptr<ya::IBuffer>> _materialParamsUBOs;
-    std::vector<DescriptorSetHandle>          _materialParamDSs;    // each material instance
-    std::vector<DescriptorSetHandle>          _materialResourceDSs; // each material's texture
+    // material descriptor pool (replaces manual DS management)
+    MaterialDescPool<UnlitMaterial, UnlitMaterial::ParamUBO> _matPool;
+    bool _bDescriptorPoolRecreated = false;
 
     std::string _ctxEntityDebugStr;
 
@@ -81,10 +76,9 @@ struct UnlitMaterialSystem : public IMaterialSystem
 
 
   private:
-    void recreateMaterialDescPool(uint32_t count);
-
+    void preTick(float deltaTime, const FrameContext* ctx);
     void updateFrameDS(const FrameContext* ctx);
-    void updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial* material);
+    void updateMaterialParamUBO(IBuffer* paramUBO, UnlitMaterial* material);
     void updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial* material);
 };
 

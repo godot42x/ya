@@ -27,12 +27,14 @@ struct PhongMaterial : public Material
     // Nested Types
     // ========================================
 
-    struct alignas(16   )
-        TextureParam
-    {
-        std140::b32  bEnable{false};
-        std140::mat3 uvTransform{1.0f};
-    };
+    // struct alignas(16   )
+    //     TextureParam
+    // {
+    //     std140::b32  bEnable{false};
+    //     std140::mat3 uvTransform{1.0f};
+    // };
+
+    using TextureParam = glsl_types::PhongLit::Types::TextureParam;
 
     /// Texture resource enum
     enum EResource : int
@@ -134,42 +136,63 @@ YA_DISABLE_PADDED_STRUCT_WARNING_END()
     }
 
     // ========================================
-    // Runtime TextureView Access (For Rendering)
+    // Runtime TextureBinding (Replaces TextureView)
     // ========================================
+    std::array<TextureBinding, EResource::Count> _textureBindings;
 
     /**
-     * @brief Get resolved texture view for rendering
+     * @brief Get texture binding for a resource slot
      */
-    [[nodiscard]] TextureView* getTextureView(EResource type)
+    [[nodiscard]] const TextureBinding& getTextureBinding(EResource type) const
     {
-        auto it = _textureViews.find(static_cast<int>(type));
-        return it != _textureViews.end() ? &it->second : nullptr;
+        return _textureBindings[static_cast<size_t>(type)];
+    }
+
+    [[nodiscard]] TextureBinding& getTextureBindingMut(EResource type)
+    {
+        return _textureBindings[static_cast<size_t>(type)];
     }
 
     /**
-     * @brief Set texture view directly (called by Component/Resolver)
+     * @brief Set texture binding (called by Component/Resolver)
      */
-    TextureView* setTextureView(EResource type, const TextureView& tv)
+    void setTextureBinding(EResource type, const TextureBinding& tb)
     {
-        _textureViews[static_cast<int>(type)] = tv;
+        _textureBindings[static_cast<size_t>(type)] = tb;
         setResourceDirty();
-        return &_textureViews[static_cast<int>(type)];
     }
 
-    void clearTextureView(EResource type)
+    void clearTextureBinding(EResource type)
     {
-        if (_textureViews.erase(static_cast<int>(type)) > 0) {
-            setResourceDirty();
+        _textureBindings[static_cast<size_t>(type)].clear();
+        setResourceDirty();
+    }
+
+    /**
+     * @brief Clear all texture bindings (called on re-resolve)
+     */
+    void clearTextureBindings()
+    {
+        for (auto& tb : _textureBindings) {
+            tb.clear();
         }
+        setResourceDirty();
     }
 
     /**
-     * @brief Clear texture views (called on re-resolve)
+     * @brief Get GPU image-view handle with fallback (white texture)
      */
-    void clearTextureViews()
+    [[nodiscard]] ImageViewHandle getImageViewHandle(EResource type) const
     {
-        _textureViews.clear();
-        setResourceDirty();
+        return _textureBindings[static_cast<size_t>(type)].getImageViewHandle();
+    }
+
+    /**
+     * @brief Get GPU sampler handle with fallback (default sampler)
+     */
+    [[nodiscard]] SamplerHandle getSamplerHandle(EResource type) const
+    {
+        return _textureBindings[static_cast<size_t>(type)].getSamplerHandle();
     }
 
     // ========================================

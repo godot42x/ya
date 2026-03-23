@@ -3,7 +3,6 @@
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MeshComponent.h"
 
-
 #include "Runtime/App/App.h"
 
 #include "Render/Core/Buffer.h"
@@ -16,8 +15,6 @@
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
 
-
-
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Scene.h"
@@ -25,13 +22,10 @@
 
 
 namespace ya
-
 {
 
 void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
 {
-
-
     IRender* render = getRender();
 
     // MARK: layout
@@ -68,7 +62,6 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
                         .stageFlags      = EShaderStage::Fragment,
                     },
                 },
-
             },
             DescriptorSetLayoutDesc{
                 .label    = "UnlitMaterial_ResourceDSL",
@@ -95,12 +88,9 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
     _materialParamDSL    = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts[1]);
     _materialResourceDSL = IDescriptorSetLayout::create(render, pipelineLayout.descriptorSetLayouts[2]);
 
-
-
     // Use factory method to create pipeline layout
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_materialFrameUboDSL, _materialParamDSL, _materialResourceDSL};
-    _pipelineLayout                                           = IPipelineLayout::create(render, pipelineLayout.label, pipelineLayout.pushConstants, dslVec);
-
+    _pipelineLayout = IPipelineLayout::create(render, pipelineLayout.label, pipelineLayout.pushConstants, dslVec);
 
     // MARK: pipeline
     _pipelineDesc = GraphicsPipelineCreateInfo{
@@ -119,37 +109,32 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
                 },
             },
             .vertexAttributes = {
-                // (location=0) in vec3 aPos,
                 VertexAttribute{
                     .bufferSlot = 0,
                     .location   = 0,
                     .format     = EVertexAttributeFormat::Float3,
                     .offset     = offsetof(ya::Vertex, position),
                 },
-                //  texcoord
                 VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
+                    .bufferSlot = 0,
                     .location   = 1,
                     .format     = EVertexAttributeFormat::Float2,
                     .offset     = offsetof(ya::Vertex, texCoord0),
                 },
-                // normal
                 VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
+                    .bufferSlot = 0,
                     .location   = 2,
                     .format     = EVertexAttributeFormat::Float3,
                     .offset     = offsetof(ya::Vertex, normal),
                 },
             },
         },
-        // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, // the imgui required this feature as I did not set the dynamical render feature
+        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor,
                                EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
             .polygonMode = EPolygonMode::Fill,
-            .frontFace   = EFrontFaceType::CounterClockWise, // GL
-            // .frontFace = EFrontFaceType::ClockWise, // VK: reverse viewport and front face to adapt vulkan
+            .frontFace   = EFrontFaceType::CounterClockWise,
         },
         .multisampleState = MultisampleState{
             .sampleCount          = ESampleCount::Sample_1,
@@ -167,7 +152,6 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
         .colorBlendState = ColorBlendState{
             .attachments = {
                 ColorBlendAttachmentState{
-                    // 0 is the final present color attachment
                     .index               = 0,
                     .bBlendEnable        = false,
                     .srcColorBlendFactor = EBlendFactor::SrcAlpha,
@@ -199,11 +183,8 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
             }},
         },
     };
-    // Use factory method to create graphics pipeline
     _pipeline = IGraphicsPipeline::create(render);
-    // _pipeline      = _pipelineOwner;
     _pipeline->recreate(_pipelineDesc);
-
 
     // frames descriptor set pool
     DescriptorPoolCreateInfo poolCI{
@@ -222,8 +203,20 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
         _frameDSs[i] = sets[i];
     }
 
-    // recreate use material's descriptor set pool
-    recreateMaterialDescPool(NUM_MATERIAL_BATCH);
+    // Initialize material descriptor pool using MaterialDescPool
+    constexpr uint32_t textureCount = 2; // BaseColor0 + BaseColor1
+    _matPool.init(
+        render,
+        _materialParamDSL,
+        _materialResourceDSL,
+        [textureCount](uint32_t n) -> std::vector<DescriptorPoolSize> {
+            return {
+                DescriptorPoolSize{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+                DescriptorPoolSize{.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * textureCount},
+            };
+        },
+        NUM_MATERIAL_BATCH);
+    _bDescriptorPoolRecreated = true;
 
     for (uint32_t i = 0; i < MAX_FRAME_SLOTS; ++i) {
         _frameUBOs[i] = ya::IBuffer::create(
@@ -234,6 +227,30 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
                 .size          = sizeof(FrameUBO),
                 .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
             });
+    }
+}
+
+void UnlitMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
+{
+    (void)deltaTime;
+    (void)ctx;
+
+    // Phase 1: Resolve components that need it
+    Scene* scene = getActiveScene();
+    if (scene) {
+        auto view = scene->getRegistry().view<UnlitMaterialComponent>();
+        for (auto entity : view) {
+            auto& umc = view.get<UnlitMaterialComponent>(entity);
+            if (umc.needsResolve()) {
+                umc.resolve();
+            }
+        }
+    }
+
+    // Phase 2: Ensure descriptor pool capacity
+    uint32_t materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
+    if (_matPool.ensureCapacity(materialCount)) {
+        _bDescriptorPoolRecreated = true;
     }
 }
 
@@ -249,11 +266,11 @@ void UnlitMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
         return;
     }
 
-    // auto cmdBuffer = VulkanCommandBuffer::fromHandle(cmdBuf);
+    // Pre-tick: resolve components and ensure pool capacity
+    preTick(0.0f, ctx);
+
     cmdBuf->bindPipeline(_pipeline.get());
 
-    // Get viewport extent from App
-    auto     app    = getApp();
     uint32_t width  = ctx->extent.width;
     uint32_t height = ctx->extent.height;
 
@@ -269,14 +286,7 @@ void UnlitMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
 
     updateFrameDS(ctx);
 
-    //
-    bool     bShouldForceUpdateMaterial = false;
-    uint32_t materialCount              = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
-    if (materialCount > _lastMaterialDSCount) {
-        recreateMaterialDescPool(materialCount);
-        bShouldForceUpdateMaterial = true;
-    }
-
+    uint32_t          materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
     std::vector<bool> updatedMaterial(materialCount);
 
     for (entt::entity entity : view)
@@ -297,35 +307,29 @@ void UnlitMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
                                          entityPtr ? entityPtr->getName() : "Unknown",
                                          material->getLabel());
 
-        // update each material instance's descriptor set if dirty
         uint32_t            materialInstanceIndex = material->getIndex();
-        DescriptorSetHandle paramDS               = _materialParamDSs[materialInstanceIndex];
-        DescriptorSetHandle resourceDS            = _materialResourceDSs[materialInstanceIndex];
+        DescriptorSetHandle paramDS               = _matPool.paramDS(materialInstanceIndex);
+        DescriptorSetHandle resourceDS            = _matPool.resourceDS(materialInstanceIndex);
 
-        // update the resource set when:
-        // 1. this has updated, multiple entity using the same material(not material instance?)
-        // 2. material count changed
-        // 3. this material's resources(such as texture) changed(dirty)
         if (!updatedMaterial[materialInstanceIndex]) {
-            if (bShouldForceUpdateMaterial || material->isParamDirty())
-            {
-                updateMaterialParamDS(paramDS, material);
-                material->setParamDirty(false);
-            }
-            {}
-            if (bShouldForceUpdateMaterial || material->isResourceDirty())
-            {
-                updateMaterialResourceDS(resourceDS, material);
-                material->setResourceDirty(false);
-            }
+            _matPool.flushDirty(
+                material,
+                _bDescriptorPoolRecreated,
+                [&](IBuffer* ubo, UnlitMaterial* mat) {
+                    updateMaterialParamUBO(ubo, mat);
+                },
+                [&](DescriptorSetHandle ds, UnlitMaterial* mat) {
+                    updateMaterialResourceDS(ds, mat);
+                });
+
             updatedMaterial[materialInstanceIndex] = true;
         }
 
         // bind descriptor set
         std::vector<DescriptorSetHandle> descSets{
             _frameDSs[getSlot()],
-            _materialParamDSs[materialInstanceIndex],
-            _materialResourceDSs[materialInstanceIndex],
+            paramDS,
+            resourceDS,
         };
         cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descSets);
 
@@ -339,104 +343,32 @@ void UnlitMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
                               sizeof(UnlitMaterialSystem::PushConstant),
                               &pushConst);
 
-        // draw mesh from MeshComponent (single mesh per component)
+        // draw mesh from MeshComponent
         Mesh* mesh = meshComp.getMesh();
         if (mesh) {
             mesh->draw(cmdBuf);
         }
     }
 
+    // Reset force update flag after rendering
+    _bDescriptorPoolRecreated = false;
     advanceSlot();
 }
 
-void UnlitMaterialSystem::recreateMaterialDescPool(uint32_t _materialCount)
-{
-    auto* render = getRender();
-    YA_CORE_ASSERT(render != nullptr, "Render is null");
-    // 1. calculate how many set needed
-    uint32_t newDescriptorSetCount = std::max<uint32_t>(1, _lastMaterialDSCount);
-    if (_lastMaterialDSCount == 0) {
-        _lastMaterialDSCount = newDescriptorSetCount;
-    }
 
-    while (newDescriptorSetCount < _materialCount) {
-        newDescriptorSetCount *= 2;
-    }
-    if (newDescriptorSetCount > NUM_MATERIAL_BATCH_MAX) {
-        YA_CORE_ASSERT(false, "Too many material, exceed the max limit");
-        return;
-    }
-
-    // 2. destroy old
-    _materialParamDSs.clear();
-    _materialResourceDSs.clear();
-
-    // 3. recreate pool
-    if (_materialDSP) {
-        _materialDSP->resetPool();
-    }
-    DescriptorPoolCreateInfo poolCI{
-        .maxSets   = newDescriptorSetCount * 2, // max(param , resource)
-        .poolSizes = {
-            DescriptorPoolSize{
-                .type            = EPipelineDescriptorType::UniformBuffer,
-                .descriptorCount = newDescriptorSetCount,
-            },
-            DescriptorPoolSize{
-                .type            = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = newDescriptorSetCount * 2, // tex0 + tex1 for each material param in one set
-            },
-        },
-    };
-    _materialDSP = IDescriptorPool::create(render, poolCI);
-
-
-    // 4. allocate new sets
-    // 为每一个单独的材质分配描述符集
-    _materialDSP->allocateDescriptorSets(_materialParamDSL, newDescriptorSetCount, _materialParamDSs);
-    _materialDSP->allocateDescriptorSets(_materialResourceDSL, newDescriptorSetCount, _materialResourceDSs);
-
-    // 5. create UBOs
-    uint32_t diffCount = newDescriptorSetCount - _materialParamsUBOs.size();
-    for (uint32_t i = 0; i < diffCount; i++) {
-        auto buffer = ya::IBuffer::create(
-            render,
-            ya::BufferCreateInfo{
-                .label         = "UnlitMaterial_Param_UBO",
-                .usage         = ya::EBufferUsage::UniformBuffer,
-                .size          = sizeof(UnlitMaterial::MaterialUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
-            });
-        _materialParamsUBOs.push_back(buffer);
-    }
-
-
-    _lastMaterialDSCount = newDescriptorSetCount;
-}
-
-// TODO: descriptor set can be shared if they use same layout and data
 void UnlitMaterialSystem::updateFrameDS(const FrameContext* ctx)
 {
     auto app    = getApp();
     auto render = getRender();
 
-    // Use passed camera context
-    FrameUBO ubo{
-        .projection = ctx->projection,
-        .view       = ctx->view,
-        .resolution = {
-            ctx->extent.width,
-            ctx->extent.height,
-        },
-        .frameIndex = app->getFrameIndex(),
-        .time       = (float)app->getElapsedTimeMS() / 1000.0f,
-    };
+    FrameUBO ubo{};
+    ubo.projMat    = ctx->projection;
+    ubo.viewMat    = ctx->view;
+    ubo.resolution = glm::ivec2(ctx->extent.width, ctx->extent.height);
+    ubo.frameIdx   = app->getFrameIndex();
+    ubo.time       = (float)app->getElapsedTimeMS() / 1000.0f;
 
     uint32_t slot = getSlot();
-    // if (_frameSlot >= MAX_FRAME_SLOTS) {
-    //     YA_CORE_WARN("UnlitMaterialSystem: frame slot wrapped around ({} -> {}), potential GPU data hazard", _frameSlot, slot);
-    // }
-
     _frameUBOs[slot]->writeData(&ubo, sizeof(ubo), 0);
 
     DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOs[slot]->getHandle()), 0, sizeof(FrameUBO));
@@ -454,61 +386,33 @@ void UnlitMaterialSystem::updateFrameDS(const FrameContext* ctx)
         {});
 }
 
-void UnlitMaterialSystem::updateMaterialParamDS(DescriptorSetHandle ds, UnlitMaterial* material)
+void UnlitMaterialSystem::updateMaterialParamUBO(IBuffer* paramUBO, UnlitMaterial* material)
 {
     auto render = getRender();
 
-    YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
-
-
-    auto& params = material->uMaterial;
-    // update param from texture
-    const TextureView* tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
-    if (tv0) {
-        params.textureParam0.updateByTextureView(tv0);
-    }
-    const TextureView* tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
-    if (tv1) {
-        params.textureParam1.updateByTextureView(tv1);
-    }
-
-    auto paramUBO = _materialParamsUBOs[material->getIndex()].get();
-    paramUBO->writeData(&params, sizeof(UnlitMaterial::MaterialUBO), 0);
-
-    DescriptorBufferInfo bufferInfo(BufferHandle(paramUBO->getHandle()), 0, sizeof(UnlitMaterial::MaterialUBO));
-
-    render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genBufferWrite(
-                    ds,
-                    0,
-                    0,
-                    EPipelineDescriptorType::UniformBuffer,
-                    {bufferInfo}),
-            },
-            {});
+    const auto& params = material->getParams();
+    paramUBO->writeData(&params, sizeof(material_param_t), 0);
 }
 
 void UnlitMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, UnlitMaterial* material)
 {
     auto render = getRender();
 
-
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
-    // TODO: not texture and default texture?
-    // update param from texture
-    const TextureView* tv0 = material->getTextureView(UnlitMaterial::BaseColor0);
-    const TextureView* tv1 = material->getTextureView(UnlitMaterial::BaseColor1);
 
+    DescriptorImageInfo img0(material->getImageViewHandle(UnlitMaterial::BaseColor0),
+                             material->getSamplerHandle(UnlitMaterial::BaseColor0),
+                             EImageLayout::ShaderReadOnlyOptimal);
+    DescriptorImageInfo img1(material->getImageViewHandle(UnlitMaterial::BaseColor1),
+                             material->getSamplerHandle(UnlitMaterial::BaseColor1),
+                             EImageLayout::ShaderReadOnlyOptimal);
 
     render
         ->getDescriptorHelper()
         ->updateDescriptorSets(
             {
-                IDescriptorSetHelper::writeOneImage(ds, 0, tv0->texture->getImageView(), tv0->sampler.get()),
-                IDescriptorSetHelper::writeOneImage(ds, 1, tv1->texture->getImageView(), tv1->sampler.get()),
+                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
+                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
             },
             {});
 }

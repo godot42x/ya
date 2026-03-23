@@ -353,14 +353,9 @@ struct PhongMaterialSystem : public IMaterialSystem
         return imageInfo0;
     }
 
-    DescriptorImageInfo getDescriptorImageInfo(const TextureView* tv)
+    DescriptorImageInfo getDescriptorImageInfo(const TextureBinding& tb)
     {
-        if (!tv) {
-            return getDescriptorImageInfo(nullptr, nullptr);
-        }
-        else {
-            return getDescriptorImageInfo(tv->texture->getImageView(), tv->sampler);
-        }
+        return DescriptorImageInfo(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
     }
 };
 

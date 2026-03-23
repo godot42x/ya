@@ -247,19 +247,23 @@ struct IDescriptorSetHelper
     }
 
 
-    static WriteDescriptorSet genSingleTextureViewWrite(
+    /**
+     * @brief Generate a single texture binding descriptor write.
+     * @deprecated Prefer constructing DescriptorImageInfo directly from TextureBinding handles.
+     */
+    static WriteDescriptorSet genSingleTextureBindingWrite(
         DescriptorSetHandle        dstSet,
         uint32_t                   dstBinding,
         EPipelineDescriptorType::T descriptorType,
-        TextureView*               tv)
+        const TextureBinding&      tb)
     {
         return genImageWrite(dstSet,
                              dstBinding,
                              0,
                              descriptorType,
                              {DescriptorImageInfo(
-                                 tv->texture->getImageView()->getHandle(),
-                                 tv->getSampler()->getHandle(),
+                                 tb.getImageViewHandle(),
+                                 tb.getSamplerHandle(),
                                  EImageLayout::ShaderReadOnlyOptimal)});
     }
 

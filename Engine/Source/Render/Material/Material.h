@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Core/Base.h"
-
 #include "Core/Common/AssetRef.h"
 #include "Render/Core/Texture.h"
 
@@ -15,6 +13,29 @@ namespace ya
  * @brief Serializable texture slot for material serialization
  * Stores texture path and UV transform parameters
  */
+/**
+ * @brief Optional sampler configuration for a texture slot.
+ *
+ * When present, a custom Sampler is created/reused at resolve time.
+ * When absent (default-constructed), the global default sampler is used.
+ */
+struct SamplerConfig
+{
+    YA_REFLECT_BEGIN(SamplerConfig)
+    YA_REFLECT_FIELD(filterMode)
+    YA_REFLECT_FIELD(addressMode)
+    YA_REFLECT_END()
+
+    EFilter::T             filterMode  = EFilter::Linear;
+    ESamplerAddressMode::T addressMode = ESamplerAddressMode::Repeat;
+
+    [[nodiscard]] bool isDefault() const { return filterMode == EFilter::Linear && addressMode == ESamplerAddressMode::Repeat; }
+};
+
+/**
+ * @brief Serializable texture slot for material serialization
+ * Stores texture path, UV transform parameters, and optional sampler config.
+ */
 struct TextureSlot
 {
     YA_REFLECT_BEGIN(TextureSlot)
@@ -23,57 +44,91 @@ struct TextureSlot
     YA_REFLECT_FIELD(uvOffset)
     YA_REFLECT_FIELD(uvRotation)
     YA_REFLECT_FIELD(bEnable)
+    YA_REFLECT_FIELD(samplerConfig)
     YA_REFLECT_END()
 
-    TextureRef textureRef; // Serialized as path, auto-loaded on deserialize
-    glm::vec2  uvScale{1.0f};
-    glm::vec2  uvOffset{0.0f};
-    float      uvRotation = 0.0f;
-    bool       bEnable    = true;
+    TextureRef    textureRef; // Serialized as path, auto-loaded on deserialize
+    glm::vec2     uvScale{1.0f};
+    glm::vec2     uvOffset{0.0f};
+    float         uvRotation = 0.0f;
+    bool          bEnable    = true;
+    SamplerConfig samplerConfig;  ///< Optional sampler override (default uses global sampler)
 
     TextureSlot() = default;
     explicit TextureSlot(const std::string &path)
         : textureRef(path)
     {}
 
+    // ========================================
+    // Resolved Resource Accessors
+    // ========================================
+
     /**
-     * @brief Convert to runtime TextureView
-     * @param defaultSampler Sampler to use (texture provides image, sampler is shared)
+     * @brief Get the resolved Texture pointer (valid after resolve()).
+     * @return Shared ptr to Texture, or nullptr if not yet resolved.
      */
-    TextureView toTextureView(ya::Ptr<Sampler> sampler = nullptr) const
+    [[nodiscard]] ya::Ptr<Texture> getResolvedTexture() const
     {
-        TextureView tv;
-        tv.texture = textureRef.getShared();
-        tv.sampler = sampler ? sampler : TextureLibrary::get().getDefaultSampler();
-        tv.bEnable = bEnable;
-        return tv;
+        if (textureRef.isLoaded()) {
+            return textureRef.getShared();
+        }
+
+        if (!textureRef.hasPath()) {
+            return TextureLibrary::get().getWhiteTexture();
+        }
+
+        return nullptr;
     }
 
     /**
-     * @brief Populate from an existing TextureView (for editor use)
+     * @brief Get the resolved Sampler for this slot.
+     *
+     * If samplerConfig is default, returns TextureLibrary::getDefaultSampler().
+     * Otherwise creates/reuses a sampler matching the config.
      */
-    void fromTextureView(const TextureView &tv, const std::string &texturePath)
+    [[nodiscard]] ya::Ptr<Sampler> getResolvedSampler() const
     {
-        textureRef.set(texturePath, tv.texture);
-        bEnable = tv.bEnable;
+        // TODO: When custom sampler creation is implemented, check samplerConfig here.
+        // For now, always return default sampler (backward compatible).
+        return TextureLibrary::get().getDefaultSampler();
     }
+
+    /**
+     * @brief Build a TextureBinding from this slot's resolved resources.
+     */
+    [[nodiscard]] TextureBinding toTextureBinding() const
+    {
+        TextureBinding tb;
+        tb.texture = getResolvedTexture();
+        tb.sampler = getResolvedSampler();
+        return tb;
+    }
+
+    // ========================================
+    // Path / Resolve helpers
+    // ========================================
 
     void fromPath(const std::string &path)
     {
         textureRef.set(path, nullptr);
     }
 
-    bool resolve() { return textureRef.resolve(); }
+    bool resolve() { return !textureRef.hasPath() || textureRef.resolve(); }
     bool hasPath() const { return textureRef.hasPath(); }
-    bool isReady() const { return textureRef.isLoaded(); }
-    bool needsResolve() const { return hasPath() && !isReady(); }
-    EAssetResolveState getResolveState() const { return textureRef.getResolveState(); }
+    bool isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
+    bool needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }
+    EAssetResolveState getResolveState() const { return !textureRef.hasPath() ? EAssetResolveState::Ready : textureRef.getResolveState(); }
+    bool isEditorEnableEditable() const { return hasPath(); }
+    bool isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && textureRef.get() != nullptr && bEnable; }
 
     // Legacy compatibility accessors. Prefer hasPath()/isReady()/needsResolve().
-    bool isLoaded() const { return textureRef.isLoaded(); }
-    bool isValid() const { return textureRef.hasPath(); }
+    bool isLoaded() const { return isReady(); }
+    bool isValid() const { return isReady(); }
 
-    void invalidate() { textureRef.invalidate(); }
+    void invalidate()
+    {
+        textureRef.invalidate();
+    }
 };
 
 /// Texture slot map type: maps resource enum (as int) to TextureSlot
@@ -112,7 +167,6 @@ struct Material
     YA_REFLECT_FIELD(_instanceIndex)
     YA_REFLECT_FIELD(_typeID)
     YA_REFLECT_FIELD(_sourcePath)
-    YA_REFLECT_FIELD(_textureViews, .notSerialized())
     YA_REFLECT_END()
 
     // ========================================
@@ -123,8 +177,6 @@ struct Material
     std::string _sourcePath    = "";
     int32_t     _instanceIndex = -1;
 
-
-
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
@@ -133,7 +185,9 @@ struct Material
     uint64_t _paramVersion      = 1;
     uint64_t _resourceVersion   = 1;
 
-    std::unordered_map<int, TextureView> _textureViews;
+    // NOTE: _textureViews removed from base class.
+    // Derived classes now manage their own TextureBinding arrays.
+    // See PhongMaterial::_textureBindings and UnlitMaterial::_textureBindings.
     // ========================================
     // Basic Accessors
     // ========================================

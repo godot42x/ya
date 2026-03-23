@@ -186,16 +186,18 @@ void SkyBoxSystem::updateSkyboxCubeMap()
          scene->getRegistry().view<SkyboxComponent, MeshComponent>().each())
     {
         if (sc.bDirty) {
-            TextureView tv = TextureView::create(sc.cubemapTexture, _sampler3D);
-
             auto render = App::get()->getRender();
             render->getDescriptorHelper()->updateDescriptorSets(
                 {
-                    IDescriptorSetHelper::genSingleTextureViewWrite(
+                    IDescriptorSetHelper::genImageWrite(
                         _cubeMapDS,
                         0,
+                        0,
                         EPipelineDescriptorType::CombinedImageSampler,
-                        &tv),
+                        {DescriptorImageInfo(
+                            sc.cubemapTexture->getImageView()->getHandle(),
+                            _sampler3D->getHandle(),
+                            EImageLayout::ShaderReadOnlyOptimal)}),
                 },
                 {});
             sc.bDirty = false;

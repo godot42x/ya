@@ -7,6 +7,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"
+#include "Render/Material/Material.h"
 #include "reflects-core/lib.h"
 
 
@@ -135,8 +136,22 @@ void renderReflectedType(const std::string& name,
                         }
                     }
                     else {
+                        // TODO: use metadata enableIf or meta=(EditCondition("xxxx"))
                         // 普通属性：直接传递 PropertyRenderContext
-                        renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, ctx, depth + 1, &propCtxCache);
+                        if (typeIndex == ya::type_index_v<TextureSlot> &&
+                            propName == "bEnable" &&
+                            !static_cast<TextureSlot*>(instance)->isEditorEnableEditable()) {
+                            auto* textureSlot = static_cast<TextureSlot*>(instance);
+                            ImGui::BeginDisabled();
+                            bool displayedEnabled = textureSlot->bEnable;
+                            ImGui::Checkbox(prettyName.c_str(), &displayedEnabled);
+                            ImGui::EndDisabled();
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("[empty slot]");
+                        }
+                        else {
+                            renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, ctx, depth + 1, &propCtxCache);
+                        }
                     }
                 }
             };

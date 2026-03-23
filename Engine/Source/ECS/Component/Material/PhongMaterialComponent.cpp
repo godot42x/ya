@@ -1,7 +1,6 @@
 #include "PhongMaterialComponent.h"
 
 #include "Core/Math/Math.h"
-#include "Resource/TextureLibrary.h"
 
 #include <string_view>
 
@@ -91,9 +90,9 @@ PhongMaterialComponent::EditorChangeSummary PhongMaterialComponent::summarizeEdi
             continue;
         }
 
-        auto index                = static_cast<size_t>(resource);
-        summary.touchedSlots[index] = true;
-        summary.hasTextureSlotChange = true;
+        auto index                       = static_cast<size_t>(resource);
+        summary.touchedSlots[index]      = true;
+        summary.hasTextureSlotChange     = true;
         summary.hasTextureResourceChange = summary.hasTextureResourceChange || isTextureRefPath(propPath);
     }
 
@@ -133,17 +132,15 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
         return;
     }
 
-    Sampler* defaultSampler = TextureLibrary::get().getDefaultSampler();
     if (slot->isReady()) {
-        TextureView tv = slot->toTextureView(defaultSampler);
-        getMaterial()->setTextureView(resourceEnum, tv);
+        getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
         getMaterial()->setTextureParam(
             resourceEnum,
-            slot->bEnable,
+            slot->isEnabledEffective(),
             FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
     }
     else {
-        getMaterial()->clearTextureView(resourceEnum);
+        getMaterial()->clearTextureBinding(resourceEnum);
         getMaterial()->disableTextureParam(resourceEnum);
     }
 }
@@ -171,8 +168,8 @@ bool PhongMaterialComponent::resolve()
     // 2. Sync params to runtime material (component authoring source -> runtime cache)
     syncParamsToMaterial();
 
-    // 3. Resolve texture slots and build texture views
-    _material->clearTextureViews();
+    // 3. Resolve texture slots and build texture bindings
+    _material->clearTextureBindings();
 
     // for (auto &[key, slot] : _textureSlots) {
     //     if (slot.textureRef.hasPath() && !slot.isLoaded()) {
@@ -259,45 +256,32 @@ void PhongMaterialComponent::syncTextureSlots()
     syncTextureSlot(PhongMaterial::EResource::NormalTexture);
 }
 
-
-void PhongMaterialComponent::importFromDescriptor(const MaterialData& matData, bool syncParams)
+void PhongMaterialComponent::importFromDescriptor(const MaterialData& matData)
 {
-    // 1. Create runtime material if needed
-    if (!_material) {
-        createDefaultMaterial();
-        if (!_material) {
-            YA_CORE_ERROR("PhongMaterialComponent::importFromDescriptor: Failed to create runtime material");
-            return;
-        }
-    }
+    importParamsFromDescriptor(matData);
 
-    // 2. Import authoring parameters
-    if (syncParams) {
-        importParamsFromDescriptor(matData);
-        syncParamsToMaterial();
-    }
+    _diffuseSlot.textureRef.setPathWithoutNotify("");
+    _specularSlot.textureRef.setPathWithoutNotify("");
+    _reflectionSlot.textureRef.setPathWithoutNotify("");
+    _normalSlot.textureRef.setPathWithoutNotify("");
 
-    // 3. Import texture paths
     if (matData.hasTexture(MatTexture::Diffuse)) {
         std::string path = matData.resolveTexturePath(MatTexture::Diffuse);
-        _diffuseSlot.textureRef.setPath(path);
+        _diffuseSlot.textureRef.setPathWithoutNotify(path);
     }
 
     if (matData.hasTexture(MatTexture::Specular)) {
         std::string path = matData.resolveTexturePath(MatTexture::Specular);
-        _specularSlot.textureRef.setPath(path);
+        _specularSlot.textureRef.setPathWithoutNotify(path);
     }
 
     if (matData.hasTexture(MatTexture::Normal)) {
-        // Note: Normal map would go to a normal slot if available
-        // Currently PhongMaterial doesn't have normal map support
-        YA_CORE_TRACE("PhongMaterialComponent: Normal map not yet supported");
+        std::string path = matData.resolveTexturePath(MatTexture::Normal);
+        _normalSlot.textureRef.setPathWithoutNotify(path);
     }
 
-    // 4. Mark as needing resolve
     invalidate();
 }
-
 
 void PhongMaterialComponent::importFromDescriptorWithSharedMaterial(const MaterialData& matData, PhongMaterial* sharedMaterial)
 {
@@ -306,28 +290,8 @@ void PhongMaterialComponent::importFromDescriptorWithSharedMaterial(const Materi
         return;
     }
 
-    // 1. Use the shared material (component does NOT own it)
+    importFromDescriptor(matData);
     setSharedMaterial(sharedMaterial);
-    importParamsFromDescriptor(matData);
-
-    // 2. Import texture paths to component slots.
-    //    Use setPathWithoutNotify to avoid redundant callbacks; resolve() will
-    //    load textures from slots and sync them to the shared material via
-    //    syncTextureSlots() → setTextureView(). Do NOT pre-mark as resolved so
-    //    that resolve() actually runs and uploads textures to the material.
-    if (matData.hasTexture(MatTexture::Diffuse)) {
-        std::string path = matData.resolveTexturePath(MatTexture::Diffuse);
-        _diffuseSlot.textureRef.setPathWithoutNotify(path);
-    }
-    if (matData.hasTexture(MatTexture::Specular)) {
-        std::string path = matData.resolveTexturePath(MatTexture::Specular);
-        _specularSlot.textureRef.setPathWithoutNotify(path);
-    }
-    if (matData.hasTexture(MatTexture::Normal)) {
-        std::string path = matData.resolveTexturePath(MatTexture::Normal);
-        _normalSlot.textureRef.setPathWithoutNotify(path);
-    }
-    // _bResolved intentionally NOT set: let resolve() run to load slot textures.
 }
 
 

@@ -42,9 +42,6 @@ struct ModelInstantiationSystem : public ISystem
                          Model*          model,
                          uint32_t        meshIndex,
                          ModelComponent& modelComp);
-    void initSharedMaterial(PhongMaterial*      material,
-                            const MaterialData* matData,
-                            const std::string&  modelDirectory);
     void initMaterialFromEmbedded(PhongMaterialComponent& matComp,
                                   const MaterialData*     matData,
                                   const std::string&      modelDirectory);

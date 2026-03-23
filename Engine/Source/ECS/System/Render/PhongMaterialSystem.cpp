@@ -527,15 +527,11 @@ void PhongMaterialSystem::updateMaterialResourceDS(DescriptorSetHandle ds, Phong
 
     YA_CORE_ASSERT(ds.ptr != nullptr, "descriptor set is null: {}", _ctxEntityDebugStr);
 
-    auto diffuseTV    = material->getTextureView(PhongMaterial::EResource::DiffuseTexture);
-    auto specularTV   = material->getTextureView(PhongMaterial::EResource::SpecularTexture);
-    auto reflectionTV = material->getTextureView(PhongMaterial::EResource::ReflectionTexture);
-    auto normalTV     = material->getTextureView(PhongMaterial::EResource::NormalTexture);
-
-    DescriptorImageInfo diffuseTexture    = getDescriptorImageInfo(diffuseTV);
-    DescriptorImageInfo specularTexture   = getDescriptorImageInfo(specularTV);
-    DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(reflectionTV);
-    DescriptorImageInfo normalTexture     = getDescriptorImageInfo(normalTV);
+    // Use TextureBinding directly — no more TextureView intermediate
+    DescriptorImageInfo diffuseTexture    = getDescriptorImageInfo(material->getTextureBinding(PhongMaterial::EResource::DiffuseTexture));
+    DescriptorImageInfo specularTexture   = getDescriptorImageInfo(material->getTextureBinding(PhongMaterial::EResource::SpecularTexture));
+    DescriptorImageInfo reflectionTexture = getDescriptorImageInfo(material->getTextureBinding(PhongMaterial::EResource::ReflectionTexture));
+    DescriptorImageInfo normalTexture     = getDescriptorImageInfo(material->getTextureBinding(PhongMaterial::EResource::NormalTexture));
 
     render
         ->getDescriptorHelper()

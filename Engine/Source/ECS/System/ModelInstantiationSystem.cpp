@@ -157,8 +157,6 @@ void ModelInstantiationSystem::buildSharedMaterials(Model* model, ModelComponent
             continue;
         }
 
-        const auto& matData = embeddedMaterials[matIndex];
-        initSharedMaterial(litMat, &matData, model->getDirectory());
         modelComp._cachedMaterials[static_cast<int32_t>(matIndex)] = litMat;
     }
 }
@@ -181,30 +179,12 @@ void ModelInstantiationSystem::configureMeshMaterial(PhongMaterialComponent& mat
         }
         else {
             matComp.setSharedMaterial(it->second);
-            matComp.markResolvedReady();
         }
         return;
     }
 
     const MaterialData* matData = model->getMaterialForMesh(meshIndex);
     initMaterialFromEmbedded(matComp, matData, model->getDirectory());
-}
-
-void ModelInstantiationSystem::initSharedMaterial(PhongMaterial*      material,
-                                                  const MaterialData* matData,
-                                                  const std::string&  modelDirectory)
-{
-    (void)modelDirectory;
-    if (!material || !matData) {
-        return;
-    }
-
-    auto& params     = material->getParamsMut();
-    params.ambient   = matData->getParam<glm::vec3>(MatParam::Ambient, glm::vec3(0.1f));
-    params.diffuse   = glm::vec3(matData->getParam<glm::vec4>(MatParam::BaseColor, glm::vec4(1.0f)));
-    params.specular  = matData->getParam<glm::vec3>(MatParam::Specular, glm::vec3(0.5f));
-    params.shininess = matData->getParam<float>(MatParam::Shininess, 32.0f);
-    material->setParamDirty();
 }
 
 void ModelInstantiationSystem::initMaterialFromEmbedded(PhongMaterialComponent& matComp,
@@ -216,7 +196,7 @@ void ModelInstantiationSystem::initMaterialFromEmbedded(PhongMaterialComponent& 
         return;
     }
 
-    matComp.importFromDescriptor(*matData, true);
+    matComp.importFromDescriptor(*matData);
 }
 
 void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, ModelComponent& modelComp)

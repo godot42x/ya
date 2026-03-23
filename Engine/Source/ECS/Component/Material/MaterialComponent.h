@@ -40,7 +40,10 @@ struct MaterialComponent : public IComponent
 
   public:
 
-    virtual ~MaterialComponent() = default;
+    virtual ~MaterialComponent()
+    {
+        releaseMaterial();
+    }
 
     /**
      * @brief Resolve all resources (textures, etc.)
@@ -59,12 +62,21 @@ struct MaterialComponent : public IComponent
      */
     void invalidate()
     {
-        _material = nullptr;
+        releaseMaterial();
+    }
+
+    void releaseMaterial()
+    {
+        if (_material && !_bSharedMaterial) {
+            MaterialFactory::get()->destroyMaterial(_material);
+        }
+        _material        = nullptr;
+        _bSharedMaterial = false;
     }
 
     MaterialType* createDefaultMaterial()
     {
-        // if(_material)
+        releaseMaterial();
         std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(this));
         _material            = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
         _bSharedMaterial     = false; // Created our own material
@@ -77,12 +89,17 @@ struct MaterialComponent : public IComponent
      */
     void setSharedMaterial(MaterialType* material)
     {
-        setMaterial(material);
-        _bSharedMaterial = true;
+        if (_material == material && _bSharedMaterial) {
+            return;
+        }
+
+        releaseMaterial();
+        _material        = material;
+        _bSharedMaterial = (_material != nullptr);
     }
 
     MaterialType* getMaterial() const { return _material; }
-    MaterialType* getOrCreateMaterial() const
+    MaterialType* getOrCreateMaterial()
     {
         if (!_material)
         {
@@ -94,8 +111,10 @@ struct MaterialComponent : public IComponent
 
     void setMaterial(MaterialType* material)
     {
-        _material = material;
+        setSharedMaterial(material);
     }
+
+    bool isUsingSharedMaterial() const { return _material != nullptr && _bSharedMaterial; }
 };
 
 

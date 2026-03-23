@@ -132,49 +132,41 @@ struct Texture
 };
 
 
-struct TextureView
+/**
+ * @brief Lightweight runtime texture binding — replaces TextureView
+ *
+ * Holds only the resolved resource pointers (Texture + Sampler).
+ * Does NOT store bEnable (that belongs in the param UBO).
+ * Provides convenience accessors that return GPU Handles with fallback.
+ */
+struct TextureBinding
 {
-    YA_REFLECT_BEGIN(TextureView)
-    YA_REFLECT_FIELD(texture)
-    YA_REFLECT_FIELD(sampler)
-    YA_REFLECT_FIELD(bEnable)
-    YA_REFLECT_END()
-
     ya::Ptr<Texture> texture = nullptr;
     ya::Ptr<Sampler> sampler = nullptr;
 
-    bool bEnable = true;
+    [[nodiscard]] bool isValid() const { return texture && sampler; }
 
-    static TextureView create(stdptr<Texture> texture, stdptr<Sampler> sampler)
-    {
-        return TextureView{
-            .texture = texture,
-            .sampler = sampler,
-        };
-    }
-    static TextureView from(ya::Ptr<Texture> texture, ya::Ptr<Sampler> sampler)
-    {
-        return TextureView{
-            .texture = texture,
-            .sampler = sampler,
-        };
-    }
+    /**
+     * @brief Get the GPU image-view handle, falling back to white texture if unset.
+     */
+    [[nodiscard]] ImageViewHandle getImageViewHandle() const;
 
-    [[nodiscard]] bool isValid() const
-    {
-        return texture && sampler;
-    }
+    /**
+     * @brief Get the GPU sampler handle, falling back to default sampler if unset.
+     */
+    [[nodiscard]] SamplerHandle getSamplerHandle() const;
 
+    // Convenience accessors
     Texture* getTexture() const { return texture.get(); }
-    void     setTexture(const stdptr<Texture>& texture_) { texture = texture_; }
-
     Sampler* getSampler() const { return sampler.get(); }
-    void     setSampler(const stdptr<Sampler>& sampler_) { sampler = sampler_; }
 
-    TextureView* setEnable(bool bEnable_)
+    void setTexture(ya::Ptr<Texture> tex) { texture = std::move(tex); }
+    void setSampler(ya::Ptr<Sampler> smp) { sampler = std::move(smp); }
+
+    void clear()
     {
-        bEnable = bEnable_;
-        return this;
+        texture = nullptr;
+        sampler = nullptr;
     }
 };
 

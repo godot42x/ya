@@ -140,6 +140,14 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         return getTextureSlotInternal(resourceEnum);
     }
 
+    const TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum) const
+    {
+        return getTextureSlotInternal(resourceEnum);
+    }
+
+    AuthoringParams& getParamsMut() { return _params; }
+    const AuthoringParams& getParams() const { return _params; }
+
     // TextureSlot* getTextureSlot(MatTexture::T type)
     // {
     //     if(type == MatTexture::Diffuse){
@@ -154,16 +162,16 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
         // return _textureSlots[resourceEnum];
         switch (resourceEnum) {
         case PhongMaterial::DiffuseTexture:
-            _diffuseSlot.textureRef.setPath(path);
+            _diffuseSlot.fromPath(path);
             break;
         case PhongMaterial::SpecularTexture:
-            _specularSlot.textureRef.setPath(path);
+            _specularSlot.fromPath(path);
             break;
         case PhongMaterial::ReflectionTexture:
-            _reflectionSlot.textureRef.setPath(path);
+            _reflectionSlot.fromPath(path);
             break;
         case PhongMaterial::NormalTexture:
-            _normalSlot.textureRef.setPath(path);
+            _normalSlot.fromPath(path);
             break;
         default:
             break;
@@ -176,19 +184,19 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 
     /**
      * @brief Import material data from a generic MaterialData descriptor
-     * Maps descriptor params to Phong-specific properties
+     * Maps descriptor params to component authoring properties
      *
      * @param matData The material descriptor from model import
-     * @param syncParams If true, sync parameters to runtime material (default: true)
      */
-    void importFromDescriptor(const MaterialData& matData, bool syncParams = true);
+    void importFromDescriptor(const MaterialData& matData);
 
     /**
-     * @brief Import material data and use an existing shared material
+     * @brief Import material data and bind an existing shared runtime material
      *
-     * This sets up the component's texture slots from the descriptor,
-     * while using an externally provided shared material instance.
-     * The component will NOT own or destroy this material.
+     * The component remains the single source of truth for authoring params
+     * and texture slots. The shared material is only used as the runtime
+     * material instance that resolve() syncs into. The component will NOT own
+     * or destroy this material.
      *
      * @param matData The material descriptor from model import
      * @param sharedMaterial Pre-created shared material instance

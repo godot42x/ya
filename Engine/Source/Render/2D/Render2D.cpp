@@ -478,10 +478,10 @@ void FQuadRender::destroy()
 
 void FQuadRender::begin(const Extent2D& extent)
 {
-    _textureViews.clear();
+    _textureBindings.clear();
     _textureLabel2Idx.clear();
-    _textureViews.push_back(
-        TextureView{
+    _textureBindings.push_back(
+        TextureBinding{
             .texture = TextureLibrary::get().getWhiteTexture(),
             .sampler = TextureLibrary::get().getDefaultSampler(),
         });
@@ -654,11 +654,11 @@ void FQuadRender::updateResources()
     // make empty slot to be updated
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
 
-        if (i < _textureViews.size()) {
-            auto* tv = &_textureViews[i];
+        if (i < _textureBindings.size()) {
+            auto& tb = _textureBindings[i];
             imageInfos.emplace_back(
-                tv->getTexture()->getImageView()->getHandle(),
-                tv->getSampler()->getHandle(),
+                tb.getImageViewHandle(),
+                tb.getSamplerHandle(),
                 EImageLayout::ShaderReadOnlyOptimal);
         }
         else {

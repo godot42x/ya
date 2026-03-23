@@ -1,4 +1,5 @@
 #include "HelloMaterial.h"
+#include "Core/Math/Math.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
@@ -56,71 +57,6 @@ void HelloMaterial::createMaterials()
     baseMaterial0->colorType = ya::SimpleMaterial::EColor::Normal;
     baseMaterial1->colorType = ya::SimpleMaterial::EColor::Texcoord;
 
-    // Create unlit materials
-    auto* unlitMaterial0 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit0");
-    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                   ya::TextureView{
-                                       .texture = ya::TextureLibrary::get().getWhiteTexture(),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial0->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                   ya::TextureView{
-                                       .texture = ya::TextureLibrary::get().getMultiPixelTexture(),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial0->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    unlitMaterial0->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    unlitMaterial0->setMixValue(0.5);
-
-    auto* unlitMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit1");
-    unlitMaterial1->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                   ya::TextureView{
-                                       .texture = ya::TextureLibrary::get().getBlackTexture(),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial1->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    unlitMaterial1->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                   ya::TextureView{
-                                       .texture = ya::AssetManager::get()->getTextureByName("face"),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial1->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    unlitMaterial1->setMixValue(0.5);
-
-    auto* unlitMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit2");
-    unlitMaterial2->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                   ya::TextureView{
-                                       .texture = ya::AssetManager::get()->getTextureByName("uv1"),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial2->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                   ya::TextureView{
-                                       .texture = ya::TextureLibrary::get().getWhiteTexture(),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial2->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    unlitMaterial2->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    unlitMaterial2->setMixValue(0.5);
-
-
-    // Create ground plane material
-    auto* unlitMaterial3 = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit3");
-    unlitMaterial3->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                   ya::TextureView{
-                                       .texture = ya::TextureLibrary::get().getWhiteTexture(),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial3->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                   ya::TextureView{
-                                       .texture = ya::AssetManager::get()->getTextureByName("uv1"),
-                                       .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                   });
-    unlitMaterial3->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    unlitMaterial3->setTextureViewEnable(ya::UnlitMaterial::BaseColor1, true);
-    unlitMaterial3->setMixValue(0.5);
-    unlitMaterial3->setTextureViewUVScale(ya::UnlitMaterial::BaseColor1, glm::vec2(100.f, 100.f));
-
-
     _pongMaterialNames.clear();
     std::string jsonContent;
     if (VirtualFileSystem::get()->readFileToString("Example/HelloMaterial/Content/PhongSamples.json", jsonContent)) {
@@ -145,20 +81,7 @@ void HelloMaterial::createMaterials()
     auto* litMaterial1 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit0");
     auto* litMaterial2 = ya::MaterialFactory::get()->createMaterial<ya::PhongMaterial>("lit1_WorldBasic");
 
-    auto pointLightMat = ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light");
-    pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor0,
-                                  ya::TextureView{
-                                      .texture = ya::TextureLibrary::get().getWhiteTexture(),
-                                      .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                  });
-    pointLightMat->setTextureView(ya::UnlitMaterial::BaseColor1,
-                                  ya::TextureView{
-                                      .texture = ya::AssetManager::get()->getTextureByName("light"),
-                                      .sampler = ya::TextureLibrary::get().getDefaultSampler(),
-                                  });
-    pointLightMat->setTextureViewEnable(ya::UnlitMaterial::BaseColor0, true);
-    pointLightMat->setTextureViewUVRotation(ya::UnlitMaterial::BaseColor1, glm::radians(90.f));
-    pointLightMat->setMixValue(0.8f);
+    ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light_shared");
 }
 
 void HelloMaterial::createEntities(ya::Scene* scene)
@@ -211,11 +134,11 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->getMaterial()->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
+        lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
         if (auto diffuse = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
                                                "Engine/ThirdParty/LearnOpenGL/resources/textures/wood.png")) {
 
+            diffuse->bEnable = true;
             diffuse->uvScale = {tc->getScale().x, tc->getScale().z}; // Match the plane's XZ scale for proper tiling
         }
     }
@@ -267,7 +190,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
                         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
                         auto mat = unlitMaterials[materialIndex % unlitMaterials.size()];
                         YA_CORE_ASSERT(mat, "Material is null");
-                        umc->setMaterial(mat->as<ya::UnlitMaterial>());
+                        umc->setSharedMaterial(mat->as<ya::UnlitMaterial>());
                     }
                 }
                 // YA_CORE_DEBUG("1.2 {} {} {}", i, j, k);
@@ -289,10 +212,15 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component with serializable texture slots
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/TestTextures/LearnOpenGL/container2.png");
-        lmc->setTextureSlot(ya::PhongMaterial::SpecularTexture, "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png");
-        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+                                                    "Engine/Content/TestTextures/LearnOpenGL/container2.png")) {
+            diffuseSlot->bEnable = true;
+        }
+        if (auto* specularSlot = lmc->setTextureSlot(ya::PhongMaterial::SpecularTexture,
+                                                     "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png")) {
+            specularSlot->bEnable = true;
+        }
+        lmc->getParamsMut() = ya::PhongMaterialComponent::AuthoringParams{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(1.0f),
             .specular  = glm::vec3(1.0f),
@@ -319,8 +247,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component with serializable texture slots
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
+        lmc->getParamsMut() = ya::PhongMaterialComponent::AuthoringParams{
             .ambient   = glm::vec3(1.0f),
             .diffuse   = glm::vec3(1.0f),
             .specular  = glm::vec3(1.0f),
@@ -342,8 +269,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->getMaterial()->getParamsMut() = ya::PhongMaterial::ParamUBO{
+        lmc->getParamsMut() = ya::PhongMaterialComponent::AuthoringParams{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
             .specular  = glm::vec3(0.5f),
@@ -404,10 +330,12 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/window.png");
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+                                                    "Engine/ThirdParty/LearnOpenGL/resources/textures/window.png")) {
+            diffuseSlot->bEnable = true;
+        }
     }
-
+    auto pointLightUnlitMat =  ya::MaterialFactory::get()->getMaterialByName("unlit_point-light_shared")->as<ya::UnlitMaterial>();
     if (auto* pointLt = scene->createNode3D("Point Light")) {
         ya::Entity* entity = pointLt->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
@@ -422,12 +350,16 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto plc = entity->addComponent<ya::PointLightComponent>();
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
+        umc->setSharedMaterial(pointLightUnlitMat);
+        umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
+        umc->getParamsMut().mixValue = 0.8f;
+        if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
+            slot->bEnable = true;
+            slot->uvRotation = glm::degrees(glm::radians(90.f));
+        }
+
         auto* bc = entity->addComponent<ya::BillboardComponent>();
         bc->image.fromPath("Engine/Content/TestTextures/icons8-light-64.png");
-
-        auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
-        umc->setMaterial(pointLightMat);
-        // umc.add
 
         // 添加 Lua 圆周运动脚本（新 API）
         auto lsc = entity->addComponent<ya::LuaScriptComponent>();
@@ -447,12 +379,16 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto plc = entity->addComponent<ya::PointLightComponent>();
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
+        umc->setSharedMaterial(pointLightUnlitMat);
+        umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
+        umc->getParamsMut().mixValue = 0.8f;
+        if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
+            slot->bEnable = true;
+            slot->uvRotation = glm::degrees(glm::radians(90.f));
+        }
+
         auto* bc = entity->addComponent<ya::BillboardComponent>();
         bc->image.fromPath("Engine/Content/TestTextures/icons8-light-64.png");
-
-        auto pointLightMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light")->as<ya::UnlitMaterial>();
-        umc->setMaterial(pointLightMat);
-        // umc.add
 
         // 添加 Lua 圆周运动脚本（新 API）
         // auto lsc = entity->addComponent<ya::LuaScriptComponent>();
@@ -471,9 +407,14 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->createDefaultMaterial();
-        lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall.jpg");
-        lmc->setTextureSlot(ya::PhongMaterial::NormalTexture, "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall_normal.jpg");
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+                                                    "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall.jpg")) {
+            diffuseSlot->bEnable = true;
+        }
+        if (auto* normalSlot = lmc->setTextureSlot(ya::PhongMaterial::NormalTexture,
+                                                   "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall_normal.jpg")) {
+            normalSlot->bEnable = true;
+        }
     }
 
     if (auto* dirLt = scene->createNode3D("Directional Light")) {
@@ -514,7 +455,11 @@ void HelloMaterial::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        lmc->setMaterial(existingMat);
+        lmc->setSharedMaterial(existingMat);
+        lmc->getParamsMut().ambient   = existingMat->getParams().ambient;
+        lmc->getParamsMut().diffuse   = existingMat->getParams().diffuse;
+        lmc->getParamsMut().specular  = existingMat->getParams().specular;
+        lmc->getParamsMut().shininess = existingMat->getParams().shininess;
 
         // TODO: implement the 3D UI system to show material name
         // auto wc          = entity->addComponent<ya::WidgetComponent>();

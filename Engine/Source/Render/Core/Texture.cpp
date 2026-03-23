@@ -1,5 +1,6 @@
 #include "Texture.h"
 
+#include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "stb/stb_image.h"
 
@@ -701,6 +702,28 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
     render->endIsolateCommands(cmdBuf);
 
     YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, (int)CubeFace_Count);
+}
+
+// ============================================================
+// TextureBinding implementation
+// ============================================================
+
+ImageViewHandle TextureBinding::getImageViewHandle() const
+{
+    if (texture && texture->getImageView()) {
+        return texture->getImageView()->getHandle();
+    }
+    // Fallback: white texture
+    return TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
+}
+
+SamplerHandle TextureBinding::getSamplerHandle() const
+{
+    if (sampler) {
+        return sampler->getHandle();
+    }
+    // Fallback: default sampler
+    return TextureLibrary::get().getDefaultSampler()->getHandle();
 }
 
 } // namespace ya

@@ -164,7 +164,7 @@ struct FQuadRender
 
     std::shared_ptr<IDescriptorSetLayout>     _resourceDSL = nullptr;
     DescriptorSetHandle                       _resourceDS  = {};
-    std::vector<TextureView>                  _textureViews;
+    std::vector<TextureBinding>                  _textureBindings;
     std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
     static constexpr size_t                   TEXTURE_SET_SIZE     = 32;
     int                                       _lastPushTextureSlot = -1;
@@ -234,11 +234,11 @@ struct FQuadRender
             else {
                 // TODO: use map to cache same texture view
                 // TODO: different sampler?
-                _textureViews.push_back(TextureView{
+                _textureBindings.push_back(TextureBinding{
                     .texture = texture,
                     .sampler = TextureLibrary::get().getDefaultSampler(),
                 });
-                auto idx                               = static_cast<uint32_t>(_textureViews.size() - 1);
+                auto idx                               = static_cast<uint32_t>(_textureBindings.size() - 1);
                 _textureLabel2Idx[texture->getLabel()] = idx;
                 textureIdx                             = idx;
                 _lastPushTextureSlot                   = static_cast<int>(idx);

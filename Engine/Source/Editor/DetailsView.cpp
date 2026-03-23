@@ -164,53 +164,12 @@ void DetailsView::drawComponents(Entity& entity)
         bc->invalidate();
     });
 
-    drawComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc) {
-        auto* unlitMat = umc->getMaterial();
-        if (!unlitMat) {
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Material not resolved");
-            return;
+    drawReflectedComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            umc->onEditorPropertiesChanged(ctx.getModificationPaths());
         }
-
-        if (ImGui::CollapsingHeader(unlitMat->getLabel().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Indent();
-
-            bool bDirty = false;
-            bDirty |= ImGui::ColorEdit3("Base Color0", glm::value_ptr(unlitMat->uMaterial.baseColor0));
-            bDirty |= ImGui::ColorEdit3("Base Color1", glm::value_ptr(unlitMat->uMaterial.baseColor1));
-            bDirty |= ImGui::DragFloat("Mix Value", &unlitMat->uMaterial.mixValue, 0.01f, 0.0f, 1.0f);
-
-            // Edit texture params (UV stored in TextureParam, not TextureView)
-            auto editTextureParam = [&bDirty](const char* name, UnlitMaterial::TextureParam& param, const TextureView* tv) {
-                if (!tv || !tv->texture) return;
-                auto label = tv->texture->getLabel();
-                if (label.empty()) label = tv->texture->getFilepath();
-                ImGui::Text("%s: %s", name, label.c_str());
-                std::string id = name;
-                bDirty |= ImGui::Checkbox(("Enable##" + id).c_str(), &param.enable);
-                // uvTransform: x,y = scale, z,w = offset
-                glm::vec2 offset{param.uvTransform.z, param.uvTransform.w};
-                glm::vec2 scale{param.uvTransform.x, param.uvTransform.y};
-                if (ImGui::DragFloat2(("Offset##" + id).c_str(), glm::value_ptr(offset), 0.01f)) {
-                    param.uvTransform.z = offset.x;
-                    param.uvTransform.w = offset.y;
-                    bDirty              = true;
-                }
-                if (ImGui::DragFloat2(("Scale##" + id).c_str(), glm::value_ptr(scale), 0.01f, 0.01f, 10.0f)) {
-                    param.uvTransform.x = scale.x;
-                    param.uvTransform.y = scale.y;
-                    bDirty              = true;
-                }
-                static constexpr const auto pi = glm::pi<float>();
-                bDirty |= ImGui::DragFloat(("Rotation##" + id).c_str(), &param.uvRotation, pi / 3600, -pi, pi);
-            };
-
-            editTextureParam("Texture0", unlitMat->uMaterial.textureParam0, unlitMat->getTextureView(UnlitMaterial::BaseColor0));
-            editTextureParam("Texture1", unlitMat->uMaterial.textureParam1, unlitMat->getTextureView(UnlitMaterial::BaseColor1));
-
-            if (bDirty) {
-                unlitMat->setParamDirty(true);
-            }
-            ImGui::Unindent();
+        if (ImGui::Button("Invalidate")) {
+            umc->invalidate();
         }
     });
 
