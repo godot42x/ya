@@ -1,4 +1,5 @@
-import Common.Helper;
+#include "Common/Helper.slang"
+#include "DeferredRender/Types.slang"
 
 
 struct VertexInput{

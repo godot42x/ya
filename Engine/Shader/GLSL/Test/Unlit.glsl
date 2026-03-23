@@ -14,15 +14,6 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
     float time;
 } uFrame;
 
-//every material update once
-// layout(set =1, binding =0, std140) uniform MaterialUBO {
-//     vec3 baseColor0;
-//     vec3 baseColor1;
-//     float mixValue;
-//     TextureParam textureParam0;
-//     TextureParam textureParam1;
-// } uMaterial;
-
 
 //every draw call once (3d mesh with material)
 layout(push_constant) uniform PushConstants {
@@ -33,16 +24,8 @@ layout(push_constant) uniform PushConstants {
 
 layout(location = 1) out vec2 vTexcoord;
 
-// out VertexOutput {
-//     vec2 texcoord;
-// } vOut;
-
 void main (){
     gl_Position = uFrame.projMat * uFrame.viewMat * pc.modelMat * vec4(aPos, 1.0);
-// #if YA_PLATFORM_VULKAN
-//     gl_Position.y = -gl_Position.y; // flip y for vulkan
-// #endif
-    // vOut.texcoord = aTexcoord; // 
     vTexcoord = aTexcoord;
 }
 
@@ -51,9 +34,8 @@ void main (){
 #version 450
 
 struct TextureParam{
-    bool bEnable;
-    float uvRotation;
-    vec4  uvTransform; // x,y: scale, z,w: translate
+    uint bEnable;
+    mat3 uvTransform;
 };
 
 
@@ -72,8 +54,7 @@ layout(set =1, binding =0, std140) uniform MaterialUBO {
     vec3 baseColor0;
     vec3 baseColor1;
     float mixValue;
-    TextureParam textureParam0;
-    TextureParam textureParam1;
+    TextureParam textureParams[2];
 } uMaterial;
 
 // every material update once
@@ -87,32 +68,22 @@ layout(location = 0)    out  vec4 fColor;
 
 vec2 getTextureUV(TextureParam param, vec2 inUV)
 {
-    // scale
-    vec2 ret = inUV * param.uvTransform.xy; 
-    // rotate
-    ret = vec2(
-        ret.x * sin(param.uvRotation) + ret.y * cos(param.uvRotation),
-        ret.y * sin(param.uvRotation) + ret.x * cos(param.uvRotation)
-    ); 
-    // translate
-    ret += param.uvTransform.zw;
-    return ret;
+    vec3 transformed = param.uvTransform * vec3(inUV, 1.0);
+    return transformed.xy;
 }
 
 void main(){
     vec3 color0 = uMaterial.baseColor0;
     vec3 color1 = uMaterial.baseColor1;
 
-    if(uMaterial.textureParam0.bEnable){
-        TextureParam param = uMaterial.textureParam0;
-        // float alpha = sin(uFrame.time) * 0.5 + 0.5;
-        param.uvTransform.w = - uFrame.time;
+    if(uMaterial.textureParams[0].bEnable != 0u){
+        TextureParam param = uMaterial.textureParams[0];
         vec2 uv0 = getTextureUV(param, vTexcoord);
         color0 = texture(uTexture0, uv0).rgb;
     }
 
-    if(uMaterial.textureParam1.bEnable){
-        color1 = texture(uTexture1, getTextureUV(uMaterial.textureParam1, vTexcoord)).rgb;
+    if(uMaterial.textureParams[1].bEnable != 0u){
+        color1 = texture(uTexture1, getTextureUV(uMaterial.textureParams[1], vTexcoord)).rgb;
     }
 
 

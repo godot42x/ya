@@ -46,11 +46,12 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
     cmdBuf->bindPipeline(_gBufferPipeline.get());
     // cmdBuf->bindDescriptorSets()
     using PC = slang_types::DeferredRender::GBufferPass::PushConstants;
-    auto pl  = _gBufferPipelineLayout;
+    auto pl  = _gBufferPPL;
 
     uint32_t materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
     bool     force         = _matPool.ensureCapacity(materialCount);
 
+    // flush material and write to GBuffer
     auto view = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
     for (const auto& [entity, mc, tc, pmc] : view.each())
     {
@@ -65,32 +66,29 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
             force,
             [](IBuffer* ubo, PhongMaterial* mat) {
                 using PD = slang_types::DeferredRender::GBufferPass::ParamsData;
-                PD params{};
+                PD          params{};
                 const auto& src = mat->getParams().textureParams;
                 for (int i = 0; i < PhongMaterial::EResource::Count; ++i) {
-                    params.textures[i].bEnable     = src[i].bEnable.value ? 1u : 0u;
-                    params.textures[i].uvTransform = src[i].uvTransform.value;
+                    params.textures[i].bEnable     = src[i].bEnable;
+                    params.textures[i].uvTransform = src[i].uvTransform;
                 }
                 ubo->writeData(&params, sizeof(PD), 0);
             },
             [this](DescriptorSetHandle ds, PhongMaterial* mat) {
-                auto& texLib      = TextureLibrary::get();
-                auto  getImageInfo = [&](TextureView* tv) -> DescriptorImageInfo {
-
-                    auto ivh = (tv && tv->isValid())
-                                   ? tv->texture->getImageView()->getHandle()
-                                   : texLib.getWhiteTexture()->getImageView()->getHandle();
-                    auto sh  = (tv && tv->isValid())
-                                   ? tv->sampler->getHandle()
-                                   : texLib.getDefaultSampler()->getHandle();
-                    return DescriptorImageInfo(ivh, sh, EImageLayout::ShaderReadOnlyOptimal);
+                // Use TextureBinding handles directly (with fallback built-in)
+                auto getImageInfo = [](const TextureBinding& tb) -> DescriptorImageInfo {
+                    return DescriptorImageInfo(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
                 };
                 _render->getDescriptorHelper()->updateDescriptorSets(
                     {
                         IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureView(PhongMaterial::EResource::DiffuseTexture))}),
+                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture))}),
                         IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureView(PhongMaterial::EResource::SpecularTexture))}),
+                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture))}),
+                        IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler,
+                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture))}),
+                        IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler,
+                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture))}),
                     },
                     {}); });
 
@@ -110,6 +108,8 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
 
 
     cmdBuf->endRendering({.renderTarget = _gBufferRT.get()});
+
+    // cmdBuf->beginRendering()
 }
 
 

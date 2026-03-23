@@ -1,5 +1,5 @@
-#include "Common/Limits.slang"
 #include "Common/Helper.slang"
+#include "DeferredRender/Types.slang"
 
 
 struct VertexInput{
@@ -23,10 +23,6 @@ struct PushConstants
     float4x4 modelMat;
 };
 
-struct TextureParams{
-    bool bEnable;
-    mat3 uvTransform;
-};
 
 
 struct ParamsData{

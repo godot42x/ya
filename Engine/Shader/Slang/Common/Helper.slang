@@ -1,5 +1,7 @@
 
-module Helper;
+// module Helper;
+#pragma once
+#define public
 
 public typealias mat3 = float3x3;
 public typealias mat4 = float4x4;
@@ -8,7 +10,7 @@ public typealias vec3 = float3;
 public typealias vec4 = float4;
 
 
-public float3x3 inverse3x3(float3x3 m)
+public inline float3x3 inverse3x3(float3x3  m)
 {
     float3 c0 = m[0], c1 = m[1], c2 = m[2];
     float3 t0 = cross(c1, c2);
@@ -35,7 +37,8 @@ public inline float3 operator*(float3x3 mat, float3 vec)
     return mul(mat, vec);
 }
 
-enum  ETextureSlot{
+
+public enum  ETextureSlot{
     Diffuse = 0,
     Specular,
     Reflection,
