@@ -89,8 +89,9 @@ void App::initRenderPipeline()
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
     // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
+    // _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
 
     // MARK: Render doc hook
     if (_ci.bEnableRenderDoc) {
@@ -225,7 +226,10 @@ void App::initRenderPipeline()
                 const bool bPresentModeChanged = (old.presentMode != now.presentMode);
 
                 if (bExtentChanged) {
-                    _screenRT->setExtent(Extent2D{now.extent.width, now.extent.height});
+                    _screenRT->setExtent(Extent2D{
+                        .width  = now.extent.width,
+                        .height = now.extent.height,
+                    });
                 }
 
                 if (bImageRecreated || bPresentModeChanged) {
@@ -382,6 +386,7 @@ void App::tickRenderPipeline(float dt)
 #else
     // Deferred
     _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
+        .cmdBuf                   = cmdBuf.get(),
         .dt                       = dt,
         .view                     = view,
         .projection               = projection,
@@ -391,14 +396,15 @@ void App::tickRenderPipeline(float dt)
         .appMode                  = static_cast<int>(_appMode),
         .clicked                  = &clicked,
     });
-    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture")
+    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture");
 
 #endif
 
     // Set viewport context for editor layer before ImGui render
     if (_editorLayer) {
         EditorViewportContext ctx;
-        ctx.viewportTexture           = getViewportOutputTexture();
+#if FORWARD
+        ctx.viewportTexture           = _forwardPipeline->viewportTexture;
         ctx.bPostprocessingEnabled    = isPostprocessingEnabled();
         ctx.postprocessOutputTexture  = getPostprocessOutputTexture();
         ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
@@ -409,6 +415,9 @@ void App::tickRenderPipeline(float dt)
         };
         ctx.bMirrorRenderResult = hasMirrorRenderResult();
         ctx.mirrorRenderTarget  = getMirrorRenderTarget();
+#else
+        ctx.viewportTexture = _deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
+#endif
         _editorLayer->setViewportContext(ctx);
     }
 
@@ -510,12 +519,6 @@ IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t fa
     auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
     return iv ? iv.get() : nullptr;
 }
-
-Texture* App::getViewportOutputTexture() const
-{
-    return _forwardPipeline ? _forwardPipeline->viewportTexture : nullptr;
-}
-
 Texture* App::getPostprocessOutputTexture() const
 {
     return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;

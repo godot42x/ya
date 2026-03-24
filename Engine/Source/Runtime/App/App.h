@@ -261,7 +261,6 @@ struct App
     [[nodiscard]] IRenderTarget*         getShadowDepthRT() const;
     [[nodiscard]] IImageView*            getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*            getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] Texture*               getViewportOutputTexture() const;
     [[nodiscard]] Texture*               getPostprocessOutputTexture() const;
     [[nodiscard]] IRenderTarget*         getMirrorRenderTarget() const;
     [[nodiscard]] bool                   isPostprocessingEnabled() const;

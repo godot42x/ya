@@ -1,19 +1,18 @@
 #include "DeferredRenderPipeline.h"
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "Runtime/App/App.h"
 
-#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
 
-#include "Core/Math/Math.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Material/PhongMaterial.h"
-#include "Resource/TextureLibrary.h"
 
-#include <imgui.h>
+#include "Resource/PrimitiveMeshCache.h"
+
 namespace ya
 
 {
@@ -21,6 +20,13 @@ namespace ya
 void DeferredRenderPipeline::tick(const TickDesc& desc)
 {
     const auto& cmdBuf = desc.cmdBuf;
+
+    bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
+    if (!bViewPortRectValid)
+    {
+        return;
+    }
+
 
     _gBufferPipeline->beginFrame();
 
@@ -52,8 +58,9 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     cmdBuf->bindPipeline(_gBufferPipeline.get());
     // cmdBuf->bindDescriptorSets()
-    using PC = slang_types::DeferredRender::GBufferPass::PushConstants;
-    auto pl  = _gBufferPPL;
+    auto pl = _gBufferPPL;
+    cmdBuf->setViewport(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
+    cmdBuf->setScissor(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
 
     uint32_t materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
     bool     force         = _matPool.ensureCapacity(materialCount);
@@ -86,32 +93,29 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
             },
             [this](DescriptorSetHandle ds, PhongMaterial* mat) {
                 // Use TextureBinding handles directly (with fallback built-in)
-                auto getImageInfo = [](const TextureBinding& tb) -> DescriptorImageInfo {
-                    return DescriptorImageInfo(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
-                };
-                _render->getDescriptorHelper()->updateDescriptorSets(
-                    {
-                        IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture))}),
-                        IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture))}),
-                        IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture))}),
-                        IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler,
-                                                           {getImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture))}),
+                _render ->getDescriptorHelper()->updateDescriptorSets( {
+                        IDescriptorSetHelper::writeOneImage( ds, 0, mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 1,  mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 2,  mat->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
                     },
                     {}); });
 
         // set 1 = resource (textures), set 2 = params UBO
-        cmdBuf->bindDescriptorSets(pl.get(), 1, {_matPool.resourceDS(idx), _matPool.paramDS(idx)});
+        cmdBuf->bindDescriptorSets(
+            pl.get(),
+            1,
+            {
+                _matPool.resourceDS(idx),
+                _matPool.paramDS(idx),
+            });
 
-        PC pc{
+        GBufferPushConstant pc{
             .modelMat = tc.getTransform(),
         };
         cmdBuf->pushConstants(pl.get(),
                               EShaderStage::Vertex,
                               0,
-                              sizeof(PC),
+                              sizeof(GBufferPushConstant),
                               &pc);
         mc.getMesh()->draw(cmdBuf);
     }
@@ -176,7 +180,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     }
 
     for (const auto& [et, dlc, tc] :
-         scene->getRegistry().view<PointLightComponent, TransformComponent>().each())
+         scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
     {
         ctx.bHasDirectionalLight       = true;
         ctx.directionalLight.direction = tc.getForward(),
@@ -185,40 +189,60 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         ctx.directionalLight.specular  = dlc._specular;
     }
 
+    uLightPassFrameData.viewPos    = ctx.cameraPos;
+    uLightPassFrameData.projMatrix = ctx.projection;
+    uLightPassFrameData.viewMatrix = ctx.view;
+    _frameUBO->writeData(&uLightPassFrameData, sizeof(uLightPassFrameData), 0);
+    _frameUBO->flush();
 
-    fillLightDataFromFrameContext(&ctx);
+    uLightPassLightData.dirLight.color     = ctx.directionalLight.diffuse;
+    uLightPassLightData.dirLight.ambient   = ctx.directionalLight.ambient;
+    uLightPassLightData.dirLight.shininess = 32;
+    _lightUBO->writeData(&uLightPassLightData, sizeof(LightPassLightData), 0);
+    _lightUBO->flush();
+
+    // update 3 GBuffer textures to light pass, set 1 = resource (textures)
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    _render
+        ->getDescriptorHelper()
+        ->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::writeOneImage(
+                    _lightTexturesDS,
+                    0,
+                    _gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
+                    sampler.get()),
+                IDescriptorSetHelper::writeOneImage(
+                    _lightTexturesDS,
+                    1,
+                    _gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
+                    sampler.get()),
+                IDescriptorSetHelper::writeOneImage(
+                    _lightTexturesDS,
+                    2,
+                    _gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
+                    sampler.get()),
+            });
 
     // TODO: bind frameData UBO, uLightPassLightData UBO, GBuffer textures, then draw fullscreen quad
     cmdBuf->bindPipeline(_lightPipeline.get());
-    // cmdBuf->bindDescriptorSets(
-    //     _lightPipeline.get(),
-    //     0,
-    //     {
-    //         _currentScenePassResources->frameDS,   // frame data UBO
-    //         _currentScenePassResources->lightDS,   // light data UBO
-    //         _currentScenePassResources->gBufferDS, // GBuffer textures
-    //     });
+    cmdBuf->setViewport(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
+    cmdBuf->setScissor(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
 
+    cmdBuf->bindDescriptorSets(
+        _lightPPL.get(),
+        0,
+        {
+            _frameAndLightDS,
+            _lightTexturesDS,
+        });
+
+    auto quad = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad);
+    quad->draw(cmdBuf);
     cmdBuf->endRendering(lightPassRI);
 #pragma endregion
 }
 
-
-void DeferredRenderPipeline::fillLightDataFromFrameContext(const FrameContext* ctx)
-{
-    YA_CORE_ASSERT(ctx, "FrameContext is null when filling deferred light data");
-
-    // uLightPassLightData.numPointLights = std::min(ctx->numPointLights, MAX_POINT_LIGHTS_DEFERRED);
-    // for (uint32_t i = 0; i < uLightPassLightData.numPointLights; ++i) {
-    //     const auto& src = ctx->pointLights[i];
-    //     auto&       dst = uLightPassLightData.pointLights[i];
-    //     dst.pos         = src.position;
-    //     dst.color       = src.diffuse; // Use diffuse as the light color for deferred
-    // }
-    uLightPassLightData.dirLight.color     = ctx->directionalLight.diffuse;
-    uLightPassLightData.dirLight.ambient   = ctx->directionalLight.ambient;
-    uLightPassLightData.dirLight.shininess = 32;
-}
 
 void DeferredRenderPipeline::renderGUI()
 {

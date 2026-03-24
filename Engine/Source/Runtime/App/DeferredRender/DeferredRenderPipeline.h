@@ -1,8 +1,10 @@
 
 #pragma once
 
+#include "Core/Math/Geometry.h"
+#include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
-#include "Render/Core/PipelineBuilder.h"
+#include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Render.h"
@@ -23,21 +25,38 @@ struct DeferredRenderPipeline
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
 
-    const EFormat::T COLOR_FORMAT = EFormat::R8G8B8A8_SRGB;
-    const EFormat::T DEPTH_FORMAT = EFormat::D32_SFLOAT;
+    const EFormat::T        COLOR_FORMAT = EFormat::R8G8B8A8_SRGB;
+    const EFormat::T        DEPTH_FORMAT = EFormat::D32_SFLOAT;
+    stdptr<IDescriptorPool> _deferredDSP;
 
-    stdptr<IGraphicsPipeline>                 _gBufferPipeline;
-    stdptr<IPipelineLayout>                   _gBufferPPL;
-    std::vector<stdptr<IDescriptorSetLayout>> _gBufferDSLs;
+    stdptr<IGraphicsPipeline> _gBufferPipeline;
+
+    stdptr<IPipelineLayout>      _gBufferPPL;
+    stdptr<IDescriptorSetLayout> _frameAndLightDSL;
+    stdptr<IDescriptorSetLayout> _resourceOrLightTexturesDSL;
+    stdptr<IDescriptorSetLayout> _paramsDSL;
+
+
+    stdptr<IGraphicsPipeline> _lightPipeline;
+    stdptr<IPipelineLayout>   _lightPPL;
+
+    DescriptorSetHandle _frameAndLightDS;
+    DescriptorSetHandle _lightTexturesDS;
+
+    stdptr<IBuffer> _frameUBO = nullptr;
+    stdptr<IBuffer> _lightUBO = nullptr;
+
 
     // GBuffer pass types
-    using GBufferFrameData    = slang_types::DeferredRender::GBufferPass::FrameData;
-    using GBufferLightData    = slang_types::DeferredRender::GBufferPass::LightData;
+    // using GBufferFrameData    = slang_types::DeferredRender::GBufferPass::FrameData;
+    // using GBufferLightData    = slang_types::DeferredRender::GBufferPass::LightData;
     using GBufferPushConstant = slang_types::DeferredRender::GBufferPass::PushConstants;
 
     // Light pass types
-    using LightPassFrameData = slang_types::DeferredRender::LightPass::FrameData;
-    using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
+    using LightPassFrameData    = slang_types::DeferredRender::LightPass::FrameData;
+    using LightPassLightData    = slang_types::DeferredRender::LightPass::LightData;
+    using LightPassPushConstant = slang_types::DeferredRender::LightPass::PushConstants;
+    LightPassFrameData uLightPassFrameData{};
     LightPassLightData uLightPassLightData{};
 
     // use one matPool, pipeline layout for two pass
@@ -45,37 +64,91 @@ struct DeferredRenderPipeline
     MaterialDescPool<PhongMaterial, ParamsData> _matPool;
 
 
-    stdptr<IGraphicsPipeline>                 _lightPipeline;
-    stdptr<IPipelineLayout>                   _lightPPL;
-    std::vector<stdptr<IDescriptorSetLayout>> _lightDSLs;
+    std::vector<VertexAttribute> _commonVertexAttributes = {
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 0,
+            .format     = EVertexAttributeFormat::Float3,
 
-    PipelineLayoutDesc _basePPL = PipelineLayoutDesc{
-        .label                = "Deferred Common PPL",
-        .descriptorSetLayouts = {
-            DescriptorSetLayoutDesc{
-                .label = "Material Resources",
-                // .bindings = {
-                //     // textures
-                //     DescriptorSetLayoutBinding{
-                //         .binding = 0,
-                //         .type    = EPipelineDescriptorType::CombinedImageSampler,
-                //         .count   = 4, // albedo + normal + specular + depth
-                //         .stage   = EShaderStage::Fragment,
-                //     },
-                // },
-            },
-            DescriptorSetLayoutDesc{
-                .label    = "Material Params",
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding        = 0,
-                        .descriptorType = EPipelineDescriptorType::UniformBuffer,
-                        .stageFlags     = EShaderStage::Fragment,
-                    },
+            .offset = offsetof(ya::Vertex, position),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 1,
+            .format     = EVertexAttributeFormat::Float2,
+            .offset     = offsetof(ya::Vertex, texCoord0),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 2,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(ya::Vertex, normal),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 3,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(ya::Vertex, tangent),
+        },
+    };
+
+    std::vector<DescriptorSetLayoutDesc> _commonDescriptorSetLayouts = {
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_GBuffer_Frame_And_Light_DSL",
+            .set      = 0,
+            .bindings = {
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 1,
+                    .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
                 },
             },
+        },
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_GBuffer_MaterialResources_DSL",
+            .set      = 1,
+            .bindings = {
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 1,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 2,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+            },
+        },
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_GBuffer_MaterialParams_DSL",
+            .set      = 2,
+            .bindings = {
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+            },
+        },
+    };
 
-        }};
 
   public:
 
@@ -90,11 +163,14 @@ struct DeferredRenderPipeline
     {
         _render = desc.render;
 
+
+
         // by the viewport size later
         Extent2D extent{
             .width  = static_cast<uint32_t>(desc.windowW),
             .height = static_cast<uint32_t>(desc.windowH),
         };
+
 
         _gBufferRT = createRenderTarget(RenderTargetCreateInfo{
             .label            = "GBuffer RenderTarget",
@@ -161,85 +237,113 @@ struct DeferredRenderPipeline
             },
         });
 
-        auto result = PipelineBuilder::create(
+        auto commonDSLs = IDescriptorSetLayout::create(
             _render,
-            PipelineBuilder::CreateDesc{
-                .shaderName            = "DeferredRender/GBufferPass.slang",
-                .renderTarget          = _gBufferRT.get(),
-                .pipelineRenderingInfo = PipelineRenderingInfo{
-                    .label                  = "GBuffer Pass",
-                    .colorAttachmentFormats = {COLOR_FORMAT, COLOR_FORMAT, COLOR_FORMAT},
-                    .depthAttachmentFormat  = DEPTH_FORMAT,
-                },
-                .rasterizationState = RasterizationState{
-                    .cullMode  = ECullMode::Back,
-                    .frontFace = EFrontFaceType::CounterClockWise,
-                },
-                .depthStencilState = DepthStencilState{
-                    .bDepthTestEnable  = true,
-                    .bDepthWriteEnable = true,
-                    .depthCompareOp    = ECompareOp::Less,
-                },
-                .multisampleState = MultisampleState{},
-                .colorBlendState  = ColorBlendState{
-                     .attachments = {
-                        ColorBlendAttachmentState{
-                            // index of the attachments in the render pass and the renderpass begin info
-                             .index               = 0,
-                             .bBlendEnable        = false,                          // no need for deferred render?
-                             .srcColorBlendFactor = EBlendFactor::SrcAlpha,         // srcColor = srcColor * srcAlpha
-                             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, // dstColor = dstColor * (1 - srcAlpha)
-                             .colorBlendOp        = EBlendOp::Add,                  // finalColor = srcColor + dstColor
-                             .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,         // use src alpha for alpha blending
-                             .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, // use dst alpha for alpha blending
-                             .alphaBlendOp        = EBlendOp::Add,
-                             .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                        },
-                        ColorBlendAttachmentState{
-                            // index of the attachments in the render pass and the renderpass begin info
-                             .index               = 2,
-                             .bBlendEnable        = false,
-                             .srcColorBlendFactor = EBlendFactor::SrcAlpha,         // srcColor = srcColor * srcAlpha
-                             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, // dstColor = dstColor * (1 - srcAlpha)
-                             .colorBlendOp        = EBlendOp::Add,                  // finalColor = srcColor + dstColor
-                             .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,         // use src alpha for alpha blending
-                             .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, // use dst alpha for alpha blending
-                             .alphaBlendOp        = EBlendOp::Add,
-                             .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                        },
-                        ColorBlendAttachmentState{
-                            // index of the attachments in the render pass and the renderpass begin info
-                             .index               = 1,
-                             .bBlendEnable        = false,
-                             .srcColorBlendFactor = EBlendFactor::SrcAlpha,         // srcColor = srcColor * srcAlpha
-                             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, // dstColor = dstColor * (1 - srcAlpha)
-                             .colorBlendOp        = EBlendOp::Add,                  // finalColor = srcColor + dstColor
-                             .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,         // use src alpha for alpha blending
-                             .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, // use dst alpha for alpha blending
-                             .alphaBlendOp        = EBlendOp::Add,
-                             .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                        },
-                    },
-                },
-                .viewportState = ViewportState{
-                    .viewports = {
-                        Viewport::defaults(),
-                    },
-                    .scissors = {
-                        Scissor::defaults(),
-                    },
-                },
-            });
-        _gBufferPipeline = result.pipeline;
-        _gBufferPPL      = result.pipelineLayout;
-        _gBufferDSLs     = result.descriptorSetLayouts;
+            _commonDescriptorSetLayouts);
+        _frameAndLightDSL           = commonDSLs[0];
+        _resourceOrLightTexturesDSL = commonDSLs[1];
+        _paramsDSL                  = commonDSLs[2];
 
-        // _gBufferDSLs[0] = set 1 (resource: textures), _gBufferDSLs[1] = set 2 (params UBO)
-        const uint32_t texCount = static_cast<uint32_t>(_gBufferDSLs[0]->getLayoutInfo().bindings.size());
+        _gBufferPPL = IPipelineLayout::create(
+            _render,
+            "GBuffer PPL",
+            {
+                PushConstantRange{
+                    .offset     = 0,
+                    .size       = sizeof(GBufferPushConstant),
+                    .stageFlags = EShaderStage::Vertex,
+                },
+            },
+            commonDSLs);
+
+        GraphicsPipelineCreateInfo gBufferPipelineCI{
+            .renderPass            = _gBufferRT->getRenderPass(),
+            .pipelineRenderingInfo = PipelineRenderingInfo{
+                .label                  = "GBuffer Pass",
+                .colorAttachmentFormats = {COLOR_FORMAT, COLOR_FORMAT, COLOR_FORMAT},
+                .depthAttachmentFormat  = DEPTH_FORMAT,
+            },
+            .pipelineLayout = _gBufferPPL.get(),
+            .shaderDesc     = ShaderDesc{
+                    .shaderName        = "DeferredRender/GBufferPass.slang",
+                    .bDeriveFromShader = false,
+                    .vertexBufferDescs = {
+                    VertexBufferDescription{
+                            .slot  = 0,
+                            .pitch = sizeof(ya::Vertex),
+                    },
+                },
+                    .vertexAttributes = _commonVertexAttributes,
+            },
+            .dynamicFeatures = {
+                EPipelineDynamicFeature::Viewport,
+                EPipelineDynamicFeature::Scissor,
+            },
+            .primitiveType      = EPrimitiveType::TriangleList,
+            .rasterizationState = RasterizationState{
+                .cullMode  = ECullMode::Back,
+                .frontFace = EFrontFaceType::CounterClockWise,
+            },
+            .multisampleState  = MultisampleState{},
+            .depthStencilState = DepthStencilState{
+                .bDepthTestEnable  = true,
+                .bDepthWriteEnable = true,
+                .depthCompareOp    = ECompareOp::Less,
+            },
+            .colorBlendState = ColorBlendState{
+                .attachments = {
+                    ColorBlendAttachmentState{
+                        .index               = 0,
+                        .bBlendEnable        = false,
+                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .colorBlendOp        = EBlendOp::Add,
+                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .alphaBlendOp        = EBlendOp::Add,
+                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    },
+                    ColorBlendAttachmentState{
+                        .index               = 2,
+                        .bBlendEnable        = false,
+                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .colorBlendOp        = EBlendOp::Add,
+                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .alphaBlendOp        = EBlendOp::Add,
+                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    },
+                    ColorBlendAttachmentState{
+                        .index               = 1,
+                        .bBlendEnable        = false,
+                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .colorBlendOp        = EBlendOp::Add,
+                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .alphaBlendOp        = EBlendOp::Add,
+                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    },
+                },
+            },
+            .viewportState = ViewportState{
+                .viewports = {
+                    Viewport::defaults(),
+                },
+                .scissors = {
+                    Scissor::defaults(),
+                },
+            },
+        };
+        _gBufferPipeline = IGraphicsPipeline::create(_render);
+        YA_CORE_ASSERT(_gBufferPipeline && _gBufferPipeline->recreate(gBufferPipelineCI), "Failed to create deferred gbuffer pipeline");
+
+        const uint32_t texCount = static_cast<uint32_t>(_resourceOrLightTexturesDSL->getLayoutInfo().bindings.size());
         _matPool.init(
             _render,
-            _gBufferDSLs[1], // set 2: params UBO
-            _gBufferDSLs[0], // set 1: textures
+            _paramsDSL,
+            _resourceOrLightTexturesDSL,
             [texCount](uint32_t n) {
                 return std::vector<DescriptorPoolSize>{
                     {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
@@ -273,63 +377,128 @@ struct DeferredRenderPipeline
             },
         });
 
-        auto lightPassResult = PipelineBuilder::create(
+
+        _lightPPL = IPipelineLayout::create(
             _render,
-            PipelineBuilder::CreateDesc{
-                .shaderName = "DeferredRender/LightPass.slang",
-                // here need to share depth rt from GBuffer pass for depth test, output dir
-                //  but vulkan dynamic rendering does not support input attachment, so we read depth as texture in shader, and the depth attachment is not needed in light pass render target
-                // .renderTarget          = viewportRt.get(),
-                .pipelineRenderingInfo = PipelineRenderingInfo{
-                    .label                  = "Light Pass",
-                    .colorAttachmentFormats = {COLOR_FORMAT},
-                    .depthAttachmentFormat  = DEPTH_FORMAT,
+            "Deferred Light PPL",
+            {
+                PushConstantRange{
+                    .offset     = 0,
+                    .size       = sizeof(LightPassPushConstant),
+                    .stageFlags = EShaderStage::Vertex,
                 },
-                .rasterizationState = RasterizationState{
-                    .cullMode  = ECullMode::None,
-                    .frontFace = EFrontFaceType::CounterClockWise,
-                },
-                .depthStencilState = DepthStencilState{
-                    .bDepthTestEnable  = true,
-                    .bDepthWriteEnable = false,
-                },
-                .multisampleState = MultisampleState{},
-                .colorBlendState  = ColorBlendState{
-                     .attachments = {
-                        ColorBlendAttachmentState{
-                            // index of the attachments in the render pass and the renderpass begin info
-                             .index               = 0,
-                             .bBlendEnable        = false,                          // no need for deferred render?
-                             .srcColorBlendFactor = EBlendFactor::SrcAlpha,         // srcColor = srcColor * srcAlpha
-                             .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, // dstColor = dstColor * (1 - srcAlpha)
-                             .colorBlendOp        = EBlendOp::Add,                  // finalColor = srcColor + dstColor
-                             .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,         // use src alpha for alpha blending
-                             .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, // use dst alpha for alpha blending
-                             .alphaBlendOp        = EBlendOp::Add,
-                             .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                        },
+            },
+            commonDSLs);
+
+        GraphicsPipelineCreateInfo lightPipelineCI{
+            .renderPass            = nullptr,
+            .pipelineRenderingInfo = PipelineRenderingInfo{
+                .label                  = "Light Pass",
+                .colorAttachmentFormats = {COLOR_FORMAT},
+                .depthAttachmentFormat  = DEPTH_FORMAT,
+            },
+            .pipelineLayout = _lightPPL.get(),
+            .shaderDesc     = ShaderDesc{
+
+                .shaderName        = "DeferredRender/LightPass.slang",
+                .bDeriveFromShader = false,
+                .vertexBufferDescs = {
+                    VertexBufferDescription{
+                        .slot  = 0,
+                        .pitch = sizeof(ya::Vertex),
                     },
                 },
-                .viewportState = ViewportState{
-                    .viewports = {
-                        Viewport::defaults(),
-                    },
-                    .scissors = {
-                        Scissor::defaults(),
+                .vertexAttributes = _commonVertexAttributes,
+            },
+            .dynamicFeatures = {
+                EPipelineDynamicFeature::Viewport,
+                EPipelineDynamicFeature::Scissor,
+            },
+            .primitiveType      = EPrimitiveType::TriangleList,
+            .rasterizationState = RasterizationState{
+                .cullMode  = ECullMode::None,
+                .frontFace = EFrontFaceType::CounterClockWise,
+            },
+            .multisampleState  = MultisampleState{},
+            .depthStencilState = DepthStencilState{
+                .bDepthTestEnable  = true,
+                .bDepthWriteEnable = false,
+            },
+            .colorBlendState = ColorBlendState{
+                .attachments = {
+                    ColorBlendAttachmentState{
+                        .index               = 0,
+                        .bBlendEnable        = false,
+                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .colorBlendOp        = EBlendOp::Add,
+                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .alphaBlendOp        = EBlendOp::Add,
+                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
                     },
                 },
-                .defines = {},
+            },
+            .viewportState = ViewportState{
+                .viewports = {
+                    Viewport::defaults(),
+                },
+                .scissors = {
+                    Scissor::defaults(),
+                },
+            },
+        };
+        _lightPipeline = IGraphicsPipeline::create(_render);
+        YA_CORE_ASSERT(_lightPipeline && _lightPipeline->recreate(lightPipelineCI), "Failed to create deferred light pipeline");
+
+        _deferredDSP = IDescriptorPool::create(
+            _render,
+            DescriptorPoolCreateInfo{
+                .label     = "Deferred Rendering DSP",
+                .maxSets   = 2,
+                .poolSizes = {
+                    DescriptorPoolSize{
+                        .type            = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 2, // frame + light
+                    },
+                    DescriptorPoolSize{
+                        .type            = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 3,
+                    },
+                },
+            });
+
+        _frameAndLightDS = _deferredDSP->allocateDescriptorSets(_frameAndLightDSL);
+        _lightTexturesDS = _deferredDSP->allocateDescriptorSets(_resourceOrLightTexturesDSL);
+
+        _frameUBO = IBuffer::create(
+            _render,
+            BufferCreateInfo{
+                .label         = "Deferrred frame buffer",
+                .usage         = EBufferUsage::UniformBuffer,
+                .size          = sizeof(LightPassFrameData),
+                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            });
+
+        _lightUBO = IBuffer::create(
+            _render,
+            BufferCreateInfo{
+                .label         = "Deferrred light buffer",
+                .usage         = EBufferUsage::UniformBuffer,
+                .size          = sizeof(LightPassLightData),
+                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
             });
 
 
-        _lightPipeline = result.pipeline;
-        _lightPPL      = result.pipelineLayout;
-        _lightDSLs     = result.descriptorSetLayouts;
+        _render->getDescriptorHelper()->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 0, _frameUBO.get()),
+            IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
+        });
     }
 
     struct TickDesc
     {
-        ICommandBuffer*         cmdBuf                   = nullptr;
+        ICommandBuffer*         cmdBuf;
         float                   dt                       = 0.0f;
         glm::mat4               view                     = glm::mat4(1.0f);
         glm::mat4               projection               = glm::mat4(1.0f);
@@ -342,8 +511,6 @@ struct DeferredRenderPipeline
     void tick(const TickDesc& desc);
     void shutdown() {}
     void renderGUI();
-
-    void fillLightDataFromFrameContext(const FrameContext* ctx);
 
 
 

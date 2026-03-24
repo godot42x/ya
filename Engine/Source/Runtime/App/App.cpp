@@ -14,7 +14,6 @@
 
 
 
-
 // Managers/System
 #include "Core/Manager/Facade.h"
 
@@ -168,11 +167,14 @@ void App::init(AppDesc ci)
     initRenderPipeline();
 
 
-    _sceneManager                   = new SceneManager();
-    _forwardPipeline->_sceneManager = _sceneManager;
+    _sceneManager = new SceneManager();
     _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
+
+#if FORWARD
+    _forwardPipeline->_sceneManager = _sceneManager;
+#endif
 
 
     FPSControl::get()->bEnable = true;

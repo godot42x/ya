@@ -137,6 +137,7 @@ enum T
     Fragment = 0x04,
     Compute  = 0x08,
     Count,
+    All = 0xFF,
 };
 
 inline T fromString(std::string_view str)

@@ -283,6 +283,21 @@ struct IDescriptorSetHelper
                                  EImageLayout::ShaderReadOnlyOptimal)});
     }
 
+    static WriteDescriptorSet writeOneImage(
+        DescriptorSetHandle dstSet,
+        uint32_t            dstBinding,
+        TextureBinding      binding)
+    {
+        return genImageWrite(dstSet,
+                             dstBinding,
+                             0,
+                             EPipelineDescriptorType::CombinedImageSampler,
+                             {DescriptorImageInfo(
+                                 binding.getImageViewHandle(),
+                                 binding.getSamplerHandle(),
+                                 EImageLayout::ShaderReadOnlyOptimal)});
+    }
+
     /**
      * @brief Helper to generate an image write descriptor
      */

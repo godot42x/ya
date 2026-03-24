@@ -33,6 +33,7 @@ struct LightData{
 [[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
 [[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
 
+// dynamic: use same set and slot but different definition(event not the same uniform)
 [[vk::binding(0,1)]] Sampler2D uTexGPos;
 [[vk::binding(1,1)]] Sampler2D uTexGNormal;
 [[vk::binding(2,1)]] Sampler2D uTexGAlbedoSpecular;
@@ -40,5 +41,6 @@ struct LightData{
 [[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
 [[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
 [[vk::binding(2, 1)]]  Sampler2D  uTexNormal;
+//
 
 [[vk::binding(0, 2)]] ConstantBuffer<ParamsData,Std140DataLayout> uParams;
