@@ -1,16 +1,15 @@
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
-#include "ECS/System/3D/SkyboxSystem.h"
-#include "ECS/System/Render/DebugRenderSystem.h"
-#include "ECS/System/Render/PhongMaterialSystem.h"
-#include "ECS/System/Render/SimpleMaterialSystem.h"
-#include "ECS/System/Render/UnlitMaterialSystem.h"
 #include "Core/Math/Math.h"
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/PointLightComponent.h"
-#include "Resource/AssetManager.h"
+#include "ECS/System/3D/SkyboxSystem.h"
+#include "ECS/System/Render/DebugRenderSystem.h"
+#include "ECS/System/Render/PhongMaterialSystem.h"
+#include "ECS/System/Render/SimpleMaterialSystem.h"
+#include "ECS/System/Render/UnlitMaterialSystem.h"
 #include "Platform/Render/Vulkan//VulkanRender.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Buffer.h"
@@ -18,6 +17,8 @@
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/Pipelines/ShadowMapping.h"
+#include "Resource/AssetManager.h"
+
 
 #include "utility.cc/ranges.h"
 
@@ -173,18 +174,18 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
         auto shadowAddressMode = ESamplerAddressMode::ClampToBorder;
         shadowSampler          = Sampler::create(
             SamplerDesc{
-                .label         = "shadow",
-                .minFilter     = EFilter::Linear,
-                .magFilter     = EFilter::Linear,
-                .mipmapMode    = ESamplerMipmapMode::Linear,
-                .addressModeU  = shadowAddressMode,
-                .addressModeV  = shadowAddressMode,
-                .addressModeW  = shadowAddressMode,
-                .mipLodBias    = 0.0f,
-                .maxAnisotropy = 1.0f,
-                .borderColor   = SamplerDesc::BorderColor{
-                      .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
-                      .color = {1.0f, 1.0f, 1.0f, 1.0f},
+                         .label         = "shadow",
+                         .minFilter     = EFilter::Linear,
+                         .magFilter     = EFilter::Linear,
+                         .mipmapMode    = ESamplerMipmapMode::Linear,
+                         .addressModeU  = shadowAddressMode,
+                         .addressModeV  = shadowAddressMode,
+                         .addressModeW  = shadowAddressMode,
+                         .mipLodBias    = 0.0f,
+                         .maxAnisotropy = 1.0f,
+                         .borderColor   = SamplerDesc::BorderColor{
+                               .type  = SamplerDesc::EBorderColor::FloatOpaqueWhite,
+                               .color = {1.0f, 1.0f, 1.0f, 1.0f},
                 },
             });
         YA_CORE_ASSERT(shadowSampler, "Failed to create shadow sampler");
@@ -259,7 +260,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                 .stencilAttachmentFormat = EFormat::Undefined,
             },
         });
-        auto* phongSys = phongMaterialSystem->as<PhongMaterialSystem>();
+        auto* phongSys       = phongMaterialSystem->as<PhongMaterialSystem>();
         _phongSharedLightUBO = IBuffer::create(
             _render,
             BufferCreateInfo{
@@ -337,7 +338,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 
         _render->waitIdle();
 
-        skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                 = skyBoxCubeMapDS;
+        skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = skyBoxCubeMapDS;
         phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = skyBoxCubeMapDS;
         shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(depthRT);
         phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = depthBufferShadowDS;
@@ -353,6 +354,12 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
 {
     YA_CORE_ASSERT(_sceneManager, "ForwardRenderPipeline requires scene manager before tick");
     YA_CORE_ASSERT(desc.cmdBuf, "ForwardRenderPipeline requires command buffer");
+
+    bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
+    if (!bViewPortRectValid)
+    {
+        return;
+    }
 
     FrameContext ctx;
     ctx.view       = desc.view;
@@ -435,12 +442,10 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             ctx.extent = depthRT->getExtent();
             shadowMappingSystem->tick(desc.cmdBuf, desc.dt, &ctx);
         }
-        desc.cmdBuf->endRendering(EndRenderingInfo{.renderTarget = depthRT.get()});
+        desc.cmdBuf->endRendering(shadowMapRI);
     }
 
-    bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
 
-    if (bViewPortRectValid)
     {
         YA_PROFILE_SCOPE("ViewPort pass")
 
@@ -471,10 +476,10 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
                 .windowWidth  = ctx.extent.width,
                 .windowHeight = ctx.extent.height,
                 .cam          = {
-                    .position       = ctx.cameraPos,
-                    .view           = ctx.view,
-                    .projection     = ctx.projection,
-                    .viewProjection = ctx.projection * ctx.view,
+                             .position       = ctx.cameraPos,
+                             .view           = ctx.view,
+                             .projection     = ctx.projection,
+                             .viewProjection = ctx.projection * ctx.view,
                 },
             };
 
@@ -500,8 +505,8 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             for (const auto& [entity, billboard, transfCompp] :
                  scene->getRegistry().view<BillboardComponent, TransformComponent>().each())
             {
-                auto texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
-                const auto& pos = transfCompp.getWorldPosition();
+                auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
+                const auto& pos     = transfCompp.getWorldPosition();
 
                 glm::vec3 billboardToCamera = ctx.cameraPos - pos;
                 float     distance          = glm::length(billboardToCamera);
@@ -534,12 +539,10 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             Render2D::end();
         }
 
-        desc.cmdBuf->endRendering(EndRenderingInfo{
-            .renderTarget = viewportRT.get(),
-        });
+        desc.cmdBuf->endRendering(ri);
     }
 
-    if (basicPostprocessingSystem->bEnabled && bViewPortRectValid)
+    if (basicPostprocessingSystem->bEnabled)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
         desc.cmdBuf->debugBeginLabel("Postprocessing");
@@ -556,10 +559,9 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             .depthClearValue  = ClearValue(1.0f, 0),
             .colorAttachments = {
                 RenderingInfo::ImageSpec{
-                    .texture     = postprocessTexture.get(),
-                    .sampleCount = ESampleCount::Sample_1,
-                    .loadOp      = EAttachmentLoadOp::Clear,
-                    .storeOp     = EAttachmentStoreOp::Store,
+                    .texture = postprocessTexture.get(),
+                    .loadOp  = EAttachmentLoadOp::Clear,
+                    .storeOp = EAttachmentStoreOp::Store,
                 },
             },
         };
@@ -576,7 +578,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
         postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(desc.viewportRect.extent));
         postprocessSystem->tick(desc.cmdBuf, desc.dt, &ctx);
-        desc.cmdBuf->endRendering(EndRenderingInfo{});
+        desc.cmdBuf->endRendering(ri);
 
         desc.cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
         desc.cmdBuf->debugEndLabel();
@@ -584,7 +586,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         viewportTexture = postprocessTexture.get();
     }
     else {
-        auto fb = viewportRT->getCurFrameBuffer();
+        auto fb         = viewportRT->getCurFrameBuffer();
         viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
     }
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
@@ -690,7 +692,7 @@ bool ForwardRenderPipeline::recreateViewportRT(uint32_t width, uint32_t height)
 
     viewportRT = ya::createRenderTarget(viewportRTci);
     if (viewportRT) {
-        auto fb        = viewportRT->getCurFrameBuffer();
+        auto fb         = viewportRT->getCurFrameBuffer();
         viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
     }
     return viewportRT != nullptr;

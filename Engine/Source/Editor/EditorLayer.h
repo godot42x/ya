@@ -21,6 +21,33 @@ namespace ya
 {
 
 struct App;
+struct Texture;
+struct IRenderTarget;
+struct IImageView;
+
+// All render resources that the editor viewport needs, explicitly passed in from App
+struct EditorViewportContext
+{
+    // Viewport output
+    Texture* viewportTexture = nullptr;
+
+    // Postprocessing
+    bool     bPostprocessingEnabled   = false;
+    Texture* postprocessOutputTexture = nullptr;
+
+    // Shadow mapping
+    bool          bShadowMappingEnabled     = false;
+    IRenderTarget* shadowDepthRT             = nullptr;
+    IImageView*   shadowDirectionalDepthIV  = nullptr;
+    // Point light shadow: indexed [pointLightIndex][faceIndex]
+    // Caller provides a lambda to avoid large fixed-size arrays
+    std::function<IImageView*(uint32_t /*pointLightIndex*/, uint32_t /*faceIndex*/)> getShadowPointFaceDepthIV;
+
+    // Mirror
+    bool           bMirrorRenderResult = false;
+    IRenderTarget* mirrorRenderTarget  = nullptr;
+};
+
 struct EditorLayer
 {
   private:
@@ -79,6 +106,9 @@ struct EditorLayer
     Rect2D   _pendingViewportRect; // Pending resize event to be processed in next frame
     bool     _bViewportResizePending = false;
 
+    // Render resources explicitly passed in from App each frame
+    EditorViewportContext _viewportCtx;
+
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
 
@@ -92,6 +122,9 @@ struct EditorLayer
 
     void onAttach();
     void onDetach();
+
+    // Set viewport render context before ImGui render - called from App each frame
+    void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
 
     void onUpdate(float dt);
     void setSceneContext(Scene *scene)

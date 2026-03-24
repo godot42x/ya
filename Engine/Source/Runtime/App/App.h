@@ -5,7 +5,6 @@
 #include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
 #include "Core/System/System.h"
-#include "ECS/System/Render/IRenderSystem.h"
 
 #include "Editor/EditorLayer.h"
 
@@ -30,7 +29,6 @@ struct Scene;
 struct Material;
 struct IRenderPass;
 struct LuaScriptingSystem;
-struct Texture;
 struct Texture;
 struct Sampler;
 struct RenderDocCapture;
@@ -179,10 +177,8 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-
-    static const auto COLOR_FORMAT                       = EFormat::R8G8B8A8_UNORM;
-    static const auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
-    static const auto SHADOW_MAPPING_DEPTH_BUFFER_FORMAT = EFormat::D32_SFLOAT;
+    static const auto COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
+    static const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
     // Render targets (simplified - only manage attachments, no RenderPass dependency)
     Rect2D                 _viewportRect;
@@ -340,6 +336,7 @@ struct App
     void initRenderPipeline();
     void shutdownRenderPipeline();
     void tickRenderPipeline(float dt);
+    void renderGUIRenderPipeline();
 };
 
 

@@ -305,7 +305,7 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
     }
 
-    void endRendering()
+    void endRendering(const RenderingInfo& info = {})
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::EndRendering{}});
     }
@@ -368,8 +368,9 @@ struct ICommandBuffer
 
     /**
      * @brief End rendering (works for both RenderPass and Dynamic Rendering)
+     * Shares the same RenderingInfo as beginRendering - uses finalLayout and renderTarget fields
      */
-    virtual void endRendering(const EndRenderingInfo& info = {}) = 0;
+    virtual void endRendering(const RenderingInfo& info = {}) = 0;
 
     virtual void transitionImageLayout(
         IImage*                      image,

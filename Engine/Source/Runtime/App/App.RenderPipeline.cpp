@@ -1,6 +1,8 @@
 
 #include "App.h"
 #include "Core/Debug/RenderDocCapture.h"
+#include "DeferredRender/DeferredRenderPipeline.h"
+#include "Editor/EditorLayer.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
 #include "ImGuiHelper.h"
@@ -18,8 +20,41 @@ namespace ya
 extern ClearValue colorClearValue;
 extern ClearValue depthClearValue;
 
+static enum EShadingModel {
+    Forward,
+    Deferred
+} _shadingModel = EShadingModel::Deferred;
+
+#define FORWARD 0
+
+
+
 // forward declaration - defined in App.cpp
 static void openDirectoryInOS(const std::string& filePath);
+
+
+void App::onSceneViewportResized(Rect2D rect)
+{
+    _viewportRect     = rect;
+    float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
+    camera.setAspectRatio(aspectRatio);
+
+    if (_forwardPipeline) {
+        _forwardPipeline->onViewportResized(rect);
+    }
+}
+
+bool App::recreateViewPortRT(uint32_t width, uint32_t height)
+{
+#if FORWARD
+    YA_CORE_ASSERT(_forwardPipeline, "ForwardRenderPipeline not initialized");
+    return _forwardPipeline->recreateViewportRT(width, height);
+#endif
+
+    // YA_CORE_ASSERT(_deferredPipeline, "DeferredRenderPipeline not initialized");
+    // _deferredPipeline->_viewportRT->recreate();
+    return true;
+}
 
 // MARK: Init
 void App::initRenderPipeline()
@@ -100,7 +135,11 @@ void App::initRenderPipeline()
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
 
+#if FORWARD
     _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
+#else
+    _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
+#endif
 
     // Get window size
     int winW = 0, winH = 0;
@@ -134,12 +173,21 @@ void App::initRenderPipeline()
         ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
     }
 
+
+#if FORWARD
     _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
         .render       = _render,
         .sceneManager = nullptr,
         .windowW      = winW,
         .windowH      = winH,
     });
+#else
+    _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
+        .render  = _render,
+        .windowW = winW,
+        .windowH = winH,
+    });
+#endif
 
     recreateViewPortRT(winW, winH);
 
@@ -208,6 +256,10 @@ void App::shutdownRenderPipeline()
     if (_forwardPipeline) {
         _forwardPipeline->shutdown();
         _forwardPipeline.reset();
+    }
+    if (_deferredPipeline) {
+        _deferredPipeline->shutdown();
+        _deferredPipeline.reset();
     }
 
     if (_renderDocCapture) {
@@ -281,9 +333,15 @@ void App::tickRenderPipeline(float dt)
         auto cc = runtimeCamera->getComponent<CameraComponent>();
         auto tc = runtimeCamera->getComponent<TransformComponent>();
 
+#if FORWARD
         const Extent2D ext = _forwardPipeline->getViewportExtent();
         cameraController.update(*tc, *cc, inputManager, ext, dt);
         cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+#else
+        const Extent2D ext = _deferredPipeline->_viewportRT->getExtent();
+        cameraController.update(*tc, *cc, inputManager, ext, dt);
+        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+#endif
     }
 
     glm::vec3 cameraPos;
@@ -305,27 +363,56 @@ void App::tickRenderPipeline(float dt)
         cameraPos  = camera.getPosition();
     }
 
-    if (1) {
-        // Forward
-        _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
-            .cmdBuf                   = cmdBuf.get(),
-            .dt                       = dt,
-            .view                     = view,
-            .projection               = projection,
-            .cameraPos                = cameraPos,
-            .viewportRect             = _viewportRect,
-            .viewportFrameBufferScale = _viewportFrameBufferScale,
-            .appMode                  = static_cast<int>(_appMode),
-            .clicked                  = &clicked,
-            .editorLayer              = _editorLayer,
-        });
-        YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
-    }
-    else {
-        // Deferred
+    // MARK: Shading
+#if FORWARD
+    // Forward
+    _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
+        .cmdBuf                   = cmdBuf.get(),
+        .dt                       = dt,
+        .view                     = view,
+        .projection               = projection,
+        .cameraPos                = cameraPos,
+        .viewportRect             = _viewportRect,
+        .viewportFrameBufferScale = _viewportFrameBufferScale,
+        .appMode                  = static_cast<int>(_appMode),
+        .clicked                  = &clicked,
+        .editorLayer              = _editorLayer,
+    });
+    YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+#else
+    // Deferred
+    _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
+        .dt                       = dt,
+        .view                     = view,
+        .projection               = projection,
+        .cameraPos                = cameraPos,
+        .viewportRect             = _viewportRect,
+        .viewportFrameBufferScale = _viewportFrameBufferScale,
+        .appMode                  = static_cast<int>(_appMode),
+        .clicked                  = &clicked,
+    });
+    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture")
+
+#endif
+
+    // Set viewport context for editor layer before ImGui render
+    if (_editorLayer) {
+        EditorViewportContext ctx;
+        ctx.viewportTexture           = getViewportOutputTexture();
+        ctx.bPostprocessingEnabled    = isPostprocessingEnabled();
+        ctx.postprocessOutputTexture  = getPostprocessOutputTexture();
+        ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
+        ctx.shadowDepthRT             = getShadowDepthRT();
+        ctx.shadowDirectionalDepthIV  = getShadowDirectionalDepthIV();
+        ctx.getShadowPointFaceDepthIV = [this](uint32_t pointLightIndex, uint32_t faceIndex) -> IImageView* {
+            return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+        };
+        ctx.bMirrorRenderResult = hasMirrorRenderResult();
+        ctx.mirrorRenderTarget  = getMirrorRenderTarget();
+        _editorLayer->setViewportContext(ctx);
     }
 
-    // --- MARK: Editor pass
+    // MARK: Editor pass
     {
         YA_PROFILE_SCOPE("Screen pass")
 
@@ -356,9 +443,7 @@ void App::tickRenderPipeline(float dt)
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
-        cmdBuf->endRendering(EndRenderingInfo{
-            .renderTarget = _screenRT.get(),
-        });
+        cmdBuf->endRendering(ri);
     }
     cmdBuf->end();
 
@@ -383,6 +468,84 @@ void App::tickRenderPipeline(float dt)
 
     if (_renderDocCapture) {
         _renderDocCapture->onFrameEnd();
+    }
+} // namespace ya
+
+
+// MARK: Render resource query proxies
+ForwardRenderPipeline* App::getForwardPipeline() const
+{
+    return _forwardPipeline.get();
+}
+
+bool App::isShadowMappingEnabled() const
+{
+    return _forwardPipeline ? _forwardPipeline->bShadowMapping : false;
+}
+
+bool App::isMirrorRenderingEnabled() const
+{
+    return false;
+}
+
+bool App::hasMirrorRenderResult() const
+{
+    return false;
+}
+
+IRenderTarget* App::getShadowDepthRT() const
+{
+    return _forwardPipeline && _forwardPipeline->depthRT ? _forwardPipeline->depthRT.get() : nullptr;
+}
+
+IImageView* App::getShadowDirectionalDepthIV() const
+{
+    return _forwardPipeline && _forwardPipeline->shadowDirectionalDepthIV ? _forwardPipeline->shadowDirectionalDepthIV.get() : nullptr;
+}
+
+IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+{
+    if (!_forwardPipeline) return nullptr;
+    if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
+    auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
+    return iv ? iv.get() : nullptr;
+}
+
+Texture* App::getViewportOutputTexture() const
+{
+    return _forwardPipeline ? _forwardPipeline->viewportTexture : nullptr;
+}
+
+Texture* App::getPostprocessOutputTexture() const
+{
+    return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;
+}
+
+IRenderTarget* App::getMirrorRenderTarget() const
+{
+    return nullptr;
+}
+
+bool App::isPostprocessingEnabled() const
+{
+    return _forwardPipeline && _forwardPipeline->basicPostprocessingSystem && _forwardPipeline->basicPostprocessingSystem->bEnabled;
+}
+
+void App::renderGUI(float dt)
+{
+    _editorLayer->onImGuiRender([this, dt]() {
+        this->onRenderGUI(dt);
+    });
+}
+
+void App::renderGUIRenderPipeline()
+{
+    if (_forwardPipeline) {
+        _forwardPipeline->renderGUI();
+    }
+
+    if (_forwardPipeline && _forwardPipeline->viewportRT) {
+        _forwardPipeline->viewportRT->onRenderGUI();
     }
 }
 

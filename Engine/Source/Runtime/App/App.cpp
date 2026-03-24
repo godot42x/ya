@@ -18,7 +18,6 @@
 // Managers/System
 #include "Core/Manager/Facade.h"
 
-#include "ECS/Component/PointLightComponent.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Scene/SceneManager.h"
@@ -45,12 +44,6 @@
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 
-#include "ECS/System/3D/SkyboxSystem.h"
-#include "ECS/System/Render/DebugRenderSystem.h"
-#include "ECS/System/Render/PhongMaterialSystem.h"
-#include "ECS/System/Render/SimpleMaterialSystem.h"
-#include "ECS/System/Render/UnlitMaterialSystem.h"
-
 #include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
@@ -59,13 +52,9 @@
 
 // Render
 #include "Platform/Render/Vulkan//VulkanRender.h"
-#include "Platform/Render/Vulkan/VulkanImage.h"
-#include "Platform/Render/Vulkan/VulkanImageView.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
-#include "Render/Pipelines/BasicPostprocessing.h"
-#include "Render/Pipelines/ShadowMapping.h"
 #include "Render/Render.h"
 
 
@@ -121,11 +110,6 @@ static void openDirectoryInOS(const std::string& filePath)
 App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
 
-bool App::recreateViewPortRT(uint32_t width, uint32_t height)
-{
-    YA_CORE_ASSERT(_forwardPipeline, "ForwardRenderPipeline not initialized");
-    return _forwardPipeline->recreateViewportRT(width, height);
-}
 
 
 // ===== TODO: These global variables should be moved to appropriate managers =====
@@ -263,71 +247,6 @@ int App::dispatchEvent(const T& event)
         MessageBus::get()->publish(event);
     }
     return 0;
-}
-
-ForwardRenderPipeline* App::getForwardPipeline() const
-{
-    return _forwardPipeline.get();
-}
-
-bool App::isShadowMappingEnabled() const
-{
-    return _forwardPipeline ? _forwardPipeline->bShadowMapping : false;
-}
-
-bool App::isMirrorRenderingEnabled() const
-{
-    return false;
-}
-
-bool App::hasMirrorRenderResult() const
-{
-    return false;
-}
-
-IRenderTarget* App::getShadowDepthRT() const
-{
-    return _forwardPipeline && _forwardPipeline->depthRT ? _forwardPipeline->depthRT.get() : nullptr;
-}
-
-IImageView* App::getShadowDirectionalDepthIV() const
-{
-    return _forwardPipeline && _forwardPipeline->shadowDirectionalDepthIV ? _forwardPipeline->shadowDirectionalDepthIV.get() : nullptr;
-}
-
-IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
-{
-    if (!_forwardPipeline) return nullptr;
-    if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
-    return iv ? iv.get() : nullptr;
-}
-
-Texture* App::getViewportOutputTexture() const
-{
-    return _forwardPipeline ? _forwardPipeline->viewportTexture : nullptr;
-}
-
-Texture* App::getPostprocessOutputTexture() const
-{
-    return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;
-}
-
-IRenderTarget* App::getMirrorRenderTarget() const
-{
-    return nullptr;
-}
-
-bool App::isPostprocessingEnabled() const
-{
-    return _forwardPipeline && _forwardPipeline->basicPostprocessingSystem && _forwardPipeline->basicPostprocessingSystem->bEnabled;
-}
-
-void App::renderGUI(float dt)
-{
-    _editorLayer->onImGuiRender([this, dt]() {
-        this->onRenderGUI(dt);
-    });
 }
 
 // MARK: on init
@@ -623,13 +542,7 @@ void App::onRenderGUI(float dt)
         // RenderTargetPool::get().onRenderGUI();
     }
 
-    if (_forwardPipeline) {
-        _forwardPipeline->renderGUI();
-    }
-
-    if (_forwardPipeline && _forwardPipeline->viewportRT) {
-        _forwardPipeline->viewportRT->onRenderGUI();
-    }
+    renderGUIRenderPipeline();
     _screenRT->onRenderGUI();
 
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {

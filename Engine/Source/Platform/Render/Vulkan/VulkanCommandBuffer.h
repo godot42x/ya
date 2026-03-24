@@ -70,7 +70,7 @@ class VulkanCommandBuffer : public ICommandBuffer
                                  const VkRect2D&                         renderArea,
                                  uint32_t                                layerCount = 1);
 
-    void executeEndRendering(const EndRenderingInfo& info);
+    void executeEndRendering(const RenderingInfo& info);
 
     void executeBindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                                    uint32_t                                firstSet,
@@ -143,7 +143,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     void copyBufferToImage(IBuffer* srcBuffer, IImage* dstImage, EImageLayout::T dstImageLayout,
                            const std::vector<BufferImageCopy>& regions) override;
     void beginRendering(const RenderingInfo& info) override;
-    void endRendering(const EndRenderingInfo& info) override;
+    void endRendering(const RenderingInfo& info) override;
     void transitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
                                const ImageSubresourceRange* subresourceRange) override;
     void transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange = nullptr) override;

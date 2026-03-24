@@ -23,20 +23,8 @@ struct PushConstants
     float4x4 modelMat;
 };
 
-
-
-struct ParamsData{
-    TextureParams textures[ETextureSlot::Count];
-};
-
-
 [[vk::push_constant]] PushConstants pc;
 
-[[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
-[[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
-[[vk::binding(2, 1)]]  Sampler2D  uTexNormal;
-
-[[vk::binding(0, 2)]] ConstantBuffer<ParamsData,Std140DataLayout> uParams;
 
 
 [shader("vertex")]

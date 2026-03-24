@@ -254,7 +254,7 @@ void VulkanCommandBuffer::executeSetPolygonMode(EPolygonMode::T polygonMode)
     }
 }
 
-void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo& info)
+void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
 {
     if (_currentRenderingMode == ERenderingMode::RenderPass) {
         // End traditional render pass
@@ -276,6 +276,32 @@ void VulkanCommandBuffer::executeEndRendering(const EndRenderingInfo& info)
                 VulkanImage::transitionLayouts(_commandBuffer, transitions);
             }
             info.renderTarget->endFrame(this);
+        }
+        else {
+            // Final layout transitions for manual image path
+            std::vector<VulkanImage::LayoutTransition> transitions;
+            for (auto& spec : info.colorAttachments) {
+                if (spec.finalLayout != EImageLayout::Undefined && spec.texture) {
+                    if (auto* img = spec.texture->getImage()) {
+                        if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
+                            transitions.emplace_back(vkImg, spec.finalLayout);
+                        }
+                    }
+                }
+            }
+            if (info.depthAttachment) {
+                auto& spec = *info.depthAttachment;
+                if (spec.finalLayout != EImageLayout::Undefined && spec.texture) {
+                    if (auto* img = spec.texture->getImage()) {
+                        if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
+                            transitions.emplace_back(vkImg, spec.finalLayout);
+                        }
+                    }
+                }
+            }
+            if (!transitions.empty()) {
+                VulkanImage::transitionLayouts(_commandBuffer, transitions);
+            }
         }
     }
 
@@ -794,6 +820,37 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
         return;
     }
 
+    // Initial layout transitions for manual images (mirrors RT branch)
+    {
+        std::vector<VulkanImage::LayoutTransition> transitions;
+        for (auto& spec : info.colorAttachments) {
+            if (spec.initialLayout != EImageLayout::Undefined && spec.texture) {
+                if (auto* img = spec.texture->getImage()) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
+                        transitions.emplace_back(vkImg, spec.initialLayout);
+                    }
+                }
+            }
+        }
+        if (info.depthAttachment) {
+            auto& spec = *info.depthAttachment;
+            auto targetLayout = spec.initialLayout;
+            if (targetLayout == EImageLayout::Undefined) {
+                targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
+            }
+            if (spec.texture) {
+                if (auto* img = spec.texture->getImage()) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
+                        transitions.emplace_back(vkImg, targetLayout);
+                    }
+                }
+            }
+        }
+        if (!transitions.empty()) {
+            VulkanImage::transitionLayouts(_commandBuffer, transitions);
+        }
+    }
+
     // Build color attachments from manual images
     std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
     vkColorAttachments.reserve(info.colorAttachments.size());
@@ -831,7 +888,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, info.layerCount);
 }
 
-void VulkanCommandBuffer::endRendering(const EndRenderingInfo& info)
+void VulkanCommandBuffer::endRendering(const RenderingInfo& info)
 {
     executeEndRendering(info);
     debugEndLabel();

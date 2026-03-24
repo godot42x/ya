@@ -15,25 +15,13 @@ struct VertexOutput{
 };
 
 
+
 struct PushConstants
 {
     float4x4 modelMat;
 };
-
-struct FrameData{
-    float3 viewPos;
-    mat4  viewMatrix;
-    mat4  projMatrix;
-};
-
 [[vk::push_constant]] PushConstants pc;
 
-[[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
-[[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
-
-[[vk::binding(0,1)]] Sampler2D uTexGPos;
-[[vk::binding(1,1)]] Sampler2D uTexGNormal;
-[[vk::binding(2,1)]] Sampler2D uTexGAlbedoSpecular;
 
 
 [shader("vertex")]
@@ -44,28 +32,13 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     vec4 viewSpacePos = uFrame.projMatrix * uFrame.viewMatrix * vec4(pos, 1.0);
     OUT.pos =  viewSpacePos.xyz;
 
-    OUT.normal = uTexGNormal.Sample(IN.uv).xyz;
+    OUT.normal = uTexGNormal.Sample(IN.uv).xyz; // TODO: use TBN in fragment 
     OUT.albedoSpecular = uTexGAlbedoSpecular.Sample(IN.uv);
 }
 
 
 struct FragmentOutput{
     float4 color: COLOR;
-};
-
-struct DirectionalLight{
-    vec3 dir;
-    vec3 color;
-    float ambient;
-    float shininess;
-};
-
-struct LightData{
-    DirectionalLight dirLight;
-};
-
-struct ParamsData{
-
 };
 
 

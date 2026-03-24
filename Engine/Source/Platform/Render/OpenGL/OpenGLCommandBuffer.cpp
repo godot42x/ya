@@ -469,7 +469,7 @@ void OpenGLCommandBuffer::beginRendering(const RenderingInfo &info)
     (void)info; // OpenGL doesn't need explicit rendering begin
 }
 
-void OpenGLCommandBuffer::endRendering()
+void OpenGLCommandBuffer::endRendering(const RenderingInfo& /*info*/)
 {
     // OpenGL doesn't need explicit rendering end
 }

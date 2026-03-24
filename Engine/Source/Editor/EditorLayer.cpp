@@ -534,7 +534,7 @@ void EditorLayer::viewportWindow()
         Sampler* sampler = _viewPortSamplerType == Linear
                              ? TextureLibrary::get().getLinearSampler()
                              : TextureLibrary::get().getNearestSampler();
-        auto* viewportTexture = App::get()->getViewportOutputTexture();
+        auto* viewportTexture = _viewportCtx.viewportTexture;
         if (viewportTexture && ImGuiHelper::Image(viewportTexture->getImageView(),
                                sampler,
                                "Viewport Texture ",
@@ -705,9 +705,9 @@ void EditorLayer::debugWindow()
         return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
     };
     Text("Shadow Mapping(Depth Buffer)");
-    if (App::get()->isShadowMappingEnabled()) {
-        auto* depthRT            = App::get()->getShadowDepthRT();
-        auto* directionalDepthIV = App::get()->getShadowDirectionalDepthIV();
+    if (_viewportCtx.bShadowMappingEnabled) {
+        auto* depthRT            = _viewportCtx.shadowDepthRT;
+        auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
         if (!depthRT || !directionalDepthIV) {
             ImGui::Text("Shadow resources unavailable");
         }
@@ -734,7 +734,9 @@ void EditorLayer::debugWindow()
             ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
         }
 
-            auto* faceIV = App::get()->getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace));
+            auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
+                             ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
+                             : nullptr;
             if (faceIV) {
                 ImGuiHelper::Image(faceIV,
                                TextureLibrary::get().getLinearSampler(),
@@ -789,8 +791,8 @@ void EditorLayer::debugWindow()
 
 
     Text("Mirror Render Target (from framebuffer)");
-    if (App::get()->hasMirrorRenderResult()) {
-        auto* mirrorRT = App::get()->getMirrorRenderTarget();
+    if (_viewportCtx.bMirrorRenderResult) {
+        auto* mirrorRT = _viewportCtx.mirrorRenderTarget;
         auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
         if (mirrorTexture) {
         ImGuiHelper::Image(mirrorTexture->getImageView(),
@@ -801,7 +803,7 @@ void EditorLayer::debugWindow()
     }
 
     Text("Viewport Render Target (from framebuffer)");
-    auto viewportRTTexture = App::get()->getViewportOutputTexture();
+    auto viewportRTTexture = _viewportCtx.viewportTexture;
     if (viewportRTTexture) {
         ImGuiHelper::Image(viewportRTTexture->getImageView(),
                            TextureLibrary::get().getLinearSampler(),
@@ -810,8 +812,8 @@ void EditorLayer::debugWindow()
     }
 
     Text("Post-process Texture (from App)");
-    if (App::get()->isPostprocessingEnabled()) {
-        auto postProcessTexture = App::get()->getPostprocessOutputTexture();
+    if (_viewportCtx.bPostprocessingEnabled) {
+        auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
         if (postProcessTexture) {
             ImGuiHelper::Image(postProcessTexture->getImageView(),
                                TextureLibrary::get().getLinearSampler(),

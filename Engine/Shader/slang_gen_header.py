@@ -184,6 +184,19 @@ def collect_structs(type_node: dict, visited: set, ordered: list):
     name = type_node["name"]
     if name in visited:
         return
+    # Capture nested struct occupied size from parent-field reflection.
+    # Example: a struct may end at byte 36 by its last field, but when embedded
+    # in std140 it can occupy 48 bytes due to trailing padding/alignment.
+    for field in type_node.get("fields", []):
+        field_type = field.get("type", {})
+        binding = field.get("binding", {})
+        if field_type.get("kind") == "struct" and "size" in binding:
+            field_struct_name = field_type.get("name")
+            if field_struct_name:
+                STRUCT_SIZES[field_struct_name] = max(
+                    STRUCT_SIZES.get(field_struct_name, 0),
+                    binding["size"],
+                )
     # Recurse into field types first (dependencies before dependents)
     for field in type_node.get("fields", []):
         collect_structs(field["type"], visited, ordered)
@@ -247,7 +260,7 @@ def gen_struct(struct_node: dict) -> str:
         lines.append(f"    uint8_t _pad{pad_idx}[{gap}];")
 
     lines.append("};")
-    # static_assert must come after the struct is complete (MSVC requires complete type)
+
     lines.append(f'static_assert(sizeof({name}) == {total_size}, "Size mismatch for {name}");')
     for field in fields:
         offset = field["binding"]["offset"]

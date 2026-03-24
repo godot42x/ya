@@ -7,17 +7,6 @@
 namespace ya
 {
 
-void App::onSceneViewportResized(Rect2D rect)
-{
-    _viewportRect     = rect;
-    float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
-    camera.setAspectRatio(aspectRatio);
-
-    if (_forwardPipeline) {
-        _forwardPipeline->onViewportResized(rect);
-    }
-}
-
 
 bool App::onWindowResized(const WindowResizeEvent& event)
 {

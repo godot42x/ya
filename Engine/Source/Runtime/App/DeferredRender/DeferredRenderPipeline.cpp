@@ -1,9 +1,12 @@
 #include "DeferredRenderPipeline.h"
 #include "Runtime/App/App.h"
 
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
+
 
 #include "Core/Math/Math.h"
 #include "Render/Material/MaterialFactory.h"
@@ -15,8 +18,10 @@ namespace ya
 
 {
 
-void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
+void DeferredRenderPipeline::tick(const TickDesc& desc)
 {
+    const auto& cmdBuf = desc.cmdBuf;
+
     _gBufferPipeline->beginFrame();
 
     auto app   = App::get();
@@ -25,8 +30,9 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
         return;
     }
 
+#pragma region GBuffer
     // 1. grab all mesh with * material, render to geometry
-    cmdBuf->beginRendering(RenderingInfo{
+    RenderingInfo gBufferRI{
         .label      = "GBuffer Pass",
         .renderArea = Rect2D{
             .pos    = {0, 0},
@@ -40,7 +46,8 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
         },
         .depthClearValue = ClearValue(1.0f, 0),
         .renderTarget    = _gBufferRT.get(),
-    });
+    };
+    cmdBuf->beginRendering(gBufferRI);
 
 
     cmdBuf->bindPipeline(_gBufferPipeline.get());
@@ -51,7 +58,10 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
     uint32_t materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
     bool     force         = _matPool.ensureCapacity(materialCount);
 
-    // flush material and write to GBuffer
+    // flush each material and write to GBuffer
+    // 1. params UBO
+    // 2. each slot's texture
+    // Then update other global resource(Not for each material) to gpu, eg: FrameUBO, LightUBO
     auto view = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
     for (const auto& [entity, mc, tc, pmc] : view.each())
     {
@@ -107,11 +117,108 @@ void DeferredRenderPipeline::tick(ICommandBuffer* cmdBuf)
     }
 
 
-    cmdBuf->endRendering({.renderTarget = _gBufferRT.get()});
+    cmdBuf->endRendering(gBufferRI);
+#pragma endregion
 
-    // cmdBuf->beginRendering()
+
+    RenderingInfo::ImageSpec sharedDepth{
+        .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
+        .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+    };
+
+    RenderingInfo lightPassRI{
+        .label      = "Light Pass",
+        .renderArea = {
+            .pos    = {0, 0},
+            .extent = _viewportRT->getExtent().toVec2(),
+        },
+        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
+        .colorAttachments = {
+            RenderingInfo::ImageSpec{
+                .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
+                .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+            },
+        },
+        .depthAttachment = &sharedDepth,
+    };
+
+    cmdBuf->beginRendering(lightPassRI);
+
+    // Fill light pass frame data from TickDesc
+    LightPassFrameData frameData{};
+    frameData.viewPos    = desc.cameraPos;
+    frameData.viewMatrix = desc.view;
+    frameData.projMatrix = desc.projection;
+
+    // Collect light data from scene into deferred light UBO
+    FrameContext ctx{};
+    ctx.view       = desc.view;
+    ctx.projection = desc.projection;
+    ctx.cameraPos  = desc.cameraPos;
+
+    ctx.numPointLights = 0;
+    for (const auto& [et, plc, tc] :
+         scene->getRegistry().view<PointLightComponent, TransformComponent>().each())
+    {
+        if (ctx.numPointLights >= MAX_POINT_LIGHTS) break; // FrameContext::pointLights is sized to MAX_POINT_LIGHTS
+        auto& pl     = ctx.pointLights[ctx.numPointLights];
+        pl.type      = static_cast<float>(plc._type);
+        pl.constant  = plc._constant;
+        pl.linear    = plc._linear;
+        pl.quadratic = plc._quadratic;
+        pl.position  = tc._position;
+        pl.ambient   = plc._ambient;
+        pl.diffuse   = plc._diffuse;
+        pl.specular  = plc._specular;
+        ++ctx.numPointLights;
+    }
+
+    for (const auto& [et, dlc, tc] :
+         scene->getRegistry().view<PointLightComponent, TransformComponent>().each())
+    {
+        ctx.bHasDirectionalLight       = true;
+        ctx.directionalLight.direction = tc.getForward(),
+        ctx.directionalLight.ambient   = dlc._ambient;
+        ctx.directionalLight.diffuse   = dlc._diffuse;
+        ctx.directionalLight.specular  = dlc._specular;
+    }
+
+
+    fillLightDataFromFrameContext(&ctx);
+
+    // TODO: bind frameData UBO, uLightPassLightData UBO, GBuffer textures, then draw fullscreen quad
+    cmdBuf->bindPipeline(_lightPipeline.get());
+    // cmdBuf->bindDescriptorSets(
+    //     _lightPipeline.get(),
+    //     0,
+    //     {
+    //         _currentScenePassResources->frameDS,   // frame data UBO
+    //         _currentScenePassResources->lightDS,   // light data UBO
+    //         _currentScenePassResources->gBufferDS, // GBuffer textures
+    //     });
+
+    cmdBuf->endRendering(lightPassRI);
+#pragma endregion
 }
 
+
+void DeferredRenderPipeline::fillLightDataFromFrameContext(const FrameContext* ctx)
+{
+    YA_CORE_ASSERT(ctx, "FrameContext is null when filling deferred light data");
+
+    // uLightPassLightData.numPointLights = std::min(ctx->numPointLights, MAX_POINT_LIGHTS_DEFERRED);
+    // for (uint32_t i = 0; i < uLightPassLightData.numPointLights; ++i) {
+    //     const auto& src = ctx->pointLights[i];
+    //     auto&       dst = uLightPassLightData.pointLights[i];
+    //     dst.pos         = src.position;
+    //     dst.color       = src.diffuse; // Use diffuse as the light color for deferred
+    // }
+    uLightPassLightData.dirLight.color     = ctx->directionalLight.diffuse;
+    uLightPassLightData.dirLight.ambient   = ctx->directionalLight.ambient;
+    uLightPassLightData.dirLight.shininess = 32;
+}
 
 void DeferredRenderPipeline::renderGUI()
 {

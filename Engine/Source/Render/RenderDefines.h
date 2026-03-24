@@ -770,12 +770,19 @@ struct RenderingInfo
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 
-        ESampleCount::T sampleCount;
-        // uint32_t        viewMask       = 0;
+        // ESampleCount::T sampleCount;
+        [[deprecated("Unimplemented")]]
+        uint32_t viewMask = 0;
         // bool            bResolveTarget = false;
 
         EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Load;   // Load operation
         EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
+
+        // Layout transitions (mirroring AttachmentDescription for manual image path)
+        // beginRendering will transition from current layout → initialLayout
+        // endRendering  will transition from current layout → finalLayout
+        EImageLayout::T initialLayout = EImageLayout::Undefined; // Undefined = no transition
+        EImageLayout::T finalLayout   = EImageLayout::Undefined; // Undefined = no transition
     };
 
     // use render target spec
@@ -784,10 +791,6 @@ struct RenderingInfo
     // or manual combined image spec
     std::vector<ImageSpec> colorAttachments = {};
     ImageSpec*             depthAttachment  = nullptr;
-};
-struct EndRenderingInfo
-{
-    IRenderTarget* renderTarget = nullptr;
 };
 
 
