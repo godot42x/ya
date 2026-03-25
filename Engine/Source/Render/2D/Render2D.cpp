@@ -22,13 +22,13 @@ FQuadRender*  Render2D::quadData = nullptr;
 auto& data2D = Render2D::data;
 
 
-void Render2D::init(IRender* render)
+void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     // windowWidth/Height are now set per-frame in begin() from the actual render target extent,
     // instead of from the swapchain. This unifies the data source.
 
     quadData = new FQuadRender();
-    quadData->init(render);
+    quadData->init(render, colorFormat, depthFormat);
 }
 
 void Render2D::destroy()
@@ -116,7 +116,7 @@ void Render2D::onImGui()
 
 // MARK: quad init
 
-void FQuadRender::init(IRender* render)
+void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     _render = render;
 
@@ -181,8 +181,8 @@ void FQuadRender::init(IRender* render)
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Sprite2D_Pipeline",
             .viewMask               = 0,
-            .colorAttachmentFormats = {App::get()->COLOR_FORMAT},
-            .depthAttachmentFormat  = App::get()->DEPTH_FORMAT,
+            .colorAttachmentFormats = {colorFormat},
+            .depthAttachmentFormat  = depthFormat,
         },
         .pipelineLayout = _pipelineLayout.get(),
 
@@ -296,8 +296,8 @@ void FQuadRender::init(IRender* render)
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Sprite2D_World_Pipeline",
             .viewMask               = 0,
-            .colorAttachmentFormats = {App::get()->COLOR_FORMAT},
-            .depthAttachmentFormat  = App::get()->DEPTH_FORMAT,
+            .colorAttachmentFormats = {colorFormat},
+            .depthAttachmentFormat  = depthFormat,
         },
         .pipelineLayout = _pipelineLayout.get(),
 

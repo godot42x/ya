@@ -508,7 +508,7 @@ bool Image(IImageView*        imageView,
            const ImVec4&      tint,
            const ImVec4&      border)
 {
-    if (imageView) {
+    if (imageView && imageView->getHandle()) {
         void* ds = getOrCreateDescriptorSet(imageView, sampler);
         if (ds) {
             ImGui::Image(ds, size, uv0, uv1, tint, border);

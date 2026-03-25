@@ -3,7 +3,6 @@
 
 #include "glm/glm.hpp"
 
-#include "Runtime/App/App.h"
 #include "Core/Base.h"
 
 #include "Render/Core/Buffer.h"
@@ -171,7 +170,7 @@ struct FQuadRender
 
     // Note: White texture and default sampler are now provided by TextureLibrary
 
-    void init(IRender* render);
+    void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
 
     void onImGui()
@@ -270,7 +269,7 @@ struct Render2D
     virtual ~Render2D() = default;
 
 
-    static void init(IRender* render);
+    static void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     static void destroy();
 
     static void onUpdate(float dt);

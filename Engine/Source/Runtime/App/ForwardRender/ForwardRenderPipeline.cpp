@@ -1,8 +1,6 @@
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
 #include "Core/Math/Math.h"
-#include "Core/UI/UIManager.h"
-#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/System/3D/SkyboxSystem.h"
@@ -11,16 +9,13 @@
 #include "ECS/System/Render/SimpleMaterialSystem.h"
 #include "ECS/System/Render/UnlitMaterialSystem.h"
 #include "Platform/Render/Vulkan//VulkanRender.h"
-#include "Render/2D/Render2D.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/Pipelines/ShadowMapping.h"
-#include "Resource/AssetManager.h"
+#include "Runtime/App/App.h"
 
-
-#include "utility.cc/ranges.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -31,7 +26,6 @@ namespace ya
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render       = desc.render;
-    _sceneManager = desc.sceneManager;
 
     postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
         .label   = "PostprocessRenderTarget",
@@ -345,15 +339,15 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
         phongMaterialSystem->as<PhongMaterialSystem>()->setDirectionalShadowMappingEnabled(bShadowMapping);
 
         debugRenderSystem->bEnabled = false;
-
-        Render2D::init(_render);
     }
 }
 
 void ForwardRenderPipeline::tick(const TickDesc& desc)
 {
-    YA_CORE_ASSERT(_sceneManager, "ForwardRenderPipeline requires scene manager before tick");
+    auto sceneManager = App::get()->getSceneManager();
+    YA_CORE_ASSERT(sceneManager, "ForwardRenderPipeline requires scene manager before tick");
     YA_CORE_ASSERT(desc.cmdBuf, "ForwardRenderPipeline requires command buffer");
+
 
     bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
     if (!bViewPortRectValid)
@@ -367,7 +361,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     ctx.cameraPos  = desc.cameraPos;
 
     ctx.bHasDirectionalLight = false;
-    auto scene               = _sceneManager->getActiveScene();
+    auto scene               = sceneManager->getActiveScene();
     for (const auto& [et, dlc, tc] :
          scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
     {
@@ -469,90 +463,30 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         ctx.extent = viewportRT->getExtent();
         renderScene(desc.cmdBuf, desc.dt, ctx, _phongViewportPassResources);
 
-        {
-            YA_PROFILE_SCOPE("Render2D");
-            FRender2dContext render2dCtx{
-                .cmdBuf       = desc.cmdBuf,
-                .windowWidth  = ctx.extent.width,
-                .windowHeight = ctx.extent.height,
-                .cam          = {
-                             .position       = ctx.cameraPos,
-                             .view           = ctx.view,
-                             .projection     = ctx.projection,
-                             .viewProjection = ctx.projection * ctx.view,
-                },
-            };
-
-            Render2D::begin(render2dCtx);
-
-            if (desc.appMode == 1 && desc.clicked && desc.editorLayer) {
-                for (const auto&& [idx, p] : ut::enumerate(*desc.clicked))
-                {
-                    auto tex = idx % 2 == 0
-                                 ? AssetManager::get()->getTextureByName("uv1")
-                                 : AssetManager::get()->getTextureByName("face");
-                    YA_CORE_ASSERT(tex, "Texture not found");
-                    glm::vec2 pos;
-                    desc.editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
-                    Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
-                }
-            }
-
-            const glm::vec2 screenSize(30, 30);
-            const float     viewPortHeight = static_cast<float>(ctx.extent.height);
-            const float     scaleFactor    = screenSize.x / viewPortHeight;
-
-            for (const auto& [entity, billboard, transfCompp] :
-                 scene->getRegistry().view<BillboardComponent, TransformComponent>().each())
-            {
-                auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
-                const auto& pos     = transfCompp.getWorldPosition();
-
-                glm::vec3 billboardToCamera = ctx.cameraPos - pos;
-                float     distance          = glm::length(billboardToCamera);
-                billboardToCamera           = glm::normalize(billboardToCamera);
-
-                glm::vec3 forward = billboardToCamera;
-                glm::vec3 worldUp = glm::vec3(0, 1, 0);
-                glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
-                glm::vec3 up      = glm::cross(forward, right);
-
-                glm::mat4 rot(1.0f);
-                rot[0] = glm::vec4(right, 0.0f);
-                rot[1] = glm::vec4(up, 0.0f);
-                rot[2] = glm::vec4(forward, 0.0f);
-
-                float     factor = scaleFactor * distance * 2.0f;
-                glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
-
-                glm::mat4 trans = glm::mat4(1.0);
-                trans           = glm::translate(trans, pos);
-                trans           = trans * rot;
-                trans           = glm::scale(trans, scale);
-
-                Render2D::makeWorldSprite(trans, texture);
-            }
-
-            Render2D::onRender();
-            UIManager::get()->render();
-            Render2D::onRenderGUI();
-            Render2D::end();
-        }
-
-        desc.cmdBuf->endRendering(ri);
+        // Viewport pass left open for App-level 2D rendering; App calls endViewportPass() after Render2D.
+        _viewportRI   = ri;
+        _lastTickCtx  = ctx;
+        _lastTickDesc = desc;
     }
+}
 
+void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+{
+    // Close viewport rendering pass (opened in tick())
+    cmdBuf->endRendering(_viewportRI);
+
+    // Run postprocessing if enabled
     if (basicPostprocessingSystem->bEnabled)
     {
         YA_PROFILE_SCOPE("Postprocessing pass")
-        desc.cmdBuf->debugBeginLabel("Postprocessing");
-        desc.cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ColorAttachmentOptimal);
+        cmdBuf->debugBeginLabel("Postprocessing");
+        cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ColorAttachmentOptimal);
 
         RenderingInfo ri{
             .label      = "Postprocessing",
             .renderArea = Rect2D{
                 .pos    = {0, 0},
-                .extent = desc.viewportRect.extent,
+                .extent = _lastTickDesc.viewportRect.extent,
             },
             .layerCount       = 1,
             .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
@@ -566,7 +500,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             },
         };
 
-        desc.cmdBuf->beginRendering(ri);
+        cmdBuf->beginRendering(ri);
 
         const auto& tex = bMSAA
                             ? viewportRT->getCurFrameBuffer()->getResolveTexture()
@@ -576,12 +510,12 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         auto swapchainFormat   = _render->getSwapchain()->getFormat();
         bool bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
         postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
-        postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(desc.viewportRect.extent));
-        postprocessSystem->tick(desc.cmdBuf, desc.dt, &ctx);
-        desc.cmdBuf->endRendering(ri);
+        postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_lastTickDesc.viewportRect.extent));
+        postprocessSystem->tick(cmdBuf, _lastTickDesc.dt, &_lastTickCtx);
+        cmdBuf->endRendering(ri);
 
-        desc.cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-        desc.cmdBuf->debugEndLabel();
+        cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
+        cmdBuf->debugEndLabel();
 
         viewportTexture = postprocessTexture.get();
     }

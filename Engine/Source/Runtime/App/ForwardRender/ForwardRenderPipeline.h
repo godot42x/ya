@@ -13,7 +13,6 @@ namespace ya
 {
 
 struct SceneManager;
-struct EditorLayer;
 struct Texture;
 struct Sampler;
 struct PhongScenePassResources;
@@ -27,7 +26,6 @@ struct ForwardRenderPipeline
     struct InitDesc
     {
         IRender*          render         = nullptr;
-        SceneManager*     sceneManager   = nullptr;
         int               windowW        = 0;
         int               windowH        = 0;
     };
@@ -43,13 +41,11 @@ struct ForwardRenderPipeline
         float                          viewportFrameBufferScale  = 1.0f;
         int                            appMode                   = 0;
         std::vector<glm::vec2>*       clicked                   = nullptr;
-        EditorLayer*                   editorLayer               = nullptr;
     };
 
     Deleter _deleter;
 
     IRender*         _render         = nullptr;
-    SceneManager*    _sceneManager   = nullptr;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
@@ -89,10 +85,18 @@ struct ForwardRenderPipeline
 
     Texture* viewportTexture = nullptr;
 
+    // Stored viewport RenderingInfo for App-level endViewportPass()
+    RenderingInfo _viewportRI{};
+    FrameContext  _lastTickCtx{};
+    TickDesc      _lastTickDesc{};
+
     void init(const InitDesc& desc);
     void tick(const TickDesc& desc);
     void shutdown();
     void renderGUI();
+
+    /// End the viewport rendering pass (called by App after 2D rendering)
+    void endViewportPass(ICommandBuffer* cmdBuf);
 
     bool     recreateViewportRT(uint32_t width, uint32_t height);
     void     onViewportResized(Rect2D rect);

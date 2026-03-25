@@ -62,6 +62,10 @@ struct DeferredRenderPipeline
     using ParamsData = slang_types::DeferredRender::GBufferPass::ParamsData;
     MaterialDescPool<PhongMaterial, ParamsData> _matPool;
 
+    // Stored viewport RenderingInfo for App-level endViewportPass()
+    RenderingInfo _viewportRI{};
+    RenderingInfo::ImageSpec _sharedDepthSpec{}; // Kept alive for _viewportRI.depthAttachment
+
 
     std::vector<VertexAttribute> _commonVertexAttributes = {
         VertexAttribute{
@@ -516,6 +520,12 @@ struct DeferredRenderPipeline
     void tick(const TickDesc& desc);
     void shutdown() {}
     void renderGUI();
+
+    /// End the viewport rendering pass (called by App after 2D rendering)
+    void endViewportPass(ICommandBuffer* cmdBuf);
+
+    /// Get viewport extent for 2D rendering context
+    Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
 
 
 

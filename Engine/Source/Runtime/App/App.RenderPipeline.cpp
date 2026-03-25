@@ -7,12 +7,20 @@
 
 #include "ImGuiHelper.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 #include "Resource/AssetManager.h"
 #include "Resource/FontManager.h"
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/ResourceRegistry.h"
 #include "Resource/TextureLibrary.h"
+
+#include "Core/UI/UIManager.h"
+#include "ECS/Component/2D/BillboardComponent.h"
+
+#include "utility.cc/ranges.h"
+
+#include <glm/gtc/matrix_transform.hpp>
 
 
 namespace ya
@@ -25,7 +33,6 @@ static enum EShadingModel {
     Deferred
 } _shadingModel = EShadingModel::Deferred;
 
-#define FORWARD 0
 
 
 
@@ -177,10 +184,9 @@ void App::initRenderPipeline()
 
 #if FORWARD
     _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-        .render       = _render,
-        .sceneManager = nullptr,
-        .windowW      = winW,
-        .windowH      = winH,
+        .render  = _render,
+        .windowW = winW,
+        .windowH = winH,
     });
 #else
     _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
@@ -191,6 +197,13 @@ void App::initRenderPipeline()
 #endif
 
     recreateViewPortRT(winW, winH);
+
+    // Initialize Render2D at App level (shared between forward & deferred pipelines)
+#if FORWARD
+    Render2D::init(_render, ForwardRenderPipeline::COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
+#else
+    Render2D::init(_render, _deferredPipeline->COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
+#endif
 
     // Screen RT (swapchain target for ImGui/editor)
     {
@@ -248,6 +261,9 @@ void App::initRenderPipeline()
 // MARK: Shutdown
 void App::shutdownRenderPipeline()
 {
+    // Destroy Render2D before pipeline shutdown
+    Render2D::destroy();
+
     ImGuiManager::get().shutdown();
 
     if (_screenRT) {
@@ -380,9 +396,7 @@ void App::tickRenderPipeline(float dt)
         .viewportFrameBufferScale = _viewportFrameBufferScale,
         .appMode                  = static_cast<int>(_appMode),
         .clicked                  = &clicked,
-        .editorLayer              = _editorLayer,
     });
-    YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
 #else
     // Deferred
     _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
@@ -396,8 +410,98 @@ void App::tickRenderPipeline(float dt)
         .appMode                  = static_cast<int>(_appMode),
         .clicked                  = &clicked,
     });
-    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture");
+#endif
 
+    // MARK: Render2D (shared between forward & deferred pipelines)
+    {
+        YA_PROFILE_SCOPE("Render2D")
+
+#if FORWARD
+        const Extent2D viewportExtent = _forwardPipeline->getViewportExtent();
+#else
+        const Extent2D viewportExtent = _deferredPipeline->getViewportExtent();
+#endif
+
+        FRender2dContext render2dCtx{
+            .cmdBuf       = cmdBuf.get(),
+            .windowWidth  = viewportExtent.width,
+            .windowHeight = viewportExtent.height,
+            .cam          = {
+                         .position       = cameraPos,
+                         .view           = view,
+                         .projection     = projection,
+                         .viewProjection = projection * view,
+            },
+        };
+
+        Render2D::begin(render2dCtx);
+
+        // Editor sprite placement
+        if (_appMode == AppMode::Drawing && _editorLayer) {
+            for (const auto&& [idx, p] : ut::enumerate(clicked))
+            {
+                auto tex = idx % 2 == 0
+                             ? AssetManager::get()->getTextureByName("uv1")
+                             : AssetManager::get()->getTextureByName("face");
+                YA_CORE_ASSERT(tex, "Texture not found");
+                glm::vec2 pos;
+                _editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
+                Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
+            }
+        }
+
+        // Billboard components
+        auto scene = _sceneManager ? _sceneManager->getActiveScene() : nullptr;
+        if (scene) {
+            const glm::vec2 screenSize(30, 30);
+            const float     viewPortHeight = static_cast<float>(viewportExtent.height);
+            const float     scaleFactor    = screenSize.x / viewPortHeight;
+
+            for (const auto& [entity, billboard, transfCompp] :
+                 scene->getRegistry().view<BillboardComponent, TransformComponent>().each())
+            {
+                auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
+                const auto& pos     = transfCompp.getWorldPosition();
+
+                glm::vec3 billboardToCamera = cameraPos - pos;
+                float     distance          = glm::length(billboardToCamera);
+                billboardToCamera           = glm::normalize(billboardToCamera);
+
+                glm::vec3 forward = billboardToCamera;
+                glm::vec3 worldUp = glm::vec3(0, 1, 0);
+                glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
+                glm::vec3 up      = glm::cross(forward, right);
+
+                glm::mat4 rot(1.0f);
+                rot[0] = glm::vec4(right, 0.0f);
+                rot[1] = glm::vec4(up, 0.0f);
+                rot[2] = glm::vec4(forward, 0.0f);
+
+                float     factor = scaleFactor * distance * 2.0f;
+                glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
+
+                glm::mat4 trans = glm::mat4(1.0);
+                trans           = glm::translate(trans, pos);
+                trans           = trans * rot;
+                trans           = glm::scale(trans, scale);
+
+                Render2D::makeWorldSprite(trans, texture);
+            }
+        }
+
+        Render2D::onRender();
+        UIManager::get()->render();
+        Render2D::onRenderGUI();
+        Render2D::end();
+    }
+
+    // End viewport rendering pass (also runs postprocessing for forward pipeline)
+#if FORWARD
+    _forwardPipeline->endViewportPass(cmdBuf.get());
+    YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+#else
+    _deferredPipeline->endViewportPass(cmdBuf.get());
+    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture");
 #endif
 
     // Set viewport context for editor layer before ImGui render
@@ -414,7 +518,7 @@ void App::tickRenderPipeline(float dt)
             return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
         };
         ctx.bMirrorRenderResult = hasMirrorRenderResult();
-        ctx.mirrorRenderTarget  = getMirrorRenderTarget();
+        ctx.mirrorRenderTarget  = nullptr; // getMirrorRenderTarget();
 #else
         ctx.viewportTexture = _deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
         ctx.deferredSpec    = {

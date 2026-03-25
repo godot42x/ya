@@ -70,7 +70,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     // normal
     // vec2 uv = (IN.TBN *  vec3(IN.uv, 0)).xy;
     // OUT.normal =  normalize(uTexNormal.Sample(uv).rgb * 2.0 - 1.0); // normal map is in [0,1], need to remap to [-1,1]
-    OUT.normal = IN.normal;
+    OUT.normal = normalize(IN.normal);
 
     float3 albedo = uTexDiffuse.Sample(IN.uv).rgb;
     float specular = uTexSpecular.Sample(IN.uv).r; // TODO: no specular texture use 1.0 by default?

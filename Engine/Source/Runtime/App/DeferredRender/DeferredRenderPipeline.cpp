@@ -194,7 +194,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
 #pragma region Lighting
 
-    RenderingInfo::ImageSpec sharedDepth{
+    _sharedDepthSpec = RenderingInfo::ImageSpec{
         .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
         .initialLayout = EImageLayout::Undefined,
         .finalLayout   = EImageLayout::Undefined,
@@ -214,7 +214,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
                 .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
             },
         },
-        .depthAttachment = &sharedDepth,
+        .depthAttachment = &_sharedDepthSpec,
     };
 
     cmdBuf->beginRendering(lightPassRI);
@@ -256,12 +256,20 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     auto quad = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad);
     quad->draw(cmdBuf);
-    cmdBuf->endRendering(lightPassRI);
+
+    // Light pass left open for App-level 2D rendering; App calls endViewportPass() after Render2D.
+    _viewportRI = lightPassRI;
 #pragma endregion
 
     cmdBuf->debugEndLabel();
 }
 
+
+void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+{
+    // Close light pass rendering (opened in tick())
+    cmdBuf->endRendering(_viewportRI);
+}
 
 void DeferredRenderPipeline::renderGUI()
 {

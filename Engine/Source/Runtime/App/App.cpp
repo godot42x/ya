@@ -172,10 +172,6 @@ void App::init(AppDesc ci)
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
 
-#if FORWARD
-    _forwardPipeline->_sceneManager = _sceneManager;
-#endif
-
 
     FPSControl::get()->bEnable = true;
     FPSControl::get()->setFPSLimit(120.f);
