@@ -101,6 +101,7 @@ void App::initRenderPipeline()
     // _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.glsl"});
 
     // MARK: Render doc hook
     if (_ci.bEnableRenderDoc) {
@@ -528,6 +529,7 @@ void App::tickRenderPipeline(float dt)
                .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
                .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
                .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
+               .gBufferSpecular       = _deferredPipeline->_debugSpecularIV,
         };
 #endif
         _editorLayer->setViewportContext(ctx);

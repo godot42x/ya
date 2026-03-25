@@ -12,6 +12,7 @@
 #include "Render/Material/PhongMaterial.h"
 
 #include "Resource/PrimitiveMeshCache.h"
+#include "Resource/TextureLibrary.h"
 
 #include <glm/gtx/string_cast.hpp>
 
@@ -250,10 +251,10 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     float lightVpY      = 0.0f;
     float lightVpHeight = static_cast<float>(viewportHeight);
-    if (_bReverseViewportY) {
-        lightVpY      = static_cast<float>(viewportHeight);
-        lightVpHeight = -static_cast<float>(viewportHeight);
-    }
+    // if (_bReverseViewportY) {
+    //     lightVpY      = static_cast<float>(viewportHeight);
+    //     lightVpHeight = -static_cast<float>(viewportHeight);
+    // }
     cmdBuf->setViewport(0.0f, lightVpY, static_cast<float>(viewportWidth), lightVpHeight);
     cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
 
@@ -280,6 +281,74 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 {
     // Close light pass rendering (opened in tick())
     cmdBuf->endRendering(_viewportRI);
+
+    // MARK: Debug specular channel extract pass
+    // Reads GBuffer albedoSpecular (attachment 2) and outputs its alpha channel to _debugChannelExtract.rt
+    {
+        auto& dc    = _debugChannelExtract;
+        auto  gBuf2 = _gBufferRT->getCurFrameBuffer()->getColorTexture(2);
+        if (gBuf2 && dc.rt && dc.pipeline)
+        {
+            auto iv     = gBuf2->getImageView();
+            auto extent = dc.rt->getExtent();
+            if (extent.width > 0 && extent.height > 0)
+            {
+                // Update descriptor set only if input changed
+                if (dc.currentInputImageViewHandle != iv->getHandle())
+                {
+                    dc.currentInputImageViewHandle = iv->getHandle();
+                    auto sampler = TextureLibrary::get().getDefaultSampler();
+                    DescriptorImageInfo imageInfo(iv->getHandle(), sampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal);
+                    _render->getDescriptorHelper()->updateDescriptorSets(
+                        {
+                            IDescriptorSetHelper::genImageWrite(
+                                dc.descriptorSet,
+                                0,
+                                0,
+                                EPipelineDescriptorType::CombinedImageSampler,
+                                {imageInfo}),
+                        },
+                        {});
+                }
+
+                RenderingInfo ri{
+                    .label      = "Debug Specular Extract",
+                    .renderArea = Rect2D{
+                        .pos    = {0, 0},
+                        .extent = extent.toVec2(),
+                    },
+                    .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
+                    .colorAttachments = {
+                        RenderingInfo::ImageSpec{
+                            .texture       = dc.rt->getCurFrameBuffer()->getColorTexture(0),
+                            .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                        },
+                    },
+                };
+                cmdBuf->beginRendering(ri);
+
+                cmdBuf->bindPipeline(dc.pipeline.get());
+                cmdBuf->setViewport(0, 0, (float)extent.width, (float)extent.height);
+                cmdBuf->setScissor(0, 0, extent.width, extent.height);
+                cmdBuf->bindDescriptorSets(dc.pipelineLayout.get(), 0, {dc.descriptorSet}, {});
+
+                // Push constant: channel=3 (alpha) to extract specular from .w
+                int channel = 3; // 0=R, 1=G, 2=B, 3=A
+                cmdBuf->pushConstants(dc.pipelineLayout.get(),
+                                      EShaderStage::Vertex | EShaderStage::Fragment,
+                                      0,
+                                      DebugChannelExtract::PC_SIZE,
+                                      &channel);
+
+                cmdBuf->draw(6, 1, 0, 0);
+                cmdBuf->endRendering(ri);
+
+                // Cache ImageView for editor
+                _debugSpecularIV = dc.rt->getCurFrameBuffer()->getColorTexture(0)->getImageView();
+            }
+        }
+    }
 }
 
 void DeferredRenderPipeline::renderGUI()

@@ -44,6 +44,21 @@ struct DeferredRenderPipeline
     DescriptorSetHandle _frameAndLightDS;
     DescriptorSetHandle _lightTexturesDS;
 
+    // --- Debug: channel extract pass (e.g. specular alpha channel) ---
+    struct DebugChannelExtract
+    {
+        static constexpr int PC_SIZE = 4; // just one int32 for channel index
+
+        stdptr<IRenderTarget>            rt;
+        stdptr<IGraphicsPipeline>        pipeline;
+        stdptr<IPipelineLayout>          pipelineLayout;
+        stdptr<IDescriptorSetLayout>     dsl;
+        std::shared_ptr<IDescriptorPool> descriptorPool;
+        DescriptorSetHandle              descriptorSet;
+        ImageViewHandle                  currentInputImageViewHandle = nullptr;
+    } _debugChannelExtract;
+    IImageView* _debugSpecularIV = nullptr; // cached pointer for editor
+
     stdptr<IBuffer> _frameUBO = nullptr;
     stdptr<IBuffer> _lightUBO = nullptr;
 
@@ -507,6 +522,117 @@ struct DeferredRenderPipeline
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
         });
 
+        // MARK: Debug channel extract (for specular alpha view)
+        {
+            auto& dc = _debugChannelExtract;
+            dc.dsl   = IDescriptorSetLayout::create(
+                _render,
+                DescriptorSetLayoutDesc{
+                      .label    = "DebugChannelExtract_DSL",
+                      .set      = 0,
+                      .bindings = {
+                        DescriptorSetLayoutBinding{
+                              .binding         = 0,
+                              .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                              .descriptorCount = 1,
+                              .stageFlags      = EShaderStage::Fragment,
+                        },
+                    },
+                });
+
+            dc.pipelineLayout = IPipelineLayout::create(
+                _render,
+                "DebugChannelExtract PPL",
+                {
+                    PushConstantRange{
+                        .offset     = 0,
+                        .size       = DebugChannelExtract::PC_SIZE,
+                        .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
+                    },
+                },
+                {dc.dsl});
+
+            GraphicsPipelineCreateInfo dcePipelineCI{
+                .pipelineRenderingInfo = PipelineRenderingInfo{
+                    .label                  = "DebugChannelExtract",
+                    .colorAttachmentFormats = {COLOR_FORMAT},
+                },
+                .pipelineLayout = dc.pipelineLayout.get(),
+                .shaderDesc     = ShaderDesc{
+                        .shaderName = "DebugChannelExtract.glsl", .bDeriveFromShader = false,
+                    // No vertex buffers — quad generated in shader
+                },
+                .dynamicFeatures = {
+                    EPipelineDynamicFeature::Viewport,
+                    EPipelineDynamicFeature::Scissor,
+                },
+                .primitiveType      = EPrimitiveType::TriangleList,
+                .rasterizationState = RasterizationState{
+                    .cullMode  = ECullMode::None,
+                    .frontFace = EFrontFaceType::CounterClockWise,
+                },
+                .depthStencilState = DepthStencilState{
+                    .bDepthTestEnable  = false,
+                    .bDepthWriteEnable = false,
+                },
+                .colorBlendState = ColorBlendState{
+                    .attachments = {
+                        ColorBlendAttachmentState{
+                            .index          = 0,
+                            .bBlendEnable   = false,
+                            .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                        },
+                    },
+                },
+                .viewportState = ViewportState{
+                    .viewports = {Viewport::defaults()},
+                    .scissors  = {Scissor::defaults()},
+                },
+            };
+            dc.pipeline = IGraphicsPipeline::create(_render);
+            YA_CORE_ASSERT(dc.pipeline && dc.pipeline->recreate(dcePipelineCI), "Failed to create DebugChannelExtract pipeline");
+
+            dc.rt = createRenderTarget(RenderTargetCreateInfo{
+                .label            = "DebugChannelExtract RT",
+                .renderingMode    = ERenderingMode::DynamicRendering,
+                .bSwapChainTarget = false,
+                .extent           = extent,
+                .attachments      = {
+                         .colorAttach = {
+                        AttachmentDescription{
+                                 .index          = 0,
+                                 .format         = COLOR_FORMAT,
+                                 .samples        = ESampleCount::Sample_1,
+                                 .loadOp         = EAttachmentLoadOp::Clear,
+                                 .storeOp        = EAttachmentStoreOp::Store,
+                                 .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                                 .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                                 .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                                 .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                                 .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                        },
+                    },
+                },
+            });
+
+            dc.descriptorPool = IDescriptorPool::create(
+                _render,
+                DescriptorPoolCreateInfo{
+                    .label     = "DebugChannelExtract DSP",
+                    .maxSets   = 1,
+                    .poolSizes = {
+                        DescriptorPoolSize{
+                            .type            = EPipelineDescriptorType::CombinedImageSampler,
+                            .descriptorCount = 1,
+                        },
+                    },
+                });
+            std::vector<DescriptorSetHandle> dceDS;
+            bool                             ok = dc.descriptorPool->allocateDescriptorSets(dc.dsl, 1, dceDS);
+            YA_CORE_ASSERT(ok, "Failed to allocate DebugChannelExtract descriptor set");
+            dc.descriptorSet = dceDS[0];
+        }
+
         _render->waitIdle();
     }
 
@@ -542,6 +668,9 @@ struct DeferredRenderPipeline
 
         _gBufferRT->setExtent(newExtent);
         _viewportRT->setExtent(newExtent);
+        if (_debugChannelExtract.rt) {
+            _debugChannelExtract.rt->setExtent(newExtent);
+        }
     }
 
 

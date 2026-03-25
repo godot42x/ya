@@ -856,6 +856,19 @@ void EditorLayer::debugWindow()
         ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular, sampler, "GBuffer Albedo Specular",
                            ImVec2(colWidth, imgHeight));
 
+        // Specular (extracted alpha channel)
+        TableSetColumnIndex(3);
+        Text("GBuffer Specular");
+        if (_viewportCtx.deferredSpec.gBufferSpecular)
+        {
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferSpecular, sampler, "GBuffer Specular",
+                               ImVec2(colWidth, imgHeight));
+        }
+        else
+        {
+            TextDisabled("(not available)");
+        }
+
         EndTable();
     }
 
