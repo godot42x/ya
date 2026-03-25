@@ -417,6 +417,11 @@ void App::tickRenderPipeline(float dt)
         ctx.mirrorRenderTarget  = getMirrorRenderTarget();
 #else
         ctx.viewportTexture = _deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
+        ctx.deferredSpec    = {
+               .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
+               .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
+               .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
+        };
 #endif
         _editorLayer->setViewportContext(ctx);
     }
@@ -524,10 +529,6 @@ Texture* App::getPostprocessOutputTexture() const
     return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;
 }
 
-IRenderTarget* App::getMirrorRenderTarget() const
-{
-    return nullptr;
-}
 
 bool App::isPostprocessingEnabled() const
 {
@@ -546,9 +547,8 @@ void App::renderGUIRenderPipeline()
     if (_forwardPipeline) {
         _forwardPipeline->renderGUI();
     }
-
-    if (_forwardPipeline && _forwardPipeline->viewportRT) {
-        _forwardPipeline->viewportRT->onRenderGUI();
+    if (_deferredPipeline) {
+        _deferredPipeline->renderGUI();
     }
 }
 

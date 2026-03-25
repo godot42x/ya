@@ -7,15 +7,16 @@
 namespace ya
 {
 
-std::shared_ptr<IBuffer> IBuffer::create(IRender *render, const BufferCreateInfo &ci)
+std::shared_ptr<IBuffer> IBuffer::create(IRender* render, const BufferCreateInfo& ci)
 {
-    if (auto *vkRender = dynamic_cast<VulkanRender *>(render))
-    {
-        // VulkanBuffer will handle the conversion from generic to Vulkan-specific types
-        return VulkanBuffer::create(vkRender, ci);
-    }
+    if (render->getAPI() == ERenderAPI::Vulkan) {
+        {
+            // VulkanBuffer will handle the conversion from generic to Vulkan-specific types
+            return VulkanBuffer::create(render->as<VulkanRender>(), ci);
+        }
 
-    return nullptr;
+        return nullptr;
+    }
 }
 
 } // namespace ya

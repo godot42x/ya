@@ -208,6 +208,8 @@ void VulkanPipeline::setDepthBias(float constantFactor, float clamp, float slope
 
 void VulkanPipeline::renderGUI()
 {
+    ImGui::PushID(_ci.shaderDesc.shaderName.c_str());
+
     bool bManualReload = false;
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
     if (ImGui::Button("Reload Shaders")) {
@@ -259,6 +261,7 @@ void VulkanPipeline::renderGUI()
     if (bManualReload) {
         updateDesc(_ci);
     }
+    ImGui::PopID();
 }
 
 

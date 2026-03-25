@@ -20,6 +20,7 @@ namespace ya
 void DeferredRenderPipeline::tick(const TickDesc& desc)
 {
     const auto& cmdBuf = desc.cmdBuf;
+    cmdBuf->debugBeginLabel("Deferred Pipeline");
 
     bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
     if (!bViewPortRectValid)
@@ -29,6 +30,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
 
     _gBufferPipeline->beginFrame();
+    _lightPipeline->beginFrame();
 
     auto app   = App::get();
     auto scene = app->getSceneManager()->getActiveScene();
@@ -36,47 +38,26 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         return;
     }
 
-#pragma region GBuffer
-    // 1. grab all mesh with * material, render to geometry
-    RenderingInfo gBufferRI{
-        .label      = "GBuffer Pass",
-        .renderArea = Rect2D{
-            .pos    = {0, 0},
-            .extent = _gBufferRT->getExtent().toVec2(),
-        },
-        .layerCount       = 1,
-        .colorClearValues = {
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-        },
-        .depthClearValue = ClearValue(1.0f, 0),
-        .renderTarget    = _gBufferRT.get(),
-    };
-    cmdBuf->beginRendering(gBufferRI);
-
-
-    cmdBuf->bindPipeline(_gBufferPipeline.get());
-    // cmdBuf->bindDescriptorSets()
-    auto pl = _gBufferPPL;
-    cmdBuf->setViewport(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
-    cmdBuf->setScissor(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
-
-    uint32_t materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
-    bool     force         = _matPool.ensureCapacity(materialCount);
-
-    // flush each material and write to GBuffer
-    // 1. params UBO
-    // 2. each slot's texture
-    // Then update other global resource(Not for each material) to gpu, eg: FrameUBO, LightUBO
+    // MARK: ressource upload
     auto view = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
+
+    // Prepare all material descriptor sets before issuing any draw calls.
+    // This avoids updating descriptor sets after they have already been bound in the same command buffer.
+    uint32_t         materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
+    bool             force         = _matPool.ensureCapacity(materialCount);
+    std::vector<int> preparedMaterial(materialCount, 0);
+
     for (const auto& [entity, mc, tc, pmc] : view.each())
     {
         PhongMaterial* material = pmc.getMaterial();
-        if (!material || material->getIndex() < 0)
+        if (!material || material->getIndex() < 0) {
             continue;
+        }
 
         uint32_t idx = static_cast<uint32_t>(material->getIndex());
+        if (preparedMaterial[idx]) {
+            continue;
+        }
 
         _matPool.flushDirty(
             material,
@@ -92,69 +73,17 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
                 ubo->writeData(&params, sizeof(PD), 0);
             },
             [this](DescriptorSetHandle ds, PhongMaterial* mat) {
-                // Use TextureBinding handles directly (with fallback built-in)
-                _render ->getDescriptorHelper()->updateDescriptorSets( {
-                        IDescriptorSetHelper::writeOneImage( ds, 0, mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
-                        IDescriptorSetHelper::writeOneImage(ds, 1,  mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
-                        IDescriptorSetHelper::writeOneImage(ds, 2,  mat->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
+                _render->getDescriptorHelper()->updateDescriptorSets(
+                    {
+                        IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
                     },
-                    {}); });
-
-        // set 1 = resource (textures), set 2 = params UBO
-        cmdBuf->bindDescriptorSets(
-            pl.get(),
-            1,
-            {
-                _matPool.resourceDS(idx),
-                _matPool.paramDS(idx),
+                    {});
             });
 
-        GBufferPushConstant pc{
-            .modelMat = tc.getTransform(),
-        };
-        cmdBuf->pushConstants(pl.get(),
-                              EShaderStage::Vertex,
-                              0,
-                              sizeof(GBufferPushConstant),
-                              &pc);
-        mc.getMesh()->draw(cmdBuf);
+        preparedMaterial[idx] = 1;
     }
-
-
-    cmdBuf->endRendering(gBufferRI);
-#pragma endregion
-
-
-    RenderingInfo::ImageSpec sharedDepth{
-        .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
-        .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-    };
-
-    RenderingInfo lightPassRI{
-        .label      = "Light Pass",
-        .renderArea = {
-            .pos    = {0, 0},
-            .extent = _viewportRT->getExtent().toVec2(),
-        },
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-        .colorAttachments = {
-            RenderingInfo::ImageSpec{
-                .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
-                .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-            },
-        },
-        .depthAttachment = &sharedDepth,
-    };
-
-    cmdBuf->beginRendering(lightPassRI);
-
-    // Fill light pass frame data from TickDesc
-    LightPassFrameData frameData{};
-    frameData.viewPos    = desc.cameraPos;
-    frameData.viewMatrix = desc.view;
-    frameData.projMatrix = desc.projection;
 
     // Collect light data from scene into deferred light UBO
     FrameContext ctx{};
@@ -183,7 +112,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
          scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
     {
         ctx.bHasDirectionalLight       = true;
-        ctx.directionalLight.direction = tc.getForward(),
+        ctx.directionalLight.direction = tc.getForward();
         ctx.directionalLight.ambient   = dlc._ambient;
         ctx.directionalLight.diffuse   = dlc._diffuse;
         ctx.directionalLight.specular  = dlc._specular;
@@ -192,14 +121,103 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     uLightPassFrameData.viewPos    = ctx.cameraPos;
     uLightPassFrameData.projMatrix = ctx.projection;
     uLightPassFrameData.viewMatrix = ctx.view;
-    _frameUBO->writeData(&uLightPassFrameData, sizeof(uLightPassFrameData), 0);
+    _frameUBO->writeData(&uLightPassFrameData, sizeof(LightPassFrameData), 0);
     _frameUBO->flush();
 
+    uLightPassLightData.dirLight.dir       = ctx.directionalLight.direction;
     uLightPassLightData.dirLight.color     = ctx.directionalLight.diffuse;
     uLightPassLightData.dirLight.ambient   = ctx.directionalLight.ambient;
     uLightPassLightData.dirLight.shininess = 32;
     _lightUBO->writeData(&uLightPassLightData, sizeof(LightPassLightData), 0);
     _lightUBO->flush();
+
+#pragma region GBuffer
+    const uint32_t viewportWidth  = static_cast<uint32_t>(desc.viewportRect.extent.x);
+    const uint32_t viewportHeight = static_cast<uint32_t>(desc.viewportRect.extent.y);
+
+    // 1. grab all mesh with * material, render to geometry
+    RenderingInfo gBufferRI{
+        .label      = "GBuffer Pass",
+        .renderArea = Rect2D{
+            .pos    = {0, 0},
+            .extent = _gBufferRT->getExtent().toVec2(),
+        },
+        .layerCount       = 1,
+        .colorClearValues = {
+            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+        },
+        .depthClearValue = ClearValue(1.0f, 0),
+        .renderTarget    = _gBufferRT.get(),
+    };
+    cmdBuf->beginRendering(gBufferRI);
+
+
+    cmdBuf->bindPipeline(_gBufferPipeline.get());
+    auto pl = _gBufferPPL;
+    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+    cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
+
+    for (const auto& [entity, mc, tc, pmc] : view.each())
+    {
+        PhongMaterial* material = pmc.getMaterial();
+        if (!material || material->getIndex() < 0)
+            continue;
+
+        uint32_t idx = static_cast<uint32_t>(material->getIndex());
+
+        // set 1 = resource (textures), set 2 = params UBO
+        cmdBuf->bindDescriptorSets(
+            pl.get(),
+            0,
+            {
+                _frameAndLightDS,
+                _matPool.resourceDS(idx),
+                _matPool.paramDS(idx),
+            });
+
+        GBufferPushConstant pc{
+            .modelMat = tc.getTransform(),
+        };
+        cmdBuf->pushConstants(pl.get(),
+                              EShaderStage::Vertex,
+                              0,
+                              sizeof(GBufferPushConstant),
+                              &pc);
+        mc.getMesh()->draw(cmdBuf);
+    }
+
+
+    cmdBuf->endRendering(gBufferRI);
+#pragma endregion
+
+#pragma region Lighting
+
+    RenderingInfo::ImageSpec sharedDepth{
+        .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
+        .initialLayout = EImageLayout::Undefined,
+        .finalLayout   = EImageLayout::Undefined,
+    };
+
+    RenderingInfo lightPassRI{
+        .label      = "Light Pass",
+        .renderArea = {
+            .pos    = {0, 0},
+            .extent = _viewportRT->getExtent().toVec2(),
+        },
+        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
+        .colorAttachments = {
+            RenderingInfo::ImageSpec{
+                .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
+                .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+            },
+        },
+        .depthAttachment = &sharedDepth,
+    };
+
+    cmdBuf->beginRendering(lightPassRI);
 
     // update 3 GBuffer textures to light pass, set 1 = resource (textures)
     auto sampler = TextureLibrary::get().getDefaultSampler();
@@ -224,10 +242,9 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
                     sampler.get()),
             });
 
-    // TODO: bind frameData UBO, uLightPassLightData UBO, GBuffer textures, then draw fullscreen quad
     cmdBuf->bindPipeline(_lightPipeline.get());
-    cmdBuf->setViewport(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
-    cmdBuf->setScissor(0, 0, desc.viewportRect.extent.x, desc.viewportRect.extent.y);
+    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+    cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
 
     cmdBuf->bindDescriptorSets(
         _lightPPL.get(),
@@ -241,15 +258,18 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     quad->draw(cmdBuf);
     cmdBuf->endRendering(lightPassRI);
 #pragma endregion
+
+    cmdBuf->debugEndLabel();
 }
 
 
 void DeferredRenderPipeline::renderGUI()
 {
-    if (!ImGui::CollapsingHeader("GBuffer Pipeline")) {
+    if (!ImGui::CollapsingHeader("Deferrer Pipeline")) {
         return;
     }
     _gBufferPipeline->renderGUI();
+    _lightPipeline->renderGUI();
 }
 
 } // namespace ya

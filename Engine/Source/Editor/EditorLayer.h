@@ -36,9 +36,9 @@ struct EditorViewportContext
     Texture* postprocessOutputTexture = nullptr;
 
     // Shadow mapping
-    bool          bShadowMappingEnabled     = false;
-    IRenderTarget* shadowDepthRT             = nullptr;
-    IImageView*   shadowDirectionalDepthIV  = nullptr;
+    bool           bShadowMappingEnabled    = false;
+    IRenderTarget* shadowDepthRT            = nullptr;
+    IImageView*    shadowDirectionalDepthIV = nullptr;
     // Point light shadow: indexed [pointLightIndex][faceIndex]
     // Caller provides a lambda to avoid large fixed-size arrays
     std::function<IImageView*(uint32_t /*pointLightIndex*/, uint32_t /*faceIndex*/)> getShadowPointFaceDepthIV;
@@ -46,13 +46,22 @@ struct EditorViewportContext
     // Mirror
     bool           bMirrorRenderResult = false;
     IRenderTarget* mirrorRenderTarget  = nullptr;
+
+
+    struct DeferredSpec
+    {
+        IImageView* gBufferPostion;
+        IImageView* gBufferNormal;
+        IImageView* gBufferAlbedoSpecular;
+
+    } deferredSpec;
 };
 
 struct EditorLayer
 {
   private:
-    App                  *_app = nullptr;
-    std::vector<Entity *> _selections;
+    App*                 _app = nullptr;
+    std::vector<Entity*> _selections;
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
@@ -92,10 +101,10 @@ struct EditorLayer
     ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
     ImGuizmo::MODE      _gizmoMode      = ImGuizmo::LOCAL;
 
-    const ImGuiImageEntry *_playIcon       = nullptr;
-    const ImGuiImageEntry *_pauseIcon      = nullptr;
-    const ImGuiImageEntry *_stopIcon       = nullptr;
-    const ImGuiImageEntry *_simulationIcon = nullptr;
+    const ImGuiImageEntry* _playIcon       = nullptr;
+    const ImGuiImageEntry* _pauseIcon      = nullptr;
+    const ImGuiImageEntry* _stopIcon       = nullptr;
+    const ImGuiImageEntry* _simulationIcon = nullptr;
     enum
     {
         Linear = 0,
@@ -117,7 +126,7 @@ struct EditorLayer
     std::string _currentScenePath; // Current scene file path
 
   public:
-    EditorLayer(App *app);
+    EditorLayer(App* app);
     ~EditorLayer() = default;
 
     void onAttach();
@@ -127,13 +136,13 @@ struct EditorLayer
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
 
     void onUpdate(float dt);
-    void setSceneContext(Scene *scene)
+    void setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);
     }
 
     // Entity selection bus - notifies DetailsView of selection changes
-    void setSelectedEntity(Entity *entity)
+    void setSelectedEntity(Entity* entity)
     {
         // 验证实体有效性，防止悬空指针
         if (entity && entity->isValid()) {
@@ -151,7 +160,7 @@ struct EditorLayer
     bool shouldCaptureInput() const { return bViewportFocused; }
 
     // Get and clear pending viewport resize - called from App before render
-    bool getPendingViewportResize(Rect2D &outRect)
+    bool getPendingViewportResize(Rect2D& outRect)
     {
         if (_bViewportResizePending) {
             outRect                 = _pendingViewportRect;
@@ -161,8 +170,8 @@ struct EditorLayer
         return false;
     }
 
-    bool screenToViewport(float screenX, float screenY, float &outX, float &outY) const;
-    bool screenToViewport(const glm::vec2 in, glm::vec2 &out) const;
+    bool screenToViewport(float screenX, float screenY, float& outX, float& outY) const;
+    bool screenToViewport(const glm::vec2 in, glm::vec2& out) const;
 
     void onImGuiRender(auto content)
     {
@@ -206,7 +215,7 @@ struct EditorLayer
 
         ImGui::End(); // End main dockspace window
     }
-    void onEvent(const Event &event);
+    void onEvent(const Event& event);
 
     void setContent(std::function<void()> contentFunc)
     {
@@ -220,8 +229,8 @@ struct EditorLayer
      * @param sampler Platform sampler handle (e.g., VkSampler)
      * @return ImTextureID (VkDescriptorSet as void*)
      */
-    const ImGuiImageEntry *getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
-    const ImGuiImageEntry *getOrCreateImGuiDescriptorSet(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr)
+    const ImGuiImageEntry* getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
+    const ImGuiImageEntry* getOrCreateImGuiDescriptorSet(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr)
     {
         return getOrCreateImGuiTextureID(imageView, sampler);
     }
@@ -229,7 +238,7 @@ struct EditorLayer
 
   private:
     // UI Methods
-    void updateWindowFlags(ya::ImGuiStyleScope &style);
+    void updateWindowFlags(ya::ImGuiStyleScope& style);
     void menuBar();
     void toolbar();
     // void settingsWindow();
@@ -243,19 +252,19 @@ struct EditorLayer
 
 
     void cleanupImGuiTextures();
-    void removeImGuiTexture(const ImGuiImageEntry *entry);
+    void removeImGuiTexture(const ImGuiImageEntry* entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
-    void focusCameraOnEntity(Entity *entity);
+    void focusCameraOnEntity(Entity* entity);
 
   public:
     // Public getters
-    glm::vec2                    getViewportSize() const { return _viewportSize; }
-    bool                         isViewportFocused() const { return bViewportFocused; }
-    bool                         isViewportHovered() const { return bViewportHovered; }
-    bool                         isGizmoActive() const; // Check if ImGuizmo is being used or hovered
-    bool                         isRightMouseDragging() const { return _bRightMouseDragging; }
-    const std::vector<Entity *> &getSelections() const { return _selections; }
+    glm::vec2                   getViewportSize() const { return _viewportSize; }
+    bool                        isViewportFocused() const { return bViewportFocused; }
+    bool                        isViewportHovered() const { return bViewportHovered; }
+    bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
+    const std::vector<Entity*>& getSelections() const { return _selections; }
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 

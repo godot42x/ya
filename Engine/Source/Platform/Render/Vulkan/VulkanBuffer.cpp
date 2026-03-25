@@ -65,34 +65,50 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
         YA_CORE_ERROR("Write data to buffer {} failed: buffer is not host visible", name);
         return false;
     }
-    YA_CORE_ASSERT(offset + size <= _size, "Write data out of range!");
-    void *mappedData = nullptr;
+
+    VkDeviceSize writeSize = size == 0 ? _size : size;
+    VkDeviceSize writeOffset = offset;
+    YA_CORE_ASSERT(writeOffset + writeSize <= _size, "Write data out of range!");
     if (size == 0) {
         YA_CORE_ASSERT(offset == 0, "If size is 0, offset must be 0");
-        VK_CALL(vkMapMemory(_render->getDevice(),
-                            _memory,
-                            0,
-                            VK_WHOLE_SIZE,
-                            0,
-                            &mappedData));
     }
-    else {
 
-        VK_CALL(vkMapMemory(_render->getDevice(),
-                            _memory,
-                            offset,
-                            size, // map the whole memory
-                            0,
-                            &mappedData));
+    void *mappedData = nullptr;
+    VK_CALL(vkMapMemory(_render->getDevice(),
+                        _memory,
+                        writeOffset,
+                        size == 0 ? VK_WHOLE_SIZE : writeSize,
+                        0,
+                        &mappedData));
+    bMemoryMapped = true;
+
+    std::memcpy(mappedData, data, static_cast<size_t>(writeSize));
+
+    if (!bHostCoherent) {
+        VkMappedMemoryRange range{
+            .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .pNext  = nullptr,
+            .memory = _memory,
+            .offset = writeOffset,
+            .size   = size == 0 ? VK_WHOLE_SIZE : writeSize,
+        };
+        VK_CALL(vkFlushMappedMemoryRanges(_render->getDevice(), 1, &range));
     }
-    std::memcpy(mappedData, data, size);
+
     vkUnmapMemory(_render->getDevice(), _memory);
+    bMemoryMapped = false;
     return true;
 }
 
 bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
 {
     YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot flush!");
+
+    if (bHostCoherent) {
+        return true;
+    }
+
+    YA_CORE_ASSERT(bMemoryMapped, "Buffer memory must be mapped before flush!");
 
     VkMappedMemoryRange range{
         .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -109,12 +125,14 @@ bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
 void VulkanBuffer::mapInternal(void **ptr)
 {
     YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot map!");
+    YA_CORE_ASSERT(!bMemoryMapped, "Buffer memory is already mapped!");
     VK_CALL(vkMapMemory(_render->getDevice(),
                         _memory,
                         0,
                         VK_WHOLE_SIZE,
                         0,
                         ptr));
+    bMemoryMapped = true;
 }
 
 void VulkanBuffer::setupDebugName(const std::string &inName)
@@ -127,7 +145,12 @@ void VulkanBuffer::setupDebugName(const std::string &inName)
 
 void VulkanBuffer::unmap()
 {
+    if (!bMemoryMapped) {
+        return;
+    }
+
     vkUnmapMemory(_render->getDevice(), _memory);
+    bMemoryMapped = false;
 }
 
 bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage, VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory)

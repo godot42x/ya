@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include "Core/Math/Geometry.h"
@@ -256,6 +255,7 @@ struct DeferredRenderPipeline
             },
             commonDSLs);
 
+        // MARK: GBuffer
         GraphicsPipelineCreateInfo gBufferPipelineCI{
             .renderPass            = _gBufferRT->getRenderPass(),
             .pipelineRenderingInfo = PipelineRenderingInfo{
@@ -294,18 +294,7 @@ struct DeferredRenderPipeline
                 .attachments = {
                     ColorBlendAttachmentState{
                         .index               = 0,
-                        .bBlendEnable        = false,
-                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                        .colorBlendOp        = EBlendOp::Add,
-                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
-                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                        .alphaBlendOp        = EBlendOp::Add,
-                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                    },
-                    ColorBlendAttachmentState{
-                        .index               = 2,
-                        .bBlendEnable        = false,
+                        .bBlendEnable        = true,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -316,7 +305,18 @@ struct DeferredRenderPipeline
                     },
                     ColorBlendAttachmentState{
                         .index               = 1,
-                        .bBlendEnable        = false,
+                        .bBlendEnable        = true,
+                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .colorBlendOp        = EBlendOp::Add,
+                        .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                        .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                        .alphaBlendOp        = EBlendOp::Add,
+                        .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                    },
+                    ColorBlendAttachmentState{
+                        .index               = 2,
+                        .bBlendEnable        = true,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -337,7 +337,7 @@ struct DeferredRenderPipeline
             },
         };
         _gBufferPipeline = IGraphicsPipeline::create(_render);
-        YA_CORE_ASSERT(_gBufferPipeline && _gBufferPipeline->recreate(gBufferPipelineCI), "Failed to create deferred gbuffer pipeline");
+        YA_CORE_ASSERT(_gBufferPipeline && _gBufferPipeline->recreate(gBufferPipelineCI), "Failed to create deferred GBuffer pipeline");
 
         const uint32_t texCount = static_cast<uint32_t>(_resourceOrLightTexturesDSL->getLayoutInfo().bindings.size());
         _matPool.init(
@@ -390,6 +390,7 @@ struct DeferredRenderPipeline
             },
             commonDSLs);
 
+        // MARK: Light
         GraphicsPipelineCreateInfo lightPipelineCI{
             .renderPass            = nullptr,
             .pipelineRenderingInfo = PipelineRenderingInfo{
@@ -421,7 +422,7 @@ struct DeferredRenderPipeline
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
-                .bDepthTestEnable  = true,
+                .bDepthTestEnable  = false,
                 .bDepthWriteEnable = false,
             },
             .colorBlendState = ColorBlendState{
@@ -488,7 +489,11 @@ struct DeferredRenderPipeline
                 .size          = sizeof(LightPassLightData),
                 .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
             });
-
+        // initial data
+        _frameUBO->writeData(&uLightPassFrameData, sizeof(LightPassFrameData), 0);
+        _frameUBO->flush();
+        _lightUBO->writeData(&uLightPassLightData, sizeof(LightPassLightData), 0);
+        _lightUBO->flush();
 
         _render->getDescriptorHelper()->updateDescriptorSets({
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 0, _frameUBO.get()),

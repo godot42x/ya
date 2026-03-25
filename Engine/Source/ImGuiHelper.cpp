@@ -22,9 +22,9 @@ namespace ya
 
 namespace
 {
-constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE        = 512;
+constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE       = 512;
 constexpr uint64_t IMGUI_DESCRIPTOR_GC_DELAY_FRAMES = 8;
-}
+} // namespace
 
 void ImGuiManager::initImGuiCore()
 {
@@ -394,8 +394,8 @@ struct ImageCacheKeyHash
 
 struct ImageCacheEntry
 {
-    ImageViewHandle handle = {};
-    void*           ds     = nullptr;
+    ImageViewHandle handle        = {};
+    void*           ds            = nullptr;
     uint64_t        lastUsedFrame = 0;
 };
 
@@ -508,10 +508,12 @@ bool Image(IImageView*        imageView,
            const ImVec4&      tint,
            const ImVec4&      border)
 {
-    void* ds = getOrCreateDescriptorSet(imageView, sampler);
-    if (ds) {
-        ImGui::Image(ds, size, uv0, uv1, tint, border);
-        return true;
+    if (imageView) {
+        void* ds = getOrCreateDescriptorSet(imageView, sampler);
+        if (ds) {
+            ImGui::Image(ds, size, uv0, uv1, tint, border);
+            return true;
+        }
     }
     ImGui::TextColored(ImVec4(1, 0, 0, 1), "Invalid Image: %s", alt.c_str());
     return false;

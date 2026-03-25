@@ -1,5 +1,4 @@
 #include "EditorLayer.h"
-#include "Runtime/App/App.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
@@ -13,6 +12,7 @@
 #include "ImGuiHelper.h"
 #include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
+#include "Runtime/App/App.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
@@ -531,16 +531,16 @@ void EditorLayer::viewportWindow()
     // Display the render texture from editor render target (unified Texture semantics)
     if (viewportPanelSize.x > 0 && viewportPanelSize.y > 0)
     {
-        Sampler* sampler = _viewPortSamplerType == Linear
-                             ? TextureLibrary::get().getLinearSampler()
-                             : TextureLibrary::get().getNearestSampler();
-        auto* viewportTexture = _viewportCtx.viewportTexture;
+        Sampler* sampler         = _viewPortSamplerType == Linear
+                                     ? TextureLibrary::get().getLinearSampler()
+                                     : TextureLibrary::get().getNearestSampler();
+        auto*    viewportTexture = _viewportCtx.viewportTexture;
         if (viewportTexture && ImGuiHelper::Image(viewportTexture->getImageView(),
-                               sampler,
-                               "Viewport Texture ",
-                               viewportPanelSize,
-                               ImVec2(0, 0),
-                               ImVec2(1, 1)))
+                                                  sampler,
+                                                  "Viewport Texture ",
+                                                  viewportPanelSize,
+                                                  ImVec2(0, 0),
+                                                  ImVec2(1, 1)))
         {
             renderGizmo();
         }
@@ -704,6 +704,7 @@ void EditorLayer::debugWindow()
     auto constraintSize = [&panelSize](auto extent) {
         return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
     };
+#if FORWARD
     Text("Shadow Mapping(Depth Buffer)");
     if (_viewportCtx.bShadowMappingEnabled) {
         auto* depthRT            = _viewportCtx.shadowDepthRT;
@@ -714,34 +715,34 @@ void EditorLayer::debugWindow()
         else {
             auto depthExtent = depthRT->getExtent();
             ImGuiHelper::Image(directionalDepthIV,
-                           TextureLibrary::get().getLinearSampler(),
-                           "Shadow Map",
-                           constraintSize(depthExtent));
-        // Per-face View2D: pre-created in App, just index
-        static int selectedPointLight = 0;
-        static int cubeFace           = ECubeFace::CubeFace_NegY;
-        {
-            static std::string pointLightComboStr = []() {
-                std::string ret{};
-                for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
-                    ret += "Point Light " + std::to_string(i) + '\0';
-                }
-                return ret;
-            }();
-            Combo(std::format("Point Light {}", selectedPointLight).c_str(),
-                  &selectedPointLight,
-                  pointLightComboStr.c_str());
-            ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
-        }
+                               TextureLibrary::get().getLinearSampler(),
+                               "Shadow Map",
+                               constraintSize(depthExtent));
+            // Per-face View2D: pre-created in App, just index
+            static int selectedPointLight = 0;
+            static int cubeFace           = ECubeFace::CubeFace_NegY;
+            {
+                static std::string pointLightComboStr = []() {
+                    std::string ret{};
+                    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+                        ret += "Point Light " + std::to_string(i) + '\0';
+                    }
+                    return ret;
+                }();
+                Combo(std::format("Point Light {}", selectedPointLight).c_str(),
+                      &selectedPointLight,
+                      pointLightComboStr.c_str());
+                ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
+            }
 
             auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
                              ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
                              : nullptr;
             if (faceIV) {
                 ImGuiHelper::Image(faceIV,
-                               TextureLibrary::get().getLinearSampler(),
-                               "Point Light Shadow Map",
-                               constraintSize(depthExtent));
+                                   TextureLibrary::get().getLinearSampler(),
+                                   "Point Light Shadow Map",
+                                   constraintSize(depthExtent));
             }
         }
 
@@ -792,13 +793,13 @@ void EditorLayer::debugWindow()
 
     Text("Mirror Render Target (from framebuffer)");
     if (_viewportCtx.bMirrorRenderResult) {
-        auto* mirrorRT = _viewportCtx.mirrorRenderTarget;
+        auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
         auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
         if (mirrorTexture) {
-        ImGuiHelper::Image(mirrorTexture->getImageView(),
-                           TextureLibrary::get().getLinearSampler(),
-                           "Mirror RT",
-                           constraintSize(mirrorTexture->getExtent()));
+            ImGuiHelper::Image(mirrorTexture->getImageView(),
+                               TextureLibrary::get().getLinearSampler(),
+                               "Mirror RT",
+                               constraintSize(mirrorTexture->getExtent()));
         }
     }
 
@@ -821,6 +822,18 @@ void EditorLayer::debugWindow()
                                constraintSize(postProcessTexture->getExtent()));
         }
     }
+#else
+
+    // deferred render GBuffers
+    auto size    = constraintSize(_viewportCtx.viewportTexture->getExtent());
+    auto sampler = TextureLibrary::get().getLinearSampler();
+
+    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position", size);
+    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal", size);
+    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular, sampler, "GBuffer Albedo Specular", size);
+
+
+#endif
 
     ImGui::End();
 }

@@ -19,11 +19,13 @@ struct VulkanBuffer : public ya::IBuffer
     VulkanRender *_render = nullptr;
 
     std::string        name         = "None";
-    VkBuffer           _handle      = VK_NULL_HANDLE;
-    VkDeviceMemory     _memory      = VK_NULL_HANDLE;
-    VkBufferUsageFlags _usageFlags  = 0;
-    VkDeviceSize       _size        = 0;
-    bool               bHostVisible = false; // CPU can access the memory directly
+    VkBuffer           _handle        = VK_NULL_HANDLE;
+    VkDeviceMemory     _memory        = VK_NULL_HANDLE;
+    VkBufferUsageFlags _usageFlags    = 0;
+    VkDeviceSize       _size          = 0;
+    bool               bHostVisible   = false; // CPU can access the memory directly
+    bool               bHostCoherent  = false; // CPU writes are automatically visible to the device
+    bool               bMemoryMapped  = false;
 
 
 
@@ -37,7 +39,8 @@ struct VulkanBuffer : public ya::IBuffer
         _usageFlags     = toVk(ci.usage);
         name            = ci.label;
         auto vkMemProps = toVk(ci.memProperties);
-        bHostVisible    = vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        bHostVisible    = (vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+        bHostCoherent   = (vkMemProps & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
         _size           = ci.size;
 
         if (ci.data.has_value()) {

@@ -25,6 +25,7 @@ struct PushConstants
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
 {
+    // OUT.sv_position = uFrame.projMatrix * uFrame.viewMatrix * float4(IN.pos, 1.0);
     OUT.sv_position = float4(IN.pos, 1.0);
     OUT.uv = IN.uv;
 }

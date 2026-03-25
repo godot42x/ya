@@ -626,6 +626,9 @@ void ForwardRenderPipeline::renderGUI()
         auto* phongSys = phongMaterialSystem->as<PhongMaterialSystem>();
         phongSys->setDirectionalShadowMappingEnabled(bShadowMapping);
     }
+    if (viewportRT) {
+        viewportRT->onRenderGUI();
+    }
 }
 
 bool ForwardRenderPipeline::recreateViewportRT(uint32_t width, uint32_t height)

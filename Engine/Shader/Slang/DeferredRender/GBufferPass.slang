@@ -30,10 +30,12 @@ struct PushConstants
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
 {
-    float4 pos = mul( pc.modelMat , float4(IN.pos,1.0));
-    OUT.pos = pos.xyz;
+    float4 worldPos = pc.modelMat * float4(IN.pos, 1.0);
+    float4 clipPos = uFrame.projMatrix * uFrame.viewMatrix * worldPos;
+
+    OUT.pos = worldPos.xyz;
     OUT.uv = IN.uv;
-    OUT.sv_position = pos;
+    OUT.sv_position = clipPos;
 
     // float3 T = normalize( (pc.modelMat * float4(IN.tangent, 0.0)).xyz);
     // float3 N = normalize( (pc.modelMat * float4(IN.normal, 0.0)).xyz);
