@@ -4,7 +4,7 @@
 
 struct VertexInput{
     float3 pos : POSITION;
-    float2 uv : UV;
+    float2 uv : TEXCOORD0;
 };
 
 struct VertexOutput{
@@ -32,7 +32,7 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
 
 
 struct FragmentOutput{
-    float4 color: COLOR;
+    float4 color: SV_Target;
 };
 
 
@@ -40,7 +40,7 @@ struct FragmentOutput{
 [shader("fragment")]
 void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
-    vec3 pos = uTexGPos.Sample(IN.uv).rgb;
+    vec3 pos = uTexGPos.Sample(IN.uv).rgb; // in world space
     vec3 normal = uTexGNormal.Sample(IN.uv).xyz;
     float4 albedoSpecular = uTexGAlbedoSpecular.Sample(IN.uv);
 

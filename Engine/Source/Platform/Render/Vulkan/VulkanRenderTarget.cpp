@@ -307,7 +307,6 @@ void VulkanRenderTarget::onRenderGUI()
 {
     ImGui::PushID(label.c_str());
     if (ImGui::CollapsingHeader(label.c_str())) {
-        ImGui::Indent();
 
         ImGui::Text("Extent: %u x %u", _extent.width, _extent.height);
         ImGui::Text("Color Attachments: %zu", _colorAttachmentDescs.size());
@@ -358,7 +357,6 @@ void VulkanRenderTarget::onRenderGUI()
             ImGui::TreePop();
         }
 
-        ImGui::Unindent();
     }
     ImGui::PopID();
 }

@@ -13,6 +13,8 @@
 
 #include "Resource/PrimitiveMeshCache.h"
 
+#include <glm/gtx/string_cast.hpp>
+
 namespace ya
 
 {
@@ -23,8 +25,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     cmdBuf->debugBeginLabel("Deferred Pipeline");
 
     bool bViewPortRectValid = desc.viewportRect.extent.x > 0 && desc.viewportRect.extent.y > 0;
-    if (!bViewPortRectValid)
-    {
+    if (!bViewPortRectValid) {
         return;
     }
 
@@ -39,7 +40,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     }
 
     // MARK: ressource upload
-    auto view = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
+    auto drawListView = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
 
     // Prepare all material descriptor sets before issuing any draw calls.
     // This avoids updating descriptor sets after they have already been bound in the same command buffer.
@@ -47,8 +48,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     bool             force         = _matPool.ensureCapacity(materialCount);
     std::vector<int> preparedMaterial(materialCount, 0);
 
-    for (const auto& [entity, mc, tc, pmc] : view.each())
-    {
+    for (const auto& [entity, mc, tc, pmc] : drawListView.each()) {
         PhongMaterial* material = pmc.getMaterial();
         if (!material || material->getIndex() < 0) {
             continue;
@@ -93,8 +93,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     ctx.numPointLights = 0;
     for (const auto& [et, plc, tc] :
-         scene->getRegistry().view<PointLightComponent, TransformComponent>().each())
-    {
+         scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
         if (ctx.numPointLights >= MAX_POINT_LIGHTS) break; // FrameContext::pointLights is sized to MAX_POINT_LIGHTS
         auto& pl     = ctx.pointLights[ctx.numPointLights];
         pl.type      = static_cast<float>(plc._type);
@@ -109,8 +108,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     }
 
     for (const auto& [et, dlc, tc] :
-         scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
-    {
+         scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each()) {
         ctx.bHasDirectionalLight       = true;
         ctx.directionalLight.direction = tc.getForward();
         ctx.directionalLight.ambient   = dlc._ambient;
@@ -146,7 +144,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         .colorClearValues = {
             ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
             ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+            ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
         },
         .depthClearValue = ClearValue(1.0f, 0),
         .renderTarget    = _gBufferRT.get(),
@@ -156,11 +154,17 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     cmdBuf->bindPipeline(_gBufferPipeline.get());
     auto pl = _gBufferPPL;
-    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+
+    float gbufVpY      = 0.0f;
+    float gbufVpHeight = static_cast<float>(viewportHeight);
+    if (_bReverseViewportY) {
+        gbufVpY      = static_cast<float>(viewportHeight);
+        gbufVpHeight = -static_cast<float>(viewportHeight);
+    }
+    cmdBuf->setViewport(0.0f, gbufVpY, static_cast<float>(viewportWidth), gbufVpHeight);
     cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
 
-    for (const auto& [entity, mc, tc, pmc] : view.each())
-    {
+    for (const auto& [entity, mc, tc, pmc] : drawListView.each()) {
         PhongMaterial* material = pmc.getMaterial();
         if (!material || material->getIndex() < 0)
             continue;
@@ -206,7 +210,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
             .pos    = {0, 0},
             .extent = _viewportRT->getExtent().toVec2(),
         },
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
+        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 0.0f)},
         .colorAttachments = {
             RenderingInfo::ImageSpec{
                 .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
@@ -243,7 +247,14 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
             });
 
     cmdBuf->bindPipeline(_lightPipeline.get());
-    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+
+    float lightVpY      = 0.0f;
+    float lightVpHeight = static_cast<float>(viewportHeight);
+    if (_bReverseViewportY) {
+        lightVpY      = static_cast<float>(viewportHeight);
+        lightVpHeight = -static_cast<float>(viewportHeight);
+    }
+    cmdBuf->setViewport(0.0f, lightVpY, static_cast<float>(viewportWidth), lightVpHeight);
     cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
 
     cmdBuf->bindDescriptorSets(
@@ -276,6 +287,7 @@ void DeferredRenderPipeline::renderGUI()
     if (!ImGui::CollapsingHeader("Deferrer Pipeline")) {
         return;
     }
+    ImGui::Checkbox("Reverse Viewport Y", &_bReverseViewportY);
     _gBufferPipeline->renderGUI();
     _lightPipeline->renderGUI();
 }

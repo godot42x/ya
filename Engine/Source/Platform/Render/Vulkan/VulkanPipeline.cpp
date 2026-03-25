@@ -1,11 +1,11 @@
 #include <algorithm>
 #include <array>
 
-#include "Runtime/App/App.h"
 #include "Core/Log.h"
 #include "ImGui.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/RenderDefines.h"
+#include "Runtime/App/App.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
@@ -208,7 +208,10 @@ void VulkanPipeline::setDepthBias(float constantFactor, float clamp, float slope
 
 void VulkanPipeline::renderGUI()
 {
-    ImGui::PushID(_ci.shaderDesc.shaderName.c_str());
+    auto name = _ci.shaderDesc.shaderName;
+    if (!ImGui::TreeNode(name.c_str())) {
+        return;
+    }
 
     bool bManualReload = false;
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
@@ -261,7 +264,7 @@ void VulkanPipeline::renderGUI()
     if (bManualReload) {
         updateDesc(_ci);
     }
-    ImGui::PopID();
+    ImGui::TreePop();
 }
 
 
@@ -356,7 +359,7 @@ void VulkanPipeline::createPipelineInternal()
 
     if (_ci.shaderDesc.bDeriveFromShader) {
         // Reflect all shader stages
-        auto processor = shaderStorage->selectProcessor(_ci.shaderDesc);
+        auto                                           processor = shaderStorage->selectProcessor(_ci.shaderDesc);
         std::vector<ShaderReflection::ShaderResources> allStageResources;
 
         for (const auto& [stage, spirv] : *stage2Spirv) {

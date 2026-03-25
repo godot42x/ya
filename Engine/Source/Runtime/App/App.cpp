@@ -398,7 +398,6 @@ void ya::App::quit()
 
     MaterialFactory::get()->destroy();
 
-    Render2D::destroy();
 
     _deleter.clear();
 

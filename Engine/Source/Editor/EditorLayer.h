@@ -53,6 +53,7 @@ struct EditorViewportContext
         IImageView* gBufferPostion;
         IImageView* gBufferNormal;
         IImageView* gBufferAlbedoSpecular;
+        IImageView* gBufferSpecular; // extracted alpha channel from albedoSpecular
 
     } deferredSpec;
 };

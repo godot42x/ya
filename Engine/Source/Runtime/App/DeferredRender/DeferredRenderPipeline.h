@@ -28,6 +28,8 @@ struct DeferredRenderPipeline
     const EFormat::T        DEPTH_FORMAT = EFormat::D32_SFLOAT;
     stdptr<IDescriptorPool> _deferredDSP;
 
+    bool _bReverseViewportY = true; // debug toggle
+
     stdptr<IGraphicsPipeline> _gBufferPipeline;
 
     stdptr<IPipelineLayout>      _gBufferPPL;
@@ -63,7 +65,7 @@ struct DeferredRenderPipeline
     MaterialDescPool<PhongMaterial, ParamsData> _matPool;
 
     // Stored viewport RenderingInfo for App-level endViewportPass()
-    RenderingInfo _viewportRI{};
+    RenderingInfo            _viewportRI{};
     RenderingInfo::ImageSpec _sharedDepthSpec{}; // Kept alive for _viewportRI.depthAttachment
 
 
@@ -261,7 +263,7 @@ struct DeferredRenderPipeline
 
         // MARK: GBuffer
         GraphicsPipelineCreateInfo gBufferPipelineCI{
-            .renderPass            = _gBufferRT->getRenderPass(),
+            .renderPass            = nullptr,
             .pipelineRenderingInfo = PipelineRenderingInfo{
                 .label                  = "GBuffer Pass",
                 .colorAttachmentFormats = {COLOR_FORMAT, COLOR_FORMAT, COLOR_FORMAT},
@@ -269,15 +271,16 @@ struct DeferredRenderPipeline
             },
             .pipelineLayout = _gBufferPPL.get(),
             .shaderDesc     = ShaderDesc{
-                    .shaderName        = "DeferredRender/GBufferPass.slang",
-                    .bDeriveFromShader = false,
-                    .vertexBufferDescs = {
+
+                .shaderName        = "DeferredRender/GBufferPass.slang",
+                .bDeriveFromShader = false,
+                .vertexBufferDescs = {
                     VertexBufferDescription{
-                            .slot  = 0,
-                            .pitch = sizeof(ya::Vertex),
+                        .slot  = 0,
+                        .pitch = sizeof(ya::Vertex),
                     },
                 },
-                    .vertexAttributes = _commonVertexAttributes,
+                .vertexAttributes = _commonVertexAttributes,
             },
             .dynamicFeatures = {
                 EPipelineDynamicFeature::Viewport,
@@ -426,14 +429,14 @@ struct DeferredRenderPipeline
             },
             .multisampleState  = MultisampleState{},
             .depthStencilState = DepthStencilState{
-                .bDepthTestEnable  = false,
+                .bDepthTestEnable  = true,
                 .bDepthWriteEnable = false,
             },
             .colorBlendState = ColorBlendState{
                 .attachments = {
                     ColorBlendAttachmentState{
                         .index               = 0,
-                        .bBlendEnable        = false,
+                        .bBlendEnable        = true,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -503,6 +506,8 @@ struct DeferredRenderPipeline
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 0, _frameUBO.get()),
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
         });
+
+        _render->waitIdle();
     }
 
     struct TickDesc
@@ -527,6 +532,17 @@ struct DeferredRenderPipeline
     /// Get viewport extent for 2D rendering context
     Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
 
+
+    void onViewportResized(Rect2D rect)
+    {
+        Extent2D newExtent{
+            .width  = static_cast<uint32_t>(rect.extent.x),
+            .height = static_cast<uint32_t>(rect.extent.y),
+        };
+
+        _gBufferRT->setExtent(newExtent);
+        _viewportRT->setExtent(newExtent);
+    }
 
 
   private:

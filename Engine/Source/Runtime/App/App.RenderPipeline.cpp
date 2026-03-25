@@ -35,7 +35,6 @@ static enum EShadingModel {
 
 
 
-
 // forward declaration - defined in App.cpp
 static void openDirectoryInOS(const std::string& filePath);
 
@@ -49,6 +48,9 @@ void App::onSceneViewportResized(Rect2D rect)
     if (_forwardPipeline) {
         _forwardPipeline->onViewportResized(rect);
     }
+    if (_deferredPipeline) {
+        _deferredPipeline->onViewportResized(rect);
+    }
 }
 
 bool App::recreateViewPortRT(uint32_t width, uint32_t height)
@@ -59,7 +61,7 @@ bool App::recreateViewPortRT(uint32_t width, uint32_t height)
 #endif
 
     // YA_CORE_ASSERT(_deferredPipeline, "DeferredRenderPipeline not initialized");
-    // _deferredPipeline->_viewportRT->recreate();
+    _deferredPipeline->_viewportRT->setExtent({.width = width, .height = height});
     return true;
 }
 
@@ -427,10 +429,11 @@ void App::tickRenderPipeline(float dt)
             .windowWidth  = viewportExtent.width,
             .windowHeight = viewportExtent.height,
             .cam          = {
-                         .position       = cameraPos,
-                         .view           = view,
-                         .projection     = projection,
-                         .viewProjection = projection * view,
+
+                .position       = cameraPos,
+                .view           = view,
+                .projection     = projection,
+                .viewProjection = projection * view,
             },
         };
 
@@ -558,6 +561,7 @@ void App::tickRenderPipeline(float dt)
         imManager.render();
 
         if (render->getAPI() == ERenderAPI::Vulkan) {
+            // record render cmds in fact, not submit
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 

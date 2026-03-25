@@ -33,7 +33,7 @@ struct FRender2dData
     uint32_t        windowHeight     = 600;
     ECullMode::T    screenCullMode   = ECullMode::Back;  // debug: world-space cull mode (Front when viewport reversed)
     ECullMode::T    worldCullMode    = ECullMode::Front; // debug: world-space cull mode (Front when viewport reversed)
-    bool            bReverseViewport = true; // flip viewport Y for world-space path to unify LH coordinate system across render backends
+    bool            bReverseViewport = true;             // flip viewport Y for world-space path to unify LH coordinate system across render backends
     ICommandBuffer* curCmdBuf        = nullptr;
 
     struct Camera
@@ -51,9 +51,9 @@ struct FRender2dContext
 {
     // std::vector<stdptr<RenderSystem>> _systems;
 
-    ICommandBuffer* cmdBuf        = nullptr;
-    uint32_t        windowWidth      = 800;
-    uint32_t        windowHeight     = 600;
+    ICommandBuffer* cmdBuf       = nullptr;
+    uint32_t        windowWidth  = 800;
+    uint32_t        windowHeight = 600;
 
     FRender2dData::Camera cam;
 };
@@ -103,8 +103,8 @@ struct FQuadRender
     // Screen-space batch
     FQuadRender::Vertex* vertexPtr     = nullptr;
     FQuadRender::Vertex* vertexPtrHead = nullptr;
-    uint32_t vertexCount = 0;
-    uint32_t indexCount  = 0;
+    uint32_t             vertexCount   = 0;
+    uint32_t             indexCount    = 0;
 
     // World-space batch
     std::shared_ptr<IBuffer> _worldVertexBuffer;
@@ -151,19 +151,19 @@ struct FQuadRender
     // descriptor set layout & pool
     std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
-    std::shared_ptr<IDescriptorSetLayout> _frameUboDSL    = nullptr;
+    std::shared_ptr<IDescriptorSetLayout> _frameUboDSL = nullptr;
 
     // Screen-space FrameUBO
-    DescriptorSetHandle                   _frameUboDS     = {};
-    std::shared_ptr<IBuffer>              _frameUBOBuffer = nullptr;
+    DescriptorSetHandle      _frameUboDS     = {};
+    std::shared_ptr<IBuffer> _frameUBOBuffer = nullptr;
 
     // World-space FrameUBO (separate buffer to avoid GPU read hazard)
-    DescriptorSetHandle                   _worldFrameUboDS     = {};
-    std::shared_ptr<IBuffer>              _worldFrameUBOBuffer = nullptr;
+    DescriptorSetHandle      _worldFrameUboDS     = {};
+    std::shared_ptr<IBuffer> _worldFrameUBOBuffer = nullptr;
 
     std::shared_ptr<IDescriptorSetLayout>     _resourceDSL = nullptr;
     DescriptorSetHandle                       _resourceDS  = {};
-    std::vector<TextureBinding>                  _textureBindings;
+    std::vector<TextureBinding>               _textureBindings;
     std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
     static constexpr size_t                   TEXTURE_SET_SIZE     = 32;
     int                                       _lastPushTextureSlot = -1;

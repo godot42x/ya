@@ -535,12 +535,12 @@ void EditorLayer::viewportWindow()
                                      ? TextureLibrary::get().getLinearSampler()
                                      : TextureLibrary::get().getNearestSampler();
         auto*    viewportTexture = _viewportCtx.viewportTexture;
-        if (viewportTexture && ImGuiHelper::Image(viewportTexture->getImageView(),
-                                                  sampler,
-                                                  "Viewport Texture ",
-                                                  viewportPanelSize,
-                                                  ImVec2(0, 0),
-                                                  ImVec2(1, 1)))
+        if (ImGuiHelper::Image(viewportTexture->getImageView(),
+                               sampler,
+                               "Viewport Texture ",
+                               viewportPanelSize,
+                               ImVec2(0, 0),
+                               ImVec2(1, 1)))
         {
             renderGizmo();
         }
@@ -824,13 +824,40 @@ void EditorLayer::debugWindow()
     }
 #else
 
-    // deferred render GBuffers
-    auto size    = constraintSize(_viewportCtx.viewportTexture->getExtent());
+    // deferred render GBuffers — 4-column table so they stay visible at any window size
     auto sampler = TextureLibrary::get().getLinearSampler();
+    float padding   = GetStyle().ItemSpacing.x;
+    float colWidth  = (panelSize.x - padding * 3.0f) / 4.0f;
+    float imgHeight = colWidth; // keep 1:1 aspect ratio for GBuffer views
 
-    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position", size);
-    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal", size);
-    ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular, sampler, "GBuffer Albedo Specular", size);
+    if (BeginTable("GBufferTable", 4, ImGuiTableFlags_BordersInnerV))
+    {
+        TableSetupColumn("Pos",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableSetupColumn("Norm", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableSetupColumn("Alb",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableSetupColumn("Spec", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableNextRow();
+
+        // Position
+        TableSetColumnIndex(0);
+        Text("GBuffer Position");
+        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position",
+                           ImVec2(colWidth, imgHeight));
+
+        // Normal
+        TableSetColumnIndex(1);
+        Text("GBuffer Normal");
+        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal",
+                           ImVec2(colWidth, imgHeight));
+
+        // Albedo + Specular
+        TableSetColumnIndex(2);
+        Text("GBuffer Albedo + Specular");
+        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular, sampler, "GBuffer Albedo Specular",
+                           ImVec2(colWidth, imgHeight));
+
+        EndTable();
+    }
 
 
 #endif
