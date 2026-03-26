@@ -17,6 +17,7 @@ struct ICommandBuffer;
 // Forward declarations
 struct PushConstantRange;
 struct GraphicsPipelineCreateInfo;
+struct ComputePipelineCreateInfo;
 
 /**
  * @brief Generic pipeline layout interface
@@ -60,6 +61,29 @@ struct IPipelineLayout : public plat_base<IPipelineLayout>
 
 struct IPipeline
 {
+    virtual ~IPipeline() = default;
+};
+
+/**
+ * @brief Generic compute pipeline interface
+ */
+struct IComputePipeline : public IPipeline
+{
+  public:
+    IComputePipeline()                                    = default;
+    IComputePipeline(const IComputePipeline&)            = delete;
+    IComputePipeline& operator=(const IComputePipeline&) = delete;
+    IComputePipeline(IComputePipeline&&)                 = default;
+    IComputePipeline& operator=(IComputePipeline&&)      = default;
+
+    static std::shared_ptr<IComputePipeline> create(IRender* render);
+
+    virtual bool              recreate(const ComputePipelineCreateInfo& ci) = 0;
+    virtual void             *getHandle() const                              = 0;
+    virtual const std::string& getName() const                               = 0;
+
+    template <typename T>
+    T getHandleAs() const { return static_cast<T>(getHandle()); }
 };
 
 /**

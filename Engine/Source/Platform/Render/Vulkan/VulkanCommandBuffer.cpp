@@ -184,6 +184,11 @@ void VulkanCommandBuffer::executeBindPipeline(IGraphicsPipeline* pipeline)
     vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandleAs<VkPipeline>());
 }
 
+void VulkanCommandBuffer::executeBindComputePipeline(IComputePipeline* pipeline)
+{
+    vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->getHandleAs<VkPipeline>());
+}
+
 void VulkanCommandBuffer::executeBindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset)
 {
     if (!buffer) return;
@@ -213,6 +218,17 @@ void VulkanCommandBuffer::executeDrawIndexed(uint32_t indexCount, uint32_t insta
                                              uint32_t firstInstance)
 {
     vkCmdDrawIndexed(_commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void VulkanCommandBuffer::executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    vkCmdDispatch(_commandBuffer, groupCountX, groupCountY, groupCountZ);
+}
+
+void VulkanCommandBuffer::executeDispatchIndirect(IBuffer* buffer, uint64_t offset)
+{
+    if (!buffer) return;
+    vkCmdDispatchIndirect(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset);
 }
 
 void VulkanCommandBuffer::executeSetViewport(float x, float y, float width, float height,
@@ -312,7 +328,8 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
 void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                                                     uint32_t                                firstSet,
                                                     const std::vector<DescriptorSetHandle>& descriptorSets,
-                                                    const std::vector<uint32_t>&            dynamicOffsets)
+                                                    const std::vector<uint32_t>&            dynamicOffsets,
+                                                    VkPipelineBindPoint                      bindPoint)
 {
     std::vector<VkDescriptorSet> vkDescriptorSets;
     vkDescriptorSets.reserve(descriptorSets.size());
@@ -324,7 +341,7 @@ void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout*            
 
     vkCmdBindDescriptorSets(
         _commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        bindPoint,
         pipelineLayout->getHandleAs<VkPipelineLayout>(),
         firstSet,
         static_cast<uint32_t>(vkDescriptorSets.size()),
@@ -487,6 +504,15 @@ void VulkanCommandBuffer::executeAll()
                 else if constexpr (std::is_same_v<T, RenderCommand::TransitionImageLayout>) {
                     (void)arg; // TODO: implement dynamic layout transitions
                 }
+                else if constexpr (std::is_same_v<T, RenderCommand::BindComputePipeline>) {
+                    executeBindComputePipeline(arg.pipeline);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::Dispatch>) {
+                    executeDispatch(arg.groupCountX, arg.groupCountY, arg.groupCountZ);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::DispatchIndirect>) {
+                    executeDispatchIndirect(arg.buffer, arg.offset);
+                }
             },
             cmd.data);
     }
@@ -500,6 +526,11 @@ void VulkanCommandBuffer::executeAll()
 void VulkanCommandBuffer::bindPipeline(IGraphicsPipeline* pipeline)
 {
     executeBindPipeline(pipeline);
+}
+
+void VulkanCommandBuffer::bindComputePipeline(IComputePipeline* pipeline)
+{
+    executeBindComputePipeline(pipeline);
 }
 
 void VulkanCommandBuffer::bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset)
@@ -900,7 +931,16 @@ void VulkanCommandBuffer::bindDescriptorSets(
     const std::vector<DescriptorSetHandle>& descriptorSets,
     const std::vector<uint32_t>&            dynamicOffsets)
 {
-    executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets);
+    executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets, VK_PIPELINE_BIND_POINT_GRAPHICS);
+}
+
+void VulkanCommandBuffer::bindComputeDescriptorSets(
+    IPipelineLayout*                        pipelineLayout,
+    uint32_t                                firstSet,
+    const std::vector<DescriptorSetHandle>& descriptorSets,
+    const std::vector<uint32_t>&            dynamicOffsets)
+{
+    executeBindDescriptorSets(pipelineLayout, firstSet, descriptorSets, dynamicOffsets, VK_PIPELINE_BIND_POINT_COMPUTE);
 }
 
 void VulkanCommandBuffer::pushConstants(
@@ -916,6 +956,16 @@ void VulkanCommandBuffer::pushConstants(
 void VulkanCommandBuffer::copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset)
 {
     executeCopyBuffer(src, dst, size, srcOffset, dstOffset);
+}
+
+void VulkanCommandBuffer::dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    executeDispatch(groupCountX, groupCountY, groupCountZ);
+}
+
+void VulkanCommandBuffer::dispatchIndirect(IBuffer* buffer, uint64_t offset)
+{
+    executeDispatchIndirect(buffer, offset);
 }
 
 void VulkanCommandBuffer::transitionImageLayout(

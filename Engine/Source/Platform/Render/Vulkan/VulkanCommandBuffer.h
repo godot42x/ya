@@ -41,6 +41,7 @@ class VulkanCommandBuffer : public ICommandBuffer
 
 
     void executeBindPipeline(IGraphicsPipeline* pipeline);
+    void executeBindComputePipeline(IComputePipeline* pipeline);
     void executeBindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset);
     void executeBindIndexBuffer(IBuffer* buffer, uint64_t offset, bool use16BitIndices);
     void executeDraw(uint32_t vertexCount, uint32_t instanceCount,
@@ -48,6 +49,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeDrawIndexed(uint32_t indexCount, uint32_t instanceCount,
                             uint32_t firstIndex, int32_t vertexOffset,
                             uint32_t firstInstance);
+    void executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+    void executeDispatchIndirect(IBuffer* buffer, uint64_t offset);
     void executeSetViewport(float x, float y, float width, float height,
                             float minDepth, float maxDepth);
     void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
@@ -75,7 +78,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeBindDescriptorSets(IPipelineLayout*                        pipelineLayout,
                                    uint32_t                                firstSet,
                                    const std::vector<DescriptorSetHandle>& descriptorSets,
-                                   const std::vector<uint32_t>&            dynamicOffsets);
+                                   const std::vector<uint32_t>&            dynamicOffsets,
+                                   VkPipelineBindPoint                      bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS);
     void executePushConstants(IPipelineLayout* pipelineLayout,
                               EShaderStage::T  stages,
                               uint32_t         offset,
@@ -116,6 +120,7 @@ class VulkanCommandBuffer : public ICommandBuffer
 
     // Virtual mode: direct implementations
     void bindPipeline(IGraphicsPipeline* pipeline) override;
+    void bindComputePipeline(IComputePipeline* pipeline) override;
     void bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset = 0) override;
     void bindIndexBuffer(IBuffer* buffer, uint64_t offset = 0, bool use16BitIndices = false) override;
     void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
@@ -133,6 +138,10 @@ class VulkanCommandBuffer : public ICommandBuffer
                             uint32_t                                firstSet,
                             const std::vector<DescriptorSetHandle>& descriptorSets,
                             const std::vector<uint32_t>&            dynamicOffsets = {}) override;
+    void bindComputeDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                                   uint32_t                                firstSet,
+                                   const std::vector<DescriptorSetHandle>& descriptorSets,
+                                   const std::vector<uint32_t>&            dynamicOffsets = {}) override;
     void pushConstants(IPipelineLayout* pipelineLayout,
                        EShaderStage::T  stages,
                        uint32_t         offset,
@@ -140,6 +149,8 @@ class VulkanCommandBuffer : public ICommandBuffer
                        const void*      data) override;
     void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
+    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
+    void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0) override;
     void copyBufferToImage(IBuffer* srcBuffer, IImage* dstImage, EImageLayout::T dstImageLayout,
                            const std::vector<BufferImageCopy>& regions) override;
     void beginRendering(const RenderingInfo& info) override;

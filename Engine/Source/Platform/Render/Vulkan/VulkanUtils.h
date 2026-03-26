@@ -785,6 +785,8 @@ inline auto toVk(T layout) -> VkImageLayout
         return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     case PresentSrcKHR:
         return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    case General:
+        return VK_IMAGE_LAYOUT_GENERAL;
     default:
         UNREACHABLE();
     }
@@ -806,6 +808,8 @@ inline auto fromVk(VkImageLayout layout) -> T
         return TransferDst;
     case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
         return PresentSrcKHR;
+    case VK_IMAGE_LAYOUT_GENERAL:
+        return General;
     default:
         UNREACHABLE();
     }

@@ -311,6 +311,7 @@ enum T
     TransferSrc /*Optimal*/,
     TransferDst /*Optimal*/,
     PresentSrcKHR,
+    General, // Required for storage image read/write
 };
 } // namespace EImageLayout
 
@@ -811,6 +812,12 @@ struct PipelineRenderingInfo
 };
 
 struct IPipelineLayout;
+
+struct ComputePipelineCreateInfo
+{
+    IPipelineLayout* pipelineLayout = nullptr;
+    ShaderDesc       shaderDesc;
+};
 
 struct GraphicsPipelineCreateInfo
 {

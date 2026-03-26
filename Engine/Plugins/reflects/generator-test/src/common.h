@@ -1,6 +1,15 @@
 #pragma once
 
+#include <any>
+#include <functional>
+#include <memory>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <vector>
+
+#include "registry.h"
 
 namespace refl
 {
@@ -37,7 +46,7 @@ struct
     float height;
 
     Person() : name(""), age(0), height(0.0f) {}
-    Person(const std::string &n, int a, float h) : name(n), age(a), height(h) {}
+    Person(const std::string& n, int a, float h) : name(n), age(a), height(h) {}
 
     void introduce() const
     {
@@ -67,7 +76,4 @@ struct
 };
 
 // 包含自动生成的反射注册代码
-// 使用条件编译避免首次生成时找不到文件
-#if __has_include("common.generated.h")
-    #include "common.generated.h"
-#endif
+#include "common.generated.h"

@@ -26,6 +26,7 @@ namespace ya
 
 // Forward declarations
 struct IGraphicsPipeline;
+struct IComputePipeline;
 struct IRenderPass;
 struct IBuffer;
 struct IImage;
@@ -126,6 +127,21 @@ struct RenderCommand
         EImageLayout::T       newLayout = EImageLayout::Undefined;
         ImageSubresourceRange subresourceRange;
     };
+    struct BindComputePipeline
+    {
+        IComputePipeline* pipeline = nullptr;
+    };
+    struct Dispatch
+    {
+        uint32_t groupCountX = 0;
+        uint32_t groupCountY = 0;
+        uint32_t groupCountZ = 0;
+    };
+    struct DispatchIndirect
+    {
+        IBuffer* buffer = nullptr;
+        uint64_t offset = 0;
+    };
 
     using type = std::variant<
         BindPipeline,
@@ -142,7 +158,10 @@ struct RenderCommand
         CopyBuffer,
         BeginRendering,
         EndRendering,
-        TransitionImageLayout>;
+        TransitionImageLayout,
+        BindComputePipeline,
+        Dispatch,
+        DispatchIndirect>;
     type data;
 };
 #endif
@@ -207,9 +226,14 @@ struct ICommandBuffer
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BindPipeline{pipeline}});
     }
+    void bindComputePipeline(IComputePipeline* pipeline)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::BindComputePipeline{pipeline}});
+    }
 #else
     // ========== Virtual Mode: Direct virtual function calls ==========
     virtual void bindPipeline(IGraphicsPipeline* pipeline) = 0;
+    virtual void bindComputePipeline(IComputePipeline* pipeline) = 0;
 #endif
 
 #if YA_CMDBUF_RECORD_MODE
@@ -276,6 +300,29 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{std::move(cmd)});
     }
 
+    void bindComputeDescriptorSets(
+        IPipelineLayout*                        pipelineLayout,
+        uint32_t                                firstSet,
+        const std::vector<DescriptorSetHandle>& descriptorSets,
+        const std::vector<uint32_t>&            dynamicOffsets = {})
+    {
+        // Reuse BindDescriptorSets command — executeAll dispatches it with COMPUTE bind point
+        // when preceded by BindComputePipeline. For simplicity, store the same struct
+        // and let the Vulkan backend differentiate via current pipeline type.
+        // However, to be explicit, we add a separate recording path.
+        // For now, we record the same struct; the executeAll in VulkanCommandBuffer
+        // will call executeBindDescriptorSets with the correct bind point based on
+        // surrounding BindComputePipeline context.
+        // TODO: add a dedicated BindComputeDescriptorSets command type if needed.
+        RenderCommand::BindDescriptorSets cmd{
+            .pipelineLayout = pipelineLayout,
+            .firstSet       = firstSet,
+            .descriptorSets = descriptorSets,
+            .dynamicOffsets = dynamicOffsets,
+        };
+        recordedCommands.push_back(RenderCommand{std::move(cmd)});
+    }
+
     void pushConstants(
         IPipelineLayout* pipelineLayout,
         EShaderStage::T  stages,
@@ -298,6 +345,16 @@ struct ICommandBuffer
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::CopyBuffer{src, dst, size, srcOffset, dstOffset}});
+    }
+
+    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::Dispatch{groupCountX, groupCountY, groupCountZ}});
+    }
+
+    void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::DispatchIndirect{buffer, offset}});
     }
 
     void beginRendering(const RenderingInfo& info)
@@ -343,6 +400,14 @@ struct ICommandBuffer
                                     uint32_t                                firstSet,
                                     const std::vector<DescriptorSetHandle>& descriptorSets,
                                     const std::vector<uint32_t>&            dynamicOffsets = {})                = 0;
+
+    /**
+     * @brief Bind descriptor sets for compute pipeline (VK_PIPELINE_BIND_POINT_COMPUTE)
+     */
+    virtual void bindComputeDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                                           uint32_t                                firstSet,
+                                           const std::vector<DescriptorSetHandle>& descriptorSets,
+                                           const std::vector<uint32_t>&            dynamicOffsets = {}) = 0;
     virtual void pushConstants(IPipelineLayout* pipelineLayout,
                                EShaderStage::T  stages,
                                uint32_t         offset,
@@ -350,6 +415,8 @@ struct ICommandBuffer
                                const void*      data)                                                     = 0;
     virtual void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
                             uint64_t srcOffset = 0, uint64_t dstOffset = 0)                          = 0;
+    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)           = 0;
+    virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                              = 0;
 
     /**
      * @brief Copy data from buffer to image

@@ -282,23 +282,29 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     // Close light pass rendering (opened in tick())
     cmdBuf->endRendering(_viewportRI);
 
-    // MARK: Debug specular channel extract pass
-    // Reads GBuffer albedoSpecular (attachment 2) and outputs its alpha channel to _debugChannelExtract.rt
+    // MARK: Debug specular channel extract pass (compute)
+    // Reads GBuffer albedoSpecular (attachment 2) alpha → writes storage image
     {
         auto& dc    = _debugChannelExtract;
         auto  gBuf2 = _gBufferRT->getCurFrameBuffer()->getColorTexture(2);
-        if (gBuf2 && dc.rt && dc.pipeline)
+        if (gBuf2 && dc.outputTexture && dc.pipeline)
         {
             auto iv     = gBuf2->getImageView();
-            auto extent = dc.rt->getExtent();
-            if (extent.width > 0 && extent.height > 0)
+            auto width  = dc.outputTexture->getWidth();
+            auto height = dc.outputTexture->getHeight();
+            if (width > 0 && height > 0)
             {
-                // Update descriptor set only if input changed
-                if (dc.currentInputImageViewHandle != iv->getHandle())
+                bool bNeedDescriptorUpdate = (dc.currentInputImageViewHandle != iv->getHandle());
+
+                // Always update output storage image descriptor (it may have been recreated on resize)
+                if (bNeedDescriptorUpdate || !dc.descriptorSet)
                 {
-                    dc.currentInputImageViewHandle = iv->getHandle();
+                    if (bNeedDescriptorUpdate)
+                    {
+                        dc.currentInputImageViewHandle = iv->getHandle();
+                    }
+
                     auto sampler = TextureLibrary::get().getDefaultSampler();
-                    DescriptorImageInfo imageInfo(iv->getHandle(), sampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal);
                     _render->getDescriptorHelper()->updateDescriptorSets(
                         {
                             IDescriptorSetHelper::genImageWrite(
@@ -306,46 +312,37 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
                                 0,
                                 0,
                                 EPipelineDescriptorType::CombinedImageSampler,
-                                {imageInfo}),
+                                {DescriptorImageInfo(iv->getHandle(), sampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal)}),
+                            IDescriptorSetHelper::genImageWrite(
+                                dc.descriptorSet,
+                                1,
+                                0,
+                                EPipelineDescriptorType::StorageImage,
+                                {DescriptorImageInfo(dc.outputTexture->getImageView()->getHandle(), SamplerHandle{}, EImageLayout::General)}),
                         },
                         {});
                 }
 
-                RenderingInfo ri{
-                    .label      = "Debug Specular Extract",
-                    .renderArea = Rect2D{
-                        .pos    = {0, 0},
-                        .extent = extent.toVec2(),
-                    },
-                    .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-                    .colorAttachments = {
-                        RenderingInfo::ImageSpec{
-                            .texture       = dc.rt->getCurFrameBuffer()->getColorTexture(0),
-                            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                        },
-                    },
-                };
-                cmdBuf->beginRendering(ri);
+                // Transition output image to General layout for compute write
+                cmdBuf->transitionImageLayoutAuto(dc.outputTexture->getImage(), EImageLayout::General);
 
-                cmdBuf->bindPipeline(dc.pipeline.get());
-                cmdBuf->setViewport(0, 0, (float)extent.width, (float)extent.height);
-                cmdBuf->setScissor(0, 0, extent.width, extent.height);
-                cmdBuf->bindDescriptorSets(dc.pipelineLayout.get(), 0, {dc.descriptorSet}, {});
+                cmdBuf->debugBeginLabel("Debug Specular Extract (Compute)");
 
-                // Push constant: channel=3 (alpha) to extract specular from .w
-                int channel = 3; // 0=R, 1=G, 2=B, 3=A
-                cmdBuf->pushConstants(dc.pipelineLayout.get(),
-                                      EShaderStage::Vertex | EShaderStage::Fragment,
-                                      0,
-                                      DebugChannelExtract::PC_SIZE,
-                                      &channel);
+                cmdBuf->bindComputePipeline(dc.pipeline.get());
+                cmdBuf->bindComputeDescriptorSets(dc.pipelineLayout.get(), 0, {dc.descriptorSet}, {});
 
-                cmdBuf->draw(6, 1, 0, 0);
-                cmdBuf->endRendering(ri);
+                const uint32_t wgSize   = 8;
+                uint32_t       wgCountX = (width + wgSize - 1) / wgSize;
+                uint32_t       wgCountY = (height + wgSize - 1) / wgSize;
+                cmdBuf->dispatch(wgCountX, wgCountY, 1);
+
+                cmdBuf->debugEndLabel();
+
+                // Transition output image back to ShaderReadOnlyOptimal for downstream sampling
+                cmdBuf->transitionImageLayoutAuto(dc.outputTexture->getImage(), EImageLayout::ShaderReadOnlyOptimal);
 
                 // Cache ImageView for editor
-                _debugSpecularIV = dc.rt->getCurFrameBuffer()->getColorTexture(0)->getImageView();
+                _debugSpecularIV = dc.outputTexture->getImageView();
             }
         }
     }

@@ -60,4 +60,23 @@ std::shared_ptr<IGraphicsPipeline> IGraphicsPipeline::create(IRender *render)
     }
 }
 
+std::shared_ptr<IComputePipeline> IComputePipeline::create(IRender* render)
+{
+    if (!render)
+        return nullptr;
+
+    switch (render->getAPI())
+    {
+    case ERenderAPI::Vulkan:
+    {
+        auto vkRender = render->as<VulkanRender>();
+        auto ret      = makeShared<VulkanComputePipeline>(vkRender);
+        YA_CORE_ASSERT(ret != nullptr, "Failed to create VulkanComputePipeline");
+        return ret;
+    }
+    default:
+        return nullptr;
+    }
+}
+
 } // namespace ya

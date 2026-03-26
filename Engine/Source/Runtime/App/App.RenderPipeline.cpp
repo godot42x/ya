@@ -101,7 +101,7 @@ void App::initRenderPipeline()
     // _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.glsl"});
+    _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.comp.glsl"});
 
     // MARK: Render doc hook
     if (_ci.bEnableRenderDoc) {

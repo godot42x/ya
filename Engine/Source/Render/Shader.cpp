@@ -60,6 +60,8 @@ shaderc_shader_kind toShadercType(EShaderStage::T Stage)
         return shaderc_glsl_fragment_shader;
     case Geometry:
         return shaderc_glsl_geometry_shader;
+    case Compute:
+        return shaderc_glsl_compute_shader;
     default:
         UNREACHABLE();
         break;
@@ -953,8 +955,11 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
         }
 
         if (!hasRequiredGraphicsStages()) {
-            YA_CORE_ERROR("SingleShader mode requires at least vertex and fragment stages: {}", shaderName);
-            return {};
+            // Allow compute-only shaders (single compute stage, no vertex/fragment)
+            if (!ret.contains(EShaderStage::Compute) || ret.size() != 1) {
+                YA_CORE_ERROR("SingleShader mode requires at least vertex and fragment stages: {}", shaderName);
+                return {};
+            }
         }
     }
 

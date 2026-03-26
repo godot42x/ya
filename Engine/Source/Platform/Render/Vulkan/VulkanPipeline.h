@@ -147,10 +147,52 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     // Pipeline creation helpers
-    VkShaderModule createShaderModule(const std::vector<uint32_t> &spv_binary);
-    void           createPipelineInternal();
+    void createPipelineInternal();
 
     void queryPhysicalDeviceLimits();
+
+  public:
+    static VkShaderModule createShaderModule(VkDevice device, const std::vector<uint32_t>& spv_binary);
+};
+
+struct VulkanComputePipeline : public ya::IComputePipeline
+{
+    VkPipeline       _pipeline       = VK_NULL_HANDLE;
+    VulkanRender     *_render        = nullptr;
+    VulkanPipelineLayout *_pipelineLayout = nullptr;
+
+    // Shader-derived resources (auto-created when bDeriveFromShader=true)
+    std::shared_ptr<IPipelineLayout>                   _derivedPipelineLayout;
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> _derivedDSLs;
+
+    std::string _name;
+
+  public:
+    VulkanComputePipeline(VulkanRender* render)
+        : _render(render) {}
+
+    ~VulkanComputePipeline() override { cleanup(); }
+
+    VulkanComputePipeline(const VulkanComputePipeline&)            = delete;
+    VulkanComputePipeline& operator=(const VulkanComputePipeline&) = delete;
+    VulkanComputePipeline(VulkanComputePipeline&&)                 = default;
+    VulkanComputePipeline& operator=(VulkanComputePipeline&&)      = default;
+
+    void cleanup();
+
+    // IComputePipeline interface
+    bool              recreate(const ComputePipelineCreateInfo& ci) override;
+    void             *getHandle() const override { return (void*)(uintptr_t)_pipeline; }
+    const std::string& getName() const override { return _name; }
+
+    VkPipeline getVkHandle() const { return _pipeline; }
+
+    const std::shared_ptr<IPipelineLayout>& getDerivedPipelineLayout() const { return _derivedPipelineLayout; }
+    const std::vector<std::shared_ptr<IDescriptorSetLayout>>& getDerivedDSLs() const { return _derivedDSLs; }
+
+  private:
+    ComputePipelineCreateInfo _ci;
+    void createPipelineInternal();
 };
 
 } // namespace ya
