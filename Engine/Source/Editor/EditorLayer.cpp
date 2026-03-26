@@ -704,186 +704,186 @@ void EditorLayer::debugWindow()
     auto constraintSize = [&panelSize](auto extent) {
         return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
     };
-#if FORWARD
-    Text("Shadow Mapping(Depth Buffer)");
-    if (_viewportCtx.bShadowMappingEnabled) {
-        auto* depthRT            = _viewportCtx.shadowDepthRT;
-        auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
-        if (!depthRT || !directionalDepthIV) {
-            ImGui::Text("Shadow resources unavailable");
-        }
-        else {
-            auto depthExtent = depthRT->getExtent();
-            ImGuiHelper::Image(directionalDepthIV,
-                               TextureLibrary::get().getLinearSampler(),
-                               "Shadow Map",
-                               constraintSize(depthExtent));
-            // Per-face View2D: pre-created in App, just index
-            static int selectedPointLight = 0;
-            static int cubeFace           = ECubeFace::CubeFace_NegY;
-            {
-                static std::string pointLightComboStr = []() {
-                    std::string ret{};
-                    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
-                        ret += "Point Light " + std::to_string(i) + '\0';
-                    }
-                    return ret;
-                }();
-                Combo(std::format("Point Light {}", selectedPointLight).c_str(),
-                      &selectedPointLight,
-                      pointLightComboStr.c_str());
-                ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
+    if (_viewportCtx.bForwardPipeline) {
+        Text("Shadow Mapping(Depth Buffer)");
+        if (_viewportCtx.bShadowMappingEnabled) {
+            auto* depthRT            = _viewportCtx.shadowDepthRT;
+            auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
+            if (!depthRT || !directionalDepthIV) {
+                ImGui::Text("Shadow resources unavailable");
             }
-
-            auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
-                             ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
-                             : nullptr;
-            if (faceIV) {
-                ImGuiHelper::Image(faceIV,
+            else {
+                auto depthExtent = depthRT->getExtent();
+                ImGuiHelper::Image(directionalDepthIV,
                                    TextureLibrary::get().getLinearSampler(),
-                                   "Point Light Shadow Map",
+                                   "Shadow Map",
                                    constraintSize(depthExtent));
+                // Per-face View2D: pre-created in App, just index
+                static int selectedPointLight = 0;
+                static int cubeFace           = ECubeFace::CubeFace_NegY;
+                {
+                    static std::string pointLightComboStr = []() {
+                        std::string ret{};
+                        for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+                            ret += "Point Light " + std::to_string(i) + '\0';
+                        }
+                        return ret;
+                    }();
+                    Combo(std::format("Point Light {}", selectedPointLight).c_str(),
+                          &selectedPointLight,
+                          pointLightComboStr.c_str());
+                    ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
+                }
+
+                auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
+                                 ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
+                                 : nullptr;
+                if (faceIV) {
+                    ImGuiHelper::Image(faceIV,
+                                       TextureLibrary::get().getLinearSampler(),
+                                       "Point Light Shadow Map",
+                                       constraintSize(depthExtent));
+                }
+            }
+
+            // auto cubeImagesView = [](int layerStart, int numCube) {
+            //     static int selectedCube = 0;
+            //     static int selectedFace = 0;
+            //     for (int i = 0; i < numCube; ++i) {
+            //         if (Button(std::format("Cube %s", i).c_str())) {
+            //             selectedCube = i;
+            //         }
+            //         if (i < numCube - 1) {
+            //             SameLine();
+            //         }
+            //     }
+            //     static const auto idxToFaceName = [](int idx) {
+            //         switch (idx) {
+            //         case 0:
+            //             return "PosX";
+            //         case 1:
+            //             return "NegX";
+            //         case 2:
+            //             return "PosY";
+            //         case 3:
+            //             return "Neg";
+            //         case 4:
+            //             return "PosZ";
+            //         case 5:
+            //             return "NegZ";
+            //         default:
+            //             return "Unknown";
+            //         };
+            //     };
+
+            //     for (int i = 0; i < 6; ++i)
+            //     {
+            //         if (Button(std::format("Face {}", idxToFaceName(i)).c_str())) {
+            //             selectedFace = i;
+            //         }
+            //         if (i < 6 - 1) {
+            //             SameLine();
+            //         }
+            //     }
+
+            // };
+        }
+
+
+
+        Text("Mirror Render Target (from framebuffer)");
+        if (_viewportCtx.bMirrorRenderResult) {
+            auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
+            auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
+            if (mirrorTexture) {
+                ImGuiHelper::Image(mirrorTexture->getImageView(),
+                                   TextureLibrary::get().getLinearSampler(),
+                                   "Mirror RT",
+                                   constraintSize(mirrorTexture->getExtent()));
             }
         }
 
-        // auto cubeImagesView = [](int layerStart, int numCube) {
-        //     static int selectedCube = 0;
-        //     static int selectedFace = 0;
-        //     for (int i = 0; i < numCube; ++i) {
-        //         if (Button(std::format("Cube %s", i).c_str())) {
-        //             selectedCube = i;
-        //         }
-        //         if (i < numCube - 1) {
-        //             SameLine();
-        //         }
-        //     }
-        //     static const auto idxToFaceName = [](int idx) {
-        //         switch (idx) {
-        //         case 0:
-        //             return "PosX";
-        //         case 1:
-        //             return "NegX";
-        //         case 2:
-        //             return "PosY";
-        //         case 3:
-        //             return "Neg";
-        //         case 4:
-        //             return "PosZ";
-        //         case 5:
-        //             return "NegZ";
-        //         default:
-        //             return "Unknown";
-        //         };
-        //     };
-
-        //     for (int i = 0; i < 6; ++i)
-        //     {
-        //         if (Button(std::format("Face {}", idxToFaceName(i)).c_str())) {
-        //             selectedFace = i;
-        //         }
-        //         if (i < 6 - 1) {
-        //             SameLine();
-        //         }
-        //     }
-
-        // };
-    }
-
-
-
-    Text("Mirror Render Target (from framebuffer)");
-    if (_viewportCtx.bMirrorRenderResult) {
-        auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
-        auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
-        if (mirrorTexture) {
-            ImGuiHelper::Image(mirrorTexture->getImageView(),
+        Text("Viewport Render Target (from framebuffer)");
+        auto viewportRTTexture = _viewportCtx.viewportTexture;
+        if (viewportRTTexture) {
+            ImGuiHelper::Image(viewportRTTexture->getImageView(),
                                TextureLibrary::get().getLinearSampler(),
-                               "Mirror RT",
-                               constraintSize(mirrorTexture->getExtent()));
+                               "Viewport RT (from framebuffer)",
+                               constraintSize(viewportRTTexture->getExtent()));
+        }
+
+        Text("Post-process Texture (from App)");
+        if (_viewportCtx.bPostprocessingEnabled) {
+            auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
+            if (postProcessTexture) {
+                ImGuiHelper::Image(postProcessTexture->getImageView(),
+                                   TextureLibrary::get().getLinearSampler(),
+                                   "Post-process texture",
+                                   constraintSize(postProcessTexture->getExtent()));
+            }
         }
     }
+    else {
 
-    Text("Viewport Render Target (from framebuffer)");
-    auto viewportRTTexture = _viewportCtx.viewportTexture;
-    if (viewportRTTexture) {
-        ImGuiHelper::Image(viewportRTTexture->getImageView(),
-                           TextureLibrary::get().getLinearSampler(),
-                           "Viewport RT (from framebuffer)",
-                           constraintSize(viewportRTTexture->getExtent()));
+
+        // deferred render GBuffers — 4-column table so they stay visible at any window size
+        auto  sampler   = TextureLibrary::get().getLinearSampler();
+        float padding   = GetStyle().ItemSpacing.x;
+        float colWidth  = (panelSize.x - padding * 3.0f) / 4.0f;
+        float imgHeight = colWidth; // keep 1:1 aspect ratio for GBuffer views
+
+        if (BeginTable("GBufferTable", 4, ImGuiTableFlags_BordersInnerV))
+        {
+            TableSetupColumn("Pos", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            TableSetupColumn("Norm", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            TableSetupColumn("Alb", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            TableSetupColumn("Spec", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            TableNextRow();
+
+            // Position
+            TableSetColumnIndex(0);
+            Text("GBuffer Position");
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position", ImVec2(colWidth, imgHeight));
+
+            // Normal
+            TableSetColumnIndex(1);
+            Text("GBuffer Normal");
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal", ImVec2(colWidth, imgHeight));
+
+            // Albedo RGB (swizzled: RGB only, alpha forced to 1)
+            TableSetColumnIndex(2);
+            Text("GBuffer Albedo (RGB)");
+            if (_viewportCtx.deferredSpec.gBufferAlbedoRGB)
+            {
+                ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoRGB,
+                                   sampler,
+                                   "GBuffer Albedo RGB",
+                                   ImVec2(colWidth, imgHeight));
+            }
+            else
+            {
+                // Fallback: show original albedo+specular combined
+                ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular,
+                                   sampler,
+                                   "GBuffer Albedo Specular",
+                                   ImVec2(colWidth, imgHeight));
+            }
+
+            // Specular (swizzled: alpha channel as grayscale)
+            TableSetColumnIndex(3);
+            Text("GBuffer Specular (Alpha)");
+            if (_viewportCtx.deferredSpec.gBufferSpecular)
+            {
+                ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferSpecular, sampler, "GBuffer Specular", ImVec2(colWidth, imgHeight));
+            }
+            else
+            {
+                TextDisabled("(not available)");
+            }
+
+            EndTable();
+        }
     }
-
-    Text("Post-process Texture (from App)");
-    if (_viewportCtx.bPostprocessingEnabled) {
-        auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
-        if (postProcessTexture) {
-            ImGuiHelper::Image(postProcessTexture->getImageView(),
-                               TextureLibrary::get().getLinearSampler(),
-                               "Post-process texture",
-                               constraintSize(postProcessTexture->getExtent()));
-        }
-    }
-#else
-
-    // deferred render GBuffers — 4-column table so they stay visible at any window size
-    auto  sampler   = TextureLibrary::get().getLinearSampler();
-    float padding   = GetStyle().ItemSpacing.x;
-    float colWidth  = (panelSize.x - padding * 3.0f) / 4.0f;
-    float imgHeight = colWidth; // keep 1:1 aspect ratio for GBuffer views
-
-    if (BeginTable("GBufferTable", 4, ImGuiTableFlags_BordersInnerV))
-    {
-        TableSetupColumn("Pos", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        TableSetupColumn("Norm", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        TableSetupColumn("Alb", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        TableSetupColumn("Spec", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        TableNextRow();
-
-        // Position
-        TableSetColumnIndex(0);
-        Text("GBuffer Position");
-        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position", ImVec2(colWidth, imgHeight));
-
-        // Normal
-        TableSetColumnIndex(1);
-        Text("GBuffer Normal");
-        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal", ImVec2(colWidth, imgHeight));
-
-        // Albedo RGB (swizzled: RGB only, alpha forced to 1)
-        TableSetColumnIndex(2);
-        Text("GBuffer Albedo (RGB)");
-        if (_viewportCtx.deferredSpec.gBufferAlbedoRGB)
-        {
-            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoRGB,
-                               sampler,
-                               "GBuffer Albedo RGB",
-                               ImVec2(colWidth, imgHeight));
-        }
-        else
-        {
-            // Fallback: show original albedo+specular combined
-            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular,
-                               sampler,
-                               "GBuffer Albedo Specular",
-                               ImVec2(colWidth, imgHeight));
-        }
-
-        // Specular (swizzled: alpha channel as grayscale)
-        TableSetColumnIndex(3);
-        Text("GBuffer Specular (Alpha)");
-        if (_viewportCtx.deferredSpec.gBufferSpecular)
-        {
-            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferSpecular, sampler, "GBuffer Specular", ImVec2(colWidth, imgHeight));
-        }
-        else
-        {
-            TextDisabled("(not available)");
-        }
-
-        EndTable();
-    }
-
-
-#endif
 
     ImGui::End();
 }

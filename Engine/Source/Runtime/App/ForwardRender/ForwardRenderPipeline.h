@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Pipelines/PostProcessStage.h"
 #include "Render/Render.h"
 
 #include <array>
@@ -51,7 +52,6 @@ struct ForwardRenderPipeline
 
     std::shared_ptr<IRenderPass>   viewportRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> viewportRT         = nullptr;
-    stdptr<Texture>                postprocessTexture = nullptr;
 
     std::shared_ptr<IRenderPass>   screenRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> screenRT         = nullptr;
@@ -68,7 +68,9 @@ struct ForwardRenderPipeline
     stdptr<IRenderSystem> debugRenderSystem         = nullptr;
     stdptr<IRenderSystem> skyboxSystem              = nullptr;
     stdptr<IRenderSystem> shadowMappingSystem       = nullptr;
-    stdptr<IRenderSystem> basicPostprocessingSystem = nullptr;
+
+    // Shared post-processing stage (reusable between forward & deferred)
+    PostProcessStage _postProcessStage;
 
     stdptr<IBuffer> _phongSharedLightUBO = nullptr;
     stdptr<PhongScenePassResources> _phongViewportPassResources = nullptr;
@@ -98,7 +100,6 @@ struct ForwardRenderPipeline
     /// End the viewport rendering pass (called by App after 2D rendering)
     void endViewportPass(ICommandBuffer* cmdBuf);
 
-    bool     recreateViewportRT(uint32_t width, uint32_t height);
     void     onViewportResized(Rect2D rect);
     Extent2D getViewportExtent() const;
 

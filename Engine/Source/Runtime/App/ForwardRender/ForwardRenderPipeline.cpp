@@ -12,7 +12,6 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
-#include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/Pipelines/ShadowMapping.h"
 #include "Runtime/App/App.h"
 
@@ -25,19 +24,57 @@ namespace ya
 
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
-    _render       = desc.render;
+    _render = desc.render;
 
-    postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label   = "PostprocessRenderTarget",
-        .width   = static_cast<uint32_t>(desc.windowW),
-        .height  = static_cast<uint32_t>(desc.windowH),
-        .format  = EFormat::R8G8B8A8_UNORM,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
+    // Initial viewport RT creation (subsequent changes go through dirty mechanism)
+    RenderTargetCreateInfo viewportRTci{
+        .label            = "Viewport RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = false,
+        .extent           = {.width  = static_cast<uint32_t>(desc.windowW),
+                             .height = static_cast<uint32_t>(desc.windowH)},
+        .frameBufferCount = 1,
+        .attachments      = {
+
+            .colorAttach = {
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = COLOR_FORMAT,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+            },
+            .depthAttach = AttachmentDescription{
+                .index          = 1,
+                .format         = DEPTH_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                .stencilStoreOp = EAttachmentStoreOp::Store,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment,
+            },
+        },
+    };
+    viewportRT = ya::createRenderTarget(viewportRTci);
+    YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
+
+    _postProcessStage.init(PostProcessStage::InitDesc{
+        .render      = _render,
+        .colorFormat = COLOR_FORMAT,
+        .width       = static_cast<uint32_t>(desc.windowW),
+        .height      = static_cast<uint32_t>(desc.windowH),
     });
-    _deleter.push("PostprocessTexture", [this](void*) {
-        postprocessTexture.reset();
+    _deleter.push("PostProcessStage", [this](void*) {
+        _postProcessStage.shutdown();
     });
 
     depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
@@ -283,7 +320,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             .pipelineRenderingInfo = PipelineRenderingInfo{
                 .label                   = "Skybox Pipeline",
                 .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
+                .colorAttachmentFormats  = {COLOR_FORMAT},
                 .depthAttachmentFormat   = DEPTH_FORMAT,
                 .stencilAttachmentFormat = EFormat::Undefined,
             },
@@ -301,18 +338,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             },
         });
 
-        basicPostprocessingSystem = ya::makeShared<BasicPostprocessing>();
-        basicPostprocessingSystem->init(IRenderSystem::InitParams{
-            .renderPass            = nullptr,
-            .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "BasicPostprocessing",
-                .viewMask                = 0,
-                .colorAttachmentFormats  = {EFormat::R8G8B8A8_UNORM},
-                .depthAttachmentFormat   = EFormat::Undefined,
-                .stencilAttachmentFormat = EFormat::Undefined,
-            },
-        });
-
         _deleter.push("RenderSystems", [this](void*) {
             simpleMaterialSystem->onDestroy();
             simpleMaterialSystem.reset();
@@ -326,8 +351,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             skyboxSystem.reset();
             shadowMappingSystem->onDestroy();
             shadowMappingSystem.reset();
-            basicPostprocessingSystem->onDestroy();
-            basicPostprocessingSystem.reset();
         });
 
         _render->waitIdle();
@@ -475,54 +498,14 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     // Close viewport rendering pass (opened in tick())
     cmdBuf->endRendering(_viewportRI);
 
-    // Run postprocessing if enabled
-    if (basicPostprocessingSystem->bEnabled)
-    {
-        YA_PROFILE_SCOPE("Postprocessing pass")
-        cmdBuf->debugBeginLabel("Postprocessing");
-        cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ColorAttachmentOptimal);
+    // Determine the source color texture (MSAA → resolve, otherwise → color[0])
+    auto  fb           = viewportRT->getCurFrameBuffer();
+    auto* inputTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
 
-        RenderingInfo ri{
-            .label      = "Postprocessing",
-            .renderArea = Rect2D{
-                .pos    = {0, 0},
-                .extent = _lastTickDesc.viewportRect.extent,
-            },
-            .layerCount       = 1,
-            .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-            .depthClearValue  = ClearValue(1.0f, 0),
-            .colorAttachments = {
-                RenderingInfo::ImageSpec{
-                    .texture = postprocessTexture.get(),
-                    .loadOp  = EAttachmentLoadOp::Clear,
-                    .storeOp = EAttachmentStoreOp::Store,
-                },
-            },
-        };
+    // Run postprocessing via shared stage; returns input unchanged if disabled
+    viewportTexture = _postProcessStage.execute(
+        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, _lastTickDesc.dt, &_lastTickCtx);
 
-        cmdBuf->beginRendering(ri);
-
-        const auto& tex = bMSAA
-                            ? viewportRT->getCurFrameBuffer()->getResolveTexture()
-                            : viewportRT->getCurFrameBuffer()->getColorTexture(0);
-
-        auto postprocessSystem = basicPostprocessingSystem->as<BasicPostprocessing>();
-        auto swapchainFormat   = _render->getSwapchain()->getFormat();
-        bool bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
-        postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
-        postprocessSystem->setInputTexture(tex->getImageView(), Extent2D::fromVec2(_lastTickDesc.viewportRect.extent));
-        postprocessSystem->tick(cmdBuf, _lastTickDesc.dt, &_lastTickCtx);
-        cmdBuf->endRendering(ri);
-
-        cmdBuf->transitionImageLayoutAuto(postprocessTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-        cmdBuf->debugEndLabel();
-
-        viewportTexture = postprocessTexture.get();
-    }
-    else {
-        auto fb         = viewportRT->getCurFrameBuffer();
-        viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
-    }
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
 }
 
@@ -540,7 +523,7 @@ void ForwardRenderPipeline::renderGUI()
         debugRenderSystem->renderGUI();
         skyboxSystem->renderGUI();
         shadowMappingSystem->renderGUI();
-        basicPostprocessingSystem->renderGUI();
+        _postProcessStage.renderGUI();
     }
 
     if (ImGui::Checkbox("MSAA", &bMSAA)) {
@@ -551,9 +534,26 @@ void ForwardRenderPipeline::renderGUI()
         debugRenderSystem->getPipeline()->setSampleCount(sampleCount);
         skyboxSystem->getPipeline()->setSampleCount(sampleCount);
 
-        uint32_t width  = viewportRT ? viewportRT->getExtent().width : 1;
-        uint32_t height = viewportRT ? viewportRT->getExtent().height : 1;
-        recreateViewportRT(width, height);
+        // Mark RT dirty instead of full recreate — flushDirty() handles the rest
+        viewportRT->setColorAttachmentSampleCount(0, sampleCount);
+        viewportRT->setDepthAttachmentSampleCount(sampleCount);
+        if (bMSAA) {
+            viewportRT->setResolveAttachment(AttachmentDescription{
+                .index          = 2,
+                .format         = COLOR_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::DontCare,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            });
+        }
+        else {
+            viewportRT->clearResolveAttachment();
+        }
     }
 
     if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping)) {
@@ -565,75 +565,6 @@ void ForwardRenderPipeline::renderGUI()
     }
 }
 
-bool ForwardRenderPipeline::recreateViewportRT(uint32_t width, uint32_t height)
-{
-    if (_render && viewportRT) {
-        _render->waitIdle();
-    }
-    viewportTexture = nullptr;
-
-    RenderTargetCreateInfo viewportRTci = RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = width, .height = height},
-        .frameBufferCount = 1,
-        .attachments      = {
-
-            .colorAttach = {
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = COLOR_FORMAT,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-            .depthAttach = AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                .stencilStoreOp = EAttachmentStoreOp::Store,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
-            },
-        },
-    };
-
-    if (bMSAA) {
-        viewportRTci.attachments.colorAttach[0].samples = ESampleCount::Sample_4;
-        viewportRTci.attachments.depthAttach->samples   = ESampleCount::Sample_4;
-
-        viewportRTci.attachments.resolveAttach = AttachmentDescription{
-            .index          = 2,
-            .format         = COLOR_FORMAT,
-            .samples        = ESampleCount::Sample_1,
-            .loadOp         = EAttachmentLoadOp::DontCare,
-            .storeOp        = EAttachmentStoreOp::Store,
-            .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-            .stencilStoreOp = EAttachmentStoreOp::DontCare,
-            .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-            .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        };
-    }
-
-    viewportRT = ya::createRenderTarget(viewportRTci);
-    if (viewportRT) {
-        auto fb         = viewportRT->getCurFrameBuffer();
-        viewportTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
-    }
-    return viewportRT != nullptr;
-}
 
 void ForwardRenderPipeline::onViewportResized(Rect2D rect)
 {
@@ -646,21 +577,7 @@ void ForwardRenderPipeline::onViewportResized(Rect2D rect)
         viewportRT->setExtent(newExtent);
     }
 
-    if (_render && newExtent.width > 0 && newExtent.height > 0) {
-        if (postprocessTexture) {
-            _render->waitIdle();
-        }
-        postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "PostprocessRenderTarget",
-            .width   = newExtent.width,
-            .height  = newExtent.height,
-            .format  = EFormat::R8G8B8A8_UNORM,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        _render->waitIdle();
-    }
+    _postProcessStage.onViewportResized(newExtent);
 }
 
 Extent2D ForwardRenderPipeline::getViewportExtent() const
@@ -685,7 +602,7 @@ void ForwardRenderPipeline::renderScene(ICommandBuffer* cmdBuf, float dt, FrameC
 void ForwardRenderPipeline::beginFrame()
 {
     shadowMappingSystem->beginFrame();
-    basicPostprocessingSystem->beginFrame();
+    _postProcessStage.beginFrame();
     skyboxSystem->beginFrame();
     simpleMaterialSystem->beginFrame();
     unlitMaterialSystem->beginFrame();

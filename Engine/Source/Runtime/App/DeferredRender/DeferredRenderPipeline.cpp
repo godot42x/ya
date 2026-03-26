@@ -35,6 +35,10 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     _gBufferPipeline->beginFrame();
     _lightPipeline->beginFrame();
+    if (_skyboxSystem) {
+        _skyboxSystem->beginFrame();
+    }
+    _postProcessStage.beginFrame();
 
     // Ensure render targets are up-to-date before rendering.
     // GBuffer pass uses renderTarget mode (auto-flushes in beginRendering),
@@ -94,45 +98,31 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     }
 
     // Collect light data from scene into deferred light UBO
-    FrameContext ctx{};
-    ctx.view       = desc.view;
-    ctx.projection = desc.projection;
-    ctx.cameraPos  = desc.cameraPos;
 
-    ctx.numPointLights = 0;
-    for (const auto& [et, plc, tc] :
-         scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
-        if (ctx.numPointLights >= MAX_POINT_LIGHTS) break; // FrameContext::pointLights is sized to MAX_POINT_LIGHTS
-        auto& pl     = ctx.pointLights[ctx.numPointLights];
-        pl.type      = static_cast<float>(plc._type);
-        pl.constant  = plc._constant;
-        pl.linear    = plc._linear;
-        pl.quadratic = plc._quadratic;
-        pl.position  = tc._position;
-        pl.ambient   = plc._ambient;
-        pl.diffuse   = plc._diffuse;
-        pl.specular  = plc._specular;
-        ++ctx.numPointLights;
-    }
+    // int numPointLights = 0;
+    // for (const auto& [et, plc, tc] :
+    //      scene->getRegistry().view<PointLightComponent, TransformComponent>().each()) {
+    //     if (numPointLights >= MAX_POINT_LIGHTS) {
+    //         break;
+    //     }
+    //     ++numPointLights;
+    // }
 
     for (const auto& [et, dlc, tc] :
-         scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each()) {
-        ctx.bHasDirectionalLight       = true;
-        ctx.directionalLight.direction = tc.getForward();
-        ctx.directionalLight.ambient   = dlc._ambient;
-        ctx.directionalLight.diffuse   = dlc._diffuse;
-        ctx.directionalLight.specular  = dlc._specular;
+         scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
+    {
+        // ctx.bHasDirectionalLight             = true; // TODO: invoke a macro to disable dir light  branch
+        uLightPassLightData.dirLight.dir     = tc.getForward();
+        uLightPassLightData.dirLight.color   = dlc._color;
+        uLightPassLightData.dirLight.ambient = dlc._ambient;
     }
 
-    uLightPassFrameData.viewPos    = ctx.cameraPos;
-    uLightPassFrameData.projMatrix = ctx.projection;
-    uLightPassFrameData.viewMatrix = ctx.view;
+    uLightPassFrameData.viewPos    = desc.cameraPos;
+    uLightPassFrameData.projMatrix = desc.projection;
+    uLightPassFrameData.viewMatrix = desc.view;
     _frameUBO->writeData(&uLightPassFrameData, sizeof(LightPassFrameData), 0);
     _frameUBO->flush();
 
-    uLightPassLightData.dirLight.dir       = ctx.directionalLight.direction;
-    uLightPassLightData.dirLight.color     = ctx.directionalLight.diffuse;
-    uLightPassLightData.dirLight.ambient   = ctx.directionalLight.ambient;
     uLightPassLightData.dirLight.shininess = 32;
     _lightUBO->writeData(&uLightPassLightData, sizeof(LightPassLightData), 0);
     _lightUBO->flush();
@@ -279,8 +269,33 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     auto quad = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad);
     quad->draw(cmdBuf);
 
+    // MARK: Skybox (after light pass, reuses GBuffer depth)
+    if (_skyboxSystem && _skyboxSystem->bEnabled) {
+        cmdBuf->debugBeginLabel("Deferred Skybox");
+        FrameContext skyboxCtx;
+        skyboxCtx.view       = desc.view;
+        skyboxCtx.projection = desc.projection;
+        skyboxCtx.cameraPos  = desc.cameraPos;
+        skyboxCtx.extent     = Extent2D{
+            .width  = viewportWidth,
+            .height = viewportHeight,
+        };
+        _skyboxSystem->tick(cmdBuf, desc.dt, &skyboxCtx);
+        cmdBuf->debugEndLabel();
+    }
+
     // Light pass left open for App-level 2D rendering; App calls endViewportPass() after Render2D.
     _viewportRI = lightPassRI;
+
+    // Save context for postprocessing in endViewportPass()
+    _lastTickCtx.view       = desc.view;
+    _lastTickCtx.projection = desc.projection;
+    _lastTickCtx.cameraPos  = desc.cameraPos;
+    _lastTickCtx.extent     = Extent2D{
+        .width  = viewportWidth,
+        .height = viewportHeight,
+    };
+    _lastTickDesc = desc;
 #pragma endregion
 
     cmdBuf->debugEndLabel();
@@ -291,6 +306,13 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 {
     // Close light pass rendering (opened in tick())
     cmdBuf->endRendering(_viewportRI);
+
+    // Determine source color texture from light pass output
+    auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
+
+    // Run postprocessing via shared stage; returns input unchanged if disabled
+    viewportTexture = _postProcessStage.execute(
+        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, _lastTickDesc.dt, &_lastTickCtx);
 }
 
 void DeferredRenderPipeline::ensureDebugSwizzledViews()
@@ -352,6 +374,10 @@ void DeferredRenderPipeline::renderGUI()
     ImGui::Checkbox("Reverse Viewport Y", &_bReverseViewportY);
     _gBufferPipeline->renderGUI();
     _lightPipeline->renderGUI();
+    if (_skyboxSystem) {
+        _skyboxSystem->renderGUI();
+    }
+    _postProcessStage.renderGUI();
 }
 
 } // namespace ya

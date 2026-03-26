@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
+#include "ECS/System/3D/SkyboxSystem.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/PhongMaterial.h"
+#include "Render/Pipelines/PostProcessStage.h"
 #include "Render/Render.h"
 
 #include "DeferredRender.GBufferPass.slang.h"
@@ -27,6 +29,15 @@ struct DeferredRenderPipeline
     const EFormat::T        COLOR_FORMAT = EFormat::R8G8B8A8_SRGB;
     const EFormat::T        DEPTH_FORMAT = EFormat::D32_SFLOAT;
     stdptr<IDescriptorPool> _deferredDSP;
+
+    // --- Skybox ---
+    stdptr<SkyBoxSystem>        _skyboxSystem;
+    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL;
+    DescriptorSetHandle          _skyBoxCubeMapDS;
+
+    // --- Post Processing (shared stage) ---
+    PostProcessStage _postProcessStage;
+    Texture*         viewportTexture = nullptr; // points to postprocess output or viewport color
 
     bool _bReverseViewportY = true; // debug toggle
 
@@ -80,6 +91,7 @@ struct DeferredRenderPipeline
     // Stored viewport RenderingInfo for App-level endViewportPass()
     RenderingInfo            _viewportRI{};
     RenderingInfo::ImageSpec _sharedDepthSpec{}; // Kept alive for _viewportRI.depthAttachment
+    FrameContext             _lastTickCtx{};     // saved for postprocessing in endViewportPass()
 
 
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -477,7 +489,7 @@ struct DeferredRenderPipeline
             _render,
             DescriptorPoolCreateInfo{
                 .label     = "Deferred Rendering DSP",
-                .maxSets   = 2,
+                .maxSets   = 3, // frame+light, light textures, skybox cubemap
                 .poolSizes = {
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::UniformBuffer,
@@ -485,7 +497,7 @@ struct DeferredRenderPipeline
                     },
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 3,
+                        .descriptorCount = 4, // 3 GBuffer textures + 1 skybox cubemap
                     },
                 },
             });
@@ -521,6 +533,44 @@ struct DeferredRenderPipeline
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
         });
 
+        // MARK: Skybox
+        _skyBoxCubeMapDSL = IDescriptorSetLayout::create(
+            _render,
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_Skybox_CubeMap_DSL",
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            });
+        _skyBoxCubeMapDS = _deferredDSP->allocateDescriptorSets(_skyBoxCubeMapDSL);
+
+        _skyboxSystem = ya::makeShared<SkyBoxSystem>();
+        _skyboxSystem->init(IRenderSystem::InitParams{
+            .renderPass            = nullptr,
+            .pipelineRenderingInfo = PipelineRenderingInfo{
+                .label                   = "Deferred Skybox Pipeline",
+                .viewMask                = 0,
+                .colorAttachmentFormats  = {COLOR_FORMAT},
+                .depthAttachmentFormat   = DEPTH_FORMAT,
+                .stencilAttachmentFormat = EFormat::Undefined,
+            },
+        });
+        _skyboxSystem->_cubeMapDS = _skyBoxCubeMapDS;
+        _skyboxSystem->bReverseViewportY = true; // light pass viewport is not flipped
+
+        // MARK: Post Processing (shared stage)
+        _postProcessStage.init(PostProcessStage::InitDesc{
+            .render      = _render,
+            .colorFormat = COLOR_FORMAT,
+            .width       = extent.width,
+            .height      = extent.height,
+        });
+
         _render->waitIdle();
     }
 
@@ -536,8 +586,20 @@ struct DeferredRenderPipeline
         int                     appMode                  = 0;
         std::vector<glm::vec2>* clicked                  = nullptr;
     };
+    TickDesc _lastTickDesc{}; // saved for postprocessing in endViewportPass()
+
     void tick(const TickDesc& desc);
-    void shutdown() {}
+    void shutdown()
+    {
+        _postProcessStage.shutdown();
+        viewportTexture = nullptr;
+
+        if (_skyboxSystem) {
+            _skyboxSystem->onDestroy();
+            _skyboxSystem.reset();
+        }
+        _skyBoxCubeMapDSL.reset();
+    }
     void renderGUI();
 
     /// End the viewport rendering pass (called by App after 2D rendering)
@@ -559,6 +621,8 @@ struct DeferredRenderPipeline
 
         // Invalidate cached swizzled views — they reference old GBuffer images
         _cachedAlbedoSpecImageViewHandle = nullptr;
+
+        _postProcessStage.onViewportResized(newExtent);
     }
 
 

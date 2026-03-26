@@ -35,7 +35,7 @@ struct FreeCamera : public Camera
     float _fov         = 45.0f;
     float _aspectRatio = 1.6f / 0.9f;
     float _nearClip    = 0.1f;
-    float _farClip     = 100.0f;
+    float _farClip     = 1000.0f;
 
     glm::vec3 _position = {0.0f, 0.0f, 0.0f}; // Start a bit back from the origin
     glm::vec3 _rotation = {0.0f, 0.0f, 0.0f}; // euler angles: pitch, yaw, roll , x,y,z 代表绕x,y,z轴旋转的角度

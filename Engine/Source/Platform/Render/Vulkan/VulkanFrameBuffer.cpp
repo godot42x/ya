@@ -60,12 +60,13 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createTexture(
     }
 
     // Determine view type based on image properties
-    uint32_t layerCount = vkImage->getArrayLayers();
-    uint32_t mipLevels  = vkImage->getMipLevels();
-    VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
+    uint32_t        layerCount = vkImage->getArrayLayers();
+    uint32_t        mipLevels  = vkImage->getMipLevels();
+    VkImageViewType viewType   = VK_IMAGE_VIEW_TYPE_2D;
     if (layerCount == 6 && (vkImage->_ci.flags & EImageCreateFlag::CubeCompatible)) {
         viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    } else if (layerCount > 1) {
+    }
+    else if (layerCount > 1) {
         viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
     }
 
@@ -194,6 +195,9 @@ bool VulkanFrameBuffer::onRecreate(const FrameBufferCreateInfo& ci)
     }
     if (_depthTexture && _depthTexture->imageView) {
         vkImageViews.push_back(_depthTexture->imageView->getHandle().as<VkImageView>());
+    }
+    if (_resolveTexture && _resolveTexture->getImageView()) {
+        vkImageViews.push_back(_resolveTexture->getImageView()->getHandle().as<VkImageView>());
     }
 
     VkFramebufferCreateInfo createInfo{

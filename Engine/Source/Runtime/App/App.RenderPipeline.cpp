@@ -17,6 +17,7 @@
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 
 #include "utility.cc/ranges.h"
 
@@ -28,10 +29,7 @@ namespace ya
 extern ClearValue colorClearValue;
 extern ClearValue depthClearValue;
 
-static enum EShadingModel {
-    Forward,
-    Deferred
-} _shadingModel = EShadingModel::Deferred;
+// EShadingModel is now a member of App (see App.h)
 
 
 
@@ -53,17 +51,6 @@ void App::onSceneViewportResized(Rect2D rect)
     }
 }
 
-bool App::recreateViewPortRT(uint32_t width, uint32_t height)
-{
-#if FORWARD
-    YA_CORE_ASSERT(_forwardPipeline, "ForwardRenderPipeline not initialized");
-    return _forwardPipeline->recreateViewportRT(width, height);
-#endif
-
-    // YA_CORE_ASSERT(_deferredPipeline, "DeferredRenderPipeline not initialized");
-    _deferredPipeline->_viewportRT->setExtent({.width = width, .height = height});
-    return true;
-}
 
 // MARK: Init
 void App::initRenderPipeline()
@@ -146,12 +133,6 @@ void App::initRenderPipeline()
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
 
-#if FORWARD
-    _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
-#else
-    _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
-#endif
-
     // Get window size
     int winW = 0, winH = 0;
     _render->getWindowSize(winW, winH);
@@ -185,28 +166,9 @@ void App::initRenderPipeline()
     }
 
 
-#if FORWARD
-    _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-        .render  = _render,
-        .windowW = winW,
-        .windowH = winH,
-    });
-#else
-    _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
-        .render  = _render,
-        .windowW = winW,
-        .windowH = winH,
-    });
-#endif
 
-    recreateViewPortRT(winW, winH);
-
-    // Initialize Render2D at App level (shared between forward & deferred pipelines)
-#if FORWARD
-    Render2D::init(_render, ForwardRenderPipeline::COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
-#else
-    Render2D::init(_render, _deferredPipeline->COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
-#endif
+    // Create & init the active pipeline, recreate viewport RT, init Render2D
+    initActivePipeline();
 
     // Screen RT (swapchain target for ImGui/editor)
     {
@@ -264,8 +226,8 @@ void App::initRenderPipeline()
 // MARK: Shutdown
 void App::shutdownRenderPipeline()
 {
-    // Destroy Render2D before pipeline shutdown
-    Render2D::destroy();
+    // Shutdown active pipeline (includes Render2D::destroy + pipeline shutdown/reset)
+    shutdownActivePipeline();
 
     ImGuiManager::get().shutdown();
 
@@ -275,15 +237,6 @@ void App::shutdownRenderPipeline()
     }
 
     _screenRenderPass.reset();
-
-    if (_forwardPipeline) {
-        _forwardPipeline->shutdown();
-        _forwardPipeline.reset();
-    }
-    if (_deferredPipeline) {
-        _deferredPipeline->shutdown();
-        _deferredPipeline.reset();
-    }
 
     if (_renderDocCapture) {
         _renderDocCapture->shutdown();
@@ -308,6 +261,10 @@ void App::shutdownRenderPipeline()
 void App::tickRenderPipeline(float dt)
 {
     YA_PROFILE_FUNCTION()
+
+    // Apply pending shading model switch before rendering the frame
+    applyPendingShadingModelSwitch();
+
     auto render = getRender();
 
 
@@ -356,15 +313,11 @@ void App::tickRenderPipeline(float dt)
         auto cc = runtimeCamera->getComponent<CameraComponent>();
         auto tc = runtimeCamera->getComponent<TransformComponent>();
 
-#if FORWARD
-        const Extent2D ext = _forwardPipeline->getViewportExtent();
+        const Extent2D ext = (_shadingModel == EShadingModel::Forward)
+                                 ? _forwardPipeline->getViewportExtent()
+                                 : _deferredPipeline->_viewportRT->getExtent();
         cameraController.update(*tc, *cc, inputManager, ext, dt);
         cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-#else
-        const Extent2D ext = _deferredPipeline->_viewportRT->getExtent();
-        cameraController.update(*tc, *cc, inputManager, ext, dt);
-        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-#endif
     }
 
     glm::vec3 cameraPos;
@@ -387,43 +340,39 @@ void App::tickRenderPipeline(float dt)
     }
 
     // MARK: Shading
-#if FORWARD
-    // Forward
-    _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
-        .cmdBuf                   = cmdBuf.get(),
-        .dt                       = dt,
-        .view                     = view,
-        .projection               = projection,
-        .cameraPos                = cameraPos,
-        .viewportRect             = _viewportRect,
-        .viewportFrameBufferScale = _viewportFrameBufferScale,
-        .appMode                  = static_cast<int>(_appMode),
-        .clicked                  = &clicked,
-    });
-#else
-    // Deferred
-    _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
-        .cmdBuf                   = cmdBuf.get(),
-        .dt                       = dt,
-        .view                     = view,
-        .projection               = projection,
-        .cameraPos                = cameraPos,
-        .viewportRect             = _viewportRect,
-        .viewportFrameBufferScale = _viewportFrameBufferScale,
-        .appMode                  = static_cast<int>(_appMode),
-        .clicked                  = &clicked,
-    });
-#endif
+    if (_shadingModel == EShadingModel::Forward) {
+        _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
+            .cmdBuf                   = cmdBuf.get(),
+            .dt                       = dt,
+            .view                     = view,
+            .projection               = projection,
+            .cameraPos                = cameraPos,
+            .viewportRect             = _viewportRect,
+            .viewportFrameBufferScale = _viewportFrameBufferScale,
+            .appMode                  = static_cast<int>(_appMode),
+            .clicked                  = &clicked,
+        });
+    } else {
+        _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
+            .cmdBuf                   = cmdBuf.get(),
+            .dt                       = dt,
+            .view                     = view,
+            .projection               = projection,
+            .cameraPos                = cameraPos,
+            .viewportRect             = _viewportRect,
+            .viewportFrameBufferScale = _viewportFrameBufferScale,
+            .appMode                  = static_cast<int>(_appMode),
+            .clicked                  = &clicked,
+        });
+    }
 
     // MARK: Render2D (shared between forward & deferred pipelines)
     {
         YA_PROFILE_SCOPE("Render2D")
 
-#if FORWARD
-        const Extent2D viewportExtent = _forwardPipeline->getViewportExtent();
-#else
-        const Extent2D viewportExtent = _deferredPipeline->getViewportExtent();
-#endif
+        const Extent2D viewportExtent = (_shadingModel == EShadingModel::Forward)
+                                           ? _forwardPipeline->getViewportExtent()
+                                           : _deferredPipeline->getViewportExtent();
 
         FRender2dContext render2dCtx{
             .cmdBuf       = cmdBuf.get(),
@@ -499,41 +448,43 @@ void App::tickRenderPipeline(float dt)
         Render2D::end();
     }
 
-    // End viewport rendering pass (also runs postprocessing for forward pipeline)
-#if FORWARD
-    _forwardPipeline->endViewportPass(cmdBuf.get());
-    YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
-#else
-    _deferredPipeline->endViewportPass(cmdBuf.get());
-    YA_CORE_ASSERT(_deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0), "Failed to get viewport texture");
-#endif
+    // End viewport rendering pass (also runs postprocessing)
+    if (_shadingModel == EShadingModel::Forward) {
+        _forwardPipeline->endViewportPass(cmdBuf.get());
+        YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+    } else {
+        _deferredPipeline->endViewportPass(cmdBuf.get());
+        YA_CORE_ASSERT(_deferredPipeline->viewportTexture, "Failed to get deferred viewport texture");
+    }
 
     // Set viewport context for editor layer before ImGui render
     if (_editorLayer) {
         EditorViewportContext ctx;
-#if FORWARD
-        ctx.viewportTexture           = _forwardPipeline->viewportTexture;
+        ctx.bForwardPipeline = (_shadingModel == EShadingModel::Forward);
         ctx.bPostprocessingEnabled    = isPostprocessingEnabled();
         ctx.postprocessOutputTexture  = getPostprocessOutputTexture();
-        ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
-        ctx.shadowDepthRT             = getShadowDepthRT();
-        ctx.shadowDirectionalDepthIV  = getShadowDirectionalDepthIV();
-        ctx.getShadowPointFaceDepthIV = [this](uint32_t pointLightIndex, uint32_t faceIndex) -> IImageView* {
-            return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
-        };
-        ctx.bMirrorRenderResult = hasMirrorRenderResult();
-        ctx.mirrorRenderTarget  = nullptr; // getMirrorRenderTarget();
-#else
-        ctx.viewportTexture = _deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
-        _deferredPipeline->ensureDebugSwizzledViews();
-        ctx.deferredSpec    = {
-               .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
-               .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
-               .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
-               .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
-               .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
-        };
-#endif
+
+        if (_shadingModel == EShadingModel::Forward) {
+            ctx.viewportTexture           = _forwardPipeline->viewportTexture;
+            ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
+            ctx.shadowDepthRT             = getShadowDepthRT();
+            ctx.shadowDirectionalDepthIV  = getShadowDirectionalDepthIV();
+            ctx.getShadowPointFaceDepthIV = [this](uint32_t pointLightIndex, uint32_t faceIndex) -> IImageView* {
+                return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+            };
+            ctx.bMirrorRenderResult = hasMirrorRenderResult();
+            ctx.mirrorRenderTarget  = nullptr;
+        } else {
+            ctx.viewportTexture = _deferredPipeline->viewportTexture;
+            _deferredPipeline->ensureDebugSwizzledViews();
+            ctx.deferredSpec    = {
+                   .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
+                   .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
+                   .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
+                   .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
+                   .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
+            };
+        }
         _editorLayer->setViewportContext(ctx);
     }
 
@@ -606,7 +557,9 @@ ForwardRenderPipeline* App::getForwardPipeline() const
 
 bool App::isShadowMappingEnabled() const
 {
-    return _forwardPipeline ? _forwardPipeline->bShadowMapping : false;
+    if (_forwardPipeline) return _forwardPipeline->bShadowMapping;
+    // Deferred pipeline doesn't have shadow mapping yet
+    return false;
 }
 
 bool App::isMirrorRenderingEnabled() const
@@ -636,15 +589,19 @@ IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t fa
     auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
     return iv ? iv.get() : nullptr;
 }
+
 Texture* App::getPostprocessOutputTexture() const
 {
-    return _forwardPipeline && _forwardPipeline->postprocessTexture ? _forwardPipeline->postprocessTexture.get() : nullptr;
+    if (_forwardPipeline)  return _forwardPipeline->_postProcessStage.getOutputTexture();
+    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getOutputTexture();
+    return nullptr;
 }
-
 
 bool App::isPostprocessingEnabled() const
 {
-    return _forwardPipeline && _forwardPipeline->basicPostprocessingSystem && _forwardPipeline->basicPostprocessingSystem->bEnabled;
+    if (_forwardPipeline)  return _forwardPipeline->_postProcessStage.isEnabled();
+    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.isEnabled();
+    return false;
 }
 
 void App::renderGUI(float dt)
@@ -656,11 +613,104 @@ void App::renderGUI(float dt)
 
 void App::renderGUIRenderPipeline()
 {
+    // Shading model selector
+    {
+        static const char* items[] = {"Forward", "Deferred"};
+        int current = static_cast<int>(_pendingShadingModel);
+        if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
+            _pendingShadingModel = static_cast<EShadingModel>(current);
+        }
+        if (_pendingShadingModel != _shadingModel) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
+        }
+    }
+
     if (_forwardPipeline) {
         _forwardPipeline->renderGUI();
     }
     if (_deferredPipeline) {
         _deferredPipeline->renderGUI();
+    }
+}
+
+// MARK: Runtime pipeline switching
+void App::initActivePipeline()
+{
+    int winW = 0, winH = 0;
+    _render->getWindowSize(winW, winH);
+
+    if (_shadingModel == EShadingModel::Forward) {
+        _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
+        _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
+            .render  = _render,
+            .windowW = winW,
+            .windowH = winH,
+        });
+    } else {
+        _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
+        _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
+            .render  = _render,
+            .windowW = winW,
+            .windowH = winH,
+        });
+    }
+
+    // Initialize Render2D with the active pipeline's formats
+    if (_shadingModel == EShadingModel::Forward) {
+        Render2D::init(_render, ForwardRenderPipeline::COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
+    } else {
+        Render2D::init(_render, _deferredPipeline->COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
+    }
+}
+
+void App::shutdownActivePipeline()
+{
+    // Tear down Render2D first (it references pipeline resources)
+    Render2D::destroy();
+
+    if (_forwardPipeline) {
+        _forwardPipeline->shutdown();
+        _forwardPipeline.reset();
+    }
+    if (_deferredPipeline) {
+        _deferredPipeline->shutdown();
+        _deferredPipeline.reset();
+    }
+}
+
+void App::applyPendingShadingModelSwitch()
+{
+    if (_pendingShadingModel == _shadingModel) {
+        return;
+    }
+    YA_PROFILE_FUNCTION_LOG();
+
+
+    YA_CORE_INFO("Switching shading model: {} -> {}",
+                 _shadingModel == EShadingModel::Forward ? "Forward" : "Deferred",
+                 _pendingShadingModel == EShadingModel::Forward ? "Forward" : "Deferred");
+
+    _render->waitIdle();
+
+    shutdownActivePipeline();
+    _shadingModel = _pendingShadingModel;
+    initActivePipeline();
+
+    // Force skybox cubemap descriptor re-write for the new pipeline's SkyBoxSystem,
+    // because the previous pipeline's SkyBoxSystem already consumed bDirty.
+    {
+        auto scene = getSceneManager()->getActiveScene();
+        if (scene) {
+            for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+                sc.bDirty = true;
+            }
+        }
+    }
+
+    // Re-apply the current viewport rect so the new pipeline has correct size
+    if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
+        onSceneViewportResized(_viewportRect);
     }
 }
 

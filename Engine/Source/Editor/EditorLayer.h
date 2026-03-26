@@ -28,6 +28,9 @@ struct IImageView;
 // All render resources that the editor viewport needs, explicitly passed in from App
 struct EditorViewportContext
 {
+    // Which pipeline is active?
+    bool bForwardPipeline = false;
+
     // Viewport output
     Texture* viewportTexture = nullptr;
 

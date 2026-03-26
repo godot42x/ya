@@ -142,6 +142,11 @@ struct App
     std::shared_ptr<ShaderStorage>                                   _shaderStorage = nullptr;
     std::vector<std::pair<std::string /*name*/, IGraphicsPipeline*>> _monitorPipelines;
 
+    // --- Shading model: runtime-switchable pipeline selection ---
+    enum class EShadingModel { Forward, Deferred };
+    EShadingModel _shadingModel        = EShadingModel::Deferred;
+    EShadingModel _pendingShadingModel = EShadingModel::Deferred; // set by GUI, applied next frame
+
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
@@ -329,12 +334,18 @@ struct App
 
 
     void handleSystemSignals();
-    bool recreateViewPortRT(uint32_t width, uint32_t height);
 
     void initRenderPipeline();
     void shutdownRenderPipeline();
     void tickRenderPipeline(float dt);
     void renderGUIRenderPipeline();
+
+    /// Create the pipeline indicated by _shadingModel (called during init & switch)
+    void initActivePipeline();
+    /// Destroy whichever pipeline is currently alive
+    void shutdownActivePipeline();
+    /// Apply a pending shading-model switch (called at the top of tickRenderPipeline)
+    void applyPendingShadingModelSwitch();
 };
 
 

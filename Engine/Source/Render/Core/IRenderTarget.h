@@ -191,6 +191,22 @@ struct IRenderTarget
         return true;
     }
 
+    /// Set (or replace) the resolve attachment description. Marks dirty.
+    void setResolveAttachment(const AttachmentDescription& desc)
+    {
+        _resolveAttachmentDesc = desc;
+        bDirty                 = true;
+    }
+
+    /// Remove the resolve attachment entirely. Marks dirty only if one existed.
+    void clearResolveAttachment()
+    {
+        if (_resolveAttachmentDesc.has_value()) {
+            _resolveAttachmentDesc.reset();
+            bDirty = true;
+        }
+    }
+
     const Extent2D& getExtent() const { return _extent; }
 
     // ===== Attachment Access =====
