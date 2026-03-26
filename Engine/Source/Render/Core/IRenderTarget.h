@@ -133,6 +133,16 @@ struct IRenderTarget
         }
     }
 
+    // Flush dirty state: recreate images/framebuffers if needed.
+    // Call this before using any RT images to ensure they match the current extent.
+    void flushDirty()
+    {
+        if (bDirty) {
+            recreate();
+            bDirty = false;
+        }
+    }
+
     void setFrameBufferCount(uint32_t frameBufferCount)
     {
         if (frameBufferCount == 0) {

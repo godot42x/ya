@@ -53,7 +53,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 
     // phong
     float diff = max(dot(lightVDir, normal), 0.0);
-    vec3 halfwayDir = normalize(lightVDir+viewDir);
+    vec3 halfwayDir = normalize(lightVDir + viewDir);
     float spec = pow(max(dot(normal, halfwayDir), 0.0), uLight.dirLight.shininess);
 
 
@@ -62,7 +62,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     vec3 albedo =  albedoSpecular.xyz;
     vec3 ambient =  albedo *  uLight.dirLight.ambient;
     vec3 diffuse =  diff *   albedo * uLight.dirLight.color;
-    vec3 specular = albedoSpecular.w * spec * uLight.dirLight.color;
+    vec3 specular = albedoSpecular.a * spec * uLight.dirLight.color;
     // float shadow = calculateDirectionalShadow(IN.posInDirLightSpace, norm, lightDir);
     color +=  ambient + /*(1-shadow)  */ (diffuse + specular);
 

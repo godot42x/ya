@@ -525,11 +525,13 @@ void App::tickRenderPipeline(float dt)
         ctx.mirrorRenderTarget  = nullptr; // getMirrorRenderTarget();
 #else
         ctx.viewportTexture = _deferredPipeline->_viewportRT->getCurFrameBuffer()->getColorTexture(0);
+        _deferredPipeline->ensureDebugSwizzledViews();
         ctx.deferredSpec    = {
                .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
                .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
                .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
-               .gBufferSpecular       = _deferredPipeline->_debugSpecularIV,
+               .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
+               .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
         };
 #endif
         _editorLayer->setViewportContext(ctx);

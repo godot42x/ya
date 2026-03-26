@@ -115,12 +115,6 @@ void VulkanRenderTarget::destroy()
 
 void VulkanRenderTarget::beginFrame(ICommandBuffer* cmdBuf)
 {
-    // Handle dirty flag - recreate if needed
-    if (bDirty) {
-        recreate();
-        bDirty = false;
-    }
-
     if (bSwapChainTarget) {
         auto swapchain     = _vkRender->getSwapchain();
         _currentFrameIndex = swapchain->getCurImageIndex();

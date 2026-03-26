@@ -49,6 +49,9 @@ std::shared_ptr<IImageView> VulkanTextureFactory::createImageView(std::shared_pt
     vkCi.levelCount     = ci.levelCount;
     vkCi.baseArrayLayer = ci.baseArrayLayer;
     vkCi.layerCount     = ci.layerCount;
+    if (!ci.components.isIdentity()) {
+        vkCi.components = toVk(ci.components);
+    }
 
     return VulkanImageView::create(_render, vkImage, vkCi);
 }

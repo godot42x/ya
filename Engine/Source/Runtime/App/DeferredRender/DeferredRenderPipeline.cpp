@@ -8,8 +8,10 @@
 #include "ECS/Component/TransformComponent.h"
 
 
+#include "Render/Core/TextureFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Material/PhongMaterial.h"
+
 
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/TextureLibrary.h"
@@ -34,6 +36,13 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     _gBufferPipeline->beginFrame();
     _lightPipeline->beginFrame();
 
+    // Ensure render targets are up-to-date before rendering.
+    // GBuffer pass uses renderTarget mode (auto-flushes in beginRendering),
+    // but light pass uses manual images mode, so _viewportRT must be flushed
+    // explicitly here (e.g. after viewport resize).
+    _viewportRT->flushDirty();
+    _gBufferRT->flushDirty();
+
     auto app   = App::get();
     auto scene = app->getSceneManager()->getActiveScene();
     if (!scene) {
@@ -54,12 +63,10 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         if (!material || material->getIndex() < 0) {
             continue;
         }
-
         uint32_t idx = static_cast<uint32_t>(material->getIndex());
         if (preparedMaterial[idx]) {
             continue;
         }
-
         _matPool.flushDirty(
             material,
             force,
@@ -156,13 +163,16 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     cmdBuf->bindPipeline(_gBufferPipeline.get());
     auto pl = _gBufferPPL;
 
-    float gbufVpY      = 0.0f;
-    float gbufVpHeight = static_cast<float>(viewportHeight);
+    float gBufferViewportY      = 0.0f;
+    float gBufferViewportHeight = static_cast<float>(viewportHeight);
     if (_bReverseViewportY) {
-        gbufVpY      = static_cast<float>(viewportHeight);
-        gbufVpHeight = -static_cast<float>(viewportHeight);
+        gBufferViewportY      = static_cast<float>(viewportHeight);
+        gBufferViewportHeight = -static_cast<float>(viewportHeight);
     }
-    cmdBuf->setViewport(0.0f, gbufVpY, static_cast<float>(viewportWidth), gbufVpHeight);
+    cmdBuf->setViewport(0.0f,
+                        gBufferViewportY,
+                        static_cast<float>(viewportWidth),
+                        gBufferViewportHeight);
     cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
 
     for (const auto& [entity, mc, tc, pmc] : drawListView.each()) {
@@ -281,71 +291,57 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 {
     // Close light pass rendering (opened in tick())
     cmdBuf->endRendering(_viewportRI);
+}
 
-    // MARK: Debug specular channel extract pass (compute)
-    // Reads GBuffer albedoSpecular (attachment 2) alpha → writes storage image
+void DeferredRenderPipeline::ensureDebugSwizzledViews()
+{
+    auto gBuf2 = _gBufferRT->getCurFrameBuffer()->getColorTexture(2);
+    if (!gBuf2) return;
+
+    auto* iv = gBuf2->getImageView();
+    if (!iv) return;
+
+    // Check if source image view changed (e.g. after resize/recreate)
+    if (_cachedAlbedoSpecImageViewHandle == iv->getHandle() &&
+        _debugAlbedoRGBView && _debugSpecularAlphaView) {
+        return; // Already up-to-date
+    }
+
+    auto* factory = ITextureFactory::get();
+    if (!factory) return;
+
+    auto image = gBuf2->getImageShared();
+
+    // Create RGB-only view (alpha forced to 1)
     {
-        auto& dc    = _debugChannelExtract;
-        auto  gBuf2 = _gBufferRT->getCurFrameBuffer()->getColorTexture(2);
-        if (gBuf2 && dc.outputTexture && dc.pipeline)
-        {
-            auto iv     = gBuf2->getImageView();
-            auto width  = dc.outputTexture->getWidth();
-            auto height = dc.outputTexture->getHeight();
-            if (width > 0 && height > 0)
-            {
-                bool bNeedDescriptorUpdate = (dc.currentInputImageViewHandle != iv->getHandle());
-
-                // Always update output storage image descriptor (it may have been recreated on resize)
-                if (bNeedDescriptorUpdate || !dc.descriptorSet)
-                {
-                    if (bNeedDescriptorUpdate)
-                    {
-                        dc.currentInputImageViewHandle = iv->getHandle();
-                    }
-
-                    auto sampler = TextureLibrary::get().getDefaultSampler();
-                    _render->getDescriptorHelper()->updateDescriptorSets(
-                        {
-                            IDescriptorSetHelper::genImageWrite(
-                                dc.descriptorSet,
-                                0,
-                                0,
-                                EPipelineDescriptorType::CombinedImageSampler,
-                                {DescriptorImageInfo(iv->getHandle(), sampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal)}),
-                            IDescriptorSetHelper::genImageWrite(
-                                dc.descriptorSet,
-                                1,
-                                0,
-                                EPipelineDescriptorType::StorageImage,
-                                {DescriptorImageInfo(dc.outputTexture->getImageView()->getHandle(), SamplerHandle{}, EImageLayout::General)}),
-                        },
-                        {});
-                }
-
-                // Transition output image to General layout for compute write
-                cmdBuf->transitionImageLayoutAuto(dc.outputTexture->getImage(), EImageLayout::General);
-
-                cmdBuf->debugBeginLabel("Debug Specular Extract (Compute)");
-
-                cmdBuf->bindComputePipeline(dc.pipeline.get());
-                cmdBuf->bindComputeDescriptorSets(dc.pipelineLayout.get(), 0, {dc.descriptorSet}, {});
-
-                const uint32_t wgSize   = 8;
-                uint32_t       wgCountX = (width + wgSize - 1) / wgSize;
-                uint32_t       wgCountY = (height + wgSize - 1) / wgSize;
-                cmdBuf->dispatch(wgCountX, wgCountY, 1);
-
-                cmdBuf->debugEndLabel();
-
-                // Transition output image back to ShaderReadOnlyOptimal for downstream sampling
-                cmdBuf->transitionImageLayoutAuto(dc.outputTexture->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-
-                // Cache ImageView for editor
-                _debugSpecularIV = dc.outputTexture->getImageView();
-            }
+        ImageViewCreateInfo ci{
+            .label       = "GBuffer AlbedoSpec RGB View",
+            .viewType    = EImageViewType::View2D,
+            .aspectFlags = EImageAspect::Color,
+            .components  = ComponentMapping::RGBOnly(),
+        };
+        _debugAlbedoRGBView = factory->createImageView(image, ci);
+        if (_debugAlbedoRGBView) {
+            _debugAlbedoRGBView->setDebugName("GBuffer_AlbedoSpec_RGB");
         }
     }
+
+    // Create alpha-as-grayscale view (A → R,G,B; alpha = 1)
+    {
+        ImageViewCreateInfo ci{
+            .label       = "GBuffer AlbedoSpec Alpha View",
+            .viewType    = EImageViewType::View2D,
+            .aspectFlags = EImageAspect::Color,
+            .components  = ComponentMapping::AlphaToGrayscale(),
+        };
+        _debugSpecularAlphaView = factory->createImageView(image, ci);
+        if (_debugSpecularAlphaView) {
+            _debugSpecularAlphaView->setDebugName("GBuffer_AlbedoSpec_Alpha");
+        }
+    }
+
+    _cachedAlbedoSpecImageViewHandle = iv->getHandle();
+    YA_CORE_INFO("Created debug swizzled image views for GBuffer albedoSpecular");
 }
 
 void DeferredRenderPipeline::renderGUI()

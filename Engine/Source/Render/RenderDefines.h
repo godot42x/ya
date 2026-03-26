@@ -1028,6 +1028,48 @@ enum T
 
 } // namespace ESamplerAddressMode
 
+// Component swizzle for image view channel remapping
+namespace EComponentSwizzle
+{
+enum T : uint32_t
+{
+    Identity = 0, // Use the original channel
+    Zero     = 1, // Always output 0
+    One      = 2, // Always output 1
+    R        = 3, // Use the R channel
+    G        = 4, // Use the G channel
+    B        = 5, // Use the B channel
+    A        = 6, // Use the A channel
+};
+} // namespace EComponentSwizzle
+
+// Predefined component mapping presets
+struct ComponentMapping
+{
+    EComponentSwizzle::T r = EComponentSwizzle::Identity;
+    EComponentSwizzle::T g = EComponentSwizzle::Identity;
+    EComponentSwizzle::T b = EComponentSwizzle::Identity;
+    EComponentSwizzle::T a = EComponentSwizzle::Identity;
+
+    bool isIdentity() const
+    {
+        return r == EComponentSwizzle::Identity &&
+               g == EComponentSwizzle::Identity &&
+               b == EComponentSwizzle::Identity &&
+               a == EComponentSwizzle::Identity;
+    }
+
+    // Extract RGB channels, force alpha to 1 (opaque)
+    static ComponentMapping RGBOnly()
+    {
+        return {EComponentSwizzle::R, EComponentSwizzle::G, EComponentSwizzle::B, EComponentSwizzle::One};
+    }
+
+    // Extract alpha channel as grayscale (A → R,G,B), alpha = 1
+    static ComponentMapping AlphaToGrayscale()    {
+        return {.r = EComponentSwizzle::A, .g = EComponentSwizzle::A, .b = EComponentSwizzle::A, .a = EComponentSwizzle::One};
+    }
+};
 
 struct SamplerDesc
 {

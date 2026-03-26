@@ -17,12 +17,7 @@ bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, cons
         .image      = image->getVkImage(),
         .viewType   = ci.viewType,
         .format     = _format,
-        .components = {
-            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = VK_COMPONENT_SWIZZLE_IDENTITY,
-        },
+        .components = ci.components,
         .subresourceRange = {
             .aspectMask     = _aspectFlags,
             .baseMipLevel   = ci.baseMipLevel,

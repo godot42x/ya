@@ -44,6 +44,12 @@ struct VulkanImageView : public IImageView
         uint32_t           levelCount     = 1;
         uint32_t           baseArrayLayer = 0;
         uint32_t           layerCount     = 1;
+        VkComponentMapping components     = {
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+            VK_COMPONENT_SWIZZLE_IDENTITY,
+        };
     };
 
     static stdptr<VulkanImageView> create(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci);

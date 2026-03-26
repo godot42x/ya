@@ -67,7 +67,11 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     OUT.pos = vec4(IN.pos, 1.0);
     OUT.normal = vec4(normalize(IN.normal), 1.0);
 
-    float3 albedo = uTexDiffuse.Sample(IN.uv).rgb;
-    float specular = uTexSpecular.Sample(IN.uv).r;
-    OUT.albedoSpecular = float4(albedo, specular);
+    OUT.albedoSpecular = float4(1.0);
+    if(uParams.textures[ETextureSlot::Diffuse].bEnable){
+        OUT.albedoSpecular.rgb = uTexDiffuse.Sample(IN.uv).rgb;
+    }
+    if(uParams.textures[ETextureSlot::Specular].bEnable){
+        OUT.albedoSpecular.a = uTexSpecular.Sample(IN.uv).r;
+    }
 }

@@ -604,6 +604,7 @@ void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
 
         auto renderingMode = renderTarget->getRenderingMode();
 
+        renderTarget->flushDirty();
         renderTarget->beginFrame(this);
 
         if (renderingMode == ERenderingMode::RenderPass) {

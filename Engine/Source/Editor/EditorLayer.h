@@ -53,7 +53,8 @@ struct EditorViewportContext
         IImageView* gBufferPostion;
         IImageView* gBufferNormal;
         IImageView* gBufferAlbedoSpecular;
-        IImageView* gBufferSpecular; // extracted alpha channel from albedoSpecular
+        IImageView* gBufferAlbedoRGB  = nullptr; // RGB-only view (alpha forced to 1)
+        IImageView* gBufferSpecular   = nullptr; // Alpha channel as grayscale (specular intensity)
 
     } deferredSpec;
 };

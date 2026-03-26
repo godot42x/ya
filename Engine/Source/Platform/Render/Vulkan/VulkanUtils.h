@@ -909,6 +909,36 @@ inline auto toVk(T t) -> VkImageViewType
 }
 } // namespace EImageViewType
 
+namespace EComponentSwizzle
+{
+using namespace ya::EComponentSwizzle;
+inline auto toVk(T swizzle) -> VkComponentSwizzle
+{
+    switch (swizzle) {
+    case Identity: return VK_COMPONENT_SWIZZLE_IDENTITY;
+    case Zero:     return VK_COMPONENT_SWIZZLE_ZERO;
+    case One:      return VK_COMPONENT_SWIZZLE_ONE;
+    case R:        return VK_COMPONENT_SWIZZLE_R;
+    case G:        return VK_COMPONENT_SWIZZLE_G;
+    case B:        return VK_COMPONENT_SWIZZLE_B;
+    case A:        return VK_COMPONENT_SWIZZLE_A;
+    }
+    UNREACHABLE();
+    return {};
+}
+} // namespace EComponentSwizzle
+
+inline VkComponentMapping toVk(const ComponentMapping& cm)
+{
+    using namespace EComponentSwizzle;
+    return VkComponentMapping{
+        .r = toVk(cm.r),
+        .g = toVk(cm.g),
+        .b = toVk(cm.b),
+        .a = toVk(cm.a),
+    };
+}
+
 } // namespace ya
 
 

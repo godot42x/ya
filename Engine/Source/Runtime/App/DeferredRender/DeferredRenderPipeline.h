@@ -44,19 +44,18 @@ struct DeferredRenderPipeline
     DescriptorSetHandle _frameAndLightDS;
     DescriptorSetHandle _lightTexturesDS;
 
-    // --- Debug: channel extract pass (e.g. specular alpha channel) ---
-    // Uses compute pipeline: reads GBuffer attachment[2] alpha → writes storage image
-    struct DebugChannelExtract
-    {
-        std::shared_ptr<Texture>           outputTexture;     // Storage+Sampled texture (replaces RenderTarget)
-        stdptr<IComputePipeline>           pipeline;
-        stdptr<IPipelineLayout>            pipelineLayout;
-        stdptr<IDescriptorSetLayout>       dsl;
-        std::shared_ptr<IDescriptorPool>  descriptorPool;
-        DescriptorSetHandle               descriptorSet;
-        ImageViewHandle                   currentInputImageViewHandle = nullptr;
-    } _debugChannelExtract;
-    IImageView* _debugSpecularIV = nullptr; // cached pointer for editor
+    // --- Debug: swizzled image views for GBuffer channel visualization ---
+    // Created lazily from GBuffer attachment[2] (albedoSpecular) using component swizzle
+    // RGB view: shows albedo color only (alpha forced to 1)
+    // Alpha-as-grayscale view: shows specular intensity (alpha → R,G,B)
+    stdptr<IImageView> _debugAlbedoRGBView;                        // swizzle: R,G,B → R,G,B; A → 1
+    stdptr<IImageView> _debugSpecularAlphaView;                    // swizzle: A → R,G,B; A → 1
+    ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr; // track source IV for invalidation
+
+    // Get or create swizzled debug views from GBuffer albedoSpecular attachment
+    void        ensureDebugSwizzledViews();
+    IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
+    IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
 
     stdptr<IBuffer> _frameUBO = nullptr;
     stdptr<IBuffer> _lightUBO = nullptr;
@@ -315,7 +314,7 @@ struct DeferredRenderPipeline
                 .attachments = {
                     ColorBlendAttachmentState{
                         .index               = 0,
-                        .bBlendEnable        = true,
+                        .bBlendEnable        = false,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -326,7 +325,7 @@ struct DeferredRenderPipeline
                     },
                     ColorBlendAttachmentState{
                         .index               = 1,
-                        .bBlendEnable        = true,
+                        .bBlendEnable        = false,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -337,7 +336,7 @@ struct DeferredRenderPipeline
                     },
                     ColorBlendAttachmentState{
                         .index               = 2,
-                        .bBlendEnable        = true,
+                        .bBlendEnable        = false,
                         .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                         .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                         .colorBlendOp        = EBlendOp::Add,
@@ -445,6 +444,7 @@ struct DeferredRenderPipeline
             .depthStencilState = DepthStencilState{
                 .bDepthTestEnable  = true,
                 .bDepthWriteEnable = false,
+                .depthCompareOp    = ECompareOp::Less,
             },
             .colorBlendState = ColorBlendState{
                 .attachments = {
@@ -521,78 +521,6 @@ struct DeferredRenderPipeline
             IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
         });
 
-        // MARK: Debug channel extract (compute pipeline for specular alpha view)
-        {
-            auto& dc = _debugChannelExtract;
-
-            // Create output texture with Storage+Sampled usage
-            dc.outputTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-                .label     = "DebugChannelExtract_Output",
-                .width     = extent.width,
-                .height    = extent.height,
-                .format    = COLOR_FORMAT,
-                .usage     = EImageUsage::Storage | EImageUsage::Sampled,
-            });
-
-            dc.dsl = IDescriptorSetLayout::create(
-                _render,
-                DescriptorSetLayoutDesc{
-                    .label    = "DebugChannelExtract_DSL",
-                    .set      = 0,
-                    .bindings = {
-                        DescriptorSetLayoutBinding{
-                            .binding         = 0,
-                            .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                            .descriptorCount = 1,
-                            .stageFlags      = EShaderStage::Compute,
-                        },
-                        DescriptorSetLayoutBinding{
-                            .binding         = 1,
-                            .descriptorType  = EPipelineDescriptorType::StorageImage,
-                            .descriptorCount = 1,
-                            .stageFlags      = EShaderStage::Compute,
-                        },
-                    },
-                });
-
-            dc.pipelineLayout = IPipelineLayout::create(
-                _render,
-                "DebugChannelExtract PPL",
-                {}, // no push constants
-                {dc.dsl});
-
-            dc.pipeline = IComputePipeline::create(_render);
-            ComputePipelineCreateInfo compCI{
-                .pipelineLayout = dc.pipelineLayout.get(),
-                .shaderDesc     = ShaderDesc{
-                    .shaderName        = "DebugChannelExtract.comp.glsl",
-                    .bDeriveFromShader = false,
-                },
-            };
-            YA_CORE_ASSERT(dc.pipeline && dc.pipeline->recreate(compCI), "Failed to create DebugChannelExtract compute pipeline");
-
-            dc.descriptorPool = IDescriptorPool::create(
-                _render,
-                DescriptorPoolCreateInfo{
-                    .label     = "DebugChannelExtract DSP",
-                    .maxSets   = 1,
-                    .poolSizes = {
-                        DescriptorPoolSize{
-                            .type            = EPipelineDescriptorType::CombinedImageSampler,
-                            .descriptorCount = 1,
-                        },
-                        DescriptorPoolSize{
-                            .type            = EPipelineDescriptorType::StorageImage,
-                            .descriptorCount = 1,
-                        },
-                    },
-                });
-            std::vector<DescriptorSetHandle> dceDS;
-            bool                             ok = dc.descriptorPool->allocateDescriptorSets(dc.dsl, 1, dceDS);
-            YA_CORE_ASSERT(ok, "Failed to allocate DebugChannelExtract descriptor set");
-            dc.descriptorSet = dceDS[0];
-        }
-
         _render->waitIdle();
     }
 
@@ -628,17 +556,9 @@ struct DeferredRenderPipeline
 
         _gBufferRT->setExtent(newExtent);
         _viewportRT->setExtent(newExtent);
-        if (_debugChannelExtract.outputTexture) {
-            _debugChannelExtract.outputTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-                .label     = "DebugChannelExtract_Output",
-                .width     = newExtent.width,
-                .height    = newExtent.height,
-                .format    = COLOR_FORMAT,
-                .usage     = EImageUsage::Storage | EImageUsage::Sampled,
-            });
-            // Force descriptor set update on next frame (input view may also change after resize)
-            _debugChannelExtract.currentInputImageViewHandle = nullptr;
-        }
+
+        // Invalidate cached swizzled views — they reference old GBuffer images
+        _cachedAlbedoSpecImageViewHandle = nullptr;
     }
 
 

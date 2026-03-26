@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Trait.h"
 #include "Image.h"
 #include "Render/RenderDefines.h"
 
@@ -97,9 +98,12 @@ struct CubeMapCreateInfo
  *
  * Note: Use Texture::fromFile(), Texture::createCubeMap() etc. for high-level API.
  */
-struct ITextureFactory
+struct ITextureFactory : public disable_copy
 {
+
     virtual ~ITextureFactory() = default;
+
+    static ITextureFactory* get();
 
     // ====== Low-level API (Used by Texture static methods) ======
 
@@ -171,52 +175,18 @@ struct ITextureFactory
  */
 struct ImageViewCreateInfo
 {
-    std::string        label;
-    EImageViewType::T  viewType    = EImageViewType::View2D;
-    EImageAspect::T    aspectFlags = EImageAspect::None;
-    uint32_t        baseMipLevel   = 0;
-    uint32_t        levelCount     = 1;
-    uint32_t        baseArrayLayer = 0;
-    uint32_t        layerCount     = 1;
+    std::string       label;
+    EImageViewType::T viewType       = EImageViewType::View2D;
+    EImageAspect::T   aspectFlags    = EImageAspect::None;
+    uint32_t          baseMipLevel   = 0;
+    uint32_t          levelCount     = 1;
+    uint32_t          baseArrayLayer = 0;
+    uint32_t          layerCount     = 1;
 
-
-    [[deprecated("Unimplemented")]]
-    // Component mapping (for format conversion)
-    struct ComponentMapping
-    {
-        uint32_t r = 0;
-        uint32_t g = 0;
-        uint32_t b = 0;
-        uint32_t a = 0;
-    } components = {};
+    // Component mapping (swizzle) for channel remapping
+    ComponentMapping components = {};
 };
 
-/**
- * @brief TextureFactoryHelper - Global access to texture factory
- */
-class TextureFactoryHelper
-{
-  public:
-    /**
-     * @brief Get current renderer's texture factory
-     * @return ITextureFactory interface pointer, nullptr if not set
-     */
-    static ITextureFactory* get();
 
-    /**
-     * @brief Set current renderer's texture factory
-     * @param factory Texture factory interface
-     */
-    static void set(ITextureFactory* factory);
-
-    /**
-     * @brief Check if texture factory is available
-     * @return Whether factory is set and valid
-     */
-    static bool isAvailable();
-
-  private:
-    static ITextureFactory* s_currentFactory;
-};
 
 } // namespace ya

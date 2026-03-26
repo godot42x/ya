@@ -825,44 +825,54 @@ void EditorLayer::debugWindow()
 #else
 
     // deferred render GBuffers — 4-column table so they stay visible at any window size
-    auto sampler = TextureLibrary::get().getLinearSampler();
+    auto  sampler   = TextureLibrary::get().getLinearSampler();
     float padding   = GetStyle().ItemSpacing.x;
     float colWidth  = (panelSize.x - padding * 3.0f) / 4.0f;
     float imgHeight = colWidth; // keep 1:1 aspect ratio for GBuffer views
 
     if (BeginTable("GBufferTable", 4, ImGuiTableFlags_BordersInnerV))
     {
-        TableSetupColumn("Pos",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableSetupColumn("Pos", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         TableSetupColumn("Norm", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        TableSetupColumn("Alb",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        TableSetupColumn("Alb", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         TableSetupColumn("Spec", ImGuiTableColumnFlags_WidthStretch, 1.0f);
         TableNextRow();
 
         // Position
         TableSetColumnIndex(0);
         Text("GBuffer Position");
-        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position",
-                           ImVec2(colWidth, imgHeight));
+        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferPostion, sampler, "GBuffer Position", ImVec2(colWidth, imgHeight));
 
         // Normal
         TableSetColumnIndex(1);
         Text("GBuffer Normal");
-        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal",
-                           ImVec2(colWidth, imgHeight));
+        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferNormal, sampler, "GBuffer Normal", ImVec2(colWidth, imgHeight));
 
-        // Albedo + Specular
+        // Albedo RGB (swizzled: RGB only, alpha forced to 1)
         TableSetColumnIndex(2);
-        Text("GBuffer Albedo + Specular");
-        ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular, sampler, "GBuffer Albedo Specular",
-                           ImVec2(colWidth, imgHeight));
+        Text("GBuffer Albedo (RGB)");
+        if (_viewportCtx.deferredSpec.gBufferAlbedoRGB)
+        {
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoRGB,
+                               sampler,
+                               "GBuffer Albedo RGB",
+                               ImVec2(colWidth, imgHeight));
+        }
+        else
+        {
+            // Fallback: show original albedo+specular combined
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferAlbedoSpecular,
+                               sampler,
+                               "GBuffer Albedo Specular",
+                               ImVec2(colWidth, imgHeight));
+        }
 
-        // Specular (extracted alpha channel)
+        // Specular (swizzled: alpha channel as grayscale)
         TableSetColumnIndex(3);
-        Text("GBuffer Specular");
+        Text("GBuffer Specular (Alpha)");
         if (_viewportCtx.deferredSpec.gBufferSpecular)
         {
-            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferSpecular, sampler, "GBuffer Specular",
-                               ImVec2(colWidth, imgHeight));
+            ImGuiHelper::Image(_viewportCtx.deferredSpec.gBufferSpecular, sampler, "GBuffer Specular", ImVec2(colWidth, imgHeight));
         }
         else
         {
