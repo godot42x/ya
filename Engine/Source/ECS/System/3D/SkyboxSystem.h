@@ -64,10 +64,7 @@ struct SkyBoxSystem : public IRenderSystem
     std::array<DescriptorSetHandle, SKYBOX_PER_FRAME_SET> _dsPerFrame;
     std::array<stdptr<IBuffer>, SKYBOX_PER_FRAME_SET>     _frameUBO;
 
-    DescriptorSetHandle _cubeMapDS;
-
     stdptr<IPipelineLayout>   _pipelineLayout = nullptr;
-    stdptr<Sampler>           _sampler3D      = nullptr;
 
     SkyBoxSystem() : IRenderSystem("SkyBoxSystem") {}
 
@@ -76,13 +73,10 @@ struct SkyBoxSystem : public IRenderSystem
     void onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx) override;
     void onDestroy() override;
 
-    void updateSkyboxCubeMap();
-
     void advance() { _index = (_index + 1) % SKYBOX_PER_FRAME_SET; }
     void beginFrame() override
     {
         Super::beginFrame();
-        updateSkyboxCubeMap();
         _index = 0;
     }
 };

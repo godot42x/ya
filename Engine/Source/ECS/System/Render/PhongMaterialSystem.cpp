@@ -6,6 +6,7 @@
 
 
 
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -305,6 +306,12 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
 
     preTick(0.0f, ctx);
 
+    // Fetch shared skybox cubemap DS from SkyboxComponent (written by ResourceResolveSystem)
+    DescriptorSetHandle skyboxDS = nullptr;
+    for (auto&& [e, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+        skyboxDS = sc.cubeMapDS;
+        break;
+    }
 
     // Query entities with both PhongMaterialComponent and MeshComponent
     auto view = scene->getRegistry().view<PhongMaterialComponent, MeshComponent, TransformComponent>();
@@ -412,7 +419,7 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
                                        _currentScenePassResources->frameDS,
                                        resourceDS,
                                        paramDS,
-                                       skyBoxCubeMapDS,
+                                       skyboxDS,
                                        depthBufferDS,
                                    });
 

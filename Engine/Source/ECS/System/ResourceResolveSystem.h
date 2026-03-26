@@ -9,6 +9,7 @@ namespace ya
 // Forward declarations
 struct MeshComponent;
 struct PhongMaterialComponent;
+struct SkyboxComponent;
 struct Scene;
 
 /**
@@ -40,6 +41,7 @@ struct ResourceResolveSystem : public ISystem
     void resolvePendingMaterials(Scene* scene);
     void resolvePendingUI(Scene* scene);
     void resolvePendingBillboards(Scene* scene);
+    void resolvePendingSkybox(Scene* scene);
 };
 
 } // namespace ya

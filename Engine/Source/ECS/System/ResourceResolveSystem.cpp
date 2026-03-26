@@ -6,9 +6,12 @@
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/UIComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 
+#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/Sampler.h"
 
 
 
@@ -27,6 +30,7 @@ void ResourceResolveSystem::onUpdate(float dt)
     resolvePendingMaterials(scene);
     resolvePendingUI(scene);
     resolvePendingBillboards(scene);
+    resolvePendingSkybox(scene);
 
     // Add more component types here as needed:
     // - PBRMaterialComponent
@@ -79,6 +83,42 @@ void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
         (void)entity;
         if (comp.bDirty) {
             comp.resolve();
+        }
+    }
+}
+
+void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
+{
+    auto  app      = App::get();
+    auto  render   = app->getRender();
+    auto& registry = scene->getRegistry();
+
+    for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
+        // Lazy-allocate DS from App-layer pool on first use
+        if (!sc.cubeMapDS) {
+            sc.cubeMapDS = app->_skyboxDSP->allocateDescriptorSets(app->_skyboxDSL);
+            render->as<VulkanRender>()->setDebugObjectName(
+                VK_OBJECT_TYPE_DESCRIPTOR_SET, sc.cubeMapDS.ptr, "Skybox_CubeMap_DS_Shared");
+            sc.bDirty = true; // force initial write
+        }
+
+        if (sc.bDirty && sc.cubemapTexture && sc.cubemapTexture->getImageView()) {
+            render->getDescriptorHelper()->updateDescriptorSets(
+                {
+                    IDescriptorSetHelper::genImageWrite(
+                        sc.cubeMapDS,
+                        0,
+                        0,
+                        EPipelineDescriptorType::CombinedImageSampler,
+                        {
+                            DescriptorImageInfo(
+                                sc.cubemapTexture->getImageView()->getHandle(),
+                                app->_skyboxSampler->getHandle(),
+                                EImageLayout::ShaderReadOnlyOptimal),
+                        }),
+                },
+                {});
+            sc.bDirty = false;
         }
     }
 }

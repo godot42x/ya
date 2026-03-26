@@ -17,7 +17,7 @@
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/3D/SkyboxComponent.h"
+#include "Render/Core/Sampler.h"
 
 #include "utility.cc/ranges.h"
 
@@ -167,6 +167,43 @@ void App::initRenderPipeline()
 
 
 
+    // MARK: Shared skybox cubemap descriptor resources (outlives pipeline switches)
+    {
+        _skyboxDSL = IDescriptorSetLayout::create(
+            _render,
+            DescriptorSetLayoutDesc{
+                .label    = "App_Skybox_CubeMap_DSL",
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                },
+            });
+
+        _skyboxDSP = IDescriptorPool::create(
+            _render,
+            DescriptorPoolCreateInfo{
+                .label     = "App_Skybox_DSP",
+                .maxSets   = 4, // headroom for multiple skybox entities
+                .poolSizes = {
+                    DescriptorPoolSize{
+                        .type            = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 4,
+                    },
+                },
+            });
+
+        _skyboxSampler = Sampler::create(SamplerDesc{
+            .label        = "App_SkyboxSampler",
+            .addressModeU = ESamplerAddressMode::Repeat,
+            .addressModeV = ESamplerAddressMode::Repeat,
+            .addressModeW = ESamplerAddressMode::Repeat,
+        });
+    }
+
     // Create & init the active pipeline, recreate viewport RT, init Render2D
     initActivePipeline();
 
@@ -245,6 +282,11 @@ void App::shutdownRenderPipeline()
 
     // Unified cleanup of all resource caches in priority order
     ResourceRegistry::get().clearAll();
+
+    // Release shared skybox descriptor resources (must happen before render destruction)
+    _skyboxSampler.reset();
+    _skyboxDSP.reset();
+    _skyboxDSL.reset();
 
     if (_render) {
         _render->waitIdle();
@@ -696,17 +738,6 @@ void App::applyPendingShadingModelSwitch()
     shutdownActivePipeline();
     _shadingModel = _pendingShadingModel;
     initActivePipeline();
-
-    // Force skybox cubemap descriptor re-write for the new pipeline's SkyBoxSystem,
-    // because the previous pipeline's SkyBoxSystem already consumed bDirty.
-    {
-        auto scene = getSceneManager()->getActiveScene();
-        if (scene) {
-            for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-                sc.bDirty = true;
-            }
-        }
-    }
 
     // Re-apply the current viewport rect so the new pipeline has correct size
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {

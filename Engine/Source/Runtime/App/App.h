@@ -150,6 +150,11 @@ struct App
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
+    // --- Shared skybox cubemap descriptor resources (outlives pipeline switches) ---
+    stdptr<IDescriptorPool>      _skyboxDSP    = nullptr;
+    stdptr<IDescriptorSetLayout> _skyboxDSL    = nullptr;
+    stdptr<Sampler>              _skyboxSampler = nullptr;
+
     // Runtime state
     bool          bRunning         = true;
     ERenderAPI::T currentRenderAPI = ERenderAPI::None;

@@ -6,7 +6,6 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
-#include "glm/glm.hpp"
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
@@ -165,44 +164,11 @@ void SkyBoxSystem::onInitImpl(const InitParams& initParams)
 
     // _cubeMapDS = resourceSets[0];
     // render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, _dsResource.ptr, "Skybox_Resource_DS");
-
-    _sampler3D = Sampler::create(SamplerDesc{
-        .label        = "SkyboxSampler",
-        .addressModeU = ESamplerAddressMode::Repeat,
-        .addressModeV = ESamplerAddressMode::Repeat,
-        .addressModeW = ESamplerAddressMode::Repeat,
-    });
 }
 
 
 void SkyBoxSystem::onDestroy()
 {
-}
-
-void SkyBoxSystem::updateSkyboxCubeMap()
-{
-    auto scene = App::get()->getSceneManager()->getActiveScene();
-    for (const auto& [entity, sc, mc] :
-         scene->getRegistry().view<SkyboxComponent, MeshComponent>().each())
-    {
-        if (sc.bDirty) {
-            auto render = App::get()->getRender();
-            render->getDescriptorHelper()->updateDescriptorSets(
-                {
-                    IDescriptorSetHelper::genImageWrite(
-                        _cubeMapDS,
-                        0,
-                        0,
-                        EPipelineDescriptorType::CombinedImageSampler,
-                        {DescriptorImageInfo(
-                            sc.cubemapTexture->getImageView()->getHandle(),
-                            _sampler3D->getHandle(),
-                            EImageLayout::ShaderReadOnlyOptimal)}),
-                },
-                {});
-            sc.bDirty = false;
-        }
-    }
 }
 
 void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
@@ -220,25 +186,11 @@ void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         meshComp   = &mc;
         break;
     }
-    if (!skyboxComp || !meshComp) {
+    if (!skyboxComp || !meshComp || !skyboxComp->cubeMapDS) {
         return;
     }
 
-    // if (skyboxComp->bDirty) {
-    //     skyboxComp->bDirty = false;
-    //     TextureView tv     = TextureView::create(skyboxComp->cubemapTexture, _sampler3D);
 
-    //     auto render = App::get()->getRender();
-    //     render->getDescriptorHelper()->updateDescriptorSets(
-    //         {
-    //             IDescriptorSetHelper::genSingleTextureViewWrite(
-    //                 _cubeMapDS,
-    //                 0,
-    //                 EPipelineDescriptorType::CombinedImageSampler,
-    //                 &tv),
-    //         },
-    //         {});
-    // }
 
 
     // MARK: Set Viewport and Scissor
@@ -276,7 +228,7 @@ void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
                                0,
                                {
                                    _dsPerFrame[_index],
-                                   _cubeMapDS,
+                                   skyboxComp->cubeMapDS,
                                });
 
     meshComp->getMesh()->draw(cmdBuf);

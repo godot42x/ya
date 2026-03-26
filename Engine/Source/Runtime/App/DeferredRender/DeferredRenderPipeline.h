@@ -31,9 +31,7 @@ struct DeferredRenderPipeline
     stdptr<IDescriptorPool> _deferredDSP;
 
     // --- Skybox ---
-    stdptr<SkyBoxSystem>        _skyboxSystem;
-    stdptr<IDescriptorSetLayout> _skyBoxCubeMapDSL;
-    DescriptorSetHandle          _skyBoxCubeMapDS;
+    stdptr<SkyBoxSystem> _skyboxSystem;
 
     // --- Post Processing (shared stage) ---
     PostProcessStage _postProcessStage;
@@ -489,7 +487,7 @@ struct DeferredRenderPipeline
             _render,
             DescriptorPoolCreateInfo{
                 .label     = "Deferred Rendering DSP",
-                .maxSets   = 3, // frame+light, light textures, skybox cubemap
+                .maxSets   = 2, // frame+light, light textures
                 .poolSizes = {
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::UniformBuffer,
@@ -497,7 +495,7 @@ struct DeferredRenderPipeline
                     },
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 4, // 3 GBuffer textures + 1 skybox cubemap
+                        .descriptorCount = 3, // 3 GBuffer textures
                     },
                 },
             });
@@ -534,21 +532,6 @@ struct DeferredRenderPipeline
         });
 
         // MARK: Skybox
-        _skyBoxCubeMapDSL = IDescriptorSetLayout::create(
-            _render,
-            DescriptorSetLayoutDesc{
-                .label    = "Deferred_Skybox_CubeMap_DSL",
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            });
-        _skyBoxCubeMapDS = _deferredDSP->allocateDescriptorSets(_skyBoxCubeMapDSL);
-
         _skyboxSystem = ya::makeShared<SkyBoxSystem>();
         _skyboxSystem->init(IRenderSystem::InitParams{
             .renderPass            = nullptr,
@@ -560,7 +543,6 @@ struct DeferredRenderPipeline
                 .stencilAttachmentFormat = EFormat::Undefined,
             },
         });
-        _skyboxSystem->_cubeMapDS = _skyBoxCubeMapDS;
         _skyboxSystem->bReverseViewportY = true; // light pass viewport is not flipped
 
         // MARK: Post Processing (shared stage)
@@ -598,7 +580,6 @@ struct DeferredRenderPipeline
             _skyboxSystem->onDestroy();
             _skyboxSystem.reset();
         }
-        _skyBoxCubeMapDSL.reset();
     }
     void renderGUI();
 

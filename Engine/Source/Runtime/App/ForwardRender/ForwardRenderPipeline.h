@@ -56,8 +56,6 @@ struct ForwardRenderPipeline
     std::shared_ptr<IRenderPass>   screenRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> screenRT         = nullptr;
 
-    stdptr<IDescriptorSetLayout> skyBoxCubeMapDSL    = nullptr;
-    DescriptorSetHandle          skyBoxCubeMapDS     = nullptr;
     stdptr<IDescriptorSetLayout> depthBufferDSL      = nullptr;
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
     stdptr<Sampler>              shadowSampler       = nullptr;

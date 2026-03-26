@@ -103,7 +103,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     });
     _deleter.push("DepthRT", [this](void*) { depthRT.reset(); });
 
-    // Create internal descriptor pool (owns skybox + shadow map descriptors)
+    // Create internal descriptor pool (owns shadow map descriptors)
     _descriptorPool = IDescriptorPool::create(
         _render,
         DescriptorPoolCreateInfo{
@@ -112,30 +112,13 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1 + (1 + MAX_POINT_LIGHTS), // skybox + depth shadow(point and directional)
+                    .descriptorCount = (1 + MAX_POINT_LIGHTS), // depth shadow(point and directional)
                 },
             },
         });
     _deleter.push("OwnedDescriptorPool", [this](void*) { _descriptorPool.reset(); });
 
     {
-        skyBoxCubeMapDSL = IDescriptorSetLayout::create(
-            _render,
-            DescriptorSetLayoutDesc{
-                .label    = "Skybox_CubeMap_DSL",
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            });
-        skyBoxCubeMapDS = _descriptorPool->allocateDescriptorSets(skyBoxCubeMapDSL);
-        _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, skyBoxCubeMapDS.ptr, "Skybox_CubeMap_DS");
-        _deleter.push("SkyboxCubeMapDSL", [this](void*) { skyBoxCubeMapDSL.reset(); });
-
         depthBufferDSL = IDescriptorSetLayout::create(
             _render,
             DescriptorSetLayoutDesc{
@@ -355,8 +338,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 
         _render->waitIdle();
 
-        skyboxSystem->as<SkyBoxSystem>()->_cubeMapDS                    = skyBoxCubeMapDS;
-        phongMaterialSystem->as<PhongMaterialSystem>()->skyBoxCubeMapDS = skyBoxCubeMapDS;
         shadowMappingSystem->as<ShadowMapping>()->setRenderTarget(depthRT);
         phongMaterialSystem->as<PhongMaterialSystem>()->depthBufferDS = depthBufferShadowDS;
         phongMaterialSystem->as<PhongMaterialSystem>()->setDirectionalShadowMappingEnabled(bShadowMapping);

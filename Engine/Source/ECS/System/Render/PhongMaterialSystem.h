@@ -301,7 +301,6 @@ struct PhongMaterialSystem : public IMaterialSystem
     MaterialDescPool<PhongMaterial, PhongMaterial::ParamUBO> _matPool;
     bool                                                      _bDescriptorPoolRecreated = false;
 
-    DescriptorSetHandle skyBoxCubeMapDS            = nullptr;
     DescriptorSetHandle depthBufferDS              = nullptr;
     bool                _bDirectionalShadowMapping = true;
     std::string         _ctxEntityDebugStr;
