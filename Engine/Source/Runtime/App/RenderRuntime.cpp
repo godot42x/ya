@@ -341,6 +341,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     else {
         _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
             .cmdBuf                   = cmdBuf.get(),
+            .sceneManager             = input.sceneManager,
             .dt                       = input.dt,
             .view                     = input.view,
             .projection               = input.projection,
@@ -578,6 +579,9 @@ Extent2D RenderRuntime::getViewportExtent() const
 
 void RenderRuntime::renderGUI(float dt)
 {
+    if(!ImGui::CollapsingHeader("Render Runtime")){
+        return;
+    }
     (void)dt;
 
     {

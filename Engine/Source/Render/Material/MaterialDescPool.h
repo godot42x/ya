@@ -21,12 +21,12 @@ namespace ya
  * @tparam TMaterial  Material type (must expose getIndex(), getParamVersion(), getResourceVersion(), isParamDirty/setParamDirty, isResourceDirty/setResourceDirty)
  * @tparam TParamUBO  UBO struct stored per material
  */
-template<typename TMaterial, typename TParamUBO>
+template <typename TMaterial, typename TParamUBO>
 struct MaterialDescPool
 {
     static constexpr uint32_t MAX_CAP = 2048;
 
-    IRender*                     _render      = nullptr;
+    IRender*                     _render = nullptr;
     stdptr<IDescriptorSetLayout> _paramDSL;
     stdptr<IDescriptorSetLayout> _resourceDSL;
     // Returns pool sizes for N materials (called during rebuild)
@@ -41,8 +41,8 @@ struct MaterialDescPool
     uint32_t                         _capacity = 0;
 
     void init(IRender*                                                 render,
-              stdptr<IDescriptorSetLayout>                            paramDSL,
-              stdptr<IDescriptorSetLayout>                            resourceDSL,
+              stdptr<IDescriptorSetLayout>                             paramDSL,
+              stdptr<IDescriptorSetLayout>                             resourceDSL,
               std::function<std::vector<DescriptorPoolSize>(uint32_t)> poolSizeFn,
               uint32_t                                                 initialCapacity = 16)
     {
@@ -81,10 +81,10 @@ struct MaterialDescPool
      * @param onParam      void(IBuffer* ubo, TMaterial* mat) — write UBO data
      * @param onResource   void(DescriptorSetHandle ds, TMaterial* mat) — write texture DS
      */
-    template<typename FOnParam, typename FOnResource>
+    template <typename FOnParam, typename FOnResource>
     void flushDirty(TMaterial* mat, bool forceUpdate, FOnParam onParam, FOnResource onResource)
     {
-        uint32_t idx = static_cast<uint32_t>(mat->getIndex());
+        uint32_t idx             = static_cast<uint32_t>(mat->getIndex());
         uint64_t paramVersion    = mat->getParamVersion();
         uint64_t resourceVersion = mat->getResourceVersion();
 
@@ -100,7 +100,7 @@ struct MaterialDescPool
         }
     }
 
-private:
+  private:
     void rebuild(uint32_t capacity)
     {
         _paramDSs.clear();
@@ -118,8 +118,8 @@ private:
 
         _pool->allocateDescriptorSets(_paramDSL, capacity, _paramDSs);
         _pool->allocateDescriptorSets(_resourceDSL, capacity, _resourceDSs);
-    _uploadedParamVersions.assign(capacity, 0);
-    _uploadedResourceVersions.assign(capacity, 0);
+        _uploadedParamVersions.assign(capacity, 0);
+        _uploadedResourceVersions.assign(capacity, 0);
 
         // Create UBOs for any new slots
         uint32_t prevCount = static_cast<uint32_t>(_paramUBOs.size());

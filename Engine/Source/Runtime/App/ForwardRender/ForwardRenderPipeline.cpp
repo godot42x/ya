@@ -497,6 +497,10 @@ void ForwardRenderPipeline::shutdown()
 
 void ForwardRenderPipeline::renderGUI()
 {
+    if(!ImGui::TreeNode("Forward Render Pipeline")){
+        return;
+    }
+
     if (ImGui::CollapsingHeader("Render Systems", ImGuiTreeNodeFlags_DefaultOpen)) {
         simpleMaterialSystem->renderGUI();
         unlitMaterialSystem->renderGUI();
@@ -544,6 +548,7 @@ void ForwardRenderPipeline::renderGUI()
     if (viewportRT) {
         viewportRT->onRenderGUI();
     }
+    ImGui::TreePop();
 }
 
 

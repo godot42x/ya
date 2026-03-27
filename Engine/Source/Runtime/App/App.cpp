@@ -586,9 +586,9 @@ void App::onRenderGUI(float dt)
         Render2D::onImGui();
     }
 
-    if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
-        // RenderTargetPool::get().onRenderGUI();
-    }
+    // if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
+    //     // RenderTargetPool::get().onRenderGUI();
+    // }
 
     if (_renderRuntime) {
         _renderRuntime->renderGUI(dt);
