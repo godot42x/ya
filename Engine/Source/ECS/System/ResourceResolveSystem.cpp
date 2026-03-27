@@ -1,5 +1,6 @@
 #include "ResourceResolveSystem.h"
 #include "Runtime/App/App.h"
+#include "Runtime/App/RenderRuntime.h"
 #include "Scene/SceneManager.h"
 
 
@@ -89,20 +90,27 @@ void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
 
 void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 {
-    auto  app      = App::get();
-    auto  render   = app->getRender();
+    auto* app      = App::get();
+    auto* runtime  = app->getRenderRuntime();
+    auto* render   = app->getRender();
+    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
     auto& registry = scene->getRegistry();
 
     for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
         // Lazy-allocate DS from App-layer pool on first use
         if (!sc.cubeMapDS) {
-            sc.cubeMapDS = app->_skyboxDSP->allocateDescriptorSets(app->_skyboxDSL);
+            auto skyboxDSP = runtime->getSkyboxDescriptorPool();
+            auto skyboxDSL = runtime->getSkyboxDescriptorSetLayout();
+            YA_CORE_ASSERT(skyboxDSP && skyboxDSL, "Skybox shared descriptor resources are not initialized");
+            sc.cubeMapDS = skyboxDSP->allocateDescriptorSets(skyboxDSL);
             render->as<VulkanRender>()->setDebugObjectName(
                 VK_OBJECT_TYPE_DESCRIPTOR_SET, sc.cubeMapDS.ptr, "Skybox_CubeMap_DS_Shared");
             sc.bDirty = true; // force initial write
         }
 
         if (sc.bDirty && sc.cubemapTexture && sc.cubemapTexture->getImageView()) {
+            auto* skyboxSampler = runtime->getSkyboxSampler();
+            YA_CORE_ASSERT(skyboxSampler, "Skybox sampler is not initialized");
             render->getDescriptorHelper()->updateDescriptorSets(
                 {
                     IDescriptorSetHelper::genImageWrite(
@@ -113,7 +121,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                         {
                             DescriptorImageInfo(
                                 sc.cubemapTexture->getImageView()->getHandle(),
-                                app->_skyboxSampler->getHandle(),
+                                skyboxSampler->getHandle(),
                                 EImageLayout::ShaderReadOnlyOptimal),
                         }),
                 },

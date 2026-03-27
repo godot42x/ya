@@ -15,6 +15,13 @@ namespace ya
 /// endViewportPass() logic that runs after the main viewport pass closes.
 struct PostProcessStage
 {
+  private:
+    IRender*              _render      = nullptr;
+    EFormat::T            _colorFormat = EFormat::R8G8B8A8_UNORM;
+    stdptr<IRenderSystem> _system;
+    stdptr<Texture>       _postprocessTexture;
+
+  public:
     struct InitDesc
     {
         IRender*   render = nullptr;
@@ -150,12 +157,6 @@ struct PostProcessStage
     // --- Accessors ---
     bool     isEnabled() const { return _system && _system->bEnabled; }
     Texture* getOutputTexture() const { return _postprocessTexture.get(); }
-
-  private:
-    IRender*              _render      = nullptr;
-    EFormat::T            _colorFormat = EFormat::R8G8B8A8_UNORM;
-    stdptr<IRenderSystem> _system;
-    stdptr<Texture>       _postprocessTexture;
 };
 
 } // namespace ya

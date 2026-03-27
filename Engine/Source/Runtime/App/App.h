@@ -9,12 +9,13 @@
 #include "Editor/EditorLayer.h"
 
 #include "Runtime/App/FPSCtrl.h"
+#include "Runtime/App/RenderRuntime.h"
 
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Scene/SceneManager.h"
 #include <array>
+#include <memory>
 #include <glm/glm.hpp>
 
 
@@ -28,6 +29,8 @@ struct SceneManager;
 struct Scene;
 struct Material;
 struct IRenderPass;
+struct IRenderTarget;
+struct IImageView;
 struct LuaScriptingSystem;
 struct Texture;
 struct Sampler;
@@ -40,7 +43,7 @@ void imcFpsControl(FPSControl& fpsCtrl);
 bool imcEditorCamera(FreeCamera& camera);
 void imcClearValues();
 
-enum AppMode
+enum AppMode : int
 {
     Control,
     Drawing,
@@ -134,30 +137,11 @@ struct App
     Deleter _deleter;
 
     // Core subsystems
-    IRender*      _render       = nullptr;
     SceneManager* _sceneManager = nullptr;
-
-    std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
-
-    std::shared_ptr<ShaderStorage>                                   _shaderStorage = nullptr;
-    std::vector<std::pair<std::string /*name*/, IGraphicsPipeline*>> _monitorPipelines;
-
-    // --- Shading model: runtime-switchable pipeline selection ---
-    enum class EShadingModel { Forward, Deferred };
-    EShadingModel _shadingModel        = EShadingModel::Deferred;
-    EShadingModel _pendingShadingModel = EShadingModel::Deferred; // set by GUI, applied next frame
-
-    stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
-    stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
-
-    // --- Shared skybox cubemap descriptor resources (outlives pipeline switches) ---
-    stdptr<IDescriptorPool>      _skyboxDSP    = nullptr;
-    stdptr<IDescriptorSetLayout> _skyboxDSL    = nullptr;
-    stdptr<Sampler>              _skyboxSampler = nullptr;
+    std::unique_ptr<RenderRuntime> _renderRuntime;
 
     // Runtime state
-    bool          bRunning         = true;
-    ERenderAPI::T currentRenderAPI = ERenderAPI::None;
+    bool bRunning = true;
 
     using clock_t      = std::chrono::steady_clock;
     using time_point_t = clock_t::time_point;
@@ -190,13 +174,7 @@ struct App
     static const auto COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
     static const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
 
-    // Render targets (simplified - only manage attachments, no RenderPass dependency)
-    Rect2D                 _viewportRect;
-    float                  _viewportFrameBufferScale = 1.0f;
     std::vector<glm::vec2> clicked;
-
-    std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr; // Legacy render pass (unused in dynamic rendering)
-    std::shared_ptr<IRenderTarget> _screenRT         = nullptr; // Swapchain RT for ImGui
 
     // other systems, eg: transform, resource resolve
     std::vector<stdptr<ISystem>> _systems;
@@ -209,20 +187,13 @@ struct App
     MulticastDelegate<void()> onScenePostInit;
 
     LuaScriptingSystem*      _luaScriptingSystem;
-    stdptr<RenderDocCapture> _renderDocCapture;
-    int                      _renderDocOnCaptureAction = 0; // 0: none, 1: open replay UI, 2: open capture folder
-    std::string              _renderDocLastCapturePath;
-    std::string              _renderDocConfiguredDllPath;
-    std::string              _renderDocConfiguredOutputDir;
-
-
   public:
     App()                      = default;
     App(const App&)            = delete;
     App& operator=(const App&) = delete;
     App(App&&)                 = delete;
     App& operator=(App&&)      = delete;
-    virtual ~App()             = default;
+    virtual ~App();
 
     void init(AppDesc ci);
     int  run();
@@ -257,12 +228,13 @@ struct App
     static App* get() { return _instance; }
 
 
-    [[nodiscard]] IRender* getRender() const { return _render; }
+    [[nodiscard]] IRender* getRender() const;
     template <typename T>
     [[nodiscard]] T* getRender() { return static_cast<T*>(getRender()); }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
-    [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
+    [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const;
+    [[nodiscard]] RenderRuntime*                 getRenderRuntime() const { return _renderRuntime.get(); }
 
     [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
     [[nodiscard]] bool                   isShadowMappingEnabled() const;
@@ -335,22 +307,9 @@ struct App
     bool onMouseMoved(const MouseMoveEvent& event);
     bool onMouseButtonReleased(const MouseButtonReleasedEvent& event);
     bool onMouseScrolled(const MouseScrolledEvent& event);
-    void onSceneViewportResized(Rect2D rect);
 
 
     void handleSystemSignals();
-
-    void initRenderPipeline();
-    void shutdownRenderPipeline();
-    void tickRenderPipeline(float dt);
-    void renderGUIRenderPipeline();
-
-    /// Create the pipeline indicated by _shadingModel (called during init & switch)
-    void initActivePipeline();
-    /// Destroy whichever pipeline is currently alive
-    void shutdownActivePipeline();
-    /// Apply a pending shading-model switch (called at the top of tickRenderPipeline)
-    void applyPendingShadingModelSwitch();
 };
 
 

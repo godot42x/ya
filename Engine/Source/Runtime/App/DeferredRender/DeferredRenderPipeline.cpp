@@ -277,8 +277,8 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         skyboxCtx.projection = desc.projection;
         skyboxCtx.cameraPos  = desc.cameraPos;
         skyboxCtx.extent     = Extent2D{
-            .width  = viewportWidth,
-            .height = viewportHeight,
+                .width  = viewportWidth,
+                .height = viewportHeight,
         };
         _skyboxSystem->tick(cmdBuf, desc.dt, &skyboxCtx);
         cmdBuf->debugEndLabel();
@@ -292,8 +292,8 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     _lastTickCtx.projection = desc.projection;
     _lastTickCtx.cameraPos  = desc.cameraPos;
     _lastTickCtx.extent     = Extent2D{
-        .width  = viewportWidth,
-        .height = viewportHeight,
+            .width  = viewportWidth,
+            .height = viewportHeight,
     };
     _lastTickDesc = desc;
 #pragma endregion
@@ -311,8 +311,11 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
 
     // Run postprocessing via shared stage; returns input unchanged if disabled
-    viewportTexture = _postProcessStage.execute(
-        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, _lastTickDesc.dt, &_lastTickCtx);
+    viewportTexture = _postProcessStage.execute(cmdBuf,
+                                                inputTexture,
+                                                _lastTickDesc.viewportRect.extent,
+                                                _lastTickDesc.dt,
+                                                &_lastTickCtx);
 }
 
 void DeferredRenderPipeline::ensureDebugSwizzledViews()

@@ -18,6 +18,10 @@ namespace ya
 {
 
 
+enum EShadingModel{
+
+};
+
 
 struct DeferredRenderPipeline
 {
@@ -97,8 +101,7 @@ struct DeferredRenderPipeline
             .bufferSlot = 0,
             .location   = 0,
             .format     = EVertexAttributeFormat::Float3,
-
-            .offset = offsetof(ya::Vertex, position),
+            .offset     = offsetof(ya::Vertex, position),
         },
         VertexAttribute{
             .bufferSlot = 0,
@@ -211,56 +214,36 @@ struct DeferredRenderPipeline
                 .colorAttach = {
                     //  geometry
                     AttachmentDescription{
-                        .index          = 0,
-                        .format         = COLOR_FORMAT,
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                        .index         = 0,
+                        .format        = COLOR_FORMAT,
+                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                        .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                     },
                     // normal
                     AttachmentDescription{
-                        .index          = 1,
-                        .format         = COLOR_FORMAT,
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                        .index         = 1,
+                        .format        = COLOR_FORMAT,
+                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                        .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                     },
                     // color + specular(w is specular)
                     AttachmentDescription{
-                        .index          = 2,
-                        .format         = COLOR_FORMAT,
-                        .samples        = ESampleCount::Sample_1,
-                        .loadOp         = EAttachmentLoadOp::Clear,
-                        .storeOp        = EAttachmentStoreOp::Store,
-                        .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                        .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                        .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                        .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                        .index         = 2,
+                        .format        = COLOR_FORMAT,
+                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                        .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                     },
 
                 },
                 .depthAttach = AttachmentDescription{
-                    .index          = 3,
-                    .format         = DEPTH_FORMAT,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                    .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                    .usage          = EImageUsage::DepthStencilAttachment,
+                    .index         = 3,
+                    .format        = DEPTH_FORMAT,
+                    .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                    .finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
+                    .usage         = EImageUsage::DepthStencilAttachment,
                 },
             },
         });

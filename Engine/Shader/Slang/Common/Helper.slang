@@ -3,6 +3,8 @@
 #pragma once
 #define public
 
+static const float PI = 3.14159265358979323846;
+
 public typealias mat3 = float3x3;
 public typealias mat4 = float4x4;
 public typealias vec2 = float2;

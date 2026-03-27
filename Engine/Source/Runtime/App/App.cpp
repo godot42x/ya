@@ -1,4 +1,4 @@
-#include "App.h"
+#include "Runtime/App/App.h"
 
 
 // Core
@@ -8,7 +8,8 @@
 #include "Core/MessageBus.h"
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Runtime/App/App.h"
+
+#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include "Runtime/App/SDLMisc.h"
 
@@ -71,12 +72,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <filesystem>
-
 // SDL
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_events.h>
-#include <SDL3/SDL_misc.h>
 
 
 // Scene
@@ -85,25 +83,6 @@
 
 namespace ya
 {
-
-static void openDirectoryInOS(const std::string& filePath)
-{
-    if (filePath.empty()) {
-        YA_CORE_WARN("File path is empty, cannot open directory");
-        return;
-    }
-    auto dir = std::filesystem::path(filePath).parent_path();
-    if (dir.empty()) {
-        YA_CORE_WARN("Directory path is empty for file: {}", filePath);
-        return;
-    }
-    dir     = std::filesystem::absolute(dir);
-    auto p  = std::format("file:///{}", dir.string());
-    bool ok = SDL_OpenURL(p.c_str());
-    if (!ok) {
-        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
-    }
-}
 
 // Define the static member variable
 App*     App::_instance        = nullptr;
@@ -117,6 +96,8 @@ uint32_t App::App::_frameIndex = 0;
 
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
 ClearValue depthClearValue = ClearValue(1.0f, 0);
+
+App::~App() = default;
 
 
 
@@ -164,7 +145,17 @@ void App::init(AppDesc ci)
         }
     }
 
-    initRenderPipeline();
+    _renderRuntime = std::make_unique<RenderRuntime>();
+    _renderRuntime->init(RenderRuntime::InitDesc{
+        .app     = this,
+        .appDesc = &_ci,
+    });
+    if (auto* render = getRender()) {
+        int winW = 0, winH = 0;
+        render->getWindowSize(winW, winH);
+        _windowSize.x = static_cast<float>(winW);
+        _windowSize.y = static_cast<float>(winH);
+    }
 
 
     _sceneManager = new SceneManager();
@@ -356,14 +347,15 @@ int App::onEvent(const Event& event)
         return 0;
     }
 
-    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, _viewportRect.pos, _viewportRect.extent);
+    Rect2D viewportRect = _renderRuntime ? _renderRuntime->getViewportRect() : Rect2D{};
+    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
     // currently ui only rendering in viewport
     if (bInViewport)
     {
         UIAppCtx ctx{
             .lastMousePos = _lastMousePos,
             .bInViewport  = bInViewport,
-            .viewportRect = _viewportRect,
+            .viewportRect = viewportRect,
         };
         _editorLayer->screenToViewport(_lastMousePos, ctx.lastMousePos);
         UIManager::get()->onEvent(event, ctx);
@@ -379,8 +371,8 @@ int App::onEvent(const Event& event)
 // MARK: QUIT
 void ya::App::quit()
 {
-    if (_render) {
-        _render->waitIdle();
+    if (auto* render = getRender()) {
+        render->waitIdle();
     }
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Quit");
@@ -401,7 +393,10 @@ void ya::App::quit()
 
     _deleter.clear();
 
-    shutdownRenderPipeline();
+    if (_renderRuntime) {
+        _renderRuntime->shutdown();
+        _renderRuntime.reset();
+    }
 }
 
 
@@ -506,7 +501,11 @@ void App::tickLogic(float dt)
     // Update Editor camera (FreeCamera)
     cameraController.update(camera, inputManager, dt);
 
-    auto        vkRender       = _render->as<VulkanRender>();
+    auto*       render         = getRender();
+    if (!render) {
+        return;
+    }
+    auto        vkRender       = render->as<VulkanRender>();
     auto        windowProvider = vkRender->_windowProvider;
     std::string title          = std::format("{}({})", _ci.title, vkRender->_selectedDeviceInfo.deviceName);
     SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
@@ -515,7 +514,59 @@ void App::tickLogic(float dt)
 // MARK: Render
 void App::tickRender(float dt)
 {
-    tickRenderPipeline(dt);
+    auto* renderRuntime = getRenderRuntime();
+
+    auto viewportRect = renderRuntime->getViewportRect();
+
+    Entity* runtimeCamera = getPrimaryCamera();
+    if (runtimeCamera && runtimeCamera->isValid())
+    {
+        auto cc = runtimeCamera->getComponent<CameraComponent>();
+        auto tc = runtimeCamera->getComponent<TransformComponent>();
+
+        Extent2D ext = renderRuntime->getViewportExtent();
+        if (ext.width == 0 || ext.height == 0) {
+            ext = viewportRect.extent.x > 0 && viewportRect.extent.y > 0
+                      ? Extent2D::fromVec2(viewportRect.extent)
+                      : Extent2D{.width = static_cast<uint32_t>(_windowSize.x), .height = static_cast<uint32_t>(_windowSize.y)};
+        }
+        cameraController.update(*tc, *cc, inputManager, ext, dt);
+        if (ext.height > 0) {
+            cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
+        }
+    }
+
+    glm::vec3 cameraPos;
+    glm::mat4 view;
+    glm::mat4 projection;
+    bool      bUseRuntimeCamera = _appState == AppState::Runtime &&
+                             runtimeCamera && runtimeCamera->isValid() &&
+                             runtimeCamera->hasComponent<CameraComponent>();
+    if (bUseRuntimeCamera) {
+        auto cc    = runtimeCamera->getComponent<CameraComponent>();
+        auto tc    = runtimeCamera->getComponent<TransformComponent>();
+        view       = cc->getFreeView();
+        projection = cc->getProjection();
+        cameraPos  = tc->getWorldPosition();
+    }
+    else {
+        view       = camera.getViewMatrix();
+        projection = camera.getProjectionMatrix();
+        cameraPos  = camera.getPosition();
+    }
+
+    renderRuntime->renderFrame(RenderRuntime::FrameInput{
+        .dt                       = dt,
+        .sceneManager             = _sceneManager,
+        .editorLayer              = _editorLayer,
+        .viewportRect             = renderRuntime->getViewportRect(),
+        .viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale(),
+        .appMode                  = _appMode,
+        .clicked                  = &clicked,
+        .view                     = view,
+        .projection               = projection,
+        .cameraPos                = cameraPos,
+    });
 }
 
 // MARK: Render GUI
@@ -539,8 +590,9 @@ void App::onRenderGUI(float dt)
         // RenderTargetPool::get().onRenderGUI();
     }
 
-    renderGUIRenderPipeline();
-    _screenRT->onRenderGUI();
+    if (_renderRuntime) {
+        _renderRuntime->renderGUI(dt);
+    }
 
     if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
 
@@ -590,8 +642,9 @@ void App::onRenderGUI(float dt)
             ImGui::TreePop();
         }
 
-        ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
-        auto* swapchain = _render->getSwapchain();
+        auto* render = getRender();
+        YA_CORE_ASSERT(render, "Render is null");
+        auto* swapchain = render->getSwapchain();
         bool  bVsync    = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
             swapchain->setVsync(bVsync);
@@ -608,44 +661,6 @@ void App::onRenderGUI(float dt)
         AppMode mode = _appMode;
         if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
             _appMode = mode;
-        }
-
-        if (ImGui::TreeNode("RenderDoc")) {
-            bool bAvailable = _renderDocCapture && _renderDocCapture->isAvailable();
-            ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
-            ImGui::TextWrapped("DLL Path: %s", _renderDocConfiguredDllPath.empty() ? "<default>" : _renderDocConfiguredDllPath.c_str());
-            ImGui::TextWrapped("Output Dir: %s", _renderDocConfiguredOutputDir.empty() ? "<default>" : _renderDocConfiguredOutputDir.c_str());
-            if (bAvailable) {
-                bool bCaptureEnabled = _renderDocCapture->isCaptureEnabled();
-                if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
-                    _renderDocCapture->setCaptureEnabled(bCaptureEnabled);
-                }
-
-                bool bHudVisible = _renderDocCapture->isHUDVisible();
-                if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
-                    _renderDocCapture->setHUDVisible(bHudVisible);
-                }
-
-                ImGui::Text("Capturing: %s", _renderDocCapture->isCapturing() ? "Yes" : "No");
-                ImGui::Text("Delay Frames: %u", _renderDocCapture->getDelayFrames());
-                ImGui::Combo("On Capture", &_renderDocOnCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
-                ImGui::TextWrapped("Last Capture: %s", _renderDocLastCapturePath.empty() ? "<none>" : _renderDocLastCapturePath.c_str());
-
-                bool bCanCapture = _renderDocCapture->isCaptureEnabled();
-                ImGui::BeginDisabled(!bCanCapture);
-                if (ImGui::Button("Capture Next Frame (F9)")) {
-                    _renderDocCapture->requestNextFrame();
-                }
-                if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
-                    _renderDocCapture->requestAfterFrames(120);
-                }
-                ImGui::EndDisabled();
-
-                if (ImGui::Button("Open Last Capture Folder") && !_renderDocLastCapturePath.empty()) {
-                    openDirectoryInOS(_renderDocLastCapturePath);
-                }
-            }
-            ImGui::TreePop();
         }
 
         std::string clickedPoints;
@@ -815,6 +830,68 @@ Entity* App::getPrimaryCamera() const
 
     // No primary camera found
     return nullptr;
+}
+
+IRender* App::getRender() const
+{
+    return _renderRuntime ? _renderRuntime->getRender() : nullptr;
+}
+
+std::shared_ptr<ShaderStorage> App::getShaderStorage() const
+{
+    return _renderRuntime ? _renderRuntime->getShaderStorage() : nullptr;
+}
+
+ForwardRenderPipeline* App::getForwardPipeline() const
+{
+    return _renderRuntime ? _renderRuntime->getForwardPipeline() : nullptr;
+}
+
+bool App::isShadowMappingEnabled() const
+{
+    return _renderRuntime && _renderRuntime->isShadowMappingEnabled();
+}
+
+bool App::isMirrorRenderingEnabled() const
+{
+    return _renderRuntime && _renderRuntime->isMirrorRenderingEnabled();
+}
+
+bool App::hasMirrorRenderResult() const
+{
+    return _renderRuntime && _renderRuntime->hasMirrorRenderResult();
+}
+
+IRenderTarget* App::getShadowDepthRT() const
+{
+    return _renderRuntime ? _renderRuntime->getShadowDepthRT() : nullptr;
+}
+
+IImageView* App::getShadowDirectionalDepthIV() const
+{
+    return _renderRuntime ? _renderRuntime->getShadowDirectionalDepthIV() : nullptr;
+}
+
+IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+{
+    return _renderRuntime ? _renderRuntime->getShadowPointFaceDepthIV(pointLightIndex, faceIndex) : nullptr;
+}
+
+Texture* App::getPostprocessOutputTexture() const
+{
+    return _renderRuntime ? _renderRuntime->getPostprocessOutputTexture() : nullptr;
+}
+
+bool App::isPostprocessingEnabled() const
+{
+    return _renderRuntime && _renderRuntime->isPostprocessingEnabled();
+}
+
+void App::renderGUI(float dt)
+{
+    _editorLayer->onImGuiRender([this, dt]() {
+        this->onRenderGUI(dt);
+    });
 }
 
 

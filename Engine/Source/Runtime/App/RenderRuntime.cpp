@@ -1,3 +1,4 @@
+#include "RenderRuntime.h"
 
 #include "App.h"
 #include "Core/Debug/RenderDocCapture.h"
@@ -8,7 +9,9 @@
 #include "ImGuiHelper.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
+#include "Render/Core/Sampler.h"
 #include "Render/Core/Swapchain.h"
+
 #include "Resource/AssetManager.h"
 #include "Resource/FontManager.h"
 #include "Resource/PrimitiveMeshCache.h"
@@ -17,31 +20,38 @@
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Render/Core/Sampler.h"
 
 #include "utility.cc/ranges.h"
 
+#include <SDL3/SDL.h>
+#include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
-
 
 namespace ya
 {
-extern ClearValue colorClearValue;
-extern ClearValue depthClearValue;
 
-// EShadingModel is now a member of App (see App.h)
-
-
-
-// forward declaration - defined in App.cpp
-static void openDirectoryInOS(const std::string& filePath);
-
-
-void App::onSceneViewportResized(Rect2D rect)
+static void openDirectoryInOS(const std::string& filePath)
 {
-    _viewportRect     = rect;
-    float aspectRatio = rect.extent.x > 0 && rect.extent.y > 0 ? rect.extent.x / rect.extent.y : 16.0f / 9.0f;
-    camera.setAspectRatio(aspectRatio);
+    if (filePath.empty()) {
+        YA_CORE_WARN("File path is empty, cannot open directory");
+        return;
+    }
+    auto dir = std::filesystem::path(filePath).parent_path();
+    if (dir.empty()) {
+        YA_CORE_WARN("Directory path is empty for file: {}", filePath);
+        return;
+    }
+    dir     = std::filesystem::absolute(dir);
+    auto p  = std::format("file:///{}", dir.string());
+    bool ok = SDL_OpenURL(p.c_str());
+    if (!ok) {
+        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
+    }
+}
+
+void RenderRuntime::onViewportResized(Rect2D rect)
+{
+    _viewportRect = rect;
 
     if (_forwardPipeline) {
         _forwardPipeline->onViewportResized(rect);
@@ -51,13 +61,16 @@ void App::onSceneViewportResized(Rect2D rect)
     }
 }
 
-
-// MARK: Init
-void App::initRenderPipeline()
+void RenderRuntime::init(const InitDesc& desc)
 {
+    YA_PROFILE_FUNCTION_LOG();
+    YA_CORE_ASSERT(desc.app && desc.appDesc, "RenderRuntime init requires App and AppDesc");
+
+    _app              = desc.app;
+    const AppDesc& ci = *desc.appDesc;
+
     currentRenderAPI = ERenderAPI::Vulkan;
 
-    // WHY: validate shaders before render initialized, avoid vk init(about > 3s) but shader error
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
                                .withShaderStoragePath("Engine/Shader/GLSL")
@@ -65,7 +78,6 @@ void App::initRenderPipeline()
                                .FactoryNew<GLSLProcessor>();
     _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
 
-    // Register Slang processor for .slang shader files (hot-reload supported)
     auto slangProcessor = ShaderProcessorFactory()
                               .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
                               .withShaderStoragePath("Engine/Shader/Slang")
@@ -76,26 +88,20 @@ void App::initRenderPipeline()
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_World.glsl"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "Test/PhongLit.glsl"}); // macro defines by various material system, so validate only, load when create pipeline
     _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"});
-    // _shaderStorage->validate(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
     _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.comp.glsl"});
 
-    // MARK: Render doc hook
-    if (_ci.bEnableRenderDoc) {
-        // before render init to hook apis
+    if (ci.bEnableRenderDoc) {
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();
-        _renderDocConfiguredDllPath   = _ci.renderDocDllPath;
-        _renderDocConfiguredOutputDir = _ci.renderDocCaptureOutputDir;
+        _renderDocConfiguredDllPath   = ci.renderDocDllPath;
+        _renderDocConfiguredOutputDir = ci.renderDocCaptureOutputDir;
         _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
         _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result) {
             if (!result.bSuccess) {
@@ -121,11 +127,11 @@ void App::initRenderPipeline()
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = COLOR_FORMAT,
+            .imageFormat   = App::COLOR_FORMAT,
             .bVsync        = false,
             .minImageCount = 3,
-            .width         = static_cast<uint32_t>(_ci.width),
-            .height        = static_cast<uint32_t>(_ci.height),
+            .width         = static_cast<uint32_t>(ci.width),
+            .height        = static_cast<uint32_t>(ci.height),
         },
     };
 
@@ -133,13 +139,7 @@ void App::initRenderPipeline()
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
 
-    // Get window size
-    int winW = 0, winH = 0;
-    _render->getWindowSize(winW, winH);
-    _windowSize.x = static_cast<float>(winW);
-    _windowSize.y = static_cast<float>(winH);
-
-    if (_ci.bEnableRenderDoc) {
+    if (ci.bEnableRenderDoc) {
         _renderDocCapture->setRenderContext({
             .device    = _render->as<VulkanRender>()->getDevice(),
             .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
@@ -154,20 +154,15 @@ void App::initRenderPipeline()
             });
     }
 
-    // MARK: Resources
     {
         TextureLibrary::get().init();
 
-        // Priority order: higher = cleared first (GPU resources before CPU resources)
-        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100); // GPU meshes first
-        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);      // GPU textures
-        ResourceRegistry::get().registerCache(FontManager::get(), 80);          // Font textures
-        ResourceRegistry::get().registerCache(AssetManager::get(), 70);         // General assets
+        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100);
+        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);
+        ResourceRegistry::get().registerCache(FontManager::get(), 80);
+        ResourceRegistry::get().registerCache(AssetManager::get(), 70);
     }
 
-
-
-    // MARK: Shared skybox cubemap descriptor resources (outlives pipeline switches)
     {
         _skyboxDSL = IDescriptorSetLayout::create(
             _render,
@@ -187,7 +182,7 @@ void App::initRenderPipeline()
             _render,
             DescriptorPoolCreateInfo{
                 .label     = "App_Skybox_DSP",
-                .maxSets   = 4, // headroom for multiple skybox entities
+                .maxSets   = 4,
                 .poolSizes = {
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::CombinedImageSampler,
@@ -204,10 +199,8 @@ void App::initRenderPipeline()
         });
     }
 
-    // Create & init the active pipeline, recreate viewport RT, init Render2D
     initActivePipeline();
 
-    // Screen RT (swapchain target for ImGui/editor)
     {
         _screenRenderPass = nullptr;
 
@@ -254,16 +247,12 @@ void App::initRenderPipeline()
     }
 
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
-
     ImGuiManager::get().init(_render, nullptr);
-
     _render->waitIdle();
 }
 
-// MARK: Shutdown
-void App::shutdownRenderPipeline()
+void RenderRuntime::shutdown()
 {
-    // Shutdown active pipeline (includes Render2D::destroy + pipeline shutdown/reset)
     shutdownActivePipeline();
 
     ImGuiManager::get().shutdown();
@@ -280,10 +269,8 @@ void App::shutdownRenderPipeline()
         _renderDocCapture.reset();
     }
 
-    // Unified cleanup of all resource caches in priority order
     ResourceRegistry::get().clearAll();
 
-    // Release shared skybox descriptor resources (must happen before render destruction)
     _skyboxSampler.reset();
     _skyboxDSP.reset();
     _skyboxDSL.reset();
@@ -291,52 +278,42 @@ void App::shutdownRenderPipeline()
     if (_render) {
         _render->waitIdle();
         _commandBuffers.clear();
-
         _render->destroy();
         delete _render;
         _render = nullptr;
     }
 }
 
-
-// MARK: Tick
-void App::tickRenderPipeline(float dt)
+void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()
 
-    // Apply pending shading model switch before rendering the frame
     applyPendingShadingModelSwitch();
 
-    auto render = getRender();
-
-
-    if (_windowSize.x <= 0 || _windowSize.y <= 0) {
-        YA_CORE_INFO("{}x{}: Window minimized, skipping frame", _windowSize.x, _windowSize.y);
-        return;
+    if (_viewportRect.extent.x <= 0 || _viewportRect.extent.y <= 0) {
+        _viewportRect = input.viewportRect;
     }
+    _viewportFrameBufferScale = input.viewportFrameBufferScale;
 
-    // BUG: crash on resizing while renderdoc open
-    //  How to fix it?
     if (_renderDocCapture) {
         _renderDocCapture->onFrameBegin();
     }
 
-    // Process pending viewport resize before rendering
-    if (_editorLayer) {
+    if (input.editorLayer) {
         Rect2D pendingRect;
-        if (_editorLayer->getPendingViewportResize(pendingRect)) {
-            onSceneViewportResized(pendingRect);
+        if (input.editorLayer->getPendingViewportResize(pendingRect)) {
+            onViewportResized(pendingRect);
         }
     }
 
-    // this can avoid bunch black mosaic when resizing
-    // remove this if swapchain size == every rt's size
+    if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
+        return;
+    }
+
     _render->waitIdle();
 
-
-    // ===== Get swapchain image index =====
     int32_t imageIndex = -1;
-    if (!render->begin(&imageIndex)) {
+    if (!_render->begin(&imageIndex)) {
         return;
     }
     if (imageIndex < 0) {
@@ -348,105 +325,68 @@ void App::tickRenderPipeline(float dt)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    // MARK: Resource grab
-    Entity* runtimeCamera = getPrimaryCamera();
-    if (runtimeCamera && runtimeCamera->isValid())
-    {
-        auto cc = runtimeCamera->getComponent<CameraComponent>();
-        auto tc = runtimeCamera->getComponent<TransformComponent>();
-
-        const Extent2D ext = (_shadingModel == EShadingModel::Forward)
-                                 ? _forwardPipeline->getViewportExtent()
-                                 : _deferredPipeline->_viewportRT->getExtent();
-        cameraController.update(*tc, *cc, inputManager, ext, dt);
-        cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-    }
-
-    glm::vec3 cameraPos;
-    glm::mat4 view;
-    glm::mat4 projection;
-    bool      bUseRuntimeCamera = _appState == AppState::Runtime &&
-                             runtimeCamera && runtimeCamera->isValid() &&
-                             runtimeCamera->hasComponent<CameraComponent>();
-    if (bUseRuntimeCamera) {
-        auto cc    = runtimeCamera->getComponent<CameraComponent>();
-        auto tc    = runtimeCamera->getComponent<TransformComponent>();
-        view       = cc->getFreeView();
-        projection = cc->getProjection();
-        cameraPos  = tc->getWorldPosition();
-    }
-    else {
-        view       = camera.getViewMatrix();
-        projection = camera.getProjectionMatrix();
-        cameraPos  = camera.getPosition();
-    }
-
-    // MARK: Shading
     if (_shadingModel == EShadingModel::Forward) {
         _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
             .cmdBuf                   = cmdBuf.get(),
-            .dt                       = dt,
-            .view                     = view,
-            .projection               = projection,
-            .cameraPos                = cameraPos,
+            .dt                       = input.dt,
+            .view                     = input.view,
+            .projection               = input.projection,
+            .cameraPos                = input.cameraPos,
             .viewportRect             = _viewportRect,
             .viewportFrameBufferScale = _viewportFrameBufferScale,
-            .appMode                  = static_cast<int>(_appMode),
-            .clicked                  = &clicked,
+            .appMode                  = static_cast<int>(input.appMode),
+            .clicked                  = input.clicked,
         });
-    } else {
+    }
+    else {
         _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
             .cmdBuf                   = cmdBuf.get(),
-            .dt                       = dt,
-            .view                     = view,
-            .projection               = projection,
-            .cameraPos                = cameraPos,
+            .dt                       = input.dt,
+            .view                     = input.view,
+            .projection               = input.projection,
+            .cameraPos                = input.cameraPos,
             .viewportRect             = _viewportRect,
             .viewportFrameBufferScale = _viewportFrameBufferScale,
-            .appMode                  = static_cast<int>(_appMode),
-            .clicked                  = &clicked,
+            .appMode                  = static_cast<int>(input.appMode),
+            .clicked                  = input.clicked,
         });
     }
 
-    // MARK: Render2D (shared between forward & deferred pipelines)
     {
         YA_PROFILE_SCOPE("Render2D")
 
         const Extent2D viewportExtent = (_shadingModel == EShadingModel::Forward)
-                                           ? _forwardPipeline->getViewportExtent()
-                                           : _deferredPipeline->getViewportExtent();
+                                          ? _forwardPipeline->getViewportExtent()
+                                          : _deferredPipeline->getViewportExtent();
 
         FRender2dContext render2dCtx{
             .cmdBuf       = cmdBuf.get(),
             .windowWidth  = viewportExtent.width,
             .windowHeight = viewportExtent.height,
             .cam          = {
-
-                .position       = cameraPos,
-                .view           = view,
-                .projection     = projection,
-                .viewProjection = projection * view,
+                         .position       = input.cameraPos,
+                         .view           = input.view,
+                         .projection     = input.projection,
+                         .viewProjection = input.projection * input.view,
             },
         };
 
         Render2D::begin(render2dCtx);
 
-        // Editor sprite placement
-        if (_appMode == AppMode::Drawing && _editorLayer) {
-            for (const auto&& [idx, p] : ut::enumerate(clicked))
+        if (input.appMode == AppMode::Drawing && input.editorLayer && input.clicked) {
+            for (const auto&& [idx, p] : ut::enumerate(*input.clicked))
             {
                 auto tex = idx % 2 == 0
                              ? AssetManager::get()->getTextureByName("uv1")
                              : AssetManager::get()->getTextureByName("face");
                 YA_CORE_ASSERT(tex, "Texture not found");
                 glm::vec2 pos;
-                _editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
+                input.editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
                 Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
             }
         }
 
-        // Billboard components
-        auto scene = _sceneManager ? _sceneManager->getActiveScene() : nullptr;
+        auto scene = input.sceneManager ? input.sceneManager->getActiveScene() : nullptr;
         if (scene) {
             const glm::vec2 screenSize(30, 30);
             const float     viewPortHeight = static_cast<float>(viewportExtent.height);
@@ -458,7 +398,7 @@ void App::tickRenderPipeline(float dt)
                 auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
                 const auto& pos     = transfCompp.getWorldPosition();
 
-                glm::vec3 billboardToCamera = cameraPos - pos;
+                glm::vec3 billboardToCamera = input.cameraPos - pos;
                 float     distance          = glm::length(billboardToCamera);
                 billboardToCamera           = glm::normalize(billboardToCamera);
 
@@ -490,21 +430,20 @@ void App::tickRenderPipeline(float dt)
         Render2D::end();
     }
 
-    // End viewport rendering pass (also runs postprocessing)
     if (_shadingModel == EShadingModel::Forward) {
         _forwardPipeline->endViewportPass(cmdBuf.get());
         YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
-    } else {
+    }
+    else {
         _deferredPipeline->endViewportPass(cmdBuf.get());
         YA_CORE_ASSERT(_deferredPipeline->viewportTexture, "Failed to get deferred viewport texture");
     }
 
-    // Set viewport context for editor layer before ImGui render
-    if (_editorLayer) {
+    if (input.editorLayer) {
         EditorViewportContext ctx;
-        ctx.bForwardPipeline = (_shadingModel == EShadingModel::Forward);
-        ctx.bPostprocessingEnabled    = isPostprocessingEnabled();
-        ctx.postprocessOutputTexture  = getPostprocessOutputTexture();
+        ctx.bForwardPipeline         = (_shadingModel == EShadingModel::Forward);
+        ctx.bPostprocessingEnabled   = isPostprocessingEnabled();
+        ctx.postprocessOutputTexture = getPostprocessOutputTexture();
 
         if (_shadingModel == EShadingModel::Forward) {
             ctx.viewportTexture           = _forwardPipeline->viewportTexture;
@@ -516,21 +455,21 @@ void App::tickRenderPipeline(float dt)
             };
             ctx.bMirrorRenderResult = hasMirrorRenderResult();
             ctx.mirrorRenderTarget  = nullptr;
-        } else {
+        }
+        else {
             ctx.viewportTexture = _deferredPipeline->viewportTexture;
             _deferredPipeline->ensureDebugSwizzledViews();
-            ctx.deferredSpec    = {
-                   .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
-                   .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
-                   .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
-                   .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
-                   .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
+            ctx.deferredSpec = {
+                .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
+                .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
+                .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
+                .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
+                .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
             };
         }
-        _editorLayer->setViewportContext(ctx);
+        input.editorLayer->setViewportContext(ctx);
     }
 
-    // MARK: Editor pass
     {
         YA_PROFILE_SCOPE("Screen pass")
 
@@ -542,89 +481,66 @@ void App::tickRenderPipeline(float dt)
             },
             .layerCount       = 1,
             .colorClearValues = {ClearValue::Black()},
-            //
-            .renderTarget = _screenRT.get(),
+            .renderTarget     = _screenRT.get(),
         };
 
         cmdBuf->beginRendering(ri);
 
-        // Render ImGui
         auto& imManager = ImGuiManager::get();
         imManager.beginFrame();
-        {
-            this->renderGUI(dt);
+        if (_app) {
+            _app->renderGUI(input.dt);
         }
         imManager.endFrame();
         imManager.render();
 
-        if (render->getAPI() == ERenderAPI::Vulkan) {
-            // record render cmds in fact, not submit
+        if (_render->getAPI() == ERenderAPI::Vulkan) {
             imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
         }
 
         cmdBuf->endRendering(ri);
     }
+
     cmdBuf->end();
-
-    // TODO: multi-thread rendering
-    // ===== Single Submit: Wait on imageAvailable, Signal renderFinished, Set fence =====
-    // render->submitToQueue(
-    //     {cmdBuf->getHandle()},
-    //     {render->getCurrentImageAvailableSemaphore()},    // Wait for swapchain image
-    //     {render->getRenderFinishedSemaphore(imageIndex)}, // Signal when all rendering done
-    //     render->getCurrentFrameFence());                  // Signal fence when done
-
-    // // ===== Present: Wait on renderFinished =====
-    // int result = render->presentImage(imageIndex, {render->getRenderFinishedSemaphore(imageIndex)});
-
-    // // Check for swapchain recreation needed
-    // if (result == 2 /* VK_SUBOPTIMAL_KHR */) {
-    //     YA_CORE_INFO("Swapchain suboptimal detected in App, will recreate next frame");
-    // }
-    // // Advance to next frame
-    // render->advanceFrame();
-    render->end(imageIndex, {cmdBuf->getHandle()});
+    _render->end(imageIndex, {cmdBuf->getHandle()});
 
     if (_renderDocCapture) {
         _renderDocCapture->onFrameEnd();
     }
-} // namespace ya
+}
 
-
-// MARK: Render resource query proxies
-ForwardRenderPipeline* App::getForwardPipeline() const
+ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
 {
     return _forwardPipeline.get();
 }
 
-bool App::isShadowMappingEnabled() const
+bool RenderRuntime::isShadowMappingEnabled() const
 {
     if (_forwardPipeline) return _forwardPipeline->bShadowMapping;
-    // Deferred pipeline doesn't have shadow mapping yet
     return false;
 }
 
-bool App::isMirrorRenderingEnabled() const
+bool RenderRuntime::isMirrorRenderingEnabled() const
 {
     return false;
 }
 
-bool App::hasMirrorRenderResult() const
+bool RenderRuntime::hasMirrorRenderResult() const
 {
     return false;
 }
 
-IRenderTarget* App::getShadowDepthRT() const
+IRenderTarget* RenderRuntime::getShadowDepthRT() const
 {
     return _forwardPipeline && _forwardPipeline->depthRT ? _forwardPipeline->depthRT.get() : nullptr;
 }
 
-IImageView* App::getShadowDirectionalDepthIV() const
+IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
     return _forwardPipeline && _forwardPipeline->shadowDirectionalDepthIV ? _forwardPipeline->shadowDirectionalDepthIV.get() : nullptr;
 }
 
-IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
     if (!_forwardPipeline) return nullptr;
     if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
@@ -632,33 +548,41 @@ IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t fa
     return iv ? iv.get() : nullptr;
 }
 
-Texture* App::getPostprocessOutputTexture() const
+Texture* RenderRuntime::getPostprocessOutputTexture() const
 {
-    if (_forwardPipeline)  return _forwardPipeline->_postProcessStage.getOutputTexture();
+    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getOutputTexture();
     if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getOutputTexture();
     return nullptr;
 }
 
-bool App::isPostprocessingEnabled() const
+bool RenderRuntime::isPostprocessingEnabled() const
 {
-    if (_forwardPipeline)  return _forwardPipeline->_postProcessStage.isEnabled();
+    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.isEnabled();
     if (_deferredPipeline) return _deferredPipeline->_postProcessStage.isEnabled();
     return false;
 }
 
-void App::renderGUI(float dt)
+Extent2D RenderRuntime::getViewportExtent() const
 {
-    _editorLayer->onImGuiRender([this, dt]() {
-        this->onRenderGUI(dt);
-    });
+    if (_forwardPipeline) {
+        return _forwardPipeline->getViewportExtent();
+    }
+    if (_deferredPipeline) {
+        return _deferredPipeline->getViewportExtent();
+    }
+    if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
+        return Extent2D::fromVec2(_viewportRect.extent);
+    }
+    return {};
 }
 
-void App::renderGUIRenderPipeline()
+void RenderRuntime::renderGUI(float dt)
 {
-    // Shading model selector
+    (void)dt;
+
     {
         static const char* items[] = {"Forward", "Deferred"};
-        int current = static_cast<int>(_pendingShadingModel);
+        int                current = static_cast<int>(_pendingShadingModel);
         if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
             _pendingShadingModel = static_cast<EShadingModel>(current);
         }
@@ -674,10 +598,53 @@ void App::renderGUIRenderPipeline()
     if (_deferredPipeline) {
         _deferredPipeline->renderGUI();
     }
+
+    if (_screenRT) {
+        _screenRT->onRenderGUI();
+    }
+
+    ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+
+    if (ImGui::TreeNode("RenderDoc")) {
+        bool bAvailable = _renderDocCapture && _renderDocCapture->isAvailable();
+        ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
+        ImGui::TextWrapped("DLL Path: %s", _renderDocConfiguredDllPath.empty() ? "<default>" : _renderDocConfiguredDllPath.c_str());
+        ImGui::TextWrapped("Output Dir: %s", _renderDocConfiguredOutputDir.empty() ? "<default>" : _renderDocConfiguredOutputDir.c_str());
+        if (bAvailable) {
+            bool bCaptureEnabled = _renderDocCapture->isCaptureEnabled();
+            if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
+                _renderDocCapture->setCaptureEnabled(bCaptureEnabled);
+            }
+
+            bool bHudVisible = _renderDocCapture->isHUDVisible();
+            if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
+                _renderDocCapture->setHUDVisible(bHudVisible);
+            }
+
+            ImGui::Text("Capturing: %s", _renderDocCapture->isCapturing() ? "Yes" : "No");
+            ImGui::Text("Delay Frames: %u", _renderDocCapture->getDelayFrames());
+            ImGui::Combo("On Capture", &_renderDocOnCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
+            ImGui::TextWrapped("Last Capture: %s", _renderDocLastCapturePath.empty() ? "<none>" : _renderDocLastCapturePath.c_str());
+
+            bool bCanCapture = _renderDocCapture->isCaptureEnabled();
+            ImGui::BeginDisabled(!bCanCapture);
+            if (ImGui::Button("Capture Next Frame (F9)")) {
+                _renderDocCapture->requestNextFrame();
+            }
+            if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
+                _renderDocCapture->requestAfterFrames(120);
+            }
+            ImGui::EndDisabled();
+
+            if (ImGui::Button("Open Last Capture Folder") && !_renderDocLastCapturePath.empty()) {
+                openDirectoryInOS(_renderDocLastCapturePath);
+            }
+        }
+        ImGui::TreePop();
+    }
 }
 
-// MARK: Runtime pipeline switching
-void App::initActivePipeline()
+void RenderRuntime::initActivePipeline()
 {
     int winW = 0, winH = 0;
     _render->getWindowSize(winW, winH);
@@ -689,7 +656,8 @@ void App::initActivePipeline()
             .windowW = winW,
             .windowH = winH,
         });
-    } else {
+    }
+    else {
         _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
         _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
             .render  = _render,
@@ -698,17 +666,16 @@ void App::initActivePipeline()
         });
     }
 
-    // Initialize Render2D with the active pipeline's formats
     if (_shadingModel == EShadingModel::Forward) {
         Render2D::init(_render, ForwardRenderPipeline::COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
-    } else {
+    }
+    else {
         Render2D::init(_render, _deferredPipeline->COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
     }
 }
 
-void App::shutdownActivePipeline()
+void RenderRuntime::shutdownActivePipeline()
 {
-    // Tear down Render2D first (it references pipeline resources)
     Render2D::destroy();
 
     if (_forwardPipeline) {
@@ -721,13 +688,12 @@ void App::shutdownActivePipeline()
     }
 }
 
-void App::applyPendingShadingModelSwitch()
+void RenderRuntime::applyPendingShadingModelSwitch()
 {
     if (_pendingShadingModel == _shadingModel) {
         return;
     }
     YA_PROFILE_FUNCTION_LOG();
-
 
     YA_CORE_INFO("Switching shading model: {} -> {}",
                  _shadingModel == EShadingModel::Forward ? "Forward" : "Deferred",
@@ -739,9 +705,8 @@ void App::applyPendingShadingModelSwitch()
     _shadingModel = _pendingShadingModel;
     initActivePipeline();
 
-    // Re-apply the current viewport rect so the new pipeline has correct size
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
-        onSceneViewportResized(_viewportRect);
+        onViewportResized(_viewportRect);
     }
 }
 

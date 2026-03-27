@@ -10,6 +10,7 @@
 #include "ECS/System/TransformSystem.h"
 #include "EditorCommon.h"
 #include "ImGuiHelper.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"

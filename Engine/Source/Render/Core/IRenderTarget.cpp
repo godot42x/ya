@@ -13,8 +13,9 @@ namespace ya
 
 std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo &ci)
 {
-
-    auto api = App::get()->currentRenderAPI;
+    auto* render = App::get()->getRender();
+    YA_CORE_ASSERT(render, "Render is null when creating render target");
+    auto api = render->getAPI();
     switch (api) {
     case ERenderAPI::Vulkan:
     {
