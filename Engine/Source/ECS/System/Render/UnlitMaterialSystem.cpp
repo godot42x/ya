@@ -225,7 +225,7 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
                 .label         = std::format("Unlit_Frame_UBO_{}", i),
                 .usage         = ya::EBufferUsage::UniformBuffer,
                 .size          = sizeof(FrameUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+                .memoryUsage = ya::EMemoryUsage::CpuToGpu,
             });
     }
 }
@@ -235,17 +235,18 @@ void UnlitMaterialSystem::preTick(float deltaTime, const FrameContext* ctx)
     (void)deltaTime;
     (void)ctx;
 
+    // Has move to ResourceResolveSystem
     // Phase 1: Resolve components that need it
-    Scene* scene = getActiveScene();
-    if (scene) {
-        auto view = scene->getRegistry().view<UnlitMaterialComponent>();
-        for (auto entity : view) {
-            auto& umc = view.get<UnlitMaterialComponent>(entity);
-            if (umc.needsResolve()) {
-                umc.resolve();
-            }
-        }
-    }
+    // Scene* scene = getActiveScene();
+    // if (scene) {
+    //     auto view = scene->getRegistry().view<UnlitMaterialComponent>();
+    //     for (auto entity : view) {
+    //         auto& umc = view.get<UnlitMaterialComponent>(entity);
+    //         if (umc.needsResolve()) {
+    //             umc.resolve();
+    //         }
+    //     }
+    // }
 
     // Phase 2: Ensure descriptor pool capacity
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();

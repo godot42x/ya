@@ -1,4 +1,5 @@
 #include "ResourceResolveSystem.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Scene/SceneManager.h"
@@ -8,9 +9,10 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Sampler.h"
@@ -63,6 +65,12 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
     });
 
     registry.view<PBRMaterialComponent>().each([&](auto entity, PBRMaterialComponent& materialComponent) {
+        (void)entity;
+        if (materialComponent.needsResolve()) {
+            materialComponent.resolve();
+        }
+    });
+    registry.view<UnlitMaterialComponent>().each([&](auto entity, UnlitMaterialComponent& materialComponent) {
         (void)entity;
         if (materialComponent.needsResolve()) {
             materialComponent.resolve();

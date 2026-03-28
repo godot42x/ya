@@ -51,6 +51,7 @@
         "nlohmann",
         "Octree",
         "OFFSETOF",
+        "PBRG",
         "Phong",
         "Pointee",
         "PRIMITIVETYPE",

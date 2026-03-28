@@ -55,6 +55,12 @@ class TextureLibrary : public IResourceCache
     ya::Ptr<Texture> getMultiPixelTexture();
 
     /**
+     * @brief Get an 8x8 checkerboard texture (gray/white alternating)
+     * Used as default fallback for meshes without materials
+     */
+    ya::Ptr<Texture> getCheckerboardTexture();
+
+    /**
      * @brief Get the default sampler (linear filtering)
      */
     ya::Ptr<Sampler> getDefaultSampler();
@@ -84,6 +90,7 @@ class TextureLibrary : public IResourceCache
     std::shared_ptr<Texture> _whiteTexture;
     std::shared_ptr<Texture> _blackTexture;
     std::shared_ptr<Texture> _multiPixelTexture;
+    std::shared_ptr<Texture> _checkerboardTexture;
 
     // Samplers
     std::shared_ptr<Sampler> _defaultSampler;

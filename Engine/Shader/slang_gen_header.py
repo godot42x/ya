@@ -48,8 +48,7 @@ SCALAR_MAP = {
     "bool":    "uint32_t",  # GLSL bool is 4 bytes in std140
 }
 
-# Maps struct name -> total byte size (from elementVarLayout or uniformStride)
-STRUCT_SIZES: dict[str, int] = {}
+
 
 # Maps macro name -> int value, extracted from .slang source
 SLANG_DEFINES: dict[str, int] = {}
@@ -148,7 +147,7 @@ def slang_type_to_cpp(type_node: dict) -> tuple[str, str]:
     return "uint8_t", ""
 
 
-def collect_structs(type_node: dict, visited: set, ordered: list):
+def collect_structs(type_node: dict, visited: set, ordered: list, struct_sizes: dict[str, int]):
     """Recursively collect all struct definitions in dependency order."""
     if type_node is None:
         return
@@ -160,24 +159,24 @@ def collect_structs(type_node: dict, visited: set, ordered: list):
         evl_size = evl.get("binding", {}).get("size")
         evl_type = evl.get("type", {})
         if evl_type.get("kind") == "struct" and evl_size is not None:
-            STRUCT_SIZES[evl_type["name"]] = evl_size
+            struct_sizes[evl_type["name"]] = evl_size
         elem = type_node.get("elementType")
         if elem:
-            collect_structs(elem, visited, ordered)
+            collect_structs(elem, visited, ordered, struct_sizes)
         return
     if kind == "array":
         # Capture struct total size from uniformStride if available
         stride = type_node.get("uniformStride")
         elem = type_node.get("elementType")
         if elem and elem.get("kind") == "struct" and stride is not None:
-            STRUCT_SIZES[elem["name"]] = stride
+            struct_sizes[elem["name"]] = stride
         if elem:
-            collect_structs(elem, visited, ordered)
+            collect_structs(elem, visited, ordered, struct_sizes)
         return
     if kind in ("vector", "matrix"):
         elem = type_node.get("elementType")
         if elem:
-            collect_structs(elem, visited, ordered)
+            collect_structs(elem, visited, ordered, struct_sizes)
         return
     if kind != "struct":
         return
@@ -193,13 +192,13 @@ def collect_structs(type_node: dict, visited: set, ordered: list):
         if field_type.get("kind") == "struct" and "size" in binding:
             field_struct_name = field_type.get("name")
             if field_struct_name:
-                STRUCT_SIZES[field_struct_name] = max(
-                    STRUCT_SIZES.get(field_struct_name, 0),
+                struct_sizes[field_struct_name] = max(
+                    struct_sizes.get(field_struct_name, 0),
                     binding["size"],
                 )
     # Recurse into field types first (dependencies before dependents)
     for field in type_node.get("fields", []):
-        collect_structs(field["type"], visited, ordered)
+        collect_structs(field["type"], visited, ordered, struct_sizes)
     visited.add(name)
     ordered.append(type_node)
 
@@ -218,15 +217,15 @@ def is_uniform_struct(struct_node: dict) -> bool:
     return False
 
 
-def gen_struct(struct_node: dict) -> str:
+def gen_struct(struct_node: dict, struct_sizes: dict[str, int]) -> str:
     """Generate C++ struct definition with auto-padding and static_assert guards."""
     name = struct_node["name"]
     fields = struct_node.get("fields", [])
 
-    # Determine total size: prefer STRUCT_SIZES (from elementVarLayout/uniformStride),
+    # Determine total size: prefer struct_sizes (from elementVarLayout/uniformStride),
     # otherwise compute from last field.
-    if name in STRUCT_SIZES:
-        total_size = STRUCT_SIZES[name]
+    if name in struct_sizes:
+        total_size = struct_sizes[name]
     elif fields:
         last = fields[-1]
         total_size = last["binding"]["offset"] + last["binding"]["size"]
@@ -289,13 +288,14 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
 
     visited = set()
     ordered = []
+    struct_sizes: dict[str, int] = {}  # per-file struct sizes
     # Scan top-level parameters (ConstantBuffers, push constants, etc.)
     for param in data.get("parameters", []):
-        collect_structs(param.get("type"), visited, ordered)
+        collect_structs(param.get("type"), visited, ordered, struct_sizes)
     # Also scan entry point parameters (vertex inputs, etc.)
     for ep in data.get("entryPoints", []):
         for param in ep.get("parameters", []):
-            collect_structs(param.get("type"), visited, ordered)
+            collect_structs(param.get("type"), visited, ordered, struct_sizes)
 
     # Filter: only emit structs with uniform bindings (offset/size)
     ordered = [s for s in ordered if is_uniform_struct(s)]
@@ -327,7 +327,7 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
             lines.append(f"constexpr uint32_t {macro_name} = {macro_val};")
         lines.append("")
     for struct_node in ordered:
-        lines.append(gen_struct(struct_node))
+        lines.append(gen_struct(struct_node, struct_sizes))
     if namespace:
         lines.append(f"}} // namespace {namespace}")
     lines.append("")
@@ -498,6 +498,7 @@ def main():
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     include_dirs = [Path(d) for d in (args.include_dirs or [])]
     slang_root = Path(args.slang_root) if args.slang_root else None
     t_start = time.perf_counter()

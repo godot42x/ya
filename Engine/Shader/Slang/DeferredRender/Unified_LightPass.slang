@@ -47,8 +47,6 @@ struct FrameData{
 struct DirectionalLight{
     vec3 dir;
     vec3 color;
-    vec3 ambient;
-    float shininess;
 };
 
 struct PointLight{
@@ -60,6 +58,7 @@ struct PointLight{
 struct LightData{
     DirectionalLight dirLight;
     PointLight pointLights[MAX_POINT_LIGHTS];
+    vec3 ambient;
     bool hasDirLight;
     uint numPointLight;
 };
@@ -143,10 +142,10 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
     }
 
-    return uLight.dirLight.ambient * albedo * ao + Lo;
+    return uLight.ambient * albedo * ao + Lo;
 }
 
-vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity)
+vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity, float shininess )
 {
     vec3 light = 0;
     // Directional light — Blinn-Phong
@@ -154,9 +153,9 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity)
         vec3 lightDir   = normalize(-uLight.dirLight.dir);
         float diff      = max(dot(lightDir, N), 0.0);
         vec3 halfwayDir = normalize(lightDir + V);
-        float spec      = pow(max(dot(N, halfwayDir), 0.0), uLight.dirLight.shininess);
+        float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
 
-        vec3 ambient  = albedo * uLight.dirLight.ambient;
+        vec3 ambient  = albedo * uLight.ambient;
         vec3 diffuse  = diff * albedo * uLight.dirLight.color;
         vec3 specular = specIntensity * spec * uLight.dirLight.color;
         light += ambient + diffuse + specular;
@@ -175,6 +174,10 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity)
 [[vk::binding(1,1)]] Sampler2D uTexGNormal;           // RT1
 [[vk::binding(2,1)]] Sampler2D uTexGAlbedoSpecular;   // RT2
 [[vk::binding(3,1)]] Sampler2D uTexGShadingModel;     // RT3
+
+namespace phong{
+
+};
 
 struct FragmentOutput{
     vec4 color : SV_Target;
@@ -210,12 +213,18 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     }
     case 2: // Phong
     {
-        float specIntensity = albedoSpec.a;
-        color = shadePhong(worldPos, N, V, albedo, specIntensity);
+        float shininess = posRoughness.a;
+        float specIntensity = normalAO.a;
+        color = shadePhong(worldPos, N, V, albedo, specIntensity, shininess);
+        break;
+    }
+    case 3: // Unlit — direct albedo output, no lighting
+    {
+        color = albedo;
         break;
     }
     default:
-        // ID=0: background / unlit — no shading, keep black
+        // ID=0: background — no shading, keep black
         discard;
     }
 

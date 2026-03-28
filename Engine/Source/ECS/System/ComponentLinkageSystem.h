@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/System/System.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -30,7 +31,8 @@ struct ComponentLinkageSystem : public ISystem
         handle2 = SceneBus::get().onComponentRemoved.addLambda(
             this,
             [](entt::registry& reg, const entt::entity entity, ya::type_index_t type) {
-                if (type == ya::type_index_v<PhongMaterialComponent> ||
+                if (type == ya::type_index_v<PBRMaterialComponent> ||
+                    type == ya::type_index_v<PhongMaterialComponent> ||
                     type == ya::type_index_v<UnlitMaterialComponent> ||
                     type == ya::type_index_v<SimpleMaterialComponent>)
                 {
@@ -55,7 +57,7 @@ struct ComponentLinkageSystem : public ISystem
     // TODO: not only material components management?
     static void OnMaterialComponentChanged(entt::registry& reg, const entt::entity entity)
     {
-        if (reg.any_of<PhongMaterialComponent, UnlitMaterialComponent, UnlitMaterialComponent>(entity))
+        if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(entity))
         {
             if (!reg.all_of<RenderComponent>(entity))
             {
@@ -84,12 +86,15 @@ struct ComponentLinkageSystem : public ISystem
 #define CALL_BACK &ComponentLinkageSystem::OnMaterialComponentChanged
 
         auto& _registry = scene->getRegistry();
+        _registry.on_construct<PBRMaterialComponent>().connect<CALL_BACK>();
         _registry.on_construct<PhongMaterialComponent>().connect<CALL_BACK>();
         _registry.on_construct<UnlitMaterialComponent>().connect<CALL_BACK>();
         _registry.on_construct<SimpleMaterialComponent>().connect<CALL_BACK>();
+        _registry.on_update<PBRMaterialComponent>().connect<CALL_BACK>();
         _registry.on_update<PhongMaterialComponent>().connect<CALL_BACK>();
         _registry.on_update<UnlitMaterialComponent>().connect<CALL_BACK>();
         _registry.on_update<SimpleMaterialComponent>().connect<CALL_BACK>();
+        _registry.on_destroy<PBRMaterialComponent>().connect<CALL_BACK>();
         _registry.on_destroy<PhongMaterialComponent>().connect<CALL_BACK>();
         _registry.on_destroy<UnlitMaterialComponent>().connect<CALL_BACK>();
         _registry.on_destroy<SimpleMaterialComponent>().connect<CALL_BACK>();

@@ -1,87 +1,133 @@
-# YA Engine Codex Instructions
+# AGENTS.md
 
-This repository already maintains detailed guidance in [`.github/copilot-instructions.md`](C:\Users\norm\1\craft\ya\.github\copilot-instructions.md). Treat that file as the primary project instruction source when working in Codex.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
 
-- Name: YA Engine
-- Type: C++ game engine
-- Build system: XMake
-- Render backends: Vulkan + OpenGL
+**YA Engine** (Yet Another Engine) — a C++ game engine with Vulkan (primary) and OpenGL backends. Uses EnTT ECS, ImGui editor, Lua scripting (sol2), and a custom reflection system.
 
-## First Source Of Truth
+## Build / Run / Test
 
-When task-specific guidance is needed, read [`.github/copilot-instructions.md`](C:\Users\norm\1\craft\ya\.github\copilot-instructions.md) first, then follow the relevant skill document under [`.github/skills`](C:\Users\norm\1\craft\ya\.github\skills).
+Build system is **XMake** (NOT CMake). Default target is `ya`. Example targets are under `Example/`.
 
-Available project skills:
+```bash
+# Makefile wrapper (preferred)
+make r t=HelloMaterial           # build + run target
+make b t=HelloMaterial           # build only
+make f=true r t=HelloMaterial    # clean + build + run
+make test t=ya r_args="TestName" # run single test (GoogleTest filter)
+make cfg                         # reconfigure (debug, compile_commands)
 
-- `SOUL`: [`.github/skills/soul/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\soul\SKILL.md)
-- `BUILD`: [`.github/skills/build/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\build\SKILL.md)
-- `MATERIAL_FLOW`: [`.github/skills/material-flow/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\material-flow\SKILL.md)
-- `RENDER_ARCH`: [`.github/skills/render-arch/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\render-arch\SKILL.md)
-- `CPP_STYLE`: [`.github/skills/cpp-style/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\cpp-style\SKILL.md)
-- `DEBUG_REVIEW`: [`.github/skills/debug-review/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\debug-review\SKILL.md)
-- `VSCODE`: [`.github/skills/vscode/SKILL.md`](C:\Users\norm\1\craft\ya\.github\skills\vscode\SKILL.md)
+# Direct XMake
+xmake                            # build all
+xmake b TargetName               # build single target
+xmake run TargetName             # run target
+xmake l targets                  # list available targets
+xmake f -m debug -y              # reconfigure debug mode
+xmake ya-shader                  # regenerate shader headers
 
-## Skill Selection
+# Tests (GoogleTest)
+xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
+```
 
-- Unclear request: start with `SOUL`
-- Build, run, target selection, compiler errors: `BUILD`
-- ECS to material to render pipeline data flow: `MATERIAL_FLOW`
-- Render pipeline, backend boundaries, material architecture: `RENDER_ARCH`
-- C++ additions, refactors, style, ownership: `CPP_STYLE`
-- Crash investigation, log analysis, review: `DEBUG_REVIEW`
-- VS Code tasks, launch, settings, clangd: `VSCODE`
+Requirements: xmake, C++20 compiler (MSVC preferred), Vulkan SDK.
 
-Priority when multiple skills apply:
+## Architecture
 
-`BUILD > VSCODE > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW > SOUL`
+### Directory Layout
 
-## Build Rules
+```
+Engine/Source/
+  Core/              Core systems, math, logging, reflection, scripting
+  Platform/Render/   Backend implementations (Vulkan/, OpenGL/)
+  Render/            Render abstraction (IRender, IRenderTarget, Material/)
+  ECS/               Entity-component system (EnTT), components, systems
+  Resource/          AssetManager, HandlePool, ResourceDirtyQueue
+  Editor/            ImGui editor layer, property inspector, file pickers
+  Runtime/App/       Application entry point (App.h), render runtime
+  Scene/             Scene graph, Node hierarchy
+Engine/Shader/
+  Slang/             .slang shader sources
+  Slang/Generated/   Auto-generated C++ headers (DO NOT HAND-EDIT)
+  GLSL/              Legacy GLSL shaders
+Engine/Plugins/      Internal libraries (log.cc, test.cc, reflects-core, yalua)
+Example/             Runnable targets (HelloMaterial, GreedSnake)
+Test/                Unit tests (GoogleTest)
+```
 
-- Use XMake, not CMake
-- Prefer reading the repository `Makefile` wrapper before inventing commands
-- Common commands:
-  - `xmake`
-  - `xmake run <TargetName>`
-  - `xmake clean`
-  - `xmake config`
+### Key Systems
 
-## Code Rules
+- **IRender** — abstract rendering interface; `VulkanRender` is the primary backend
+- **IRenderTarget** — render surface abstraction (framebuffers, attachments)
+- **ISystem** — base for all systems. Subtypes: `EngineSystem` (app lifetime), `GameInstanceSystem` (scene lifetime), `IRenderSystem`, `IMaterialSystem`
+- **AssetManager** (singleton) — loads/caches textures and models via handle pools. Textures return `TextureHandle`, models return `ModelHandle`
+- **ResourceHandlePool<T>** — type-safe handle-based resource storage (index + generation). `TextureHandlePool` specializes this
+- **ResourceDirtyQueue** — tracks resources needing GPU re-upload
+- **TextureSlot** — serializable texture reference (`_path` + `_handle`), lives in materials
+- **Material system** — `MaterialComponent` → `Material` → `TextureSlot[]` → descriptor sets
+- **Reflection** — `YA_REFLECT_BEGIN`/`YA_REFLECT_FIELD`/`YA_REFLECT_END` macros; drives serialization, editor UI, and ECS registration
+- **Lua scripting** — sol2 bindings, scripts in `Engine/Content/Lua/` and `Content/Scripts/`
 
-- Follow existing interface abstractions
-- Prefer smart pointers over raw `new` and `delete`
-- If lifecycle is not fully understood, do not introduce manual ownership
-- Class member declarations should appear before methods when adding new classes
+### Shader Pipeline
 
-Naming conventions:
+```
+.slang source → xmake ya-shader → slang_gen_header.py → Generated/*.slang.h → #include in C++
+```
 
-- Types: `PascalCase`
-- Private members: `_memberName`
-- Public members: `memberName`
-- Locals and functions: `camelCase`
+GPU struct definitions live in `slang_types::` namespace. **Never hand-write C++ structs matching shader uniforms** — always use the generated headers with their `alignas(16)` and `static_assert` guards.
+
+## Domain Knowledge (Skills)
+
+Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
+
+| Skill | When to read |
+|-------|-------------|
+| `resource-system` | Handle/HandlePool, AssetManager, texture lifecycle, dirty queue |
+| `material-flow` | ECS → material → render pipeline data flow, TextureSlot resolve |
+| `render-arch` | Render pipeline, backend boundaries, pipeline/material architecture |
+| `cpp-style` | C++ conventions, ownership rules, refactoring patterns |
+| `debug-review` | Crash investigation, log analysis, pre-commit review |
+| `vscode` | VS Code tasks, launch configs, clangd setup |
+| `build` | Build errors, target selection, compiler issues |
+
+Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW`
+
+## Code Style
+
+### Naming
+
+- Types: `PascalCase` — `VulkanRender`, `IRenderTarget`
+- Enums: `E<Name>::T` or `enum class E<Name>`
+- Private members: `_camelCase`
+- Public members: `camelCase`
+- Functions/locals: `camelCase`
 - Constants: `UPPER_SNAKE_CASE`
+- Prefixes: `I` for interfaces, `F` for data types (`FName`, `FAssetPath`)
 
-## Engine Notes
+### Class layout
 
-- `Render2D::drawTexture()` uses top-left origin coordinates
-- `IRender` must be initialized before dependent systems use it
-- Avoid resource recreation during frame recording; defer unsafe recreate work to the next frame
+Member variables declared **before** methods. Prioritize data organization over method grouping.
 
-## Logging
+### Memory
 
-Prefer existing YA logging/assert macros:
+- `stdptr<T>` = `std::shared_ptr<T>`, `makeShared<T>(...)` = `std::make_shared<T>(...)`
+- Prefer smart pointers; never raw `new/delete` without full lifecycle understanding
+- Interfaces return `shared_ptr`
 
-- `YA_CORE_TRACE`
-- `YA_CORE_DEBUG`
-- `YA_CORE_INFO`
-- `YA_CORE_WARN`
-- `YA_CORE_ERROR`
-- `YA_CORE_ASSERT`
+### Logging
 
-## Change Discipline
+Use `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT` macros only. Never `std::cout` or `printf`.
 
-- Do not add extra markdown documents unless the user explicitly asks
-- Keep comments minimal and necessary
-- Commit messages should use prefixes like `[xxx] message`
-- Multi-module prefixes are allowed, for example `[rhi x material] ...`
+## Git
+
+Commit format: `[module] message` — e.g. `[vulkan] fix swapchain resize`, `[rhi x material] init pipeline wiring`, `[material/phong] add specular`
+
+## Rules
+
+1. **XMake only** — never introduce CMake
+2. **Generated files are read-only** — fix `slang_gen_header.py`, not `*.slang.h` output
+3. **No gratuitous docs/comments** — don't generate markdown or add obvious comments unless asked
+4. **Follow existing abstractions** — don't introduce parallel interfaces
+5. **Minimal changes** — no unrelated refactors in the same change
+6. **Resource timing** — avoid resource recreation during frame recording (causes `vk device lost`); defer to next frame
+7. **Render2D** — uses top-left origin coordinates

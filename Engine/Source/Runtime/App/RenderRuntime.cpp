@@ -94,9 +94,9 @@ void RenderRuntime::init(const InitDesc& desc)
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
     _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.comp.glsl"});
+    // _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
+    // _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
+    // _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.comp.glsl"});
 
     if (ci.bEnableRenderDoc) {
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();

@@ -399,12 +399,15 @@ void ya::App::quit()
     // If MaterialFactory is destroyed first, component destruction will crash
     _deleter.clear();
 
-    MaterialFactory::get()->destroy();
-
+    // CRITICAL: Shutdown render pipelines BEFORE MaterialFactory
+    // DeferredRenderPipeline holds material references (fallback material, matPools)
+    // that must be released before MaterialFactory destroys all materials.
     if (_renderRuntime) {
         _renderRuntime->shutdown();
         _renderRuntime.reset();
     }
+
+    MaterialFactory::get()->destroy();
 }
 
 

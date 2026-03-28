@@ -34,6 +34,7 @@ void TextureLibrary::clearCache()
     _whiteTexture.reset();
     _blackTexture.reset();
     _multiPixelTexture.reset();
+    _checkerboardTexture.reset();
 
     // Cleanup samplers
     _defaultSampler.reset();
@@ -96,6 +97,19 @@ void TextureLibrary::createTextures()
                                                        blue,
                                                        white,
                                                    }, "multi-pixel");
+
+    // Create 8x8 checkerboard texture (gray/white alternating)
+    {
+        constexpr uint32_t size = 8;
+        color_t gray{.r = 180, .g = 180, .b = 180, .a = 255};
+        std::vector<color_t> pixels(size * size);
+        for (uint32_t y = 0; y < size; ++y) {
+            for (uint32_t x = 0; x < size; ++x) {
+                pixels[y * size + x] = ((x + y) % 2 == 0) ? white : gray;
+            }
+        }
+        _checkerboardTexture = Texture::fromData(size, size, pixels, "checkerboard");
+    }
 }
 
 ya::Ptr<Texture> TextureLibrary::getWhiteTexture()
@@ -114,6 +128,12 @@ ya::Ptr<Texture> TextureLibrary::getMultiPixelTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
     return ya::Ptr<Texture>(_multiPixelTexture);
+}
+
+ya::Ptr<Texture> TextureLibrary::getCheckerboardTexture()
+{
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return ya::Ptr<Texture>(_checkerboardTexture);
 }
 
 ya::Ptr<Sampler> TextureLibrary::getDefaultSampler()
