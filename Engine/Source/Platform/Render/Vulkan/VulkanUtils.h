@@ -51,8 +51,6 @@ struct VulkanUtils
     static void createTextureImage(VkDevice device, VkPhysicalDevice physicalDevice, VkCommandPool commandPool, VkQueue graphicsQueue,
                                    const char* path, VkImage& outImage, VkDeviceMemory& outImageMemory);
 
-    static bool isDepthOnlyFormat(VkFormat format) { return format == VK_FORMAT_D16_UNORM || format == VK_FORMAT_D32_SFLOAT; }
-    static bool isDepthStencilFormat(VkFormat format) { return format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT; }
 };
 
 
@@ -202,6 +200,47 @@ inline auto toVk(T op) -> VkCompareOp
     return {};
 }
 } // namespace ECompareOp
+
+namespace EStencilOp
+{
+inline auto toVk(T op) -> VkStencilOp
+{
+    switch (op) {
+    case Keep:
+        return VK_STENCIL_OP_KEEP;
+    case Zero:
+        return VK_STENCIL_OP_ZERO;
+    case Replace:
+        return VK_STENCIL_OP_REPLACE;
+    case IncrementAndClamp:
+        return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+    case DecrementAndClamp:
+        return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+    case Invert:
+        return VK_STENCIL_OP_INVERT;
+    case IncrementAndWrap:
+        return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+    case DecrementAndWrap:
+        return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+    default:
+        UNREACHABLE();
+    }
+    return {};
+}
+
+inline auto toVkStencilOpState(const StencilOpState& s) -> VkStencilOpState
+{
+    return VkStencilOpState{
+        .failOp      = toVk(s.failOp),
+        .passOp      = toVk(s.passOp),
+        .depthFailOp = toVk(s.depthFailOp),
+        .compareOp   = ECompareOp::toVk(s.compareOp),
+        .compareMask = s.compareMask,
+        .writeMask   = s.writeMask,
+        .reference   = s.reference,
+    };
+}
+} // namespace EStencilOp
 
 namespace EBlendFactor
 {

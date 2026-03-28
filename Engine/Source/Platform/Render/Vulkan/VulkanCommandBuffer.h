@@ -70,6 +70,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     // Helper: Execute dynamic rendering with prepared attachments
     void executeDynamicRendering(std::vector<VkRenderingAttachmentInfo>& colorAttachments,
                                  VkRenderingAttachmentInfo*              pDepthAttach,
+                                 VkRenderingAttachmentInfo*              pStencilAttach,
                                  const VkRect2D&                         renderArea,
                                  uint32_t                                layerCount = 1);
 

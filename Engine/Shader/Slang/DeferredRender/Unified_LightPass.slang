@@ -1,0 +1,223 @@
+#include "Common/Limits.slang"
+#include "Common/Helper.slang"
+
+// Unified Light Pass — single pass with switch/case on Shading Model ID
+// Reads from unified GBuffer:
+//   RT0: (position.xyz, roughness)       R16G16B16A16_SFLOAT
+//   RT1: (normal.xyz,   ao)              R16G16B16A16_SFLOAT
+//   RT2: (albedo.rgb,   metallic/spec)   R8G8B8A8_UNORM
+//   RT3: shadingModelID                  R8_UNORM (id/255.0)
+//
+// Shading Model IDs:
+//   0 = background (no shading)
+//   1 = PBR (Cook-Torrance BRDF)
+//   2 = Phong (Blinn-Phong)
+
+struct VertexInput{
+    float3 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertexOutput{
+    float4 sv_position : SV_Position;
+    float2 uv : UV;
+};
+
+struct PushConstants
+{
+    float4x4 modelMat;
+};
+[[vk::push_constant]] PushConstants pc;
+
+
+[shader("vertex")]
+void vertMain(in VertexInput IN, out VertexOutput OUT)
+{
+    OUT.sv_position = float4(IN.pos, 1.0);
+    OUT.uv = IN.uv;
+}
+
+
+// ── UBO definitions ──
+
+struct FrameData{
+    vec3 camPos;
+};
+
+struct DirectionalLight{
+    vec3 dir;
+    vec3 color;
+    vec3 ambient;
+    float shininess;
+};
+
+struct PointLight{
+    vec3 pos;
+    vec3 color;
+    float intensity;
+};
+
+struct LightData{
+    DirectionalLight dirLight;
+    PointLight pointLights[MAX_POINT_LIGHTS];
+    bool hasDirLight;
+    uint numPointLight;
+};
+
+
+// ── PBR BRDF functions ──
+
+float D_normalDistribution_GGX(vec3 N, vec3 H, float roughness)
+{
+    float a      = roughness*roughness;
+    float a2     = a*a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+}
+
+float G_geometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+float G_geometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return G_geometrySchlickGGX(NdotV, roughness) * G_geometrySchlickGGX(NdotL, roughness);
+}
+
+vec3 F_fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+
+// ── Shading functions ──
+
+vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metallic, float roughness, float ao)
+{
+    vec3 F0 = lerp(vec3(0.04), albedo, metallic);
+    vec3 Lo = vec3(0.0);
+
+    // Directional light
+    if (uLight.hasDirLight)
+    {
+        vec3 L = normalize(-uLight.dirLight.dir);
+        vec3 H = normalize(V + L);
+        vec3 radiance = uLight.dirLight.color;
+
+        float NDF = D_normalDistribution_GGX(N, H, roughness);
+        float G   = G_geometrySmith(N, V, L, roughness);
+        vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+
+        Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+    }
+
+    // Point lights
+    for (int i = 0; i < uLight.numPointLight; ++i)
+    {
+        vec3 L = normalize(uLight.pointLights[i].pos - worldPos);
+        vec3 H = normalize(V + L);
+        float dist = length(uLight.pointLights[i].pos - worldPos);
+        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
+
+        float NDF = D_normalDistribution_GGX(N, H, roughness);
+        float G   = G_geometrySmith(N, V, L, roughness);
+        vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.000001);
+
+        Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+    }
+
+    return uLight.dirLight.ambient * albedo * ao + Lo;
+}
+
+vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity)
+{
+    vec3 light = 0;
+    // Directional light — Blinn-Phong
+    if(uLight.hasDirLight){
+        vec3 lightDir   = normalize(-uLight.dirLight.dir);
+        float diff      = max(dot(lightDir, N), 0.0);
+        vec3 halfwayDir = normalize(lightDir + V);
+        float spec      = pow(max(dot(N, halfwayDir), 0.0), uLight.dirLight.shininess);
+
+        vec3 ambient  = albedo * uLight.dirLight.ambient;
+        vec3 diffuse  = diff * albedo * uLight.dirLight.color;
+        vec3 specular = specIntensity * spec * uLight.dirLight.color;
+        light += ambient + diffuse + specular;
+    }
+
+    return light;
+}
+
+
+// ── Descriptor bindings ──
+
+[[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
+[[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
+
+[[vk::binding(0,1)]] Sampler2D uTexGPos;             // RT0
+[[vk::binding(1,1)]] Sampler2D uTexGNormal;           // RT1
+[[vk::binding(2,1)]] Sampler2D uTexGAlbedoSpecular;   // RT2
+[[vk::binding(3,1)]] Sampler2D uTexGShadingModel;     // RT3
+
+struct FragmentOutput{
+    vec4 color : SV_Target;
+};
+
+[shader("fragment")]
+void fragMain(in VertexOutput IN, out FragmentOutput OUT)
+{
+    // Read GBuffer
+    vec4 posRoughness = uTexGPos.Sample(IN.uv);
+    vec4 normalAO     = uTexGNormal.Sample(IN.uv);
+    vec4 albedoSpec   = uTexGAlbedoSpecular.Sample(IN.uv);
+    float smRaw       = uTexGShadingModel.Sample(IN.uv).r;
+
+    // Decode shading model ID from R8_UNORM
+    uint shadingModelID = uint(smRaw * 255.0 + 0.5);
+
+    vec3 worldPos = posRoughness.rgb;
+    vec3 N        = normalize(normalAO.rgb);
+    vec3 V        = normalize(uFrame.camPos - worldPos);
+    vec3 albedo   = albedoSpec.rgb;
+
+    vec3 color = vec3(0.0);
+
+    switch (shadingModelID) {
+    case 1: // PBR
+    {
+        float metallic  = albedoSpec.a;
+        float roughness = posRoughness.a;
+        float ao        = normalAO.a;
+        color = shadePBR(worldPos, N, V, albedo, metallic, roughness, ao);
+        break;
+    }
+    case 2: // Phong
+    {
+        float specIntensity = albedoSpec.a;
+        color = shadePhong(worldPos, N, V, albedo, specIntensity);
+        break;
+    }
+    default:
+        // ID=0: background / unlit — no shading, keep black
+        discard;
+    }
+
+    OUT.color = vec4(color, 1.0);
+}

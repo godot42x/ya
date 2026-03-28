@@ -19,6 +19,7 @@
         "cxxopts",
         "dmat",
         "Dockspace",
+        "DSLs",
         "dvec",
         "DXIL",
         "entt",

@@ -547,6 +547,8 @@ void VulkanPipeline::createPipelineInternal()
         .depthCompareOp        = toVk(_ci.depthStencilState.depthCompareOp),
         .depthBoundsTestEnable = _ci.depthStencilState.bDepthBoundsTestEnable,
         .stencilTestEnable     = _ci.depthStencilState.bStencilTestEnable,
+        .front                 = EStencilOp::toVkStencilOpState(_ci.depthStencilState.front),
+        .back                  = EStencilOp::toVkStencilOpState(_ci.depthStencilState.back),
         .minDepthBounds        = _ci.depthStencilState.minDepthBounds,
         .maxDepthBounds        = _ci.depthStencilState.maxDepthBounds,
 

@@ -736,6 +736,7 @@ VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const R
 
 void VulkanCommandBuffer::executeDynamicRendering(std::vector<VkRenderingAttachmentInfo>& colorAttachments,
                                                   VkRenderingAttachmentInfo*              pDepthAttach,
+                                                  VkRenderingAttachmentInfo*              pStencilAttach,
                                                   const VkRect2D&                         renderArea,
                                                   uint32_t                                layerCount)
 {
@@ -749,7 +750,7 @@ void VulkanCommandBuffer::executeDynamicRendering(std::vector<VkRenderingAttachm
         .colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size()),
         .pColorAttachments    = colorAttachments.data(),
         .pDepthAttachment     = pDepthAttach,
-        .pStencilAttachment   = nullptr,
+        .pStencilAttachment   = pStencilAttach,
     };
 
     s_vkCmdBeginRenderingKHR(_commandBuffer, &vkRenderingInfo);
@@ -835,12 +836,36 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 
 
 
+    // Build stencil attachment (shares imageView with depth for depth-stencil formats)
+    VkRenderingAttachmentInfo  vkStencilAttach{};
+    VkRenderingAttachmentInfo* pVkStencilAttach = nullptr;
+    if (depthAttachmentDesc && EFormat::isDepthStencilFormat(depthAttachmentDesc->format)) {
+        vkStencilAttach = VkRenderingAttachmentInfo{
+            .sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .pNext              = nullptr,
+            .imageView          = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
+            .imageLayout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            .resolveMode        = VK_RESOLVE_MODE_NONE,
+            .resolveImageView   = VK_NULL_HANDLE,
+            .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .loadOp             = EAttachmentLoadOp::toVk(depthAttachmentDesc->stencilLoadOp),
+            .storeOp            = EAttachmentStoreOp::toVk(depthAttachmentDesc->stencilStoreOp),
+            .clearValue         = {
+                .depthStencil = {
+                    .depth   = 0.0f,
+                    .stencil = info.depthClearValue.isDepthStencil ? info.depthClearValue.depthStencil.stencil : 0u,
+                },
+            },
+        };
+        pVkStencilAttach = &vkStencilAttach;
+    }
+
     // Execute dynamic rendering
     VkRect2D renderArea = {
         .offset = {0, 0},
         .extent = {renderTarget->getExtent().width, renderTarget->getExtent().height},
     };
-    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, renderTarget->_layerCount);
+    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, renderTarget->_layerCount);
 }
 
 void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingInfo& info)
@@ -912,12 +937,21 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     VkRenderingAttachmentInfo  vkDepthAttach{};
     VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
 
+    // Build stencil attachment (shares imageView with depth for depth-stencil formats)
+    VkRenderingAttachmentInfo  vkStencilAttach{};
+    VkRenderingAttachmentInfo* pVkStencilAttach = nullptr;
+    if (info.depthAttachment && info.depthAttachment->texture &&
+        EFormat::isDepthStencilFormat(info.depthAttachment->texture->_format)) {
+        vkStencilAttach = vkDepthAttach; // Copy from depth — same imageView and layout
+        pVkStencilAttach = &vkStencilAttach;
+    }
+
     // Execute dynamic rendering
     VkRect2D renderArea = {
         .offset = {static_cast<int32_t>(info.renderArea.pos.x), static_cast<int32_t>(info.renderArea.pos.y)},
         .extent = {static_cast<uint32_t>(info.renderArea.extent.x), static_cast<uint32_t>(info.renderArea.extent.y)},
     };
-    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, renderArea, info.layerCount);
+    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, info.layerCount);
 }
 
 void VulkanCommandBuffer::endRendering(const RenderingInfo& info)

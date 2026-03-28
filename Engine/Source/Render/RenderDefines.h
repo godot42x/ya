@@ -322,6 +322,23 @@ inline static bool isSRGB(T format)
 
     return sRGBFormats.contains(format);
 }
+
+inline static bool isDepthFormat(T format)
+{
+    return format == D32_SFLOAT ||
+           format == D24_UNORM_S8_UINT || format == D32_SFLOAT_S8_UINT;
+}
+
+inline static bool isDepthStencilFormat(T format)
+{
+    return format == D24_UNORM_S8_UINT || format == D32_SFLOAT_S8_UINT;
+}
+
+inline static bool isDepthOnlyFormat(T format)
+{
+    return isDepthFormat(format) && !isDepthStencilFormat(format);
+}
+
 }; // namespace EFormat
 
 namespace EImageLayout
@@ -420,6 +437,21 @@ enum T
     NotEqual,
     GreaterOrEqual,
     Always,
+};
+};
+
+namespace EStencilOp
+{
+enum T
+{
+    Keep = 0,
+    Zero,
+    Replace,
+    IncrementAndClamp,
+    DecrementAndClamp,
+    Invert,
+    IncrementAndWrap,
+    DecrementAndWrap,
 };
 };
 
@@ -617,6 +649,17 @@ struct ColorBlendState
     float                                  blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 };
 
+struct StencilOpState
+{
+    EStencilOp::T failOp      = EStencilOp::Keep;
+    EStencilOp::T passOp      = EStencilOp::Keep;
+    EStencilOp::T depthFailOp = EStencilOp::Keep;
+    ECompareOp::T compareOp   = ECompareOp::Always;
+    uint32_t      compareMask = 0xFF;
+    uint32_t      writeMask   = 0xFF;
+    uint32_t      reference   = 0;
+};
+
 struct DepthStencilState
 {
     bool          bDepthTestEnable       = false;
@@ -627,10 +670,8 @@ struct DepthStencilState
     float         minDepthBounds         = 0.0f;
     float         maxDepthBounds         = 1.0f;
 
-    // TODO
-    // VkStencilOpState                          front;
-    // VkStencilOpState                          back;
-    // Stencil ops can be added later if needed
+    StencilOpState front;
+    StencilOpState back;
 };
 
 struct MultisampleState
@@ -1156,11 +1197,7 @@ struct SamplerDesc
 
 
 
-struct RenderHelper
-{
-    static bool isDepthOnlyFormat(EFormat::T format) { return format == EFormat::D32_SFLOAT || format == EFormat::D24_UNORM_S8_UINT; }
-    static bool isDepthStencilFormat(EFormat::T format) { return format == EFormat::D24_UNORM_S8_UINT || format == EFormat::D32_SFLOAT_S8_UINT; }
-};
+
 
 
 
