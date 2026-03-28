@@ -93,9 +93,9 @@ static void collectRenderTargetTransitions(
 }
 
 // Define the static function pointers for VK_KHR_dynamic_rendering and VK_EXT_extended_dynamic_state3
-PFN_vkCmdBeginRenderingKHR VulkanCommandBuffer::s_vkCmdBeginRenderingKHR = nullptr;
-PFN_vkCmdEndRenderingKHR   VulkanCommandBuffer::s_vkCmdEndRenderingKHR   = nullptr;
-PFN_vkCmdSetPolygonModeEXT VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT = nullptr;
+PFN_vkCmdBeginRenderingKHR       VulkanCommandBuffer::s_vkCmdBeginRenderingKHR       = nullptr;
+PFN_vkCmdEndRenderingKHR         VulkanCommandBuffer::s_vkCmdEndRenderingKHR         = nullptr;
+PFN_vkCmdSetPolygonModeEXT       VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT       = nullptr;
 PFN_vkCmdBeginDebugUtilsLabelEXT VulkanCommandBuffer::s_vkCmdBeginDebugUtilsLabelEXT = nullptr;
 PFN_vkCmdEndDebugUtilsLabelEXT   VulkanCommandBuffer::s_vkCmdEndDebugUtilsLabelEXT   = nullptr;
 
@@ -141,6 +141,7 @@ bool VulkanCommandBuffer::begin(bool oneTimeSubmit)
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
+    _debugLabelDepth = 0;
     VkCommandBufferBeginInfo beginInfo{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext            = nullptr,
@@ -172,6 +173,7 @@ void VulkanCommandBuffer::reset()
 {
     vkResetCommandBuffer(_commandBuffer, 0);
     _isRecording = false;
+    _debugLabelDepth = 0;
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
@@ -329,7 +331,7 @@ void VulkanCommandBuffer::executeBindDescriptorSets(IPipelineLayout*            
                                                     uint32_t                                firstSet,
                                                     const std::vector<DescriptorSetHandle>& descriptorSets,
                                                     const std::vector<uint32_t>&            dynamicOffsets,
-                                                    VkPipelineBindPoint                      bindPoint)
+                                                    VkPipelineBindPoint                     bindPoint)
 {
     std::vector<VkDescriptorSet> vkDescriptorSets;
     vkDescriptorSets.reserve(descriptorSets.size());
@@ -427,6 +429,60 @@ void VulkanCommandBuffer::copyBufferToImage(IBuffer* srcBuffer,
     vkCmdCopyBufferToImage(
         _commandBuffer,
         srcBuffer->getHandleAs<VkBuffer>(),
+        dstImage->getHandle().as<VkImage>(),
+        EImageLayout::toVk(dstImageLayout),
+        static_cast<uint32_t>(vkRegions.size()),
+        vkRegions.data());
+}
+
+void VulkanCommandBuffer::copyImage(IImage*                       srcImage,
+                                    EImageLayout::T               srcImageLayout,
+                                    IImage*                       dstImage,
+                                    EImageLayout::T               dstImageLayout,
+                                    const std::vector<ImageCopy>& regions)
+{
+    if (!srcImage || !dstImage || regions.empty()) return;
+
+    std::vector<VkImageCopy> vkRegions;
+    vkRegions.reserve(regions.size());
+
+    for (const auto& region : regions) {
+        VkImageCopy vkRegion{
+            .srcSubresource = {
+                .aspectMask     = region.srcSubresource.aspectMask,
+                .mipLevel       = region.srcSubresource.mipLevel,
+                .baseArrayLayer = region.srcSubresource.baseArrayLayer,
+                .layerCount     = region.srcSubresource.layerCount,
+            },
+            .srcOffset = {
+                region.srcOffsetX,
+                region.srcOffsetY,
+                region.srcOffsetZ,
+            },
+            .dstSubresource = {
+                .aspectMask     = region.dstSubresource.aspectMask,
+                .mipLevel       = region.dstSubresource.mipLevel,
+                .baseArrayLayer = region.dstSubresource.baseArrayLayer,
+                .layerCount     = region.dstSubresource.layerCount,
+            },
+            .dstOffset = {
+                region.dstOffsetX,
+                region.dstOffsetY,
+                region.dstOffsetZ,
+            },
+            .extent = {
+                region.extentWidth,
+                region.extentHeight,
+                region.extentDepth,
+            },
+        };
+        vkRegions.push_back(vkRegion);
+    }
+
+    vkCmdCopyImage(
+        _commandBuffer,
+        srcImage->getHandle().as<VkImage>(),
+        EImageLayout::toVk(srcImageLayout),
         dstImage->getHandle().as<VkImage>(),
         EImageLayout::toVk(dstImageLayout),
         static_cast<uint32_t>(vkRegions.size()),
@@ -836,29 +892,10 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 
 
 
-    // Build stencil attachment (shares imageView with depth for depth-stencil formats)
-    VkRenderingAttachmentInfo  vkStencilAttach{};
+    // Stencil is not modelled as a separate attachment in the current render-target path.
+    // Binding it implicitly for depth-stencil images breaks pipelines created with
+    // stencilAttachmentFormat = Undefined.
     VkRenderingAttachmentInfo* pVkStencilAttach = nullptr;
-    if (depthAttachmentDesc && EFormat::isDepthStencilFormat(depthAttachmentDesc->format)) {
-        vkStencilAttach = VkRenderingAttachmentInfo{
-            .sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .pNext              = nullptr,
-            .imageView          = curFrameBuffer->getDepthTexture()->getImageView()->getHandle().as<VkImageView>(),
-            .imageLayout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            .resolveMode        = VK_RESOLVE_MODE_NONE,
-            .resolveImageView   = VK_NULL_HANDLE,
-            .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .loadOp             = EAttachmentLoadOp::toVk(depthAttachmentDesc->stencilLoadOp),
-            .storeOp            = EAttachmentStoreOp::toVk(depthAttachmentDesc->stencilStoreOp),
-            .clearValue         = {
-                .depthStencil = {
-                    .depth   = 0.0f,
-                    .stencil = info.depthClearValue.isDepthStencil ? info.depthClearValue.depthStencil.stencil : 0u,
-                },
-            },
-        };
-        pVkStencilAttach = &vkStencilAttach;
-    }
 
     // Execute dynamic rendering
     VkRect2D renderArea = {
@@ -890,8 +927,8 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             }
         }
         if (info.depthAttachment) {
-            auto& spec = *info.depthAttachment;
-            auto targetLayout = spec.initialLayout;
+            auto& spec         = *info.depthAttachment;
+            auto  targetLayout = spec.initialLayout;
             if (targetLayout == EImageLayout::Undefined) {
                 targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
             }
@@ -937,14 +974,8 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     VkRenderingAttachmentInfo  vkDepthAttach{};
     VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
 
-    // Build stencil attachment (shares imageView with depth for depth-stencil formats)
-    VkRenderingAttachmentInfo  vkStencilAttach{};
+    // Stencil is currently not modelled explicitly for manual dynamic rendering either.
     VkRenderingAttachmentInfo* pVkStencilAttach = nullptr;
-    if (info.depthAttachment && info.depthAttachment->texture &&
-        EFormat::isDepthStencilFormat(info.depthAttachment->texture->_format)) {
-        vkStencilAttach = vkDepthAttach; // Copy from depth — same imageView and layout
-        pVkStencilAttach = &vkStencilAttach;
-    }
 
     // Execute dynamic rendering
     VkRect2D renderArea = {
@@ -1025,6 +1056,10 @@ void VulkanCommandBuffer::transitionImageLayoutAuto(IImage* image, EImageLayout:
 
 void VulkanCommandBuffer::debugBeginLabel(const char* labelName, const float* colorRGBA)
 {
+    if (!s_vkCmdBeginDebugUtilsLabelEXT) {
+        return;
+    }
+
     VkDebugUtilsLabelEXT label{
         .sType      = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
         .pNext      = nullptr,
@@ -1034,14 +1069,23 @@ void VulkanCommandBuffer::debugBeginLabel(const char* labelName, const float* co
         std::memcpy(label.color, colorRGBA, sizeof(label.color));
     }
     s_vkCmdBeginDebugUtilsLabelEXT(_commandBuffer, &label);
+    ++_debugLabelDepth;
 }
 
 void VulkanCommandBuffer::debugEndLabel()
 {
-    // if (!s_vkCmdEndDebugUtilsLabelEXT) {
-    //     return;
-    // }
+    if (!s_vkCmdEndDebugUtilsLabelEXT) {
+        YA_CORE_WARN("vkCmdEndDebugUtilsLabelEXT not available");
+        return;
+    }
+
+    if (_debugLabelDepth == 0) {
+        YA_CORE_ERROR("debugEndLabel called without a matching debugBeginLabel on command buffer {}", (uintptr_t)_commandBuffer);
+        return;
+    }
+
     s_vkCmdEndDebugUtilsLabelEXT(_commandBuffer);
+    --_debugLabelDepth;
 }
 
 void VulkanCommandBuffer::transitionRenderTargetLayout(

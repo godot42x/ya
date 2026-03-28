@@ -40,14 +40,14 @@ static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
             normalized.push_back('_');
         }
     }
-    return std::format("debugWindow.gbufferMask.{}", normalized);
+    return std::format("debugWindow.debugSlotImageMask.{}", normalized);
 }
 
-static std::string buildDepthMaskConfigKey(const std::string& slotLabel)
+static std::string buildDebugGroupConfigKey(const std::string& groupLabel)
 {
     std::string normalized;
-    normalized.reserve(slotLabel.size());
-    for (char ch : slotLabel) {
+    normalized.reserve(groupLabel.size());
+    for (char ch : groupLabel) {
         if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
             normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
         }
@@ -55,8 +55,33 @@ static std::string buildDepthMaskConfigKey(const std::string& slotLabel)
             normalized.push_back('_');
         }
     }
-    return std::format("debugWindow.depthMask.{}", normalized);
+    return std::format("debugWindow.debugGroupViewer.{}", normalized);
 }
+
+static std::string buildDebugGroupItemConfigKey(const std::string& groupLabel, uint32_t itemIndex)
+{
+    std::string normalized;
+    normalized.reserve(groupLabel.size() + 16);
+    for (char ch : groupLabel) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        else {
+            normalized.push_back('_');
+        }
+    }
+    return std::format("debugWindow.debugGroupViewerSelection.{}_item_{}", normalized, itemIndex);
+}
+
+static const char* const kCubeFaceLabels[6] = {
+    "PosX",
+    "NegX",
+    "PosY",
+    "NegY",
+    "PosZ",
+    "NegZ",
+};
+
 
 static ComponentMapping buildDeferredMaskMapping(const std::array<bool, 4>& channelEnabled)
 {
@@ -597,14 +622,20 @@ void EditorLayer::viewportWindow()
                                      ? TextureLibrary::get().getLinearSampler()
                                      : TextureLibrary::get().getNearestSampler();
         auto*    viewportTexture = _viewportCtx.viewportTexture;
-        if (ImGuiHelper::Image(viewportTexture->getImageView(),
-                               sampler,
-                               "Viewport Texture ",
-                               viewportPanelSize,
-                               ImVec2(0, 0),
-                               ImVec2(1, 1)))
-        {
-            renderGizmo();
+        if (viewportTexture && viewportTexture->getImageView()) {
+            if (ImGuiHelper::Image(viewportTexture->getImageView(),
+                                   sampler,
+                                   "Viewport Texture ",
+                                   viewportPanelSize,
+                                   ImVec2(0, 0),
+                                   ImVec2(1, 1)))
+            {
+                renderGizmo();
+            }
+        }
+        else {
+            ImGui::TextDisabled("Viewport image unavailable");
+            ImGui::TextDisabled("Waiting for a valid viewport pass / texture");
         }
     }
     else
@@ -751,7 +782,7 @@ void EditorLayer::editorSettings()
     ImGui::End();
 }
 
-void EditorLayer::syncDeferredSlotState(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state)
+void EditorLayer::syncDebugSlotState(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state)
 {
     const std::string configKey = buildDeferredMaskConfigKey(slot.label);
     if (state.configKey == configKey) {
@@ -768,7 +799,7 @@ void EditorLayer::syncDeferredSlotState(const EditorViewportContext::GBufferSlot
     state.lastBase = nullptr;
 }
 
-bool EditorLayer::renderDeferredSlotMaskControls(const EditorViewportContext::GBufferSlot&, GbufferSlotState& state)
+bool EditorLayer::renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot&, ImageSlotState& state)
 {
     static constexpr const char* kChannelLabels[] = {"R", "G", "B", "A"};
 
@@ -804,7 +835,7 @@ bool EditorLayer::renderDeferredSlotMaskControls(const EditorViewportContext::GB
     return maskChanged;
 }
 
-void EditorLayer::updateDeferredSlotImageView(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, bool bForceRefresh)
+void EditorLayer::updateDebugSlotImageView(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, bool bForceRefresh)
 {
     const bool baseChanged = slot.defaultView != state.lastBase;
     if (!bForceRefresh && !baseChanged) {
@@ -820,207 +851,224 @@ void EditorLayer::updateDeferredSlotImageView(const EditorViewportContext::GBuff
     ImageViewCreateInfo ci;
     ci.label         = slot.label + "_mask";
     ci.viewType      = EImageViewType::View2D;
-    ci.aspectFlags   = EImageAspect::Color;
+    ci.aspectFlags   = slot.aspectFlags;
     ci.components    = buildDeferredMaskMapping(state.channelEnabled);
     state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
 }
 
-void EditorLayer::renderDeferredSlotImage(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, float width, float height, Sampler* sampler)
+void EditorLayer::renderDebugSlotImage(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, float width, float height, Sampler* sampler)
 {
     IImageView* displayView = (isIdentityDeferredMask(state.channelEnabled) || !state.maskedView)
                                 ? slot.defaultView
                                 : state.maskedView.get();
-    ImGuiHelper::Image(displayView, sampler, slot.label, ImVec2(width, height));
+    ImGuiHelper::Image(displayView,
+                       sampler,
+                       slot.label,
+                       ImVec2(width, height),
+                       ImVec2(0, 0),
+                       ImVec2(1, 1),
+                       {slot.tint.x, slot.tint.y, slot.tint.z, slot.tint.w});
 }
 
-void EditorLayer::debugForwardWindow(const ImVec2& panelSize)
+void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
 {
-    auto constraintSize = [&panelSize](auto extent) {
-        return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
-    };
+    using namespace ImGui;
+    Sampler*    sampler = TextureLibrary::get().getLinearSampler();
+    const auto& groups  = _viewportCtx.debugSpec.groups;
 
-    ImGui::Text("Shadow Mapping(Depth Buffer)");
-    if (_viewportCtx.bShadowMappingEnabled) {
-        auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
-        if (!directionalDepthIV || _viewportCtx.depthDebugSlots.empty()) {
-            ImGui::Text("Shadow resources unavailable");
-        }
-        else {
-            auto depthExtent = _viewportCtx.depthDebugSlots.front().extent;
-            ImGuiHelper::Image(directionalDepthIV,
-                               TextureLibrary::get().getLinearSampler(),
-                               "Shadow Map",
-                               constraintSize(depthExtent));
-
-            static int         selectedPointLight = 0;
-            static int         cubeFace           = ECubeFace::CubeFace_NegY;
-            static std::string pointLightComboStr = []() {
-                std::string ret{};
-                for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
-                    ret += "Point Light " + std::to_string(i) + '\0';
-                }
-                return ret;
-            }();
-
-            ImGui::Combo(std::format("Point Light {}", selectedPointLight).c_str(),
-                         &selectedPointLight,
-                         pointLightComboStr.c_str());
-            ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
-
-            auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
-                             ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
-                             : nullptr;
-            if (faceIV) {
-                ImGuiHelper::Image(faceIV,
-                                   TextureLibrary::get().getLinearSampler(),
-                                   "Point Light Shadow Map",
-                                   constraintSize(depthExtent));
-            }
-        }
-    }
-
-    ImGui::Text("Mirror Render Target (from framebuffer)");
-    ImGui::TextDisabled("Mirror visualization unavailable");
-
-    ImGui::Text("Viewport Render Target (from framebuffer)");
-    auto viewportRTTexture = _viewportCtx.viewportTexture;
-    if (viewportRTTexture) {
-        ImGuiHelper::Image(viewportRTTexture->getImageView(),
-                           TextureLibrary::get().getLinearSampler(),
-                           "Viewport RT (from framebuffer)",
-                           constraintSize(viewportRTTexture->getExtent()));
-    }
-
-    ImGui::Text("Post-process Texture (from App)");
-    if (_viewportCtx.bPostprocessingEnabled) {
-        auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
-        if (postProcessTexture) {
-            ImGuiHelper::Image(postProcessTexture->getImageView(),
-                               TextureLibrary::get().getLinearSampler(),
-                               "Post-process texture",
-                               constraintSize(postProcessTexture->getExtent()));
-        }
-    }
-}
-
-void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
-{
-    Sampler*    sampler  = TextureLibrary::get().getLinearSampler();
-    const auto& slots    = _viewportCtx.deferredSpec.slots;
-    const int   numSlots = static_cast<int>(slots.size());
-    const auto& depthSlots = _viewportCtx.depthDebugSlots;
-    const int   totalSlots = numSlots + static_cast<int>(depthSlots.size());
-
-    if (static_cast<int>(_deferredSlotStates.size()) != totalSlots) {
-        _deferredSlotStates.resize(totalSlots);
-    }
-
-    for (int i = 0; i < numSlots; ++i) {
-        syncDeferredSlotState(slots[i], _deferredSlotStates[i]);
-    }
-
-    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
-        const auto& depthSlot   = depthSlots[i];
-        auto&       state       = _deferredSlotStates[numSlots + i];
-        const auto  configKey   = buildDepthMaskConfigKey(depthSlot.label);
-        if (state.configKey != configKey) {
-            std::array<bool, 4> channelEnabled = {true, false, false, false};
-            auto&               configManager  = ConfigManager::get();
-            (void)configManager.tryGet<std::array<bool, 4>>("editor", configKey, channelEnabled);
-
-            state.configKey      = configKey;
-            state.channelEnabled = channelEnabled;
-            state.maskedView.reset();
-            state.lastBase = nullptr;
-        }
-    }
-
-    if (totalSlots <= 0 || !ImGui::BeginTable("GBufferTable", totalSlots, ImGuiTableFlags_BordersInnerV)) {
+    if (groups.empty()) {
         return;
     }
 
-    for (int i = 0; i < numSlots; ++i) {
-        ImGui::TableSetupColumn(slots[i].label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    if (static_cast<int>(_debugGroupStates.size()) < static_cast<int>(groups.size())) {
+        _debugGroupStates.resize(groups.size());
     }
 
-    for (const auto& depthSlot : depthSlots) {
-        ImGui::TableSetupColumn(depthSlot.label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    if (_viewportCtx.debugSpec.slots.size() > _debugImageSlotStates.size()) {
+        _debugImageSlotStates.resize(_viewportCtx.debugSpec.slots.size());
     }
 
-    ImGui::TableNextRow();
-    for (int i = 0; i < numSlots; ++i) {
-        ImGui::TableSetColumnIndex(i);
-        ImGui::Text("%s", slots[i].label.c_str());
-    }
+    for (int groupIndex = 0; groupIndex < static_cast<int>(groups.size()); ++groupIndex) {
+        const auto& group = groups[groupIndex];
+        if (group.slotCount == 0 || group.beginIndex >= _viewportCtx.debugSpec.slots.size()) {
+            continue;
+        }
 
-    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
-        ImGui::TableSetColumnIndex(numSlots + i);
-        ImGui::Text("%s", depthSlots[i].label.c_str());
-    }
+        const uint32_t availableSlots = static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()) - group.beginIndex;
+        const uint32_t slotCount      = std::min(group.slotCount, availableSlots);
+        if (slotCount == 0) {
+            continue;
+        }
 
-    ImGui::TableNextRow();
-    for (int i = 0; i < numSlots; ++i) {
-        ImGui::TableSetColumnIndex(i);
-        ImGui::PushID(i);
-        bool maskChanged = renderDeferredSlotMaskControls(slots[i], _deferredSlotStates[i]);
-        updateDeferredSlotImageView(slots[i], _deferredSlotStates[i], maskChanged);
-        ImGui::PopID();
-    }
+        const uint32_t groupSize  = std::max(1u, group.groupSize);
+        const uint32_t groupCount = slotCount / groupSize;
+        if (groupCount == 0) {
+            continue;
+        }
 
-    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
-        const auto& depthSlot = depthSlots[i];
-        auto&       state     = _deferredSlotStates[numSlots + i];
+        auto&             groupState = _debugGroupStates[groupIndex];
+        const std::string configKey  = buildDebugGroupConfigKey(group.label);
+        if (groupState.configKey != configKey) {
+            groupState.configKey = configKey;
+            groupState.selectedSlots.clear();
+        }
 
-        ImGui::TableSetColumnIndex(numSlots + i);
-        ImGui::PushID(("depth-mask-" + depthSlot.label).c_str());
-        bool maskChanged = renderDeferredSlotMaskControls(EditorViewportContext::GBufferSlot{}, state);
-
-        const bool baseChanged = depthSlot.defaultView != state.lastBase;
-        if (maskChanged || baseChanged) {
-            state.lastBase = depthSlot.defaultView;
-            if (isIdentityDeferredMask(state.channelEnabled) || !depthSlot.image) {
-                state.maskedView.reset();
-            }
-            else {
-                ImageViewCreateInfo ci;
-                ci.label       = depthSlot.label + "_mask";
-                ci.viewType    = EImageViewType::View2D;
-                ci.aspectFlags = EImageAspect::Depth;
-                ci.components  = buildDeferredMaskMapping(state.channelEnabled);
-                state.maskedView = ITextureFactory::get()->createImageView(depthSlot.image, ci);
+        if (static_cast<uint32_t>(groupState.selectedSlots.size()) != groupCount) {
+            groupState.selectedSlots.assign(groupCount, 0);
+            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+                int               selectedSlot = 0;
+                const std::string key          = buildDebugGroupItemConfigKey(group.label, groupItemIndex);
+                (void)ConfigManager::get().tryGet<int>("editor", key, selectedSlot);
+                groupState.selectedSlots[groupItemIndex] = selectedSlot;
             }
         }
-        ImGui::PopID();
+
+        if (!CollapsingHeader(group.label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            continue;
+        }
+
+        PushID(group.label.c_str());
+
+        bool anySelectionChanged = false;
+
+        const int viewerColumns = std::max(1, std::min(2, static_cast<int>(groupCount)));
+        if (BeginTable("DebugGroupViewerTable", viewerColumns, ImGuiTableFlags_BordersInnerV)) {
+            for (int columnIndex = 0; columnIndex < viewerColumns; ++columnIndex) {
+                TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            }
+
+            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+                if (groupItemIndex % static_cast<uint32_t>(viewerColumns) == 0) {
+                    TableNextRow();
+                }
+                TableSetColumnIndex(static_cast<int>(groupItemIndex % static_cast<uint32_t>(viewerColumns)));
+                PushID(static_cast<int>(groupItemIndex));
+
+                const uint32_t slotBase     = group.beginIndex + groupItemIndex * groupSize;
+                int&           selectedFace = groupState.selectedSlots[groupItemIndex];
+                selectedFace                = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
+
+                Text("Viewer %u", groupItemIndex);
+
+                if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == 6) {
+                    for (uint32_t rowIndex = 0; rowIndex < 2; ++rowIndex) {
+                        float totalSpacing = GetStyle().ItemSpacing.x * 2.0f;
+                        float buttonWidth  = (GetContentRegionAvail().x - totalSpacing) / 3.0f;
+                        for (uint32_t columnIndex = 0; columnIndex < 3; ++columnIndex) {
+                            const uint32_t faceIndex   = rowIndex * 3 + columnIndex;
+                            const bool     bSelected   = (selectedFace == static_cast<int>(faceIndex));
+                            ImVec4         buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
+                            ImVec4         hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
+                            ImVec4         activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
+
+                            ya::ImGuiStyleScope buttonStyle;
+                            buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
+                            buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
+                            buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
+                            if (Button(kCubeFaceLabels[faceIndex], ImVec2(buttonWidth, 0.0f))) {
+                                selectedFace        = static_cast<int>(faceIndex);
+                                anySelectionChanged = true;
+                            }
+
+                            if (columnIndex < 2) {
+                                SameLine();
+                            }
+                        }
+                    }
+                }
+                else {
+                    std::string comboItems;
+                    for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
+                        comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
+                        comboItems.push_back('\0');
+                    }
+                    comboItems.push_back('\0');
+                    if (Combo("Viewer", &selectedFace, comboItems.c_str())) {
+                        anySelectionChanged = true;
+                    }
+                }
+
+                auto& slot  = _viewportCtx.debugSpec.slots[slotBase + static_cast<uint32_t>(selectedFace)];
+                auto& state = _debugImageSlotStates[slotBase + static_cast<uint32_t>(selectedFace)];
+                syncDebugSlotState(slot, state);
+                bool maskChanged = renderDebugSlotMaskControls(slot, state);
+                updateDebugSlotImageView(slot, state, maskChanged);
+                const float viewerWidth  = GetContentRegionAvail().x;
+                const float viewerHeight = std::min(viewerWidth, panelSize.x);
+                renderDebugSlotImage(slot, state, viewerWidth, viewerHeight, sampler);
+
+                PopID();
+            }
+
+            EndTable();
+        }
+
+        if (anySelectionChanged) {
+            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+                ConfigManager::get().set("editor",
+                                         buildDebugGroupItemConfigKey(group.label, groupItemIndex),
+                                         groupState.selectedSlots[groupItemIndex]);
+            }
+            ConfigManager::get().flushDocument("editor");
+        }
+
+        PopID();
+    }
+}
+
+
+void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize)
+{
+    using namespace ImGui;
+    Sampler*    sampler    = TextureLibrary::get().getLinearSampler();
+    const auto& slots      = _viewportCtx.debugSpec.slots;
+    const int   totalSlots = static_cast<int>(slots.size());
+    if (totalSlots <= 0) {
+        TextDisabled("No debug images");
+        return;
     }
 
-    float padding   = ImGui::GetStyle().ItemSpacing.x;
-    float colWidth  = (panelSize.x - padding * static_cast<float>(totalSlots - 1)) / static_cast<float>(totalSlots);
-    float imgHeight = colWidth;
-
-    ImGui::TableNextRow();
-    for (int i = 0; i < numSlots; ++i) {
-        ImGui::TableSetColumnIndex(i);
-        ImGui::PushID(i);
-        renderDeferredSlotImage(slots[i], _deferredSlotStates[i], colWidth, imgHeight, sampler);
-        ImGui::PopID();
+    if (totalSlots > static_cast<int>(_debugImageSlotStates.size())) {
+        _debugImageSlotStates.resize(totalSlots);
     }
 
-    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
-        const auto& depthSlot = depthSlots[i];
-        auto&       state     = _deferredSlotStates[numSlots + i];
-        IImageView* displayView = (isIdentityDeferredMask(state.channelEnabled) || !state.maskedView)
-                                    ? depthSlot.defaultView
-                                    : state.maskedView.get();
+    const int rowSize = std::max(1, std::min(4, totalSlots));
 
-        ImGui::TableSetColumnIndex(numSlots + i);
-        ImGui::PushID(("depth-image-" + depthSlot.label).c_str());
-        ImGuiHelper::Image(displayView, sampler, depthSlot.label, ImVec2(colWidth, imgHeight));
+    for (int i = 0; i < totalSlots; ++i) {
+        syncDebugSlotState(slots[i], _debugImageSlotStates[i]);
+    }
+
+    if (!ImGui::BeginTable("DebugImageGrid", rowSize, ImGuiTableFlags_BordersInnerV)) {
+        return;
+    }
+
+    for (int i = 0; i < rowSize; ++i) {
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    }
+
+    const float padding   = ImGui::GetStyle().ItemSpacing.x;
+    const float colWidth  = (panelSize.x - padding * static_cast<float>(rowSize - 1)) / static_cast<float>(rowSize);
+    const float imgHeight = colWidth;
+
+    for (int i = 0; i < totalSlots; ++i) {
+        if (i % rowSize == 0) {
+            TableNextRow();
+        }
+
+        const int columnIndex = i % rowSize;
+        TableSetColumnIndex(columnIndex);
+        Text("%s", slots[i].label.c_str());
+        ImGui::PushID(("debug-imageSlot-" + slots[i].label).c_str());
+        bool maskChanged = renderDebugSlotMaskControls(slots[i], _debugImageSlotStates[i]);
+        updateDebugSlotImageView(slots[i], _debugImageSlotStates[i], maskChanged);
+        renderDebugSlotImage(slots[i], _debugImageSlotStates[i], colWidth, imgHeight, sampler);
         ImGui::PopID();
     }
 
     ImGui::EndTable();
 }
 
+// MARK: Debug
 void EditorLayer::debugWindow()
 {
     if (!ImGui::Begin("Debug Window"))
@@ -1028,15 +1076,12 @@ void EditorLayer::debugWindow()
         ImGui::End();
         return;
     }
-
     const ImVec2 panelSize = ImGui::GetContentRegionAvail();
-    if (_viewportCtx.bForwardPipeline) {
-        debugForwardWindow(panelSize);
+    renderDebugImageGroups(panelSize);
+    if (!_viewportCtx.debugSpec.groups.empty()) {
+        ImGui::Separator();
     }
-    else {
-        debugDeferredWindow(panelSize);
-    }
-
+    renderDebugImageSlots(panelSize);
     ImGui::End();
 }
 

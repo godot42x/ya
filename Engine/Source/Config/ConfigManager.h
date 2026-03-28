@@ -11,23 +11,28 @@
 namespace ya
 {
 
+
+namespace Config
+{
+struct OpenDocumentOptions
+{
+    bool bPersistIfMissing = true;
+    bool bReadOnly         = false;
+};
+} // namespace Config
+
 struct ConfigManager : public disable_copy
 {
-    struct OpenDocumentOptions
-    {
-        bool bPersistIfMissing = true;
-        bool bReadOnly         = false;
-    };
-
     struct Document
     {
         std::string    path;
-        nlohmann::json root  = nlohmann::json::object();
-        bool           dirty = false;
+        nlohmann::json root      = nlohmann::json::object();
+        bool           dirty     = false;
         bool           bReadOnly = false;
 
         [[nodiscard]] bool isLoaded() const { return !path.empty(); }
     };
+
 
     static ConfigManager& get();
 
@@ -36,7 +41,7 @@ struct ConfigManager : public disable_copy
     void flushAll();
     void markDirty(const std::string& docName);
 
-    Document& openDocument(const std::string& name, const std::string& path, OpenDocumentOptions options = {});
+    Document& openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options = {});
     bool      closeDocument(const std::string& name, bool bFlush = true);
 
     [[nodiscard]] bool hasDocument(const std::string& name) const;

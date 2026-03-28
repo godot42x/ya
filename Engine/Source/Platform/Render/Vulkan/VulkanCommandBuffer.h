@@ -24,6 +24,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     VulkanRender*   _render        = nullptr;
     VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
     bool            _isRecording   = false;
+    uint32_t        _debugLabelDepth = 0;
 
     // Track current rendering mode for proper endRendering() call
     ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
@@ -154,6 +155,9 @@ class VulkanCommandBuffer : public ICommandBuffer
     void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0) override;
     void copyBufferToImage(IBuffer* srcBuffer, IImage* dstImage, EImageLayout::T dstImageLayout,
                            const std::vector<BufferImageCopy>& regions) override;
+    void copyImage(IImage* srcImage, EImageLayout::T srcImageLayout,
+                   IImage* dstImage, EImageLayout::T dstImageLayout,
+                   const std::vector<ImageCopy>& regions) override;
     void beginRendering(const RenderingInfo& info) override;
     void endRendering(const RenderingInfo& info) override;
     void transitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,

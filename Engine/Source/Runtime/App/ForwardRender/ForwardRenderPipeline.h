@@ -84,6 +84,7 @@ struct ForwardRenderPipeline
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> shadowPointFaceIVs{};
 
     Texture* viewportTexture = nullptr;
+    bool     _bViewportPassOpen = false;
 
     // Stored viewport RenderingInfo for App-level endViewportPass()
     RenderingInfo _viewportRI{};
@@ -97,6 +98,7 @@ struct ForwardRenderPipeline
 
     /// End the viewport rendering pass (called by App after 2D rendering)
     void endViewportPass(ICommandBuffer* cmdBuf);
+    bool hasOpenViewportPass() const { return _bViewportPassOpen; }
 
     void     onViewportResized(Rect2D rect);
     Extent2D getViewportExtent() const;

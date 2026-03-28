@@ -25,6 +25,7 @@ namespace ya
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render = desc.render;
+    _bViewportPassOpen = false;
 
     // Initial viewport RT creation (subsequent changes go through dirty mechanism)
     RenderTargetCreateInfo viewportRTci{
@@ -60,7 +61,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                 .stencilStoreOp = EAttachmentStoreOp::Store,
                 .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
                 .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
             },
         },
     };
@@ -463,6 +464,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
         };
 
         desc.cmdBuf->beginRendering(ri);
+        _bViewportPassOpen = true;
 
         ctx.extent = viewportRT->getExtent();
         renderScene(desc.cmdBuf, desc.dt, ctx, _phongViewportPassResources);
@@ -476,8 +478,13 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
 
 void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 {
+    if (!_bViewportPassOpen) {
+        return;
+    }
+
     // Close viewport rendering pass (opened in tick())
     cmdBuf->endRendering(_viewportRI);
+    _bViewportPassOpen = false;
 
     // Determine the source color texture (MSAA → resolve, otherwise → color[0])
     auto  fb           = viewportRT->getCurFrameBuffer();
@@ -492,6 +499,7 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 
 void ForwardRenderPipeline::shutdown()
 {
+    _bViewportPassOpen = false;
     _deleter.clear();
 }
 

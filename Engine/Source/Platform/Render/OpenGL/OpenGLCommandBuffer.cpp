@@ -464,6 +464,20 @@ void OpenGLCommandBuffer::copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
     glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 }
 
+void OpenGLCommandBuffer::copyImage(IImage *srcImage,
+                                    EImageLayout::T srcImageLayout,
+                                    IImage *dstImage,
+                                    EImageLayout::T dstImageLayout,
+                                    const std::vector<ImageCopy> &regions)
+{
+    (void)srcImage;
+    (void)srcImageLayout;
+    (void)dstImage;
+    (void)dstImageLayout;
+    (void)regions;
+    YA_CORE_ERROR("OpenGLCommandBuffer::copyImage is not implemented");
+}
+
 void OpenGLCommandBuffer::beginRendering(const RenderingInfo &info)
 {
     (void)info; // OpenGL doesn't need explicit rendering begin

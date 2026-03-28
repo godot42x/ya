@@ -103,39 +103,43 @@ struct FragmentOutput{
 [shader("fragment")]
 void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
+    OUT.shadingModelID = 2.0 / 255.0; // EShadingModelID::Phong = 2
     // Position — roughness unused in Phong, fill 0.0
     OUT.posShininess = vec4(IN.pos, uParams.shininess);
+
+    // Albedo 
+    float4 albedoSpec;
+    albedoSpec.rgb = uParams.diffuse;
+    if(uParams.textures[ETextureSlot::Diffuse].bEnable){
+        vec2 uv = mul(uParams.textures[ETextureSlot::Diffuse].uvTransform , vec3(IN.uv, 0)).xy;
+        albedoSpec.rgb *=  uTexDiffuse.Sample(uv).rgb;
+    }
+
+    // specular
+    float specularMatIntensity = dot(uParams.specular, vec3(0.299, 0.587, 0.114));
+    albedoSpec.a = specularMatIntensity;
+    if(uParams.textures[ETextureSlot::Specular].bEnable){
+        vec2 uv = mul(uParams.textures[ETextureSlot::Specular].uvTransform , vec3(IN.uv, 0)).xy;
+        albedoSpec.a *= uTexSpecular.Sample(uv).r;
+    }
+    OUT.albedoSpecular = albedoSpec;
 
     // Normal — ao unused in Phong, fill 1.0 (no darkening)
     vec3 N = normalize(IN.normal);
     OUT.normalAO.xyz = N;
     if(uParams.textures[ETextureSlot::Normal].bEnable){
+        vec2 uv = mul(uParams.textures[ETextureSlot::Normal].uvTransform , vec3(IN.uv, 0)).xy;
         vec3 T = normalize(IN.tangent);
         T = normalize(T - dot(T, N) * N);
         mat3 TBN = mat3(T,cross(N,T),N);
         // vec2 uv = (TBN * vec3(IN.uv,0)).xy;
-        vec3 normal = uTexNormal.Sample(IN.uv).xyz;
+        vec3 normal = uTexNormal.Sample(uv).xyz;
         // vec3 normal = normalize(uTexNormal.Sample(IN.uv).xyz);
         normal = normalize(normal * 2.0 - 1.0);
         // normal = normalize(normal);
         OUT.normalAO.xyz = normalize(TBN*  normal);
     }
 
-    // Albedo + specular intensity
-    float4 albedoSpec;
-    albedoSpec.rgb = uParams.diffuse;
-    if(uParams.textures[ETextureSlot::Diffuse].bEnable){
-        albedoSpec.rgb *=  uTexDiffuse.Sample(IN.uv).rgb;
-    }
-
-    float specularMatIntensity = dot(uParams.specular, vec3(0.299, 0.587, 0.114));
-    albedoSpec.a = specularMatIntensity;
-    
-    if(uParams.textures[ETextureSlot::Specular].bEnable){
-        albedoSpec.a *= uTexSpecular.Sample(IN.uv).r;
-    }
-    OUT.albedoSpecular = albedoSpec;
-    OUT.shadingModelID = 2.0 / 255.0; // EShadingModelID::Phong = 2
 }
 
 // /* TODO

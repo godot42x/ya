@@ -984,6 +984,24 @@ struct BufferImageCopy
     uint32_t               imageExtentDepth  = 1;  // Depth of region to copy
 };
 
+/**
+ * @brief Image to image copy region (RHI layer)
+ */
+struct ImageCopy
+{
+    ImageSubresourceLayers srcSubresource = {};
+    int32_t                srcOffsetX     = 0;
+    int32_t                srcOffsetY     = 0;
+    int32_t                srcOffsetZ     = 0;
+    ImageSubresourceLayers dstSubresource = {};
+    int32_t                dstOffsetX     = 0;
+    int32_t                dstOffsetY     = 0;
+    int32_t                dstOffsetZ     = 0;
+    uint32_t               extentWidth    = 0;
+    uint32_t               extentHeight   = 0;
+    uint32_t               extentDepth    = 1;
+};
+
 
 struct SwapchainCreateInfo
 {

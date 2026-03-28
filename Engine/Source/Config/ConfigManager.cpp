@@ -49,7 +49,7 @@ void ConfigManager::markDirty(const std::string& docName)
     }
 }
 
-ConfigManager::Document& ConfigManager::openDocument(const std::string& name, const std::string& path, OpenDocumentOptions options)
+ConfigManager::Document& ConfigManager::openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options)
 {
     Document& doc = _documents[name];
     if (doc.path == path && doc.isLoaded()) {
@@ -66,7 +66,7 @@ ConfigManager::Document& ConfigManager::openDocument(const std::string& name, co
         std::string content;
         if (vfs->readFileToString(path, content) && !content.empty()) {
             try {
-                doc.root = nlohmann::json::parse(content, nullptr, true, true);
+                doc.root        = nlohmann::json::parse(content, nullptr, true, true);
                 bLoadedFromDisk = true;
             }
             catch (const nlohmann::json::exception& e) {
@@ -135,9 +135,9 @@ void ConfigManager::removeValue(const std::string& docName, std::string_view key
         return;
     }
 
-    const nlohmann::json::json_pointer pointer = toJsonPointer(key);
-    const std::string                 pointerStr = pointer.to_string();
-    const size_t lastSlash = pointerStr.find_last_of('/');
+    const nlohmann::json::json_pointer pointer    = toJsonPointer(key);
+    const std::string                  pointerStr = pointer.to_string();
+    const size_t                       lastSlash  = pointerStr.find_last_of('/');
     if (lastSlash == std::string::npos || lastSlash == 0) {
         std::string keyName = pointerStr.substr(1);
         if (!doc->root.contains(keyName)) {

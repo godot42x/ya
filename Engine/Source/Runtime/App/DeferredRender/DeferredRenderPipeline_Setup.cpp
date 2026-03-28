@@ -58,7 +58,7 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
                 .stencilStoreOp = EAttachmentStoreOp::Store,
                 .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
                 .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
             },
         },
     });
@@ -68,18 +68,34 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .bSwapChainTarget = false,
         .extent           = extent,
         .attachments      = {
-                 .colorAttach = {AttachmentDescription{
-                     .index          = 0,
-                     .format         = LINEAR_FORMAT,
-                     .samples        = ESampleCount::Sample_1,
-                     .loadOp         = EAttachmentLoadOp::Clear,
-                     .storeOp        = EAttachmentStoreOp::Store,
-                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                     .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                     .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            }},
+
+            .colorAttach = {
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = LINEAR_FORMAT,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+            },
+            .depthAttach = AttachmentDescription{
+                .index          = 1,
+                .format         = DEPTH_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                // use the depth copied from gbuffer pass
+                .loadOp         = EAttachmentLoadOp::Load,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
+            },
         },
     });
 }
@@ -177,17 +193,17 @@ void DeferredRenderPipeline::initDescriptorsAndUBOs()
     _frameUBO = IBuffer::create(
         _render,
         BufferCreateInfo{
-            .label         = "Deferred_Frame_UBO",
-            .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(PBRGBufferFrameData),
+            .label       = "Deferred_Frame_UBO",
+            .usage       = EBufferUsage::UniformBuffer,
+            .size        = sizeof(PBRGBufferFrameData),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
     _lightUBO = IBuffer::create(
         _render,
         BufferCreateInfo{
-            .label         = "Deferred_Light_UBO",
-            .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(LightPassLightData),
+            .label       = "Deferred_Light_UBO",
+            .usage       = EBufferUsage::UniformBuffer,
+            .size        = sizeof(LightPassLightData),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 

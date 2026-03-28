@@ -112,6 +112,9 @@ class OpenGLCommandBuffer : public ICommandBuffer
         const void      *data) override;
     void copyBuffer(IBuffer *src, IBuffer *dst, uint64_t size,
                     uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
+    void copyImage(IImage *srcImage, EImageLayout::T srcImageLayout,
+                   IImage *dstImage, EImageLayout::T dstImageLayout,
+                   const std::vector<ImageCopy> &regions) override;
     void beginRendering(const RenderingInfo &info) override;
     void endRendering(const RenderingInfo& info) override;
     void transitionImageLayout(

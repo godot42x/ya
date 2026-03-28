@@ -146,6 +146,7 @@ struct DeferredRenderPipeline
     stdptr<SimpleMaterialSystem> _simpleMaterialSystem; // Forward overlay (debug vis, direction cones)
     PostProcessStage             _postProcessStage;
     Texture*                     viewportTexture    = nullptr;
+    bool                         _bViewportPassOpen = false;
     bool                         _bReverseViewportY = true;
 
     // ── Debug views ───────────────────────────────────────────────────
@@ -155,7 +156,7 @@ struct DeferredRenderPipeline
 
     // ── Frame state ───────────────────────────────────────────────────
     RenderingInfo            _viewportRI{};
-    RenderingInfo::ImageSpec _sharedDepthSpec{};
+    RenderingInfo::ImageSpec _viewportDepthSpec{};
     FrameContext             _lastTickCtx{};
     TickDesc                 _lastTickDesc{};
 
@@ -167,6 +168,7 @@ struct DeferredRenderPipeline
     void shutdown();
     void renderGUI();
     void endViewportPass(ICommandBuffer* cmdBuf);
+    bool hasOpenViewportPass() const { return _bViewportPassOpen; }
     void onViewportResized(Rect2D rect);
 
     Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
@@ -199,6 +201,7 @@ struct DeferredRenderPipeline
     // ── Orchestration (stages in render order) ──
     void updateUBOs(const TickDesc& desc, Scene* scene);
     void executeGBufferPass(const TickDesc& desc, Scene* scene);
+    void copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
 
     // Viewport pass stages (share one beginRendering / endRendering)
     void beginViewportRendering(const TickDesc& desc);

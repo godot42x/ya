@@ -40,35 +40,36 @@ struct EditorViewportContext
     bool     bPostprocessingEnabled   = false;
     Texture* postprocessOutputTexture = nullptr;
 
-    // Shadow mapping
-    bool        bShadowMappingEnabled    = false;
-    IImageView* shadowDirectionalDepthIV = nullptr;
-    // Point light shadow: indexed [pointLightIndex][faceIndex]
-    // Caller provides a lambda to avoid large fixed-size arrays
-    std::function<IImageView*(uint32_t /*pointLightIndex*/, uint32_t /*faceIndex*/)> getShadowPointFaceDepthIV;
-
-    struct DepthDebugSpec
-    {
-        std::string             label;
-        IImageView*             defaultView = nullptr;
-        std::shared_ptr<IImage> image;
-        Extent2D                extent{};
-    };
-
-    std::vector<DepthDebugSpec> depthDebugSlots;
-
-
-    struct GBufferSlot
+    struct ImageSlot
     {
         std::string             label;
         IImageView*             defaultView = nullptr; // identity view from Texture
         std::shared_ptr<IImage> image;                 // for createImageView()
+        EImageAspect::T         aspectFlags = EImageAspect::Color;
+        glm::vec4               tint        = glm::vec4(1.0);
     };
 
-    struct DeferredSpec
+    struct DebugSpec
     {
-        std::vector<GBufferSlot> slots;
-    } deferredSpec;
+        std::vector<ImageSlot> slots;
+
+        enum class EGroupType
+        {
+            Generic,
+            CubeMapFaces,
+        };
+
+        struct Group
+        {
+            std::string label;
+            EGroupType  type       = EGroupType::Generic;
+            uint32_t    beginIndex = 0;
+            uint32_t    slotCount  = 0;
+            uint32_t    groupSize  = 1;
+        };
+
+        std::vector<Group> groups;
+    } debugSpec;
 };
 
 struct EditorLayer
@@ -78,10 +79,10 @@ struct EditorLayer
     std::vector<Entity*> _selections;
 
     // Editor panels
-    SceneHierarchyPanel  _sceneHierarchyPanel;
-    DetailsView          _detailsView;
-    ContentBrowserPanel  _contentBrowserPanel;
-    AssetInspectorPanel  _assetInspectorPanel;
+    SceneHierarchyPanel _sceneHierarchyPanel;
+    DetailsView         _detailsView;
+    ContentBrowserPanel _contentBrowserPanel;
+    AssetInspectorPanel _assetInspectorPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -134,14 +135,21 @@ struct EditorLayer
     EditorViewportContext _viewportCtx;
 
     // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
-    struct GbufferSlotState
+    struct ImageSlotState
     {
-        std::string                  configKey;
-        std::array<bool, 4>          channelEnabled = {true, true, true, true};
+        std::string                 configKey;
+        std::array<bool, 4>         channelEnabled = {true, true, true, true};
         std::shared_ptr<IImageView> maskedView;
-        IImageView*                  lastBase = nullptr;
+        IImageView*                 lastBase = nullptr;
     };
-    std::vector<GbufferSlotState> _deferredSlotStates;
+    std::vector<ImageSlotState> _debugImageSlotStates;
+
+    struct DebugGroupState
+    {
+        std::string      configKey;
+        std::vector<int> selectedSlots;
+    };
+    std::vector<DebugGroupState> _debugGroupStates;
 
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
@@ -277,12 +285,12 @@ struct EditorLayer
 
     // --
     void debugWindow();
-    void debugForwardWindow(const ImVec2& panelSize);
-    void debugDeferredWindow(const ImVec2& panelSize);
-    void syncDeferredSlotState(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state);
-    bool renderDeferredSlotMaskControls(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state);
-    void updateDeferredSlotImageView(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, bool bForceRefresh = false);
-    void renderDeferredSlotImage(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, float width, float height, Sampler* sampler);
+    void renderDebugImageGroups(const ImVec2& panelSize);
+    void renderDebugImageSlots(const ImVec2& panelSize);
+    void syncDebugSlotState(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
+    bool renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
+    void updateDebugSlotImageView(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, bool bForceRefresh = false);
+    void renderDebugSlotImage(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
 
     // Helpers
     void setupDockspace();

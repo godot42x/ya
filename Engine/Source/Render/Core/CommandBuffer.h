@@ -431,6 +431,21 @@ struct ICommandBuffer
         EImageLayout::T                     dstImageLayout,
         const std::vector<BufferImageCopy>& regions) = 0;
 
+    /**
+     * @brief Copy data from one image to another
+     * @param srcImage Source image
+     * @param srcImageLayout Current layout of source image (must be TransferSrc)
+     * @param dstImage Destination image
+     * @param dstImageLayout Current layout of destination image (must be TransferDst)
+     * @param regions Copy regions
+     */
+    virtual void copyImage(
+        IImage*                      srcImage,
+        EImageLayout::T              srcImageLayout,
+        IImage*                      dstImage,
+        EImageLayout::T              dstImageLayout,
+        const std::vector<ImageCopy>& regions) = 0;
+
     virtual void beginRendering(const RenderingInfo& info) = 0;
 
     /**

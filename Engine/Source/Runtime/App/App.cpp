@@ -126,7 +126,7 @@ void App::init(AppDesc ci)
         ConfigManager::get().openDocument(
             "engine",
             "Engine/Config/Engine.jsonc",
-            ConfigManager::OpenDocumentOptions{
+            Config::OpenDocumentOptions{
                 .bPersistIfMissing = false,
                 .bReadOnly         = true,
             });

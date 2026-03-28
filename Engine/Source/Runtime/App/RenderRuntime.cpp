@@ -74,6 +74,11 @@ void RenderRuntime::init(const InitDesc& desc)
 
     currentRenderAPI = ERenderAPI::Vulkan;
 
+    _viewportRect = Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = {static_cast<float>(ci.width), static_cast<float>(ci.height)},
+    };
+
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
                                .withShaderStoragePath("Engine/Shader/GLSL")
@@ -359,6 +364,7 @@ void RenderRuntime::resetSkyboxPool()
     }
 }
 
+// MARK: render
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()
@@ -366,7 +372,16 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     applyPendingShadingModelSwitch();
 
     if (_viewportRect.extent.x <= 0 || _viewportRect.extent.y <= 0) {
-        _viewportRect = input.viewportRect;
+        if (input.viewportRect.extent.x > 0 && input.viewportRect.extent.y > 0) {
+            onViewportResized(input.viewportRect);
+        }
+        else {
+            auto swapchainExtent = _render->getSwapchain()->getExtent();
+            onViewportResized(Rect2D{
+                .pos    = {0.0f, 0.0f},
+                .extent = {static_cast<float>(swapchainExtent.width), static_cast<float>(swapchainExtent.height)},
+            });
+        }
     }
     _viewportFrameBufferScale = input.viewportFrameBufferScale;
 
@@ -422,7 +437,11 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         });
     }
 
-    {
+    const bool bViewportPassOpen = (_shadingModel == EShadingModel::Forward)
+                                     ? (_forwardPipeline && _forwardPipeline->hasOpenViewportPass())
+                                     : (_deferredPipeline && _deferredPipeline->hasOpenViewportPass());
+
+    if (bViewportPassOpen) {
         YA_PROFILE_SCOPE("Render2D")
 
         const Extent2D viewportExtent = (_shadingModel == EShadingModel::Forward)
@@ -500,13 +519,15 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         Render2D::end();
     }
 
-    if (_shadingModel == EShadingModel::Forward) {
-        _forwardPipeline->endViewportPass(cmdBuf.get());
-        YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
-    }
-    else {
-        _deferredPipeline->endViewportPass(cmdBuf.get());
-        YA_CORE_ASSERT(_deferredPipeline->viewportTexture, "Failed to get deferred viewport texture");
+    if (bViewportPassOpen) {
+        if (_shadingModel == EShadingModel::Forward) {
+            _forwardPipeline->endViewportPass(cmdBuf.get());
+            YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+        }
+        else {
+            _deferredPipeline->endViewportPass(cmdBuf.get());
+            YA_CORE_ASSERT(_deferredPipeline->viewportTexture, "Failed to get deferred viewport texture");
+        }
     }
 
     if (input.editorLayer) {
@@ -514,28 +535,57 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         ctx.bForwardPipeline         = (_shadingModel == EShadingModel::Forward);
         ctx.bPostprocessingEnabled   = isPostprocessingEnabled();
         ctx.postprocessOutputTexture = getPostprocessOutputTexture();
+        ctx.viewportTexture          = (_shadingModel == EShadingModel::Forward)
+                                         ? (_forwardPipeline ? _forwardPipeline->viewportTexture : nullptr)
+                                         : (_deferredPipeline ? _deferredPipeline->viewportTexture : nullptr);
 
+        // TODO: cache each frame's debug, change if modified
         if (_shadingModel == EShadingModel::Forward) {
-            ctx.viewportTexture           = _forwardPipeline->viewportTexture;
-            ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
-            ctx.shadowDirectionalDepthIV  = getShadowDirectionalDepthIV();
-            ctx.getShadowPointFaceDepthIV = [this](uint32_t pointLightIndex, uint32_t faceIndex) -> IImageView* {
-                return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
-            };
+            if (isShadowMappingEnabled()) {
+                if (auto* directionalDepth = getShadowDirectionalDepthIV()) {
+                    ctx.debugSpec.slots.push_back({
+                        .label       = "ShadowDirectionalDepth",
+                        .defaultView = directionalDepth,
+                    });
+                }
+
+                EditorViewportContext::DebugSpec::Group pointShadowGroup{
+                    .label      = "Point Shadow Cubemap",
+                    .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                    .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                    .groupSize  = 6,
+                };
+                for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
+                    for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+                        if (auto* faceIV = getShadowPointFaceDepthIV(pointLightIndex, faceIndex))
+                        {
+                            auto slot = EditorViewportContext::ImageSlot{
+                                .label       = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
+                                .defaultView = faceIV,
+                                .aspectFlags = EImageAspect::Depth,
+                            };
+                            ctx.debugSpec.slots.push_back(std::move(slot));
+                        }
+                    }
+                }
+                pointShadowGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - pointShadowGroup.beginIndex;
+                if (pointShadowGroup.slotCount >= pointShadowGroup.groupSize) {
+                    ctx.debugSpec.groups.push_back(std::move(pointShadowGroup));
+                }
+            }
 
             if (auto* viewportDepth = _forwardPipeline->viewportRT->getCurFrameBuffer()->getDepthTexture()) {
-                ctx.depthDebugSlots.push_back({
+                ctx.debugSpec.slots.push_back({
                     .label       = "ViewportDepth",
                     .defaultView = viewportDepth->getImageView(),
                     .image       = viewportDepth->getImageShared(),
-                    .extent      = viewportDepth->getExtent(),
+                    .aspectFlags = EImageAspect::Depth,
                 });
             }
         }
         else {
-            ctx.viewportTexture    = _deferredPipeline->viewportTexture;
-            auto& fb               = *_deferredPipeline->_gBufferRT->getCurFrameBuffer();
-            ctx.deferredSpec.slots = {
+            auto& fb            = *_deferredPipeline->_gBufferRT->getCurFrameBuffer();
+            ctx.debugSpec.slots = {
                 {
                     .label       = "Position",
                     .defaultView = fb.getColorTexture(0)->getImageView(),
@@ -551,16 +601,29 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                     .defaultView = fb.getColorTexture(2)->getImageView(),
                     .image       = fb.getColorTexture(2)->getImageShared(),
                 },
+                {
+                    .label       = "Depth",
+                    .defaultView = fb.getDepthTexture()->getImageView(),
+                    .image       = fb.getDepthTexture()->getImageShared(),
+                    .aspectFlags = EImageAspect::Depth,
+                    .tint        = {1, 0, 0, 1}, // only red mask
+                },
             };
 
-            if (auto* gbufferDepth = fb.getDepthTexture()) {
-                ctx.depthDebugSlots.push_back({
-                    .label       = "GBufferDepth",
-                    .defaultView = gbufferDepth->getImageView(),
-                    .image       = gbufferDepth->getImageShared(),
-                    .extent      = gbufferDepth->getExtent(),
-                });
-            }
+            auto viewPortRT = _deferredPipeline->_viewportRT->getCurFrameBuffer();
+            ctx.debugSpec.slots.push_back({
+                .label       = "ViewPortColor0",
+                .defaultView = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageView() : nullptr,
+                .image       = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageShared() : nullptr,
+            });
+            ctx.debugSpec.slots.push_back({
+                .label       = "ViewportDepth",
+                .defaultView = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageView() : nullptr,
+                .image       = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageShared() : nullptr,
+                .aspectFlags = EImageAspect::Depth,
+                .tint        = {1, 0, 0, 1}, // only red mask
+
+            });
         }
         input.editorLayer->setViewportContext(ctx);
     }
@@ -797,6 +860,12 @@ void RenderRuntime::applyPendingShadingModelSwitch()
         return;
     }
     YA_PROFILE_FUNCTION_LOG();
+
+    if ((_forwardPipeline && _forwardPipeline->hasOpenViewportPass()) ||
+        (_deferredPipeline && _deferredPipeline->hasOpenViewportPass())) {
+        YA_CORE_WARN("Skipping shading-model switch while a viewport pass is still open");
+        return;
+    }
 
     YA_CORE_INFO("Switching shading model: {} -> {}",
                  _shadingModel == EShadingModel::Forward ? "Forward" : "Deferred",

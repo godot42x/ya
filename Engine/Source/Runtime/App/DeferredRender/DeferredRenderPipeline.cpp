@@ -28,6 +28,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     shutdown();
 
     _render = desc.render;
+    _bViewportPassOpen = false;
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
     Extent2D extent{
@@ -110,6 +111,7 @@ void DeferredRenderPipeline::shutdown()
 
 void DeferredRenderPipeline::shutdownAll()
 {
+    _bViewportPassOpen = false;
     _postProcessStage.shutdown();
     viewportTexture = nullptr;
 
@@ -197,6 +199,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     prepareUnlit(scene);
     updateUBOs(desc, scene);
     executeGBufferPass(desc, scene);
+    copyGBufferDepthToViewport(desc.cmdBuf);
 
     // Viewport pass (all stages share one render pass)
     beginViewportRendering(desc);
@@ -290,8 +293,76 @@ void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, Scene* sce
     cmdBuf->endRendering(gBufferRI);
 }
 
+void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
+{
+    auto* gbufferDepth  = _gBufferRT ? _gBufferRT->getCurFrameBuffer()->getDepthTexture() : nullptr;
+    auto* viewportDepth = _viewportRT ? _viewportRT->getCurFrameBuffer()->getDepthTexture() : nullptr;
+    if (!cmdBuf || !gbufferDepth || !viewportDepth) {
+        return;
+    }
+
+    auto* srcImage = gbufferDepth->getImage();
+    auto* dstImage = viewportDepth->getImage();
+    if (!srcImage || !dstImage) {
+        return;
+    }
+
+    ImageSubresourceRange depthRange{
+        .aspectMask     = EImageAspect::Depth,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+
+    cmdBuf->debugBeginLabel("Deferred Depth Copy");
+    cmdBuf->transitionImageLayoutAuto(srcImage,
+                                      //   EImageLayout::ShaderReadOnlyOptimal,
+                                      EImageLayout::TransferSrc,
+                                      &depthRange);
+    cmdBuf->transitionImageLayoutAuto(dstImage,
+                                      //   EImageLayout::ShaderReadOnlyOptimal,
+                                      EImageLayout::TransferDst,
+                                      &depthRange);
+
+    cmdBuf->copyImage(
+        srcImage,
+        EImageLayout::TransferSrc,
+        dstImage,
+        EImageLayout::TransferDst,
+        {
+            ImageCopy{
+                .srcSubresource = ImageSubresourceLayers{
+                    .aspectMask     = EImageAspect::Depth,
+                    .mipLevel       = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount     = 1,
+                },
+                .dstSubresource = ImageSubresourceLayers{
+                    .aspectMask     = EImageAspect::Depth,
+                    .mipLevel       = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount     = 1,
+                },
+                .extentWidth  = _gBufferRT->getExtent().width,
+                .extentHeight = _gBufferRT->getExtent().height,
+                .extentDepth  = 1,
+            },
+        });
+
+    cmdBuf->transitionImageLayoutAuto(srcImage,
+                                      //   EImageLayout::TransferSrc,
+                                      EImageLayout::ShaderReadOnlyOptimal,
+                                      &depthRange);
+    cmdBuf->transitionImageLayoutAuto(dstImage,
+                                      //   EImageLayout::TransferDst,
+                                      EImageLayout::ShaderReadOnlyOptimal,
+                                      &depthRange);
+    cmdBuf->debugEndLabel();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
-// Viewport Pass — stages sharing one render pass (viewport RT + GBuffer depth)
+// Viewport Pass — stages sharing one render pass (viewport RT + viewport depth)
 // Order: Light → Skybox → ForwardOverlay → (future) Transparent
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -299,9 +370,8 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
 {
     auto cmdBuf = desc.cmdBuf;
 
-    _sharedDepthSpec = RenderingInfo::ImageSpec{
-        .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
-        // reuse gbuffer depth buffer, and do not clear it
+    _viewportDepthSpec = RenderingInfo::ImageSpec{
+        .texture       = _viewportRT->getCurFrameBuffer()->getDepthTexture(),
         .loadOp        = EAttachmentLoadOp::Load,
         .storeOp       = EAttachmentStoreOp::Store,
         .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
@@ -312,15 +382,17 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
         .label            = "Viewport Pass",
         .renderArea       = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
         .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 0.0f)},
-        .colorAttachments = {RenderingInfo::ImageSpec{
-            .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
-            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        }},
-        .depthAttachment  = &_sharedDepthSpec,
+        // .colorAttachments = {RenderingInfo::ImageSpec{
+        //     .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
+        //     .initialLayout = EImageLayout::ColorAttachmentOptimal,
+        //     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+        // }},
+        // .depthAttachment  = &_viewportDepthSpec,
+        .renderTarget = _viewportRT.get(),
     };
 
     cmdBuf->beginRendering(_viewportRI);
+    _bViewportPassOpen = true;
 
     const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
     const uint32_t vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
@@ -425,7 +497,12 @@ void DeferredRenderPipeline::renderGUI()
 
 void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 {
+    if (!_bViewportPassOpen) {
+        return;
+    }
+
     cmdBuf->endRendering(_viewportRI);
+    _bViewportPassOpen = false;
 
     auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
     viewportTexture    = _postProcessStage.execute(
