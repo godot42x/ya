@@ -76,6 +76,7 @@ static size_t getFormatPixelSize(EFormat::T format)
     case EFormat::R8G8B8A8_UNORM:
     case EFormat::R8G8B8A8_SRGB:
     case EFormat::B8G8R8A8_UNORM:
+    case EFormat::B8G8R8A8_SNORM:
     case EFormat::B8G8R8A8_SRGB:
     case EFormat::D32_SFLOAT:
     case EFormat::D24_UNORM_S8_UINT:

@@ -9,6 +9,7 @@
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -34,7 +35,6 @@ void ResourceResolveSystem::onUpdate(float dt)
     resolvePendingSkybox(scene);
 
     // Add more component types here as needed:
-    // - PBRMaterialComponent
     // - SkeletalMeshComponent
     // - etc.
 }
@@ -56,6 +56,13 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
     auto& registry = scene->getRegistry();
 
     registry.view<PhongMaterialComponent>().each([&](auto entity, PhongMaterialComponent& materialComponent) {
+        (void)entity;
+        if (materialComponent.needsResolve()) {
+            materialComponent.resolve();
+        }
+    });
+
+    registry.view<PBRMaterialComponent>().each([&](auto entity, PBRMaterialComponent& materialComponent) {
         (void)entity;
         if (materialComponent.needsResolve()) {
             materialComponent.resolve();

@@ -256,8 +256,10 @@ enum T
     R8G8B8A8_UNORM,
     R8G8B8A8_SRGB,
     B8G8R8A8_UNORM,
+    B8G8R8A8_SNORM,
     B8G8R8A8_SRGB,
     R32_SFLOAT,
+    R16G16B16A16_SFLOAT,
     D32_SFLOAT,
     D32_SFLOAT_S8_UINT,
     D24_UNORM_S8_UINT,
@@ -298,7 +300,29 @@ enum T
 
     ENUM_MAX,
 };
-};
+
+inline static bool isSRGB(T format)
+{
+    static const auto sRGBFormats = std::unordered_set<T>{
+        R8G8B8A8_SRGB,
+        B8G8R8A8_SRGB,
+        BC1_RGB_SRGB_BLOCK,
+        BC1_RGBA_SRGB_BLOCK,
+        BC3_SRGB_BLOCK,
+        BC7_SRGB_BLOCK,
+        ASTC_4x4_SRGB_BLOCK,
+        ASTC_5x5_SRGB_BLOCK,
+        ASTC_6x6_SRGB_BLOCK,
+        ASTC_8x8_SRGB_BLOCK,
+        ASTC_10x10_SRGB_BLOCK,
+        ETC2_R8G8B8_SRGB_BLOCK,
+        ETC2_R8G8B8A1_SRGB_BLOCK,
+        ETC2_R8G8B8A8_SRGB_BLOCK,
+    };
+
+    return sRGBFormats.contains(format);
+}
+}; // namespace EFormat
 
 namespace EImageLayout
 {
@@ -1066,7 +1090,8 @@ struct ComponentMapping
     }
 
     // Extract alpha channel as grayscale (A → R,G,B), alpha = 1
-    static ComponentMapping AlphaToGrayscale()    {
+    static ComponentMapping AlphaToGrayscale()
+    {
         return {.r = EComponentSwizzle::A, .g = EComponentSwizzle::A, .b = EComponentSwizzle::A, .a = EComponentSwizzle::One};
     }
 };

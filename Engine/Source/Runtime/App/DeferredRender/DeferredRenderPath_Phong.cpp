@@ -5,10 +5,11 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Render/Material/MaterialFactory.h"
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/TextureLibrary.h"
-#include "Render/Material/MaterialFactory.h"
 #include "Scene/Scene.h"
+
 
 namespace ya
 {
@@ -17,7 +18,7 @@ void DeferredPhongRenderPath::init(DeferredRenderPipeline& pipeline)
 {
     auto* render = pipeline._render;
 
-    auto commonDSLs = IDescriptorSetLayout::create(render, _commonDescriptorSetLayouts);
+    auto commonDSLs             = IDescriptorSetLayout::create(render, _commonDescriptorSetLayouts);
     _frameAndLightDSL           = commonDSLs[0];
     _resourceOrLightTexturesDSL = commonDSLs[1];
     _paramsDSL                  = commonDSLs[2];
@@ -38,20 +39,20 @@ void DeferredPhongRenderPath::init(DeferredRenderPipeline& pipeline)
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Deferred Phong GBuffer Pass",
-            .colorAttachmentFormats = {pipeline.COLOR_FORMAT, pipeline.COLOR_FORMAT, pipeline.COLOR_FORMAT},
+            .colorAttachmentFormats = {pipeline.SIGNED_LINEAR_FORMAT, pipeline.SIGNED_LINEAR_FORMAT, pipeline.LINEAR_FORMAT},
             .depthAttachmentFormat  = pipeline.DEPTH_FORMAT,
         },
         .pipelineLayout = _gBufferPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "DeferredRender/GBufferPass.slang",
-            .bDeriveFromShader = false,
-            .vertexBufferDescs = {
+                .shaderName        = "DeferredRender/GBufferPass.slang",
+                .bDeriveFromShader = false,
+                .vertexBufferDescs = {
                 VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(ya::Vertex),
+                        .slot  = 0,
+                        .pitch = sizeof(ya::Vertex),
                 },
             },
-            .vertexAttributes = _commonVertexAttributes,
+                .vertexAttributes = _commonVertexAttributes,
         },
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
@@ -142,20 +143,20 @@ void DeferredPhongRenderPath::init(DeferredRenderPipeline& pipeline)
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Deferred Phong Light Pass",
-            .colorAttachmentFormats = {pipeline.COLOR_FORMAT},
+            .colorAttachmentFormats = {pipeline.LINEAR_FORMAT},
             .depthAttachmentFormat  = pipeline.DEPTH_FORMAT,
         },
         .pipelineLayout = _lightPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "DeferredRender/LightPass.slang",
-            .bDeriveFromShader = false,
-            .vertexBufferDescs = {
+                .shaderName        = "DeferredRender/LightPass.slang",
+                .bDeriveFromShader = false,
+                .vertexBufferDescs = {
                 VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(ya::Vertex),
+                        .slot  = 0,
+                        .pitch = sizeof(ya::Vertex),
                 },
             },
-            .vertexAttributes = _commonVertexAttributes,
+                .vertexAttributes = _commonVertexAttributes,
         },
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
@@ -294,7 +295,7 @@ void DeferredPhongRenderPath::tick(DeferredRenderPipeline& pipeline, const Defer
             material,
             force,
             [](IBuffer* ubo, PhongMaterial* mat) {
-                ParamsData   params{};
+                ParamsData  params{};
                 const auto& src = mat->getParams().textureParams;
                 for (int i = 0; i < PhongMaterial::EResource::Count; ++i) {
                     params.textures[i].bEnable     = src[i].bEnable;
@@ -319,9 +320,9 @@ void DeferredPhongRenderPath::tick(DeferredRenderPipeline& pipeline, const Defer
          scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
     {
         (void)et;
-        _lightPassLightData.dirLight.dir       = tc.getForward();
-        _lightPassLightData.dirLight.color     = dlc._color;
-        _lightPassLightData.dirLight.ambient   = dlc._ambient;
+        _lightPassLightData.dirLight.dir     = tc.getForward();
+        _lightPassLightData.dirLight.color   = dlc._color;
+        _lightPassLightData.dirLight.ambient = dlc._ambient;
     }
 
     _lightPassFrameData.viewPos    = desc.cameraPos;
@@ -462,20 +463,20 @@ void DeferredPhongRenderPath::tick(DeferredRenderPipeline& pipeline, const Defer
         skyboxCtx.projection = desc.projection;
         skyboxCtx.cameraPos  = desc.cameraPos;
         skyboxCtx.extent     = Extent2D{
-            .width  = viewportWidth,
-            .height = viewportHeight,
+                .width  = viewportWidth,
+                .height = viewportHeight,
         };
         pipeline._skyboxSystem->tick(desc.cmdBuf, desc.dt, &skyboxCtx);
         desc.cmdBuf->debugEndLabel();
     }
 
-    pipeline._viewportRI = lightPassRI;
+    pipeline._viewportRI             = lightPassRI;
     pipeline._lastTickCtx.view       = desc.view;
     pipeline._lastTickCtx.projection = desc.projection;
     pipeline._lastTickCtx.cameraPos  = desc.cameraPos;
     pipeline._lastTickCtx.extent     = Extent2D{
-        .width  = viewportWidth,
-        .height = viewportHeight,
+            .width  = viewportWidth,
+            .height = viewportHeight,
     };
     pipeline._lastTickDesc = desc;
 }

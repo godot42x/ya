@@ -20,33 +20,33 @@ struct PhongScenePassResources;
 
 struct ForwardRenderPipeline
 {
-    static const auto COLOR_FORMAT                       = EFormat::R8G8B8A8_UNORM;
+    static const auto LINEAR_FORMAT                       = EFormat::R8G8B8A8_UNORM;
     static const auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
     static const auto SHADOW_MAPPING_DEPTH_BUFFER_FORMAT = EFormat::D32_SFLOAT;
 
     struct InitDesc
     {
-        IRender*          render         = nullptr;
-        int               windowW        = 0;
-        int               windowH        = 0;
+        IRender* render  = nullptr;
+        int      windowW = 0;
+        int      windowH = 0;
     };
 
     struct TickDesc
     {
-        ICommandBuffer*                cmdBuf                    = nullptr;
-        float                          dt                        = 0.0f;
-        glm::mat4                      view                      = glm::mat4(1.0f);
-        glm::mat4                      projection                = glm::mat4(1.0f);
-        glm::vec3                      cameraPos                 = glm::vec3(0.0f);
-        Rect2D                         viewportRect              = {};
-        float                          viewportFrameBufferScale  = 1.0f;
-        int                            appMode                   = 0;
-        std::vector<glm::vec2>*       clicked                   = nullptr;
+        ICommandBuffer*         cmdBuf                   = nullptr;
+        float                   dt                       = 0.0f;
+        glm::mat4               view                     = glm::mat4(1.0f);
+        glm::mat4               projection               = glm::mat4(1.0f);
+        glm::vec3               cameraPos                = glm::vec3(0.0f);
+        Rect2D                  viewportRect             = {};
+        float                   viewportFrameBufferScale = 1.0f;
+        int                     appMode                  = 0;
+        std::vector<glm::vec2>* clicked                  = nullptr;
     };
 
     Deleter _deleter;
 
-    IRender*         _render         = nullptr;
+    IRender* _render = nullptr;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
@@ -60,25 +60,25 @@ struct ForwardRenderPipeline
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
     stdptr<Sampler>              shadowSampler       = nullptr;
 
-    stdptr<IRenderSystem> simpleMaterialSystem      = nullptr;
-    stdptr<IRenderSystem> unlitMaterialSystem       = nullptr;
-    stdptr<IRenderSystem> phongMaterialSystem       = nullptr;
-    stdptr<IRenderSystem> debugRenderSystem         = nullptr;
-    stdptr<IRenderSystem> skyboxSystem              = nullptr;
-    stdptr<IRenderSystem> shadowMappingSystem       = nullptr;
+    stdptr<IRenderSystem> simpleMaterialSystem = nullptr;
+    stdptr<IRenderSystem> unlitMaterialSystem  = nullptr;
+    stdptr<IRenderSystem> phongMaterialSystem  = nullptr;
+    stdptr<IRenderSystem> debugRenderSystem    = nullptr;
+    stdptr<IRenderSystem> skyboxSystem         = nullptr;
+    stdptr<IRenderSystem> shadowMappingSystem  = nullptr;
 
     // Shared post-processing stage (reusable between forward & deferred)
     PostProcessStage _postProcessStage;
 
-    stdptr<IBuffer> _phongSharedLightUBO = nullptr;
+    stdptr<IBuffer>                 _phongSharedLightUBO        = nullptr;
     stdptr<PhongScenePassResources> _phongViewportPassResources = nullptr;
 
     bool bMSAA = false;
 
-    bool                  bShadowMapping            = true;
-    stdptr<IRenderTarget> depthRT                   = nullptr;
-    stdptr<IRenderTarget> pointLightDepthRT         = nullptr;
-    stdptr<IImageView>    shadowDirectionalDepthIV  = nullptr;
+    bool                  bShadowMapping           = true;
+    stdptr<IRenderTarget> depthRT                  = nullptr;
+    stdptr<IRenderTarget> pointLightDepthRT        = nullptr;
+    stdptr<IImageView>    shadowDirectionalDepthIV = nullptr;
 
     std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                shadowPointCubeIVs{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> shadowPointFaceIVs{};

@@ -15,8 +15,8 @@
 #include "Render/Shader.h"
 #include "Scene/SceneManager.h"
 #include <array>
-#include <memory>
 #include <glm/glm.hpp>
+#include <memory>
 
 
 
@@ -137,7 +137,7 @@ struct App
     Deleter _deleter;
 
     // Core subsystems
-    SceneManager* _sceneManager = nullptr;
+    SceneManager*                  _sceneManager = nullptr;
     std::unique_ptr<RenderRuntime> _renderRuntime;
 
     // Runtime state
@@ -171,8 +171,8 @@ struct App
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    static const auto COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
-    static const auto DEPTH_FORMAT = EFormat::D32_SFLOAT_S8_UINT;
+    static const auto LINEAR_FORMAT    = EFormat::R8G8B8A8_UNORM;
+    static const auto SWAPCHAIN_FORMAT = LINEAR_FORMAT;
 
     std::vector<glm::vec2> clicked;
 
@@ -186,7 +186,8 @@ struct App
 
     MulticastDelegate<void()> onScenePostInit;
 
-    LuaScriptingSystem*      _luaScriptingSystem;
+    LuaScriptingSystem* _luaScriptingSystem;
+
   public:
     App()                      = default;
     App(const App&)            = delete;

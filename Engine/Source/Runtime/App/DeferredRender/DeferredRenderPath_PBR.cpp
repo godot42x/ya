@@ -2,8 +2,9 @@
 
 #include "DeferredRenderPipeline.h"
 #include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Resource/PrimitiveMeshCache.h"
@@ -17,10 +18,38 @@ void DeferredPBRRenderPath::init(DeferredRenderPipeline& pipeline)
 {
     auto* render = pipeline._render;
 
-    auto commonDSLs             = IDescriptorSetLayout::create(render, _commonDescriptorSetLayouts);
-    _frameAndLightDSL           = commonDSLs[0];
-    _resourceOrLightTexturesDSL = commonDSLs[1];
-    _paramsDSL                  = commonDSLs[2];
+    auto gBufferDSLs            = IDescriptorSetLayout::create(render, _gBufferDescriptorSetLayouts);
+    _frameAndLightDSL           = gBufferDSLs[0];
+    _resourceOrLightTexturesDSL = gBufferDSLs[1];
+    _paramsDSL                  = gBufferDSLs[2];
+
+    // Separate DSL for light pass — only 3 GBuffer textures
+    _lightGBufferDSL = IDescriptorSetLayout::create(
+        render,
+        {DescriptorSetLayoutDesc{
+            .label    = "Deferred_PBR_LightPass_GBuffer_DSL",
+            .set      = 1,
+            .bindings = {
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 1,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+                DescriptorSetLayoutBinding{
+                    .binding         = 2,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+            },
+        }});
 
     _gBufferPPL = IPipelineLayout::create(
         render,
@@ -32,18 +61,18 @@ void DeferredPBRRenderPath::init(DeferredRenderPipeline& pipeline)
                 .stageFlags = EShaderStage::Vertex,
             },
         },
-        commonDSLs);
+        gBufferDSLs);
 
     GraphicsPipelineCreateInfo gBufferPipelineCI{
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Deferred PBR GBuffer Pass",
-            .colorAttachmentFormats = {pipeline.COLOR_FORMAT, pipeline.COLOR_FORMAT, pipeline.COLOR_FORMAT},
+            .colorAttachmentFormats = {pipeline.SIGNED_LINEAR_FORMAT, pipeline.SIGNED_LINEAR_FORMAT, pipeline.LINEAR_FORMAT},
             .depthAttachmentFormat  = pipeline.DEPTH_FORMAT,
         },
         .pipelineLayout = _gBufferPPL.get(),
         .shaderDesc     = ShaderDesc{
-                .shaderName        = "DeferredRender/GBufferPass.slang",
+                .shaderName        = "DeferredRender/PBR_GBufferPass.slang",
                 .bDeriveFromShader = false,
                 .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -136,18 +165,18 @@ void DeferredPBRRenderPath::init(DeferredRenderPipeline& pipeline)
                 .stageFlags = EShaderStage::Vertex,
             },
         },
-        commonDSLs);
+        {_frameAndLightDSL, _lightGBufferDSL}); // Light pass only needs set 0 + set 1
 
     GraphicsPipelineCreateInfo lightPipelineCI{
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                  = "Deferred PBR Light Pass",
-            .colorAttachmentFormats = {pipeline.COLOR_FORMAT},
+            .colorAttachmentFormats = {pipeline.LINEAR_FORMAT},
             .depthAttachmentFormat  = pipeline.DEPTH_FORMAT,
         },
         .pipelineLayout = _lightPPL.get(),
         .shaderDesc     = ShaderDesc{
-                .shaderName        = "DeferredRender/LightPass.slang",
+                .shaderName        = "DeferredRender/PBR_LightPass.slang",
                 .bDeriveFromShader = false,
                 .vertexBufferDescs = {
                 VertexBufferDescription{
@@ -207,20 +236,20 @@ void DeferredPBRRenderPath::init(DeferredRenderPipeline& pipeline)
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 3,
+                    .descriptorCount = 3, // 3 GBuffer textures for light pass
                 },
             },
         });
 
     _frameAndLightDS = _deferredDSP->allocateDescriptorSets(_frameAndLightDSL);
-    _lightTexturesDS = _deferredDSP->allocateDescriptorSets(_resourceOrLightTexturesDSL);
+    _lightTexturesDS = _deferredDSP->allocateDescriptorSets(_lightGBufferDSL);
 
     _frameUBO = IBuffer::create(
         render,
         BufferCreateInfo{
             .label         = "Deferred_PBR_Frame_UBO",
             .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(DeferredRenderPipeline::LightPassFrameData),
+            .size          = sizeof(GBufferPassFrameData),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
@@ -229,11 +258,11 @@ void DeferredPBRRenderPath::init(DeferredRenderPipeline& pipeline)
         BufferCreateInfo{
             .label         = "Deferred_PBR_Light_UBO",
             .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(DeferredRenderPipeline::LightPassLightData),
+            .size          = sizeof(LightPassLightData),
             .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
         });
 
-    _frameUBO->writeData(&_lightPassFrameData, sizeof(_lightPassFrameData), 0);
+    _frameUBO->writeData(&_gBufferPassFrameData, sizeof(_gBufferPassFrameData), 0);
     _frameUBO->flush();
     _lightUBO->writeData(&_lightPassLightData, sizeof(_lightPassLightData), 0);
     _lightUBO->flush();
@@ -255,6 +284,7 @@ void DeferredPBRRenderPath::shutdown(DeferredRenderPipeline& pipeline)
     _gBufferPipeline.reset();
     _gBufferPPL.reset();
     _paramsDSL.reset();
+    _lightGBufferDSL.reset();
     _resourceOrLightTexturesDSL.reset();
     _frameAndLightDSL.reset();
 }
@@ -270,9 +300,9 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
 {
     YA_CORE_ASSERT(scene, "DeferredPBRRenderPath requires a valid scene");
 
-    auto drawListView = scene->getRegistry().view<MeshComponent, TransformComponent, PhongMaterialComponent>();
+    auto drawListView = scene->getRegistry().view<MeshComponent, TransformComponent, PBRMaterialComponent>();
 
-    uint32_t         materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
+    uint32_t         materialCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PBRMaterial>());
     bool             force         = _matPool.ensureCapacity(materialCount);
     std::vector<int> preparedMaterial(materialCount, 0);
 
@@ -281,7 +311,7 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
         (void)mc;
         (void)tc;
 
-        PhongMaterial* material = pmc.getMaterial();
+        PBRMaterial* material = pmc.getMaterial();
         if (!material || material->getIndex() < 0) {
             continue;
         }
@@ -293,21 +323,18 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
         _matPool.flushDirty(
             material,
             force,
-            [](IBuffer* ubo, PhongMaterial* mat) {
-                ParamsData  params{};
-                const auto& src = mat->getParams().textureParams;
-                for (int i = 0; i < PhongMaterial::EResource::Count; ++i) {
-                    params.textures[i].bEnable     = src[i].bEnable;
-                    params.textures[i].uvTransform = src[i].uvTransform;
-                }
-                ubo->writeData(&params, sizeof(ParamsData), 0);
+            [](IBuffer* ubo, PBRMaterial* mat) {
+                const auto& params = mat->getParams();
+                ubo->writeData(&params, sizeof(ParamUBO), 0);
             },
-            [&pipeline](DescriptorSetHandle ds, PhongMaterial* mat) {
+            [&pipeline](DescriptorSetHandle ds, PBRMaterial* mat) {
                 pipeline._render->getDescriptorHelper()->updateDescriptorSets(
                     {
-                        IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
-                        IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
-                        IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 3, mat->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 4, mat->getTextureBinding(PBRMaterial::EResource::AOTexture)),
                     },
                     {});
             });
@@ -315,6 +342,7 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
         preparedMaterial[idx] = 1;
     }
 
+    _lightPassLightData.hasDirLight = false;
     for (const auto& [et, dlc, tc] :
          scene->getRegistry().view<DirectionalLightComponent, TransformComponent>().each())
     {
@@ -322,12 +350,25 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
         _lightPassLightData.dirLight.dir     = tc.getForward();
         _lightPassLightData.dirLight.color   = dlc._color;
         _lightPassLightData.dirLight.ambient = dlc._ambient;
+        _lightPassLightData.hasDirLight      = true;
     }
+    int pointLightIndex = 0;
+    for (const auto& [et, plc, tc] :
+         scene->getRegistry().view<PointLightComponent, TransformComponent>().each())
+    {
+        _lightPassLightData.pointLights[pointLightIndex] = {
+            .pos   = tc.getPosition(),
+            .color = plc.color,
+            .intensity = plc.intensity,
+        };
+        ++pointLightIndex;
+    }
+    _lightPassLightData.numPointLight = pointLightIndex;
 
-    _lightPassFrameData.viewPos    = desc.cameraPos;
-    _lightPassFrameData.projMatrix = desc.projection;
-    _lightPassFrameData.viewMatrix = desc.view;
-    _frameUBO->writeData(&_lightPassFrameData, sizeof(_lightPassFrameData), 0);
+    _gBufferPassFrameData.viewPos    = desc.cameraPos;
+    _gBufferPassFrameData.projMatrix = desc.projection;
+    _gBufferPassFrameData.viewMatrix = desc.view;
+    _frameUBO->writeData(&_gBufferPassFrameData, sizeof(_gBufferPassFrameData), 0);
     _frameUBO->flush();
 
     _lightPassLightData.dirLight.shininess = 32;
@@ -369,7 +410,7 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
 
     for (const auto& [entity, mc, tc, pmc] : drawListView.each()) {
         (void)entity;
-        PhongMaterial* material = pmc.getMaterial();
+        PBRMaterial* material = pmc.getMaterial();
         if (!material || material->getIndex() < 0) {
             continue;
         }
@@ -485,7 +526,7 @@ void DeferredPBRRenderPath::tick(DeferredRenderPipeline& pipeline, const Deferre
 void DeferredPBRRenderPath::renderGUI(DeferredRenderPipeline& pipeline)
 {
     (void)pipeline;
-    ImGui::TextUnformatted("PBR path scaffold currently mirrors the Phong deferred path.");
+    ImGui::TextUnformatted("Deferred PBR Render Path (Metallic-Roughness)");
     if (_gBufferPipeline) {
         _gBufferPipeline->renderGUI();
     }

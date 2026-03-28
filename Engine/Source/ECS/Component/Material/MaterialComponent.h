@@ -11,6 +11,13 @@
 namespace ya
 {
 
+enum class EMaterialResolveState : uint8_t
+{
+    Dirty = 0,
+    Resolving,
+    Ready,
+    Failed,
+};
 
 /**
  * @brief Template material component base
@@ -68,7 +75,9 @@ struct MaterialComponent : public IComponent
     void releaseMaterial()
     {
         if (_material && !_bSharedMaterial) {
-            MaterialFactory::get()->destroyMaterial(_material);
+            if (auto* factory = MaterialFactory::get()) {
+                factory->destroyMaterial(_material);
+            }
         }
         _material        = nullptr;
         _bSharedMaterial = false;

@@ -26,12 +26,9 @@ struct PushConstants
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
 {
-    // OUT.sv_position = uFrame.projMatrix * uFrame.viewMatrix * float4(IN.pos, 1.0);
     OUT.sv_position = float4(IN.pos, 1.0);
     OUT.uv = IN.uv;
 }
-
-
 
 
 struct FrameData{
@@ -48,6 +45,7 @@ struct DirectionalLight{
 struct PointLight{
     vec3 pos;
     vec3 color;
+    float intensity;
 };
 
 struct LightData{
@@ -57,14 +55,10 @@ struct LightData{
     uint numPointLight;
 };
 
-// Static switch params
-#ifndef HAS_DIR_LIGHT
-    #define HAS_DIR_LIGHT 0
-#endif
-
-
+// PBR material parameters — all packed in GBuffer:
+//   RT0.a = roughness, RT1.a = ao, RT2.a = metallic
+// PBRParams struct retained for reference / future per-pixel override.
 struct PBRParams{
-    // material parameters
     vec3  albedo;
     float metallic;
     float roughness;
@@ -106,12 +100,10 @@ float G_geometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 
 }
 
-vec3 F_fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness);
 vec3 F_fresnelSchlick(float cosTheta, vec3 F0)
 {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
-
 
 
 
@@ -123,61 +115,94 @@ vec3 F_fresnelSchlick(float cosTheta, vec3 F0)
 [[vk::binding(1,1)]] Sampler2D uTexGNormal;
 [[vk::binding(2,1)]] Sampler2D uTexGAlbedoSpecular;
 
-[[vk::binding(0,2)]] PBRParams uParams;
-
-
 struct FragmentOutput{
     vec4 color : SV_Target;
-}
+};
 
-void main(in VertexOutput IN, out FragmentOutput OUT)
-{       
-    vec3 worldPos = uTexGPos.Sample(IN.uv).rgb;
-    vec3 normal = uTexGNormal.Sample(IN.uv).rgb;
-    vec4 albedoSpecular = uTexGAlbedoSpecular.Sample(IN.uv);
+[shader("fragment")]
+void fragMain(in VertexOutput IN, out FragmentOutput OUT)
+{
+    vec4 posRoughness = uTexGPos.Sample(IN.uv);
+    vec4 normalAO     = uTexGNormal.Sample(IN.uv);
+    vec4 albedoSpec   = uTexGAlbedoSpecular.Sample(IN.uv);
 
-    vec3 N = normalize(normal);
-    vec3 V = normalize(uFrame.camPos - worldPos);
+    vec3 worldPos = posRoughness.rgb;
+    vec3 N        = normalize(normalAO.rgb);
+    vec3 V        = normalize(uFrame.camPos - worldPos);
 
-    vec3 albedo = albedoSpecular.rgb * uParams.albedo;
+    // GBuffer layout:
+    //   RT0 = (position.xyz, roughness)
+    //   RT1 = (normal.xyz,   ao)
+    //   RT2 = (albedo.rgb,   metallic)
+    vec3  albedo    = albedoSpec.rgb;
+    float metallic  = albedoSpec.a;
+    float roughness = posRoughness.a;
+    float ao        = normalAO.a;
 
-    vec3 F0 = vec3(0.04); 
-    F0 = lerp(F0, albedo, uParams.metallic);
+    vec3 F0 = vec3(0.04);
+    F0 = lerp(F0, albedo, metallic);
 
-    // reflectance equation
+    // Reflectance equation
     vec3 Lo = vec3(0.0);
-    for(int i = 0; i < uLight.numPointLight; ++i) 
+
+    // Directional light contribution
+    if (uLight.hasDirLight)
     {
-        // calculate per-light radiance
+        vec3 L = normalize(-uLight.dirLight.dir);
+        vec3 H = normalize(V + L);
+
+        vec3 radiance = uLight.dirLight.color;
+
+        float NDF = D_normalDistribution_GGX(N, H, roughness);
+        float G   = G_geometrySmith(N, V, L, roughness);
+        vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        vec3  numerator   = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3  specular    = numerator / denominator;
+
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+
+    // Point light contributions
+    for (int i = 0; i < uLight.numPointLight; ++i)
+    {
+        // per-light radiance
         vec3 L = normalize(uLight.pointLights[i].pos - worldPos);
         vec3 H = normalize(V + L);
         float distance    = length(uLight.pointLights[i].pos - worldPos);
         float attenuation = 1.0 / (distance * distance);
-        vec3 radiance     = uLight.pointLights[i].color * attenuation;        
+        vec3 radiance     = uLight.pointLights[i].color * uLight.pointLights[i].intensity * attenuation;
 
         // cook-torrance brdf
-        float NDF = D_normalDistribution_GGX(N, H, uParams.roughness);        
-        float G   = G_geometrySmith(N, V, L, uParams.roughness);      
-        vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);       
+        float NDF = D_normalDistribution_GGX(N, H, roughness);
+        float G   = G_geometrySmith(N, V, L, roughness);
+        vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
 
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
-        kD *= 1.0 - uParams.metallic;     
+        kD *= 1.0 - metallic;
 
-        vec3  nominator    = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; 
-        vec3  specular     = nominator / denominator;
+        vec3  numerator   = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.000001;
+        vec3  specular    = numerator / denominator;
 
-        // add to outgoing radiance Lo
-        float NdotL = max(dot(N, L), 0.0);                
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL; 
-    }   
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
 
-    vec3 ambient = vec3(0.03) * albedo * uParams.ao;
+    vec3 ambient = uLight.dirLight.ambient * albedo * ao;
     vec3 color = ambient + Lo;
 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));  
+    // HDR tone mapping (Reinhard)
+    // color = color / (color + vec3(1.0));
+    // Gamma correction
+    // color = pow(color, vec3(1.0/2.2));
 
     OUT.color = vec4(color, 1.0);
-}  
+}

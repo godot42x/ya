@@ -234,7 +234,13 @@ def gen_struct(struct_node: dict) -> str:
         total_size = 0
 
     lines = []
-    lines.append(f"struct alignas(16) {name}")
+    # Only enforce alignas(16) when the struct's total size is a multiple of 16
+    # (i.e. std140 ConstantBuffer structs). For smaller/non-aligned structs
+    # (e.g. bare uniforms), let C++ use natural alignment so sizeof matches.
+    if total_size > 0 and total_size % 16 == 0:
+        lines.append(f"struct alignas(16) {name}")
+    else:
+        lines.append(f"struct {name}")
     lines.append("{")
 
     cursor = 0  # tracks the current byte position

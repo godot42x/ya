@@ -9,8 +9,8 @@
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
-#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
+#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/SDLMisc.h"
 
 
@@ -162,6 +162,10 @@ void App::init(AppDesc ci)
     _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
+    _deleter.push("SceneManager", [this](void*) {
+        delete _sceneManager;
+        _sceneManager = nullptr;
+    });
 
 
     FPSControl::get()->bEnable = true;
@@ -193,6 +197,11 @@ void App::init(AppDesc ci)
     // _editorLayer->onViewportResized.set([this](Rect2D rect) {
     //     onSceneViewportResized(rect);
     // });
+    _deleter.push("Editor", [this](void*) {
+        _editorLayer->onDetach();
+        delete _editorLayer;
+        _editorLayer = nullptr;
+    });
 
     // see TypeRenderer.h
     ya::registerBuiltinTypeRenderers();
@@ -348,7 +357,7 @@ int App::onEvent(const Event& event)
     }
 
     Rect2D viewportRect = _renderRuntime ? _renderRuntime->getViewportRect() : Rect2D{};
-    bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
+    bool   bInViewport  = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
     // currently ui only rendering in viewport
     if (bInViewport)
     {
@@ -380,18 +389,17 @@ void ya::App::quit()
     }
 
     unloadScene();
-    _editorLayer->onDetach();
-    delete _editorLayer;
 
     // CRITICAL: Destroy SceneManager BEFORE LuaScriptingSystem
     // LuaScriptComponent holds sol::object references to lua state
     // If lua state is destroyed first, component destruction will crash
-    delete _sceneManager;
+    //
+    // CRITICAL: Destroy SceneManager (via _deleter) BEFORE MaterialFactory
+    // MaterialComponent destructors call MaterialFactory::destroyMaterial()
+    // If MaterialFactory is destroyed first, component destruction will crash
+    _deleter.clear();
 
     MaterialFactory::get()->destroy();
-
-
-    _deleter.clear();
 
     if (_renderRuntime) {
         _renderRuntime->shutdown();
@@ -501,7 +509,7 @@ void App::tickLogic(float dt)
     // Update Editor camera (FreeCamera)
     cameraController.update(camera, inputManager, dt);
 
-    auto*       render         = getRender();
+    auto* render = getRender();
     if (!render) {
         return;
     }
@@ -527,8 +535,8 @@ void App::tickRender(float dt)
         Extent2D ext = renderRuntime->getViewportExtent();
         if (ext.width == 0 || ext.height == 0) {
             ext = viewportRect.extent.x > 0 && viewportRect.extent.y > 0
-                      ? Extent2D::fromVec2(viewportRect.extent)
-                      : Extent2D{.width = static_cast<uint32_t>(_windowSize.x), .height = static_cast<uint32_t>(_windowSize.y)};
+                    ? Extent2D::fromVec2(viewportRect.extent)
+                    : Extent2D{.width = static_cast<uint32_t>(_windowSize.x), .height = static_cast<uint32_t>(_windowSize.y)};
         }
         cameraController.update(*tc, *cc, inputManager, ext, dt);
         if (ext.height > 0) {

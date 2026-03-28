@@ -52,10 +52,10 @@ struct TextureSlot
     glm::vec2     uvOffset{0.0f};
     float         uvRotation = 0.0f;
     bool          bEnable    = true;
-    SamplerConfig samplerConfig;  ///< Optional sampler override (default uses global sampler)
+    SamplerConfig samplerConfig; ///< Optional sampler override (default uses global sampler)
 
     TextureSlot() = default;
-    explicit TextureSlot(const std::string &path)
+    explicit TextureSlot(const std::string& path)
         : textureRef(path)
     {}
 
@@ -108,18 +108,18 @@ struct TextureSlot
     // Path / Resolve helpers
     // ========================================
 
-    void fromPath(const std::string &path)
+    void fromPath(const std::string& path)
     {
         textureRef.set(path, nullptr);
     }
 
-    bool resolve() { return !textureRef.hasPath() || textureRef.resolve(); }
-    bool hasPath() const { return textureRef.hasPath(); }
-    bool isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
-    bool needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }
+    bool               resolve() { return !textureRef.hasPath() || textureRef.resolve(); }
+    bool               hasPath() const { return textureRef.hasPath(); }
+    bool               isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
+    bool               needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }
     EAssetResolveState getResolveState() const { return !textureRef.hasPath() ? EAssetResolveState::Ready : textureRef.getResolveState(); }
-    bool isEditorEnableEditable() const { return hasPath(); }
-    bool isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && textureRef.get() != nullptr && bEnable; }
+    bool               isEditorEnableEditable() const { return hasPath(); }
+    bool               isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && textureRef.get() != nullptr && bEnable; }
 
     // Legacy compatibility accessors. Prefer hasPath()/isReady()/needsResolve().
     bool isLoaded() const { return isReady(); }
@@ -133,17 +133,6 @@ struct TextureSlot
 
 /// Texture slot map type: maps resource enum (as int) to TextureSlot
 using TextureSlotMap = std::unordered_map<int, TextureSlot>;
-
-// struct TextureSlotMap2
-// {
-//     YA_REFLECT_BEGIN(TextureSlotMap2)
-//     YA_REFLECT_FIELD(textureSlots)
-//     YA_REFLECT_END()
-
-//     TextureSlotMap textureSlots;
-
-//     std::function<void()> onTextureSlotChanged;
-// };
 
 
 //  MARK: Material
@@ -180,52 +169,40 @@ struct Material
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
-    bool     _bParamDirty       = true; ///< Compatibility flag for legacy callers
-    bool     _bResourceDirty    = true; ///< Compatibility flag for legacy callers
-    uint64_t _paramVersion      = 1;
-    uint64_t _resourceVersion   = 1;
+    bool     _bParamDirty     = true; ///< Compatibility flag for legacy callers
+    bool     _bResourceDirty  = true; ///< Compatibility flag for legacy callers
+    uint64_t _paramVersion    = 1;
+    uint64_t _resourceVersion = 1;
 
-    // NOTE: _textureViews removed from base class.
-    // Derived classes now manage their own TextureBinding arrays.
-    // See PhongMaterial::_textureBindings and UnlitMaterial::_textureBindings.
-    // ========================================
-    // Basic Accessors
-    // ========================================
     std::string getLabel() const { return _label; }
-    void        setLabel(const std::string &label) { _label = label; }
+    void        setLabel(const std::string& label) { _label = label; }
 
     [[nodiscard]] int32_t getIndex() const { return _instanceIndex; }
     void                  setIndex(int32_t index) { _instanceIndex = index; }
 
     [[nodiscard]] uint32_t getTypeID() const { return _typeID; }
-    void                   setTypeID(const uint32_t &typeID) { _typeID = typeID; }
+    void                   setTypeID(const uint32_t& typeID) { _typeID = typeID; }
 
-    // ========================================
-    // Dirty Flags (Unified Interface)
-    // ========================================
-    void               setParamDirty(bool bInDirty = true)
+    void setParamDirty(bool bInDirty = true)
     {
         _bParamDirty = bInDirty;
         if (bInDirty) {
             ++_paramVersion;
         }
     }
-    [[nodiscard]] bool isParamDirty() const { return _bParamDirty; }
+    [[nodiscard]] bool     isParamDirty() const { return _bParamDirty; }
     [[nodiscard]] uint64_t getParamVersion() const { return _paramVersion; }
 
-    void               setResourceDirty(bool bInDirty = true)
+    void setResourceDirty(bool bInDirty = true)
     {
         _bResourceDirty = bInDirty;
         if (bInDirty) {
             ++_resourceVersion;
         }
     }
-    [[nodiscard]] bool isResourceDirty() const { return _bResourceDirty; }
+    [[nodiscard]] bool     isResourceDirty() const { return _bResourceDirty; }
     [[nodiscard]] uint64_t getResourceVersion() const { return _resourceVersion; }
 
-    // ========================================
-    // Virtual Interface for Derived Classes
-    // ========================================
 
 
     /**
@@ -233,7 +210,7 @@ struct Material
      * @param name The slot name from JSON
      * @return Resource enum value, or -1 if not found
      */
-    virtual int getTextureSlotEnum(const std::string &name) const
+    virtual int getTextureSlotEnum(const std::string& name) const
     {
         (void)name;
         return -1;
@@ -251,10 +228,10 @@ struct Material
     // Type Casting Helper
     // ========================================
     template <typename T>
-    T *as()
+    T* as()
     {
         static_assert(std::is_base_of<Material, T>::value, "T must be derived from Material");
-        return static_cast<T *>(this);
+        return static_cast<T*>(this);
     }
 };
 

@@ -127,7 +127,7 @@ void RenderRuntime::init(const InitDesc& desc)
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = App::COLOR_FORMAT,
+            .imageFormat   = App::LINEAR_FORMAT,
             .bVsync        = false,
             .minImageCount = 3,
             .width         = static_cast<uint32_t>(ci.width),
@@ -579,7 +579,7 @@ Extent2D RenderRuntime::getViewportExtent() const
 
 void RenderRuntime::renderGUI(float dt)
 {
-    if(!ImGui::CollapsingHeader("Render Runtime")){
+    if (!ImGui::CollapsingHeader("Render Runtime")) {
         return;
     }
     (void)dt;
@@ -671,10 +671,10 @@ void RenderRuntime::initActivePipeline()
     }
 
     if (_shadingModel == EShadingModel::Forward) {
-        Render2D::init(_render, ForwardRenderPipeline::COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
+        Render2D::init(_render, ForwardRenderPipeline::LINEAR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
     }
     else {
-        Render2D::init(_render, _deferredPipeline->COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
+        Render2D::init(_render, _deferredPipeline->LINEAR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
     }
 }
 

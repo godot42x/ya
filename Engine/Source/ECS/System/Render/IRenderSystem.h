@@ -61,6 +61,11 @@ struct IRenderSystem
 
     std::shared_ptr<IGraphicsPipeline> _pipeline;
 
+    // TODO: convenient static switch variable macro
+    // #define STATIC_SWITH_VAR(GAMMA_COLLECTION, true)
+    // auto set(auto newVal){this->gamma = true; this->setDirty(true);}
+    // auto get(){...}
+
     IRenderSystem(const std::string& label) : _label(label) {}
     virtual ~IRenderSystem() = default;
 

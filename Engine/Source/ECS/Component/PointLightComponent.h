@@ -18,6 +18,10 @@ struct PointLightComponent : public IComponent
     YA_REFLECT_FIELD(_diffuse, .color())
     YA_REFLECT_FIELD(_specular, .color())
 
+    YA_REFLECT_FIELD(color, .color())
+    YA_REFLECT_FIELD(intensity)
+
+
     YA_REFLECT_FIELD(nearPlane);
     YA_REFLECT_FIELD(farPlane);
 
@@ -44,12 +48,16 @@ struct PointLightComponent : public IComponent
     glm::vec3 _diffuse  = {1.0f, 1.0f, 1.0f};
     glm::vec3 _specular = {1.0f, 1.0f, 1.0f};
 
+    glm::vec3 color     = glm::vec3{1.0};
+    float     intensity = 1.0f;
+
+
     float _innerConeAngle = 30.0f; // For spot lights
     float _outerConeAngle = 45.0f; // For spot lights
-    float nearPlane = 0.1f;
-    float farPlane = 100.0f;
+    float nearPlane       = 0.1f;
+    float farPlane        = 100.0f;
 
-    PointLightComponent()                            = default;
-    PointLightComponent(const PointLightComponent &) = default;
+    PointLightComponent()                           = default;
+    PointLightComponent(const PointLightComponent&) = default;
 };
 } // namespace ya

@@ -212,21 +212,21 @@ void DeferredRenderPipeline::initSharedResources(const InitDesc& desc)
             .colorAttach = {
                 AttachmentDescription{
                     .index         = 0,
-                    .format        = COLOR_FORMAT,
+                    .format        = SIGNED_LINEAR_FORMAT, // world-space position needs signed float
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
                     .index         = 1,
-                    .format        = COLOR_FORMAT,
+                    .format        = SIGNED_LINEAR_FORMAT, // world-space normal needs signed float
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
                     .index         = 2,
-                    .format        = COLOR_FORMAT,
+                    .format        = LINEAR_FORMAT, // albedo + metallic (0-1 range, SRGB ok)
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
@@ -250,7 +250,7 @@ void DeferredRenderPipeline::initSharedResources(const InitDesc& desc)
             .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
-                    .format         = COLOR_FORMAT,
+                    .format         = LINEAR_FORMAT,
                     .samples        = ESampleCount::Sample_1,
                     .loadOp         = EAttachmentLoadOp::Clear,
                     .storeOp        = EAttachmentStoreOp::Store,
@@ -270,7 +270,7 @@ void DeferredRenderPipeline::initSharedResources(const InitDesc& desc)
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "Deferred Skybox Pipeline",
             .viewMask                = 0,
-            .colorAttachmentFormats  = {COLOR_FORMAT},
+            .colorAttachmentFormats  = {LINEAR_FORMAT},
             .depthAttachmentFormat   = DEPTH_FORMAT,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
@@ -279,7 +279,7 @@ void DeferredRenderPipeline::initSharedResources(const InitDesc& desc)
 
     _postProcessStage.init(PostProcessStage::InitDesc{
         .render      = _render,
-        .colorFormat = COLOR_FORMAT,
+        .colorFormat = LINEAR_FORMAT,
         .width       = extent.width,
         .height      = extent.height,
     });

@@ -8,7 +8,7 @@
 namespace ya
 {
 
-namespace
+namespace detail_phong
 {
 
 using TextureResource = PhongMaterial::EResource;
@@ -46,7 +46,7 @@ bool isParamPath(std::string_view propPath)
     return propPath.starts_with("_params");
 }
 
-} // namespace
+} // namespace detail_phong
 
 TextureSlot* PhongMaterialComponent::getTextureSlotInternal(PhongMaterial::EResource resourceEnum)
 {
@@ -85,15 +85,15 @@ PhongMaterialComponent::EditorChangeSummary PhongMaterialComponent::summarizeEdi
     EditorChangeSummary summary;
 
     for (const auto& propPath : propPaths) {
-        auto resource = textureResourceFromPath(propPath);
-        if (resource == TextureResource::Count) {
+        auto resource = detail_phong::textureResourceFromPath(propPath);
+        if (resource == detail_phong::TextureResource::Count) {
             continue;
         }
 
         auto index                       = static_cast<size_t>(resource);
         summary.touchedSlots[index]      = true;
         summary.hasTextureSlotChange     = true;
-        summary.hasTextureResourceChange = summary.hasTextureResourceChange || isTextureRefPath(propPath);
+        summary.hasTextureResourceChange = summary.hasTextureResourceChange || detail_phong::isTextureRefPath(propPath);
     }
 
     return summary;
@@ -222,7 +222,7 @@ void PhongMaterialComponent::onEditorPropertiesChanged(const std::vector<std::st
 {
     bool hasParamChange = false;
     for (const auto& propPath : propPaths) {
-        hasParamChange = hasParamChange || isParamPath(propPath);
+        hasParamChange = hasParamChange || detail_phong::isParamPath(propPath);
     }
 
     const auto summary = summarizeEditorChanges(propPaths);

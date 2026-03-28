@@ -31,15 +31,6 @@
 namespace ya
 {
 
-enum class EMaterialResolveState : uint8_t
-{
-    Dirty = 0,
-    Resolving,
-    Ready,
-    Failed,
-};
-
-
 /**
  * @brief PhongMaterialComponent - Serializable lit material component
  *

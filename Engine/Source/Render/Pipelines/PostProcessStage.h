@@ -123,7 +123,7 @@ struct PostProcessStage
 
         auto* postprocessSystem = _system->as<BasicPostprocessing>();
         auto  swapchainFormat   = _render->getSwapchain()->getFormat();
-        bool  bOutputIsSRGB     = (swapchainFormat == EFormat::R8G8B8A8_SRGB || swapchainFormat == EFormat::B8G8R8A8_SRGB);
+        bool  bOutputIsSRGB     =  EFormat::isSRGB(swapchainFormat);
         postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
         postprocessSystem->setInputTexture(inputTexture->getImageView(), Extent2D::fromVec2(viewportExtent));
         postprocessSystem->tick(cmdBuf, dt, ctx);

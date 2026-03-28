@@ -8,6 +8,7 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
@@ -25,10 +26,12 @@
 #include "Core/Math/Geometry.h"
 
 #include "Render/Material/MaterialFactory.h"
+#include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Resource/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include <format>
+
 
 
 #include "Scene/SceneManager.h"
@@ -133,7 +136,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto mc = entity->addComponent<ya::MeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
-        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        auto lmc                    = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
         if (auto diffuse = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
                                                "Engine/ThirdParty/LearnOpenGL/resources/textures/wood.png")) {
@@ -246,7 +249,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setRotation(glm::vec3(-0.0f, 0.f, 0.0f));
 
         // Material component with serializable texture slots
-        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        auto lmc            = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->getParamsMut() = ya::PhongMaterialComponent::AuthoringParams{
             .ambient   = glm::vec3(1.0f),
             .diffuse   = glm::vec3(1.0f),
@@ -268,7 +271,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         mc->setModelPath("Engine/Content/Misc/Monkey.obj");
 
         // Material component
-        auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
+        auto lmc            = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->getParamsMut() = ya::PhongMaterialComponent::AuthoringParams{
             .ambient   = glm::vec3(0.1f),
             .diffuse   = glm::vec3(0.6f, 0.4f, 0.2f), // Brownish color
@@ -335,7 +338,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
             diffuseSlot->bEnable = true;
         }
     }
-    auto pointLightUnlitMat =  ya::MaterialFactory::get()->getMaterialByName("unlit_point-light_shared")->as<ya::UnlitMaterial>();
+    auto pointLightUnlitMat = ya::MaterialFactory::get()->getMaterialByName("unlit_point-light_shared")->as<ya::UnlitMaterial>();
     if (auto* pointLt = scene->createNode3D("Point Light")) {
         ya::Entity* entity = pointLt->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
@@ -354,7 +357,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
         umc->getParamsMut().mixValue = 0.8f;
         if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
-            slot->bEnable = true;
+            slot->bEnable    = true;
             slot->uvRotation = glm::degrees(glm::radians(90.f));
         }
 
@@ -383,7 +386,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
         umc->getParamsMut().mixValue = 0.8f;
         if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
-            slot->bEnable = true;
+            slot->bEnable    = true;
             slot->uvRotation = glm::degrees(glm::radians(90.f));
         }
 
@@ -433,6 +436,76 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
 
         auto pmc = entity->addComponent<ya::PhongMaterialComponent>();
+    }
+
+    // ========================================
+    // PBR Sphere Grid — metallic (rows) x roughness (cols)
+    // Classic LearnOpenGL-style PBR demo scene
+    // ========================================
+    {
+        constexpr int   rows    = 7;
+        constexpr int   cols    = 7;
+        constexpr float spacing = 2.5f;
+        glm::vec3       gridOrigin(20.0f, 0.0f, 0.0f); // offset from other objects
+
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < cols; ++col) {
+                auto* node   = scene->createNode3D(std::format("PBR_Sphere_{}_{}", row, col));
+                auto* entity = node->getEntity();
+
+                auto tc = entity->getComponent<ya::TransformComponent>();
+                tc->setPosition(gridOrigin + glm::vec3(
+                                                 col * spacing,
+                                                 row * spacing,
+                                                 0.0f));
+
+                auto mc = entity->addComponent<ya::MeshComponent>();
+                mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
+
+                auto pbrMat            = entity->addComponent<ya::PBRMaterialComponent>();
+                pbrMat->getParamsMut() = ya::PBRMaterialComponent::AuthoringParams{
+                    .albedo    = glm::vec3(0.5f, 0.0f, 0.0f), // Red spheres
+                    .metallic  = static_cast<float>(row) / static_cast<float>(rows - 1),
+                    .roughness = glm::clamp(static_cast<float>(col) / static_cast<float>(cols - 1), 0.05f, 1.0f),
+                    .ao        = 1.0f,
+                };
+            }
+        }
+
+        // 4 point lights around the PBR grid
+        struct PBRPointLight
+        {
+            glm::vec3 pos;
+            glm::vec3 color;
+            float     intensity;
+        };
+        PBRPointLight pbrLights[] = {
+            {.pos = gridOrigin + glm::vec3(-10.0f, 10.0f, 10.0f), .color = glm::vec3(300.0f), .intensity = 15.0f},
+            {.pos = gridOrigin + glm::vec3(10.0f, 10.0f, 10.0f), .color = glm::vec3(300.0f), .intensity = 15.0f},
+            {.pos = gridOrigin + glm::vec3(-10.0f, -10.0f, 10.0f), .color = glm::vec3(300.0f), .intensity = 15.0f},
+            {.pos = gridOrigin + glm::vec3(10.0f, -10.0f, 10.0f), .color = glm::vec3(300.0f), .intensity = 15.0f},
+        };
+
+        for (int i = 0; i < 4; ++i) {
+            auto* node   = scene->createNode3D(std::format("PBR_PointLight_{}", i));
+            auto* entity = node->getEntity();
+
+            auto tc = entity->getComponent<ya::TransformComponent>();
+            tc->setPosition(pbrLights[i].pos);
+            tc->setScale(glm::vec3(0.3f));
+
+            auto mc = entity->addComponent<ya::MeshComponent>();
+            mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
+
+            auto plc       = entity->addComponent<ya::PointLightComponent>();
+            plc->_diffuse  = pbrLights[i].color;
+            plc->_specular = pbrLights[i].color;
+            plc->color     = pbrLights[i].color;
+            plc->intensity = pbrLights[i].intensity;
+
+            auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
+            umc->setSharedMaterial(pointLightUnlitMat);
+        }
     }
 
     // Create Phong sample cubes using new reflection-based approach

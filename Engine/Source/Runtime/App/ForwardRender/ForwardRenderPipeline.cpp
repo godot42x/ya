@@ -39,7 +39,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
-                    .format         = COLOR_FORMAT,
+                    .format         = LINEAR_FORMAT,
                     .samples        = ESampleCount::Sample_1,
                     .loadOp         = EAttachmentLoadOp::Clear,
                     .storeOp        = EAttachmentStoreOp::Store,
@@ -69,7 +69,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 
     _postProcessStage.init(PostProcessStage::InitDesc{
         .render      = _render,
-        .colorFormat = COLOR_FORMAT,
+        .colorFormat = LINEAR_FORMAT,
         .width       = static_cast<uint32_t>(desc.windowW),
         .height      = static_cast<uint32_t>(desc.windowH),
     });
@@ -303,7 +303,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
             .pipelineRenderingInfo = PipelineRenderingInfo{
                 .label                   = "Skybox Pipeline",
                 .viewMask                = 0,
-                .colorAttachmentFormats  = {COLOR_FORMAT},
+                .colorAttachmentFormats  = {LINEAR_FORMAT},
                 .depthAttachmentFormat   = DEPTH_FORMAT,
                 .stencilAttachmentFormat = EFormat::Undefined,
             },
@@ -525,7 +525,7 @@ void ForwardRenderPipeline::renderGUI()
         if (bMSAA) {
             viewportRT->setResolveAttachment(AttachmentDescription{
                 .index          = 2,
-                .format         = COLOR_FORMAT,
+                .format         = LINEAR_FORMAT,
                 .samples        = ESampleCount::Sample_1,
                 .loadOp         = EAttachmentLoadOp::DontCare,
                 .storeOp        = EAttachmentStoreOp::Store,

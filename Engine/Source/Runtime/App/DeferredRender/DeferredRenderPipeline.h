@@ -32,16 +32,16 @@ struct DeferredRenderInitDesc
 
 struct DeferredRenderTickDesc
 {
-    ICommandBuffer*         cmdBuf                    = nullptr;
-    SceneManager*           sceneManager              = nullptr;
-    float                   dt                        = 0.0f;
-    glm::mat4               view                      = glm::mat4(1.0f);
-    glm::mat4               projection                = glm::mat4(1.0f);
-    glm::vec3               cameraPos                 = glm::vec3(0.0f);
-    Rect2D                  viewportRect              = {};
-    float                   viewportFrameBufferScale  = 1.0f;
-    int                     appMode                   = 0;
-    std::vector<glm::vec2>* clicked                   = nullptr;
+    ICommandBuffer*         cmdBuf                   = nullptr;
+    SceneManager*           sceneManager             = nullptr;
+    float                   dt                       = 0.0f;
+    glm::mat4               view                     = glm::mat4(1.0f);
+    glm::mat4               projection               = glm::mat4(1.0f);
+    glm::vec3               cameraPos                = glm::vec3(0.0f);
+    Rect2D                  viewportRect             = {};
+    float                   viewportFrameBufferScale = 1.0f;
+    int                     appMode                  = 0;
+    std::vector<glm::vec2>* clicked                  = nullptr;
 };
 
 struct DeferredRenderPipeline
@@ -49,9 +49,9 @@ struct DeferredRenderPipeline
     using InitDesc = DeferredRenderInitDesc;
     using TickDesc = DeferredRenderTickDesc;
 
-    using GBufferPushConstant = slang_types::DeferredRender::GBufferPass::PushConstants;
-    using LightPassFrameData  = slang_types::DeferredRender::LightPass::FrameData;
-    using LightPassLightData  = slang_types::DeferredRender::LightPass::LightData;
+    using GBufferPushConstant   = slang_types::DeferredRender::GBufferPass::PushConstants;
+    using LightPassFrameData    = slang_types::DeferredRender::LightPass::FrameData;
+    using LightPassLightData    = slang_types::DeferredRender::LightPass::LightData;
     using LightPassPushConstant = slang_types::DeferredRender::LightPass::PushConstants;
 
     IRender* _render = nullptr;
@@ -59,8 +59,9 @@ struct DeferredRenderPipeline
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
 
-    const EFormat::T COLOR_FORMAT = EFormat::R8G8B8A8_SRGB;
-    const EFormat::T DEPTH_FORMAT = EFormat::D32_SFLOAT;
+    const EFormat::T LINEAR_FORMAT        = EFormat::R8G8B8A8_UNORM;
+    const EFormat::T SIGNED_LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT; // position & normal need signed float range
+    const EFormat::T DEPTH_FORMAT         = EFormat::D32_SFLOAT;
 
     stdptr<SkyBoxSystem> _skyboxSystem;
     PostProcessStage     _postProcessStage;
@@ -77,8 +78,8 @@ struct DeferredRenderPipeline
     FrameContext             _lastTickCtx{};
     TickDesc                 _lastTickDesc{};
 
-    EDeferredPathModel          _pathModel        = EDeferredPathModel::Phong;
-    EDeferredPathModel          _pendingPathModel = EDeferredPathModel::Phong;
+    EDeferredPathModel                   _pathModel        = EDeferredPathModel::PBR;
+    EDeferredPathModel                   _pendingPathModel = EDeferredPathModel::PBR;
     std::unique_ptr<IDeferredRenderPath> _path;
 
     DeferredRenderPipeline() = default;

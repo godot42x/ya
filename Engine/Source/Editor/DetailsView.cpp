@@ -4,6 +4,7 @@
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "TypeRenderer.h"
@@ -178,6 +179,15 @@ void DetailsView::drawComponents(Entity& entity)
             pmc->onEditorPropertiesChanged(ctx.getModificationPaths());
         }
         if (ImGui::Button("Invalidate")) {
+            pmc->invalidate();
+        }
+    });
+
+    drawReflectedComponent<PBRMaterialComponent>("PBR Material", entity, [](PBRMaterialComponent* pmc, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            pmc->onEditorPropertiesChanged(ctx.getModificationPaths());
+        }
+        if (ImGui::Button("Invalidate##PBR")) {
             pmc->invalidate();
         }
     });

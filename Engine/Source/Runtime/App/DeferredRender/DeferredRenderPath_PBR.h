@@ -1,39 +1,42 @@
 #pragma once
 
-#include "DeferredRenderPipeline.h"
 #include "IDeferredRenderPath.h"
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
-#include "Render/Material/PhongMaterial.h"
+#include "Render/Material/PBRMaterial.h"
 #include "Render/RenderDefines.h"
 
+#include "DeferredRender.PBR_LightPass.slang.h"
 namespace ya
 {
 
-// Scaffold path for future deferred PBR work.
-// It currently mirrors the Phong deferred path so new PBR changes can land here
-// without forcing edits to the stable Phong deferred implementation.
 struct DeferredPBRRenderPath : IDeferredRenderPath
 {
-    using ParamsData = slang_types::DeferredRender::GBufferPass::ParamsData;
+    using ParamUBO = PBRMaterial::ParamUBO;
 
-    stdptr<IDescriptorPool>       _deferredDSP;
-    stdptr<IGraphicsPipeline>     _gBufferPipeline;
-    stdptr<IPipelineLayout>       _gBufferPPL;
-    stdptr<IDescriptorSetLayout>  _frameAndLightDSL;
-    stdptr<IDescriptorSetLayout>  _resourceOrLightTexturesDSL;
-    stdptr<IDescriptorSetLayout>  _paramsDSL;
-    stdptr<IGraphicsPipeline>     _lightPipeline;
-    stdptr<IPipelineLayout>       _lightPPL;
-    DescriptorSetHandle           _frameAndLightDS = nullptr;
-    DescriptorSetHandle           _lightTexturesDS = nullptr;
-    stdptr<IBuffer>               _frameUBO        = nullptr;
-    stdptr<IBuffer>               _lightUBO        = nullptr;
-    DeferredRenderPipeline::LightPassFrameData _lightPassFrameData{};
-    DeferredRenderPipeline::LightPassLightData _lightPassLightData{};
-    MaterialDescPool<PhongMaterial, ParamsData> _matPool;
+    stdptr<IDescriptorPool>      _deferredDSP;
+    stdptr<IGraphicsPipeline>    _gBufferPipeline;
+    stdptr<IPipelineLayout>      _gBufferPPL;
+    stdptr<IDescriptorSetLayout> _frameAndLightDSL;
+    stdptr<IDescriptorSetLayout> _resourceOrLightTexturesDSL;
+    stdptr<IDescriptorSetLayout> _lightGBufferDSL; // 3-binding DSL for light pass GBuffer sampling
+    stdptr<IDescriptorSetLayout> _paramsDSL;
+    stdptr<IGraphicsPipeline>    _lightPipeline;
+    stdptr<IPipelineLayout>      _lightPPL;
+    DescriptorSetHandle          _frameAndLightDS = nullptr;
+    DescriptorSetHandle          _lightTexturesDS = nullptr;
+    stdptr<IBuffer>              _frameUBO        = nullptr;
+    stdptr<IBuffer>              _lightUBO        = nullptr;
+
+    using GBufferPassFrameData = slang_types::DeferredRender::PBR_GBufferPass::FrameData;
+    using LightPassLightData   = slang_types::DeferredRender::PBR_LightPass::LightData;
+
+    GBufferPassFrameData _gBufferPassFrameData{};
+    LightPassLightData   _lightPassLightData{};
+
+    MaterialDescPool<PBRMaterial, ParamUBO> _matPool;
 
     std::vector<VertexAttribute> _commonVertexAttributes = {
         VertexAttribute{
@@ -62,7 +65,12 @@ struct DeferredPBRRenderPath : IDeferredRenderPath
         },
     };
 
-    std::vector<DescriptorSetLayoutDesc> _commonDescriptorSetLayouts = {
+    // GBuffer pass descriptor set layouts:
+    //   set 0 = Frame+Light UBO
+    //   set 1 = PBR material textures (5 bindings)
+    //   set 2 = PBR param UBO
+    // Light pass uses a separate layout: set 0 (shared) + set 1 (_lightGBufferDSL, 3 GBuffer textures)
+    std::vector<DescriptorSetLayoutDesc> _gBufferDescriptorSetLayouts = {
         DescriptorSetLayoutDesc{
             .label    = "Deferred_PBR_Frame_And_Light_DSL",
             .set      = 0,
@@ -85,20 +93,37 @@ struct DeferredPBRRenderPath : IDeferredRenderPath
             .label    = "Deferred_PBR_MaterialResources_DSL",
             .set      = 1,
             .bindings = {
+                // Albedo
                 DescriptorSetLayoutBinding{
                     .binding         = 0,
                     .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
                     .descriptorCount = 1,
                     .stageFlags      = EShaderStage::All,
                 },
+                // Normal
                 DescriptorSetLayoutBinding{
                     .binding         = 1,
                     .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
                     .descriptorCount = 1,
                     .stageFlags      = EShaderStage::All,
                 },
+                // Metallic
                 DescriptorSetLayoutBinding{
                     .binding         = 2,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+                // Roughness
+                DescriptorSetLayoutBinding{
+                    .binding         = 3,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::All,
+                },
+                // AO
+                DescriptorSetLayoutBinding{
+                    .binding         = 4,
                     .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
                     .descriptorCount = 1,
                     .stageFlags      = EShaderStage::All,
