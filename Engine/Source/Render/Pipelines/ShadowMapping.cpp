@@ -102,7 +102,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
                   .label         = std::format("Shadow_Frame_UBO_{}", i),
                   .usage         = EBufferUsage::UniformBuffer,
                   .size          = sizeof(FrameUBO),
-                  .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+                  .memoryUsage = EMemoryUsage::CpuToGpu,
             });
         _frameUBO[i]->writeData(&initialFrameData, sizeof(FrameUBO), 0);
 

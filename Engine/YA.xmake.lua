@@ -58,6 +58,7 @@ add_requires("vulkansdk", {
         }
     }
 })
+add_requires("vulkan-memory-allocator v3.3.0")
 add_requires("entt v3.15.0", {
     -- configs = {
     -- debug = is_mode("debug"),
@@ -128,6 +129,7 @@ do
 
 
     add_packages("vulkansdk", { public = true })
+    add_packages("vulkan-memory-allocator")
     add_packages("glad")
     add_packages("cxxopts", { public = true })
     add_packages("entt", { public = true })

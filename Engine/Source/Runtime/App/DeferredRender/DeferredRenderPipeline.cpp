@@ -57,7 +57,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
         auto checkerTex = TextureLibrary::get().getCheckerboardTexture();
         if (checkerTex) {
             TextureBinding tb;
-            tb.textureOverride = checkerTex.get();
+            tb.texture = checkerTex.get();
             tb.sampler = TextureLibrary::get().getNearestSampler();
             _fallbackMaterial->setTextureBinding(UnlitMaterial::BaseColor0, tb);
             params.textureParams[0].bEnable = true;

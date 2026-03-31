@@ -130,7 +130,7 @@ struct MaterialDescPool
                     .label         = std::format("MaterialPool_Param_UBO_{}", i),
                     .usage         = EBufferUsage::UniformBuffer,
                     .size          = sizeof(TParamUBO),
-                    .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
                 }));
         }
 

@@ -3,6 +3,8 @@
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
 
+#include <vk_mem_alloc.h>
+
 namespace ya
 {
 
@@ -92,15 +94,20 @@ static VkPipelineStageFlags getStageMask(VkImageLayout layout, VkAccessFlags acc
 VulkanImage::~VulkanImage()
 {
     if (bOwned) {
-        VK_DESTROY(Image, _render->getDevice(), _handle);
-        VK_FREE(Memory, _render->getDevice(), _imageMemory);
+        if (_handle != VK_NULL_HANDLE && _allocation != VK_NULL_HANDLE) {
+            vmaDestroyImage(_render->getVmaAllocator(), _handle, _allocation);
+            _handle     = VK_NULL_HANDLE;
+            _allocation = VK_NULL_HANDLE;
+        }
     }
 }
 
 void VulkanImage::setDebugName(const std::string& name)
 {
     _render->setDebugObjectName(VK_OBJECT_TYPE_IMAGE, (void*)_handle, name);
-    _render->setDebugObjectName(VK_OBJECT_TYPE_DEVICE_MEMORY, (void*)_imageMemory, name + "_Memory");
+    if (_allocation) {
+        vmaSetAllocationName(_render->getVmaAllocator(), _allocation, name.c_str());
+    }
 }
 
 void VulkanImage::transfer(VkCommandBuffer cmdBuf, VulkanBuffer* srcBuffer, VulkanImage* dstImage)
@@ -370,21 +377,10 @@ bool VulkanImage::allocate()
         .initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    VK_CALL(vkCreateImage(_render->getDevice(), &imageCreateInfo, _render->getAllocator(), &_handle));
+    VmaAllocationCreateInfo allocCI{};
+    allocCI.usage = VMA_MEMORY_USAGE_AUTO;
 
-
-    // allocate memory
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(_render->getDevice(), _handle, &memRequirements);
-    VkMemoryAllocateInfo allocInfo{
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext           = nullptr,
-        .allocationSize  = memRequirements.size,
-        .memoryTypeIndex = static_cast<uint32_t>(_render->getMemoryIndex(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memRequirements.memoryTypeBits)),
-    };
-
-    VK_CALL(vkAllocateMemory(_render->getDevice(), &allocInfo, nullptr, &_imageMemory));
-    VK_CALL(vkBindImageMemory(_render->getDevice(), _handle, _imageMemory, 0));
+    VK_CALL(vmaCreateImage(_render->getVmaAllocator(), &imageCreateInfo, &allocCI, &_handle, &_allocation, nullptr));
 
 
     _layout = VK_IMAGE_LAYOUT_UNDEFINED;

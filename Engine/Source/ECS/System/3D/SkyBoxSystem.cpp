@@ -149,7 +149,7 @@ void SkyBoxSystem::onInitImpl(const InitParams& initParams)
                 .label         = std::format("Skybox_Frame_UBO_{}", i),
                 .usage         = ya::EBufferUsage::UniformBuffer,
                 .size          = sizeof(SkyboxFrameUBO),
-                .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+                .memoryUsage = ya::EMemoryUsage::CpuToGpu,
             });
         _frameUBO[i]->writeData(&initialFrameData, sizeof(SkyboxFrameUBO), 0);
 

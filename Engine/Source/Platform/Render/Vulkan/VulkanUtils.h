@@ -341,23 +341,6 @@ inline VkBufferUsageFlags toVk(EBufferUsage usage)
     return vkUsage;
 }
 
-// Memory property conversion
-inline VkMemoryPropertyFlags toVk(EMemoryProperty props)
-{
-    VkMemoryPropertyFlags vkProps = 0;
-    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::DeviceLocal)) != 0)
-        vkProps |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostVisible)) != 0)
-        vkProps |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostCoherent)) != 0)
-        vkProps |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::HostCached)) != 0)
-        vkProps |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-    if ((static_cast<uint32_t>(props) & static_cast<uint32_t>(EMemoryProperty::LazilyAllocated)) != 0)
-        vkProps |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
-    return vkProps;
-}
-
 namespace EBlendOp
 {
 inline auto toVk(T op) -> VkBlendOp

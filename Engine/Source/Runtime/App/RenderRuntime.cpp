@@ -13,10 +13,13 @@
 #include "Render/Core/Swapchain.h"
 
 #include "Resource/AssetManager.h"
+#include "Resource/DeferredDeletionQueue.h"
 #include "Resource/FontManager.h"
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/ResourceRegistry.h"
 #include "Resource/TextureLibrary.h"
+
+#include "Core/Async/TaskQueue.h"
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -249,6 +252,15 @@ void RenderRuntime::init(const InitDesc& desc)
     _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
     ImGuiManager::get().init(_render, nullptr);
     _render->waitIdle();
+
+    // ── Resource management subsystems ──────────────────────────────────
+    // Initialize GPU-safe deferred deletion queue.
+    // framesInFlight: resources are kept alive for this many extra frames
+    // after removal from the cache, guaranteeing the GPU has finished with them.
+    DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
+
+    // Start async IO task queue (file reading, texture decoding).
+    TaskQueue::get().start(/*numThreads=*/2);
 }
 
 void RenderRuntime::shutdown()
@@ -277,6 +289,13 @@ void RenderRuntime::shutdown()
 
     if (_render) {
         _render->waitIdle();
+
+        // GPU is idle — safe to execute ALL pending resource destructors now.
+        DeferredDeletionQueue::get().flushAll();
+
+        // Stop async task queue (join worker threads).
+        TaskQueue::get().stop();
+
         _commandBuffers.clear();
         _render->destroy();
         delete _render;
@@ -504,6 +523,11 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
     cmdBuf->end();
     _render->end(imageIndex, {cmdBuf->getHandle()});
+
+    // ── Per-frame resource management ───────────────────────────────────
+    // Process completed async task callbacks on the main thread
+    // (e.g. GPU texture uploads after background file IO completes).
+    TaskQueue::get().processMainThreadCallbacks();
 
     if (_renderDocCapture) {
         _renderDocCapture->onFrameEnd();

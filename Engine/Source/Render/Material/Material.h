@@ -114,6 +114,7 @@ struct TextureSlot
     }
 
     bool               resolve() { return !textureRef.hasPath() || textureRef.resolve(); }
+    bool               isLoading() const { return textureRef.isLoading(); }
     bool               hasPath() const { return textureRef.hasPath(); }
     bool               isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
     bool               needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }

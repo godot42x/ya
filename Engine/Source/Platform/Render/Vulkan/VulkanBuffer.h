@@ -8,6 +8,9 @@
 
 #include <vulkan/vulkan.h>
 
+// VMA forward declaration (full definition comes from vk_mem_alloc.h via VulkanRender.h)
+struct VmaAllocation_T;
+typedef struct VmaAllocation_T* VmaAllocation;
 
 namespace ya
 {
@@ -20,7 +23,7 @@ struct VulkanBuffer : public ya::IBuffer
 
     std::string        name         = "None";
     VkBuffer           _handle        = VK_NULL_HANDLE;
-    VkDeviceMemory     _memory        = VK_NULL_HANDLE;
+    VmaAllocation      _allocation    = VK_NULL_HANDLE;
     VkBufferUsageFlags _usageFlags    = 0;
     VkDeviceSize       _size          = 0;
     bool               bHostVisible   = false; // CPU can access the memory directly
@@ -35,19 +38,20 @@ struct VulkanBuffer : public ya::IBuffer
 
     VulkanBuffer(decltype(_dummy), VulkanRender *render, const BufferCreateInfo &ci)
     {
-        _render         = render;
-        _usageFlags     = toVk(ci.usage);
-        name            = ci.label;
-        auto vkMemProps = toVk(ci.memProperties);
-        bHostVisible    = (vkMemProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
-        bHostCoherent   = (vkMemProps & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
-        _size           = ci.size;
+        _render     = render;
+        _usageFlags = toVk(ci.usage);
+        name        = ci.label;
+        _size       = ci.size;
+
+        auto memUsage = ci.memoryUsage;
+        bHostVisible  = (memUsage == EMemoryUsage::CpuToGpu || memUsage == EMemoryUsage::GpuToCpu);
+        bHostCoherent = (memUsage == EMemoryUsage::CpuToGpu);
 
         if (ci.data.has_value()) {
-            createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), vkMemProps);
+            createWithDataInternal(ci.data.value(), static_cast<uint32_t>(ci.size), memUsage);
         }
         else {
-            createDefaultInternal(static_cast<uint32_t>(ci.size), vkMemProps);
+            createDefaultInternal(static_cast<uint32_t>(ci.size), memUsage);
         }
 
         // YA_CORE_TRACE("Created VulkanBuffer [{}]: {} of size: {} with usage: {}", name, (uintptr_t)_handle, _size, std::to_string(_usageFlags));
@@ -72,11 +76,10 @@ struct VulkanBuffer : public ya::IBuffer
 
     // Vulkan-specific methods
     [[nodiscard]] VkBuffer       getVkBuffer() const { return _handle; }
-    [[nodiscard]] VkDeviceMemory getVkMemory() const { return _memory; }
 
     static bool allocate(VulkanRender *render, uint32_t size,
-                         VkMemoryPropertyFlags memProperties, VkBufferUsageFlags usage,
-                         VkBuffer &outBuffer, VkDeviceMemory &outBufferMemory);
+                         EMemoryUsage memUsage, VkBufferUsageFlags usage,
+                         VkBuffer &outBuffer, VmaAllocation &outAllocation);
 
     // do a copy pass
     static void transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
@@ -86,8 +89,8 @@ struct VulkanBuffer : public ya::IBuffer
     void mapInternal(void **ptr) override;
 
   private:
-    void createWithDataInternal(const void *data, uint32_t size, VkMemoryPropertyFlags memProperties);
-    void createDefaultInternal(uint32_t size, VkMemoryPropertyFlags memProperties);
+    void createWithDataInternal(const void *data, uint32_t size, EMemoryUsage memUsage);
+    void createDefaultInternal(uint32_t size, EMemoryUsage memUsage);
     void setupDebugName(const std::string &inName);
 };
 

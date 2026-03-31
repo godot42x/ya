@@ -1,318 +1,25 @@
 #include "AssetManager.h"
 
-#include <math.h>
-
 #include "Core/Debug/Instrumentor.h"
-#include "assimp/IOStream.hpp"
-#include "assimp/IOSystem.hpp"
-#include "assimp/Importer.hpp"
-#include "assimp/ObjMaterial.h"
-#include "assimp/mesh.h"
-#include "assimp/postprocess.h"
-#include "assimp/scene.h"
-
-
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Resource/AssetMeta.h"
+#include "Resource/DeferredDeletionQueue.h"
+#include "Resource/TextureLibrary.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 
 namespace ya
 {
 
-namespace
-{
 
 // ============================================================================
-// Custom Assimp IOSystem to bridge VirtualFileSystem
+// Singleton
 // ============================================================================
-
-/**
- * @brief Custom IOStream implementation for VirtualFileSystem
- *        Wraps a string buffer for read-only access
- */
-class VFSIOStream : public Assimp::IOStream
-{
-  public:
-    VFSIOStream(std::string path, std::string content)
-        : _path(std::move(path)), _content(std::move(content)), _position(0)
-    {
-    }
-
-    ~VFSIOStream() override = default;
-
-    // Read operations
-    size_t Read(void* pvBuffer, size_t pSize, size_t pCount) override
-    {
-        size_t bytesToRead = pSize * pCount;
-        size_t available   = _content.size() - _position;
-        size_t actualRead  = (bytesToRead < available) ? bytesToRead : available;
-
-        if (actualRead > 0) {
-            std::memcpy(pvBuffer, _content.data() + _position, actualRead);
-            _position += actualRead;
-        }
-
-        return actualRead / pSize; // Return number of elements read
-    }
-
-    // Write operations (not supported for read-only stream)
-    size_t Write(const void* pvBuffer, size_t pSize, size_t pCount) override
-    {
-        // Read-only stream
-        return 0;
-    }
-
-    // Seek operations
-    aiReturn Seek(size_t pOffset, aiOrigin pOrigin) override
-    {
-        size_t newPos = _position;
-
-        switch (pOrigin) {
-        case aiOrigin_SET:
-            newPos = pOffset;
-            break;
-        case aiOrigin_CUR:
-            newPos = _position + pOffset;
-            break;
-        case aiOrigin_END:
-            newPos = _content.size() + pOffset;
-            break;
-        default:
-            return aiReturn_FAILURE;
-        }
-
-        if (newPos > _content.size()) {
-            return aiReturn_FAILURE;
-        }
-
-        _position = newPos;
-        return aiReturn_SUCCESS;
-    }
-
-    size_t Tell() const override { return _position; }
-
-    size_t FileSize() const override { return _content.size(); }
-
-    void Flush() override
-    {
-        // No-op for read-only stream
-    }
-
-  private:
-    std::string _path;
-    std::string _content;
-    size_t      _position;
-};
-
-/**
- * @brief Custom IOSystem implementation for VirtualFileSystem
- *        Bridges Assimp's file I/O to VirtualFileSystem
- */
-class VFSIOSystem : public Assimp::IOSystem
-{
-  public:
-    explicit VFSIOSystem(const std::string& baseDir) : _baseDir(baseDir)
-    {
-        // Normalize base directory path
-        if (!_baseDir.empty() && _baseDir.back() != '/' && _baseDir.back() != '\\') {
-            _baseDir += '/';
-        }
-        std::ranges::replace(_baseDir, '\\', '/');
-    }
-
-    ~VFSIOSystem() override = default;
-
-    /**
-     * @brief Check if a file exists in VirtualFileSystem
-     */
-    bool Exists(const char* pFile) const override
-    {
-        if (!pFile) {
-            return false;
-        }
-
-        std::string fullPath = resolvePath(pFile);
-        return VirtualFileSystem::get()->isFileExists(fullPath);
-    }
-
-    /**
-     * @brief Get the OS-specific path separator
-     */
-    char getOsSeparator() const override { return '/'; }
-
-    /**
-     * @brief Open a file through VirtualFileSystem
-     */
-    Assimp::IOStream* Open(const char* pFile, const char* pMode = "rb") override
-    {
-        if (!pFile) {
-            YA_CORE_ERROR("VFSIOSystem: Attempted to open null file path");
-            return nullptr;
-        }
-
-        std::string fullPath = resolvePath(pFile);
-
-        // Read file content through VFS
-        std::string content;
-        if (!VirtualFileSystem::get()->readFileToString(fullPath, content)) {
-            YA_CORE_ERROR("VFSIOSystem: Failed to read file: {}", fullPath);
-            return nullptr;
-        }
-
-        YA_CORE_TRACE("VFSIOSystem: Opened file: {} (size: {} bytes)", fullPath, content.size());
-
-        return new VFSIOStream(fullPath, std::move(content));
-    }
-
-    /**
-     * @brief Close an open IOStream
-     */
-    void Close(Assimp::IOStream* pFile) override
-    {
-        if (pFile) {
-            delete pFile;
-        }
-    }
-
-    /**
-     * @brief Compare two paths (for file system operations)
-     */
-    bool ComparePaths(const char* first, const char* second) const override
-    {
-        std::string firstNormalized  = normalizePath(first);
-        std::string secondNormalized = normalizePath(second);
-
-        return firstNormalized == secondNormalized;
-    }
-
-  private:
-    std::string _baseDir;
-
-    /**
-     * @brief Resolve a relative path to an absolute path based on base directory
-     */
-    std::string resolvePath(const char* pFile) const
-    {
-        if (!pFile) {
-            return "";
-        }
-
-        std::string path = pFile;
-
-        // If absolute path, use as-is (but normalize separators)
-        if (!path.empty() && (path[0] == '/' || (path.size() > 1 && path[1] == ':'))) {
-            return normalizePath(path);
-        }
-
-        // Relative path: combine with base directory
-        if (_baseDir.empty()) {
-            return normalizePath(path);
-        }
-
-        return normalizePath(_baseDir + path);
-    }
-
-    /**
-     * @brief Normalize path separators to '/'
-     */
-    static std::string normalizePath(const std::string& path)
-    {
-        std::string normalized = path;
-        std::replace(normalized.begin(), normalized.end(), '\\', '/');
-        return normalized;
-    }
-};
-
-// ============================================================================
-
-/**
- * @brief Infer coordinate system from file path and scene metadata
- * @param filepath Path to the model file
- * @param scene Assimp scene (may contain metadata)
- * @return Inferred coordinate system
- */
-static CoordinateSystem inferAssimpCoordinateSystem(const std::string& filepath, const aiScene* scene)
-{
-    // Extract file extension
-    std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-    // Check scene metadata for coordinate system hints
-    if (scene && scene->mMetaData) {
-        int upAxis = 1; // Default Y-up
-        if (scene->mMetaData->Get("UpAxis", upAxis)) {
-            // 0=X, 1=Y, 2=Z
-            // Most right-handed systems are Y-up or Z-up
-        }
-
-        int upAxisSign = 1;
-        scene->mMetaData->Get("UpAxisSign", upAxisSign);
-
-        int frontAxis = 2;
-        scene->mMetaData->Get("FrontAxis", frontAxis);
-
-        int coordAxis = 0;
-        scene->mMetaData->Get("CoordAxis", coordAxis);
-
-        // Some formats explicitly store handedness
-        int coordAxisSign = 1;
-        if (scene->mMetaData->Get("CoordAxisSign", coordAxisSign)) {
-            // CoordAxisSign can indicate handedness
-        }
-    }
-
-    // Format-based heuristics (ordered by reliability)
-    // Note: Assimp often converts to right-handed Y-up during import
-
-    if (ext == "obj") {
-        // Wavefront OBJ: Right-handed, vendor-dependent up axis
-        // Blender OBJ: Right-handed, Z-up
-        // Most tools: Right-handed
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "fbx") {
-        // FBX is complex: can be both left or right handed
-        // Unity FBX: Left-handed Y-up
-        // Maya/Blender FBX: Right-handed Y-up
-        // Default to right-handed (Assimp default conversion)
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "gltf" || ext == "glb") {
-        // glTF 2.0 spec: Right-handed, Y-up
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "dae" || ext == "collada") {
-        // COLLADA: Right-handed, Y-up (default)
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "blend") {
-        // Blender native: Right-handed, Z-up
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "3ds" || ext == "max") {
-        // 3ds Max: Right-handed, Z-up
-        return CoordinateSystem::RightHanded;
-    }
-    else if (ext == "stl") {
-        // STL has no inherent coordinate system, assume right-handed
-        return CoordinateSystem::RightHanded;
-    }
-
-    // Unknown format: assume right-handed (most common)
-    // Log a warning for manual verification
-    YA_CORE_WARN("Unknown model format '{}', assuming RightHanded coordinate system. "
-                 "Manually set MeshData.sourceCoordSystem if incorrect.",
-                 ext);
-    return CoordinateSystem::RightHanded;
-}
-
-} // anonymous namespace
-
-
 
 AssetManager* AssetManager::get()
 {
@@ -320,48 +27,121 @@ AssetManager* AssetManager::get()
     return &instance;
 }
 
-void AssetManager::clearCache()
-{
-    YA_PROFILE_FUNCTION_LOG();
-    modelCache.clear();
-    _textureViews.clear();
-
-    YA_CORE_INFO("AssetManager cleared");
-}
-
 AssetManager::AssetManager()
 {
 }
 
-std::shared_ptr<Model> AssetManager::loadModel(const std::string& filepath)
+// ============================================================================
+// IResourceCache
+// ============================================================================
+
+void AssetManager::clearCache()
 {
-    return loadModelImpl(filepath, "");
+    YA_PROFILE_FUNCTION_LOG();
+    std::lock_guard lock(_cacheMutex);
+    modelCache.clear();
+    _textureViews.clear();
+    _metaCache.clear();
+
+    YA_CORE_INFO("AssetManager cleared");
 }
 
+// ============================================================================
+// Meta system
+// ============================================================================
 
-
-std::shared_ptr<Model> AssetManager::loadModel(const std::string& name, const std::string& filepath)
+AssetMeta AssetManager::getOrLoadMeta(const std::string& assetPath)
 {
-    auto model = loadModelImpl(filepath, name);
-    if (model) {
-        _modalName2Path[name] = filepath;
+    // Check meta cache first
+    {
+        auto it = _metaCache.find(assetPath);
+        if (it != _metaCache.end()) {
+            return it->second;
+        }
     }
-    return model;
-}
 
+    // Try to load from sidecar file
+    std::string metaPath = AssetMeta::metaPathFor(assetPath);
 
-
-bool AssetManager::isModelLoaded(const std::string& filepath) const
-{
-    return modelCache.find(filepath) != modelCache.end();
-}
-
-std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
-{
-    if (isModelLoaded(filepath)) {
-        return modelCache.at(filepath);
+    // Try physical path first, then VFS-translated path
+    AssetMeta meta;
+    if (std::filesystem::exists(metaPath)) {
+        meta = AssetMeta::loadFromFile(metaPath);
     }
-    return nullptr;
+    else {
+        // Also try VFS-translated path
+        auto* vfs           = VirtualFileSystem::get();
+        auto  translatedPath = vfs->translatePath(metaPath).string();
+        if (std::filesystem::exists(translatedPath)) {
+            meta = AssetMeta::loadFromFile(translatedPath);
+        }
+        else {
+            // No meta file — infer defaults from extension
+            std::string ext = assetPath.substr(assetPath.find_last_of('.') + 1);
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+            if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" ||
+                ext == "tga" || ext == "hdr" || ext == "dds") {
+                meta = AssetMeta::defaultForTexture();
+            }
+            else if (ext == "obj" || ext == "fbx" || ext == "gltf" || ext == "glb" ||
+                     ext == "dae" || ext == "blend") {
+                meta = AssetMeta::defaultForModel();
+            }
+            else {
+                // Generic fallback
+                meta.type = "unknown";
+            }
+
+            YA_CORE_TRACE("AssetMeta: no sidecar for '{}', using default (type={})", assetPath, meta.type);
+        }
+    }
+
+    // Cache
+    _metaCache[assetPath] = meta;
+    return meta;
+}
+
+AssetMeta AssetManager::reloadMeta(const std::string& assetPath)
+{
+    _metaCache.erase(assetPath);
+    return getOrLoadMeta(assetPath);
+}
+
+// ============================================================================
+// Cache key
+// ============================================================================
+
+std::string AssetManager::makeCacheKey(const std::string& filepath, const AssetMeta& meta)
+{
+    return filepath + "|" + std::to_string(meta.propertiesHash());
+}
+
+// ============================================================================
+// Synchronous texture loading (meta-driven)
+// ============================================================================
+
+AssetManager::ETextureColorSpace AssetManager::resolveColorSpace(const std::string& filepath,
+                                                                  ETextureColorSpace codeHint)
+{
+    AssetMeta meta     = getOrLoadMeta(filepath);
+    std::string csStr  = meta.getString("colorSpace", "");
+
+    if (csStr.empty()) {
+        // No meta colorSpace — use code hint
+        return codeHint;
+    }
+
+    ETextureColorSpace metaCS = (csStr == "linear") ? ETextureColorSpace::Linear : ETextureColorSpace::SRGB;
+
+    if (metaCS != codeHint) {
+        YA_CORE_TRACE("AssetMeta overrides colorSpace for '{}': code={}, meta={}",
+                       filepath,
+                       (codeHint == ETextureColorSpace::SRGB ? "SRGB" : "Linear"),
+                       csStr);
+    }
+
+    return metaCS;
 }
 
 AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FName& textureSemantic)
@@ -385,64 +165,637 @@ AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FNam
     return ETextureColorSpace::SRGB;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& filepath, ETextureColorSpace colorSpace)
+TextureFuture AssetManager::loadTexture(const std::string& filepath, ETextureColorSpace colorSpace)
 {
-    bool bSRGB = (colorSpace == ETextureColorSpace::SRGB);
-    if (isTextureLoaded(filepath)) {
-        auto tex            = _textureViews.find(filepath)->second;
-        auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
-        if (tex && tex->getFormat() != expectedFormat) {
-            YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Reusing cached texture.",
-                         filepath,
-                         (int)tex->getFormat(),
-                         (int)expectedFormat);
+    // Resolve meta + cache key
+    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
+    AssetMeta          meta       = getOrLoadMeta(filepath);
+    std::string        cacheKey   = makeCacheKey(filepath, meta);
+    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+
+    // Already loaded? Return immediately.
+    {
+        auto it = _textureViews.find(cacheKey);
+        if (it != _textureViews.end()) {
+            return TextureFuture(it->second);
         }
-        return tex;
     }
 
+    // Submit async decode if not already in flight
+    if (!isTextureLoadPending(cacheKey)) {
+        submitTextureLoad(filepath, cacheKey, bSRGB);
+    }
+
+    // Not ready yet — return empty future. Caller must check isReady().
+    return TextureFuture();
+}
+
+TextureFuture AssetManager::loadTexture(const std::string& name,
+                                        const std::string& filepath,
+                                        ETextureColorSpace colorSpace)
+{
+    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
+    AssetMeta          meta       = getOrLoadMeta(filepath);
+    std::string        cacheKey   = makeCacheKey(filepath, meta);
+    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+
+    // Already loaded?
+    {
+        auto it = _textureViews.find(cacheKey);
+        if (it != _textureViews.end()) {
+            return TextureFuture(it->second);
+        }
+    }
+
+    if (!isTextureLoadPending(cacheKey)) {
+        submitTextureLoad(filepath, cacheKey, bSRGB, name);
+    }
+
+    _textureName2Path[name] = cacheKey;
+    return TextureFuture();
+}
+
+TextureFuture AssetManager::loadTexture(const std::string& name,
+                                        const std::string& filepath,
+                                        const FName&       textureSemantic)
+{
+    return loadTexture(name, filepath, inferTextureColorSpace(textureSemantic));
+}
+
+// ============================================================================
+// Explicit synchronous loading
+// ============================================================================
+
+std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& filepath,
+                                                        ETextureColorSpace colorSpace)
+{
+    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
+    AssetMeta          meta       = getOrLoadMeta(filepath);
+    std::string        cacheKey   = makeCacheKey(filepath, meta);
+    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+
+    // Check cache
+    {
+        auto it = _textureViews.find(cacheKey);
+        if (it != _textureViews.end()) {
+            return it->second;
+        }
+    }
+
+    // Legacy path-only key backward compat
+    {
+        auto it = _textureViews.find(filepath);
+        if (it != _textureViews.end()) {
+            auto tex            = it->second;
+            auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
+            if (tex && tex->getFormat() != expectedFormat) {
+                YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Loading a new copy.",
+                             filepath, (int)tex->getFormat(), (int)expectedFormat);
+            }
+            else {
+                _textureViews[cacheKey] = tex;
+                return tex;
+            }
+        }
+    }
+
+    // Synchronous: decode + GPU upload on calling thread
     auto texture = Texture::fromFile(filepath, "", bSRGB);
     if (!texture) {
-        YA_CORE_WARN("Failed to create texture: {}", filepath);
+        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", filepath);
         return nullptr;
     }
-    else {
-        _textureViews[filepath] = texture;
-    }
+
+    _textureViews[cacheKey] = texture;
     return texture;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name,
-                                                   const std::string& filepath,
-                                                   ETextureColorSpace colorSpace)
+std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
+                                                        const std::string& filepath,
+                                                        ETextureColorSpace colorSpace)
 {
-    bool bSRGB = (colorSpace == ETextureColorSpace::SRGB);
-    if (isTextureLoaded(name)) {
-        auto tex            = _textureViews.find(name)->second;
-        auto expectedFormat = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
-        if (tex && tex->getFormat() != expectedFormat) {
-            YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Reusing cached texture.",
-                         name,
-                         (int)tex->getFormat(),
-                         (int)expectedFormat);
+    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
+    AssetMeta          meta       = getOrLoadMeta(filepath);
+    std::string        cacheKey   = makeCacheKey(filepath, meta);
+    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+
+    {
+        auto it = _textureViews.find(cacheKey);
+        if (it != _textureViews.end()) {
+            return it->second;
         }
-        return tex;
     }
 
     auto texture = Texture::fromFile(filepath, name, bSRGB);
     if (!texture) {
-        YA_CORE_WARN("Failed to create texture: {}", filepath);
+        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", filepath);
     }
 
-    _textureViews[filepath] = texture;
-    _textureName2Path[name] = filepath;
+    _textureViews[cacheKey] = texture;
+    _textureName2Path[name] = cacheKey;
     return texture;
 }
 
-std::shared_ptr<Texture> AssetManager::loadTexture(const std::string& name,
-                                                   const std::string& filepath,
-                                                   const FName&       textureSemantic)
+// ============================================================================
+// Core async texture pipeline
+// ============================================================================
+
+void AssetManager::submitTextureLoad(const std::string& filepath,
+                                     const std::string& cacheKey,
+                                     bool               bSRGB,
+                                     const std::string& name)
 {
-    return loadTexture(name, filepath, inferTextureColorSpace(textureSemantic));
+    YA_CORE_INFO("submitTextureLoad: async decode '{}' (sRGB={})", filepath, bSRGB);
+
+    auto handle = TaskQueue::get().submitWithCallback(
+        // ── Worker thread: CPU-only decode (stbi_load) ──────────────
+        [filepath, bSRGB]() -> DecodedTextureData {
+            return DecodedTextureData::decode(filepath, "", bSRGB);
+        },
+        // ── Main thread callback: GPU upload ────────────────────────
+        [this, filepath, cacheKey, name](DecodedTextureData decoded) {
+            // Another load may have raced and filled the cache already
+            {
+                std::lock_guard lock(_cacheMutex);
+                if (_textureViews.find(cacheKey) != _textureViews.end()) {
+                    _pendingTextureLoads.erase(cacheKey);
+                    return;
+                }
+            }
+
+            if (!decoded.isValid()) {
+                YA_CORE_WARN("Async texture decode failed for '{}'", filepath);
+                std::lock_guard lock(_cacheMutex);
+                _pendingTextureLoads.erase(cacheKey);
+                return;
+            }
+
+            // GPU upload on main thread
+            auto texture = Texture::fromDecodedData(std::move(decoded));
+            if (!texture) {
+                YA_CORE_WARN("Async GPU upload failed for '{}'", filepath);
+                std::lock_guard lock(_cacheMutex);
+                _pendingTextureLoads.erase(cacheKey);
+                return;
+            }
+
+            // Store in cache
+            {
+                std::lock_guard lock(_cacheMutex);
+                _textureViews[cacheKey] = texture;
+                if (!name.empty()) {
+                    _textureName2Path[name] = cacheKey;
+                }
+                _pendingTextureLoads.erase(cacheKey);
+            }
+
+            YA_CORE_INFO("Async texture ready: '{}' ({}x{})", filepath, texture->getWidth(), texture->getHeight());
+        });
+
+    std::lock_guard lock(_cacheMutex);
+    _pendingTextureLoads[cacheKey] = std::move(handle);
+}
+
+bool AssetManager::isTextureLoadPending(const std::string& cacheKey) const
+{
+    std::lock_guard lock(_cacheMutex);
+    auto it = _pendingTextureLoads.find(cacheKey);
+    if (it == _pendingTextureLoads.end()) return false;
+    return !it->second.isReady();
+}
+
+// ============================================================================
+// Reference counting / auto-release (GPU-safe via DeferredDeletionQueue)
+// ============================================================================
+
+/// Helper: get the current frame index tracked by the deferred deletion queue.
+static uint64_t getCurrentFrameIdx()
+{
+    return DeferredDeletionQueue::get().currentFrame();
+}
+
+size_t AssetManager::collectUnused()
+{
+    size_t released = 0;
+    auto&  ddq      = DeferredDeletionQueue::get();
+    uint64_t frame  = getCurrentFrameIdx();
+
+    // Textures
+    for (auto it = _textureViews.begin(); it != _textureViews.end();) {
+        if (it->second && it->second.use_count() == 1) {
+            YA_CORE_TRACE("collectUnused: scheduling deferred release for texture '{}'", it->first);
+            // Move the shared_ptr into the deferred queue — actual destructor
+            // (VulkanImage::~VulkanImage → vkDestroyImage) runs only after
+            // the GPU has finished all in-flight frames.
+            ddq.enqueueResource(frame, std::move(it->second));
+            it = _textureViews.erase(it);
+            ++released;
+        }
+        else {
+            ++it;
+        }
+    }
+
+    // Models (contain GPU Mesh buffers)
+    for (auto it = modelCache.begin(); it != modelCache.end();) {
+        if (it->second && it->second.use_count() == 1) {
+            YA_CORE_TRACE("collectUnused: scheduling deferred release for model '{}'", it->first);
+            ddq.enqueueResource(frame, std::move(it->second));
+            it = modelCache.erase(it);
+            ++released;
+        }
+        else {
+            ++it;
+        }
+    }
+
+    if (released > 0) {
+        YA_CORE_INFO("collectUnused: {} resources scheduled for deferred release", released);
+    }
+
+    return released;
+}
+
+void AssetManager::unload(const std::string& cacheKey)
+{
+    auto&    ddq   = DeferredDeletionQueue::get();
+    uint64_t frame = getCurrentFrameIdx();
+
+    auto texIt = _textureViews.find(cacheKey);
+    if (texIt != _textureViews.end()) {
+        ddq.enqueueResource(frame, std::move(texIt->second));
+        _textureViews.erase(texIt);
+        YA_CORE_INFO("Force-unloaded texture (deferred): {}", cacheKey);
+        return;
+    }
+
+    auto modelIt = modelCache.find(cacheKey);
+    if (modelIt != modelCache.end()) {
+        ddq.enqueueResource(frame, std::move(modelIt->second));
+        modelCache.erase(modelIt);
+        YA_CORE_INFO("Force-unloaded model (deferred): {}", cacheKey);
+        return;
+    }
+
+    YA_CORE_WARN("unload: cache key '{}' not found", cacheKey);
+}
+
+AssetManager::CacheStats AssetManager::getStats() const
+{
+    CacheStats stats;
+    stats.textureCount = _textureViews.size();
+    stats.modelCount   = modelCache.size();
+
+    for (auto& [key, tex] : _textureViews) {
+        if (tex) {
+            stats.textureMemoryEstimate += static_cast<size_t>(tex->getWidth()) *
+                                            tex->getHeight() * tex->getChannels();
+        }
+    }
+
+    return stats;
+}
+
+// ============================================================================
+// Hot-reload
+// ============================================================================
+
+void AssetManager::onMetaFileChanged(const std::string& metaPath)
+{
+    // Derive asset path from meta path: strip ".ya-meta.json" suffix
+    const std::string suffix = ".ya-meta.json";
+    if (metaPath.size() <= suffix.size() || metaPath.substr(metaPath.size() - suffix.size()) != suffix) {
+        YA_CORE_WARN("onMetaFileChanged: '{}' does not look like a .ya-meta.json file", metaPath);
+        return;
+    }
+
+    std::string assetPath = metaPath.substr(0, metaPath.size() - suffix.size());
+
+    // Reload meta
+    AssetMeta oldMeta = getOrLoadMeta(assetPath);
+    AssetMeta newMeta = reloadMeta(assetPath);
+
+    if (oldMeta == newMeta) {
+        YA_CORE_TRACE("onMetaFileChanged: meta unchanged for '{}'", assetPath);
+        return;
+    }
+
+    YA_CORE_INFO("onMetaFileChanged: meta changed for '{}', reloading affected resources", assetPath);
+
+    // Find and defer-delete all cache entries for this asset path
+    auto&    ddq   = DeferredDeletionQueue::get();
+    uint64_t frame = getCurrentFrameIdx();
+
+    auto keys = findCacheKeysForPath(assetPath);
+    for (auto& key : keys) {
+        // Move GPU resources into deferred queue before erasing
+        auto texIt = _textureViews.find(key);
+        if (texIt != _textureViews.end()) {
+            ddq.enqueueResource(frame, std::move(texIt->second));
+            _textureViews.erase(texIt);
+        }
+        auto modelIt = modelCache.find(key);
+        if (modelIt != modelCache.end()) {
+            ddq.enqueueResource(frame, std::move(modelIt->second));
+            modelCache.erase(modelIt);
+        }
+    }
+
+    // Reload with new meta
+    if (newMeta.type == "texture") {
+        loadTexture(assetPath);
+    }
+    else if (newMeta.type == "model") {
+        loadModel(assetPath);
+    }
+}
+
+void AssetManager::onAssetFileChanged(const std::string& assetPath)
+{
+    YA_CORE_INFO("onAssetFileChanged: '{}' changed, reloading", assetPath);
+
+    // Defer-delete all cache entries for this path
+    auto&    ddq   = DeferredDeletionQueue::get();
+    uint64_t frame = getCurrentFrameIdx();
+
+    auto keys = findCacheKeysForPath(assetPath);
+    for (auto& key : keys) {
+        auto texIt = _textureViews.find(key);
+        if (texIt != _textureViews.end()) {
+            ddq.enqueueResource(frame, std::move(texIt->second));
+            _textureViews.erase(texIt);
+        }
+        auto modelIt = modelCache.find(key);
+        if (modelIt != modelCache.end()) {
+            ddq.enqueueResource(frame, std::move(modelIt->second));
+            modelCache.erase(modelIt);
+        }
+    }
+
+    // Also invalidate meta cache (in case the file type changed, unlikely but safe)
+    _metaCache.erase(assetPath);
+
+    // Reload
+    AssetMeta meta = getOrLoadMeta(assetPath);
+    if (meta.type == "texture") {
+        loadTexture(assetPath);
+    }
+    else if (meta.type == "model") {
+        loadModel(assetPath);
+    }
+}
+
+// ============================================================================
+// Query methods
+// ============================================================================
+
+std::shared_ptr<Texture> AssetManager::getTextureByPath(const std::string& filepath) const
+{
+    // Try composite key lookup for all cached metas
+    auto metaIt = _metaCache.find(filepath);
+    if (metaIt != _metaCache.end()) {
+        std::string cacheKey = makeCacheKey(filepath, metaIt->second);
+        auto it = _textureViews.find(cacheKey);
+        if (it != _textureViews.end()) return it->second;
+    }
+
+    // Fallback: linear scan for path prefix match
+    for (auto& [key, tex] : _textureViews) {
+        if (key.starts_with(filepath)) {
+            return tex;
+        }
+    }
+
+    return nullptr;
+}
+
+std::shared_ptr<Texture> AssetManager::getTextureByName(const std::string& name) const
+{
+    auto nameIt = _textureName2Path.find(name);
+    if (nameIt != _textureName2Path.end()) {
+        auto texIt = _textureViews.find(nameIt->second);
+        if (texIt != _textureViews.end()) {
+            return texIt->second;
+        }
+    }
+    return nullptr;
+}
+
+bool AssetManager::isTextureLoaded(const std::string& filepath) const
+{
+    // Check composite key
+    auto metaIt = _metaCache.find(filepath);
+    if (metaIt != _metaCache.end()) {
+        std::string cacheKey = makeCacheKey(filepath, metaIt->second);
+        if (_textureViews.find(cacheKey) != _textureViews.end()) return true;
+    }
+
+    // Fallback: check raw filepath key (legacy)
+    return _textureViews.find(filepath) != _textureViews.end();
+}
+
+bool AssetManager::isTextureLoadedByName(const std::string& name) const
+{
+    return _textureName2Path.find(name) != _textureName2Path.end();
+}
+
+void AssetManager::registerTexture(const std::string& name, const stdptr<Texture>& texture)
+{
+    auto it = _textureViews.find(name);
+    if (it != _textureViews.end()) {
+        YA_CORE_WARN("Texture with name '{}' already registered. Overwriting.", name);
+    }
+    _textureViews.insert({name, texture});
+}
+
+void AssetManager::invalidate(const std::string& filepath)
+{
+    auto&    ddq   = DeferredDeletionQueue::get();
+    uint64_t frame = getCurrentFrameIdx();
+
+    // Defer-delete all cache keys matching this filepath
+    auto keys = findCacheKeysForPath(filepath);
+    for (auto& key : keys) {
+        auto texIt = _textureViews.find(key);
+        if (texIt != _textureViews.end()) {
+            ddq.enqueueResource(frame, std::move(texIt->second));
+            _textureViews.erase(texIt);
+        }
+        auto modelIt = modelCache.find(key);
+        if (modelIt != modelCache.end()) {
+            ddq.enqueueResource(frame, std::move(modelIt->second));
+            modelCache.erase(modelIt);
+        }
+    }
+
+    // Also try exact match (legacy keys)
+    {
+        auto texIt = _textureViews.find(filepath);
+        if (texIt != _textureViews.end()) {
+            ddq.enqueueResource(frame, std::move(texIt->second));
+            _textureViews.erase(texIt);
+        }
+        auto modelIt = modelCache.find(filepath);
+        if (modelIt != modelCache.end()) {
+            ddq.enqueueResource(frame, std::move(modelIt->second));
+            modelCache.erase(modelIt);
+        }
+    }
+
+    // Clear meta cache for this asset
+    _metaCache.erase(filepath);
+}
+
+std::vector<std::string> AssetManager::findCacheKeysForPath(const std::string& filepath) const
+{
+    std::vector<std::string> result;
+    std::string prefix = filepath + "|";
+
+    for (auto& [key, _] : _textureViews) {
+        if (key.starts_with(prefix) || key == filepath) {
+            result.push_back(key);
+        }
+    }
+    for (auto& [key, _] : modelCache) {
+        if (key.starts_with(prefix) || key == filepath) {
+            result.push_back(key);
+        }
+    }
+
+    return result;
+}
+
+// ============================================================================
+// Model loading — async by default
+// ============================================================================
+
+ModelFuture AssetManager::loadModel(const std::string& filepath)
+{
+    // Already loaded?
+    if (isModelLoaded(filepath)) {
+        return ModelFuture(modelCache[filepath]);
+    }
+
+    // Submit async decode if not already in flight
+    if (!isModelLoadPending(filepath)) {
+        submitModelLoad(filepath);
+    }
+
+    return ModelFuture();
+}
+
+ModelFuture AssetManager::loadModel(const std::string& name, const std::string& filepath)
+{
+    if (isModelLoaded(filepath)) {
+        return ModelFuture(modelCache[filepath]);
+    }
+
+    if (!isModelLoadPending(filepath)) {
+        submitModelLoad(filepath, name);
+    }
+
+    _modalName2Path[name] = filepath;
+    return ModelFuture();
+}
+
+// ── Sync model loading ──────────────────────────────────────────────────
+
+std::shared_ptr<Model> AssetManager::loadModelSync(const std::string& filepath)
+{
+    if (isModelLoaded(filepath)) {
+        return modelCache[filepath];
+    }
+
+    return loadModelImpl(filepath, "");
+}
+
+std::shared_ptr<Model> AssetManager::loadModelSync(const std::string& name, const std::string& filepath)
+{
+    if (isModelLoaded(filepath)) {
+        return modelCache[filepath];
+    }
+
+    auto model = loadModelImpl(filepath, name);
+    if (model) {
+        _modalName2Path[name] = filepath;
+    }
+    return model;
+}
+
+// ── Async model pipeline ────────────────────────────────────────────────
+
+void AssetManager::submitModelLoad(const std::string& filepath, const std::string& name)
+{
+    YA_CORE_INFO("submitModelLoad: async decode '{}'", filepath);
+
+    auto handle = TaskQueue::get().submitWithCallback(
+        // ── Worker thread: CPU-only Assimp decode ───────────────────
+        [filepath]() -> DecodedModelData {
+            return DecodedModelData::decode(filepath);
+        },
+        // ── Main thread callback: GPU mesh creation ─────────────────
+        [this, filepath, name](DecodedModelData decoded) {
+            // Race check
+            {
+                std::lock_guard lock(_cacheMutex);
+                if (modelCache.find(filepath) != modelCache.end()) {
+                    _pendingModelLoads.erase(filepath);
+                    return;
+                }
+            }
+
+            if (!decoded.isValid()) {
+                YA_CORE_WARN("Async model decode failed for '{}'", filepath);
+                std::lock_guard lock(_cacheMutex);
+                _pendingModelLoads.erase(filepath);
+                return;
+            }
+
+            // GPU mesh creation on main thread
+            auto model = decoded.createModel();
+            if (!model) {
+                YA_CORE_WARN("Async GPU mesh creation failed for '{}'", filepath);
+                std::lock_guard lock(_cacheMutex);
+                _pendingModelLoads.erase(filepath);
+                return;
+            }
+
+            {
+                std::lock_guard lock(_cacheMutex);
+                modelCache[filepath] = model;
+                if (!name.empty()) {
+                    _modalName2Path[name] = filepath;
+                }
+                _pendingModelLoads.erase(filepath);
+            }
+
+            YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials)",
+                          filepath, model->meshes.size(), model->embeddedMaterials.size());
+        });
+
+    std::lock_guard lock(_cacheMutex);
+    _pendingModelLoads[filepath] = std::move(handle);
+}
+
+bool AssetManager::isModelLoadPending(const std::string& filepath) const
+{
+    std::lock_guard lock(_cacheMutex);
+    auto it = _pendingModelLoads.find(filepath);
+    if (it == _pendingModelLoads.end()) return false;
+    return !it->second.isReady();
+}
+
+bool AssetManager::isModelLoaded(const std::string& filepath) const
+{
+    return modelCache.find(filepath) != modelCache.end();
+}
+
+std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
+{
+    if (isModelLoaded(filepath)) {
+        return modelCache.at(filepath);
+    }
+    return nullptr;
 }
 
 std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string& filepath, const std::string& identifier)
@@ -452,308 +805,21 @@ std::shared_ptr<Model> AssetManager::loadModelImpl(const std::string& filepath, 
         return modelCache[filepath];
     }
 
-    // Create a new model
-    auto model      = makeShared<Model>();
-    model->filepath = filepath;
-
-    Assimp::Importer importer;
-
-    // Get directory path for texture loading
-    size_t      lastSlash = filepath.find_last_of("/\\");
-    std::string directory = (lastSlash != std::string::npos) ? filepath.substr(0, lastSlash + 1) : "";
-    model->setDirectory(directory);
-
-
-    // Check if file exists using VirtualFileSystem
-    if (!VirtualFileSystem::get()->isFileExists(filepath)) {
-        YA_CORE_ERROR("Model file does not exist: {}", filepath);
+    // Synchronous path: decode + GPU mesh creation on calling thread
+    auto decoded = DecodedModelData::decode(filepath);
+    if (!decoded.isValid()) {
+        YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", filepath);
         return nullptr;
     }
 
-    // Load the model using Assimp with content and format hint
-    // The custom IOSystem will handle loading MTL and textures
-    constexpr unsigned int assimpFlags =
-        aiProcess_Triangulate |           // Convert all primitives to triangles
-        aiProcess_GenSmoothNormals |      // Generate smooth normals if missing
-        aiProcess_CalcTangentSpace |      // Calculate tangents for normal mapping
-        aiProcess_JoinIdenticalVertices | // Merge identical vertices (important!)
-        aiProcess_ImproveCacheLocality |  // Optimize vertex cache locality
-        aiProcess_FindDegenerates |       // Find degenerate primitives
-        aiProcess_SortByPType |           // Sort meshes by primitive type
-        aiProcess_FindInvalidData |       // Detect invalid data (NaN, etc.)
-        aiProcess_ValidateDataStructure;  // Validate the scene structure
-
-#if USE_ENGINE_IO_INTERFACE
-
-    // Read the main model file content
-    std::string fileContent;
-    if (!VirtualFileSystem::get()->readFileToString(filepath, fileContent)) {
-        YA_CORE_ERROR("Failed to read model file: {}", filepath);
+    auto model = decoded.createModel();
+    if (!model) {
+        YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", filepath);
         return nullptr;
     }
-
-    // Extract file extension as format hint for Assimp
-    std::string ext = filepath.substr(filepath.find_last_of('.') + 1);
-    std::ranges::transform(ext, ext.begin(), ::tolower);
-
-    // Set custom IOSystem to bridge VirtualFileSystem
-    // This allows Assimp to load MTL files and textures through VFS
-    auto vfsIOSystem = std::make_unique<VFSIOSystem>(directory);
-    importer.SetIOHandler(vfsIOSystem.release()); // Transfer ownership to Assimp
-
-    YA_CORE_INFO("Loading model '{}' with VFSIOSystem (base directory: '{}')", filepath, directory);
-
-
-    const aiScene* scene = importer.ReadFileFromMemory(fileContent.data(),
-                                                       fileContent.size(),
-                                                       assimpFlags,
-                                                       ext.c_str()); // Format hint (e.g., "obj", "fbx")
-#endif
-
-    const aiScene* scene = importer.ReadFile(filepath, assimpFlags);
-    // Check for errors
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        YA_CORE_ERROR("Assimp error: {}", importer.GetErrorString());
-        return nullptr;
-    }
-
-    // Storage for processed data
-    std::vector<stdptr<Mesh>> meshes;
-
-    // Material data per mesh (indexed by mesh index)
-    std::vector<MaterialData> embeddedMaterials;
-    std::vector<int32_t>      meshMaterialIndices;
-
-    // Process all materials first
-    auto processMaterial = [&](const aiScene* scene, aiMaterial* material) -> MaterialData {
-        MaterialData matData;
-        matData.type      = "phong"; // Default to phong, can be detected from source
-        matData.directory = model->getDirectory();
-
-        if (!material) {
-            return matData; // Return default material
-        }
-
-        // Get material name
-        aiString matName;
-        if (material->Get(AI_MATKEY_NAME, matName) == AI_SUCCESS) {
-            matData.name = matName.C_Str();
-        }
-
-        // Get colors - using dynamic params
-        aiColor4D color;
-        if (material->Get(AI_MATKEY_COLOR_DIFFUSE, color) == AI_SUCCESS) {
-            matData.setParam(MatParam::BaseColor, glm::vec4(color.r, color.g, color.b, color.a));
-        }
-        if (material->Get(AI_MATKEY_COLOR_AMBIENT, color) == AI_SUCCESS) {
-            matData.setParam(MatParam::Ambient, glm::vec3(color.r, color.g, color.b));
-        }
-        if (material->Get(AI_MATKEY_COLOR_SPECULAR, color) == AI_SUCCESS) {
-            matData.setParam(MatParam::Specular, glm::vec3(color.r, color.g, color.b));
-        }
-        if (material->Get(AI_MATKEY_COLOR_EMISSIVE, color) == AI_SUCCESS) {
-            matData.setParam(MatParam::Emissive, glm::vec3(color.r, color.g, color.b));
-        }
-
-        // Get scalar parameters
-        float shininess = NAN;
-        if (material->Get(AI_MATKEY_SHININESS, shininess) == AI_SUCCESS) {
-            matData.setParam(MatParam::Shininess, shininess);
-        }
-        float opacity = NAN;
-        if (material->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
-            matData.setParam(MatParam::Opacity, opacity);
-        }
-        float refractIndex = NAN;
-        if (material->Get(AI_MATKEY_REFRACTI, refractIndex) == AI_SUCCESS) {
-            matData.setParam(MatParam::RefractIndex, refractIndex);
-        }
-        float reflection = NAN;
-        if (material->Get(AI_MATKEY_REFLECTIVITY, reflection) == AI_SUCCESS) {
-            matData.setParam(MatParam::Reflection, reflection);
-        }
-
-        // Get textures (store relative paths)
-        // Note: In MTL files, map_Bump is mapped to aiTextureType_HEIGHT, not NORMALS
-        auto getTexturePath = [&](aiMaterial* mat, aiTextureType type) -> std::string {
-            if (auto count = mat->GetTextureCount(type); count > 0) {
-                if (count > 1) {
-                    YA_CORE_WARN("Material '{}' has multiple textures of type {}", matData.name, (int)type);
-                }
-
-                aiString path;
-                if (mat->GetTexture(type, 0, &path) == AI_SUCCESS) {
-                    return path.C_Str();
-                }
-            }
-            return "";
-        };
-
-        // Debug: Log texture counts for this material
-        YA_CORE_TRACE("Material '{}': Diffuse={}, Specular={}, Height={}, Emissive={}",
-                      matData.name,
-                      material->GetTextureCount(aiTextureType_DIFFUSE),
-                      material->GetTextureCount(aiTextureType_SPECULAR),
-                      material->GetTextureCount(aiTextureType_HEIGHT),
-                      material->GetTextureCount(aiTextureType_EMISSIVE));
-
-        // Set texture paths using dynamic map
-        matData.setTexturePath(MatTexture::Diffuse, getTexturePath(material, aiTextureType_DIFFUSE));
-        matData.setTexturePath(MatTexture::Specular, getTexturePath(material, aiTextureType_SPECULAR));
-        matData.setTexturePath(MatTexture::Normal, getTexturePath(material, aiTextureType_HEIGHT)); // map_Bump -> HEIGHT
-        matData.setTexturePath(MatTexture::Emissive, getTexturePath(material, aiTextureType_EMISSIVE));
-
-        // Debug: Log loaded texture paths
-        YA_CORE_TRACE("Material texture details for '{}'", model->getDirectory());
-        if (matData.hasTexture(MatTexture::Diffuse))
-            YA_CORE_TRACE("  -> Diffuse: {}", matData.getTexturePath(MatTexture::Diffuse));
-        if (matData.hasTexture(MatTexture::Specular))
-            YA_CORE_TRACE("  -> Specular: {}", matData.getTexturePath(MatTexture::Specular));
-        if (matData.hasTexture(MatTexture::Normal))
-            YA_CORE_TRACE("  -> Normal: {}", matData.getTexturePath(MatTexture::Normal));
-        if (matData.hasTexture(MatTexture::Emissive))
-            YA_CORE_TRACE("  -> Emissive: {}", matData.getTexturePath(MatTexture::Emissive));
-
-        return matData;
-    };
-
-    // Process all materials in the scene
-    for (uint32_t i = 0; i < scene->mNumMaterials; ++i) {
-        embeddedMaterials.push_back(processMaterial(scene, scene->mMaterials[i]));
-    }
-
-    auto processMesh = [&filepath, &meshes, &meshMaterialIndices](const aiScene* scene, aiMesh* mesh) {
-        // Get mesh name
-        std::string meshName = mesh->mName.length > 0 ? mesh->mName.C_Str() : "unnamed_mesh";
-
-        // Validate mesh has enough data
-        if (mesh->mNumVertices < 3) {
-            YA_CORE_WARN("Skipping mesh '{}': insufficient vertices ({})", meshName, mesh->mNumVertices);
-            meshMaterialIndices.push_back(-1); // Placeholder for skipped mesh
-            return;
-        }
-        if (mesh->mNumFaces == 0) {
-            YA_CORE_WARN("Skipping mesh '{}': no faces", meshName);
-            meshMaterialIndices.push_back(-1);
-            return;
-        }
-
-        // Check primitive type - we only support triangles
-        if (!(mesh->mPrimitiveTypes & aiPrimitiveType_TRIANGLE)) {
-            YA_CORE_WARN("Skipping mesh '{}': not triangulated (type={})", meshName, mesh->mPrimitiveTypes);
-            meshMaterialIndices.push_back(-1);
-            return;
-        }
-
-        // Infer coordinate system from file format
-        CoordinateSystem sourceCoordSystem = inferAssimpCoordinateSystem(filepath, scene);
-
-        // Temporary storage for vertex data
-        MeshData meshData;
-
-        // Process vertices
-        for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
-            ModelVertex vertex;
-
-            // Position
-            vertex.position.x = mesh->mVertices[j].x;
-            vertex.position.y = mesh->mVertices[j].y;
-            vertex.position.z = mesh->mVertices[j].z;
-
-            // Normal
-            if (mesh->HasNormals()) {
-                vertex.normal.x = mesh->mNormals[j].x;
-                vertex.normal.y = mesh->mNormals[j].y;
-                vertex.normal.z = mesh->mNormals[j].z;
-            }
-
-            // Texture coordinates
-            if (mesh->mTextureCoords[0]) {
-                vertex.texCoord.x = mesh->mTextureCoords[0][j].x;
-                vertex.texCoord.y = mesh->mTextureCoords[0][j].y;
-            }
-            else {
-                vertex.texCoord = glm::vec2(0.0f, 0.0f);
-            }
-
-            // Colors - default white if no colors are available
-            if (mesh->HasVertexColors(0)) {
-                vertex.color.r = mesh->mColors[0][j].r;
-                vertex.color.g = mesh->mColors[0][j].g;
-                vertex.color.b = mesh->mColors[0][j].b;
-                vertex.color.a = mesh->mColors[0][j].a;
-            }
-            else {
-                vertex.color = glm::vec4(1.0f);
-            }
-
-            if (mesh->HasTangentsAndBitangents()) {
-                vertex.tangent = {
-                    mesh->mTangents[j].x,
-                    mesh->mTangents[j].y,
-                    mesh->mTangents[j].z,
-                };
-            }
-
-            meshData.vertices.push_back(std::move(vertex));
-        }
-
-        // Process indices
-        for (unsigned int j = 0; j < mesh->mNumFaces; j++) {
-            aiFace face = mesh->mFaces[j];
-            for (unsigned int k = 0; k < face.mNumIndices; k++) {
-                meshData.indices.push_back(face.mIndices[k]);
-            }
-        }
-
-        auto newMesh = meshData.createMesh(meshName, sourceCoordSystem);
-
-        YA_CORE_TRACE("Processed mesh '{}': {} vertices, {} indices ({} triangles)",
-                      meshName,
-                      meshData.vertices.size(),
-                      meshData.indices.size(),
-                      meshData.indices.size() / 3);
-
-        meshes.push_back(std::move(newMesh));
-
-        // Record material index for this mesh
-        if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < static_cast<int32_t>(scene->mNumMaterials)) {
-            meshMaterialIndices.push_back(static_cast<int32_t>(mesh->mMaterialIndex));
-        }
-        else {
-            meshMaterialIndices.push_back(-1); // No material
-        }
-    };
-
-    std::function<void(const aiScene*, aiNode*)> processNode;
-    processNode = [&processMesh, &processNode](const aiScene* scene, aiNode* node) {
-        for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-            aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-            processMesh(scene, mesh);
-        }
-        for (unsigned int i = 0; i < node->mNumChildren; i++) {
-            processNode(scene, node->mChildren[i]);
-        }
-    };
-
-    processNode(scene, scene->mRootNode);
-
-    // Assign processed data to model
-    model->meshes              = std::move(meshes);
-    model->embeddedMaterials   = std::move(embeddedMaterials);
-    model->meshMaterialIndices = std::move(meshMaterialIndices);
-
-    YA_CORE_INFO("Loaded model '{}': {} meshes, {} materials",
-                 filepath,
-                 model->meshes.size(),
-                 model->embeddedMaterials.size());
-
-    model->setIsLoaded(true);
-    model->setDirectory(directory);
 
     // Cache the model
     modelCache[filepath] = model;
-
     return model;
 }
 

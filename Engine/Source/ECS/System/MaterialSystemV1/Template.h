@@ -233,7 +233,7 @@ struct MaterialSystemV1Template : public IMaterialSystem
                     .label         = std::format("{}_Param_UBO", _label),
                     .usage         = ya::EBufferUsage::UniformBuffer,
                     .size          = sizeof(MaterialParamType),
-                    .memProperties = ya::EMemoryProperty::HostVisible | ya::EMemoryProperty::HostCoherent,
+                    .memoryUsage = ya::EMemoryUsage::CpuToGpu,
                 });
             _materialParamsUBOs.push_back(buffer);
         }

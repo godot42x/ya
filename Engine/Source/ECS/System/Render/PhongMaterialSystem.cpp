@@ -195,7 +195,7 @@ stdptr<PhongScenePassResources> PhongMaterialSystem::createScenePassResources(co
             .label         = std::format("{}_Frame_UBO", label),
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
     resources->lightUBO = sharedLightUBO;
     if (!resources->lightUBO) {
@@ -205,7 +205,7 @@ stdptr<PhongScenePassResources> PhongMaterialSystem::createScenePassResources(co
                 .label         = std::format("{}_Light_UBO", label),
                 .usage         = EBufferUsage::UniformBuffer,
                 .size          = sizeof(LightUBO),
-                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+                .memoryUsage = EMemoryUsage::CpuToGpu,
             });
     }
     resources->debugUBO = IBuffer::create(
@@ -214,7 +214,7 @@ stdptr<PhongScenePassResources> PhongMaterialSystem::createScenePassResources(co
             .label         = std::format("{}_Debug_UBO", label),
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(DebugUBO),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     render->getDescriptorHelper()->updateDescriptorSets(

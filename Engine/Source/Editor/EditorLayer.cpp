@@ -65,10 +65,10 @@ void EditorLayer::onAttach()
     _filePicker.setDefaultViewMode(FileExplorer::ViewMode::Icon);
 
     auto am             = AssetManager::get();
-    auto playIcon       = am->loadTexture("play", "Engine/Content/TestTextures/editor/play.png");
-    auto pauseIcon      = am->loadTexture("pause", "Engine/Content/TestTextures/editor/pause.png");
-    auto stopIcon       = am->loadTexture("stop", "Engine/Content/TestTextures/editor/stop.png");
-    auto simulationIcon = am->loadTexture("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
+    auto playIcon       = am->loadTextureSync("play", "Engine/Content/TestTextures/editor/play.png");
+    auto pauseIcon      = am->loadTextureSync("pause", "Engine/Content/TestTextures/editor/pause.png");
+    auto stopIcon       = am->loadTextureSync("stop", "Engine/Content/TestTextures/editor/stop.png");
+    auto simulationIcon = am->loadTextureSync("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
 
     // Validate texture loading
     if (!playIcon) YA_CORE_ERROR("Failed to load play icon");

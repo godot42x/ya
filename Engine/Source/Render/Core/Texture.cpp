@@ -182,6 +182,58 @@ ITextureFactory* Texture::getTextureFactory()
     return textureFactory;
 }
 
+// ====== DecodedTextureData — CPU-only decode (thread-safe) ======
+
+DecodedTextureData DecodedTextureData::decode(const std::string& filepath,
+                                               const std::string& label,
+                                               bool bSRGB)
+{
+    DecodedTextureData result;
+    result.filepath = filepath;
+    result.label    = label.empty() ? filepath : label;
+    result.format   = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
+    result.channels = 4;
+
+    int texWidth = -1, texHeight = -1, texChannels = -1;
+    stbi_uc* raw = stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    if (!raw) {
+        YA_CORE_ERROR("DecodedTextureData::decode: Failed to load '{}'", filepath);
+        return result; // Invalid: pixels == nullptr
+    }
+
+    result.width  = static_cast<uint32_t>(texWidth);
+    result.height = static_cast<uint32_t>(texHeight);
+    result.pixels = std::shared_ptr<uint8_t>(raw, [](uint8_t* p) { stbi_image_free(p); });
+
+    YA_CORE_TRACE("DecodedTextureData::decode: '{}' ({}x{}, {} ch)", filepath, texWidth, texHeight, texChannels);
+    return result;
+}
+
+// ====== Texture::fromDecodedData — GPU upload (main thread only) ======
+
+std::shared_ptr<Texture> Texture::fromDecodedData(DecodedTextureData&& decoded)
+{
+    if (!decoded.isValid()) {
+        YA_CORE_ERROR("Texture::fromDecodedData: invalid DecodedTextureData for '{}'", decoded.filepath);
+        return nullptr;
+    }
+
+    auto texture       = Texture::createShared();
+    texture->_filepath = std::move(decoded.filepath);
+    texture->_label    = std::move(decoded.label);
+    texture->_channels = decoded.channels;
+    texture->initFromData(decoded.pixels.get(),
+                          0,
+                          decoded.width,
+                          decoded.height,
+                          decoded.format);
+
+    YA_CORE_TRACE("Created texture from decoded data: {} ({}x{})", texture->_label, decoded.width, decoded.height);
+    return texture;
+}
+
+// ====== Texture::fromFile — synchronous (decode + upload in one call) ======
+
 std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const std::string& label, bool bSRGB)
 {
     stdpath p = filepath;
@@ -415,7 +467,7 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
             .usage         = EBufferUsage::TransferSrc,
             .data          = (void*)pixels,
             .size          = static_cast<uint32_t>(imageSize),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for texture upload");
@@ -550,7 +602,7 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
             .usage         = EBufferUsage::TransferSrc,
             .data          = (void*)pixels,
             .size          = static_cast<uint32_t>(dataSize),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for fallback texture upload");
@@ -663,7 +715,7 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
             .usage         = EBufferUsage::TransferSrc,
             .data          = stagingData.data(),
             .size          = static_cast<uint32_t>(totalSize),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for cubemap upload");

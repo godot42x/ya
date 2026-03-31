@@ -33,10 +33,10 @@ bool MeshComponent::resolve()
 
     // Priority 2: Mesh from Model by path and index
     if (!_sourceModelPath.empty()) {
-        auto model = AssetManager::get()->getModel(_sourceModelPath);
-        if (!model) {
-            // Try to load the model
-            model = AssetManager::get()->loadModel(_sourceModelPath);
+        Model* model = nullptr;
+        auto ft = AssetManager::get()->loadModel(_sourceModelPath);
+        if (ft.isReady()) {
+            model = ft.get();
         }
 
         if (model && _meshIndex < model->getMeshCount()) {

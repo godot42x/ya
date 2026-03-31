@@ -147,7 +147,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .label         = "Sprite2D_Screen_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     // World-space FrameUBO (separate buffer to avoid GPU read hazard when both paths flush in the same frame)
@@ -160,7 +160,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .label         = "Sprite2D_World_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(FrameUBO),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
@@ -402,7 +402,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .label         = "Sprite2D_Screen_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
             .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
-            .memProperties = EMemoryProperty::HostVisible,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     vertexPtr     = _vertexBuffer->map<FQuadRender::Vertex>();
@@ -415,7 +415,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .label         = "Sprite2D_World_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
             .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
-            .memProperties = EMemoryProperty::HostVisible,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     worldVertexPtr     = _worldVertexBuffer->map<FQuadRender::Vertex>();
@@ -449,7 +449,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .usage         = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
             .data          = indices.data(),
             .size          = sizeof(uint32_t) * MaxIndexCount,
-            .memProperties = EMemoryProperty::DeviceLocal,
+            .memoryUsage = EMemoryUsage::GpuOnly,
         });
 
 

@@ -44,7 +44,7 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices,
             .usage         = EBufferUsage::VertexBuffer,
             .data          = (void *)vertices.data(),
             .size          = static_cast<uint32_t>(sizeof(vertices[0]) * vertices.size()),
-            .memProperties = EMemoryProperty::DeviceLocal,
+            .memoryUsage = EMemoryUsage::GpuOnly,
         });
 
     _indexBuffer = IBuffer::create(
@@ -54,7 +54,7 @@ Mesh::Mesh(const std::vector<ya::Vertex> &vertices,
             .usage         = EBufferUsage::IndexBuffer,
             .data          = (void *)processedIndices.data(),
             .size          = static_cast<uint32_t>(sizeof(processedIndices[0]) * processedIndices.size()),
-            .memProperties = EMemoryProperty::DeviceLocal,
+            .memoryUsage = EMemoryUsage::GpuOnly,
         });
 }
 

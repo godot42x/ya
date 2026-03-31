@@ -33,6 +33,7 @@
 
 #define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
 
+#include <vk_mem_alloc.h>
 
 namespace ya
 {
@@ -109,6 +110,7 @@ struct VulkanRender : public IRender
   private:
 
     VkDevice m_LogicalDevice = VK_NULL_HANDLE;
+    VmaAllocator _vmaAllocator = VK_NULL_HANDLE;
 
 
 
@@ -334,6 +336,11 @@ struct VulkanRender : public IRender
 
         // MARK: destroy device
 
+        if (_vmaAllocator) {
+            vmaDestroyAllocator(_vmaAllocator);
+            _vmaAllocator = VK_NULL_HANDLE;
+        }
+
         if (m_LogicalDevice)
         {
             vkDestroyDevice(m_LogicalDevice, nullptr);
@@ -356,6 +363,7 @@ struct VulkanRender : public IRender
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
+    [[nodiscard]] VmaAllocator     getVmaAllocator() const { return _vmaAllocator; }
     [[nodiscard]] ISwapchain*      getSwapchain() const { return _swapChain; }
     template <typename T>
     [[nodiscard]] T* getSwapchain() const { return static_cast<T*>(_swapChain); }

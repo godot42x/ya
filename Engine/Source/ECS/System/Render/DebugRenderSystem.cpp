@@ -141,7 +141,7 @@ void DebugRenderSystem::onInitImpl(const InitParams& initParams)
               .label         = "DebugRender_UBO",
               .usage         = EBufferUsage::UniformBuffer,
               .size          = sizeof(DebugUBO),
-              .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+              .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     render->getDescriptorHelper()->updateDescriptorSets(

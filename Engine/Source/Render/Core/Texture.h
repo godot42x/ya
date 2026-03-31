@@ -28,6 +28,42 @@ struct ITexture
 };
 
 using ColorU8_t = ColorRGBA<uint8_t>;
+
+/**
+ * @brief Intermediate container carrying decoded pixel data between threads.
+ *
+ * Worker thread:  file IO + stbi_load() → fills this struct (CPU only)
+ * Main thread:    fromDecodedData() → creates VkImage, staging buffer, GPU upload
+ *
+ * The pixel buffer uses shared_ptr with a custom deleter (stbi_image_free)
+ * so it's safe to move between threads and auto-cleans on destruction.
+ */
+struct DecodedTextureData
+{
+    std::string             filepath;
+    std::string             label;
+    uint32_t                width    = 0;
+    uint32_t                height   = 0;
+    uint32_t                channels = 4; // Always RGBA after stbi_load with STBI_rgb_alpha
+    EFormat::T              format   = EFormat::R8G8B8A8_UNORM;
+    std::shared_ptr<uint8_t> pixels;      // Decoded RGBA pixel data (stbi_image_free deleter)
+
+    [[nodiscard]] bool isValid() const { return pixels && width > 0 && height > 0; }
+    [[nodiscard]] size_t dataSize() const { return static_cast<size_t>(width) * height * channels; }
+
+    /**
+     * @brief Decode a texture file on the current thread (CPU only, no GPU).
+     *        Thread-safe: uses no GPU resources.
+     * @param filepath  Path to the image file.
+     * @param label     Optional debug label.
+     * @param bSRGB     If true, format is R8G8B8A8_SRGB; otherwise R8G8B8A8_UNORM.
+     * @return Decoded data, or invalid struct on failure.
+     */
+    static DecodedTextureData decode(const std::string& filepath,
+                                     const std::string& label = "",
+                                     bool bSRGB = true);
+};
+
 struct Texture
 {
     EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
@@ -45,6 +81,16 @@ struct Texture
   public:
 
     static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "", bool bSRGB = true);
+
+    /**
+     * @brief Create a GPU texture from pre-decoded pixel data.
+     *        MUST be called on the main/render thread (creates VkImage, uploads via staging buffer).
+     *
+     * This is the second half of the async pipeline:
+     *   Worker thread:  DecodedTextureData::decode() → DecodedTextureData
+     *   Main thread:    Texture::fromDecodedData(decoded) → shared_ptr<Texture>
+     */
+    static std::shared_ptr<Texture> fromDecodedData(DecodedTextureData&& decoded);
 
     static std::shared_ptr<Texture> fromData(uint32_t                               width,
                                              uint32_t                               height,

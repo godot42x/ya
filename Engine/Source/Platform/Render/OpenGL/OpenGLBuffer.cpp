@@ -5,26 +5,18 @@
 namespace ya
 {
 
-GLenum OpenGLBuffer::getGLUsage(EBufferUsage usage, EMemoryProperty memProps)
+GLenum OpenGLBuffer::getGLUsage(EBufferUsage usage, EMemoryUsage memUsage)
 {
-    // Determine GL usage hint based on memory properties
-    bool hostVisible = static_cast<uint32_t>(memProps & EMemoryProperty::HostVisible) != 0;
-    bool deviceLocal = static_cast<uint32_t>(memProps & EMemoryProperty::DeviceLocal) != 0;
-
-    if (hostVisible && !deviceLocal) {
-        // CPU-writable, frequently updated
+    switch (memUsage) {
+    case EMemoryUsage::GpuOnly:
+        return GL_STATIC_DRAW;
+    case EMemoryUsage::CpuToGpu:
         return GL_DYNAMIC_DRAW;
-    }
-    else if (hostVisible && deviceLocal) {
-        // CPU-writable, GPU-optimal
-        return GL_STREAM_DRAW;
-    }
-    else if (deviceLocal) {
-        // GPU-only, static data
+    case EMemoryUsage::GpuToCpu:
+        return GL_STREAM_READ;
+    default:
         return GL_STATIC_DRAW;
     }
-
-    return GL_STATIC_DRAW;
 }
 
 GLenum OpenGLBuffer::getGLTarget(EBufferUsage usage)
@@ -51,9 +43,9 @@ OpenGLBuffer::OpenGLBuffer(OpenGLRender *render, const BufferCreateInfo &ci)
     YA_CORE_ASSERT(render, "OpenGLRender is null");
 
     _target      = getGLTarget(ci.usage);
-    bHostVisible = static_cast<uint32_t>(ci.memProperties & EMemoryProperty::HostVisible) != 0;
+    bHostVisible = (ci.memoryUsage == EMemoryUsage::CpuToGpu || ci.memoryUsage == EMemoryUsage::GpuToCpu);
 
-    GLenum glUsage = getGLUsage(ci.usage, ci.memProperties);
+    GLenum glUsage = getGLUsage(ci.usage, ci.memoryUsage);
 
     if (ci.data.has_value()) {
         createBufferInternal(ci.data.value(), ci.size, glUsage);

@@ -10,6 +10,10 @@
 
 #include "VulkanUtils.h"
 
+// VMA forward declaration (full definition comes from vk_mem_alloc.h via VulkanRender.h)
+struct VmaAllocation_T;
+typedef struct VmaAllocation_T* VmaAllocation;
+
 namespace ya
 {
 struct VulkanRender;
@@ -21,7 +25,7 @@ struct VulkanImage : public IImage
 
     VulkanRender     *_render      = nullptr;
     VkImage           _handle      = VK_NULL_HANDLE;
-    VkDeviceMemory    _imageMemory = VK_NULL_HANDLE;
+    VmaAllocation     _allocation  = VK_NULL_HANDLE;
     VkFormat          _format      = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags _usageFlags  = 0;
     bool              bOwned       = false;
@@ -112,7 +116,7 @@ struct VulkanImage : public IImage
 
     static bool transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<LayoutTransition> &transitions);
 
-    bool isValid() const { return _handle != VK_NULL_HANDLE && _imageMemory != VK_NULL_HANDLE; }
+    bool isValid() const { return _handle != VK_NULL_HANDLE && _allocation != VK_NULL_HANDLE; }
 
 
   public:

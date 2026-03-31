@@ -50,7 +50,6 @@ YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
 
         std::array<TextureParam, EResource::Count> textureParams;
     };
-
     // C++ side uses std140::b32 + std140::mat3 for reflection metadata & type safety.
     // Cross-validate with shader companion to ensure layout consistency.
     static_assert(sizeof(TextureParam) == sizeof(glsl_types::Test::Unlit::TextureParam),

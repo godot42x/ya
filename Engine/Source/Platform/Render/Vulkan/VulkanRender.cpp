@@ -12,8 +12,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Runtime/App/App.h"
+#include "Resource/DeferredDeletionQueue.h"
 #include "VulkanUtils.h"
 
+#define VMA_IMPLEMENTATION
+#include <vk_mem_alloc.h>
 
 
 #ifdef _WIN32
@@ -595,6 +598,13 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         YA_CORE_INFO("Trying device: {}", candidate.properties.deviceName);
         VkResult ret = tryCreateForCandidate(candidate);
         if (ret == VK_SUCCESS) {
+            // Initialize VMA after device creation
+            VmaAllocatorCreateInfo vmaCI{};
+            vmaCI.instance       = _instance;
+            vmaCI.physicalDevice = m_PhysicalDevice;
+            vmaCI.device         = m_LogicalDevice;
+            vmaCI.vulkanApiVersion = apiVersion;
+            VK_CALL(vmaCreateAllocator(&vmaCI, &_vmaAllocator));
             return true;
         }
         YA_CORE_WARN("Failed to create logical device for {}: {}",
@@ -887,6 +897,10 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
     VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
+
+    // GPU has finished with the previous frame at this slot — safe to destroy
+    // any GPU resources that were deferred-deleted during that frame.
+    DeferredDeletionQueue::get().flush(App::_frameIndex);
 
     auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 

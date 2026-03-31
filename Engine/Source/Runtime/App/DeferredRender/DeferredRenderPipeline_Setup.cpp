@@ -178,7 +178,7 @@ void DeferredRenderPipeline::initDescriptorsAndUBOs()
             .label         = "Deferred_Frame_UBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(PBRGBufferFrameData),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
     _lightUBO = IBuffer::create(
         _render,
@@ -186,7 +186,7 @@ void DeferredRenderPipeline::initDescriptorsAndUBOs()
             .label         = "Deferred_Light_UBO",
             .usage         = EBufferUsage::UniformBuffer,
             .size          = sizeof(LightPassLightData),
-            .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+            .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
     _frameUBO->writeData(&_gBufferPassFrameData, sizeof(_gBufferPassFrameData), 0);

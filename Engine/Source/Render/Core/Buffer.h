@@ -38,26 +38,14 @@ inline EBufferUsage operator&(EBufferUsage a, EBufferUsage b)
     return static_cast<EBufferUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
 }
 
-// Memory property flags (backend-agnostic)
-enum class EMemoryProperty : uint32_t
+// Memory usage intent (backend-agnostic, drives allocator strategy)
+enum class EMemoryUsage : uint8_t
 {
-    None            = 0,
-    DeviceLocal     = 1 << 0, // GPU memory
-    HostVisible     = 1 << 1, // CPU can access
-    HostCoherent    = 1 << 2, // No need to flush/invalidate
-    HostCached      = 1 << 3, // CPU cached
-    LazilyAllocated = 1 << 4,
+    Auto,      // Backend picks optimal memory (default)
+    GpuOnly,   // GPU-exclusive, CPU cannot access (vertex/index/static data)
+    CpuToGpu,  // CPU writes sequentially, GPU reads (UBO, staging, dynamic vertex)
+    GpuToCpu,  // GPU writes, CPU reads back (readback, queries)
 };
-
-inline EMemoryProperty operator|(EMemoryProperty a, EMemoryProperty b)
-{
-    return static_cast<EMemoryProperty>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-
-inline EMemoryProperty operator&(EMemoryProperty a, EMemoryProperty b)
-{
-    return static_cast<EMemoryProperty>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
-}
 
 struct BufferCreateInfo
 {
@@ -65,7 +53,7 @@ struct BufferCreateInfo
     EBufferUsage          usage;
     std::optional<void *> data = std::nullopt;
     uint32_t              size;
-    EMemoryProperty       memProperties;
+    EMemoryUsage          memoryUsage = EMemoryUsage::Auto;
 };
 
 

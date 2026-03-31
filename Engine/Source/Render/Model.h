@@ -186,20 +186,26 @@ struct MeshData
     std::vector<ModelVertex> vertices;
     std::vector<uint32_t>    indices;
 
-
-    stdptr<Mesh> createMesh(const std::string& meshName, CoordinateSystem sourceCoordSystem)
+    /// Convert ModelVertex → engine Vertex format (CPU only, no GPU).
+    std::vector<ya::Vertex> toEngineVertices() const
     {
         std::vector<ya::Vertex> engineVertices;
+        engineVertices.reserve(vertices.size());
         for (const ModelVertex& v : vertices) {
             ya::Vertex vertex;
             vertex.position  = v.position;
             vertex.normal    = v.normal;
             vertex.texCoord0 = v.texCoord;
-            vertex.tangent  = v.tangent;
+            vertex.tangent   = v.tangent;
             engineVertices.push_back(vertex);
         }
+        return engineVertices;
+    }
 
-        // Create Mesh GPU resource directly
+    /// Create GPU Mesh resource (MUST be called on main/render thread).
+    stdptr<Mesh> createMesh(const std::string& meshName, CoordinateSystem sourceCoordSystem)
+    {
+        auto engineVertices = toEngineVertices();
         auto newMesh = makeShared<Mesh>(engineVertices, indices, meshName, sourceCoordSystem);
         return newMesh;
     }
@@ -304,6 +310,47 @@ struct Model
     {
         return meshIndex < meshMaterialIndices.size() ? meshMaterialIndices[meshIndex] : -1;
     }
+};
+
+/**
+ * @brief Intermediate CPU-only model data decoded from file.
+ *
+ * Worker thread:  Assimp ReadFile → process nodes/meshes/materials → DecodedModelData
+ * Main thread:    DecodedModelData::createModel() → Model with GPU Mesh resources
+ *
+ * All MeshData holds raw vertices/indices (no GPU buffers yet).
+ * MaterialData holds texture paths (no loaded textures yet).
+ */
+struct DecodedModelData
+{
+    std::string filepath;
+    std::string directory;
+
+    /// Per-mesh decoded data (vertices + indices, CPU only)
+    struct DecodedMesh
+    {
+        std::string      name;
+        MeshData         data;
+        CoordinateSystem coordSystem = CoordinateSystem::RightHanded;
+    };
+
+    std::vector<DecodedMesh>  meshes;
+    std::vector<MaterialData> materials;
+    std::vector<int32_t>      meshMaterialIndices;
+
+    [[nodiscard]] bool isValid() const { return !meshes.empty(); }
+
+    /**
+     * @brief Decode a model file using Assimp (CPU only, no GPU).
+     *        Thread-safe: uses no GPU resources.
+     */
+    static DecodedModelData decode(const std::string& filepath);
+
+    /**
+     * @brief Create the final Model with GPU Mesh resources.
+     *        MUST be called on the main/render thread.
+     */
+    std::shared_ptr<Model> createModel() const;
 };
 
 } // namespace ya

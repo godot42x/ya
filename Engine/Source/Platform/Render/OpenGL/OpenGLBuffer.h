@@ -26,7 +26,7 @@ struct OpenGLBuffer : public ya::IBuffer
     void        *_mappedData  = nullptr;
 
     // Helper to convert usage flags to GL usage
-    static GLenum getGLUsage(EBufferUsage usage, EMemoryProperty memProps);
+    static GLenum getGLUsage(EBufferUsage usage, EMemoryUsage memUsage);
     static GLenum getGLTarget(EBufferUsage usage);
 
   public:

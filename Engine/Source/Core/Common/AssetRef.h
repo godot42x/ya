@@ -142,6 +142,7 @@ struct TAssetRef : public AssetRefBase
     // explicit operator bool() const { return _cachedPtr != nullptr; }
 
     bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
+    bool               isLoading() const { return _resolveState == EAssetResolveState::Loading; }
     EAssetResolveState getResolveState() const { return _resolveState; }
 
 
@@ -241,6 +242,7 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 // Include necessary headers for inline implementations
 // ============================================================================
 #include "Resource/AssetManager.h"
+#include "Resource/TextureLibrary.h"
 #include "Core/Log.h"
 
 namespace ya
@@ -253,20 +255,31 @@ inline bool TAssetRef<Texture>::resolve()
         _resolveState = EAssetResolveState::Empty;
         return false;
     }
-    if (_cachedPtr) {
-        _resolveState = EAssetResolveState::Ready;
-        return true; // Already loaded
+
+    // Ready: real texture already cached
+    if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
+        return true;
     }
 
-    _resolveState = EAssetResolveState::Loading;
-    _cachedPtr = AssetManager::get()->loadTexture(_path);
-    if (!_cachedPtr) {
-        _resolveState = EAssetResolveState::Failed;
-        YA_CORE_WARN("TAssetRef<Texture>: Failed to load texture from path '{}'", _path);
-        return false;
+    // Loading or Dirty: try to get the real texture from cache
+    auto future = AssetManager::get()->loadTexture(_path);
+    if (future.isReady()) {
+        _cachedPtr    = future.getShared();
+        _resolveState = EAssetResolveState::Ready;
+        return true;
     }
-    _resolveState = EAssetResolveState::Ready;
-    return true;
+
+    // Not ready yet (async decode in-flight) — use placeholder, stay in Loading state.
+    // ResourceResolveSystem will call resolve() again next frame.
+    if (_resolveState != EAssetResolveState::Loading) {
+        _resolveState = EAssetResolveState::Loading;
+        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
+        if (placeholder) {
+            _cachedPtr = placeholder;  // Render with placeholder until real texture arrives
+        }
+        YA_CORE_TRACE("TAssetRef<Texture>: async loading '{}', using placeholder", _path);
+    }
+    return false;  // Not ready — caller should retry
 }
 
 template <>
@@ -276,21 +289,26 @@ inline bool TAssetRef<Model>::resolve()
         _resolveState = EAssetResolveState::Empty;
         return false;
     }
-    if (_cachedPtr) {
-        _resolveState = EAssetResolveState::Ready;
-        return true; // Already loaded
+
+    // Ready: real model already cached
+    if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
+        return true;
     }
 
-    _resolveState = EAssetResolveState::Loading;
-    _cachedPtr = AssetManager::get()->loadModel(_path);
-    if (!_cachedPtr) {
-        _resolveState = EAssetResolveState::Failed;
-        YA_CORE_WARN("TAssetRef<Model>: Failed to load model from path '{}'", _path);
-        return false;
+    // Try to get the real model from cache
+    auto future = AssetManager::get()->loadModel(_path);
+    if (future.isReady()) {
+        _cachedPtr    = future.getShared();
+        _resolveState = EAssetResolveState::Ready;
+        return true;
     }
-    _resolveState = EAssetResolveState::Ready;
-    // char a = "🫡";
-    return true;
+
+    // Not ready yet — stay in Loading, retry next frame
+    if (_resolveState != EAssetResolveState::Loading) {
+        _resolveState = EAssetResolveState::Loading;
+        YA_CORE_TRACE("TAssetRef<Model>: async loading '{}'", _path);
+    }
+    return false;
 }
 
 template <>

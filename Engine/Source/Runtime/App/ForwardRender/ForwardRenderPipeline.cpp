@@ -281,7 +281,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                 .label         = "Phong_Shared_Light_UBO",
                 .usage         = EBufferUsage::UniformBuffer,
                 .size          = sizeof(PhongMaterialSystem::LightUBO),
-                .memProperties = EMemoryProperty::HostVisible | EMemoryProperty::HostCoherent,
+                .memoryUsage = EMemoryUsage::CpuToGpu,
             });
         _phongViewportPassResources = phongSys->createScenePassResources("Phong_ViewportPass", _phongSharedLightUBO);
 
