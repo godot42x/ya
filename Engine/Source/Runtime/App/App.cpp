@@ -476,6 +476,7 @@ void App::tickLogic(float dt)
     YA_PROFILE_FUNCTION()
     taskManager.update();
     Facade.timerManager.onUpdate(dt);
+    syncViewportState();
 
     // Store real-time delta for editor
     // Note: ClearValue is now set in onRender() via beginRenderPass() or beginRendering()
@@ -520,63 +521,107 @@ void App::tickLogic(float dt)
     auto        windowProvider = vkRender->_windowProvider;
     std::string title          = std::format("{}({})", _ci.title, vkRender->_selectedDeviceInfo.deviceName);
     SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
+
+    prepareRenderFrameState(dt);
+}
+
+void App::syncViewportState()
+{
+    auto* renderRuntime = getRenderRuntime();
+    if (!renderRuntime || !_editorLayer) {
+        return;
+    }
+
+    Rect2D pendingRect;
+    if (!_editorLayer->getPendingViewportResize(pendingRect)) {
+        return;
+    }
+
+    renderRuntime->onViewportResized(pendingRect);
+    if (pendingRect.extent.x > 0 && pendingRect.extent.y > 0) {
+        camera.setAspectRatio(pendingRect.extent.x / pendingRect.extent.y);
+    }
+}
+
+Extent2D App::resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& viewportRect) const
+{
+    if (renderRuntime) {
+        Extent2D extent = renderRuntime->getViewportExtent();
+        if (extent.width > 0 && extent.height > 0) {
+            return extent;
+        }
+    }
+
+    if (viewportRect.extent.x > 0 && viewportRect.extent.y > 0) {
+        return Extent2D::fromVec2(viewportRect.extent);
+    }
+
+    return Extent2D{
+        .width  = static_cast<uint32_t>(_windowSize.x),
+        .height = static_cast<uint32_t>(_windowSize.y),
+    };
+}
+
+void App::prepareRenderFrameState(float dt)
+{
+    auto* renderRuntime = getRenderRuntime();
+    if (!renderRuntime) {
+        _renderFrameState = {};
+        return;
+    }
+
+    Rect2D viewportRect = renderRuntime->getViewportRect();
+
+    Entity* runtimeCamera = getPrimaryCamera();
+    if (runtimeCamera && runtimeCamera->isValid()) {
+        auto cc = runtimeCamera->getComponent<CameraComponent>();
+        auto tc = runtimeCamera->getComponent<TransformComponent>();
+        Extent2D viewportExtent = resolveViewportExtent(renderRuntime, viewportRect);
+        cameraController.update(*tc, *cc, inputManager, viewportExtent, dt);
+        if (viewportExtent.height > 0) {
+            cc->setAspectRatio(static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height));
+        }
+    }
+
+    const bool bUseRuntimeCamera = _appState == AppState::Runtime &&
+                                   runtimeCamera && runtimeCamera->isValid() &&
+                                   runtimeCamera->hasComponent<CameraComponent>();
+
+    _renderFrameState.viewportRect             = viewportRect;
+    _renderFrameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
+    if (bUseRuntimeCamera) {
+        auto cc                    = runtimeCamera->getComponent<CameraComponent>();
+        auto tc                    = runtimeCamera->getComponent<TransformComponent>();
+        _renderFrameState.view     = cc->getFreeView();
+        _renderFrameState.projection = cc->getProjection();
+        _renderFrameState.cameraPos  = tc->getWorldPosition();
+        return;
+    }
+
+    _renderFrameState.view       = camera.getViewMatrix();
+    _renderFrameState.projection = camera.getProjectionMatrix();
+    _renderFrameState.cameraPos  = camera.getPosition();
 }
 
 // MARK: Render
 void App::tickRender(float dt)
 {
     auto* renderRuntime = getRenderRuntime();
-
-    auto viewportRect = renderRuntime->getViewportRect();
-
-    Entity* runtimeCamera = getPrimaryCamera();
-    if (runtimeCamera && runtimeCamera->isValid())
-    {
-        auto cc = runtimeCamera->getComponent<CameraComponent>();
-        auto tc = runtimeCamera->getComponent<TransformComponent>();
-
-        Extent2D ext = renderRuntime->getViewportExtent();
-        if (ext.width == 0 || ext.height == 0) {
-            ext = viewportRect.extent.x > 0 && viewportRect.extent.y > 0
-                    ? Extent2D::fromVec2(viewportRect.extent)
-                    : Extent2D{.width = static_cast<uint32_t>(_windowSize.x), .height = static_cast<uint32_t>(_windowSize.y)};
-        }
-        cameraController.update(*tc, *cc, inputManager, ext, dt);
-        if (ext.height > 0) {
-            cc->setAspectRatio(static_cast<float>(ext.width) / static_cast<float>(ext.height));
-        }
-    }
-
-    glm::vec3 cameraPos;
-    glm::mat4 view;
-    glm::mat4 projection;
-    bool      bUseRuntimeCamera = _appState == AppState::Runtime &&
-                             runtimeCamera && runtimeCamera->isValid() &&
-                             runtimeCamera->hasComponent<CameraComponent>();
-    if (bUseRuntimeCamera) {
-        auto cc    = runtimeCamera->getComponent<CameraComponent>();
-        auto tc    = runtimeCamera->getComponent<TransformComponent>();
-        view       = cc->getFreeView();
-        projection = cc->getProjection();
-        cameraPos  = tc->getWorldPosition();
-    }
-    else {
-        view       = camera.getViewMatrix();
-        projection = camera.getProjectionMatrix();
-        cameraPos  = camera.getPosition();
+    if (!renderRuntime) {
+        return;
     }
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .dt                       = dt,
         .sceneManager             = _sceneManager,
         .editorLayer              = _editorLayer,
-        .viewportRect             = renderRuntime->getViewportRect(),
-        .viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale(),
+        .viewportRect             = _renderFrameState.viewportRect,
+        .viewportFrameBufferScale = _renderFrameState.viewportFrameBufferScale,
         .appMode                  = _appMode,
         .clicked                  = &clicked,
-        .view                     = view,
-        .projection               = projection,
-        .cameraPos                = cameraPos,
+        .view                     = _renderFrameState.view,
+        .projection               = _renderFrameState.projection,
+        .cameraPos                = _renderFrameState.cameraPos,
     });
 }
 

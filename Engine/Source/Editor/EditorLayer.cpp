@@ -826,23 +826,30 @@ void EditorLayer::debugWindow()
         }
     }
     else {
-        static const char* kMaskItems    = "RGBA\0RGB\0R\0G\0B\0A\0";
-        auto               maskToMapping = [](int idx) -> ComponentMapping {
-            switch (idx) {
-            case 1:
-                return ComponentMapping::RGBOnly();
-            case 2:
-                return ComponentMapping{.r = EComponentSwizzle::R, .g = EComponentSwizzle::R, .b = EComponentSwizzle::R, .a = EComponentSwizzle::One};
-            case 3:
-                return ComponentMapping{.r = EComponentSwizzle::G, .g = EComponentSwizzle::G, .b = EComponentSwizzle::G, .a = EComponentSwizzle::One};
-            case 4:
-                return ComponentMapping{.r = EComponentSwizzle::B, .g = EComponentSwizzle::B, .b = EComponentSwizzle::B, .a = EComponentSwizzle::One};
-            case 5:
-                return ComponentMapping::AlphaToGrayscale();
-            default:
-                return ComponentMapping{};
-            }
+        auto buildMaskMapping = [](const std::array<bool, 4>& channelEnabled) -> ComponentMapping {
+            const bool bR = channelEnabled[0];
+            const bool bG = channelEnabled[1];
+            const bool bB = channelEnabled[2];
+            const bool bA = channelEnabled[3];
+
+            auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T {
+                if (bR) return EComponentSwizzle::R;
+                if (bG) return EComponentSwizzle::G;
+                if (bB) return EComponentSwizzle::B;
+                if (bA) return EComponentSwizzle::A;
+                return EComponentSwizzle::Zero;
+            };
+
+            const EComponentSwizzle::T fallback = chooseColor();
+            return ComponentMapping{
+                .r = bR ? EComponentSwizzle::R : fallback,
+                .g = bG ? EComponentSwizzle::G : fallback,
+                .b = bB ? EComponentSwizzle::B : fallback,
+                .a = bA ? EComponentSwizzle::A : EComponentSwizzle::One,
+            };
         };
+
+        static constexpr const char* kChannelLabels[] = {"R", "G", "B", "A"};
 
         auto        sampler  = TextureLibrary::get().getLinearSampler();
         const auto& slots    = _viewportCtx.deferredSpec.slots;
@@ -851,41 +858,100 @@ void EditorLayer::debugWindow()
         if (static_cast<int>(_deferredSlotStates.size()) != numSlots)
             _deferredSlotStates.resize(numSlots);
 
-        for (int i = 0; i < numSlots; ++i) {
-            const auto& slot  = slots[i];
-            auto&       state = _deferredSlotStates[i];
+        if (numSlots > 0 && BeginTable("GBufferTable", numSlots, ImGuiTableFlags_BordersInnerV))
+        {
+            for (int i = 0; i < numSlots; ++i)
+                TableSetupColumn(slots[i].label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
 
-            ImGui::PushID(i);
-
-            Text("%s", slot.label.c_str());
-
-            bool maskChanged = Combo("Mask", &state.maskIdx, kMaskItems);
-            bool baseChanged = (slot.defaultView != state.lastBase);
-
-            if (maskChanged || baseChanged) {
-                state.lastBase = slot.defaultView;
-                if (state.maskIdx == 0 || !slot.image) {
-                    state.maskedView.reset();
-                }
-                else {
-                    ImageViewCreateInfo ci;
-                    ci.label         = slot.label + "_mask";
-                    ci.viewType      = EImageViewType::View2D;
-                    ci.aspectFlags   = EImageAspect::Color;
-                    ci.components    = maskToMapping(state.maskIdx);
-                    state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
-                }
+            // Row 1: labels + mask combos
+            TableNextRow();
+            for (int i = 0; i < numSlots; ++i) {
+                TableSetColumnIndex(i);
+                ImGui::PushID(i);
+                Text("%s", slots[i].label.c_str());
+                ImGui::PopID();
             }
 
-            IImageView* displayView = (state.maskIdx == 0 || !state.maskedView)
-                                        ? slot.defaultView
-                                        : state.maskedView.get();
+            // Row 2: mask combos
+            TableNextRow();
+            for (int i = 0; i < numSlots; ++i) {
+                const auto& slot  = slots[i];
+                auto&       state = _deferredSlotStates[i];
+                TableSetColumnIndex(i);
+                ImGui::PushID(i);
 
-            float imgW = panelSize.x;
-            ImGuiHelper::Image(displayView, sampler, slot.label, ImVec2(imgW, imgW));
+                float totalSpacing = GetStyle().ItemSpacing.x * static_cast<float>(IM_ARRAYSIZE(kChannelLabels) - 1);
+                float buttonWidth  = (ImGui::GetContentRegionAvail().x - totalSpacing) / static_cast<float>(IM_ARRAYSIZE(kChannelLabels));
+                bool  maskChanged  = false;
 
-            ImGui::PopID();
-            ImGui::Separator();
+                ya::ImGuiStyleScope maskStyle;
+                maskStyle.pushVar(ImGuiStyleVar_FrameRounding, 6.0f);
+
+                for (int maskButtonIdx = 0; maskButtonIdx < IM_ARRAYSIZE(kChannelLabels); ++maskButtonIdx) {
+                    const bool bSelected = state.channelEnabled[maskButtonIdx];
+                    ImVec4     buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
+                    ImVec4     hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
+                    ImVec4     activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
+
+                    ya::ImGuiStyleScope buttonStyle;
+                    buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
+                    buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
+                    buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
+                    if (ImGui::Button(kChannelLabels[maskButtonIdx], ImVec2(buttonWidth, 0.0f))) {
+                        state.channelEnabled[maskButtonIdx] = !state.channelEnabled[maskButtonIdx];
+                        maskChanged                         = true;
+                    }
+
+                    if (maskButtonIdx + 1 < IM_ARRAYSIZE(kChannelLabels)) {
+                        ImGui::SameLine();
+                    }
+                }
+
+                bool baseChanged = (slot.defaultView != state.lastBase);
+
+                if (maskChanged || baseChanged) {
+                    state.lastBase = slot.defaultView;
+                    const bool bIdentityMask = state.channelEnabled[0] && state.channelEnabled[1] &&
+                                               state.channelEnabled[2] && state.channelEnabled[3];
+                    if (bIdentityMask || !slot.image) {
+                        state.maskedView.reset();
+                    }
+                    else {
+                        ImageViewCreateInfo ci;
+                        ci.label         = slot.label + "_mask";
+                        ci.viewType      = EImageViewType::View2D;
+                        ci.aspectFlags   = EImageAspect::Color;
+                        ci.components    = buildMaskMapping(state.channelEnabled);
+                        state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
+                    }
+                }
+
+                ImGui::PopID();
+            }
+
+            // Row 3: images
+            float padding   = GetStyle().ItemSpacing.x;
+            float colWidth  = (panelSize.x - padding * static_cast<float>(numSlots - 1)) / static_cast<float>(numSlots);
+            float imgHeight = colWidth;
+
+            TableNextRow();
+            for (int i = 0; i < numSlots; ++i) {
+                const auto& slot  = slots[i];
+                auto&       state = _deferredSlotStates[i];
+                TableSetColumnIndex(i);
+                ImGui::PushID(i);
+
+                const bool  bIdentityMask = state.channelEnabled[0] && state.channelEnabled[1] &&
+                                           state.channelEnabled[2] && state.channelEnabled[3];
+                IImageView* displayView = (bIdentityMask || !state.maskedView)
+                                            ? slot.defaultView
+                                            : state.maskedView.get();
+                ImGuiHelper::Image(displayView, sampler, slot.label, ImVec2(colWidth, imgHeight));
+
+                ImGui::PopID();
+            }
+
+            EndTable();
         }
     }
 

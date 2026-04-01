@@ -128,10 +128,10 @@ struct EditorLayer
     // Render resources explicitly passed in from App each frame
     EditorViewportContext _viewportCtx;
 
-    // Per-slot state for the deferred GBuffer debug viewer (mask combo + cached swizzled view)
+    // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
     struct GbufferSlotState
     {
-        int                         maskIdx   = 0;
+        std::array<bool, 4>         channelEnabled = {true, true, true, true};
         std::shared_ptr<IImageView> maskedView;
         IImageView*                 lastBase  = nullptr;
     };

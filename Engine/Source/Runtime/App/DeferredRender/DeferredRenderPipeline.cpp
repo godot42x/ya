@@ -442,46 +442,5 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
     _postProcessStage.onViewportResized(newExtent);
 }
 
-void DeferredRenderPipeline::ensureDebugSwizzledViews()
-{
-    auto gBuf2 = _gBufferRT ? _gBufferRT->getCurFrameBuffer()->getColorTexture(2) : nullptr;
-    if (!gBuf2) return;
-
-    auto* iv = gBuf2->getImageView();
-    if (!iv) return;
-
-    if (_cachedAlbedoSpecImageViewHandle == iv->getHandle() &&
-        _debugAlbedoRGBView && _debugSpecularAlphaView) {
-        return;
-    }
-
-    auto* factory = ITextureFactory::get();
-    if (!factory) return;
-
-    auto image = gBuf2->getImageShared();
-
-    _debugAlbedoRGBView = factory->createImageView(image, ImageViewCreateInfo{
-                                                              .label       = "GBuffer AlbedoSpec RGB View",
-                                                              .viewType    = EImageViewType::View2D,
-                                                              .aspectFlags = EImageAspect::Color,
-                                                              .components  = ComponentMapping::RGBOnly(),
-                                                          });
-    if (_debugAlbedoRGBView) {
-        _debugAlbedoRGBView->setDebugName("GBuffer_AlbedoSpec_RGB");
-    }
-
-    _debugSpecularAlphaView = factory->createImageView(image, ImageViewCreateInfo{
-                                                                  .label       = "GBuffer AlbedoSpec Alpha View",
-                                                                  .viewType    = EImageViewType::View2D,
-                                                                  .aspectFlags = EImageAspect::Color,
-                                                                  .components  = ComponentMapping::AlphaToGrayscale(),
-                                                              });
-    if (_debugSpecularAlphaView) {
-        _debugSpecularAlphaView->setDebugName("GBuffer_AlbedoSpec_Alpha");
-    }
-
-    _cachedAlbedoSpecImageViewHandle = iv->getHandle();
-    YA_CORE_INFO("Created debug swizzled image views for GBuffer albedoSpecular");
-}
 
 } // namespace ya

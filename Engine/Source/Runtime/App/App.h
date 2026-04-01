@@ -132,6 +132,15 @@ struct TaskManager
 
 struct App
 {
+    struct RenderFrameState
+    {
+        Rect2D    viewportRect             = {};
+        float     viewportFrameBufferScale = 1.0f;
+        glm::mat4 view                     = glm::mat4(1.0f);
+        glm::mat4 projection               = glm::mat4(1.0f);
+        glm::vec3 cameraPos                = glm::vec3(0.0f);
+    };
+
     static App* _instance;
 
     Deleter _deleter;
@@ -180,6 +189,8 @@ struct App
     std::vector<stdptr<ISystem>> _systems;
 
     bool bRenderMirror = false;
+
+    RenderFrameState _renderFrameState;
 
 
     EditorLayer* _editorLayer;
@@ -296,6 +307,9 @@ struct App
     // temp
     [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
+    void                              syncViewportState();
+    [[nodiscard]] Extent2D            resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& viewportRect) const;
+    void                              prepareRenderFrameState(float dt);
 
 
   private:

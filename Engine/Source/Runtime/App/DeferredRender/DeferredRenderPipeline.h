@@ -171,7 +171,6 @@ struct DeferredRenderPipeline
 
     Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
 
-    void        ensureDebugSwizzledViews();
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
 

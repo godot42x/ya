@@ -318,12 +318,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         _renderDocCapture->onFrameBegin();
     }
 
-    if (input.editorLayer) {
-        Rect2D pendingRect;
-        if (input.editorLayer->getPendingViewportResize(pendingRect)) {
-            onViewportResized(pendingRect);
-        }
-    }
 
     if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
         return;
@@ -477,14 +471,24 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             ctx.mirrorRenderTarget  = nullptr;
         }
         else {
-            ctx.viewportTexture = _deferredPipeline->viewportTexture;
-            _deferredPipeline->ensureDebugSwizzledViews();
-            ctx.deferredSpec = {
-                .gBufferPostion        = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(0)->getImageView(),
-                .gBufferNormal         = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(1)->getImageView(),
-                .gBufferAlbedoSpecular = _deferredPipeline->_gBufferRT->getCurFrameBuffer()->getColorTexture(2)->getImageView(),
-                .gBufferAlbedoRGB      = _deferredPipeline->getDebugAlbedoRGBView(),
-                .gBufferSpecular       = _deferredPipeline->getDebugSpecularAlphaView(),
+            ctx.viewportTexture    = _deferredPipeline->viewportTexture;
+            auto& fb               = *_deferredPipeline->_gBufferRT->getCurFrameBuffer();
+            ctx.deferredSpec.slots = {
+                {
+                    .label       = "Position",
+                    .defaultView = fb.getColorTexture(0)->getImageView(),
+                    .image       = fb.getColorTexture(0)->getImageShared(),
+                },
+                {
+                    .label       = "Normal",
+                    .defaultView = fb.getColorTexture(1)->getImageView(),
+                    .image       = fb.getColorTexture(1)->getImageShared(),
+                },
+                {
+                    .label       = "AlbedoSpec",
+                    .defaultView = fb.getColorTexture(2)->getImageView(),
+                    .image       = fb.getColorTexture(2)->getImageShared(),
+                },
             };
         }
         input.editorLayer->setViewportContext(ctx);
