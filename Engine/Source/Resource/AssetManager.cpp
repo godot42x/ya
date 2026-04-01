@@ -42,6 +42,7 @@ void AssetManager::clearCache()
     modelCache.clear();
     _textureViews.clear();
     _metaCache.clear();
+    _cacheKeyCache.clear();
 
     YA_CORE_INFO("AssetManager cleared");
 }
@@ -50,7 +51,7 @@ void AssetManager::clearCache()
 // Meta system
 // ============================================================================
 
-AssetMeta AssetManager::getOrLoadMeta(const std::string& assetPath)
+const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
 {
     // Check meta cache first
     {
@@ -98,13 +99,14 @@ AssetMeta AssetManager::getOrLoadMeta(const std::string& assetPath)
     }
 
     // Cache
-    _metaCache[assetPath] = meta;
-    return meta;
+    auto [it2, _] = _metaCache.emplace(assetPath, std::move(meta));
+    return it2->second;
 }
 
-AssetMeta AssetManager::reloadMeta(const std::string& assetPath)
+const AssetMeta& AssetManager::reloadMeta(const std::string& assetPath)
 {
     _metaCache.erase(assetPath);
+    _cacheKeyCache.erase(assetPath);  // Force re-compute on next loadTexture
     return getOrLoadMeta(assetPath);
 }
 
@@ -117,6 +119,17 @@ std::string AssetManager::makeCacheKey(const std::string& filepath, const AssetM
     return filepath + "|" + std::to_string(meta.propertiesHash());
 }
 
+const std::string& AssetManager::getOrBuildCacheKey(const std::string& filepath)
+{
+    const auto it = _cacheKeyCache.find(filepath);
+    if (it != _cacheKeyCache.end())
+        return it->second;
+
+    const auto& meta = getOrLoadMeta(filepath);
+    auto [inserted, _] = _cacheKeyCache.emplace(filepath, makeCacheKey(filepath, meta));
+    return inserted->second;
+}
+
 // ============================================================================
 // Synchronous texture loading (meta-driven)
 // ============================================================================
@@ -124,22 +137,17 @@ std::string AssetManager::makeCacheKey(const std::string& filepath, const AssetM
 AssetManager::ETextureColorSpace AssetManager::resolveColorSpace(const std::string& filepath,
                                                                   ETextureColorSpace codeHint)
 {
-    AssetMeta meta     = getOrLoadMeta(filepath);
-    std::string csStr  = meta.getString("colorSpace", "");
+    const AssetMeta&   meta  = getOrLoadMeta(filepath);
+    const std::string  csStr = meta.getString("colorSpace", "");
 
     if (csStr.empty()) {
-        // No meta colorSpace — use code hint
         return codeHint;
     }
 
-    ETextureColorSpace metaCS = (csStr == "linear") ? ETextureColorSpace::Linear : ETextureColorSpace::SRGB;
+    const ETextureColorSpace metaCS = (csStr == "linear") ? ETextureColorSpace::Linear : ETextureColorSpace::SRGB;
 
-    if (metaCS != codeHint) {
-        YA_CORE_TRACE("AssetMeta overrides colorSpace for '{}': code={}, meta={}",
-                       filepath,
-                       (codeHint == ETextureColorSpace::SRGB ? "SRGB" : "Linear"),
-                       csStr);
-    }
+    // Only log once per unique filepath to avoid per-frame spam.
+    // The override is expected and normal — not worth logging every call.
 
     return metaCS;
 }
@@ -167,15 +175,13 @@ AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FNam
 
 TextureFuture AssetManager::loadTexture(const std::string& filepath, ETextureColorSpace colorSpace)
 {
-    // Resolve meta + cache key
-    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
-    AssetMeta          meta       = getOrLoadMeta(filepath);
-    std::string        cacheKey   = makeCacheKey(filepath, meta);
-    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
+    const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto& cacheKey   = getOrBuildCacheKey(filepath);
 
     // Already loaded? Return immediately.
     {
-        auto it = _textureViews.find(cacheKey);
+        const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             return TextureFuture(it->second);
         }
@@ -194,14 +200,13 @@ TextureFuture AssetManager::loadTexture(const std::string& name,
                                         const std::string& filepath,
                                         ETextureColorSpace colorSpace)
 {
-    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
-    AssetMeta          meta       = getOrLoadMeta(filepath);
-    std::string        cacheKey   = makeCacheKey(filepath, meta);
-    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
+    const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto& cacheKey   = getOrBuildCacheKey(filepath);
 
     // Already loaded?
     {
-        auto it = _textureViews.find(cacheKey);
+        const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             return TextureFuture(it->second);
         }
@@ -229,14 +234,13 @@ TextureFuture AssetManager::loadTexture(const std::string& name,
 std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& filepath,
                                                         ETextureColorSpace colorSpace)
 {
-    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
-    AssetMeta          meta       = getOrLoadMeta(filepath);
-    std::string        cacheKey   = makeCacheKey(filepath, meta);
-    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto         resolvedCS = resolveColorSpace(filepath, colorSpace);
+    const auto&        cacheKey   = getOrBuildCacheKey(filepath);
+    const bool         bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
 
     // Check cache
     {
-        auto it = _textureViews.find(cacheKey);
+        const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             return it->second;
         }
@@ -274,13 +278,12 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
                                                         const std::string& filepath,
                                                         ETextureColorSpace colorSpace)
 {
-    ETextureColorSpace resolvedCS = resolveColorSpace(filepath, colorSpace);
-    AssetMeta          meta       = getOrLoadMeta(filepath);
-    std::string        cacheKey   = makeCacheKey(filepath, meta);
-    bool               bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
+    const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
+    const auto& cacheKey   = getOrBuildCacheKey(filepath);
+    const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
 
     {
-        auto it = _textureViews.find(cacheKey);
+        const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             return it->second;
         }
@@ -354,6 +357,22 @@ void AssetManager::submitTextureLoad(const std::string& filepath,
 
     std::lock_guard lock(_cacheMutex);
     _pendingTextureLoads[cacheKey] = std::move(handle);
+}
+
+// ============================================================================
+// Resource versioning
+// ============================================================================
+
+uint64_t AssetManager::getResourceVersion(const std::string& assetPath) const
+{
+    auto it = _resourceVersion.find(assetPath);
+    return (it != _resourceVersion.end()) ? it->second : 0;
+}
+
+void AssetManager::bumpResourceVersion(const std::string& assetPath)
+{
+    const auto newVersion = ++_resourceVersion[assetPath];
+    YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", assetPath, newVersion);
 }
 
 bool AssetManager::isTextureLoadPending(const std::string& cacheKey) const
@@ -464,16 +483,16 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
 {
     // Derive asset path from meta path: strip ".ya-meta.json" suffix
     const std::string suffix = ".ya-meta.json";
-    if (metaPath.size() <= suffix.size() || metaPath.substr(metaPath.size() - suffix.size()) != suffix) {
+    if (metaPath.size() <= suffix.size() || !metaPath.ends_with(suffix)) {
         YA_CORE_WARN("onMetaFileChanged: '{}' does not look like a .ya-meta.json file", metaPath);
         return;
     }
 
     std::string assetPath = metaPath.substr(0, metaPath.size() - suffix.size());
 
-    // Reload meta
-    AssetMeta oldMeta = getOrLoadMeta(assetPath);
-    AssetMeta newMeta = reloadMeta(assetPath);
+    // Reload meta (copy oldMeta by value — reloadMeta erases from _metaCache)
+    AssetMeta        oldMeta = getOrLoadMeta(assetPath);
+    const AssetMeta& newMeta = reloadMeta(assetPath);
 
     if (oldMeta == newMeta) {
         YA_CORE_TRACE("onMetaFileChanged: meta unchanged for '{}'", assetPath);
@@ -508,6 +527,9 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
     else if (newMeta.type == "model") {
         loadModel(assetPath);
     }
+
+    // Bump version so all TAssetRef instances detect the change
+    bumpResourceVersion(assetPath);
 }
 
 void AssetManager::onAssetFileChanged(const std::string& assetPath)
@@ -543,9 +565,9 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
     else if (meta.type == "model") {
         loadModel(assetPath);
     }
-}
 
-// ============================================================================
+    bumpResourceVersion(assetPath);
+}
 // Query methods
 // ============================================================================
 
@@ -642,8 +664,11 @@ void AssetManager::invalidate(const std::string& filepath)
         }
     }
 
-    // Clear meta cache for this asset
+    // Clear meta + cacheKey caches for this asset
     _metaCache.erase(filepath);
+    _cacheKeyCache.erase(filepath);
+
+    bumpResourceVersion(filepath);
 }
 
 std::vector<std::string> AssetManager::findCacheKeysForPath(const std::string& filepath) const

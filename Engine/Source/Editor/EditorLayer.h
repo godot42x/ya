@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AssetInspectorPanel.h"
 #include "ContentBrowserPanel.h"
 #include "Core/Base.h"
 
@@ -8,6 +9,7 @@
 #include "FilePicker.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
+#include "Render/Core/TextureFactory.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
 
@@ -51,14 +53,16 @@ struct EditorViewportContext
     IRenderTarget* mirrorRenderTarget  = nullptr;
 
 
+    struct GBufferSlot
+    {
+        std::string             label;
+        IImageView*             defaultView = nullptr; // identity view from Texture
+        std::shared_ptr<IImage> image;                 // for createImageView()
+    };
+
     struct DeferredSpec
     {
-        IImageView* gBufferPostion;
-        IImageView* gBufferNormal;
-        IImageView* gBufferAlbedoSpecular;
-        IImageView* gBufferAlbedoRGB  = nullptr; // RGB-only view (alpha forced to 1)
-        IImageView* gBufferSpecular   = nullptr; // Alpha channel as grayscale (specular intensity)
-
+        std::vector<GBufferSlot> slots;
     } deferredSpec;
 };
 
@@ -69,9 +73,10 @@ struct EditorLayer
     std::vector<Entity*> _selections;
 
     // Editor panels
-    SceneHierarchyPanel _sceneHierarchyPanel;
-    DetailsView         _detailsView;
-    ContentBrowserPanel _contentBrowserPanel;
+    SceneHierarchyPanel  _sceneHierarchyPanel;
+    DetailsView          _detailsView;
+    ContentBrowserPanel  _contentBrowserPanel;
+    AssetInspectorPanel  _assetInspectorPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -123,6 +128,15 @@ struct EditorLayer
     // Render resources explicitly passed in from App each frame
     EditorViewportContext _viewportCtx;
 
+    // Per-slot state for the deferred GBuffer debug viewer (mask combo + cached swizzled view)
+    struct GbufferSlotState
+    {
+        int                         maskIdx   = 0;
+        std::shared_ptr<IImageView> maskedView;
+        IImageView*                 lastBase  = nullptr;
+    };
+    std::vector<GbufferSlotState> _deferredSlotStates;
+
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
 
@@ -136,6 +150,9 @@ struct EditorLayer
 
     void onAttach();
     void onDetach();
+
+    /// Open the Asset Inspector for the given relative path
+    void inspectAsset(const std::string& relativePath) { _assetInspectorPanel.inspectTexture(relativePath); }
 
     // Set viewport render context before ImGui render - called from App each frame
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
@@ -202,6 +219,7 @@ struct EditorLayer
         _sceneHierarchyPanel.onImGuiRender();
         _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
+        _assetInspectorPanel.onImGuiRender();
 
         // Render file picker dialog
         _filePicker.render();

@@ -65,6 +65,14 @@ class AssetManager : public IResourceCache
     // Meta cache: assetPath -> loaded AssetMeta
     std::unordered_map<std::string, AssetMeta> _metaCache;
 
+    // Cached path → cacheKey mapping. Avoids re-computing propertiesHash() every frame
+    // when TAssetRef::resolve() calls loadTexture() repeatedly for in-flight assets.
+    // Invalidated on meta change (onMetaFileChanged / reloadMeta).
+    std::unordered_map<std::string, std::string> _cacheKeyCache;
+
+    // Resource version: incremented on reload/invalidate. TAssetRef compares against this.
+    std::unordered_map<std::string, uint64_t> _resourceVersion;
+
     // Track in-flight async loads to avoid duplicate submissions
     std::unordered_map<std::string, TaskHandle<DecodedTextureData>> _pendingTextureLoads;
     std::unordered_map<std::string, TaskHandle<DecodedModelData>>   _pendingModelLoads;
@@ -87,8 +95,8 @@ class AssetManager : public IResourceCache
 
     // ── Meta system ─────────────────────────────────────────────────────
 
-    AssetMeta getOrLoadMeta(const std::string& assetPath);
-    AssetMeta reloadMeta(const std::string& assetPath);
+    const AssetMeta& getOrLoadMeta(const std::string& assetPath);
+    const AssetMeta& reloadMeta(const std::string& assetPath);
 
     // ── Cache key helpers ───────────────────────────────────────────────
 
@@ -169,6 +177,21 @@ class AssetManager : public IResourceCache
     void onMetaFileChanged(const std::string& metaPath);
     void onAssetFileChanged(const std::string& assetPath);
 
+    // ── Resource versioning (for TAssetRef stale-pointer detection) ─────
+
+    /**
+     * @brief Get current version for a resource path. Incremented on every
+     *        reload / invalidate / meta change. TAssetRef compares this against
+     *        its cached version to detect stale pointers.
+     */
+    uint64_t getResourceVersion(const std::string& assetPath) const;
+
+    /**
+     * @brief Force-bump the version for a resource path.
+     *        Called automatically by invalidate/onMetaFileChanged/onAssetFileChanged.
+     */
+    void bumpResourceVersion(const std::string& assetPath);
+
     // ── Query ───────────────────────────────────────────────────────────
 
     std::shared_ptr<Texture> getTextureByPath(const std::string& filepath) const;
@@ -194,6 +217,9 @@ class AssetManager : public IResourceCache
                                          ETextureColorSpace codeHint);
 
     std::vector<std::string> findCacheKeysForPath(const std::string& filepath) const;
+
+    /// Get or compute+cache the cacheKey for a filepath. Returns a stable reference.
+    const std::string& getOrBuildCacheKey(const std::string& filepath);
 
     /// Core async texture load — submits decode to worker, GPU upload to main-thread callback.
     void submitTextureLoad(const std::string& filepath,

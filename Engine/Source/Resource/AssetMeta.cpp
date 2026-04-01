@@ -11,10 +11,11 @@ namespace ya
 
 // ── Convenience accessors ───────────────────────────────────────────────────
 
-std::string AssetMeta::getString(const std::string& key, const std::string& defaultValue) const
+const std::string& AssetMeta::getString(const std::string& key, const std::string& defaultValue) const
 {
-    if (properties.contains(key) && properties[key].is_string()) {
-        return properties[key].get<std::string>();
+    const auto it = properties.find(key);
+    if (it != properties.end() && it->is_string()) {
+        return it->get_ref<const std::string&>();
     }
     return defaultValue;
 }

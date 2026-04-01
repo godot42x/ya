@@ -118,6 +118,20 @@ struct PBRMaterialComponent : public MaterialComponent<PBRMaterial>
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void                  markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
+    bool checkTexturesStaleness()
+    {
+        bool stale = false;
+        if (_albedoSlot.textureRef.isStale())     { _albedoSlot.textureRef.invalidate();     stale = true; }
+        if (_normalSlot.textureRef.isStale())      { _normalSlot.textureRef.invalidate();      stale = true; }
+        if (_metallicSlot.textureRef.isStale())    { _metallicSlot.textureRef.invalidate();    stale = true; }
+        if (_roughnessSlot.textureRef.isStale())   { _roughnessSlot.textureRef.invalidate();   stale = true; }
+        if (_aoSlot.textureRef.isStale())          { _aoSlot.textureRef.invalidate();          stale = true; }
+        if (stale) {
+            invalidate();
+        }
+        return stale;
+    }
+
     TextureSlot*       getTextureSlot(PBRMaterial::EResource r) { return getTextureSlotInternal(r); }
     const TextureSlot* getTextureSlot(PBRMaterial::EResource r) const { return getTextureSlotInternal(r); }
 

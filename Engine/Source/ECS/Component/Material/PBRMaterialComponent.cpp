@@ -1,6 +1,7 @@
 #include "PBRMaterialComponent.h"
 
 #include "Core/Math/Math.h"
+#include "Resource/TextureLibrary.h"
 
 #include <string_view>
 
@@ -108,6 +109,18 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
     if (slot->isReady()) {
         getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
     }
+    else if (slot->hasPath() && slot->textureRef.isLoading()) {
+        // Texture is being reloaded — old GPU resources may be destroyed.
+        // Use placeholder to avoid null imageView in descriptor writes.
+        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
+        auto sampler     = TextureLibrary::get().getDefaultSampler();
+        if (placeholder && sampler) {
+            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+        }
+        else {
+            getMaterial()->clearTextureBinding(resourceEnum);
+        }
+    }
     else {
         getMaterial()->clearTextureBinding(resourceEnum);
     }
@@ -135,7 +148,7 @@ bool PBRMaterialComponent::resolve()
     syncParamsToMaterial();
 
     // 3. Resolve texture slots
-    _material->clearTextureBindings();
+    // NOTE: Do NOT clearTextureBindings() — keep old bindings while async reload in flight.
 
     auto resolveSlot = [&](TextureSlot& slot, const char* name) {
         if (slot.hasPath() && !slot.isReady()) {

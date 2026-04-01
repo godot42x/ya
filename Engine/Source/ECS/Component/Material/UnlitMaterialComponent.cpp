@@ -1,6 +1,7 @@
 #include "UnlitMaterialComponent.h"
 
 #include "Core/Math/Math.h"
+#include "Resource/TextureLibrary.h"
 
 #include <string_view>
 
@@ -116,6 +117,23 @@ void UnlitMaterialComponent::syncTextureSlot(UnlitMaterial::EResource resourceEn
             slot->isEnabledEffective(),
             FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
     }
+    else if (slot->hasPath() && slot->textureRef.isLoading()) {
+        // Texture is being reloaded — old GPU resources may be destroyed.
+        // Use placeholder to avoid null imageView in descriptor writes.
+        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
+        auto sampler     = TextureLibrary::get().getDefaultSampler();
+        if (placeholder && sampler) {
+            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+            getMaterial()->setTextureParam(
+                resourceEnum,
+                slot->isEnabledEffective(),
+                FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
+        }
+        else {
+            getMaterial()->clearTextureBinding(resourceEnum);
+            getMaterial()->disableTextureParam(resourceEnum);
+        }
+    }
     else {
         getMaterial()->clearTextureBinding(resourceEnum);
         getMaterial()->disableTextureParam(resourceEnum);
@@ -146,7 +164,7 @@ bool UnlitMaterialComponent::resolve()
     syncParamsToMaterial();
 
     // 3. Resolve texture slots and build texture bindings
-    _material->clearTextureBindings();
+    // NOTE: Do NOT clearTextureBindings() — keep old bindings while async reload in flight.
 
     if (_baseColor0Slot.hasPath() && !_baseColor0Slot.isReady()) {
         if (!_baseColor0Slot.resolve()) {

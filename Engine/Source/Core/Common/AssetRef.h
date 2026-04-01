@@ -102,7 +102,8 @@ struct TAssetRef : public AssetRefBase
 
     // TODO: Add reflection support for template classes
     ya::Ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
-    EAssetResolveState _resolveState = EAssetResolveState::Empty;
+    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
+    uint64_t           _resolvedVersion = 0; // Version at which _cachedPtr was last resolved
 
     // Constructors
     TAssetRef() = default;
@@ -144,6 +145,12 @@ struct TAssetRef : public AssetRefBase
     bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
     bool               isLoading() const { return _resolveState == EAssetResolveState::Loading; }
     EAssetResolveState getResolveState() const { return _resolveState; }
+
+    /**
+     * @brief Check if cached pointer is stale (resource was reloaded after we resolved).
+     *        Lightweight — only compares two integers. No map lookup when path is empty.
+     */
+    bool isStale() const;
 
 
     /**
@@ -256,30 +263,38 @@ inline bool TAssetRef<Texture>::resolve()
         return false;
     }
 
-    // Ready: real texture already cached
+    // Ready: check version to detect reloaded resources
     if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
-        return true;
+        const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
+        if (_resolvedVersion == currentVersion) {
+            return true;  // Up-to-date, fast path
+        }
+        // Version changed → stale pointer, force re-resolve
+        _cachedPtr.reset();
+        _resolveState = EAssetResolveState::Dirty;
+        YA_CORE_TRACE("TAssetRef<Texture>: version changed for '{}', re-resolving", _path);
     }
 
     // Loading or Dirty: try to get the real texture from cache
+    const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
     auto future = AssetManager::get()->loadTexture(_path);
     if (future.isReady()) {
-        _cachedPtr    = future.getShared();
-        _resolveState = EAssetResolveState::Ready;
+        _cachedPtr        = future.getShared();
+        _resolveState     = EAssetResolveState::Ready;
+        _resolvedVersion  = currentVersion;
         return true;
     }
 
-    // Not ready yet (async decode in-flight) — use placeholder, stay in Loading state.
-    // ResourceResolveSystem will call resolve() again next frame.
+    // Not ready yet — use placeholder, stay in Loading state
     if (_resolveState != EAssetResolveState::Loading) {
         _resolveState = EAssetResolveState::Loading;
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         if (placeholder) {
-            _cachedPtr = placeholder;  // Render with placeholder until real texture arrives
+            _cachedPtr = placeholder;
         }
         YA_CORE_TRACE("TAssetRef<Texture>: async loading '{}', using placeholder", _path);
     }
-    return false;  // Not ready — caller should retry
+    return false;
 }
 
 template <>
@@ -290,20 +305,25 @@ inline bool TAssetRef<Model>::resolve()
         return false;
     }
 
-    // Ready: real model already cached
     if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
-        return true;
+        const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
+        if (_resolvedVersion == currentVersion) {
+            return true;
+        }
+        _cachedPtr.reset();
+        _resolveState = EAssetResolveState::Dirty;
+        YA_CORE_TRACE("TAssetRef<Model>: version changed for '{}', re-resolving", _path);
     }
 
-    // Try to get the real model from cache
+    const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
     auto future = AssetManager::get()->loadModel(_path);
     if (future.isReady()) {
-        _cachedPtr    = future.getShared();
-        _resolveState = EAssetResolveState::Ready;
+        _cachedPtr        = future.getShared();
+        _resolveState     = EAssetResolveState::Ready;
+        _resolvedVersion  = currentVersion;
         return true;
     }
 
-    // Not ready yet — stay in Loading, retry next frame
     if (_resolveState != EAssetResolveState::Loading) {
         _resolveState = EAssetResolveState::Loading;
         YA_CORE_TRACE("TAssetRef<Model>: async loading '{}'", _path);
@@ -318,6 +338,17 @@ inline bool TAssetRef<Mesh>::resolve()
     _resolveState = EAssetResolveState::Failed;
     UNIMPLEMENTED();
     return true;
+}
+
+// ============================================================================
+// TAssetRef<T>::isStale() — lightweight version check
+// ============================================================================
+
+template <typename T>
+inline bool TAssetRef<T>::isStale() const
+{
+    if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
+    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
 }
 
 

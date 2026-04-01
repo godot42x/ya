@@ -126,6 +126,19 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
+    bool checkTexturesStaleness()
+    {
+        bool stale = false;
+        if (_diffuseSlot.textureRef.isStale())    { _diffuseSlot.textureRef.invalidate();    stale = true; }
+        if (_specularSlot.textureRef.isStale())    { _specularSlot.textureRef.invalidate();    stale = true; }
+        if (_reflectionSlot.textureRef.isStale())  { _reflectionSlot.textureRef.invalidate();  stale = true; }
+        if (_normalSlot.textureRef.isStale())      { _normalSlot.textureRef.invalidate();      stale = true; }
+        if (stale) {
+            invalidate();
+        }
+        return stale;
+    }
+
     TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum)
     {
         return getTextureSlotInternal(resourceEnum);

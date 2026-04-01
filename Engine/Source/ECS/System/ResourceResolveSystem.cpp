@@ -62,6 +62,9 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
         if (materialComponent.needsResolve()) {
             materialComponent.resolve();
         }
+        else if (materialComponent.isResolved()) {
+            materialComponent.checkTexturesStaleness();
+        }
     });
 
     registry.view<PBRMaterialComponent>().each([&](auto entity, PBRMaterialComponent& materialComponent) {
@@ -69,11 +72,17 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
         if (materialComponent.needsResolve()) {
             materialComponent.resolve();
         }
+        else if (materialComponent.isResolved()) {
+            materialComponent.checkTexturesStaleness();
+        }
     });
     registry.view<UnlitMaterialComponent>().each([&](auto entity, UnlitMaterialComponent& materialComponent) {
         (void)entity;
         if (materialComponent.needsResolve()) {
             materialComponent.resolve();
+        }
+        else if (materialComponent.isResolved()) {
+            materialComponent.checkTexturesStaleness();
         }
     });
 }

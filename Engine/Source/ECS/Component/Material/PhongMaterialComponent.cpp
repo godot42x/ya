@@ -1,6 +1,7 @@
 #include "PhongMaterialComponent.h"
 
 #include "Core/Math/Math.h"
+#include "Resource/TextureLibrary.h"
 
 #include <string_view>
 
@@ -139,6 +140,20 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
             slot->isEnabledEffective(),
             FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
     }
+    else if (slot->hasPath() && slot->textureRef.isLoading()) {
+        // Texture is being reloaded asynchronously — old GPU resources may already
+        // be destroyed by DeferredDeletionQueue so we can't keep the old binding.
+        // Use a placeholder texture to avoid null imageView in descriptor writes.
+        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
+        auto sampler     = TextureLibrary::get().getDefaultSampler();
+        if (placeholder && sampler) {
+            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+        }
+        else {
+            getMaterial()->clearTextureBinding(resourceEnum);
+            getMaterial()->disableTextureParam(resourceEnum);
+        }
+    }
     else {
         getMaterial()->clearTextureBinding(resourceEnum);
         getMaterial()->disableTextureParam(resourceEnum);
@@ -169,7 +184,9 @@ bool PhongMaterialComponent::resolve()
     syncParamsToMaterial();
 
     // 3. Resolve texture slots and build texture bindings
-    _material->clearTextureBindings();
+    // NOTE: Do NOT clearTextureBindings() here — if a texture is being reloaded
+    // asynchronously, we want to keep the old binding until the new one is ready.
+    // syncTextureSlot() handles the per-slot logic.
 
     // for (auto &[key, slot] : _textureSlots) {
     //     if (slot.textureRef.hasPath() && !slot.isLoaded()) {

@@ -459,6 +459,21 @@ void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderCon
     if (ImGui::Button(("Browse##" + propCtx.prettyName).c_str())) {
         internal(instance, propCtx);
     }
+
+    // Locate / Inspect button — jump to Asset Inspector
+    if (!assetRef.getPath().empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton((">>##locate_" + propCtx.prettyName).c_str())) {
+            if (auto* app = App::get()) {
+                if (auto* editorLayer = app->_editorLayer) {
+                    editorLayer->inspectAsset(assetRef.getPath());
+                }
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Inspect asset properties");
+        }
+    }
 };
 
 struct EditorLayer* getEditor()

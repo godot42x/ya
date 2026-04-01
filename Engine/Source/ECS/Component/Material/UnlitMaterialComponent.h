@@ -111,6 +111,17 @@ struct UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 
+    bool checkTexturesStaleness()
+    {
+        bool stale = false;
+        if (_baseColor0Slot.textureRef.isStale())  { _baseColor0Slot.textureRef.invalidate();  stale = true; }
+        if (_baseColor1Slot.textureRef.isStale())   { _baseColor1Slot.textureRef.invalidate();   stale = true; }
+        if (stale) {
+            invalidate();
+        }
+        return stale;
+    }
+
     TextureSlot* getTextureSlot(UnlitMaterial::EResource resourceEnum)
     {
         return getTextureSlotInternal(resourceEnum);
