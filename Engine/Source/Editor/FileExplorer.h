@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Editor/EditorCommon.h"
@@ -60,8 +61,8 @@ class FileExplorer
     using SelectionCallback  = std::function<void(const std::filesystem::path &)>;
     using ItemActionCallback = std::function<void(const std::filesystem::path &)>;
 
-    FileExplorer()  = default;
-    ~FileExplorer() = default;
+    FileExplorer() = default;
+    ~FileExplorer();
 
     /**
      * @brief 初始化文件浏览器
@@ -172,6 +173,12 @@ class FileExplorer
      */
     void setShowSizeSlider(bool show) { _showSizeSlider = show; }
 
+    void setConfigScope(std::string scope) { _configScope = std::move(scope); }
+    [[nodiscard]] const std::string& getConfigScope() const { return _configScope; }
+    void loadConfig();
+    void saveConfig() const;
+    void flushConfig() const;
+
   private:
     std::vector<MountPoint> _mountPoints;
     MountPoint             *_activeMountPoint = nullptr;
@@ -192,9 +199,13 @@ class FileExplorer
     float _padding            = 16.0f;
     bool  _showViewModeToggle = true;
     bool  _showSizeSlider     = true;
+    std::string _configScope;
+    mutable bool _configDirty = false;
 
     // Callbacks
     ItemActionCallback _itemActionCallback;
+
+    std::string makeConfigKey(std::string_view suffix) const;
 
     void switchToMountPoint(MountPoint *mp);
     bool isPathWithinActiveMountPoint(const std::filesystem::path &path) const;

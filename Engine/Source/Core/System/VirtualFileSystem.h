@@ -166,7 +166,7 @@ struct VirtualFileSystem
 
     void saveToFile(std::string_view filepath, const std::string &data) const
     {
-        auto fp = stdpath(filepath);
+        auto fp = translatePath(filepath);
 
         if (std::filesystem::is_directory(fp.parent_path()) == false)
         {

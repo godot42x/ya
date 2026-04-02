@@ -9,6 +9,8 @@
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
+#include "Config/ConfigManager.h"
+
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/SDLMisc.h"
@@ -110,9 +112,6 @@ void App::init(AppDesc ci)
 
     // register terminal  C-c signal
     handleSystemSignals();
-
-
-    nlohmann::json engineConfig;
     {
         YA_PROFILE_SCOPE_LOG("App Init Subsystems");
         {
@@ -122,28 +121,24 @@ void App::init(AppDesc ci)
             profiling::StaticInitProfiler::recordEnd();
         }
         VirtualFileSystem::init();
-        // TODO: move to config system
-        std::string s;
-        if (VFS::get()->readFileToString("Engine/Config/Engine.jsonc", s)) {
-            // jsonc or json5 comments...
-            engineConfig = nlohmann::json::parse(s, nullptr, true, true);
-        }
+        ConfigManager::get().init();
+        ConfigManager::get().openDocument(
+            "engine",
+            "Engine/Config/Engine.jsonc",
+            ConfigManager::OpenDocumentOptions{
+                .bPersistIfMissing = false,
+                .bReadOnly         = true,
+            });
+        ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
         Logger::init();
         FileWatcher::init();
         // 反射系统已通过静态初始化自动注册（YA_REFLECT 宏）
         MaterialFactory::init();
     }
 
-
-    if (engineConfig.contains("enableRenderDoc")) {
-        _ci.bEnableRenderDoc = _ci.bEnableRenderDoc || engineConfig["enableRenderDoc"].get<bool>();
-    }
-    if (engineConfig.contains("disableGraphicsCards")) {
-        auto disabledCards = engineConfig["disableGraphicsCards"];
-        if (disabledCards.is_array()) {
-            _ci.disabledGraphicsCards = disabledCards.get<std::vector<std::string>>();
-        }
-    }
+    auto& configManager    = ConfigManager::get();
+    _ci.bEnableRenderDoc   = _ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
+    _ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", _ci.disabledGraphicsCards);
 
     _renderRuntime = std::make_unique<RenderRuntime>();
     _renderRuntime->init(RenderRuntime::InitDesc{
@@ -408,6 +403,7 @@ void ya::App::quit()
     }
 
     MaterialFactory::get()->destroy();
+    ConfigManager::get().shutdown();
 }
 
 

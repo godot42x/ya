@@ -27,6 +27,7 @@ void ContentBrowserPanel::init()
     folderIcon = _owner->getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler);
 
     // Initialize FileExplorer from VFS
+    _fileExplorer.setConfigScope("contentBrowser");
     _fileExplorer.initFromVFS();
     _fileExplorer.setViewMode(FileExplorer::ViewMode::Icon);
     _fileExplorer.setFilterMode(FileExplorer::FilterMode::Both);

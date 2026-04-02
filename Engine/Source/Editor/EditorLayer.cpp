@@ -1,4 +1,5 @@
 #include "EditorLayer.h"
+#include "Config/ConfigManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
@@ -26,6 +27,50 @@
 
 namespace ya
 {
+
+static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
+{
+    std::string normalized;
+    normalized.reserve(slotLabel.size());
+    for (char ch : slotLabel) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        else {
+            normalized.push_back('_');
+        }
+    }
+    return std::format("debugWindow.gbufferMask.{}", normalized);
+}
+
+static ComponentMapping buildDeferredMaskMapping(const std::array<bool, 4>& channelEnabled)
+{
+    const bool bR = channelEnabled[0];
+    const bool bG = channelEnabled[1];
+    const bool bB = channelEnabled[2];
+    const bool bA = channelEnabled[3];
+
+    auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T {
+        if (bR) return EComponentSwizzle::R;
+        if (bG) return EComponentSwizzle::G;
+        if (bB) return EComponentSwizzle::B;
+        if (bA) return EComponentSwizzle::A;
+        return EComponentSwizzle::Zero;
+    };
+
+    const EComponentSwizzle::T fallback = chooseColor();
+    return ComponentMapping{
+        .r = bR ? EComponentSwizzle::R : fallback,
+        .g = bG ? EComponentSwizzle::G : fallback,
+        .b = bB ? EComponentSwizzle::B : fallback,
+        .a = bA ? EComponentSwizzle::A : EComponentSwizzle::One,
+    };
+}
+
+static bool isIdentityDeferredMask(const std::array<bool, 4>& channelEnabled)
+{
+    return channelEnabled[0] && channelEnabled[1] && channelEnabled[2] && channelEnabled[3];
+}
 
 EditorLayer::EditorLayer(App* app)
     : _app(app),
@@ -691,268 +736,234 @@ void EditorLayer::editorSettings()
     ImGui::End();
 }
 
+void EditorLayer::syncDeferredSlotState(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state)
+{
+    const std::string configKey = buildDeferredMaskConfigKey(slot.label);
+    if (state.configKey == configKey) {
+        return;
+    }
+
+    auto&               configManager = ConfigManager::get();
+    std::array<bool, 4> channelEnabled{true, true, true, true};
+    (void)configManager.tryGet<std::array<bool, 4>>("editor", configKey, channelEnabled);
+
+    state.configKey      = configKey;
+    state.channelEnabled = channelEnabled;
+    state.maskedView.reset();
+    state.lastBase = nullptr;
+}
+
+bool EditorLayer::renderDeferredSlotMaskControls(const EditorViewportContext::GBufferSlot&, GbufferSlotState& state)
+{
+    static constexpr const char* kChannelLabels[] = {"R", "G", "B", "A"};
+
+    float totalSpacing = ImGui::GetStyle().ItemSpacing.x * static_cast<float>(IM_ARRAYSIZE(kChannelLabels) - 1);
+    float buttonWidth  = (ImGui::GetContentRegionAvail().x - totalSpacing) / static_cast<float>(IM_ARRAYSIZE(kChannelLabels));
+    bool  maskChanged  = false;
+
+    ya::ImGuiStyleScope maskStyle;
+    maskStyle.pushVar(ImGuiStyleVar_FrameRounding, 6.0f);
+
+    for (int maskButtonIdx = 0; maskButtonIdx < IM_ARRAYSIZE(kChannelLabels); ++maskButtonIdx) {
+        const bool bSelected   = state.channelEnabled[maskButtonIdx];
+        ImVec4     buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
+        ImVec4     hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
+        ImVec4     activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
+
+        ya::ImGuiStyleScope buttonStyle;
+        buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
+        buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
+        buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
+        if (ImGui::Button(kChannelLabels[maskButtonIdx], ImVec2(buttonWidth, 0.0f))) {
+            state.channelEnabled[maskButtonIdx] = !state.channelEnabled[maskButtonIdx];
+            ConfigManager::get().set("editor", state.configKey, state.channelEnabled);
+            ConfigManager::get().flushDocument("editor");
+            maskChanged = true;
+        }
+
+        if (maskButtonIdx + 1 < IM_ARRAYSIZE(kChannelLabels)) {
+            ImGui::SameLine();
+        }
+    }
+
+    return maskChanged;
+}
+
+void EditorLayer::updateDeferredSlotImageView(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, bool bForceRefresh)
+{
+    const bool baseChanged = slot.defaultView != state.lastBase;
+    if (!bForceRefresh && !baseChanged) {
+        return;
+    }
+
+    state.lastBase = slot.defaultView;
+    if (isIdentityDeferredMask(state.channelEnabled) || !slot.image) {
+        state.maskedView.reset();
+        return;
+    }
+
+    ImageViewCreateInfo ci;
+    ci.label         = slot.label + "_mask";
+    ci.viewType      = EImageViewType::View2D;
+    ci.aspectFlags   = EImageAspect::Color;
+    ci.components    = buildDeferredMaskMapping(state.channelEnabled);
+    state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
+}
+
+void EditorLayer::renderDeferredSlotImage(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, float width, float height, Sampler* sampler)
+{
+    IImageView* displayView = (isIdentityDeferredMask(state.channelEnabled) || !state.maskedView)
+                                ? slot.defaultView
+                                : state.maskedView.get();
+    ImGuiHelper::Image(displayView, sampler, slot.label, ImVec2(width, height));
+}
+
+void EditorLayer::debugForwardWindow(const ImVec2& panelSize)
+{
+    auto constraintSize = [&panelSize](auto extent) {
+        return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
+    };
+
+    ImGui::Text("Shadow Mapping(Depth Buffer)");
+    if (_viewportCtx.bShadowMappingEnabled) {
+        auto* depthRT            = _viewportCtx.shadowDepthRT;
+        auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
+        if (!depthRT || !directionalDepthIV) {
+            ImGui::Text("Shadow resources unavailable");
+        }
+        else {
+            auto depthExtent = depthRT->getExtent();
+            ImGuiHelper::Image(directionalDepthIV,
+                               TextureLibrary::get().getLinearSampler(),
+                               "Shadow Map",
+                               constraintSize(depthExtent));
+
+            static int         selectedPointLight = 0;
+            static int         cubeFace           = ECubeFace::CubeFace_NegY;
+            static std::string pointLightComboStr = []() {
+                std::string ret{};
+                for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+                    ret += "Point Light " + std::to_string(i) + '\0';
+                }
+                return ret;
+            }();
+
+            ImGui::Combo(std::format("Point Light {}", selectedPointLight).c_str(),
+                         &selectedPointLight,
+                         pointLightComboStr.c_str());
+            ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
+
+            auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
+                             ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
+                             : nullptr;
+            if (faceIV) {
+                ImGuiHelper::Image(faceIV,
+                                   TextureLibrary::get().getLinearSampler(),
+                                   "Point Light Shadow Map",
+                                   constraintSize(depthExtent));
+            }
+        }
+    }
+
+    ImGui::Text("Mirror Render Target (from framebuffer)");
+    if (_viewportCtx.bMirrorRenderResult) {
+        auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
+        auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
+        if (mirrorTexture) {
+            ImGuiHelper::Image(mirrorTexture->getImageView(),
+                               TextureLibrary::get().getLinearSampler(),
+                               "Mirror RT",
+                               constraintSize(mirrorTexture->getExtent()));
+        }
+    }
+
+    ImGui::Text("Viewport Render Target (from framebuffer)");
+    auto viewportRTTexture = _viewportCtx.viewportTexture;
+    if (viewportRTTexture) {
+        ImGuiHelper::Image(viewportRTTexture->getImageView(),
+                           TextureLibrary::get().getLinearSampler(),
+                           "Viewport RT (from framebuffer)",
+                           constraintSize(viewportRTTexture->getExtent()));
+    }
+
+    ImGui::Text("Post-process Texture (from App)");
+    if (_viewportCtx.bPostprocessingEnabled) {
+        auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
+        if (postProcessTexture) {
+            ImGuiHelper::Image(postProcessTexture->getImageView(),
+                               TextureLibrary::get().getLinearSampler(),
+                               "Post-process texture",
+                               constraintSize(postProcessTexture->getExtent()));
+        }
+    }
+}
+
+void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
+{
+    Sampler*    sampler  = TextureLibrary::get().getLinearSampler();
+    const auto& slots    = _viewportCtx.deferredSpec.slots;
+    const int   numSlots = static_cast<int>(slots.size());
+
+    if (static_cast<int>(_deferredSlotStates.size()) != numSlots) {
+        _deferredSlotStates.resize(numSlots);
+    }
+
+    for (int i = 0; i < numSlots; ++i) {
+        syncDeferredSlotState(slots[i], _deferredSlotStates[i]);
+    }
+
+    if (numSlots <= 0 || !ImGui::BeginTable("GBufferTable", numSlots, ImGuiTableFlags_BordersInnerV)) {
+        return;
+    }
+
+    for (int i = 0; i < numSlots; ++i) {
+        ImGui::TableSetupColumn(slots[i].label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    }
+
+    ImGui::TableNextRow();
+    for (int i = 0; i < numSlots; ++i) {
+        ImGui::TableSetColumnIndex(i);
+        ImGui::Text("%s", slots[i].label.c_str());
+    }
+
+    ImGui::TableNextRow();
+    for (int i = 0; i < numSlots; ++i) {
+        ImGui::TableSetColumnIndex(i);
+        ImGui::PushID(i);
+        bool maskChanged = renderDeferredSlotMaskControls(slots[i], _deferredSlotStates[i]);
+        updateDeferredSlotImageView(slots[i], _deferredSlotStates[i], maskChanged);
+        ImGui::PopID();
+    }
+
+    float padding   = ImGui::GetStyle().ItemSpacing.x;
+    float colWidth  = (panelSize.x - padding * static_cast<float>(numSlots - 1)) / static_cast<float>(numSlots);
+    float imgHeight = colWidth;
+
+    ImGui::TableNextRow();
+    for (int i = 0; i < numSlots; ++i) {
+        ImGui::TableSetColumnIndex(i);
+        ImGui::PushID(i);
+        renderDeferredSlotImage(slots[i], _deferredSlotStates[i], colWidth, imgHeight, sampler);
+        ImGui::PopID();
+    }
+
+    ImGui::EndTable();
+}
+
 void EditorLayer::debugWindow()
 {
-    using namespace ImGui;
     if (!ImGui::Begin("Debug Window"))
     {
         ImGui::End();
         return;
     }
 
-    auto panelSize = ImGui::GetContentRegionAvail();
-
-
-    auto constraintSize = [&panelSize](auto extent) {
-        return ImVec2(panelSize.x, (float)extent.height * panelSize.x / (float)extent.width);
-    };
+    const ImVec2 panelSize = ImGui::GetContentRegionAvail();
     if (_viewportCtx.bForwardPipeline) {
-        Text("Shadow Mapping(Depth Buffer)");
-        if (_viewportCtx.bShadowMappingEnabled) {
-            auto* depthRT            = _viewportCtx.shadowDepthRT;
-            auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
-            if (!depthRT || !directionalDepthIV) {
-                ImGui::Text("Shadow resources unavailable");
-            }
-            else {
-                auto depthExtent = depthRT->getExtent();
-                ImGuiHelper::Image(directionalDepthIV,
-                                   TextureLibrary::get().getLinearSampler(),
-                                   "Shadow Map",
-                                   constraintSize(depthExtent));
-                // Per-face View2D: pre-created in App, just index
-                static int selectedPointLight = 0;
-                static int cubeFace           = ECubeFace::CubeFace_NegY;
-                {
-                    static std::string pointLightComboStr = []() {
-                        std::string ret{};
-                        for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
-                            ret += "Point Light " + std::to_string(i) + '\0';
-                        }
-                        return ret;
-                    }();
-                    Combo(std::format("Point Light {}", selectedPointLight).c_str(),
-                          &selectedPointLight,
-                          pointLightComboStr.c_str());
-                    ImGui::Combo("Cube Face", &cubeFace, "PosX\0NegX\0PosY\0NegY\0PosZ\0NegZ\0");
-                }
-
-                auto* faceIV = _viewportCtx.getShadowPointFaceDepthIV
-                                 ? _viewportCtx.getShadowPointFaceDepthIV(static_cast<uint32_t>(selectedPointLight), static_cast<uint32_t>(cubeFace))
-                                 : nullptr;
-                if (faceIV) {
-                    ImGuiHelper::Image(faceIV,
-                                       TextureLibrary::get().getLinearSampler(),
-                                       "Point Light Shadow Map",
-                                       constraintSize(depthExtent));
-                }
-            }
-
-            // auto cubeImagesView = [](int layerStart, int numCube) {
-            //     static int selectedCube = 0;
-            //     static int selectedFace = 0;
-            //     for (int i = 0; i < numCube; ++i) {
-            //         if (Button(std::format("Cube %s", i).c_str())) {
-            //             selectedCube = i;
-            //         }
-            //         if (i < numCube - 1) {
-            //             SameLine();
-            //         }
-            //     }
-            //     static const auto idxToFaceName = [](int idx) {
-            //         switch (idx) {
-            //         case 0:
-            //             return "PosX";
-            //         case 1:
-            //             return "NegX";
-            //         case 2:
-            //             return "PosY";
-            //         case 3:
-            //             return "Neg";
-            //         case 4:
-            //             return "PosZ";
-            //         case 5:
-            //             return "NegZ";
-            //         default:
-            //             return "Unknown";
-            //         };
-            //     };
-
-            //     for (int i = 0; i < 6; ++i)
-            //     {
-            //         if (Button(std::format("Face {}", idxToFaceName(i)).c_str())) {
-            //             selectedFace = i;
-            //         }
-            //         if (i < 6 - 1) {
-            //             SameLine();
-            //         }
-            //     }
-
-            // };
-        }
-
-
-
-        Text("Mirror Render Target (from framebuffer)");
-        if (_viewportCtx.bMirrorRenderResult) {
-            auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
-            auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
-            if (mirrorTexture) {
-                ImGuiHelper::Image(mirrorTexture->getImageView(),
-                                   TextureLibrary::get().getLinearSampler(),
-                                   "Mirror RT",
-                                   constraintSize(mirrorTexture->getExtent()));
-            }
-        }
-
-        Text("Viewport Render Target (from framebuffer)");
-        auto viewportRTTexture = _viewportCtx.viewportTexture;
-        if (viewportRTTexture) {
-            ImGuiHelper::Image(viewportRTTexture->getImageView(),
-                               TextureLibrary::get().getLinearSampler(),
-                               "Viewport RT (from framebuffer)",
-                               constraintSize(viewportRTTexture->getExtent()));
-        }
-
-        Text("Post-process Texture (from App)");
-        if (_viewportCtx.bPostprocessingEnabled) {
-            auto postProcessTexture = _viewportCtx.postprocessOutputTexture;
-            if (postProcessTexture) {
-                ImGuiHelper::Image(postProcessTexture->getImageView(),
-                                   TextureLibrary::get().getLinearSampler(),
-                                   "Post-process texture",
-                                   constraintSize(postProcessTexture->getExtent()));
-            }
-        }
+        debugForwardWindow(panelSize);
     }
     else {
-        auto buildMaskMapping = [](const std::array<bool, 4>& channelEnabled) -> ComponentMapping {
-            const bool bR = channelEnabled[0];
-            const bool bG = channelEnabled[1];
-            const bool bB = channelEnabled[2];
-            const bool bA = channelEnabled[3];
-
-            auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T {
-                if (bR) return EComponentSwizzle::R;
-                if (bG) return EComponentSwizzle::G;
-                if (bB) return EComponentSwizzle::B;
-                if (bA) return EComponentSwizzle::A;
-                return EComponentSwizzle::Zero;
-            };
-
-            const EComponentSwizzle::T fallback = chooseColor();
-            return ComponentMapping{
-                .r = bR ? EComponentSwizzle::R : fallback,
-                .g = bG ? EComponentSwizzle::G : fallback,
-                .b = bB ? EComponentSwizzle::B : fallback,
-                .a = bA ? EComponentSwizzle::A : EComponentSwizzle::One,
-            };
-        };
-
-        static constexpr const char* kChannelLabels[] = {"R", "G", "B", "A"};
-
-        auto        sampler  = TextureLibrary::get().getLinearSampler();
-        const auto& slots    = _viewportCtx.deferredSpec.slots;
-        const int   numSlots = static_cast<int>(slots.size());
-
-        if (static_cast<int>(_deferredSlotStates.size()) != numSlots)
-            _deferredSlotStates.resize(numSlots);
-
-        if (numSlots > 0 && BeginTable("GBufferTable", numSlots, ImGuiTableFlags_BordersInnerV))
-        {
-            for (int i = 0; i < numSlots; ++i)
-                TableSetupColumn(slots[i].label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
-
-            // Row 1: labels + mask combos
-            TableNextRow();
-            for (int i = 0; i < numSlots; ++i) {
-                TableSetColumnIndex(i);
-                ImGui::PushID(i);
-                Text("%s", slots[i].label.c_str());
-                ImGui::PopID();
-            }
-
-            // Row 2: mask combos
-            TableNextRow();
-            for (int i = 0; i < numSlots; ++i) {
-                const auto& slot  = slots[i];
-                auto&       state = _deferredSlotStates[i];
-                TableSetColumnIndex(i);
-                ImGui::PushID(i);
-
-                float totalSpacing = GetStyle().ItemSpacing.x * static_cast<float>(IM_ARRAYSIZE(kChannelLabels) - 1);
-                float buttonWidth  = (ImGui::GetContentRegionAvail().x - totalSpacing) / static_cast<float>(IM_ARRAYSIZE(kChannelLabels));
-                bool  maskChanged  = false;
-
-                ya::ImGuiStyleScope maskStyle;
-                maskStyle.pushVar(ImGuiStyleVar_FrameRounding, 6.0f);
-
-                for (int maskButtonIdx = 0; maskButtonIdx < IM_ARRAYSIZE(kChannelLabels); ++maskButtonIdx) {
-                    const bool bSelected = state.channelEnabled[maskButtonIdx];
-                    ImVec4     buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
-                    ImVec4     hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
-                    ImVec4     activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
-
-                    ya::ImGuiStyleScope buttonStyle;
-                    buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
-                    buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
-                    buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
-                    if (ImGui::Button(kChannelLabels[maskButtonIdx], ImVec2(buttonWidth, 0.0f))) {
-                        state.channelEnabled[maskButtonIdx] = !state.channelEnabled[maskButtonIdx];
-                        maskChanged                         = true;
-                    }
-
-                    if (maskButtonIdx + 1 < IM_ARRAYSIZE(kChannelLabels)) {
-                        ImGui::SameLine();
-                    }
-                }
-
-                bool baseChanged = (slot.defaultView != state.lastBase);
-
-                if (maskChanged || baseChanged) {
-                    state.lastBase = slot.defaultView;
-                    const bool bIdentityMask = state.channelEnabled[0] && state.channelEnabled[1] &&
-                                               state.channelEnabled[2] && state.channelEnabled[3];
-                    if (bIdentityMask || !slot.image) {
-                        state.maskedView.reset();
-                    }
-                    else {
-                        ImageViewCreateInfo ci;
-                        ci.label         = slot.label + "_mask";
-                        ci.viewType      = EImageViewType::View2D;
-                        ci.aspectFlags   = EImageAspect::Color;
-                        ci.components    = buildMaskMapping(state.channelEnabled);
-                        state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
-                    }
-                }
-
-                ImGui::PopID();
-            }
-
-            // Row 3: images
-            float padding   = GetStyle().ItemSpacing.x;
-            float colWidth  = (panelSize.x - padding * static_cast<float>(numSlots - 1)) / static_cast<float>(numSlots);
-            float imgHeight = colWidth;
-
-            TableNextRow();
-            for (int i = 0; i < numSlots; ++i) {
-                const auto& slot  = slots[i];
-                auto&       state = _deferredSlotStates[i];
-                TableSetColumnIndex(i);
-                ImGui::PushID(i);
-
-                const bool  bIdentityMask = state.channelEnabled[0] && state.channelEnabled[1] &&
-                                           state.channelEnabled[2] && state.channelEnabled[3];
-                IImageView* displayView = (bIdentityMask || !state.maskedView)
-                                            ? slot.defaultView
-                                            : state.maskedView.get();
-                ImGuiHelper::Image(displayView, sampler, slot.label, ImVec2(colWidth, imgHeight));
-
-                ImGui::PopID();
-            }
-
-            EndTable();
-        }
+        debugDeferredWindow(panelSize);
     }
 
     ImGui::End();

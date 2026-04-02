@@ -131,9 +131,10 @@ struct EditorLayer
     // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
     struct GbufferSlotState
     {
-        std::array<bool, 4>         channelEnabled = {true, true, true, true};
+        std::string                  configKey;
+        std::array<bool, 4>          channelEnabled = {true, true, true, true};
         std::shared_ptr<IImageView> maskedView;
-        IImageView*                 lastBase  = nullptr;
+        IImageView*                  lastBase = nullptr;
     };
     std::vector<GbufferSlotState> _deferredSlotStates;
 
@@ -268,7 +269,15 @@ struct EditorLayer
     // void renderStatsWindow();
     void viewportWindow();
     void editorSettings();
+
+    // --
     void debugWindow();
+    void debugForwardWindow(const ImVec2& panelSize);
+    void debugDeferredWindow(const ImVec2& panelSize);
+    void syncDeferredSlotState(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state);
+    bool renderDeferredSlotMaskControls(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state);
+    void updateDeferredSlotImageView(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, bool bForceRefresh = false);
+    void renderDeferredSlotImage(const EditorViewportContext::GBufferSlot& slot, GbufferSlotState& state, float width, float height, Sampler* sampler);
 
     // Helpers
     void setupDockspace();

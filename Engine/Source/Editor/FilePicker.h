@@ -39,6 +39,7 @@ struct FilePicker
     // Icons
     FileExplorer::Icons    _icons;
     FileExplorer::ViewMode _defaultViewMode = FileExplorer::ViewMode::Icon;
+    std::string            _configScope     = "filePicker";
 
     // Scene save mode
     bool _bSceneSaveMode       = false;
@@ -58,6 +59,7 @@ struct FilePicker
      * @brief 设置默认视图模式
      */
     void setDefaultViewMode(FileExplorer::ViewMode mode) { _defaultViewMode = mode; }
+    void setConfigScope(std::string scope) { _configScope = std::move(scope); }
 
     /**
      * @brief 打开文件选择器

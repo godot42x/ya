@@ -31,6 +31,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include "Core/Reflection/Reflection.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 
 // GLM 类型反射支持
 YA_REFLECT_BEGIN_EXTERNAL(glm::vec2)
@@ -54,6 +55,8 @@ YA_REFLECT_END_EXTERNAL()
 
 #include "nlohmann/json.hpp"
 
+#include <stdexcept>
+
 
 namespace glm
 {
@@ -69,3 +72,78 @@ inline void from_json(const nlohmann::json &j, glm::vec2 &vec)
 }
 
 } // namespace glm
+
+namespace ya::reflection::detail
+{
+
+inline nlohmann::json serializeGlmVec2AsArray(const glm::vec2 &value)
+{
+    return nlohmann::json::array({value.x, value.y});
+}
+
+inline void deserializeGlmVec2FromArray(glm::vec2 &value, const nlohmann::json &j)
+{
+    if (j.is_array() && j.size() == 2) {
+        value.x = j[0].get<float>();
+        value.y = j[1].get<float>();
+        return;
+    }
+    if (j.is_object()) {
+        value.x = j.at("x").get<float>();
+        value.y = j.at("y").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec2 expects [x, y] or {x, y}");
+}
+
+inline nlohmann::json serializeGlmVec3AsArray(const glm::vec3 &value)
+{
+    return nlohmann::json::array({value.x, value.y, value.z});
+}
+
+inline void deserializeGlmVec3FromArray(glm::vec3 &value, const nlohmann::json &j)
+{
+    if (j.is_array() && j.size() == 3) {
+        value.x = j[0].get<float>();
+        value.y = j[1].get<float>();
+        value.z = j[2].get<float>();
+        return;
+    }
+    if (j.is_object()) {
+        value.x = j.at("x").get<float>();
+        value.y = j.at("y").get<float>();
+        value.z = j.at("z").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec3 expects [x, y, z] or {x, y, z}");
+}
+
+inline nlohmann::json serializeGlmVec4AsArray(const glm::vec4 &value)
+{
+    return nlohmann::json::array({value.x, value.y, value.z, value.w});
+}
+
+inline void deserializeGlmVec4FromArray(glm::vec4 &value, const nlohmann::json &j)
+{
+    if (j.is_array() && j.size() == 4) {
+        value.x = j[0].get<float>();
+        value.y = j[1].get<float>();
+        value.z = j[2].get<float>();
+        value.w = j[3].get<float>();
+        return;
+    }
+    if (j.is_object()) {
+        value.x = j.at("x").get<float>();
+        value.y = j.at("y").get<float>();
+        value.z = j.at("z").get<float>();
+        value.w = j.at("w").get<float>();
+        return;
+    }
+    throw std::runtime_error("glm::vec4 expects [x, y, z, w] or {x, y, z, w}");
+}
+
+} // namespace ya::reflection::detail
+
+YA_REGISTER_SERIALIZER_HOOK(glm::vec2, ::ya::reflection::detail::serializeGlmVec2AsArray, ::ya::reflection::detail::deserializeGlmVec2FromArray)
+YA_REGISTER_SERIALIZER_HOOK(glm::vec3, ::ya::reflection::detail::serializeGlmVec3AsArray, ::ya::reflection::detail::deserializeGlmVec3FromArray)
+YA_REGISTER_SERIALIZER_HOOK(glm::vec4, ::ya::reflection::detail::serializeGlmVec4AsArray, ::ya::reflection::detail::deserializeGlmVec4FromArray)

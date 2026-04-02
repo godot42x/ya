@@ -1,6 +1,8 @@
 #include "FilePicker.h"
+#include "Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "ImGuiHelper.h"
+#include <format>
 #include <imgui.h>
 
 namespace ya
@@ -14,12 +16,14 @@ void FilePicker::setIcons(const ImGuiImageEntry *folderIcon, const ImGuiImageEnt
 
 void FilePicker::applyCommonSettings()
 {
+    _fileExplorer.setConfigScope(_configScope);
     _fileExplorer.setIcons(_icons);
     _fileExplorer.setViewMode(_defaultViewMode);
     _fileExplorer.setShowViewModeToggle(true);
     _fileExplorer.setShowSizeSlider(false); // Less clutter in picker dialogs
     _fileExplorer.setThumbnailSize(64.0f);  // Smaller thumbnails for picker
     _fileExplorer.setPadding(12.0f);
+    _fileExplorer.loadConfig();
 }
 
 void FilePicker::open(const std::string              &title,
@@ -35,6 +39,8 @@ void FilePicker::open(const std::string              &title,
     _title          = title;
     _onConfirm      = onConfirm;
     _onSaveConfirm  = nullptr;
+    _configScope    = std::format("filePicker.{}", title);
+    _fileExplorer.setConfigScope(_configScope);
 
     // Initialize file explorer from VFS
     _fileExplorer.initFromVFS();
@@ -127,6 +133,8 @@ void FilePicker::openDirectoryPicker(const std::string &currentPath,
     _title          = "Select Directory";
     _onConfirm      = onConfirm;
     _onSaveConfirm  = nullptr;
+    _configScope    = "filePicker.Select Directory";
+    _fileExplorer.setConfigScope(_configScope);
 
     _fileExplorer.initFromVFS();
     _fileExplorer.setExtensions({});
@@ -148,6 +156,8 @@ void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallbac
     _title          = "Save Scene";
     _onConfirm      = nullptr;
     _onSaveConfirm  = onConfirm;
+    _configScope    = "filePicker.Save Scene";
+    _fileExplorer.setConfigScope(_configScope);
 
     // Set default scene name
     strncpy(_sceneNameBuffer, defaultName.c_str(), sizeof(_sceneNameBuffer) - 1);
@@ -159,6 +169,11 @@ void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallbac
     _fileExplorer.setFilterMode(FileExplorer::FilterMode::Directories);
     _fileExplorer.setSelectionMode(FileExplorer::SelectionMode::Directory);
     applyCommonSettings();
+
+    const std::string lastSaveDirectory = ConfigManager::get().getOr<std::string>("editor", "filePicker.lastSaveDirectory", "");
+    if (!lastSaveDirectory.empty()) {
+        _fileExplorer.setSelectedPath(lastSaveDirectory);
+    }
 }
 
 void FilePicker::renderFileSelectContent()
@@ -256,6 +271,8 @@ void FilePicker::renderSceneSaveContent()
     {
         if (_onSaveConfirm)
         {
+            ConfigManager::get().set("editor", "filePicker.lastSaveDirectory", saveDir.string());
+            ConfigManager::get().flushDocument("editor");
             _onSaveConfirm(saveDir.string(), std::string(_sceneNameBuffer));
         }
         close();
