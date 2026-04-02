@@ -385,7 +385,15 @@ bool VulkanImage::allocate()
 
     _layout = VK_IMAGE_LAYOUT_UNDEFINED;
     if (_ci.initialLayout != EImageLayout::Undefined) {
-        auto cmdBuf = _render->beginIsolateCommands("ImageInitialLayout");
+        auto cmdBuf = _render->beginIsolateCommands(std::format(
+            "ImageInitialLayout:{}:{}x{}:layers{}:mips{}:{}/{}",
+            _ci.label,
+            _ci.extent.width,
+            _ci.extent.height,
+            _ci.arrayLayers,
+            _ci.mipLevels,
+            static_cast<int>(_layout),
+            static_cast<int>(_ci.initialLayout)));
         cmdBuf->transitionImageLayout(this, EImageLayout::Undefined, _ci.initialLayout);
         _render->endIsolateCommands(cmdBuf);
     }

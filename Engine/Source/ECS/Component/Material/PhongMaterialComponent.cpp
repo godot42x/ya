@@ -160,15 +160,16 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
     }
 }
 
-bool PhongMaterialComponent::resolve()
+EMaterialResolveResult PhongMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
-        return true;
+        return EMaterialResolveResult::Ready;
     }
 
     _resolveState = EMaterialResolveState::Resolving;
 
     bool success = true;
+    bool hasPendingTextures = false;
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
@@ -176,7 +177,8 @@ bool PhongMaterialComponent::resolve()
 
         if (!_material) {
             YA_CORE_ERROR("PhongMaterialComponent: Failed to create runtime material");
-            return false;
+            _resolveState = EMaterialResolveState::Failed;
+            return EMaterialResolveResult::Failed;
         }
     }
 
@@ -199,35 +201,39 @@ bool PhongMaterialComponent::resolve()
     //         }
     //     }
     // }
-    if (_diffuseSlot.hasPath() && !_diffuseSlot.isReady()) {
-        if (!_diffuseSlot.resolve()) {
-            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve diffuse texture slot");
-            success = false;
+    auto resolveSlot = [&](TextureSlot& slot, const char* name) {
+        if (!slot.hasPath() || slot.isReady()) {
+            return;
         }
-    }
-    if (_specularSlot.hasPath() && !_specularSlot.isReady()) {
-        if (!_specularSlot.resolve()) {
-            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve specular texture slot");
-            success = false;
+
+        const auto result = slot.resolve();
+        if (result == EAssetResolveResult::Ready) {
+            return;
         }
-    }
-    if (_reflectionSlot.hasPath() && !_reflectionSlot.isReady()) {
-        if (!_reflectionSlot.resolve()) {
-            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve reflection texture slot");
-            success = false;
+
+        if (result == EAssetResolveResult::Pending) {
+            hasPendingTextures = true;
+            return;
         }
-    }
-    if (_normalSlot.hasPath() && !_normalSlot.isReady()) {
-        if (!_normalSlot.resolve()) {
-            YA_CORE_WARN("PhongMaterialComponent: Failed to resolve normal texture slot");
-            success = false;
-        }
-    }
+
+        YA_CORE_WARN("PhongMaterialComponent: Failed to resolve {} texture slot", name);
+        success = false;
+    };
+
+    resolveSlot(_diffuseSlot, "diffuse");
+    resolveSlot(_specularSlot, "specular");
+    resolveSlot(_reflectionSlot, "reflection");
+    resolveSlot(_normalSlot, "normal");
 
     syncTextureSlots();
 
-    _resolveState = success ? EMaterialResolveState::Ready : EMaterialResolveState::Failed;
-    return success;
+    if (!success) {
+        _resolveState = EMaterialResolveState::Failed;
+        return EMaterialResolveResult::Failed;
+    }
+
+    _resolveState = hasPendingTextures ? EMaterialResolveState::Resolving : EMaterialResolveState::Ready;
+    return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
 void PhongMaterialComponent::onEditorPropertyChanged(const std::string& propPath)

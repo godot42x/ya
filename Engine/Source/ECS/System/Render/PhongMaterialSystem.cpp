@@ -307,9 +307,14 @@ void PhongMaterialSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* c
     preTick(0.0f, ctx);
 
     // Fetch shared skybox cubemap DS from SkyboxComponent (written by ResourceResolveSystem)
-    DescriptorSetHandle skyboxDS = nullptr;
+    auto* runtime = App::get()->getRenderRuntime();
+    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
+
+    DescriptorSetHandle skyboxDS = runtime->getFallbackSkyboxDescriptorSet();
     for (auto&& [e, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-        skyboxDS = sc.cubeMapDS;
+        if (sc.hasRenderableCubemap()) {
+            skyboxDS = sc.cubeMapDS;
+        }
         break;
     }
 

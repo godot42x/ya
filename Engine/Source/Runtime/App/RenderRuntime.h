@@ -72,6 +72,8 @@ struct RenderRuntime
     stdptr<IDescriptorPool>       _skyboxDSP     = nullptr;
     stdptr<IDescriptorSetLayout> _skyboxDSL     = nullptr;
     stdptr<Sampler>              _skyboxSampler = nullptr;
+    stdptr<Texture>              _fallbackSkyboxTexture = nullptr;
+    DescriptorSetHandle          _fallbackSkyboxDS      = nullptr;
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
@@ -105,6 +107,7 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorPool>        getSkyboxDescriptorPool() const { return _skyboxDSP; }
     [[nodiscard]] stdptr<IDescriptorSetLayout>   getSkyboxDescriptorSetLayout() const { return _skyboxDSL; }
     [[nodiscard]] Sampler*                       getSkyboxSampler() const { return _skyboxSampler.get(); }
+    [[nodiscard]] DescriptorSetHandle            getFallbackSkyboxDescriptorSet() const { return _fallbackSkyboxDS; }
     [[nodiscard]] const Rect2D&                  getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float                          getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D                       getViewportExtent() const;

@@ -13,6 +13,7 @@ namespace ya
 struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
+struct SkyboxComponent;
 
 // ============================================================================
 // MARK: Details View
@@ -41,6 +42,8 @@ struct DetailsView
   private:
     void drawComponents(Entity &entity);
     void drawAddComponentButton(Entity &entity); // Add component popup
+    void drawSkyboxComponent(Entity& entity);
+    void drawSkyboxStatus(const SkyboxComponent& skybox);
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
     void testNewRenderInterface(Entity &entity);

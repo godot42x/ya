@@ -98,7 +98,7 @@ struct UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
     static EditorChangeSummary summarizeEditorChanges(const std::vector<std::string>& propPaths);
 
   public:
-    bool resolve() override;
+    EMaterialResolveResult resolve() override;
     void onEditorPropertyChanged(const std::string& propPath);
     void onEditorPropertiesChanged(const std::vector<std::string>& propPaths);
 
@@ -107,7 +107,11 @@ struct UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
         _resolveState = EMaterialResolveState::Dirty;
     }
     bool isResolved() const { return _resolveState == EMaterialResolveState::Ready; }
-    bool needsResolve() const { return _resolveState == EMaterialResolveState::Dirty || _resolveState == EMaterialResolveState::Failed; }
+    bool needsResolve() const
+    {
+        return _resolveState == EMaterialResolveState::Dirty ||
+               _resolveState == EMaterialResolveState::Resolving;
+    }
     EMaterialResolveState getResolveState() const { return _resolveState; }
     void markResolvedReady() { _resolveState = EMaterialResolveState::Ready; }
 

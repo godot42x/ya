@@ -114,10 +114,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
             ci.files[ya::CubeFace_NegY] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/bottom.jpg";
             ci.files[ya::CubeFace_PosZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/front.jpg";
             ci.files[ya::CubeFace_NegZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/back.jpg";
-
-            auto cubeMap = ya::Texture::createCubeMap(ci);
-
-            sc->cubemapTexture = cubeMap;
+            sc->setCubemapSource(ci);
         }
     }
 

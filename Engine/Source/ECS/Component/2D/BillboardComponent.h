@@ -14,6 +14,13 @@ class BillboardComponent : public IComponent
 
 
   public:
+    BillboardComponent()
+    {
+        image.textureRef.onModified.addLambda(this, [this]() {
+            invalidate();
+        });
+    }
+
     TextureSlot image;
 
     bool bDirty = true;

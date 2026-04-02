@@ -218,6 +218,9 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
                 auto  cls          = ClassRegistry::instance().getClass(id);
                 if (cls) {
                     ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
+                    if (auto* component = static_cast<IComponent*>(componentPtr)) {
+                        component->onPostSerialize();
+                    }
                 }
             }
         }

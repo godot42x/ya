@@ -105,6 +105,8 @@ struct Texture
                                              const std::string& label = "");
 
     static std::shared_ptr<Texture> createCubeMap(const CubeMapCreateInfo& ci);
+    static std::shared_ptr<Texture> createSolidCubeMap(const ColorU8_t& color,
+                               const std::string& label = "");
 
     static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo& ci);
 

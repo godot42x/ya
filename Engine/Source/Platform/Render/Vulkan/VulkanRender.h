@@ -399,9 +399,8 @@ struct VulkanRender : public IRender
     {
         VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
-        VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
         setDebugObjectName(VK_OBJECT_TYPE_COMMAND_BUFFER, vkCmdBuf, "IsolatedCommandBuffer_" + context);
+        VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         // Create a temporary VulkanCommandBuffer wrapper
         // Note: This is managed manually and will be deleted in endIsolateCommands
         return new VulkanCommandBuffer(this, vkCmdBuf);

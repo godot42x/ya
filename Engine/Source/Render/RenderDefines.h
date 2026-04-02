@@ -842,7 +842,7 @@ struct RenderingInfo
         uint32_t viewMask = 0;
         // bool            bResolveTarget = false;
 
-        EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Load;   // Load operation
+        EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;   // Load operation
         EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
 
         // Layout transitions (mirroring AttachmentDescription for manual image path)

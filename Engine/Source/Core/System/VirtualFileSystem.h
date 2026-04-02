@@ -26,7 +26,7 @@ struct VirtualFileSystem
     using stdpath = std::filesystem::path;
 
   private:
-    static VirtualFileSystem *instance;
+    static VirtualFileSystem* instance;
 
     stdpath projectRoot;
     stdpath engineRoot;
@@ -37,12 +37,15 @@ struct VirtualFileSystem
     std::unordered_map<std::string, stdpath> mountPoints;  // Virtual path -> Physical path mapping
     std::unordered_map<std::string, stdpath> pluginMounts; // Virtual path -> Physical path mapping
 
-    Delegate<void(const std::string &filepath)>                     onFileAlreadyExistsOnSave;
-    Delegate<void(const std::string &filepath, size_t bytesLoaded)> onFileLoaded;
+    Delegate<void(const std::string& filepath)>                     onFileAlreadyExistsOnSave;
+    Delegate<void(const std::string& filepath, size_t bytesLoaded)> onFileLoaded;
+
+  public:
+    MulticastDelegate<void()> onMountPointChanged;
 
   public:
     static void               init();
-    static VirtualFileSystem *get() { return instance; }
+    static VirtualFileSystem* get() { return instance; }
 
     VirtualFileSystem()
     {
@@ -53,13 +56,13 @@ struct VirtualFileSystem
         mount("ThirdParty", thirdPartyRoot);
     }
 
-    const stdpath &getEngineRoot() const { return engineRoot; }
-    const stdpath &getProjectRoot() const { return projectRoot; }
-    const stdpath &getGameRoot() const { return gameRoot; }
+    const stdpath& getEngineRoot() const { return engineRoot; }
+    const stdpath& getProjectRoot() const { return projectRoot; }
+    const stdpath& getGameRoot() const { return gameRoot; }
 
-    const auto &getMountPoints() const { return mountPoints; }
+    const auto& getMountPoints() const { return mountPoints; }
 
-    std::optional<stdpath> getMountPoint(const std::string &mountName) const
+    std::optional<stdpath> getMountPoint(const std::string& mountName) const
     {
         auto it = mountPoints.find(mountName);
         if (it == mountPoints.end()) return std::nullopt;
@@ -68,26 +71,27 @@ struct VirtualFileSystem
 
 
     // Set the active game root (should be called from game entry point)
-    void setGameRoot(const stdpath &path)
+    void setGameRoot(const stdpath& path)
     {
         gameRoot = path;
         mount("Game", path);
     }
 
     // Register custom mount point: "MyData" -> "path/to/data"
-    void mount(const std::string &mountName, const stdpath &physicalPath)
+    void mount(const std::string& mountName, const stdpath& physicalPath)
     {
         mountPoints[mountName] = physicalPath;
         YA_CORE_INFO("VirtualFileSystem::mount - Mounted {} -> {}", mountName, physicalPath.string());
+        onMountPointChanged.broadcast();
     }
 
-    void mountPlugin(const std::string &mountName, const stdpath &physicalPath)
+    void mountPlugin(const std::string& mountName, const stdpath& physicalPath)
     {
         pluginMounts[mountName] = physicalPath;
         mount(mountName, physicalPath);
         YA_CORE_INFO("VirtualFileSystem::mountPlugin - Mounted {} -> {}", mountName, physicalPath.string());
     }
-    void unmountPlugin(const std::string &mountName)
+    void unmountPlugin(const std::string& mountName)
     {
         pluginMounts.erase(mountName);
     }
@@ -95,7 +99,7 @@ struct VirtualFileSystem
     [[nodiscard]] auto getAllConentDir() const
     {
         std::unordered_map<std::string, stdpath> ret;
-        for (auto &[n, p] : mountPoints)
+        for (auto& [n, p] : mountPoints)
         {
             if (std::filesystem::is_directory(p / "Content")) {
                 ret.insert({n, p / "Content"});
@@ -106,7 +110,7 @@ struct VirtualFileSystem
 
 
     // Unmount a mount point
-    void unmount(const std::string &mountName)
+    void unmount(const std::string& mountName)
     {
         mountPoints.erase(mountName);
     }
@@ -153,18 +157,18 @@ struct VirtualFileSystem
 
 
     std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
-    bool                 readFileToString(std::string_view filepath, std::string &output) const;
+    bool                 readFileToString(std::string_view filepath, std::string& output) const;
 
-    bool isFileExists(const std::string &filepath) const
+    bool isFileExists(const std::string& filepath) const
     {
         return std::filesystem::exists(translatePath(filepath));
     }
-    bool isDirectoryExists(const std::string &filepath) const
+    bool isDirectoryExists(const std::string& filepath) const
     {
         return std::filesystem::is_directory(translatePath(filepath));
     }
 
-    void saveToFile(std::string_view filepath, const std::string &data) const
+    void saveToFile(std::string_view filepath, const std::string& data) const
     {
         auto fp = translatePath(filepath);
 

@@ -323,6 +323,99 @@ std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo& ci)
     return texture;
 }
 
+std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, const std::string& label)
+{
+    auto texture       = Texture::createShared();
+    texture->_label    = label.empty() ? "SolidCubeMap" : label;
+    texture->_width    = 1;
+    texture->_height   = 1;
+    texture->_channels = 4;
+    texture->_format   = EFormat::R8G8B8A8_UNORM;
+    texture->_mipLevels = 1;
+
+    auto textureFactory = getTextureFactory();
+    auto render         = textureFactory->getRender();
+
+    std::array<ColorU8_t, CubeFace_Count> facePixels{};
+    facePixels.fill(color);
+
+    ImageCreateInfo imageCI{
+        .label  = std::format("CubeMap_{}", texture->_label),
+        .format = texture->_format,
+        .extent = {
+            .width  = 1,
+            .height = 1,
+            .depth  = 1,
+        },
+        .mipLevels     = 1,
+        .arrayLayers   = CubeFace_Count,
+        .samples       = ESampleCount::Sample_1,
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
+        .initialLayout = EImageLayout::Undefined,
+        .flags         = EImageCreateFlag::CubeCompatible,
+    };
+
+    texture->image = textureFactory->createImage(imageCI);
+    if (!texture->image || !texture->image->getHandle()) {
+        YA_CORE_ERROR("Failed to create solid cubemap image: {}", texture->_label);
+        return nullptr;
+    }
+
+    texture->imageView = textureFactory->createCubeMapImageView(texture->image, EImageAspect::Color);
+    if (!texture->imageView || !texture->imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create solid cubemap image view: {}", texture->_label);
+        texture->image.reset();
+        return nullptr;
+    }
+
+    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
+        render,
+        BufferCreateInfo{
+            .label       = std::format("StagingBuffer_CubeMap_{}", texture->_label),
+            .usage       = EBufferUsage::TransferSrc,
+            .data        = facePixels.data(),
+            .size        = static_cast<uint32_t>(sizeof(facePixels)),
+            .memoryUsage = EMemoryUsage::CpuToGpu,
+        });
+
+    auto* cmdBuf = render->beginIsolateCommands(std::format("CubeMapUpload:{}:1x1", texture->_label));
+
+    ImageSubresourceRange cubeRange{
+        .aspectMask     = EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = texture->_mipLevels,
+        .baseArrayLayer = 0,
+        .layerCount     = CubeFace_Count,
+    };
+
+    cmdBuf->transitionImageLayout(texture->image.get(), EImageLayout::Undefined, EImageLayout::TransferDst, &cubeRange);
+
+    BufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+             .aspectMask     = EImageAspect::Color,
+             .mipLevel       = 0,
+             .baseArrayLayer = 0,
+             .layerCount     = CubeFace_Count,
+        },
+        .imageOffsetX      = 0,
+        .imageOffsetY      = 0,
+        .imageOffsetZ      = 0,
+        .imageExtentWidth  = 1,
+        .imageExtentHeight = 1,
+        .imageExtentDepth  = 1,
+    };
+
+    cmdBuf->copyBufferToImage(stagingBuffer.get(), texture->image.get(), EImageLayout::TransferDst, {region});
+    cmdBuf->transitionImageLayout(texture->image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
+
+    render->endIsolateCommands(cmdBuf);
+
+    return texture->isValid() ? texture : nullptr;
+}
+
 
 std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo& ci)
 {
@@ -470,7 +563,12 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for texture upload");
+    auto* cmdBuf = render->beginIsolateCommands(std::format(
+        "TextureUpload:{}:{}x{}:mips{}",
+        _filepath.empty() ? _label : _filepath,
+        texWidth,
+        texHeight,
+        mipLevels));
 
     // Transition image layout: UNDEFINED -> TRANSFER_DST
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
@@ -605,7 +703,11 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for fallback texture upload");
+    auto* cmdBuf = render->beginIsolateCommands(std::format(
+        "FallbackTextureUpload:{}:{}x{}",
+        _filepath.empty() ? _label : _filepath,
+        texWidth,
+        texHeight));
 
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
@@ -718,7 +820,11 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands("undefined->transferDst for cubemap upload");
+    auto* cmdBuf = render->beginIsolateCommands(std::format(
+        "CubeMapUpload:{}:{}x{}",
+        _label,
+        _width,
+        _height));
 
     ImageSubresourceRange cubeRange{
         .aspectMask     = EImageAspect::Color,

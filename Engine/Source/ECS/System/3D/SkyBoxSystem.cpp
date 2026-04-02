@@ -186,7 +186,7 @@ void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         meshComp   = &mc;
         break;
     }
-    if (!skyboxComp || !meshComp || !skyboxComp->cubeMapDS) {
+    if (!skyboxComp || !meshComp || !skyboxComp->hasRenderableCubemap()) {
         return;
     }
 

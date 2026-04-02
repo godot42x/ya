@@ -12,6 +12,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -38,6 +39,65 @@ namespace
 constexpr size_t DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
 
 } // namespace
+
+void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
+{
+    const char* label = "Status: Unknown";
+    ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+
+    switch (skybox.resolveState) {
+    case ESkyboxResolveState::Empty:
+        label = "Status: No cubemap source";
+        color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+        break;
+    case ESkyboxResolveState::Dirty:
+        label = "Status: Dirty";
+        color = ImVec4(1.0f, 0.75f, 0.25f, 1.0f);
+        break;
+    case ESkyboxResolveState::Resolving:
+        label = "Status: Loading...";
+        color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
+        break;
+    case ESkyboxResolveState::Ready:
+        label = "Status: Ready";
+        color = ImVec4(0.2f, 0.9f, 0.3f, 1.0f);
+        break;
+    case ESkyboxResolveState::Failed:
+        label = "Status: Failed";
+        color = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
+        break;
+    }
+
+    ImGui::TextColored(color, "%s", label);
+}
+
+void DetailsView::drawSkyboxComponent(Entity& entity)
+{
+    componentWrapper<SkyboxComponent>("Skybox", entity, [this](SkyboxComponent* sc) {
+        auto typeIndex = ya::type_index_v<SkyboxComponent>;
+        auto cls       = ClassRegistry::instance().getClass(typeIndex);
+        if (!cls) {
+            return;
+        }
+
+        ya::RenderContext ctx;
+        ctx.beginInstance(sc);
+        ya::renderReflectedType("Skybox", typeIndex, sc, ctx, 0);
+
+        if (ctx.hasModifications()) {
+            sc->invalidate();
+        }
+
+        ImGui::Separator();
+        drawSkyboxStatus(*sc);
+        if (sc->isLoading()) {
+            ImGui::TextDisabled("Waiting for 6 cubemap faces to finish loading");
+        }
+        if (ImGui::Button("Invalidate##Skybox")) {
+            sc->invalidate();
+        }
+    });
+}
 
 DetailsView::DetailsView(EditorLayer* owner) : _owner(owner)
 {
@@ -164,6 +224,7 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<BillboardComponent>("Billboard", entity, [](BillboardComponent* bc) {
         bc->invalidate();
     });
+    drawSkyboxComponent(entity);
 
     drawReflectedComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc, const ya::RenderContext& ctx) {
         if (ctx.hasModifications()) {

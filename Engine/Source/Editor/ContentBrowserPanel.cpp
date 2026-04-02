@@ -1,16 +1,17 @@
 #include "ContentBrowserPanel.h"
-#include "Runtime/App/App.h"
-#include "Resource/AssetManager.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ImGuiHelper.h"
+#include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
+#include "Runtime/App/App.h"
 #include <imgui.h>
+
 
 namespace ya
 {
 
-ContentBrowserPanel::ContentBrowserPanel(EditorLayer *owner)
+ContentBrowserPanel::ContentBrowserPanel(EditorLayer* owner)
     : _owner(owner)
 {
 }
@@ -29,6 +30,10 @@ void ContentBrowserPanel::init()
     // Initialize FileExplorer from VFS
     _fileExplorer.setConfigScope("contentBrowser");
     _fileExplorer.initFromVFS();
+    VFS::get()->onMountPointChanged.addLambda(this, [&]() {
+        _fileExplorer.initFromVFS();
+    });
+
     _fileExplorer.setViewMode(FileExplorer::ViewMode::Icon);
     _fileExplorer.setFilterMode(FileExplorer::FilterMode::Both);
     _fileExplorer.setSelectionMode(FileExplorer::SelectionMode::File);
@@ -40,7 +45,7 @@ void ContentBrowserPanel::init()
     _fileExplorer.setShowSizeSlider(true);
 
     // Set item action callback for opening scene files
-    _fileExplorer.setItemActionCallback([](const std::filesystem::path &path) {
+    _fileExplorer.setItemActionCallback([](const std::filesystem::path& path) {
         if (path.string().ends_with(".scene.json"))
         {
             App::get()->taskManager.registerFrameTask(

@@ -170,7 +170,11 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, EMemoryUsage me
 
 void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
 {
-    auto *cmdBuf = render->beginIsolateCommands("transfer buffer");
+    auto *cmdBuf = render->beginIsolateCommands(std::format(
+        "BufferTransfer:src=0x{:x}:dst=0x{:x}:size={}",
+        reinterpret_cast<uintptr_t>(srcBuffer),
+        reinterpret_cast<uintptr_t>(dstBuffer),
+        size));
     VkCommandBuffer vkCmdBuf = cmdBuf->getHandleAs<VkCommandBuffer>();
     transfer(vkCmdBuf, srcBuffer, dstBuffer, size);
     render->endIsolateCommands(cmdBuf);

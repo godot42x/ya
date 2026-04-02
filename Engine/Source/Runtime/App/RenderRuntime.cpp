@@ -200,6 +200,27 @@ void RenderRuntime::init(const InitDesc& desc)
             .addressModeV = ESamplerAddressMode::Repeat,
             .addressModeW = ESamplerAddressMode::Repeat,
         });
+
+        _fallbackSkyboxTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
+        YA_CORE_ASSERT(_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView(),
+                       "Failed to create fallback skybox cubemap");
+
+        _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
+        _render->getDescriptorHelper()->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(
+                    _fallbackSkyboxDS,
+                    0,
+                    0,
+                    EPipelineDescriptorType::CombinedImageSampler,
+                    {
+                        DescriptorImageInfo(
+                            _fallbackSkyboxTexture->getImageView()->getHandle(),
+                            _skyboxSampler->getHandle(),
+                            EImageLayout::ShaderReadOnlyOptimal),
+                    }),
+            },
+            {});
     }
 
     initActivePipeline();
@@ -283,6 +304,8 @@ void RenderRuntime::shutdown()
 
     ResourceRegistry::get().clearAll();
 
+    _fallbackSkyboxTexture.reset();
+    _fallbackSkyboxDS = nullptr;
     _skyboxSampler.reset();
     _skyboxDSP.reset();
     _skyboxDSL.reset();
@@ -525,13 +548,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         cmdBuf->endRendering(ri);
     }
 
-    cmdBuf->end();
-    _render->end(imageIndex, {cmdBuf->getHandle()});
-
     // ── Per-frame resource management ───────────────────────────────────
     // Process completed async task callbacks on the main thread
     // (e.g. GPU texture uploads after background file IO completes).
     TaskQueue::get().processMainThreadCallbacks();
+
+    cmdBuf->end();
+    _render->end(imageIndex, {cmdBuf->getHandle()});
 
     if (_renderDocCapture) {
         _renderDocCapture->onFrameEnd();

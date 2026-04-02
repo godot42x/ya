@@ -37,6 +37,13 @@ enum class EAssetResolveState : uint8_t
     Failed,
 };
 
+enum class EAssetResolveResult : uint8_t
+{
+    Pending = 0,
+    Ready,
+    Failed,
+};
+
 struct AssetRefBase
 {
     YA_REFLECT_BEGIN(AssetRefBase)
@@ -56,7 +63,7 @@ struct AssetRefBase
     AssetRefBase() = default;
     explicit AssetRefBase(const std::string &path) : _path(path) {}
 
-    virtual bool resolve() = 0;
+    virtual EAssetResolveResult resolve() = 0;
     // {
     // resolve path from abs to engine?
     // }
@@ -158,7 +165,7 @@ struct TAssetRef : public AssetRefBase
      * Called by serialization system after deserialization
      * @return true if successfully loaded, false otherwise
      */
-    bool resolve() override;
+    EAssetResolveResult resolve() override;
 
     void invalidate() override
     {
@@ -256,18 +263,18 @@ namespace ya
 {
 
 template <>
-inline bool TAssetRef<Texture>::resolve()
+inline EAssetResolveResult TAssetRef<Texture>::resolve()
 {
     if (getPath().empty()) {
         _resolveState = EAssetResolveState::Empty;
-        return false;
+        return EAssetResolveResult::Failed;
     }
 
     // Ready: check version to detect reloaded resources
     if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
         const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
         if (_resolvedVersion == currentVersion) {
-            return true;  // Up-to-date, fast path
+            return EAssetResolveResult::Ready;  // Up-to-date, fast path
         }
         // Version changed → stale pointer, force re-resolve
         _cachedPtr.reset();
@@ -282,7 +289,7 @@ inline bool TAssetRef<Texture>::resolve()
         _cachedPtr        = future.getShared();
         _resolveState     = EAssetResolveState::Ready;
         _resolvedVersion  = currentVersion;
-        return true;
+        return EAssetResolveResult::Ready;
     }
 
     // Not ready yet — use placeholder, stay in Loading state
@@ -292,23 +299,22 @@ inline bool TAssetRef<Texture>::resolve()
         if (placeholder) {
             _cachedPtr = placeholder;
         }
-        YA_CORE_TRACE("TAssetRef<Texture>: async loading '{}', using placeholder", _path);
     }
-    return false;
+    return EAssetResolveResult::Pending;
 }
 
 template <>
-inline bool TAssetRef<Model>::resolve()
+inline EAssetResolveResult TAssetRef<Model>::resolve()
 {
     if (_path.empty()) {
         _resolveState = EAssetResolveState::Empty;
-        return false;
+        return EAssetResolveResult::Failed;
     }
 
     if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
         const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
         if (_resolvedVersion == currentVersion) {
-            return true;
+            return EAssetResolveResult::Ready;
         }
         _cachedPtr.reset();
         _resolveState = EAssetResolveState::Dirty;
@@ -321,23 +327,22 @@ inline bool TAssetRef<Model>::resolve()
         _cachedPtr        = future.getShared();
         _resolveState     = EAssetResolveState::Ready;
         _resolvedVersion  = currentVersion;
-        return true;
+        return EAssetResolveResult::Ready;
     }
 
     if (_resolveState != EAssetResolveState::Loading) {
         _resolveState = EAssetResolveState::Loading;
-        YA_CORE_TRACE("TAssetRef<Model>: async loading '{}'", _path);
     }
-    return false;
+    return EAssetResolveResult::Pending;
 }
 
 template <>
-inline bool TAssetRef<Mesh>::resolve()
+inline EAssetResolveResult TAssetRef<Mesh>::resolve()
 {
     // Mesh loading not implemented yet
     _resolveState = EAssetResolveState::Failed;
     UNIMPLEMENTED();
-    return true;
+    return EAssetResolveResult::Failed;
 }
 
 // ============================================================================

@@ -113,7 +113,13 @@ struct TextureSlot
         textureRef.set(path, nullptr);
     }
 
-    bool               resolve() { return !textureRef.hasPath() || textureRef.resolve(); }
+    EAssetResolveResult resolve()
+    {
+        if (!textureRef.hasPath()) {
+            return EAssetResolveResult::Ready;
+        }
+        return textureRef.resolve();
+    }
     bool               isLoading() const { return textureRef.isLoading(); }
     bool               hasPath() const { return textureRef.hasPath(); }
     bool               isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }

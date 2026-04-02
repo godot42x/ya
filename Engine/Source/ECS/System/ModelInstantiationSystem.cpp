@@ -64,7 +64,12 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
     cleanupChildEntities(scene, modelComp);
 
     if (!modelComp._modelRef.isLoaded()) {
-        if (!modelComp._modelRef.resolve()) {
+        const auto result = modelComp._modelRef.resolve();
+        if (result == EAssetResolveResult::Pending) {
+            return;
+        }
+
+        if (result == EAssetResolveResult::Failed) {
             YA_CORE_WARN("ModelInstantiationSystem: Failed to load model '{}'",
                          modelComp._modelRef.getPath());
             return;

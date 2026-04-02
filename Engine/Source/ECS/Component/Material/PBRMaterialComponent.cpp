@@ -126,21 +126,23 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
     }
 }
 
-bool PBRMaterialComponent::resolve()
+EMaterialResolveResult PBRMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
-        return true;
+        return EMaterialResolveResult::Ready;
     }
 
     _resolveState = EMaterialResolveState::Resolving;
     bool success = true;
+    bool hasPendingTextures = false;
 
     // 1. Create runtime material if not exists
     if (!_material) {
         createDefaultMaterial();
         if (!_material) {
             YA_CORE_ERROR("PBRMaterialComponent: Failed to create runtime material");
-            return false;
+            _resolveState = EMaterialResolveState::Failed;
+            return EMaterialResolveResult::Failed;
         }
     }
 
@@ -151,12 +153,22 @@ bool PBRMaterialComponent::resolve()
     // NOTE: Do NOT clearTextureBindings() — keep old bindings while async reload in flight.
 
     auto resolveSlot = [&](TextureSlot& slot, const char* name) {
-        if (slot.hasPath() && !slot.isReady()) {
-            if (!slot.resolve()) {
-                YA_CORE_WARN("PBRMaterialComponent: Failed to resolve {} texture slot", name);
-                success = false;
-            }
+        if (!slot.hasPath() || slot.isReady()) {
+            return;
         }
+
+        const auto result = slot.resolve();
+        if (result == EAssetResolveResult::Ready) {
+            return;
+        }
+
+        if (result == EAssetResolveResult::Pending) {
+            hasPendingTextures = true;
+            return;
+        }
+
+        YA_CORE_WARN("PBRMaterialComponent: Failed to resolve {} texture slot", name);
+        success = false;
     };
 
     resolveSlot(_albedoSlot,    "albedo");
@@ -167,8 +179,13 @@ bool PBRMaterialComponent::resolve()
 
     syncTextureSlots();
 
-    _resolveState = success ? EMaterialResolveState::Ready : EMaterialResolveState::Failed;
-    return success;
+    if (!success) {
+        _resolveState = EMaterialResolveState::Failed;
+        return EMaterialResolveResult::Failed;
+    }
+
+    _resolveState = hasPendingTextures ? EMaterialResolveState::Resolving : EMaterialResolveState::Ready;
+    return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
 void PBRMaterialComponent::onEditorPropertyChanged(const std::string& propPath)

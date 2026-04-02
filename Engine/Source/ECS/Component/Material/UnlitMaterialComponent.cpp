@@ -140,15 +140,16 @@ void UnlitMaterialComponent::syncTextureSlot(UnlitMaterial::EResource resourceEn
     }
 }
 
-bool UnlitMaterialComponent::resolve()
+EMaterialResolveResult UnlitMaterialComponent::resolve()
 {
     if (_resolveState == EMaterialResolveState::Ready) {
-        return true;
+        return EMaterialResolveResult::Ready;
     }
 
     _resolveState = EMaterialResolveState::Resolving;
 
     bool success = true;
+    bool hasPendingTextures = false;
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
@@ -156,7 +157,8 @@ bool UnlitMaterialComponent::resolve()
 
         if (!_material) {
             YA_CORE_ERROR("UnlitMaterialComponent: Failed to create runtime material");
-            return false;
+            _resolveState = EMaterialResolveState::Failed;
+            return EMaterialResolveResult::Failed;
         }
     }
 
@@ -166,23 +168,37 @@ bool UnlitMaterialComponent::resolve()
     // 3. Resolve texture slots and build texture bindings
     // NOTE: Do NOT clearTextureBindings() — keep old bindings while async reload in flight.
 
-    if (_baseColor0Slot.hasPath() && !_baseColor0Slot.isReady()) {
-        if (!_baseColor0Slot.resolve()) {
-            YA_CORE_WARN("UnlitMaterialComponent: Failed to resolve baseColor0 texture slot");
-            success = false;
+    auto resolveSlot = [&](TextureSlot& slot, const char* name) {
+        if (!slot.hasPath() || slot.isReady()) {
+            return;
         }
-    }
-    if (_baseColor1Slot.hasPath() && !_baseColor1Slot.isReady()) {
-        if (!_baseColor1Slot.resolve()) {
-            YA_CORE_WARN("UnlitMaterialComponent: Failed to resolve baseColor1 texture slot");
-            success = false;
+
+        const auto result = slot.resolve();
+        if (result == EAssetResolveResult::Ready) {
+            return;
         }
-    }
+
+        if (result == EAssetResolveResult::Pending) {
+            hasPendingTextures = true;
+            return;
+        }
+
+        YA_CORE_WARN("UnlitMaterialComponent: Failed to resolve {} texture slot", name);
+        success = false;
+    };
+
+    resolveSlot(_baseColor0Slot, "baseColor0");
+    resolveSlot(_baseColor1Slot, "baseColor1");
 
     syncTextureSlots();
 
-    _resolveState = success ? EMaterialResolveState::Ready : EMaterialResolveState::Failed;
-    return success;
+    if (!success) {
+        _resolveState = EMaterialResolveState::Failed;
+        return EMaterialResolveResult::Failed;
+    }
+
+    _resolveState = hasPendingTextures ? EMaterialResolveState::Resolving : EMaterialResolveState::Ready;
+    return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
 void UnlitMaterialComponent::onEditorPropertyChanged(const std::string& propPath)

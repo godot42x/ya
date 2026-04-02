@@ -19,6 +19,13 @@ enum class EMaterialResolveState : uint8_t
     Failed,
 };
 
+enum class EMaterialResolveResult : uint8_t
+{
+    Pending = 0,
+    Ready,
+    Failed,
+};
+
 /**
  * @brief Template material component base
  *
@@ -57,7 +64,7 @@ struct MaterialComponent : public IComponent
      * Called by ResourceResolveSystem
      * Derived classes should override this
      */
-    virtual bool resolve() { return true; }
+    virtual EMaterialResolveResult resolve() { return EMaterialResolveResult::Ready; }
 
     /**
      * @brief Check if resources have been resolved

@@ -121,6 +121,13 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
     auto& registry = scene->getRegistry();
 
     for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
+        (void)entity;
+
+        if (sc.resolveState == ESkyboxResolveState::Dirty ||
+            sc.resolveState == ESkyboxResolveState::Resolving) {
+            sc.resolve();
+        }
+
         // Lazy-allocate DS from App-layer pool on first use
         if (!sc.cubeMapDS) {
             auto skyboxDSP = runtime->getSkyboxDescriptorPool();
@@ -129,10 +136,10 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             sc.cubeMapDS = skyboxDSP->allocateDescriptorSets(skyboxDSL);
             render->as<VulkanRender>()->setDebugObjectName(
                 VK_OBJECT_TYPE_DESCRIPTOR_SET, sc.cubeMapDS.ptr, "Skybox_CubeMap_DS_Shared");
-            sc.bDirty = true; // force initial write
+            sc.bDescriptorDirty = true; // force initial write
         }
 
-        if (sc.bDirty && sc.cubemapTexture && sc.cubemapTexture->getImageView()) {
+        if (sc.bDescriptorDirty && sc.cubemapTexture && sc.cubemapTexture->getImageView()) {
             auto* skyboxSampler = runtime->getSkyboxSampler();
             YA_CORE_ASSERT(skyboxSampler, "Skybox sampler is not initialized");
             render->getDescriptorHelper()->updateDescriptorSets(
@@ -150,7 +157,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                         }),
                 },
                 {});
-            sc.bDirty = false;
+            sc.bDescriptorDirty = false;
         }
     }
 }
