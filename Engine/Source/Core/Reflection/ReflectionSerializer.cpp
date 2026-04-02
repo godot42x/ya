@@ -1,8 +1,61 @@
 #include "ReflectionSerializer.h"
+#include "Core/Common/AssetRef.h"
 #include "PropertyExtensions.h"
 
 namespace ya
 {
+
+namespace
+{
+
+using CustomTypeHookMap = std::unordered_map<uint32_t, ReflectionSerializer::CustomTypeHook>;
+
+CustomTypeHookMap &getCustomTypeHooks()
+{
+    static CustomTypeHookMap hooks;
+    return hooks;
+}
+
+} // namespace
+
+void ReflectionSerializer::registerCustomTypeHook(uint32_t typeIndex, CustomTypeHook hook)
+{
+    getCustomTypeHooks()[typeIndex] = std::move(hook);
+}
+
+bool ReflectionSerializer::hasCustomTypeHook(uint32_t typeIndex)
+{
+    return findCustomTypeHook(typeIndex) != nullptr;
+}
+
+const ReflectionSerializer::CustomTypeHook *ReflectionSerializer::findCustomTypeHook(uint32_t typeIndex)
+{
+    auto &hooks = getCustomTypeHooks();
+    auto  it    = hooks.find(typeIndex);
+    return it != hooks.end() ? &it->second : nullptr;
+}
+
+bool ReflectionSerializer::trySerializeCustomType(const void *valuePtr, uint32_t typeIndex, nlohmann::json &outJson)
+{
+    auto *hook = findCustomTypeHook(typeIndex);
+    if (!hook || !hook->serialize) {
+        return false;
+    }
+
+    outJson = hook->serialize(valuePtr);
+    return true;
+}
+
+bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, uint32_t typeIndex, const nlohmann::json &jsonValue)
+{
+    auto *hook = findCustomTypeHook(typeIndex);
+    if (!hook || !hook->deserialize) {
+        return false;
+    }
+
+    hook->deserialize(valuePtr, jsonValue);
+    return true;
+}
 
 // ========================================================================
 // Helper: Common serialization utilities
@@ -13,6 +66,11 @@ namespace ya
  */
 nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t typeIndex)
 {
+    nlohmann::json customJson;
+    if (trySerializeCustomType(valuePtr, typeIndex, customJson)) {
+        return customJson;
+    }
+
     // Handle basic types first for performance
     if (typeIndex == ya::type_index_v<int>) {
         return *static_cast<int *>(valuePtr);
@@ -76,6 +134,10 @@ nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t 
  */
 void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeIndex, const nlohmann::json &jsonValue)
 {
+    if (tryDeserializeCustomType(valuePtr, typeIndex, jsonValue)) {
+        return;
+    }
+
     // Handle basic types first for performance
     if (typeIndex == ya::type_index_v<int>) {
         *static_cast<int *>(valuePtr) = jsonValue.get<int>();
@@ -448,6 +510,11 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
 
 nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *obj, uint32_t typeIndex, const std::string &typeName)
 {
+    nlohmann::json customJson;
+    if (trySerializeCustomType(obj, typeIndex, customJson)) {
+        return customJson;
+    }
+
     auto &registry = ClassRegistry::instance();
     auto *classPtr = registry.getClass(typeIndex);
 
@@ -516,6 +583,10 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
             // Null pointer - serialize as null
             j = nullptr;
         }
+        return j;
+    }
+
+    if (trySerializeCustomType(valuePtr, prop.typeIndex, j)) {
         return j;
     }
 
@@ -606,6 +677,9 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
 
 void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t typeIndex, const nlohmann::json &j, const std::string &className)
 {
+    if (tryDeserializeCustomType(obj, typeIndex, j)) {
+        return;
+    }
 
     auto &registry = ClassRegistry::instance();
     auto *classPtr = registry.getClass(typeIndex);
@@ -708,6 +782,11 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
             classPtr->destroyInstance(pointee);
             *ptrLocation = nullptr;
         }
+        return;
+    }
+
+    void *directValuePtr = prop.getMutableAddress(obj);
+    if (directValuePtr && tryDeserializeCustomType(directValuePtr, prop.typeIndex, j)) {
         return;
     }
 

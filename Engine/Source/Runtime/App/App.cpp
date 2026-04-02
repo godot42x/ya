@@ -6,6 +6,7 @@
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/MessageBus.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
@@ -117,7 +118,7 @@ void App::init(AppDesc ci)
         {
             YA_PROFILE_SCOPE_LOG("Static Initializers");
             profiling::StaticInitProfiler::recordStart();
-            ClassRegistry::instance().executeAllPostStaticInitializers();
+            ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
             profiling::StaticInitProfiler::recordEnd();
         }
         VirtualFileSystem::init();
@@ -136,8 +137,8 @@ void App::init(AppDesc ci)
         MaterialFactory::init();
     }
 
-    auto& configManager    = ConfigManager::get();
-    _ci.bEnableRenderDoc   = _ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
+    auto& configManager       = ConfigManager::get();
+    _ci.bEnableRenderDoc      = _ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
     _ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", _ci.disabledGraphicsCards);
 
     _renderRuntime = std::make_unique<RenderRuntime>();
@@ -570,8 +571,8 @@ void App::prepareRenderFrameState(float dt)
 
     Entity* runtimeCamera = getPrimaryCamera();
     if (runtimeCamera && runtimeCamera->isValid()) {
-        auto cc = runtimeCamera->getComponent<CameraComponent>();
-        auto tc = runtimeCamera->getComponent<TransformComponent>();
+        auto     cc             = runtimeCamera->getComponent<CameraComponent>();
+        auto     tc             = runtimeCamera->getComponent<TransformComponent>();
         Extent2D viewportExtent = resolveViewportExtent(renderRuntime, viewportRect);
         cameraController.update(*tc, *cc, inputManager, viewportExtent, dt);
         if (viewportExtent.height > 0) {
@@ -586,9 +587,9 @@ void App::prepareRenderFrameState(float dt)
     _renderFrameState.viewportRect             = viewportRect;
     _renderFrameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
     if (bUseRuntimeCamera) {
-        auto cc                    = runtimeCamera->getComponent<CameraComponent>();
-        auto tc                    = runtimeCamera->getComponent<TransformComponent>();
-        _renderFrameState.view     = cc->getFreeView();
+        auto cc                      = runtimeCamera->getComponent<CameraComponent>();
+        auto tc                      = runtimeCamera->getComponent<TransformComponent>();
+        _renderFrameState.view       = cc->getFreeView();
         _renderFrameState.projection = cc->getProjection();
         _renderFrameState.cameraPos  = tc->getWorldPosition();
         return;

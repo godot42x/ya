@@ -26,8 +26,6 @@ struct ClassRegistry
     // parent -> childrens
     std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
 
-    std::vector<std::function<void()>> postStaticInitializers;
-
     static ClassRegistry &instance();
 
     template <typename T>
@@ -104,18 +102,6 @@ struct ClassRegistry
     bool hasClass(uint32_t typeId) const
     {
         return typeIdMap.find(typeId) != typeIdMap.end();
-    }
-
-    void addPostStaticInitializer(std::function<void()> &&initFunc)
-    {
-        postStaticInitializers.push_back(std::move(initFunc));
-    }
-    void executeAllPostStaticInitializers()
-    {
-        for (auto &initFunc : postStaticInitializers) {
-            initFunc();
-        }
-        postStaticInitializers.clear();
     }
 };
 

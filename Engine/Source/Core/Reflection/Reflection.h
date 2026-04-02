@@ -6,6 +6,7 @@
 
 #include "Core/Profiling/StaticInitProfiler.h"
 
+#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/MetadataSupport.h"
 
 #include "Core/Macro/VariadicMacros.h"
@@ -179,7 +180,7 @@ struct Visitor<void>
                                                                                                                                                   \
         reflection_detail()                                                                                                                       \
         {                                                                                                                                         \
-            ClassRegistry::instance().addPostStaticInitializer([]() { reflection_detail::real_init(); });                                         \
+            ::ya::reflection::deferStaticInit([]() { reflection_detail::real_init(); });                                                          \
         }                                                                                                                                         \
         static void real_init()                                                                                                                   \
         {                                                                                                                                         \
@@ -314,7 +315,7 @@ struct Visitor<void>
             using _EnumType = EnumType;  \
             _reflecting_type()           \
             {                            \
-                ClassRegistry::instance().addPostStaticInitializer([]() {                   \
+                ::ya::reflection::deferStaticInit([]() {                            \
                 RegisterEnum<_EnumType> reg(#EnumType, ::ya::type_index_v<_EnumType>);  \
                 reg
 

@@ -17,13 +17,13 @@ static std::unordered_map<size_t, ReflectionCache> _reflectionCache;
 // ReflectionCache Management
 // ============================================================================
 
-ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
+ReflectionCache* getOrCreateReflectionCache(uint32_t typeIndex)
 {
     YA_PROFILE_FUNCTION();
     auto it = _reflectionCache.find(typeIndex);
 
     if (it != _reflectionCache.end()) {
-        if (auto &cache = it->second; cache.isValid(typeIndex)) {
+        if (auto& cache = it->second; cache.isValid(typeIndex)) {
             // TODO: check type properties changed
             return &it->second;
         }
@@ -31,11 +31,11 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
     ReflectionCache cache;
     cache.typeIndex = typeIndex;
 
-    if (Class *cls = ClassRegistry::instance().getClass(typeIndex)) {
+    if (Class* cls = ClassRegistry::instance().getClass(typeIndex)) {
         cache.classPtr      = cls;
         cache.propertyCount = cls->properties.size();
     }
-    else if (Enum *e = EnumRegistry::instance().getEnum(typeIndex)) {
+    else if (Enum* e = EnumRegistry::instance().getEnum(typeIndex)) {
         cache.bEnum = true;
 
         auto                             values = e->getValues();
@@ -45,9 +45,9 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
         std::string                      imguiComboString;
 
 
-        for (const auto &[idx, values] : ut::enumerate(values)) {
-            const auto &n = values.name;
-            const auto &v = values.value;
+        for (const auto& [idx, values] : ut::enumerate(values)) {
+            const auto& n = values.name;
+            const auto& v = values.value;
             names.push_back(n);
             imguiComboString.append(n);
             imguiComboString.push_back('\0');
@@ -69,7 +69,7 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
 
     // cache properties
     if (ret->classPtr) {
-        for (auto &[propName, prop] : ret->classPtr->properties) {
+        for (auto& [propName, prop] : ret->classPtr->properties) {
             ret->propertyContexts[propName] = PropertyRenderContext::createFrom(ret, prop, propName);
         }
     }
@@ -82,7 +82,7 @@ ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex)
 // PropertyRenderContext Implementation
 // ============================================================================
 
-PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache *owner, const Property &prop, const std::string &propName)
+PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache* owner, const Property& prop, const std::string& propName)
 {
     PropertyRenderContext ctx;
 
@@ -120,7 +120,26 @@ PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache *owner, 
     if (sv.starts_with("m_")) {
         sv.remove_prefix(2);
     }
-    ctx.prettyName = std::string(sv);
+    if (sv.size() > 1 && sv.starts_with("b") && std::isupper(sv[1])) {
+        sv.remove_prefix(1);
+    }
+    // from "_anyStyle bPropName" to "Pretty Name"
+    std::string ret;
+    for (size_t i = 0; i < sv.size(); ++i)
+    {
+        char c = sv[i];
+        if (i == 0) {
+            ret.push_back(static_cast<char>(std::toupper(c)));
+        } else if (std::isupper(c)) {
+            ret.push_back(' ');
+            ret.push_back(c);
+        } else {
+            ret.push_back(c);
+        }
+    }
+
+
+    ctx.prettyName = ret;
 
     return ctx;
 }

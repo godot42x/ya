@@ -116,6 +116,23 @@ metaPath.substr(metaPath.size() - suffix.size()) != suffix
 2. 生命周期不明确时，禁止 `new/delete`，统一智能指针。
 3. 接口返回优先 `shared_ptr`，避免裸指针悬空。
 4. 常用别名：`stdptr<T>`、`makeshared<T>(...)`。
+5. 单例优先采用 Meyers' Singleton，但 `instance()` 实现必须放在 `.cpp`，头文件只保留声明，避免跨 DLL 因头内联而产生多实例。
+
+```cpp
+// Header
+class FooRegistry
+{
+  public:
+    static FooRegistry& instance();
+};
+
+// Cpp
+FooRegistry& FooRegistry::instance()
+{
+    static FooRegistry registry;
+    return registry;
+}
+```
 
 ## 变更约束
 
