@@ -108,6 +108,15 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout>   getSkyboxDescriptorSetLayout() const { return _skyboxDSL; }
     [[nodiscard]] Sampler*                       getSkyboxSampler() const { return _skyboxSampler.get(); }
     [[nodiscard]] DescriptorSetHandle            getFallbackSkyboxDescriptorSet() const { return _fallbackSkyboxDS; }
+
+    /**
+     * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
+     *
+     * Must be called when a scene is about to be destroyed so that any
+     * SkyboxComponent descriptor sets allocated from this pool are returned.
+     * Without this, each scene load leaks one DS until the pool overflows.
+     */
+    void resetSkyboxPool();
     [[nodiscard]] const Rect2D&                  getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float                          getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D                       getViewportExtent() const;

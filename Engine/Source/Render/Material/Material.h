@@ -3,11 +3,32 @@
 #include "Core/Common/AssetRef.h"
 #include "Render/Core/Texture.h"
 
+#include <atomic>
 #include <unordered_map>
 
 #include "Resource/TextureLibrary.h"
 namespace ya
 {
+
+namespace detail
+{
+
+/**
+ * @brief Global monotonically-increasing version counter for material dirty tracking.
+ *
+ * Every newly constructed Material gets a unique initial version for both its
+ * param and resource versions.  This guarantees that MaterialDescPool (which
+ * caches the last-uploaded version per slot) will always detect a version
+ * mismatch when a new material occupies an existing slot — even if the pool
+ * was not rebuilt in between.
+ */
+inline uint64_t nextMaterialVersion()
+{
+    static std::atomic<uint64_t> s_counter{0};
+    return s_counter.fetch_add(1, std::memory_order_relaxed) + 1; // 1-based
+}
+
+} // namespace detail
 
 /**
  * @brief Serializable texture slot for material serialization
@@ -178,8 +199,8 @@ struct Material
     // ========================================
     bool     _bParamDirty     = true; ///< Compatibility flag for legacy callers
     bool     _bResourceDirty  = true; ///< Compatibility flag for legacy callers
-    uint64_t _paramVersion    = 1;
-    uint64_t _resourceVersion = 1;
+    uint64_t _paramVersion    = detail::nextMaterialVersion();
+    uint64_t _resourceVersion = detail::nextMaterialVersion();
 
     std::string getLabel() const { return _label; }
     void        setLabel(const std::string& label) { _label = label; }

@@ -82,7 +82,7 @@ struct VulkanBuffer : public ya::IBuffer
                          VkBuffer &outBuffer, VmaAllocation &outAllocation);
 
     // do a copy pass
-    static void transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
+    static void transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size, const std::string& ctx = "");
     static void transfer(VkCommandBuffer cmdBuf, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size);
 
   protected:

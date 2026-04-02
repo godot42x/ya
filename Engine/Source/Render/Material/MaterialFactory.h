@@ -105,28 +105,40 @@ struct MaterialFactoryInternal
     {
         uint32_t typeID = getTypeID<T>();
         auto     mat    = makeShared<T>();
-        uint32_t index  = 0;
+        int32_t  index  = -1;
 
         auto it = _materials.find(typeID);
         if (it == _materials.end())
         {
             _materials.insert({typeID, {mat}});
+            index = 0;
         }
         else
         {
-            index = it->second.size();
-            _materials[typeID].push_back(mat);
+            auto &matVec = it->second;
+            // Scan for a null (freed) slot to reuse — keeps index stable
+            for (size_t i = 0; i < matVec.size(); ++i)
+            {
+                if (!matVec[i])
+                {
+                    matVec[i] = mat;
+                    index = static_cast<int32_t>(i);
+                    break;
+                }
+            }
+            if (index < 0)
+            {
+                index = static_cast<int32_t>(matVec.size());
+                matVec.push_back(mat);
+            }
         }
         _materialCount += 1;
-        // index: 该类型材质的第n个instance, 从0开始
         auto typeRef = static_cast<Material *>(mat.get());
-        typeRef->setIndex(static_cast<int32_t>(index));
+        typeRef->setIndex(index);
         typeRef->setTypeID(typeID);
         return mat.get();
     }
-    // TODO:
-    // 1. use a dirty marker system to delay destroy, batch destroy for vector erase efficiency
-    // 2. use pool reuse freed slot
+    // Slot-based destroy: null the slot, never erase, never renumber.
     void destroyMaterialImpl(Material *material)
     {
         uint32_t typeID = material->getTypeID();
@@ -139,12 +151,7 @@ struct MaterialFactoryInternal
             auto &matVec = it->second;
             if (index >= 0 && static_cast<size_t>(index) < matVec.size())
             {
-                matVec.erase(matVec.begin() + index);
-                // Update indices of subsequent materials
-                for (size_t i = index; i < matVec.size(); ++i)
-                {
-                    matVec[i]->setIndex(static_cast<int32_t>(i));
-                }
+                matVec[index] = nullptr;  // mark slot as free
                 _materialCount -= 1;
             }
         }

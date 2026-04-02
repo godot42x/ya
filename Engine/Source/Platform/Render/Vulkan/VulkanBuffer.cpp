@@ -12,7 +12,7 @@ namespace ya
 VulkanBuffer::~VulkanBuffer()
 {
     if (_handle != VK_NULL_HANDLE && _allocation != VK_NULL_HANDLE) {
-        if(bMemoryMapped){
+        if (bMemoryMapped) {
             vmaUnmapMemory(_render->getVmaAllocator(), _allocation);
         }
         vmaDestroyBuffer(_render->getVmaAllocator(), _handle, _allocation);
@@ -21,11 +21,11 @@ VulkanBuffer::~VulkanBuffer()
     }
 }
 
-void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, EMemoryUsage memUsage)
+void VulkanBuffer::createWithDataInternal(const void* data, uint32_t size, EMemoryUsage memUsage)
 {
 
-    VkBuffer       stageBuffer     = nullptr;
-    VmaAllocation  stageAllocation = nullptr;
+    VkBuffer      stageBuffer     = nullptr;
+    VmaAllocation stageAllocation = nullptr;
 
     VulkanBuffer::allocate(_render,
                            static_cast<uint32_t>(size),
@@ -34,7 +34,7 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, EMemo
                            stageBuffer,
                            stageAllocation);
 
-    void *mappedData = nullptr;
+    void* mappedData = nullptr;
     VK_CALL(vmaMapMemory(_render->getVmaAllocator(), stageAllocation, &mappedData));
     std::memcpy(mappedData, data, size);
     vmaUnmapMemory(_render->getVmaAllocator(), stageAllocation);
@@ -46,7 +46,7 @@ void VulkanBuffer::createWithDataInternal(const void *data, uint32_t size, EMemo
                            _handle,
                            _allocation);
 
-    VulkanBuffer::transfer(_render, stageBuffer, _handle, size);
+    VulkanBuffer::transfer(_render, stageBuffer, _handle, size, "fromRowData");
 
     vmaDestroyBuffer(_render->getVmaAllocator(), stageBuffer, stageAllocation);
 }
@@ -61,7 +61,7 @@ void VulkanBuffer::createDefaultInternal(uint32_t size, EMemoryUsage memUsage)
                            _allocation);
 }
 
-bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
+bool VulkanBuffer::writeData(const void* data, uint32_t size, uint32_t offset)
 {
     if (!data) {
         YA_CORE_ERROR("Write data to buffer {} failed: data is nullptr", name);
@@ -72,14 +72,14 @@ bool VulkanBuffer::writeData(const void *data, uint32_t size, uint32_t offset)
         return false;
     }
 
-    VkDeviceSize writeSize = size == 0 ? _size : size;
+    VkDeviceSize writeSize   = size == 0 ? _size : size;
     VkDeviceSize writeOffset = offset;
     YA_CORE_ASSERT(writeOffset + writeSize <= _size, "Write data out of range!");
     if (size == 0) {
         YA_CORE_ASSERT(offset == 0, "If size is 0, offset must be 0");
     }
 
-    void *mappedData = nullptr;
+    void* mappedData = nullptr;
     VK_CALL(vmaMapMemory(_render->getVmaAllocator(), _allocation, &mappedData));
     bMemoryMapped = true;
 
@@ -109,7 +109,7 @@ bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
 }
 
 
-void VulkanBuffer::mapInternal(void **ptr)
+void VulkanBuffer::mapInternal(void** ptr)
 {
     YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot map!");
     YA_CORE_ASSERT(!bMemoryMapped, "Buffer memory is already mapped!");
@@ -117,7 +117,7 @@ void VulkanBuffer::mapInternal(void **ptr)
     bMemoryMapped = true;
 }
 
-void VulkanBuffer::setupDebugName(const std::string &inName)
+void VulkanBuffer::setupDebugName(const std::string& inName)
 {
     if (!inName.empty()) {
         _render->setDebugObjectName(VK_OBJECT_TYPE_BUFFER, _handle, inName.c_str());
@@ -135,15 +135,15 @@ void VulkanBuffer::unmap()
     bMemoryMapped = false;
 }
 
-bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, EMemoryUsage memUsage, VkBufferUsageFlags usage, VkBuffer &outBuffer, VmaAllocation &outAllocation)
+bool VulkanBuffer::allocate(VulkanRender* render, uint32_t size, EMemoryUsage memUsage, VkBufferUsageFlags usage, VkBuffer& outBuffer, VmaAllocation& outAllocation)
 {
     VkBufferCreateInfo vkBufferCI{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .size  = size,
-        .usage = usage,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext                 = nullptr,
+        .flags                 = 0,
+        .size                  = size,
+        .usage                 = usage,
+        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices   = nullptr,
     };
@@ -168,10 +168,11 @@ bool VulkanBuffer::allocate(VulkanRender *render, uint32_t size, EMemoryUsage me
     return true;
 }
 
-void VulkanBuffer::transfer(VulkanRender *render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size)
+void VulkanBuffer::transfer(VulkanRender* render, VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t size, const std::string& ctx)
 {
-    auto *cmdBuf = render->beginIsolateCommands(std::format(
-        "BufferTransfer:src=0x{:x}:dst=0x{:x}:size={}",
+    auto*           cmdBuf   = render->beginIsolateCommands(std::format(
+        "BufferTransfer:{}:src=0x{:x}:dst=0x{:x}:size={}",
+        ctx,
         reinterpret_cast<uintptr_t>(srcBuffer),
         reinterpret_cast<uintptr_t>(dstBuffer),
         size));

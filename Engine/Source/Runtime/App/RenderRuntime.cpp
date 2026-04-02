@@ -326,6 +326,39 @@ void RenderRuntime::shutdown()
     }
 }
 
+void RenderRuntime::resetSkyboxPool()
+{
+    if (!_skyboxDSP || !_skyboxDSL) {
+        return;
+    }
+
+    // Return ALL descriptor sets back to the pool (including the fallback DS).
+    _skyboxDSP->resetPool();
+    _fallbackSkyboxDS = nullptr;
+
+    // Re-allocate the permanent fallback descriptor set.
+    _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
+    YA_CORE_ASSERT(_fallbackSkyboxDS, "Failed to re-allocate fallback skybox descriptor set");
+
+    if (_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView() && _skyboxSampler) {
+        _render->getDescriptorHelper()->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(
+                    _fallbackSkyboxDS,
+                    0,
+                    0,
+                    EPipelineDescriptorType::CombinedImageSampler,
+                    {
+                        DescriptorImageInfo(
+                            _fallbackSkyboxTexture->getImageView()->getHandle(),
+                            _skyboxSampler->getHandle(),
+                            EImageLayout::ShaderReadOnlyOptimal),
+                    }),
+            },
+            {});
+    }
+}
+
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()

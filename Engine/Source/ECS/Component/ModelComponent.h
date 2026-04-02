@@ -52,6 +52,9 @@ struct ModelComponent : public IComponent
     YA_REFLECT_FIELD(_autoCreateChildEntities)
     YA_REFLECT_END()
 
+    // Defined in ModelComponent.cpp — needs full PhongMaterial + MaterialFactory types.
+    ~ModelComponent() override;
+
     // ========================================
     // Serializable Data
     // ========================================

@@ -783,8 +783,12 @@ void App::onSceneInit(Scene* scene)
 
 void App::onSceneDestroy(Scene* scene)
 {
-    // No longer need to clear runtime camera reference
-    // as we query it from ECS each frame
+    // Reset the skybox descriptor pool so the DS allocated for this scene's
+    // SkyboxComponent is returned.  Without this, each scene load leaks one DS
+    // and eventually the pool overflows with VK_ERROR_OUT_OF_POOL_MEMORY.
+    if (_renderRuntime) {
+        _renderRuntime->resetSkyboxPool();
+    }
 }
 
 void App::onSceneActivated(Scene* scene)
