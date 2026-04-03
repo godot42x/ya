@@ -206,17 +206,26 @@ void VulkanPipeline::setDepthBias(float constantFactor, float clamp, float slope
     markDirty();
 }
 
+void VulkanPipeline::setDepthCompareOp(ECompareOp::T op)
+{
+    if (_ci.depthStencilState.depthCompareOp == op) {
+        return;
+    }
+    _ci.depthStencilState.depthCompareOp = op;
+    markDirty();
+}
+
 void VulkanPipeline::renderGUI()
 {
     auto name = _ci.shaderDesc.shaderName;
-    if (!ImGui::TreeNode(name.c_str())) {
+    if (!ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         return;
     }
 
-    bool bManualReload = false;
+    bool bDirty = false;
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
     if (ImGui::Button("Reload Shaders")) {
-        bManualReload = true;
+        bDirty = true;
     }
     ImGui::PopStyleColor();
     int cull = static_cast<int>(_ci.rasterizationState.cullMode);
@@ -227,6 +236,39 @@ void VulkanPipeline::renderGUI()
     int polygonMode = static_cast<int>(_ci.rasterizationState.polygonMode);
     if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
         setPolygonMode(static_cast<EPolygonMode::T>(polygonMode));
+    }
+    bDirty |= ImGui::Checkbox("Depth Test Enable", &_ci.depthStencilState.bDepthTestEnable);
+    bDirty |= ImGui::Checkbox("Depth Write Enable", &_ci.depthStencilState.bDepthWriteEnable);
+    int op = _ci.depthStencilState.depthCompareOp;
+    if (ImGui::Combo("Depth Compare Op", &op, "Never\0Less\0Equal\0LessOrEqual\0Greater\0NotEqual\0GreaterOrEqual\0Always\0")) {
+        switch (op) {
+        case 0:
+            setDepthCompareOp(ECompareOp::Never);
+            break;
+        case 1:
+            setDepthCompareOp(ECompareOp::Less);
+            break;
+        case 2:
+            setDepthCompareOp(ECompareOp::Equal);
+            break;
+        case 3:
+            setDepthCompareOp(ECompareOp::LessOrEqual);
+            break;
+        case 4:
+            setDepthCompareOp(ECompareOp::Greater);
+            break;
+        case 5:
+            setDepthCompareOp(ECompareOp::NotEqual);
+            break;
+        case 6:
+            setDepthCompareOp(ECompareOp::GreaterOrEqual);
+            break;
+        case 7:
+            setDepthCompareOp(ECompareOp::Always);
+            break;
+        default:
+            break;
+        }
     }
 
     bool bDepthBiasEnable = _ci.rasterizationState.bDepthBiasEnable;
@@ -261,7 +303,7 @@ void VulkanPipeline::renderGUI()
     //     setSampleCount(toSampleCount(sampleCount));
     // }
 
-    if (bManualReload) {
+    if (bDirty) {
         updateDesc(_ci);
     }
     ImGui::TreePop();
@@ -734,7 +776,7 @@ void VulkanComputePipeline::cleanup()
 
 bool VulkanComputePipeline::recreate(const ComputePipelineCreateInfo& ci)
 {
-    _ci = ci;
+    _ci             = ci;
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
         createPipelineInternal();
@@ -792,7 +834,7 @@ void VulkanComputePipeline::createPipelineInternal()
 
     if (_ci.shaderDesc.bDeriveFromShader) {
         auto processor = shaderStorage->selectProcessor(_ci.shaderDesc);
-        auto res = processor->reflect(EShaderStage::Compute, stage2Spirv->at(EShaderStage::Compute));
+        auto res       = processor->reflect(EShaderStage::Compute, stage2Spirv->at(EShaderStage::Compute));
 
         auto merged = ShaderReflection::merge({res});
 
@@ -814,17 +856,17 @@ void VulkanComputePipeline::createPipelineInternal()
     }
 
     VkComputePipelineCreateInfo computeCI{
-        .sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-        .pNext  = nullptr,
-        .flags  = 0,
-        .stage  = shaderStage,
-        .layout = _pipelineLayout->getVkHandle(),
+        .sType              = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext              = nullptr,
+        .flags              = 0,
+        .stage              = shaderStage,
+        .layout             = _pipelineLayout->getVkHandle(),
         .basePipelineHandle = VK_NULL_HANDLE,
         .basePipelineIndex  = -1,
     };
 
     VkPipeline newPipeline = VK_NULL_HANDLE;
-    VkResult result = vkCreateComputePipelines(_render->getDevice(),
+    VkResult   result      = vkCreateComputePipelines(_render->getDevice(),
                                                _render->getPipelineCache(),
                                                1,
                                                &computeCI,

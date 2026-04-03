@@ -43,6 +43,21 @@ static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
     return std::format("debugWindow.gbufferMask.{}", normalized);
 }
 
+static std::string buildDepthMaskConfigKey(const std::string& slotLabel)
+{
+    std::string normalized;
+    normalized.reserve(slotLabel.size());
+    for (char ch : slotLabel) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        else {
+            normalized.push_back('_');
+        }
+    }
+    return std::format("debugWindow.depthMask.{}", normalized);
+}
+
 static ComponentMapping buildDeferredMaskMapping(const std::array<bool, 4>& channelEnabled)
 {
     const bool bR = channelEnabled[0];
@@ -826,13 +841,12 @@ void EditorLayer::debugForwardWindow(const ImVec2& panelSize)
 
     ImGui::Text("Shadow Mapping(Depth Buffer)");
     if (_viewportCtx.bShadowMappingEnabled) {
-        auto* depthRT            = _viewportCtx.shadowDepthRT;
         auto* directionalDepthIV = _viewportCtx.shadowDirectionalDepthIV;
-        if (!depthRT || !directionalDepthIV) {
+        if (!directionalDepthIV || _viewportCtx.depthDebugSlots.empty()) {
             ImGui::Text("Shadow resources unavailable");
         }
         else {
-            auto depthExtent = depthRT->getExtent();
+            auto depthExtent = _viewportCtx.depthDebugSlots.front().extent;
             ImGuiHelper::Image(directionalDepthIV,
                                TextureLibrary::get().getLinearSampler(),
                                "Shadow Map",
@@ -866,16 +880,7 @@ void EditorLayer::debugForwardWindow(const ImVec2& panelSize)
     }
 
     ImGui::Text("Mirror Render Target (from framebuffer)");
-    if (_viewportCtx.bMirrorRenderResult) {
-        auto* mirrorRT      = _viewportCtx.mirrorRenderTarget;
-        auto  mirrorTexture = mirrorRT ? mirrorRT->getCurFrameBuffer()->getColorTexture(0) : nullptr;
-        if (mirrorTexture) {
-            ImGuiHelper::Image(mirrorTexture->getImageView(),
-                               TextureLibrary::get().getLinearSampler(),
-                               "Mirror RT",
-                               constraintSize(mirrorTexture->getExtent()));
-        }
-    }
+    ImGui::TextDisabled("Mirror visualization unavailable");
 
     ImGui::Text("Viewport Render Target (from framebuffer)");
     auto viewportRTTexture = _viewportCtx.viewportTexture;
@@ -903,16 +908,34 @@ void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
     Sampler*    sampler  = TextureLibrary::get().getLinearSampler();
     const auto& slots    = _viewportCtx.deferredSpec.slots;
     const int   numSlots = static_cast<int>(slots.size());
+    const auto& depthSlots = _viewportCtx.depthDebugSlots;
+    const int   totalSlots = numSlots + static_cast<int>(depthSlots.size());
 
-    if (static_cast<int>(_deferredSlotStates.size()) != numSlots) {
-        _deferredSlotStates.resize(numSlots);
+    if (static_cast<int>(_deferredSlotStates.size()) != totalSlots) {
+        _deferredSlotStates.resize(totalSlots);
     }
 
     for (int i = 0; i < numSlots; ++i) {
         syncDeferredSlotState(slots[i], _deferredSlotStates[i]);
     }
 
-    if (numSlots <= 0 || !ImGui::BeginTable("GBufferTable", numSlots, ImGuiTableFlags_BordersInnerV)) {
+    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
+        const auto& depthSlot   = depthSlots[i];
+        auto&       state       = _deferredSlotStates[numSlots + i];
+        const auto  configKey   = buildDepthMaskConfigKey(depthSlot.label);
+        if (state.configKey != configKey) {
+            std::array<bool, 4> channelEnabled = {true, false, false, false};
+            auto&               configManager  = ConfigManager::get();
+            (void)configManager.tryGet<std::array<bool, 4>>("editor", configKey, channelEnabled);
+
+            state.configKey      = configKey;
+            state.channelEnabled = channelEnabled;
+            state.maskedView.reset();
+            state.lastBase = nullptr;
+        }
+    }
+
+    if (totalSlots <= 0 || !ImGui::BeginTable("GBufferTable", totalSlots, ImGuiTableFlags_BordersInnerV)) {
         return;
     }
 
@@ -920,10 +943,19 @@ void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
         ImGui::TableSetupColumn(slots[i].label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
     }
 
+    for (const auto& depthSlot : depthSlots) {
+        ImGui::TableSetupColumn(depthSlot.label.c_str(), ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    }
+
     ImGui::TableNextRow();
     for (int i = 0; i < numSlots; ++i) {
         ImGui::TableSetColumnIndex(i);
         ImGui::Text("%s", slots[i].label.c_str());
+    }
+
+    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
+        ImGui::TableSetColumnIndex(numSlots + i);
+        ImGui::Text("%s", depthSlots[i].label.c_str());
     }
 
     ImGui::TableNextRow();
@@ -935,8 +967,34 @@ void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
         ImGui::PopID();
     }
 
+    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
+        const auto& depthSlot = depthSlots[i];
+        auto&       state     = _deferredSlotStates[numSlots + i];
+
+        ImGui::TableSetColumnIndex(numSlots + i);
+        ImGui::PushID(("depth-mask-" + depthSlot.label).c_str());
+        bool maskChanged = renderDeferredSlotMaskControls(EditorViewportContext::GBufferSlot{}, state);
+
+        const bool baseChanged = depthSlot.defaultView != state.lastBase;
+        if (maskChanged || baseChanged) {
+            state.lastBase = depthSlot.defaultView;
+            if (isIdentityDeferredMask(state.channelEnabled) || !depthSlot.image) {
+                state.maskedView.reset();
+            }
+            else {
+                ImageViewCreateInfo ci;
+                ci.label       = depthSlot.label + "_mask";
+                ci.viewType    = EImageViewType::View2D;
+                ci.aspectFlags = EImageAspect::Depth;
+                ci.components  = buildDeferredMaskMapping(state.channelEnabled);
+                state.maskedView = ITextureFactory::get()->createImageView(depthSlot.image, ci);
+            }
+        }
+        ImGui::PopID();
+    }
+
     float padding   = ImGui::GetStyle().ItemSpacing.x;
-    float colWidth  = (panelSize.x - padding * static_cast<float>(numSlots - 1)) / static_cast<float>(numSlots);
+    float colWidth  = (panelSize.x - padding * static_cast<float>(totalSlots - 1)) / static_cast<float>(totalSlots);
     float imgHeight = colWidth;
 
     ImGui::TableNextRow();
@@ -944,6 +1002,19 @@ void EditorLayer::debugDeferredWindow(const ImVec2& panelSize)
         ImGui::TableSetColumnIndex(i);
         ImGui::PushID(i);
         renderDeferredSlotImage(slots[i], _deferredSlotStates[i], colWidth, imgHeight, sampler);
+        ImGui::PopID();
+    }
+
+    for (int i = 0; i < static_cast<int>(depthSlots.size()); ++i) {
+        const auto& depthSlot = depthSlots[i];
+        auto&       state     = _deferredSlotStates[numSlots + i];
+        IImageView* displayView = (isIdentityDeferredMask(state.channelEnabled) || !state.maskedView)
+                                    ? depthSlot.defaultView
+                                    : state.maskedView.get();
+
+        ImGui::TableSetColumnIndex(numSlots + i);
+        ImGui::PushID(("depth-image-" + depthSlot.label).c_str());
+        ImGuiHelper::Image(displayView, sampler, depthSlot.label, ImVec2(colWidth, imgHeight));
         ImGui::PopID();
     }
 

@@ -24,8 +24,8 @@ namespace ya
 
 struct App;
 struct Texture;
-struct IRenderTarget;
 struct IImageView;
+struct IImage;
 
 // All render resources that the editor viewport needs, explicitly passed in from App
 struct EditorViewportContext
@@ -41,16 +41,21 @@ struct EditorViewportContext
     Texture* postprocessOutputTexture = nullptr;
 
     // Shadow mapping
-    bool           bShadowMappingEnabled    = false;
-    IRenderTarget* shadowDepthRT            = nullptr;
-    IImageView*    shadowDirectionalDepthIV = nullptr;
+    bool        bShadowMappingEnabled    = false;
+    IImageView* shadowDirectionalDepthIV = nullptr;
     // Point light shadow: indexed [pointLightIndex][faceIndex]
     // Caller provides a lambda to avoid large fixed-size arrays
     std::function<IImageView*(uint32_t /*pointLightIndex*/, uint32_t /*faceIndex*/)> getShadowPointFaceDepthIV;
 
-    // Mirror
-    bool           bMirrorRenderResult = false;
-    IRenderTarget* mirrorRenderTarget  = nullptr;
+    struct DepthDebugSpec
+    {
+        std::string             label;
+        IImageView*             defaultView = nullptr;
+        std::shared_ptr<IImage> image;
+        Extent2D                extent{};
+    };
+
+    std::vector<DepthDebugSpec> depthDebugSlots;
 
 
     struct GBufferSlot

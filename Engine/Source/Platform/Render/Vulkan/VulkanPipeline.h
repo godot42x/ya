@@ -30,28 +30,28 @@ struct VulkanRenderPass;
 struct VulkanPipelineLayout : public IPipelineLayout
 {
     std::string        _label;
-    VulkanRender      *_render         = nullptr;
+    VulkanRender*      _render         = nullptr;
     ::VkPipelineLayout _pipelineLayout = VK_NULL_HANDLE;
     // std::vector<::VkDescriptorSetLayout> _descriptorSetLayouts = {};
 
     // ya::PipelineDesc _ci;
 
-    VulkanPipelineLayout(VulkanRender *render, std::string label = std::string("None"))
+    VulkanPipelineLayout(VulkanRender* render, std::string label = std::string("None"))
         : _label(std::move(label)), _render(render) {}
 
     ~VulkanPipelineLayout() override { cleanup(); }
 
-    VulkanPipelineLayout(const VulkanPipelineLayout &)            = delete;
-    VulkanPipelineLayout &operator=(const VulkanPipelineLayout &) = delete;
-    VulkanPipelineLayout(VulkanPipelineLayout &&)                 = default;
-    VulkanPipelineLayout &operator=(VulkanPipelineLayout &&)      = default;
+    VulkanPipelineLayout(const VulkanPipelineLayout&)            = delete;
+    VulkanPipelineLayout& operator=(const VulkanPipelineLayout&) = delete;
+    VulkanPipelineLayout(VulkanPipelineLayout&&)                 = default;
+    VulkanPipelineLayout& operator=(VulkanPipelineLayout&&)      = default;
 
     void create(const std::vector<PushConstantRange>             pushConstants,
-                const std::vector<stdptr<IDescriptorSetLayout>> &layouts);
+                const std::vector<stdptr<IDescriptorSetLayout>>& layouts);
 
     // IPipelineLayout interface
-    void              *getHandle() const override { return (void *)(uintptr_t)_pipelineLayout; }
-    const std::string &getLabel() const override { return _label; }
+    void*              getHandle() const override { return (void*)(uintptr_t)_pipelineLayout; }
+    const std::string& getLabel() const override { return _label; }
 
     ::VkPipelineLayout getVkHandle() const { return _pipelineLayout; }
 
@@ -67,21 +67,21 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
   public:
     FName _name;
 
-    VkPipeline       _pipeline           = VK_NULL_HANDLE;
-    VkDescriptorPool _descriptorPool     = VK_NULL_HANDLE;
+    VkPipeline       _pipeline       = VK_NULL_HANDLE;
+    VkDescriptorPool _descriptorPool = VK_NULL_HANDLE;
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
 
-    VulkanRender         *_render         = nullptr;
-    VulkanPipelineLayout *_pipelineLayout = nullptr;
+    VulkanRender*         _render         = nullptr;
+    VulkanPipelineLayout* _pipelineLayout = nullptr;
 
     // Shader-derived resources (auto-created when bDeriveFromShader=true)
     std::shared_ptr<IPipelineLayout>                   _derivedPipelineLayout;
     std::vector<std::shared_ptr<IDescriptorSetLayout>> _derivedDSLs;
 
   public:
-    VulkanPipeline(VulkanRender *render)
+    VulkanPipeline(VulkanRender* render)
     {
         _render = render;
         queryPhysicalDeviceLimits(); // maxTextureSlots
@@ -89,15 +89,15 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
     ~VulkanPipeline() override { cleanup(); }
 
-    VulkanPipeline(const VulkanPipeline &)            = delete;
-    VulkanPipeline &operator=(const VulkanPipeline &) = delete;
-    VulkanPipeline(VulkanPipeline &&)                 = default;
-    VulkanPipeline &operator=(VulkanPipeline &&)      = default;
+    VulkanPipeline(const VulkanPipeline&)            = delete;
+    VulkanPipeline& operator=(const VulkanPipeline&) = delete;
+    VulkanPipeline(VulkanPipeline&&)                 = default;
+    VulkanPipeline& operator=(VulkanPipeline&&)      = default;
 
     void cleanup();
 
     // IGraphicsPipeline interface
-    bool recreate(const GraphicsPipelineCreateInfo &ci) override;
+    bool recreate(const GraphicsPipelineCreateInfo& ci) override;
     void bind(CommandBufferHandle commandBuffer) override
     {
         YA_CORE_ASSERT(commandBuffer, "Invalid command buffer handle");
@@ -105,8 +105,8 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
                           VK_PIPELINE_BIND_POINT_GRAPHICS,
                           _pipeline);
     }
-    void              *getHandle() const override { return (void *)(uintptr_t)_pipeline; }
-    const std::string &getName() const override
+    void*              getHandle() const override { return (void*)(uintptr_t)_pipeline; }
+    const std::string& getName() const override
     {
         static std::string name_cache;
         name_cache = std::string(_name._data);
@@ -128,14 +128,19 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     void beginFrame() override;
     void renderGUI() override;
 
-    void setSampleCount(ESampleCount::T sampleCount) override;
+    void            setSampleCount(ESampleCount::T sampleCount) override;
     ESampleCount::T getSampleCount() const override { return _ci.multisampleState.sampleCount; }
-    void setCullMode(ECullMode::T cullMode) override;
-    ECullMode::T getCullMode() const override { return _ci.rasterizationState.cullMode; }
-    void setPolygonMode(EPolygonMode::T polygonMode) override;
+    void            setCullMode(ECullMode::T cullMode) override;
+    ECullMode::T    getCullMode() const override { return _ci.rasterizationState.cullMode; }
+    void            setPolygonMode(EPolygonMode::T polygonMode) override;
     EPolygonMode::T getPolygonMode() const override { return _ci.rasterizationState.polygonMode; }
-    void setDepthBiasEnable(bool enable) override;
-    void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
+
+    void          setDepthBiasEnable(bool enable) override;
+    void          setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
+    void          setDepthCompareOp(ECompareOp::T op) override;
+    ECompareOp::T getDepthCompareOp() const override { return _ci.depthStencilState.depthCompareOp; }
+
+
 
     VkPipeline getVkHandle() const { return _pipeline; }
 
@@ -157,9 +162,9 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
 struct VulkanComputePipeline : public ya::IComputePipeline
 {
-    VkPipeline       _pipeline       = VK_NULL_HANDLE;
-    VulkanRender     *_render        = nullptr;
-    VulkanPipelineLayout *_pipelineLayout = nullptr;
+    VkPipeline            _pipeline       = VK_NULL_HANDLE;
+    VulkanRender*         _render         = nullptr;
+    VulkanPipelineLayout* _pipelineLayout = nullptr;
 
     // Shader-derived resources (auto-created when bDeriveFromShader=true)
     std::shared_ptr<IPipelineLayout>                   _derivedPipelineLayout;
@@ -181,18 +186,18 @@ struct VulkanComputePipeline : public ya::IComputePipeline
     void cleanup();
 
     // IComputePipeline interface
-    bool              recreate(const ComputePipelineCreateInfo& ci) override;
-    void             *getHandle() const override { return (void*)(uintptr_t)_pipeline; }
+    bool               recreate(const ComputePipelineCreateInfo& ci) override;
+    void*              getHandle() const override { return (void*)(uintptr_t)_pipeline; }
     const std::string& getName() const override { return _name; }
 
     VkPipeline getVkHandle() const { return _pipeline; }
 
-    const std::shared_ptr<IPipelineLayout>& getDerivedPipelineLayout() const { return _derivedPipelineLayout; }
+    const std::shared_ptr<IPipelineLayout>&                   getDerivedPipelineLayout() const { return _derivedPipelineLayout; }
     const std::vector<std::shared_ptr<IDescriptorSetLayout>>& getDerivedDSLs() const { return _derivedDSLs; }
 
   private:
     ComputePipelineCreateInfo _ci;
-    void createPipelineInternal();
+    void                      createPipelineInternal();
 };
 
 } // namespace ya

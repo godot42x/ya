@@ -52,11 +52,13 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
             .depthAttach = AttachmentDescription{
                 .index          = 4,
                 .format         = DEPTH_FORMAT,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
                 .stencilLoadOp  = EAttachmentLoadOp::Clear,
                 .stencilStoreOp = EAttachmentStoreOp::Store,
                 .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
             },
         },
     });

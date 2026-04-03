@@ -518,13 +518,19 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         if (_shadingModel == EShadingModel::Forward) {
             ctx.viewportTexture           = _forwardPipeline->viewportTexture;
             ctx.bShadowMappingEnabled     = isShadowMappingEnabled();
-            ctx.shadowDepthRT             = getShadowDepthRT();
             ctx.shadowDirectionalDepthIV  = getShadowDirectionalDepthIV();
             ctx.getShadowPointFaceDepthIV = [this](uint32_t pointLightIndex, uint32_t faceIndex) -> IImageView* {
                 return getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
             };
-            ctx.bMirrorRenderResult = hasMirrorRenderResult();
-            ctx.mirrorRenderTarget  = nullptr;
+
+            if (auto* viewportDepth = _forwardPipeline->viewportRT->getCurFrameBuffer()->getDepthTexture()) {
+                ctx.depthDebugSlots.push_back({
+                    .label       = "ViewportDepth",
+                    .defaultView = viewportDepth->getImageView(),
+                    .image       = viewportDepth->getImageShared(),
+                    .extent      = viewportDepth->getExtent(),
+                });
+            }
         }
         else {
             ctx.viewportTexture    = _deferredPipeline->viewportTexture;
@@ -546,6 +552,15 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                     .image       = fb.getColorTexture(2)->getImageShared(),
                 },
             };
+
+            if (auto* gbufferDepth = fb.getDepthTexture()) {
+                ctx.depthDebugSlots.push_back({
+                    .label       = "GBufferDepth",
+                    .defaultView = gbufferDepth->getImageView(),
+                    .image       = gbufferDepth->getImageShared(),
+                    .extent      = gbufferDepth->getExtent(),
+                });
+            }
         }
         input.editorLayer->setViewportContext(ctx);
     }

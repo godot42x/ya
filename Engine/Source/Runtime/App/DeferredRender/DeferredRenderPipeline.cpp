@@ -300,7 +300,12 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
     auto cmdBuf = desc.cmdBuf;
 
     _sharedDepthSpec = RenderingInfo::ImageSpec{
-        .texture = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
+        .texture       = _gBufferRT->getCurFrameBuffer()->getDepthTexture(),
+        // reuse gbuffer depth buffer, and do not clear it
+        .loadOp        = EAttachmentLoadOp::Load,
+        .storeOp       = EAttachmentStoreOp::Store,
+        .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
     };
 
     _viewportRI = RenderingInfo{
@@ -339,6 +344,7 @@ void DeferredRenderPipeline::executeLightPass(const TickDesc& desc)
 
     auto  sampler = TextureLibrary::get().getDefaultSampler();
     auto* fb      = _gBufferRT->getCurFrameBuffer();
+    // TODO: each fb has it's ds cache
     _render->getDescriptorHelper()->updateDescriptorSets({
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 0, fb->getColorTexture(0)->getImageView(), sampler.get()),
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 1, fb->getColorTexture(1)->getImageView(), sampler.get()),
@@ -402,7 +408,7 @@ void DeferredRenderPipeline::renderGUI()
 {
     if (!ImGui::TreeNode("Deferred Pipeline")) return;
 
-    ImGui::Checkbox("Reverse Viewport Y", &_bReverseViewportY);
+    ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
     ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
 
     if (_pbrGBufferPipeline) _pbrGBufferPipeline->renderGUI();
