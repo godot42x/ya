@@ -1,9 +1,6 @@
 #pragma once
 
-
-
 #include "Core/Reflection/Reflection.h"
-
 
 #include "Core/Base.h"
 
@@ -11,11 +8,11 @@
 
 #include "ECS/Component.h"
 #include "Render/Core/DescriptorSet.h"
-#include "Render/Core/TextureFactory.h"
+#include "Render/Core/Texture.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {
-
 
 enum class ESkyboxResolveState : uint8_t
 {
@@ -28,6 +25,11 @@ enum class ESkyboxResolveState : uint8_t
 
 struct SkyboxComponent : public IComponent
 {
+    struct PendingBatchLoadState
+    {
+        AssetManager::TextureBatchMemoryHandle batchHandle = 0;
+    };
+
     struct CubemapSource
     {
         YA_REFLECT_BEGIN(CubemapSource)
@@ -45,10 +47,10 @@ struct SkyboxComponent : public IComponent
     YA_REFLECT_FIELD(source)
     YA_REFLECT_END()
 
-
-    CubemapSource       source;
-    stdptr<Texture>     cubemapTexture = nullptr;
-    DescriptorSetHandle cubeMapDS      = nullptr;
+    CubemapSource                         source;
+    stdptr<Texture>                       cubemapTexture = nullptr;
+    DescriptorSetHandle                   cubeMapDS      = nullptr;
+    std::shared_ptr<PendingBatchLoadState> _pendingBatchLoad;
 
     ESkyboxResolveState resolveState     = ESkyboxResolveState::Dirty;
     bool                bDescriptorDirty = true;
@@ -62,6 +64,5 @@ struct SkyboxComponent : public IComponent
     bool isLoading() const;
     void onPostSerialize() override;
 };
-
 
 } // namespace ya

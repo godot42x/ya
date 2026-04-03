@@ -49,7 +49,10 @@ void HelloMaterial::loadResources()
 {
 
     ya::FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 18);
-    auto tex = ya::AssetManager::get()->loadTexture("light", "Engine/Content/TestTextures/icons8-light-64.png");
+    auto tex = ya::AssetManager::get()->loadTexture(ya::AssetManager::TextureLoadRequest{
+        .filepath = "Engine/Content/TestTextures/icons8-light-64.png",
+        .name     = "light",
+    });
 }
 
 void HelloMaterial::createMaterials()

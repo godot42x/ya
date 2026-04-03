@@ -70,7 +70,7 @@ struct IPipeline
 struct IComputePipeline : public IPipeline
 {
   public:
-    IComputePipeline()                                    = default;
+    IComputePipeline()                                   = default;
     IComputePipeline(const IComputePipeline&)            = delete;
     IComputePipeline& operator=(const IComputePipeline&) = delete;
     IComputePipeline(IComputePipeline&&)                 = default;
@@ -78,8 +78,8 @@ struct IComputePipeline : public IPipeline
 
     static std::shared_ptr<IComputePipeline> create(IRender* render);
 
-    virtual bool              recreate(const ComputePipelineCreateInfo& ci) = 0;
-    virtual void             *getHandle() const                              = 0;
+    virtual bool               recreate(const ComputePipelineCreateInfo& ci) = 0;
+    virtual void*              getHandle() const                             = 0;
     virtual const std::string& getName() const                               = 0;
 
     template <typename T>
@@ -124,15 +124,18 @@ struct IGraphicsPipeline : public IPipeline
      */
     virtual const std::string& getName() const = 0;
 
-    virtual void            updateDesc(GraphicsPipelineCreateInfo ci)                         = 0;
-    virtual void            setSampleCount(ESampleCount::T sampleCount)                      = 0;
-    virtual ESampleCount::T getSampleCount() const                                           = 0;
-    virtual void            setCullMode(ECullMode::T cullMode)                               = 0;
-    virtual ECullMode::T    getCullMode() const                                              = 0;
-    virtual void            setPolygonMode(EPolygonMode::T polygonMode)                      = 0;
-    virtual EPolygonMode::T getPolygonMode() const                                           = 0;
-    virtual void            setDepthBiasEnable(bool enable)                                  = 0;
+    virtual void            updateDesc(GraphicsPipelineCreateInfo ci)                          = 0;
+    virtual void            setSampleCount(ESampleCount::T sampleCount)                        = 0;
+    virtual ESampleCount::T getSampleCount() const                                             = 0;
+    virtual void            setCullMode(ECullMode::T cullMode)                                 = 0;
+    virtual ECullMode::T    getCullMode() const                                                = 0;
+    virtual void            setPolygonMode(EPolygonMode::T polygonMode)                        = 0;
+    virtual EPolygonMode::T getPolygonMode() const                                             = 0;
+    virtual void            setDepthBiasEnable(bool enable)                                    = 0;
     virtual void            setDepthBias(float constantFactor, float clamp, float slopeFactor) = 0;
+    virtual void            setDepthCompareOp(ECompareOp::T op)                                = 0;
+    virtual ECompareOp::T   getDepthCompareOp() const                                          = 0;
+
 
     bool isDirty() const { return _bDirty; }
     void markDirty() { _bDirty = true; }

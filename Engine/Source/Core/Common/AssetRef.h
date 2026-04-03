@@ -284,7 +284,9 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
 
     // Loading or Dirty: try to get the real texture from cache
     const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
-    auto future = AssetManager::get()->loadTexture(_path);
+    auto future = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
+        .filepath = _path,
+    });
     if (future.isReady()) {
         _cachedPtr        = future.getShared();
         _resolveState     = EAssetResolveState::Ready;
@@ -322,7 +324,9 @@ inline EAssetResolveResult TAssetRef<Model>::resolve()
     }
 
     const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
-    auto future = AssetManager::get()->loadModel(_path);
+    auto future = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
+        .filepath = _path,
+    });
     if (future.isReady()) {
         _cachedPtr        = future.getShared();
         _resolveState     = EAssetResolveState::Ready;

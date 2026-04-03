@@ -34,7 +34,9 @@ bool MeshComponent::resolve()
     // Priority 2: Mesh from Model by path and index
     if (!_sourceModelPath.empty()) {
         Model* model = nullptr;
-        auto ft = AssetManager::get()->loadModel(_sourceModelPath);
+        auto ft = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
+            .filepath = _sourceModelPath,
+        });
         if (ft.isReady()) {
             model = ft.get();
         }

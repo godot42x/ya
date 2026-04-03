@@ -1,9 +1,12 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Common/AssetFuture.h"
@@ -42,12 +45,87 @@ struct Resource
 
 class AssetManager : public IResourceCache
 {
-    public:
-        enum class ETextureColorSpace
+  public:
+    using TextureBatchMemoryHandle = uint64_t;
+
+    struct TextureMemoryBlock
+    {
+        std::string          filepath;
+        uint32_t             width    = 0;
+        uint32_t             height   = 0;
+        uint32_t             channels = 4;
+        EFormat::T           format   = EFormat::R8G8B8A8_UNORM;
+        std::vector<uint8_t> bytes;
+
+        [[nodiscard]] bool isValid() const
         {
-                SRGB,
-                Linear,
-        };
+            return !bytes.empty() && width > 0 && height > 0;
+        }
+
+        [[nodiscard]] size_t dataSize() const
+        {
+            return bytes.size();
+        }
+    };
+
+    struct TextureBatchMemory
+    {
+        std::vector<TextureMemoryBlock> textures;
+
+        [[nodiscard]] bool isValid() const
+        {
+            if (textures.empty()) {
+                return false;
+            }
+
+            for (const auto& texture : textures) {
+                if (!texture.isValid()) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    };
+
+    using TextureReadyCallback      = std::function<void(const std::shared_ptr<Texture>&)>;
+    using ModelReadyCallback        = std::function<void(const std::shared_ptr<Model>&)>;
+    using TextureBatchReadyCallback = std::function<void(const std::vector<std::shared_ptr<Texture>>&)>;
+
+    enum class ETextureColorSpace
+    {
+        SRGB,
+        Linear,
+    };
+
+    struct TextureLoadRequest
+    {
+        std::string          filepath;
+        std::string          name;
+        TextureReadyCallback onReady;
+        ETextureColorSpace   colorSpace = ETextureColorSpace::SRGB;
+        std::optional<FName> textureSemantic;
+    };
+
+    struct TextureBatchLoadRequest
+    {
+        std::vector<std::string>  filepaths;
+        TextureBatchReadyCallback onDone;
+        ETextureColorSpace        colorSpace = ETextureColorSpace::SRGB;
+    };
+
+    struct TextureBatchMemoryLoadRequest
+    {
+        std::vector<std::string> filepaths;
+        ETextureColorSpace       colorSpace = ETextureColorSpace::SRGB;
+    };
+
+    struct ModelLoadRequest
+    {
+        std::string        filepath;
+        std::string        name;
+        ModelReadyCallback onReady;
+    };
 
   private:
 
@@ -74,8 +152,13 @@ class AssetManager : public IResourceCache
     std::unordered_map<std::string, uint64_t> _resourceVersion;
 
     // Track in-flight async loads to avoid duplicate submissions
-    std::unordered_map<std::string, TaskHandle<DecodedTextureData>> _pendingTextureLoads;
-    std::unordered_map<std::string, TaskHandle<DecodedModelData>>   _pendingModelLoads;
+    std::unordered_map<std::string, TaskHandle<TextureMemoryBlock>>              _pendingTextureLoads;
+    std::unordered_map<std::string, TaskHandle<DecodedModelData>>                _pendingModelLoads;
+    std::unordered_map<std::string, std::vector<TextureReadyCallback>>           _pendingTextureCallbacks;
+    std::unordered_map<std::string, std::vector<ModelReadyCallback>>             _pendingModelCallbacks;
+    std::unordered_map<TextureBatchMemoryHandle, TaskHandle<TextureBatchMemory>> _pendingTextureBatchMemoryLoads;
+    std::unordered_map<TextureBatchMemoryHandle, TextureBatchMemory>             _readyTextureBatchMemory;
+    TextureBatchMemoryHandle                                                     _nextTextureBatchMemoryHandle = 1;
 
     // Mutex for thread-safe cache access during async loading
     mutable std::mutex _cacheMutex;
@@ -111,24 +194,18 @@ class AssetManager : public IResourceCache
     // Use loadTextureSync() / loadModelSync() for must-have-now resources.
     // Sync methods return shared_ptr<T> directly (guaranteed non-null on success).
 
-    TextureFuture loadTexture(const std::string& filepath,
-                              ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
+    TextureFuture loadTexture(const TextureLoadRequest& request);
 
-    TextureFuture loadTexture(const std::string& name,
-                              const std::string& filepath,
-                              ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
+    ModelFuture loadModel(const ModelLoadRequest& request);
 
-    TextureFuture loadTexture(const std::string& name,
-                              const std::string& filepath,
-                              const FName&       textureSemantic);
+    void                     loadTextureBatch(const TextureBatchLoadRequest& request);
+    TextureBatchMemoryHandle loadTextureBatchIntoMemory(const TextureBatchMemoryLoadRequest& request);
+    bool                     consumeTextureBatchMemory(TextureBatchMemoryHandle handle, TextureBatchMemory& outBatchMemory);
 
     /**
      * @brief Load model asynchronously (default).
      *        Returns ModelFuture — check isReady() before using.
      */
-    ModelFuture loadModel(const std::string& filepath);
-    ModelFuture loadModel(const std::string& name, const std::string& filepath);
-
     // ── Explicit synchronous loading ────────────────────────────────────
 
     std::shared_ptr<Texture> loadTextureSync(const std::string& filepath,
@@ -230,6 +307,17 @@ class AssetManager : public IResourceCache
     /// Core async model load — submits Assimp decode to worker, GPU mesh creation to main-thread callback.
     void submitModelLoad(const std::string& filepath,
                          const std::string& name = "");
+
+    static void dispatchToGameThread(std::function<void()> task);
+
+    void                              registerTextureCallback(const std::string& cacheKey, TextureReadyCallback onReady);
+    void                              registerModelCallback(const std::string& filepath, ModelReadyCallback onReady);
+    std::vector<TextureReadyCallback> takeTextureCallbacks(const std::string& cacheKey);
+    std::vector<ModelReadyCallback>   takeModelCallbacks(const std::string& filepath);
+    void                              dispatchTextureCallbacks(const std::vector<TextureReadyCallback>& callbacks,
+                                                               const std::shared_ptr<Texture>&          texture);
+    void                              dispatchModelCallbacks(const std::vector<ModelReadyCallback>& callbacks,
+                                                             const std::shared_ptr<Model>&          model);
 };
 
 } // namespace ya

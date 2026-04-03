@@ -74,7 +74,9 @@ void AssetInspectorPanel::renderTextureInspector()
     ImGui::Separator();
 
     // ── Preview ─────────────────────────────────────────────────────────
-    auto texFuture = AssetManager::get()->loadTexture(_inspectedPath);
+    auto texFuture = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
+        .filepath = _inspectedPath,
+    });
     if (texFuture.isReady()) {
         auto* texture = texFuture.get();
         if (texture && texture->isValid()) {

@@ -10,12 +10,11 @@
 #include "Render/Core/CommandBuffer.h"
 
 #include "Render/Core/Buffer.h"
-#include "Render/Core/Image.h" // Include Image.h for RHI enums
+#include "Render/Core/Image.h"
 #include "Render/Core/TextureFactory.h"
 #include "Render/Render.h"
 
 #include "ktx.h"
-
 
 namespace ya
 {
@@ -29,13 +28,11 @@ struct StbiImage
     StbiImage() = default;
     explicit StbiImage(stbi_uc* ptr)
     {
-        data = std::shared_ptr<stbi_uc>(ptr, [](stbi_uc* ptr) {
-            stbi_image_free(ptr);
+        data = std::shared_ptr<stbi_uc>(ptr, [](stbi_uc* p) {
+            stbi_image_free(p);
         });
     }
-    ~StbiImage()
-    {
-    }
+
     operator bool() const { return data != nullptr; }
     const stbi_uc* get() const { return data.get(); }
     stbi_uc*       get() { return data.get(); }
@@ -50,22 +47,61 @@ class StbiFlipGuard
             stbi_set_flip_vertically_on_load_thread(true);
         }
     }
+
     ~StbiFlipGuard()
     {
         if (m_flip) {
             stbi_set_flip_vertically_on_load_thread(false);
         }
     }
+
     bool m_flip = false;
 };
+
+struct OwnedCubeMapFace
+{
+    uint32_t            width    = 0;
+    uint32_t            height   = 0;
+    uint32_t            channels = 4;
+    EFormat::T          format   = EFormat::R8G8B8A8_UNORM;
+    std::vector<uint8_t> bytes;
+
+    [[nodiscard]] bool isValid() const
+    {
+        return !bytes.empty() && width > 0 && height > 0;
+    }
+};
+
+static bool copyFaceToStaging(uint8_t* dst, const TextureMemoryView& face, bool flipVertical)
+{
+    if (!dst || !face.isValid()) {
+        return false;
+    }
+
+    const auto* src = static_cast<const uint8_t*>(face.data);
+    if (!flipVertical) {
+        std::memcpy(dst, src, face.dataSize);
+        return true;
+    }
+
+    if (face.height == 0 || face.dataSize % face.height != 0) {
+        YA_CORE_ERROR("Texture cubemap face row stride is invalid");
+        return false;
+    }
+
+    const size_t rowSize = face.dataSize / face.height;
+    for (uint32_t row = 0; row < face.height; ++row) {
+        const uint32_t srcRow = face.height - 1 - row;
+        std::memcpy(dst + row * rowSize, src + srcRow * rowSize, rowSize);
+    }
+
+    return true;
+}
 } // namespace
 
 static size_t getFormatPixelSize(EFormat::T format);
 static bool   isBlockCompressed(EFormat::T format);
 
-/**
- * @brief Get the size in bytes per pixel/block for a given format
- */
 static size_t getFormatPixelSize(EFormat::T format)
 {
     switch (format) {
@@ -82,25 +118,21 @@ static size_t getFormatPixelSize(EFormat::T format)
     case EFormat::D24_UNORM_S8_UINT:
         return 4;
     case EFormat::D32_SFLOAT_S8_UINT:
-        return 5; // 4 bytes for depth + 1 byte for stencil (padded to 8 in practice)
-
-    // BC formats (block size)
+        return 5;
     case EFormat::BC1_RGB_UNORM_BLOCK:
     case EFormat::BC1_RGBA_UNORM_BLOCK:
     case EFormat::BC1_RGB_SRGB_BLOCK:
     case EFormat::BC1_RGBA_SRGB_BLOCK:
     case EFormat::BC4_UNORM_BLOCK:
     case EFormat::BC4_SNORM_BLOCK:
-        return 8; // 8 bytes per 4x4 block
+        return 8;
     case EFormat::BC3_UNORM_BLOCK:
     case EFormat::BC3_SRGB_BLOCK:
     case EFormat::BC5_UNORM_BLOCK:
     case EFormat::BC5_SNORM_BLOCK:
     case EFormat::BC7_UNORM_BLOCK:
     case EFormat::BC7_SRGB_BLOCK:
-        return 16; // 16 bytes per 4x4 block
-
-    // ASTC formats (all 16 bytes per block)
+        return 16;
     case EFormat::ASTC_4x4_UNORM_BLOCK:
     case EFormat::ASTC_4x4_SRGB_BLOCK:
     case EFormat::ASTC_5x5_UNORM_BLOCK:
@@ -112,8 +144,6 @@ static size_t getFormatPixelSize(EFormat::T format)
     case EFormat::ASTC_10x10_UNORM_BLOCK:
     case EFormat::ASTC_10x10_SRGB_BLOCK:
         return 16;
-
-    // ETC2 formats
     case EFormat::ETC2_R8G8B8_UNORM_BLOCK:
     case EFormat::ETC2_R8G8B8_SRGB_BLOCK:
     case EFormat::ETC2_R8G8B8A1_UNORM_BLOCK:
@@ -122,16 +152,12 @@ static size_t getFormatPixelSize(EFormat::T format)
     case EFormat::ETC2_R8G8B8A8_UNORM_BLOCK:
     case EFormat::ETC2_R8G8B8A8_SRGB_BLOCK:
         return 16;
-
     default:
         YA_CORE_WARN("Unknown format pixel size for format: {}", static_cast<int>(format));
-        return 4; // Default to 4 bytes
+        return 4;
     }
 }
 
-/**
- * @brief Check if a format is block compressed
- */
 static bool isBlockCompressed(EFormat::T format)
 {
     switch (format) {
@@ -169,8 +195,6 @@ static bool isBlockCompressed(EFormat::T format)
     }
 }
 
-// ====== Static Factory Methods Implementation ======
-
 ITextureFactory* Texture::getTextureFactory()
 {
     auto render = ya::App::get()->getRender();
@@ -182,68 +206,36 @@ ITextureFactory* Texture::getTextureFactory()
     return textureFactory;
 }
 
-// ====== DecodedTextureData — CPU-only decode (thread-safe) ======
-
-DecodedTextureData DecodedTextureData::decode(const std::string& filepath,
-                                               const std::string& label,
-                                               bool bSRGB)
+std::shared_ptr<Texture> Texture::fromMemory(const TextureMemoryCreateInfo& ci)
 {
-    DecodedTextureData result;
-    result.filepath = filepath;
-    result.label    = label.empty() ? filepath : label;
-    result.format   = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
-    result.channels = 4;
-
-    int texWidth = -1, texHeight = -1, texChannels = -1;
-    stbi_uc* raw = stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    if (!raw) {
-        YA_CORE_ERROR("DecodedTextureData::decode: Failed to load '{}'", filepath);
-        return result; // Invalid: pixels == nullptr
-    }
-
-    result.width  = static_cast<uint32_t>(texWidth);
-    result.height = static_cast<uint32_t>(texHeight);
-    result.pixels = std::shared_ptr<uint8_t>(raw, [](uint8_t* p) { stbi_image_free(p); });
-
-    YA_CORE_TRACE("DecodedTextureData::decode: '{}' ({}x{}, {} ch)", filepath, texWidth, texHeight, texChannels);
-    return result;
-}
-
-// ====== Texture::fromDecodedData — GPU upload (main thread only) ======
-
-std::shared_ptr<Texture> Texture::fromDecodedData(DecodedTextureData&& decoded)
-{
-    if (!decoded.isValid()) {
-        YA_CORE_ERROR("Texture::fromDecodedData: invalid DecodedTextureData for '{}'", decoded.filepath);
+    if (!ci.memory.isValid()) {
+        YA_CORE_ERROR("Texture::fromMemory: invalid texture memory for '{}'", ci.filepath);
         return nullptr;
     }
 
     auto texture       = Texture::createShared();
-    texture->_filepath = std::move(decoded.filepath);
-    texture->_label    = std::move(decoded.label);
-    texture->_channels = decoded.channels;
-    texture->initFromData(decoded.pixels.get(),
-                          0,
-                          decoded.width,
-                          decoded.height,
-                          decoded.format);
+    texture->_filepath = ci.filepath;
+    texture->_label    = ci.label.empty() ? ci.filepath : ci.label;
+    texture->_channels = ci.memory.channels;
+    texture->initFromData(ci.memory.data,
+                          ci.memory.dataSize,
+                          ci.memory.width,
+                          ci.memory.height,
+                          ci.memory.format);
 
-    YA_CORE_TRACE("Created texture from decoded data: {} ({}x{})", texture->_label, decoded.width, decoded.height);
+    YA_CORE_TRACE("Created texture from memory: {} ({}x{})", texture->_label, ci.memory.width, ci.memory.height);
     return texture;
 }
-
-// ====== Texture::fromFile — synchronous (decode + upload in one call) ======
 
 std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const std::string& label, bool bSRGB)
 {
     stdpath p = filepath;
     if (p.extension() == ".ktx" || p.extension() == ".ktx2") {
-        // TODO: KTX texture loading support
         YA_CORE_WARN("KTX texture loading not yet implemented: {}", filepath);
         return nullptr;
     }
 
-    int       texWidth = -1, texHeight = -1, texChannels = -1;
+    int texWidth = -1, texHeight = -1, texChannels = -1;
     StbiImage pixels(stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha));
     if (!pixels) {
         YA_CORE_ERROR("Failed to load texture image: {}", filepath);
@@ -253,24 +245,24 @@ std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const st
     auto texture       = Texture::createShared();
     texture->_filepath = filepath;
     texture->_label    = label.empty() ? filepath : label;
-    texture->_channels = 4; // Force RGBA
+    texture->_channels = 4;
     texture->initFromData(pixels.get(),
                           0,
-                          (uint32_t)texWidth,
-                          (uint32_t)texHeight,
+                          static_cast<uint32_t>(texWidth),
+                          static_cast<uint32_t>(texHeight),
                           bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM);
 
     YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath, texWidth, texHeight, texChannels);
     return texture;
 }
 
-std::shared_ptr<Texture> Texture::fromData(
-    uint32_t                               width,
-    uint32_t                               height,
-    const std::vector<ColorRGBA<uint8_t>>& data,
-    const std::string&                     label)
+std::shared_ptr<Texture> Texture::fromData(uint32_t                               width,
+                                           uint32_t                               height,
+                                           const std::vector<ColorRGBA<uint8_t>>& data,
+                                           const std::string&                     label)
 {
-    YA_CORE_ASSERT((uint32_t)data.size() == width * height, "Pixel data size does not match width * height");
+    YA_CORE_ASSERT(static_cast<uint32_t>(data.size()) == width * height,
+                   "Pixel data size does not match width * height");
 
     auto texture       = Texture::createShared();
     texture->_label    = label;
@@ -281,40 +273,83 @@ std::shared_ptr<Texture> Texture::fromData(
     return texture;
 }
 
-std::shared_ptr<Texture> Texture::fromData(
-    uint32_t           width,
-    uint32_t           height,
-    const void*        data,
-    size_t             dataSize,
-    EFormat::T         format,
-    const std::string& label)
+std::shared_ptr<Texture> Texture::fromData(uint32_t           width,
+                                           uint32_t           height,
+                                           const void*        data,
+                                           size_t             dataSize,
+                                           EFormat::T         format,
+                                           const std::string& label)
 {
     auto texture     = Texture::createShared();
     texture->_label  = label;
     texture->_format = format;
 
-    // Derive channels from format
     switch (format) {
     case EFormat::R8G8B8A8_UNORM:
     case EFormat::B8G8R8A8_UNORM:
         texture->_channels = 4;
         break;
     default:
-        texture->_channels = 4; // Default
+        texture->_channels = 4;
         break;
     }
 
     texture->initFromData(data, dataSize, width, height, format, 1);
 
-    YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {}) label: {}", width, height, (int)format, label);
+    YA_CORE_TRACE("Created texture from raw data ({}x{}, format: {}) label: {}", width, height, static_cast<int>(format), label);
     return texture;
 }
 
 std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo& ci)
 {
+    std::array<OwnedCubeMapFace, CubeFace_Count> ownedFaces{};
+    CubeMapMemoryCreateInfo memoryCI;
+    memoryCI.label        = ci.label;
+    memoryCI.flipVertical = ci.flipVertical;
+
+    int width = -1;
+    int height = -1;
+    int channels = -1;
+
+    for (size_t i = 0; i < CubeFace_Count; ++i) {
+        stbi_uc* raw = stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha);
+        if (!raw) {
+            YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i]);
+            return nullptr;
+        }
+
+        auto& face    = ownedFaces[i];
+        face.width    = static_cast<uint32_t>(width);
+        face.height   = static_cast<uint32_t>(height);
+        face.channels = 4;
+        face.format   = EFormat::R8G8B8A8_UNORM;
+        face.bytes.resize(static_cast<size_t>(face.width) * face.height * face.channels);
+        std::memcpy(face.bytes.data(), raw, face.bytes.size());
+        stbi_image_free(raw);
+
+        memoryCI.faces[i] = TextureMemoryView{
+            .width    = face.width,
+            .height   = face.height,
+            .channels = face.channels,
+            .format   = face.format,
+            .data     = face.bytes.data(),
+            .dataSize = face.bytes.size(),
+        };
+    }
+
+    return createCubeMapFromMemory(memoryCI);
+}
+
+std::shared_ptr<Texture> Texture::createCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
+{
+    if (!ci.isValid()) {
+        YA_CORE_ERROR("Texture::createCubeMapFromMemory: invalid input");
+        return nullptr;
+    }
+
     auto texture    = Texture::createShared();
     texture->_label = ci.label;
-    texture->initCubeMap(ci);
+    texture->initCubeMapFromMemory(ci);
 
     if (!texture->isValid()) {
         return nullptr;
@@ -325,12 +360,12 @@ std::shared_ptr<Texture> Texture::createCubeMap(const CubeMapCreateInfo& ci)
 
 std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, const std::string& label)
 {
-    auto texture       = Texture::createShared();
-    texture->_label    = label.empty() ? "SolidCubeMap" : label;
-    texture->_width    = 1;
-    texture->_height   = 1;
-    texture->_channels = 4;
-    texture->_format   = EFormat::R8G8B8A8_UNORM;
+    auto texture        = Texture::createShared();
+    texture->_label     = label.empty() ? "SolidCubeMap" : label;
+    texture->_width     = 1;
+    texture->_height    = 1;
+    texture->_channels  = 4;
+    texture->_format    = EFormat::R8G8B8A8_UNORM;
     texture->_mipLevels = 1;
 
     auto textureFactory = getTextureFactory();
@@ -416,12 +451,10 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, con
     return texture->isValid() ? texture : nullptr;
 }
 
-
 std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateInfo& ci)
 {
     auto textureFactory = getTextureFactory();
 
-    // Create image for render target
     ImageCreateInfo imageCI{
         .label  = ci.label,
         .format = ci.format,
@@ -443,7 +476,6 @@ std::shared_ptr<Texture> Texture::createRenderTexture(const RenderTextureCreateI
         return nullptr;
     }
 
-    // Create image view
     ImageViewCreateInfo viewCI{
         .label       = std::format("RenderTexture_ImageView_{}", ci.label),
         .aspectFlags = static_cast<EImageAspect::T>(ci.isDepth ? EImageAspect::Depth : EImageAspect::Color),
@@ -470,13 +502,11 @@ std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
     texture->_label    = label;
     texture->image     = img;
     texture->imageView = view;
-
-    // Extract metadata from the wrapped image using RHI interface
-    texture->_width     = img->getWidth();
-    texture->_height    = img->getHeight();
-    texture->_format    = img->getFormat();
-    texture->_mipLevels = 1; // Default mip levels
-    texture->_channels  = 4; // Default
+    texture->_width    = img->getWidth();
+    texture->_height   = img->getHeight();
+    texture->_format   = img->getFormat();
+    texture->_mipLevels = 1;
+    texture->_channels = 4;
 
     YA_CORE_TRACE("Created Texture from existing IImage/IImageView: {} ({}x{})", label, texture->_width, texture->_height);
     return texture;
@@ -493,7 +523,12 @@ void Texture::setLabel(const std::string& label)
     }
 }
 
-void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels)
+void Texture::initFromData(const void* pixels,
+                           size_t      dataSize,
+                           uint32_t    texWidth,
+                           uint32_t    texHeight,
+                           EFormat::T  format,
+                           uint32_t    mipLevels)
 {
     _width     = texWidth;
     _height    = texHeight;
@@ -503,7 +538,6 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
     auto render         = App::get()->getRender();
     auto textureFactory = render->getTextureFactory();
 
-    // Calculate image size
     VkDeviceSize imageSize = 0;
     if (dataSize > 0) {
         imageSize = dataSize;
@@ -527,39 +561,36 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
         .initialLayout = EImageLayout::Undefined,
     };
 
-    // Create image using texture factory
     image = textureFactory->createImage(ci);
     if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create image for texture: {} (format: {}, {}x{})",
                       _filepath.empty() ? _label : _filepath,
-                      (int)format,
+                      static_cast<int>(format),
                       texWidth,
                       texHeight);
-
-        // Create a fallback 1x1 magenta texture to indicate error
-        uint32_t magentaPixel = 0xFFFF00FF; // RGBA: magenta
         throw std::runtime_error("Failed to create image for texture: " + _label);
-        initFallbackTexture(&magentaPixel, sizeof(magentaPixel), 1, 1);
-        return;
     }
 
-    // Create image view using texture factory
     ImageViewCreateInfo viewCI{
         .label       = std::format("Texture_ImageView_{}", _label),
         .aspectFlags = EImageAspect::Color,
         .levelCount  = mipLevels,
     };
     imageView = textureFactory->createImageView(image, viewCI);
-    YA_CORE_ASSERT(imageView, "Failed to create image view for texture: {} (format: {}, {}x{})", _filepath.empty() ? _label : _filepath, (int)format, texWidth, texHeight);
+    YA_CORE_ASSERT(imageView,
+                   "Failed to create image view for texture: {} (format: {}, {}x{})",
+                   _filepath.empty() ? _label : _filepath,
+                   static_cast<int>(format),
+                   texWidth,
+                   texHeight);
 
-    // Create staging buffer
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
-            .label         = std::format("StagingBuffer_Texture_{}", _filepath.empty() ? _label : _filepath),
-            .usage         = EBufferUsage::TransferSrc,
-            .data          = (void*)pixels,
-            .size          = static_cast<uint32_t>(imageSize),
+            .label       = std::format("StagingBuffer_Texture_{}", _filepath.empty() ? _label : _filepath),
+            .usage       = EBufferUsage::TransferSrc,
+            .data        = const_cast<void*>(pixels),
+            .size        = static_cast<uint32_t>(imageSize),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
@@ -570,10 +601,8 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
         texHeight,
         mipLevels));
 
-    // Transition image layout: UNDEFINED -> TRANSFER_DST
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
-    // For block compressed formats with multiple mip levels
     bool isCompressed = isBlockCompressed(format);
 
     if (isCompressed && mipLevels > 1 && dataSize > 0) {
@@ -645,7 +674,6 @@ void Texture::initFromData(const void* pixels, size_t dataSize, uint32_t texWidt
         cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
     }
 
-    // Transition to shader read-only layout
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
 
     render->endIsolateCommands(cmdBuf);
@@ -696,10 +724,10 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
         render,
         ya::BufferCreateInfo{
-            .label         = std::format("StagingBuffer_Fallback_{}", _label),
-            .usage         = EBufferUsage::TransferSrc,
-            .data          = (void*)pixels,
-            .size          = static_cast<uint32_t>(dataSize),
+            .label       = std::format("StagingBuffer_Fallback_{}", _label),
+            .usage       = EBufferUsage::TransferSrc,
+            .data        = const_cast<void*>(pixels),
+            .size        = static_cast<uint32_t>(dataSize),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
@@ -739,41 +767,33 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
 
 void Texture::initCubeMap(const CubeMapCreateInfo& ci)
 {
+    auto cubemap = createCubeMap(ci);
+    if (!cubemap) {
+        return;
+    }
+
+    _width     = cubemap->_width;
+    _height    = cubemap->_height;
+    _channels  = cubemap->_channels;
+    _format    = cubemap->_format;
+    _mipLevels = cubemap->_mipLevels;
+    image      = cubemap->image;
+    imageView  = cubemap->imageView;
+}
+
+void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
+{
     auto textureFactory = getTextureFactory();
     auto render         = textureFactory->getRender();
 
-    std::array<StbiImage, CubeFace_Count> pixels{};
-    {
-
-        int width    = 0;
-        int height   = 0;
-        int channels = 0;
-
-        StbiFlipGuard flipGuard(ci.flipVertical);
-        for (size_t i = 0; i < CubeFace_Count; ++i) {
-            pixels[i] = StbiImage(stbi_load(ci.files[i].c_str(), &width, &height, &channels, STBI_rgb_alpha));
-            if (!pixels[i]) {
-                YA_CORE_ERROR("Failed to load cubemap face {}: {}", i, ci.files[i]);
-                return;
-            }
-            if (i == 0) {
-                _width    = static_cast<uint32_t>(width);
-                _height   = static_cast<uint32_t>(height);
-                _channels = 4;
-            }
-            if (_width != static_cast<uint32_t>(width) || _height != static_cast<uint32_t>(height)) {
-                YA_CORE_ERROR("Cubemap faces must have the same dimensions");
-                return;
-            }
-        }
-    }
-
-    _format    = EFormat::R8G8B8A8_UNORM;
+    _width     = ci.faces[0].width;
+    _height    = ci.faces[0].height;
+    _channels  = ci.faces[0].channels;
+    _format    = ci.faces[0].format;
     _mipLevels = 1;
 
-
-    VkDeviceSize faceSize  = static_cast<VkDeviceSize>(_width) * static_cast<VkDeviceSize>(_height) * 4;
-    VkDeviceSize totalSize = faceSize * CubeFace_Count;
+    const VkDeviceSize faceSize  = static_cast<VkDeviceSize>(ci.faces[0].dataSize);
+    const VkDeviceSize totalSize = faceSize * CubeFace_Count;
 
     ImageCreateInfo imageCI{
         .label  = std::format("CubeMap_{}", _label),
@@ -804,19 +824,22 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
         return;
     }
 
-    // TODO: remove this, only copy ptrs?
     std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
     for (size_t i = 0; i < CubeFace_Count; ++i) {
-        std::memcpy(stagingData.data() + (i * faceSize), pixels[i].get(), static_cast<size_t>(faceSize));
+        if (!copyFaceToStaging(stagingData.data() + (i * faceSize), ci.faces[i], ci.flipVertical)) {
+            image.reset();
+            imageView.reset();
+            return;
+        }
     }
 
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
         render,
         BufferCreateInfo{
-            .label         = std::format("StagingBuffer_CubeMap_{}", _label),
-            .usage         = EBufferUsage::TransferSrc,
-            .data          = stagingData.data(),
-            .size          = static_cast<uint32_t>(totalSize),
+            .label       = std::format("StagingBuffer_CubeMap_{}", _label),
+            .usage       = EBufferUsage::TransferSrc,
+            .data        = stagingData.data(),
+            .size        = static_cast<uint32_t>(totalSize),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
@@ -855,24 +878,18 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
     };
 
     cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
-
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
 
     render->endIsolateCommands(cmdBuf);
 
-    YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, (int)CubeFace_Count);
+    YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, static_cast<int>(CubeFace_Count));
 }
-
-// ============================================================
-// TextureBinding implementation
-// ============================================================
 
 ImageViewHandle TextureBinding::getImageViewHandle() const
 {
     if (texture && texture->getImageView()) {
         return texture->getImageView()->getHandle();
     }
-    // Fallback: white texture
     return TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
 }
 
@@ -881,7 +898,6 @@ SamplerHandle TextureBinding::getSamplerHandle() const
     if (sampler) {
         return sampler->getHandle();
     }
-    // Fallback: default sampler
     return TextureLibrary::get().getDefaultSampler()->getHandle();
 }
 

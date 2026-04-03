@@ -1,6 +1,5 @@
 #include "SkyboxComponent.h"
 
-#include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
 
 namespace ya
@@ -47,35 +46,63 @@ bool SkyboxComponent::resolve()
         return false;
     }
 
-    bool allFacesReady = true;
-    for (const auto& file : source.files) {
-        auto future = AssetManager::get()->loadTexture(file, AssetManager::ETextureColorSpace::SRGB);
-        if (!future.isReady()) {
-            allFacesReady = false;
-        }
-    }
+    if (resolveState == ESkyboxResolveState::Dirty) {
+        std::vector<std::string> facePaths(source.files.begin(), source.files.end());
+        _pendingBatchLoad = std::make_shared<PendingBatchLoadState>();
+        _pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
+            AssetManager::TextureBatchMemoryLoadRequest{
+                .filepaths = facePaths,
+            });
 
-    if (!allFacesReady) {
         resolveState = ESkyboxResolveState::Resolving;
         return false;
     }
 
-    CubeMapCreateInfo createInfo{
-        .label        = "SkyboxCubemap",
-        .files        = source.files,
-        .flipVertical = source.flipVertical,
-    };
+    if (resolveState == ESkyboxResolveState::Resolving) {
+        AssetManager::TextureBatchMemory batchMemory;
+        if (!_pendingBatchLoad ||
+            !AssetManager::get()->consumeTextureBatchMemory(_pendingBatchLoad->batchHandle, batchMemory)) {
+            return false;
+        }
 
-    cubemapTexture = Texture::createCubeMap(createInfo);
-    if (!cubemapTexture || !cubemapTexture->isValid()) {
-        cubemapTexture.reset();
-        resolveState = ESkyboxResolveState::Failed;
-        return false;
+        _pendingBatchLoad.reset();
+
+        if (batchMemory.textures.size() != CubeFace_Count || !batchMemory.isValid()) {
+            cubemapTexture.reset();
+            resolveState = ESkyboxResolveState::Failed;
+            return false;
+        }
+
+        CubeMapMemoryCreateInfo createInfo;
+        createInfo.label        = "SkyboxCubemap";
+        createInfo.flipVertical = source.flipVertical;
+
+        for (size_t index = 0; index < CubeFace_Count; ++index) {
+            const auto& face = batchMemory.textures[index];
+            createInfo.faces[index] = TextureMemoryView{
+                .width    = face.width,
+                .height   = face.height,
+                .channels = face.channels,
+                .format   = face.format,
+                .data     = face.bytes.data(),
+                .dataSize = face.bytes.size(),
+            };
+        }
+
+        auto cubemap = Texture::createCubeMapFromMemory(createInfo);
+        if (!cubemap || !cubemap->isValid()) {
+            cubemapTexture.reset();
+            resolveState = ESkyboxResolveState::Failed;
+            return false;
+        }
+
+        cubemapTexture   = std::move(cubemap);
+        resolveState     = ESkyboxResolveState::Ready;
+        bDescriptorDirty = true;
+        return true;
     }
 
-    resolveState     = ESkyboxResolveState::Ready;
-    bDescriptorDirty = true;
-    return true;
+    return resolveState == ESkyboxResolveState::Ready;
 }
 
 bool SkyboxComponent::hasRenderableCubemap() const
@@ -86,13 +113,12 @@ bool SkyboxComponent::hasRenderableCubemap() const
 
 void SkyboxComponent::invalidate()
 {
+    _pendingBatchLoad.reset();
+
     if (cubemapTexture) {
-        // GPU may still be reading this texture in in-flight frames.
-        // Hand ownership to the deferred deletion queue; it will call
-        // cubemapTexture.reset() only after all in-flight frames have finished.
         auto& ddq = DeferredDeletionQueue::get();
         ddq.enqueueResource(ddq.currentFrame(), std::move(cubemapTexture));
-        cubemapTexture = nullptr; // move already cleared it, but be explicit
+        cubemapTexture = nullptr;
     }
     resolveState     = hasCubemapSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty;
     bDescriptorDirty = true;
@@ -107,6 +133,5 @@ void SkyboxComponent::onPostSerialize()
 {
     invalidate();
 }
-
 
 } // namespace ya

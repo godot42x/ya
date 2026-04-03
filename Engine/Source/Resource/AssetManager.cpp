@@ -6,8 +6,11 @@
 #include "Resource/AssetMeta.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Resource/TextureLibrary.h"
+#include "Runtime/App/App.h"
+#include "stb/stb_image.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -16,6 +19,33 @@
 namespace ya
 {
 
+namespace
+{
+AssetManager::TextureMemoryBlock decodeTextureToMemory(const std::string& filepath, bool bSRGB)
+{
+    AssetManager::TextureMemoryBlock result;
+    result.filepath = filepath;
+    result.format   = bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM;
+    result.channels = 4;
+
+    int width = -1;
+    int height = -1;
+    int channels = -1;
+    stbi_uc* raw = stbi_load(filepath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    if (!raw) {
+        YA_CORE_ERROR("decodeTextureToMemory: Failed to load '{}'", filepath);
+        return result;
+    }
+
+    result.width  = static_cast<uint32_t>(width);
+    result.height = static_cast<uint32_t>(height);
+    result.bytes.resize(static_cast<size_t>(result.width) * result.height * result.channels);
+    std::memcpy(result.bytes.data(), raw, result.bytes.size());
+    stbi_image_free(raw);
+
+    return result;
+}
+}
 
 // ============================================================================
 // Singleton
@@ -43,6 +73,12 @@ void AssetManager::clearCache()
     _textureViews.clear();
     _metaCache.clear();
     _cacheKeyCache.clear();
+    _pendingTextureLoads.clear();
+    _pendingModelLoads.clear();
+    _pendingTextureCallbacks.clear();
+    _pendingModelCallbacks.clear();
+    _pendingTextureBatchMemoryLoads.clear();
+    _readyTextureBatchMemory.clear();
 
     YA_CORE_INFO("AssetManager cleared");
 }
@@ -173,58 +209,167 @@ AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FNam
     return ETextureColorSpace::SRGB;
 }
 
-TextureFuture AssetManager::loadTexture(const std::string& filepath, ETextureColorSpace colorSpace)
+TextureFuture AssetManager::loadTexture(const TextureLoadRequest& request)
 {
-    const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
+    if (request.filepath.empty()) {
+        return TextureFuture();
+    }
+
+    if (request.textureSemantic.has_value()) {
+        TextureLoadRequest normalized = request;
+        normalized.colorSpace = inferTextureColorSpace(*request.textureSemantic);
+        normalized.textureSemantic.reset();
+        return loadTexture(normalized);
+    }
+
+    const auto  resolvedCS = resolveColorSpace(request.filepath, request.colorSpace);
     const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
-    const auto& cacheKey   = getOrBuildCacheKey(filepath);
+    const auto& cacheKey   = getOrBuildCacheKey(request.filepath);
 
     // Already loaded? Return immediately.
     {
         const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
+            if (!request.name.empty()) {
+                _textureName2Path[request.name] = cacheKey;
+            }
+            if (request.onReady) {
+                dispatchToGameThread([onReady = request.onReady, texture = it->second]() mutable {
+                    onReady(texture);
+                });
+            }
             return TextureFuture(it->second);
         }
     }
 
     // Submit async decode if not already in flight
     if (!isTextureLoadPending(cacheKey)) {
-        submitTextureLoad(filepath, cacheKey, bSRGB);
+        submitTextureLoad(request.filepath, cacheKey, bSRGB, request.name);
+    }
+
+    if (!request.name.empty()) {
+        _textureName2Path[request.name] = cacheKey;
+    }
+
+    if (request.onReady) {
+        registerTextureCallback(cacheKey, request.onReady);
     }
 
     // Not ready yet — return empty future. Caller must check isReady().
     return TextureFuture();
 }
 
-TextureFuture AssetManager::loadTexture(const std::string& name,
-                                        const std::string& filepath,
-                                        ETextureColorSpace colorSpace)
+void AssetManager::loadTextureBatch(const TextureBatchLoadRequest& request)
 {
-    const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
-    const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
-    const auto& cacheKey   = getOrBuildCacheKey(filepath);
+    const auto& filepaths  = request.filepaths;
+    auto        onDone     = request.onDone;
+    const auto  colorSpace = request.colorSpace;
 
-    // Already loaded?
+    // if (!onDone) {
+    //     return;
+    // }
+
+    if (filepaths.empty()) {
+        dispatchToGameThread([onDone = std::move(onDone)]() mutable {
+            onDone({});
+        });
+        return;
+    }
+
+    struct BatchState
     {
-        const auto it = _textureViews.find(cacheKey);
-        if (it != _textureViews.end()) {
-            return TextureFuture(it->second);
-        }
-    }
+        std::mutex                            mutex;
+        std::vector<std::shared_ptr<Texture>> textures;
+        std::atomic<uint32_t>                 remaining = 0;
+        TextureBatchReadyCallback             onDone;
+    };
 
-    if (!isTextureLoadPending(cacheKey)) {
-        submitTextureLoad(filepath, cacheKey, bSRGB, name);
-    }
+    auto batchState = std::make_shared<BatchState>();
+    batchState->textures.resize(filepaths.size());
+    batchState->remaining.store(static_cast<uint32_t>(filepaths.size()), std::memory_order_release);
+    batchState->onDone = std::move(onDone);
 
-    _textureName2Path[name] = cacheKey;
-    return TextureFuture();
+    for (size_t index = 0; index < filepaths.size(); ++index) {
+        const auto& filepath = filepaths[index];
+        loadTexture(TextureLoadRequest{
+            .filepath = filepath,
+            .onReady  = [batchState, index](const std::shared_ptr<Texture>& texture) {
+                {
+                    std::lock_guard lock(batchState->mutex);
+                    batchState->textures[index] = texture;
+                }
+
+                if (batchState->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                    auto textures = batchState->textures;
+                    auto onDone   = batchState->onDone;
+                    if (onDone) {
+                        onDone(textures);
+                    }
+                }
+            },
+            .colorSpace = colorSpace,
+        });
+    }
 }
 
-TextureFuture AssetManager::loadTexture(const std::string& name,
-                                        const std::string& filepath,
-                                        const FName&       textureSemantic)
+AssetManager::TextureBatchMemoryHandle AssetManager::loadTextureBatchIntoMemory(
+    const TextureBatchMemoryLoadRequest& request)
 {
-    return loadTexture(name, filepath, inferTextureColorSpace(textureSemantic));
+    const auto& filepaths = request.filepaths;
+    const auto  colorSpace = request.colorSpace;
+    const bool bSRGB = (colorSpace == ETextureColorSpace::SRGB);
+
+    TextureBatchMemoryHandle handleId = 0;
+    {
+        std::lock_guard lock(_cacheMutex);
+        handleId = _nextTextureBatchMemoryHandle++;
+    }
+
+    if (filepaths.empty()) {
+        std::lock_guard lock(_cacheMutex);
+        _readyTextureBatchMemory.emplace(handleId, TextureBatchMemory{});
+        return handleId;
+    }
+
+    auto handle = TaskQueue::get().submitWithCallback(
+        [filepaths, bSRGB]() -> TextureBatchMemory {
+            TextureBatchMemory batchMemory;
+            batchMemory.textures.reserve(filepaths.size());
+
+            for (const auto& filepath : filepaths) {
+                auto decoded = decodeTextureToMemory(filepath, bSRGB);
+                batchMemory.textures.push_back(std::move(decoded));
+            }
+
+            return batchMemory;
+        },
+        [this, handleId](TextureBatchMemory batchMemory) {
+            std::lock_guard lock(_cacheMutex);
+            _pendingTextureBatchMemoryLoads.erase(handleId);
+            _readyTextureBatchMemory[handleId] = std::move(batchMemory);
+        });
+
+    {
+        std::lock_guard lock(_cacheMutex);
+        _pendingTextureBatchMemoryLoads[handleId] = std::move(handle);
+    }
+
+    return handleId;
+}
+
+bool AssetManager::consumeTextureBatchMemory(TextureBatchMemoryHandle handle,
+                                             TextureBatchMemory&      outBatchMemory)
+{
+    std::lock_guard lock(_cacheMutex);
+
+    auto readyIt = _readyTextureBatchMemory.find(handle);
+    if (readyIt != _readyTextureBatchMemory.end()) {
+        outBatchMemory = std::move(readyIt->second);
+        _readyTextureBatchMemory.erase(readyIt);
+        return true;
+    }
+
+    return false;
 }
 
 // ============================================================================
@@ -312,33 +457,62 @@ void AssetManager::submitTextureLoad(const std::string& filepath,
 
     auto handle = TaskQueue::get().submitWithCallback(
         // ── Worker thread: CPU-only decode (stbi_load) ──────────────
-        [filepath, bSRGB]() -> DecodedTextureData {
-            return DecodedTextureData::decode(filepath, "", bSRGB);
+        [filepath, bSRGB]() -> TextureMemoryBlock {
+            return decodeTextureToMemory(filepath, bSRGB);
         },
         // ── Main thread callback: GPU upload ────────────────────────
-        [this, filepath, cacheKey, name](DecodedTextureData decoded) {
+        [this, filepath, cacheKey, name](TextureMemoryBlock decoded) {
+            std::vector<TextureReadyCallback> callbacks;
+            std::shared_ptr<Texture>          readyTexture;
+
             // Another load may have raced and filled the cache already
             {
                 std::lock_guard lock(_cacheMutex);
-                if (_textureViews.find(cacheKey) != _textureViews.end()) {
+                auto existing = _textureViews.find(cacheKey);
+                if (existing != _textureViews.end()) {
                     _pendingTextureLoads.erase(cacheKey);
-                    return;
+                    callbacks = takeTextureCallbacks(cacheKey);
+                    readyTexture = existing->second;
                 }
+            }
+
+            if (readyTexture) {
+                dispatchTextureCallbacks(callbacks, readyTexture);
+                return;
             }
 
             if (!decoded.isValid()) {
                 YA_CORE_WARN("Async texture decode failed for '{}'", filepath);
-                std::lock_guard lock(_cacheMutex);
-                _pendingTextureLoads.erase(cacheKey);
+                {
+                    std::lock_guard lock(_cacheMutex);
+                    _pendingTextureLoads.erase(cacheKey);
+                    callbacks = takeTextureCallbacks(cacheKey);
+                }
+                dispatchTextureCallbacks(callbacks, nullptr);
                 return;
             }
 
             // GPU upload on main thread
-            auto texture = Texture::fromDecodedData(std::move(decoded));
+            auto texture = Texture::fromMemory(TextureMemoryCreateInfo{
+                .filepath = decoded.filepath,
+                .label    = decoded.filepath,
+                .memory   = TextureMemoryView{
+                    .width    = decoded.width,
+                    .height   = decoded.height,
+                    .channels = decoded.channels,
+                    .format   = decoded.format,
+                    .data     = decoded.bytes.data(),
+                    .dataSize = decoded.bytes.size(),
+                },
+            });
             if (!texture) {
                 YA_CORE_WARN("Async GPU upload failed for '{}'", filepath);
-                std::lock_guard lock(_cacheMutex);
-                _pendingTextureLoads.erase(cacheKey);
+                {
+                    std::lock_guard lock(_cacheMutex);
+                    _pendingTextureLoads.erase(cacheKey);
+                    callbacks = takeTextureCallbacks(cacheKey);
+                }
+                dispatchTextureCallbacks(callbacks, nullptr);
                 return;
             }
 
@@ -350,13 +524,131 @@ void AssetManager::submitTextureLoad(const std::string& filepath,
                     _textureName2Path[name] = cacheKey;
                 }
                 _pendingTextureLoads.erase(cacheKey);
+                callbacks = takeTextureCallbacks(cacheKey);
             }
+
+            dispatchTextureCallbacks(callbacks, readyTexture ? readyTexture : texture);
 
             YA_CORE_INFO("Async texture ready: '{}' ({}x{})", filepath, texture->getWidth(), texture->getHeight());
         });
 
     std::lock_guard lock(_cacheMutex);
     _pendingTextureLoads[cacheKey] = std::move(handle);
+}
+
+void AssetManager::dispatchToGameThread(std::function<void()> task)
+{
+    if (!task) {
+        return;
+    }
+
+    auto* app = App::get();
+    if (!app) {
+        task();
+        return;
+    }
+
+    app->taskManager.registerFrameTask(std::move(task));
+}
+
+void AssetManager::registerTextureCallback(const std::string& cacheKey, TextureReadyCallback onReady)
+{
+    if (!onReady) {
+        return;
+    }
+
+    std::shared_ptr<Texture> readyTexture;
+    {
+        std::lock_guard lock(_cacheMutex);
+        auto loadedIt = _textureViews.find(cacheKey);
+        if (loadedIt != _textureViews.end()) {
+            readyTexture = loadedIt->second;
+        }
+        else {
+            _pendingTextureCallbacks[cacheKey].push_back(std::move(onReady));
+            return;
+        }
+    }
+
+    dispatchToGameThread([onReady = std::move(onReady), readyTexture]() mutable {
+        onReady(readyTexture);
+    });
+}
+
+void AssetManager::registerModelCallback(const std::string& filepath, ModelReadyCallback onReady)
+{
+    if (!onReady) {
+        return;
+    }
+
+    std::shared_ptr<Model> readyModel;
+    {
+        std::lock_guard lock(_cacheMutex);
+        auto loadedIt = modelCache.find(filepath);
+        if (loadedIt != modelCache.end()) {
+            readyModel = loadedIt->second;
+        }
+        else {
+            _pendingModelCallbacks[filepath].push_back(std::move(onReady));
+            return;
+        }
+    }
+
+    dispatchToGameThread([onReady = std::move(onReady), readyModel]() mutable {
+        onReady(readyModel);
+    });
+}
+
+std::vector<AssetManager::TextureReadyCallback> AssetManager::takeTextureCallbacks(const std::string& cacheKey)
+{
+    auto it = _pendingTextureCallbacks.find(cacheKey);
+    if (it == _pendingTextureCallbacks.end()) {
+        return {};
+    }
+
+    auto callbacks = std::move(it->second);
+    _pendingTextureCallbacks.erase(it);
+    return callbacks;
+}
+
+std::vector<AssetManager::ModelReadyCallback> AssetManager::takeModelCallbacks(const std::string& filepath)
+{
+    auto it = _pendingModelCallbacks.find(filepath);
+    if (it == _pendingModelCallbacks.end()) {
+        return {};
+    }
+
+    auto callbacks = std::move(it->second);
+    _pendingModelCallbacks.erase(it);
+    return callbacks;
+}
+
+void AssetManager::dispatchTextureCallbacks(const std::vector<TextureReadyCallback>& callbacks,
+                                            const std::shared_ptr<Texture>&          texture)
+{
+    for (const auto& callback : callbacks) {
+        if (!callback) {
+            continue;
+        }
+
+        dispatchToGameThread([callback, texture]() {
+            callback(texture);
+        });
+    }
+}
+
+void AssetManager::dispatchModelCallbacks(const std::vector<ModelReadyCallback>& callbacks,
+                                          const std::shared_ptr<Model>&          model)
+{
+    for (const auto& callback : callbacks) {
+        if (!callback) {
+            continue;
+        }
+
+        dispatchToGameThread([callback, model]() {
+            callback(model);
+        });
+    }
 }
 
 // ============================================================================
@@ -522,10 +814,14 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
 
     // Reload with new meta
     if (newMeta.type == "texture") {
-        loadTexture(assetPath);
+        loadTexture(TextureLoadRequest{
+            .filepath = assetPath,
+        });
     }
     else if (newMeta.type == "model") {
-        loadModel(assetPath);
+        loadModel(ModelLoadRequest{
+            .filepath = assetPath,
+        });
     }
 
     // Bump version so all TAssetRef instances detect the change
@@ -560,10 +856,14 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
     // Reload
     AssetMeta meta = getOrLoadMeta(assetPath);
     if (meta.type == "texture") {
-        loadTexture(assetPath);
+        loadTexture(TextureLoadRequest{
+            .filepath = assetPath,
+        });
     }
     else if (meta.type == "model") {
-        loadModel(assetPath);
+        loadModel(ModelLoadRequest{
+            .filepath = assetPath,
+        });
     }
 
     bumpResourceVersion(assetPath);
@@ -694,32 +994,38 @@ std::vector<std::string> AssetManager::findCacheKeysForPath(const std::string& f
 // Model loading — async by default
 // ============================================================================
 
-ModelFuture AssetManager::loadModel(const std::string& filepath)
+ModelFuture AssetManager::loadModel(const ModelLoadRequest& request)
 {
+    if (request.filepath.empty()) {
+        return ModelFuture();
+    }
+
     // Already loaded?
-    if (isModelLoaded(filepath)) {
-        return ModelFuture(modelCache[filepath]);
+    if (isModelLoaded(request.filepath)) {
+        if (!request.name.empty()) {
+            _modalName2Path[request.name] = request.filepath;
+        }
+        if (request.onReady) {
+            dispatchToGameThread([onReady = request.onReady, model = modelCache[request.filepath]]() mutable {
+                onReady(model);
+            });
+        }
+        return ModelFuture(modelCache[request.filepath]);
     }
 
     // Submit async decode if not already in flight
-    if (!isModelLoadPending(filepath)) {
-        submitModelLoad(filepath);
+    if (!isModelLoadPending(request.filepath)) {
+        submitModelLoad(request.filepath, request.name);
     }
 
-    return ModelFuture();
-}
-
-ModelFuture AssetManager::loadModel(const std::string& name, const std::string& filepath)
-{
-    if (isModelLoaded(filepath)) {
-        return ModelFuture(modelCache[filepath]);
+    if (!request.name.empty()) {
+        _modalName2Path[request.name] = request.filepath;
     }
 
-    if (!isModelLoadPending(filepath)) {
-        submitModelLoad(filepath, name);
+    if (request.onReady) {
+        registerModelCallback(request.filepath, request.onReady);
     }
 
-    _modalName2Path[name] = filepath;
     return ModelFuture();
 }
 
@@ -760,19 +1066,33 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
         },
         // ── Main thread callback: GPU mesh creation ─────────────────
         [this, filepath, name](DecodedModelData decoded) {
+            std::vector<ModelReadyCallback> callbacks;
+            std::shared_ptr<Model>          readyModel;
+
             // Race check
             {
                 std::lock_guard lock(_cacheMutex);
-                if (modelCache.find(filepath) != modelCache.end()) {
+                auto existing = modelCache.find(filepath);
+                if (existing != modelCache.end()) {
                     _pendingModelLoads.erase(filepath);
-                    return;
+                    callbacks = takeModelCallbacks(filepath);
+                    readyModel = existing->second;
                 }
+            }
+
+            if (readyModel) {
+                dispatchModelCallbacks(callbacks, readyModel);
+                return;
             }
 
             if (!decoded.isValid()) {
                 YA_CORE_WARN("Async model decode failed for '{}'", filepath);
-                std::lock_guard lock(_cacheMutex);
-                _pendingModelLoads.erase(filepath);
+                {
+                    std::lock_guard lock(_cacheMutex);
+                    _pendingModelLoads.erase(filepath);
+                    callbacks = takeModelCallbacks(filepath);
+                }
+                dispatchModelCallbacks(callbacks, nullptr);
                 return;
             }
 
@@ -780,8 +1100,12 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
             auto model = decoded.createModel();
             if (!model) {
                 YA_CORE_WARN("Async GPU mesh creation failed for '{}'", filepath);
-                std::lock_guard lock(_cacheMutex);
-                _pendingModelLoads.erase(filepath);
+                {
+                    std::lock_guard lock(_cacheMutex);
+                    _pendingModelLoads.erase(filepath);
+                    callbacks = takeModelCallbacks(filepath);
+                }
+                dispatchModelCallbacks(callbacks, nullptr);
                 return;
             }
 
@@ -792,7 +1116,10 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
                     _modalName2Path[name] = filepath;
                 }
                 _pendingModelLoads.erase(filepath);
+                callbacks = takeModelCallbacks(filepath);
             }
+
+            dispatchModelCallbacks(callbacks, model);
 
             YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials)",
                           filepath, model->meshes.size(), model->embeddedMaterials.size());

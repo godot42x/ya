@@ -8,6 +8,7 @@
 #include "TextureFactory.h"
 
 #include <array>
+#include <vector>
 
 namespace ya
 {
@@ -29,39 +30,58 @@ struct ITexture
 
 using ColorU8_t = ColorRGBA<uint8_t>;
 
-/**
- * @brief Intermediate container carrying decoded pixel data between threads.
- *
- * Worker thread:  file IO + stbi_load() → fills this struct (CPU only)
- * Main thread:    fromDecodedData() → creates VkImage, staging buffer, GPU upload
- *
- * The pixel buffer uses shared_ptr with a custom deleter (stbi_image_free)
- * so it's safe to move between threads and auto-cleans on destruction.
- */
-struct DecodedTextureData
+struct TextureMemoryView
 {
-    std::string             filepath;
-    std::string             label;
-    uint32_t                width    = 0;
-    uint32_t                height   = 0;
-    uint32_t                channels = 4; // Always RGBA after stbi_load with STBI_rgb_alpha
-    EFormat::T              format   = EFormat::R8G8B8A8_UNORM;
-    std::shared_ptr<uint8_t> pixels;      // Decoded RGBA pixel data (stbi_image_free deleter)
+    uint32_t   width    = 0;
+    uint32_t   height   = 0;
+    uint32_t   channels = 4;
+    EFormat::T format   = EFormat::R8G8B8A8_UNORM;
+    const void* data    = nullptr;
+    size_t     dataSize = 0;
 
-    [[nodiscard]] bool isValid() const { return pixels && width > 0 && height > 0; }
-    [[nodiscard]] size_t dataSize() const { return static_cast<size_t>(width) * height * channels; }
+    [[nodiscard]] bool isValid() const
+    {
+        return data != nullptr && dataSize > 0 && width > 0 && height > 0;
+    }
+};
 
-    /**
-     * @brief Decode a texture file on the current thread (CPU only, no GPU).
-     *        Thread-safe: uses no GPU resources.
-     * @param filepath  Path to the image file.
-     * @param label     Optional debug label.
-     * @param bSRGB     If true, format is R8G8B8A8_SRGB; otherwise R8G8B8A8_UNORM.
-     * @return Decoded data, or invalid struct on failure.
-     */
-    static DecodedTextureData decode(const std::string& filepath,
-                                     const std::string& label = "",
-                                     bool bSRGB = true);
+struct TextureMemoryCreateInfo
+{
+    std::string       filepath;
+    std::string       label;
+    TextureMemoryView memory;
+};
+
+struct CubeMapMemoryCreateInfo
+{
+    std::string                                   label;
+    std::array<TextureMemoryView, CubeFace_Count> faces{};
+    bool                                          flipVertical = false;
+
+    [[nodiscard]] bool isValid() const
+    {
+        if (!faces[0].isValid()) {
+            return false;
+        }
+
+        const auto width    = faces[0].width;
+        const auto height   = faces[0].height;
+        const auto channels = faces[0].channels;
+        const auto format   = faces[0].format;
+
+        for (const auto& face : faces) {
+            if (!face.isValid()) {
+                return false;
+            }
+
+            if (face.width != width || face.height != height ||
+                face.channels != channels || face.format != format) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 };
 
 struct Texture
@@ -82,15 +102,7 @@ struct Texture
 
     static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "", bool bSRGB = true);
 
-    /**
-     * @brief Create a GPU texture from pre-decoded pixel data.
-     *        MUST be called on the main/render thread (creates VkImage, uploads via staging buffer).
-     *
-     * This is the second half of the async pipeline:
-     *   Worker thread:  DecodedTextureData::decode() → DecodedTextureData
-     *   Main thread:    Texture::fromDecodedData(decoded) → shared_ptr<Texture>
-     */
-    static std::shared_ptr<Texture> fromDecodedData(DecodedTextureData&& decoded);
+    static std::shared_ptr<Texture> fromMemory(const TextureMemoryCreateInfo& ci);
 
     static std::shared_ptr<Texture> fromData(uint32_t                               width,
                                              uint32_t                               height,
@@ -105,8 +117,9 @@ struct Texture
                                              const std::string& label = "");
 
     static std::shared_ptr<Texture> createCubeMap(const CubeMapCreateInfo& ci);
+    static std::shared_ptr<Texture> createCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci);
     static std::shared_ptr<Texture> createSolidCubeMap(const ColorU8_t& color,
-                               const std::string& label = "");
+                                                       const std::string& label = "");
 
     static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo& ci);
 
@@ -122,7 +135,6 @@ struct Texture
     static std::shared_ptr<Texture> wrap(std::shared_ptr<IImage>     img,
                                          std::shared_ptr<IImageView> view,
                                          const std::string&          label = "");
-
 
   private:
     friend struct ITextureFactory;
@@ -142,6 +154,7 @@ struct Texture
     // Internal initialization methods (called by factory)
     void initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels = 1);
     void initCubeMap(const CubeMapCreateInfo& ci);
+    void initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci);
     void initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
   public:
@@ -179,9 +192,8 @@ struct Texture
     static struct ITextureFactory* getTextureFactory();
 };
 
-
 /**
- * @brief Lightweight runtime texture binding — replaces TextureView
+ * @brief Lightweight runtime texture binding - replaces TextureView
  *
  * Holds only the resolved resource pointers (Texture + Sampler).
  * Does NOT store bEnable (that belongs in the param UBO).
