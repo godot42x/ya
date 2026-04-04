@@ -96,7 +96,7 @@ struct CubeMapCreateInfo
  * - createImageView(): Create image view resource
  * - createCubeMapImageView(): Create cubemap image view
  *
- * Note: Use Texture::fromFile(), Texture::createCubeMap() etc. for high-level API.
+ * Note: Use AssetManager import path or Texture::fromMemory(), Texture::createCubeMap() etc. for high-level API.
  */
 struct ITextureFactory : public disable_copy
 {

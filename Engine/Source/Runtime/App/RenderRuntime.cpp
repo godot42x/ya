@@ -23,6 +23,7 @@
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 
 #include "utility.cc/ranges.h"
 
@@ -63,6 +64,7 @@ void RenderRuntime::onViewportResized(Rect2D rect)
         _deferredPipeline->onViewportResized(rect);
     }
 }
+
 
 void RenderRuntime::init(const InitDesc& desc)
 {
@@ -155,6 +157,9 @@ void RenderRuntime::init(const InitDesc& desc)
         _render->getSwapchain()->onRecreate.addLambda(
             this,
             [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+                (void)old;
+                (void)now;
+                (void)bImageRecreated;
                 _renderDocCapture->setRenderContext({
                     .device    = _render->as<VulkanRender>()->getDevice(),
                     .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
@@ -275,7 +280,15 @@ void RenderRuntime::init(const InitDesc& desc)
             });
     }
 
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), _commandBuffers);
+    std::vector<stdptr<ICommandBuffer>> cmdBufs;
+    _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
+    _commandBuffers.assign(cmdBufs.begin(), cmdBufs.begin() + _render->getSwapchainImageCount());
+    _offscreenCmdBuf = cmdBufs.back();
+    _deleter.push("CmdBufs", [this](void*) {
+        _commandBuffers.clear();
+        _offscreenCmdBuf->reset();
+    });
+
     ImGuiManager::get().init(_render, nullptr);
     _render->waitIdle();
 
@@ -315,6 +328,8 @@ void RenderRuntime::shutdown()
     _skyboxDSP.reset();
     _skyboxDSL.reset();
 
+    _deleter.clear();
+
     if (_render) {
         _render->waitIdle();
 
@@ -324,7 +339,6 @@ void RenderRuntime::shutdown()
         // Stop async task queue (join worker threads).
         TaskQueue::get().stop();
 
-        _commandBuffers.clear();
         _render->destroy();
         delete _render;
         _render = nullptr;
@@ -364,12 +378,25 @@ void RenderRuntime::resetSkyboxPool()
     }
 }
 
+void RenderRuntime::offScreenRender()
+{
+    // from a cylinder to cubemap
+    auto cmdBuf = _offscreenCmdBuf;
+    cmdBuf->reset();
+    cmdBuf->begin();
+    _app->taskManager.updateOffscreenTasks(cmdBuf.get());
+    cmdBuf->end();
+    _render->submitToQueue({cmdBuf->getHandle()}, {}, {});
+}
+
 // MARK: render
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()
 
     applyPendingShadingModelSwitch();
+
+    offScreenRender();
 
     if (_viewportRect.extent.x <= 0 || _viewportRect.extent.y <= 0) {
         if (input.viewportRect.extent.x > 0 && input.viewportRect.extent.y > 0) {
@@ -546,6 +573,8 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                     ctx.debugSpec.slots.push_back({
                         .label       = "ShadowDirectionalDepth",
                         .defaultView = directionalDepth,
+                        .ownedView   = nullptr,
+                        .image       = nullptr,
                     });
                 }
 
@@ -562,6 +591,8 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                             auto slot = EditorViewportContext::ImageSlot{
                                 .label       = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
                                 .defaultView = faceIV,
+                                .ownedView   = nullptr,
+                                .image       = nullptr,
                                 .aspectFlags = EImageAspect::Depth,
                             };
                             ctx.debugSpec.slots.push_back(std::move(slot));
@@ -574,10 +605,47 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 }
             }
 
+            if (auto* scene = _app->getSceneManager()->getActiveScene()) {
+                for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+                    (void)entity;
+                    if (!sc.cubemapTexture || !sc.cubemapTexture->getImageShared() || !sc.cubemapTexture->getImageView()) {
+                        continue;
+                    }
+
+                    EditorViewportContext::DebugSpec::Group skyboxGroup{
+                        .label      = "Skybox Cubemap",
+                        .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                        .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                        .groupSize  = CubeFace_Count,
+                    };
+
+                    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                        auto* faceView = sc.getCubemapFacePreviewView(faceIndex);
+                        if (!faceView) {
+                            continue;
+                        }
+
+                        ctx.debugSpec.slots.push_back({
+                            .label       = std::format("SkyboxFace{}", faceIndex),
+                            .defaultView = faceView,
+                            .ownedView   = sc.cubemapFacePreviewViews[faceIndex],
+                            .image       = sc.cubemapTexture->getImageShared(),
+                        });
+                    }
+
+                    skyboxGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - skyboxGroup.beginIndex;
+                    if (skyboxGroup.slotCount >= skyboxGroup.groupSize) {
+                        ctx.debugSpec.groups.push_back(std::move(skyboxGroup));
+                    }
+                    break;
+                }
+            }
+
             if (auto* viewportDepth = _forwardPipeline->viewportRT->getCurFrameBuffer()->getDepthTexture()) {
                 ctx.debugSpec.slots.push_back({
                     .label       = "ViewportDepth",
                     .defaultView = viewportDepth->getImageView(),
+                    .ownedView   = nullptr,
                     .image       = viewportDepth->getImageShared(),
                     .aspectFlags = EImageAspect::Depth,
                 });
@@ -589,21 +657,25 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 {
                     .label       = "Position",
                     .defaultView = fb.getColorTexture(0)->getImageView(),
+                    .ownedView   = nullptr,
                     .image       = fb.getColorTexture(0)->getImageShared(),
                 },
                 {
                     .label       = "Normal",
                     .defaultView = fb.getColorTexture(1)->getImageView(),
+                    .ownedView   = nullptr,
                     .image       = fb.getColorTexture(1)->getImageShared(),
                 },
                 {
                     .label       = "AlbedoSpec",
                     .defaultView = fb.getColorTexture(2)->getImageView(),
+                    .ownedView   = nullptr,
                     .image       = fb.getColorTexture(2)->getImageShared(),
                 },
                 {
                     .label       = "Depth",
                     .defaultView = fb.getDepthTexture()->getImageView(),
+                    .ownedView   = nullptr,
                     .image       = fb.getDepthTexture()->getImageShared(),
                     .aspectFlags = EImageAspect::Depth,
                     .tint        = {1, 0, 0, 1}, // only red mask
@@ -614,11 +686,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             ctx.debugSpec.slots.push_back({
                 .label       = "ViewPortColor0",
                 .defaultView = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageView() : nullptr,
+                .ownedView   = nullptr,
                 .image       = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageShared() : nullptr,
             });
             ctx.debugSpec.slots.push_back({
                 .label       = "ViewportDepth",
                 .defaultView = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageView() : nullptr,
+                .ownedView   = nullptr,
                 .image       = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageShared() : nullptr,
                 .aspectFlags = EImageAspect::Depth,
                 .tint        = {1, 0, 0, 1}, // only red mask

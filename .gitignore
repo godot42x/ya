@@ -33,3 +33,8 @@ Engine/Saved/RenderDoc/**
 .codebuddy 
 .workbuddy
 claude-history
+
+
+Saved
+# not sure the asset type implementation for now
+*ya-meta.json

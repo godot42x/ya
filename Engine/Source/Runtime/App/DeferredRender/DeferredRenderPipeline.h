@@ -177,7 +177,7 @@ struct DeferredRenderPipeline
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
 
   private:
-    // ── Setup (DeferredRenderPipeline_Setup.cpp) ──
+    // ── Shared setup + light pass ──
     void initRenderTargets(Extent2D extent);
     void initSharedResources();
     void initLightPassPipeline();

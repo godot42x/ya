@@ -111,19 +111,33 @@ struct AppDesc
 
 struct TaskManager
 {
-    std::queue<std::function<void()>> tasks;
+    // TODO: use vector for fast execution, but it's not the bottleneck and most important things for now
+    std::deque<std::function<void()>>                tasks;
+    std::deque<std::function<void(ICommandBuffer*)>> offscreenTasks;
 
     void registerFrameTask(std::function<void()> task)
     {
-        tasks.push(std::move(task));
+        tasks.push_back(std::move(task));
+    }
+    void enqueueOffscreenTask(std::function<void(ICommandBuffer*)> task)
+    {
+        offscreenTasks.push_back(std::move(task));
     }
 
     void update()
     {
         while (!tasks.empty()) {
             auto task = std::move(tasks.front());
-            tasks.pop();
+            tasks.pop_front();
             task();
+        }
+    }
+    void updateOffscreenTasks(ICommandBuffer* cmdBuf)
+    {
+        while (!offscreenTasks.empty()) {
+            auto task = std::move(offscreenTasks.front());
+            offscreenTasks.pop_front();
+            task(cmdBuf);
         }
     }
 };

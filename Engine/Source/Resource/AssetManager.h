@@ -48,14 +48,88 @@ class AssetManager : public IResourceCache
   public:
     using TextureBatchMemoryHandle = uint64_t;
 
+    enum class ETextureColorSpace
+    {
+        SRGB,
+        Linear,
+    };
+
+    enum class ETextureSourceKind
+    {
+        Auto,
+        LDR,
+        HDR,
+        Data,
+        Compressed,
+    };
+
+    enum class ETexturePayloadType
+    {
+        None,
+        U8,
+        F16,
+        F32,
+        CompressedBytes,
+    };
+
+    enum class ETextureDecodePrecision
+    {
+        Auto,
+        U8,
+        F16,
+        F32,
+    };
+
+    enum class ETextureChannelPolicy
+    {
+        Preserve,
+        ForceRGBA,
+    };
+
+    struct TextureSourceInfo
+    {
+        std::string        filepath;
+        std::string        extension;
+        uint32_t           width            = 0;
+        uint32_t           height           = 0;
+        uint32_t           detectedChannels = 0;
+        ETextureSourceKind detectedKind     = ETextureSourceKind::LDR;
+        bool               bIsHDR           = false;
+        bool               bIsCompressed    = false;
+
+        [[nodiscard]] bool isValid() const
+        {
+            return width > 0 && height > 0;
+        }
+    };
+
+    struct ResolvedTextureImportSettings
+    {
+        TextureSourceInfo       sourceInfo;
+        ETextureColorSpace      colorSpace       = ETextureColorSpace::SRGB;
+        ETextureSourceKind      sourceKind       = ETextureSourceKind::LDR;
+        ETextureDecodePrecision decodePrecision  = ETextureDecodePrecision::U8;
+        ETextureChannelPolicy   channelPolicy    = ETextureChannelPolicy::ForceRGBA;
+        ETexturePayloadType     payloadType      = ETexturePayloadType::U8;
+        EFormat::T              resolvedFormat   = EFormat::R8G8B8A8_UNORM;
+        uint32_t                resolvedChannels = 4;
+
+        [[nodiscard]] bool isHDR() const
+        {
+            return sourceKind == ETextureSourceKind::HDR;
+        }
+    };
+
     struct TextureMemoryBlock
     {
-        std::string          filepath;
-        uint32_t             width    = 0;
-        uint32_t             height   = 0;
-        uint32_t             channels = 4;
-        EFormat::T           format   = EFormat::R8G8B8A8_UNORM;
-        std::vector<uint8_t> bytes;
+        std::string                   filepath;
+        uint32_t                      width       = 0;
+        uint32_t                      height      = 0;
+        uint32_t                      channels    = 4;
+        EFormat::T                    format      = EFormat::R8G8B8A8_UNORM;
+        ETexturePayloadType           payloadType = ETexturePayloadType::None;
+        ResolvedTextureImportSettings importSettings;
+        std::vector<uint8_t>          bytes;
 
         [[nodiscard]] bool isValid() const
         {
@@ -65,6 +139,11 @@ class AssetManager : public IResourceCache
         [[nodiscard]] size_t dataSize() const
         {
             return bytes.size();
+        }
+
+        [[nodiscard]] const void* data() const
+        {
+            return bytes.empty() ? nullptr : bytes.data();
         }
     };
 
@@ -91,12 +170,6 @@ class AssetManager : public IResourceCache
     using TextureReadyCallback      = std::function<void(const std::shared_ptr<Texture>&)>;
     using ModelReadyCallback        = std::function<void(const std::shared_ptr<Model>&)>;
     using TextureBatchReadyCallback = std::function<void(const std::vector<std::shared_ptr<Texture>>&)>;
-
-    enum class ETextureColorSpace
-    {
-        SRGB,
-        Linear,
-    };
 
     struct TextureLoadRequest
     {
@@ -225,6 +298,9 @@ class AssetManager : public IResourceCache
     bool                   isModelLoaded(const std::string& filepath) const;
 
     static ETextureColorSpace inferTextureColorSpace(const FName& textureSemantic);
+    TextureSourceInfo inspectTextureSource(const std::string& filepath) const;
+    ResolvedTextureImportSettings resolveTextureImportSettings(const std::string& filepath,
+                                                              ETextureColorSpace codeHint);
 
     // ── Reference counting / auto-release ───────────────────────────────
 
@@ -281,6 +357,11 @@ class AssetManager : public IResourceCache
 
     void invalidate(const std::string& filepath) override;
 
+    static std::optional<EFormat::T> parseTextureFormatOverride(const std::string& formatName);
+    static const char*               textureSourceKindName(ETextureSourceKind kind);
+    static const char*               texturePayloadTypeName(ETexturePayloadType type);
+    static const char*               textureColorSpaceName(ETextureColorSpace colorSpace);
+
     /// Check whether an async texture load is still in flight.
     bool isTextureLoadPending(const std::string& cacheKey) const;
 
@@ -290,9 +371,6 @@ class AssetManager : public IResourceCache
   private:
     std::shared_ptr<Model> loadModelImpl(const std::string& filepath, const std::string& identifier);
 
-    ETextureColorSpace resolveColorSpace(const std::string& filepath,
-                                         ETextureColorSpace codeHint);
-
     std::vector<std::string> findCacheKeysForPath(const std::string& filepath) const;
 
     /// Get or compute+cache the cacheKey for a filepath. Returns a stable reference.
@@ -301,7 +379,7 @@ class AssetManager : public IResourceCache
     /// Core async texture load — submits decode to worker, GPU upload to main-thread callback.
     void submitTextureLoad(const std::string& filepath,
                            const std::string& cacheKey,
-                           bool               bSRGB,
+                           ResolvedTextureImportSettings settings,
                            const std::string& name = "");
 
     /// Core async model load — submits Assimp decode to worker, GPU mesh creation to main-thread callback.

@@ -20,6 +20,11 @@ struct Extent2D
             .height = static_cast<uint32_t>(v.y),
         };
     }
+
+    bool operator==(const Extent2D& other) const
+    {
+        return width == other.width && height == other.height;
+    }
 };
 
 struct Extent3D

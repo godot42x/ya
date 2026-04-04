@@ -11,11 +11,11 @@ namespace ya
 
 // ── Convenience accessors ───────────────────────────────────────────────────
 
-const std::string& AssetMeta::getString(const std::string& key, const std::string& defaultValue) const
+std::string AssetMeta::getString(const std::string& key, const std::string& defaultValue) const
 {
     const auto it = properties.find(key);
     if (it != properties.end() && it->is_string()) {
-        return it->get_ref<const std::string&>();
+        return it->get<std::string>();
     }
     return defaultValue;
 }
@@ -145,6 +145,10 @@ AssetMeta AssetMeta::defaultForTexture()
     AssetMeta meta;
     meta.type                       = "texture";
     meta.properties["colorSpace"]   = "srgb";
+    meta.properties["sourceKind"]   = "auto";
+    meta.properties["preferredUploadFormat"] = "auto";
+    meta.properties["decodePrecision"] = "auto";
+    meta.properties["channelPolicy"] = "force_rgba";
     meta.properties["generateMips"] = true;
     meta.properties["filter"]       = "linear";
     return meta;

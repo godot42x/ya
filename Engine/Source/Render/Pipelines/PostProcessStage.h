@@ -123,7 +123,7 @@ struct PostProcessStage
 
         auto* postprocessSystem = _system->as<BasicPostprocessing>();
         auto  swapchainFormat   = _render->getSwapchain()->getFormat();
-        bool  bOutputIsSRGB     =  EFormat::isSRGB(swapchainFormat);
+        bool  bOutputIsSRGB     = EFormat::isSRGB(swapchainFormat);
         postprocessSystem->setOutputColorSpace(bOutputIsSRGB);
         postprocessSystem->setInputTexture(inputTexture->getImageView(), Extent2D::fromVec2(viewportExtent));
         postprocessSystem->tick(cmdBuf, dt, ctx);
@@ -141,17 +141,20 @@ struct PostProcessStage
         if (!_render || !_postprocessTexture || newExtent.width == 0 || newExtent.height == 0) {
             return;
         }
-        _render->waitIdle();
-        _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "PostprocessRT",
-            .width   = newExtent.width,
-            .height  = newExtent.height,
-            .format  = _colorFormat,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        _render->waitIdle();
+        auto oldExtent = _postprocessTexture->getExtent();
+        if (oldExtent != newExtent) {
+            _render->waitIdle();
+            _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+                .label   = "PostprocessRT",
+                .width   = newExtent.width,
+                .height  = newExtent.height,
+                .format  = _colorFormat,
+                .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .samples = ESampleCount::Sample_1,
+                .isDepth = false,
+            });
+            _render->waitIdle();
+        }
     }
 
     // --- Accessors ---

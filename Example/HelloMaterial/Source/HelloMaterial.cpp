@@ -118,6 +118,8 @@ void HelloMaterial::createEntities(ya::Scene* scene)
             ci.files[ya::CubeFace_PosZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/front.jpg";
             ci.files[ya::CubeFace_NegZ] = "Engine/ThirdParty/LearnOpenGL/resources/textures/skybox/back.jpg";
             sc->setCubemapSource(ci);
+            sc->cylindricalSource.filepath     = "Engine/ThirdParty/LearnOpenGL/resources/textures/hdr/newport_loft.hdr";
+            sc->cylindricalSource.flipVertical = true;
         }
     }
 

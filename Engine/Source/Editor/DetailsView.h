@@ -14,6 +14,7 @@ struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
 struct SkyboxComponent;
+struct Texture;
 
 // ============================================================================
 // MARK: Details View
@@ -44,6 +45,9 @@ struct DetailsView
     void drawAddComponentButton(Entity &entity); // Add component popup
     void drawSkyboxComponent(Entity& entity);
     void drawSkyboxStatus(const SkyboxComponent& skybox);
+    void drawSkyboxPreviewSection(const SkyboxComponent& skybox);
+    void drawSkyboxSourcePreview(const SkyboxComponent& skybox);
+    void drawSkyboxCubemapPreviewGrid(const SkyboxComponent& skybox);
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
     void testNewRenderInterface(Entity &entity);

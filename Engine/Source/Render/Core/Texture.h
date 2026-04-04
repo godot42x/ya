@@ -100,8 +100,6 @@ struct Texture
 
   public:
 
-    static std::shared_ptr<Texture> fromFile(const std::string& filepath, const std::string& label = "", bool bSRGB = true);
-
     static std::shared_ptr<Texture> fromMemory(const TextureMemoryCreateInfo& ci);
 
     static std::shared_ptr<Texture> fromData(uint32_t                               width,

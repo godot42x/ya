@@ -29,7 +29,7 @@ struct AssetMeta
 
     // ── Convenience accessors ───────────────────────────────────────────
 
-    const std::string& getString(const std::string& key, const std::string& defaultValue = "") const;
+    std::string getString(const std::string& key, const std::string& defaultValue = "") const;
     bool        getBool(const std::string& key, bool defaultValue = false) const;
     int         getInt(const std::string& key, int defaultValue = 0) const;
     float       getFloat(const std::string& key, float defaultValue = 0.0f) const;

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/System/System.h"
+#include "Render/Pipelines/EquidistantCylindrical2CubeMap.h"
 
 namespace ya
 {
@@ -27,7 +28,7 @@ struct Scene;
  */
 struct ResourceResolveSystem : public ISystem
 {
-    void init() override {}
+  void init() override;
 
     /**
      * @brief Resolve all pending resources
@@ -35,9 +36,11 @@ struct ResourceResolveSystem : public ISystem
      */
     void onUpdate(float dt) override;
 
-    void destroy() {}
+    void shutdown() override;
 
   private:
+    EquidistantCylindrical2CubeMap _equidistantCylindrical2CubeMap;
+
     void resolvePendingMeshes(Scene* scene);
     void resolvePendingMaterials(Scene* scene);
     void resolvePendingUI(Scene* scene);

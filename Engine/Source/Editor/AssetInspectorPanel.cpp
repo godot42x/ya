@@ -6,13 +6,28 @@
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 
+#include <algorithm>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <string_view>
 
 namespace ya
 {
 
 static const char* kWindowTitle = "Asset Inspector";
+
+namespace
+{
+int comboIndexForValue(const char* const* labels, int count, std::string_view value, int defaultIndex = 0)
+{
+    for (int i = 0; i < count; ++i) {
+        if (value == labels[i]) {
+            return i;
+        }
+    }
+    return defaultIndex;
+}
+}
 
 AssetInspectorPanel::AssetInspectorPanel(EditorLayer* owner)
     : _owner(owner)
@@ -109,13 +124,52 @@ void AssetInspectorPanel::renderTextureInspector()
 
     ImGui::Separator();
 
+    auto importSettings = AssetManager::get()->resolveTextureImportSettings(_inspectedPath, AssetManager::ETextureColorSpace::SRGB);
+    ImGui::Text("Detected: %s", AssetManager::textureSourceKindName(importSettings.sourceInfo.detectedKind));
+    ImGui::Text("Resolved Format: %d", static_cast<int>(importSettings.resolvedFormat));
+    ImGui::Text("Payload: %s", AssetManager::texturePayloadTypeName(importSettings.payloadType));
+    ImGui::Text("Detected Channels: %u", importSettings.sourceInfo.detectedChannels);
+    ImGui::Separator();
+
     // ── Color Space ─────────────────────────────────────────────────────
-    static const char* colorSpaceLabels[] = {"sRGB", "Linear"};
+    static const char* colorSpaceLabels[] = {"srgb", "linear"};
     std::string csStr   = _meta.getString("colorSpace", "srgb");
-    int         csIndex = (csStr == "linear") ? 1 : 0;
+    int         csIndex = comboIndexForValue(colorSpaceLabels, IM_ARRAYSIZE(colorSpaceLabels), csStr, 0);
 
     if (ImGui::Combo("Color Space", &csIndex, colorSpaceLabels, IM_ARRAYSIZE(colorSpaceLabels))) {
-        _meta.properties["colorSpace"] = (csIndex == 1) ? "linear" : "srgb";
+        _meta.properties["colorSpace"] = colorSpaceLabels[csIndex];
+        _bDirty = true;
+    }
+
+    static const char* sourceKindLabels[] = {"auto", "ldr", "hdr", "data", "compressed"};
+    std::string sourceKind = _meta.getString("sourceKind", "auto");
+    int sourceKindIndex = comboIndexForValue(sourceKindLabels, IM_ARRAYSIZE(sourceKindLabels), sourceKind, 0);
+    if (ImGui::Combo("Source Kind", &sourceKindIndex, sourceKindLabels, IM_ARRAYSIZE(sourceKindLabels))) {
+        _meta.properties["sourceKind"] = sourceKindLabels[sourceKindIndex];
+        _bDirty = true;
+    }
+
+    static const char* precisionLabels[] = {"auto", "u8", "f16", "f32"};
+    std::string precision = _meta.getString("decodePrecision", "auto");
+    int precisionIndex = comboIndexForValue(precisionLabels, IM_ARRAYSIZE(precisionLabels), precision, 0);
+    if (ImGui::Combo("Decode Precision", &precisionIndex, precisionLabels, IM_ARRAYSIZE(precisionLabels))) {
+        _meta.properties["decodePrecision"] = precisionLabels[precisionIndex];
+        _bDirty = true;
+    }
+
+    static const char* channelPolicyLabels[] = {"force_rgba", "preserve"};
+    std::string channelPolicy = _meta.getString("channelPolicy", "force_rgba");
+    int channelPolicyIndex = comboIndexForValue(channelPolicyLabels, IM_ARRAYSIZE(channelPolicyLabels), channelPolicy, 0);
+    if (ImGui::Combo("Channel Policy", &channelPolicyIndex, channelPolicyLabels, IM_ARRAYSIZE(channelPolicyLabels))) {
+        _meta.properties["channelPolicy"] = channelPolicyLabels[channelPolicyIndex];
+        _bDirty = true;
+    }
+
+    static const char* uploadFormatLabels[] = {"auto", "r8_unorm", "r8g8_unorm", "r8g8b8a8_unorm", "r8g8b8a8_srgb", "r16g16b16a16_sfloat", "r32_sfloat"};
+    std::string uploadFormat = _meta.getString("preferredUploadFormat", "auto");
+    int uploadFormatIndex = comboIndexForValue(uploadFormatLabels, IM_ARRAYSIZE(uploadFormatLabels), uploadFormat, 0);
+    if (ImGui::Combo("Upload Format", &uploadFormatIndex, uploadFormatLabels, IM_ARRAYSIZE(uploadFormatLabels))) {
+        _meta.properties["preferredUploadFormat"] = uploadFormatLabels[uploadFormatIndex];
         _bDirty = true;
     }
 

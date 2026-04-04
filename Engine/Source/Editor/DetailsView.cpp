@@ -24,6 +24,10 @@
 
 
 #include "EditorLayer.h"
+#include "ImGuiHelper.h"
+#include "Resource/TextureLibrary.h"
+#include "Render/Core/TextureFactory.h"
+#include "Runtime/App/App.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include <algorithm>
@@ -37,6 +41,69 @@ namespace
 {
 
 constexpr size_t DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
+constexpr size_t DETAILS_SKYBOX_INPUT_BUFFER_SIZE = 512;
+constexpr const char* SKYBOX_SOURCE_TYPE_LABELS = "Cube Faces\0Cylindrical\0";
+constexpr float SKYBOX_PREVIEW_MAX_HEIGHT = 180.0f;
+constexpr std::array<const char*, CubeFace_Count> SKYBOX_FACE_LABELS = {
+    "+X",
+    "-X",
+    "+Y",
+    "-Y",
+    "+Z",
+    "-Z",
+};
+
+bool drawPathInput(const char* id, std::string& path, size_t bufferSize)
+{
+    std::vector<char> buffer(bufferSize, '\0');
+    strncpy_s(buffer.data(), buffer.size(), path.c_str(), buffer.size() - 1);
+    if (!ImGui::InputText(id, buffer.data(), buffer.size())) {
+        return false;
+    }
+
+    path = buffer.data();
+    return true;
+}
+
+Texture* getSkyboxSourcePreviewTexture(const SkyboxComponent& skybox)
+{
+    if (skybox.sourcePreviewTexture && skybox.sourcePreviewTexture->getImageView()) {
+        return skybox.sourcePreviewTexture.get();
+    }
+    if (skybox._pendingOffscreenProcess && skybox._pendingOffscreenProcess->sourceTexture &&
+        skybox._pendingOffscreenProcess->sourceTexture->getImageView()) {
+        return skybox._pendingOffscreenProcess->sourceTexture.get();
+    }
+    return nullptr;
+}
+
+void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, float maxHeight)
+{
+    if (!texture || !texture->getImageView()) {
+        ImGui::TextDisabled("Preview unavailable");
+        return;
+    }
+
+    const auto extent = texture->getExtent();
+    if (extent.width == 0 || extent.height == 0) {
+        ImGui::TextDisabled("Preview unavailable");
+        return;
+    }
+
+    const float scale = std::min(maxWidth / static_cast<float>(extent.width),
+                                 maxHeight / static_cast<float>(extent.height));
+    const ImVec2 size = ImVec2(static_cast<float>(extent.width) * scale,
+                               static_cast<float>(extent.height) * scale);
+    auto sampler = TextureLibrary::get().getLinearSampler();
+    if (!sampler) {
+        ImGui::TextDisabled("Preview sampler unavailable");
+        return;
+    }
+
+    ImGui::PushID(id);
+    ImGuiHelper::Image(texture->getImageView(), sampler.get(), "No Preview", size);
+    ImGui::PopID();
+}
 
 } // namespace
 
@@ -47,15 +114,19 @@ void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
 
     switch (skybox.resolveState) {
     case ESkyboxResolveState::Empty:
-        label = "Status: No cubemap source";
+        label = "Status: No skybox source";
         color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
         break;
     case ESkyboxResolveState::Dirty:
         label = "Status: Dirty";
         color = ImVec4(1.0f, 0.75f, 0.25f, 1.0f);
         break;
-    case ESkyboxResolveState::Resolving:
-        label = "Status: Loading...";
+    case ESkyboxResolveState::ResolvingSource:
+        label = "Status: Loading Source...";
+        color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
+        break;
+    case ESkyboxResolveState::Preprocessing:
+        label = "Status: Preprocessing...";
         color = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
         break;
     case ESkyboxResolveState::Ready:
@@ -74,29 +145,159 @@ void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
 void DetailsView::drawSkyboxComponent(Entity& entity)
 {
     componentWrapper<SkyboxComponent>("Skybox", entity, [this](SkyboxComponent* sc) {
-        auto typeIndex = ya::type_index_v<SkyboxComponent>;
-        auto cls       = ClassRegistry::instance().getClass(typeIndex);
-        if (!cls) {
-            return;
+        bool bSourceChanged = false;
+
+        int sourceType = static_cast<int>(sc->sourceType);
+        if (ImGui::Combo("Source Type", &sourceType, SKYBOX_SOURCE_TYPE_LABELS)) {
+            sc->sourceType = static_cast<ESkyboxSourceType>(sourceType);
+            bSourceChanged = true;
         }
 
-        ya::RenderContext ctx;
-        ctx.beginInstance(sc);
-        ya::renderReflectedType("Skybox", typeIndex, sc, ctx, 0);
+        ImGui::Separator();
+        if (sc->sourceType == ESkyboxSourceType::CubeFaces) {
+            ImGui::TextDisabled("Use six textures to author the cubemap directly.");
 
-        if (ctx.hasModifications()) {
+            bool flipVertical = sc->cubemapSource.flipVertical;
+            if (ImGui::Checkbox("Flip Vertical", &flipVertical)) {
+                sc->cubemapSource.flipVertical = flipVertical;
+                bSourceChanged = true;
+            }
+
+            for (size_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                ImGui::PushID(static_cast<int>(faceIndex));
+                ImGui::TextUnformatted(SKYBOX_FACE_LABELS[faceIndex]);
+                ImGui::SetNextItemWidth(-90.0f);
+                if (drawPathInput("##SkyboxFacePath", sc->cubemapSource.files[faceIndex], DETAILS_SKYBOX_INPUT_BUFFER_SIZE)) {
+                    bSourceChanged = true;
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Browse")) {
+                    _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex](const std::string& newPath) {
+                        sc->sourceType = ESkyboxSourceType::CubeFaces;
+                        sc->cubemapSource.files[faceIndex] = newPath;
+                        sc->invalidate();
+                    });
+                }
+                ImGui::PopID();
+            }
+        }
+        else {
+            ImGui::TextDisabled("Use one cylindrical/equirectangular texture. It will be converted offscreen to a cubemap.");
+
+            bool flipVertical = sc->cylindricalSource.flipVertical;
+            if (ImGui::Checkbox("Flip Vertical##SkyboxCylindrical", &flipVertical)) {
+                sc->cylindricalSource.flipVertical = flipVertical;
+                bSourceChanged = true;
+            }
+
+            if (ImGui::BeginTable("SkyboxCylindricalPathTable", 2, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Browse", ImGuiTableColumnFlags_WidthFixed, 88.0f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::SetNextItemWidth(-1.0f);
+                if (drawPathInput("Cylindrical Texture", sc->cylindricalSource.filepath, DETAILS_SKYBOX_INPUT_BUFFER_SIZE)) {
+                    bSourceChanged = true;
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Button("Browse##SkyboxCylindrical", ImVec2(-1.0f, 0.0f))) {
+                    _filePicker.openTexturePicker(sc->cylindricalSource.filepath, [sc](const std::string& newPath) {
+                        sc->setCylindricalSource(newPath);
+                    });
+                }
+                ImGui::EndTable();
+            }
+        }
+
+        if (bSourceChanged) {
             sc->invalidate();
         }
 
         ImGui::Separator();
         drawSkyboxStatus(*sc);
         if (sc->isLoading()) {
-            ImGui::TextDisabled("Waiting for 6 cubemap faces to finish loading");
+            ImGui::TextDisabled("Waiting for skybox source load or preprocessing to finish");
         }
         if (ImGui::Button("Invalidate##Skybox")) {
             sc->invalidate();
         }
+
+        drawSkyboxPreviewSection(*sc);
     });
+}
+
+void DetailsView::drawSkyboxPreviewSection(const SkyboxComponent& skybox)
+{
+    ImGui::Separator();
+    ImGui::TextUnformatted("Preview");
+    drawSkyboxSourcePreview(skybox);
+    drawSkyboxCubemapPreviewGrid(skybox);
+}
+
+void DetailsView::drawSkyboxSourcePreview(const SkyboxComponent& skybox)
+{
+    if (skybox.sourceType != ESkyboxSourceType::Cylindrical) {
+        return;
+    }
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("Source Image");
+    auto* sourceTexture = getSkyboxSourcePreviewTexture(skybox);
+    if (!sourceTexture) {
+        ImGui::TextDisabled("Source preview unavailable until the texture is loaded.");
+        return;
+    }
+
+    const float previewWidth = std::max(120.0f, ImGui::GetContentRegionAvail().x);
+    drawTexturePreviewImage("SkyboxSourcePreview", sourceTexture, previewWidth, SKYBOX_PREVIEW_MAX_HEIGHT);
+}
+
+void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxComponent& skybox)
+{
+    auto* cubemapTexture = skybox.cubemapTexture.get();
+    if (!cubemapTexture || !cubemapTexture->getImageShared() || !cubemapTexture->getImageView()) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Cubemap face previews unavailable until preprocessing completes.");
+        return;
+    }
+
+    auto sampler = TextureLibrary::get().getLinearSampler();
+    if (!sampler) {
+        ImGui::Spacing();
+        ImGui::TextDisabled("Cubemap face previews unavailable.");
+        return;
+    }
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("Cubemap Faces");
+    const float availableWidth = std::max(220.0f, ImGui::GetContentRegionAvail().x);
+    const float spacing        = ImGui::GetStyle().ItemSpacing.x;
+    const float cellWidth      = std::max(96.0f, (availableWidth - spacing * 2.0f) / 3.0f);
+    const float cellHeight     = cellWidth;
+
+    if (!ImGui::BeginTable("SkyboxFacePreviewTable", 3, ImGuiTableFlags_SizingFixedFit)) {
+        return;
+    }
+
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        ImGui::TableNextColumn();
+        ImGui::PushID(static_cast<int>(faceIndex));
+        ImGui::TextUnformatted(SKYBOX_FACE_LABELS[faceIndex]);
+
+        if (auto* faceView = skybox.getCubemapFacePreviewView(faceIndex)) {
+            ImGuiHelper::Image(faceView, sampler.get(), "No Preview", ImVec2(cellWidth, cellHeight));
+        }
+        else {
+            ImGui::Dummy(ImVec2(cellWidth, cellHeight));
+            ImGui::TextDisabled("No Preview");
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::EndTable();
 }
 
 DetailsView::DetailsView(EditorLayer* owner) : _owner(owner)
@@ -139,6 +340,8 @@ void DetailsView::drawComponents(Entity& entity)
     }
 
     ImGui::Text("Entity ID: %u", entity.getId());
+    ImGui::SameLine();
+    drawAddComponentButton(entity);
     ImGui::Separator();
 
     // ★ 自定义名字编辑器：优先使用 Node 的名字
@@ -385,8 +588,6 @@ void DetailsView::drawComponents(Entity& entity)
         }
     });
 
-    // Add Component button at the bottom
-    drawAddComponentButton(entity);
 }
 
 void DetailsView::drawAddComponentButton(Entity& entity)

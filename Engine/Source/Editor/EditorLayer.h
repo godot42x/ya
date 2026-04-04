@@ -44,6 +44,7 @@ struct EditorViewportContext
     {
         std::string             label;
         IImageView*             defaultView = nullptr; // identity view from Texture
+        std::shared_ptr<IImageView> ownedView;
         std::shared_ptr<IImage> image;                 // for createImageView()
         EImageAspect::T         aspectFlags = EImageAspect::Color;
         glm::vec4               tint        = glm::vec4(1.0);

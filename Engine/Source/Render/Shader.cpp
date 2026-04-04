@@ -1354,7 +1354,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
     }
     else
     {
-        // SingleShader mode: one .slang file with both vertMain and fragMain
+        // SingleShader mode: one .slang file may contain vertex/fragment/geometry/compute entry points.
         std::string shaderName = ci.shaderName;
         YA_CORE_ASSERT(!shaderName.empty(), "SingleShader mode requires shaderName");
         if (!shaderName.ends_with(".slang"))
@@ -1370,26 +1370,36 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             return {};
         }
 
-        // Compile vertex stage
+        struct StageEntryCandidate
         {
-            std::vector<ir_t> spv;
-            if (!compileToSpv(source, curFilePath.generic_string(), "vertMain", EShaderStage::Vertex, ci.defines, spv))
-            {
-                YA_CORE_ERROR("[Slang] Failed to compile vertex stage: {}", shaderName);
-                return {};
-            }
-            ret[EShaderStage::Vertex] = std::move(spv);
-        }
+            EShaderStage::T stage;
+            const char*     entryName;
+            bool            bRequired;
+        };
 
-        // Compile fragment stage
+        const std::array<StageEntryCandidate, 4> stageCandidates = {{
+            {.stage = EShaderStage::Vertex, .entryName = "vertMain", .bRequired = true},
+            {.stage = EShaderStage::Fragment, .entryName = "fragMain", .bRequired = true},
+            {.stage = EShaderStage::Geometry, .entryName = "geomMain", .bRequired = false},
+            {.stage = EShaderStage::Compute, .entryName = "compMain", .bRequired = false},
+        }};
+
+        for (const auto& candidate : stageCandidates)
         {
             std::vector<ir_t> spv;
-            if (!compileToSpv(source, curFilePath.generic_string(), "fragMain", EShaderStage::Fragment, ci.defines, spv))
+            if (compileToSpv(source, curFilePath.generic_string(), candidate.entryName, candidate.stage, ci.defines, spv))
             {
-                YA_CORE_ERROR("[Slang] Failed to compile fragment stage: {}", shaderName);
+                ret[candidate.stage] = std::move(spv);
+                continue;
+            }
+
+            if (candidate.bRequired)
+            {
+                YA_CORE_ERROR("[Slang] Failed to compile required stage {} for: {}",
+                              EShaderStage::T2Strings[candidate.stage],
+                              shaderName);
                 return {};
             }
-            ret[EShaderStage::Fragment] = std::move(spv);
         }
 
         YA_CORE_INFO("[Slang] Compiled {} stages for: {}", ret.size(), shaderName);
@@ -1423,8 +1433,8 @@ ShaderReflection::MergedResources ShaderReflection::merge(
     // 1. Push Constants: merge across stages (union stageFlags,
     //    use max size across all stages).
     // -----------------------------------------------------------
-    uint32_t        pcMaxSize   = 0;
-    EShaderStage::T pcStageFlags = static_cast<EShaderStage::T>(0);
+    uint32_t        pcMaxSize       = 0;
+    EShaderStage::T pcStageFlags    = static_cast<EShaderStage::T>(0);
     bool            hasPushConstant = false;
 
     for (const auto& res : stageResources) {
@@ -1453,7 +1463,7 @@ ShaderReflection::MergedResources ShaderReflection::merge(
     {
         uint32_t set;
         uint32_t binding;
-        bool operator<(const BindingKey& o) const
+        bool     operator<(const BindingKey& o) const
         {
             return set < o.set || (set == o.set && binding < o.binding);
         }
@@ -1467,11 +1477,7 @@ ShaderReflection::MergedResources ShaderReflection::merge(
     };
     std::map<BindingKey, BindingInfo> bindingMap;
 
-    auto mergeBinding = [&](uint32_t set, uint32_t binding,
-                            EPipelineDescriptorType::T descType,
-                            uint32_t                   count,
-                            EShaderStage::T            stage,
-                            const std::string&         name) {
+    auto mergeBinding = [&](uint32_t set, uint32_t binding, EPipelineDescriptorType::T descType, uint32_t count, EShaderStage::T stage, const std::string& name) {
         BindingKey key{set, binding};
         auto       it = bindingMap.find(key);
         if (it == bindingMap.end()) {
@@ -1482,11 +1488,12 @@ ShaderReflection::MergedResources ShaderReflection::merge(
             if (it->second.type != descType) {
                 YA_CORE_ERROR("ShaderReflection::merge: binding (set={}, binding={}) "
                               "has conflicting types: {} vs {}",
-                              set, binding,
+                              set,
+                              binding,
                               static_cast<int>(it->second.type),
                               static_cast<int>(descType));
             }
-            it->second.stageFlags    = it->second.stageFlags | stage;
+            it->second.stageFlags      = it->second.stageFlags | stage;
             it->second.descriptorCount = std::max(it->second.descriptorCount, count);
         }
     };
@@ -1494,15 +1501,11 @@ ShaderReflection::MergedResources ShaderReflection::merge(
     for (const auto& res : stageResources) {
         // Uniform buffers → UniformBuffer descriptor type
         for (const auto& ubo : res.uniformBuffers) {
-            mergeBinding(ubo.set, ubo.binding,
-                         EPipelineDescriptorType::UniformBuffer,
-                         1, res.stage, ubo.name);
+            mergeBinding(ubo.set, ubo.binding, EPipelineDescriptorType::UniformBuffer, 1, res.stage, ubo.name);
         }
         // Sampled images → CombinedImageSampler descriptor type
         for (const auto& img : res.sampledImages) {
-            mergeBinding(img.set, img.binding,
-                         EPipelineDescriptorType::CombinedImageSampler,
-                         img.arraySize, res.stage, img.name);
+            mergeBinding(img.set, img.binding, EPipelineDescriptorType::CombinedImageSampler, img.arraySize, res.stage, img.name);
         }
     }
 

@@ -57,7 +57,10 @@ struct RenderRuntime
 
     App* _app = nullptr;
 
+    ut::StackDeleter _deleter;
+
     IRender*                                                _render = nullptr;
+    stdptr<ICommandBuffer>                                  _offscreenCmdBuf;
     std::vector<std::shared_ptr<ICommandBuffer>>            _commandBuffers;
     std::shared_ptr<ShaderStorage>                          _shaderStorage = nullptr;
     std::vector<std::pair<std::string, IGraphicsPipeline*>> _monitorPipelines;
@@ -69,9 +72,9 @@ struct RenderRuntime
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
-    stdptr<IDescriptorPool>       _skyboxDSP     = nullptr;
-    stdptr<IDescriptorSetLayout> _skyboxDSL     = nullptr;
-    stdptr<Sampler>              _skyboxSampler = nullptr;
+    stdptr<IDescriptorPool>      _skyboxDSP             = nullptr;
+    stdptr<IDescriptorSetLayout> _skyboxDSL             = nullptr;
+    stdptr<Sampler>              _skyboxSampler         = nullptr;
     stdptr<Texture>              _fallbackSkyboxTexture = nullptr;
     DescriptorSetHandle          _fallbackSkyboxDS      = nullptr;
 
@@ -90,6 +93,7 @@ struct RenderRuntime
     void init(const InitDesc& desc);
     void shutdown();
     void onViewportResized(Rect2D rect);
+    void offScreenRender();
     void renderFrame(const FrameInput& input);
     void renderGUI(float dt);
 
@@ -116,10 +120,10 @@ struct RenderRuntime
      * SkyboxComponent descriptor sets allocated from this pool are returned.
      * Without this, each scene load leaks one DS until the pool overflows.
      */
-    void resetSkyboxPool();
-    [[nodiscard]] const Rect2D&                  getViewportRect() const { return _viewportRect; }
-    [[nodiscard]] float                          getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
-    [[nodiscard]] Extent2D                       getViewportExtent() const;
+    void                        resetSkyboxPool();
+    [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
+    [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
+    [[nodiscard]] Extent2D      getViewportExtent() const;
 
   private:
     void initActivePipeline();

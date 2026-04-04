@@ -109,6 +109,10 @@ static size_t getFormatPixelSize(EFormat::T format)
         return 1;
     case EFormat::R8G8_UNORM:
         return 2;
+    case EFormat::R32_SFLOAT:
+        return 4;
+    case EFormat::R16G16B16A16_SFLOAT:
+        return 8;
     case EFormat::R8G8B8A8_UNORM:
     case EFormat::R8G8B8A8_SRGB:
     case EFormat::B8G8R8A8_UNORM:
@@ -224,35 +228,6 @@ std::shared_ptr<Texture> Texture::fromMemory(const TextureMemoryCreateInfo& ci)
                           ci.memory.format);
 
     YA_CORE_TRACE("Created texture from memory: {} ({}x{})", texture->_label, ci.memory.width, ci.memory.height);
-    return texture;
-}
-
-std::shared_ptr<Texture> Texture::fromFile(const std::string& filepath, const std::string& label, bool bSRGB)
-{
-    stdpath p = filepath;
-    if (p.extension() == ".ktx" || p.extension() == ".ktx2") {
-        YA_CORE_WARN("KTX texture loading not yet implemented: {}", filepath);
-        return nullptr;
-    }
-
-    int texWidth = -1, texHeight = -1, texChannels = -1;
-    StbiImage pixels(stbi_load(filepath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha));
-    if (!pixels) {
-        YA_CORE_ERROR("Failed to load texture image: {}", filepath);
-        return nullptr;
-    }
-
-    auto texture       = Texture::createShared();
-    texture->_filepath = filepath;
-    texture->_label    = label.empty() ? filepath : label;
-    texture->_channels = 4;
-    texture->initFromData(pixels.get(),
-                          0,
-                          static_cast<uint32_t>(texWidth),
-                          static_cast<uint32_t>(texHeight),
-                          bSRGB ? EFormat::R8G8B8A8_SRGB : EFormat::R8G8B8A8_UNORM);
-
-    YA_CORE_TRACE("Created texture from file: {} ({}x{}, {} channels)", filepath, texWidth, texHeight, texChannels);
     return texture;
 }
 
