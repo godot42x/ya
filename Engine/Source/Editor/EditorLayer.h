@@ -108,6 +108,8 @@ struct EditorLayer
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
     float     _debugFloat = 0.0f;
+    char      _defaultScenePathBuffer[512] = {};
+    bool      _bDefaultScenePathDirty      = false;
 
     // ImGui texture descriptor set cache (editor-only, application layer)
     std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
@@ -275,6 +277,9 @@ struct EditorLayer
 
 
   private:
+    Scene* getEditableScene() const;
+    void   syncEditorSettingsFromConfig();
+
     // UI Methods
     void updateWindowFlags(ya::ImGuiStyleScope& style);
     void menuBar();

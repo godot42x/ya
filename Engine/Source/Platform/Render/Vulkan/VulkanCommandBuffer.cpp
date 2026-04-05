@@ -183,11 +183,13 @@ void VulkanCommandBuffer::reset()
 
 void VulkanCommandBuffer::executeBindPipeline(IGraphicsPipeline* pipeline)
 {
+    YA_CORE_ASSERT(pipeline && pipeline->getHandle(), "null ppl");
     vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandleAs<VkPipeline>());
 }
 
 void VulkanCommandBuffer::executeBindComputePipeline(IComputePipeline* pipeline)
 {
+    YA_CORE_ASSERT(pipeline && pipeline->getHandle(), "null ppl");
     vkCmdBindPipeline(_commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->getHandleAs<VkPipeline>());
 }
 

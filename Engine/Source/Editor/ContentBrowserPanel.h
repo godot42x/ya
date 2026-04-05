@@ -26,6 +26,8 @@ struct ContentBrowserPanel
     const ImGuiImageEntry *folderIcon = nullptr;
     const ImGuiImageEntry *fileIcon   = nullptr;
 
+    std::string _pendingSceneOpenPath;
+
 
   public:
     ContentBrowserPanel(EditorLayer *owner);

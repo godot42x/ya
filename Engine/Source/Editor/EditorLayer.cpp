@@ -15,6 +15,7 @@
 #include "Resource/AssetManager.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
@@ -27,6 +28,23 @@
 
 namespace ya
 {
+
+Scene* EditorLayer::getEditableScene() const
+{
+    if (!_app) {
+        return nullptr;
+    }
+
+    auto* sceneManager = _app->getSceneManager();
+    return sceneManager ? sceneManager->getEditorScene() : nullptr;
+}
+
+void EditorLayer::syncEditorSettingsFromConfig()
+{
+    const std::string defaultScenePath = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
+    strncpy_s(_defaultScenePathBuffer, sizeof(_defaultScenePathBuffer), defaultScenePath.c_str(), _TRUNCATE);
+    _bDefaultScenePathDirty = false;
+}
 
 static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
 {
@@ -99,6 +117,8 @@ void EditorLayer::onAttach()
     if (!_app)
         return;
 
+    syncEditorSettingsFromConfig();
+
     // Subscribe to scene activation events to cleanup stale entity references
     // _app->getSceneManager()->onSceneActivated.addLambda(this, [this](Scene* newScene) {
     //     YA_CORE_INFO("EditorLayer: Scene activated, clearing selection");
@@ -109,7 +129,7 @@ void EditorLayer::onAttach()
     // });
 
     // Initialize editor panels
-    if (auto scene = _app->getSceneManager()->getActiveScene())
+    if (auto scene = _app->getSceneManager()->getEditorScene())
     {
         _sceneHierarchyPanel.setContext(scene);
     }
@@ -290,7 +310,7 @@ void EditorLayer::onEvent(const Event& event)
 
         if (keyEvent.getKeyCode() == EKey::K_F) {
             // Focus camera on selected entity
-            if (_sceneHierarchyPanel.getSelectedEntity()->isValid()) {
+            if (auto* selectedEntity = _sceneHierarchyPanel.getSelectedEntity(); selectedEntity && selectedEntity->isValid()) {
                 focusCameraOnEntity(_sceneHierarchyPanel.getSelectedEntity());
             }
         }
@@ -364,6 +384,10 @@ void EditorLayer::menuBar()
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
             // TODO: New scene
+            App::get()->taskManager.registerFrameTask([]() {
+                auto scene = makeShared<Scene>();
+                App::get()->getSceneManager()->setEditorScene(scene);
+            });
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O"))
         {
@@ -376,7 +400,7 @@ void EditorLayer::menuBar()
             {
                 if (_app && _app->getSceneManager())
                 {
-                    auto* scene = _app->getSceneManager()->getActiveScene();
+                    auto* scene = _app->getSceneManager()->getEditorScene();
                     if (scene)
                     {
                         _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
@@ -390,7 +414,7 @@ void EditorLayer::menuBar()
                 std::string defaultName = "NewScene";
                 if (_app && _app->getSceneManager())
                 {
-                    auto* scene = _app->getSceneManager()->getActiveScene();
+                    auto* scene = _app->getSceneManager()->getEditorScene();
                     if (scene && !scene->getName().empty())
                     {
                         defaultName = scene->getName();
@@ -403,7 +427,7 @@ void EditorLayer::menuBar()
                         _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                         if (_app && _app->getSceneManager())
                         {
-                            auto* scene = _app->getSceneManager()->getActiveScene();
+                            auto* scene = _app->getSceneManager()->getEditorScene();
                             if (scene)
                             {
                                 scene->setName(sceneName);
@@ -420,7 +444,7 @@ void EditorLayer::menuBar()
             std::string defaultName = "NewScene";
             if (_app && _app->getSceneManager())
             {
-                auto* scene = _app->getSceneManager()->getActiveScene();
+                auto* scene = _app->getSceneManager()->getEditorScene();
                 if (scene && !scene->getName().empty())
                 {
                     defaultName = scene->getName();
@@ -433,7 +457,7 @@ void EditorLayer::menuBar()
                     _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                     if (_app && _app->getSceneManager())
                     {
-                        auto* scene = _app->getSceneManager()->getActiveScene();
+                        auto* scene = _app->getSceneManager()->getEditorScene();
                         if (scene)
                         {
                             scene->setName(sceneName);
@@ -507,12 +531,17 @@ void EditorLayer::toolbar()
     if (ImGui::ImageButton("Play", *_playIcon, ImVec2(size, size)))
     {
         _sceneHierarchyPanel.setSelection(nullptr);
-        _app->startRuntime();
-        // TODO: Play scene
+        if (_app->isEditorMode()) {
+            _app->startRuntime();
+        }
     }
     ImGui::SameLine();
     if (ImGui::ImageButton("Simulate", *_simulationIcon, ImVec2(size, size)))
     {
+        _sceneHierarchyPanel.setSelection(nullptr);
+        if (_app->isEditorMode()) {
+            _app->startSimulation();
+        }
     }
     // if (ImGui::ImageButton("Pause", pauseDS, ImVec2(size * 2, size)))
     // {
@@ -520,7 +549,12 @@ void EditorLayer::toolbar()
     ImGui::SameLine();
     if (ImGui::ImageButton("Stop", *_stopIcon, ImVec2(size, size)))
     {
-        _app->stopRuntime();
+        if (_app->isRuntimeMode()) {
+            _app->stopRuntime();
+        }
+        else if (_app->isSimulationMode()) {
+            _app->stopSimulation();
+        }
     }
 
     // style RAII auto-pop
@@ -635,7 +669,7 @@ void EditorLayer::viewportWindow()
         {
             if (ctx.menuItem("Create Empty Node"))
             {
-                if (auto scene = _app->getSceneManager()->getActiveScene())
+                if (auto scene = getEditableScene())
                 {
                     Node* newNode = scene->createNode3D("New Node");
                     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -648,7 +682,7 @@ void EditorLayer::viewportWindow()
             {
                 if (ctx.menuItem("Cube"))
                 {
-                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    if (auto scene = getEditableScene())
                     {
                         Node* newNode = scene->createNode3D("Cube");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -662,7 +696,7 @@ void EditorLayer::viewportWindow()
                 }
                 if (ctx.menuItem("Sphere"))
                 {
-                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    if (auto scene = getEditableScene())
                     {
                         Node* newNode = scene->createNode3D("Sphere");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -676,7 +710,7 @@ void EditorLayer::viewportWindow()
                 }
                 if (ctx.menuItem("Plane"))
                 {
-                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    if (auto scene = getEditableScene())
                     {
                         Node* newNode = scene->createNode3D("Plane");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -693,7 +727,7 @@ void EditorLayer::viewportWindow()
 
             if (ctx.menuItem("Create Point Light"))
             {
-                if (auto scene = _app->getSceneManager()->getActiveScene())
+                if (auto scene = getEditableScene())
                 {
                     Node* newNode = scene->createNode3D("Point Light");
                     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
@@ -712,7 +746,7 @@ void EditorLayer::viewportWindow()
             {
                 if (ctx.menuItem("Duplicate Selected"))
                 {
-                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    if (auto scene = getEditableScene())
                     {
                         if (auto newNode = scene->duplicateNode(scene->getNodeByEntity(selectedEntity))) {
                             YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
@@ -726,7 +760,7 @@ void EditorLayer::viewportWindow()
                 }
                 if (ctx.menuItem("Delete Selected"))
                 {
-                    if (auto scene = _app->getSceneManager()->getActiveScene())
+                    if (auto scene = getEditableScene())
                     {
                         scene->destroyNode(scene->getNodeByEntity(selectedEntity));
                         setSelectedEntity(nullptr);
@@ -747,7 +781,56 @@ void EditorLayer::editorSettings()
         ImGui::End();
         return;
     }
+
+    if (!_bDefaultScenePathDirty && _defaultScenePathBuffer[0] == '\0') {
+        syncEditorSettingsFromConfig();
+    }
+
     ImGui::Combo("Viewport Sampler", (int*)&_viewPortSamplerType, "Linear\0Nearest\0");
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Startup Scene");
+    ImGui::SetNextItemWidth(-90.0f);
+    if (ImGui::InputText("##DefaultScenePath", _defaultScenePathBuffer, sizeof(_defaultScenePathBuffer))) {
+        _bDefaultScenePathDirty = true;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Browse")) {
+        _filePicker.open(
+            "Select Default Scene",
+            _defaultScenePathBuffer,
+            {".scene.json"},
+            [this](const std::string& newPath) {
+                strncpy_s(_defaultScenePathBuffer, sizeof(_defaultScenePathBuffer), newPath.c_str(), _TRUNCATE);
+                _bDefaultScenePathDirty = true;
+            });
+    }
+
+    const std::string scenePath = _defaultScenePathBuffer;
+    const bool        bHasScenePath = !scenePath.empty();
+    if (bHasScenePath) {
+        const bool bExists = VFS::get() && VirtualFileSystem::get()->isFileExists(scenePath);
+        ImGui::TextDisabled("Used on next app start");
+        ImGui::TextColored(bExists ? ImVec4(0.35f, 0.85f, 0.45f, 1.0f) : ImVec4(1.0f, 0.55f, 0.35f, 1.0f),
+                           bExists ? "Scene exists" : "Scene not found");
+    }
+    else {
+        ImGui::TextDisabled("Empty means startup falls back to an empty scene");
+    }
+
+    if (_bDefaultScenePathDirty) {
+        if (ImGui::Button("Apply Default Scene Path")) {
+            ConfigManager::get().set("editor", "startup.defaultScenePath", std::string(_defaultScenePathBuffer));
+            ConfigManager::get().flushDocument("editor");
+            _bDefaultScenePathDirty = false;
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            syncEditorSettingsFromConfig();
+        }
+    }
 
     ImGui::End();
 }
@@ -1217,7 +1300,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     }
 
     // Get active scene
-    auto* scene = app->getSceneManager()->getActiveScene();
+    auto* scene = getEditableScene();
     if (!scene) {
         return;
     }

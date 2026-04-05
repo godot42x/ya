@@ -134,9 +134,12 @@ void DeferredRenderPipeline::drawPhong(ICommandBuffer* cmdBuf, Scene* scene)
     auto& reg = scene->getRegistry();
 
     cmdBuf->bindPipeline(_phongGBufferPipeline.get());
-    for (const auto& [entity, mc, tc, pmc] : reg.view<MeshComponent, TransformComponent, PhongMaterialComponent>().each()) {
+    for (const auto& [entity, mc, tc, pmc] :
+         reg.view<MeshComponent, TransformComponent, PhongMaterialComponent>().each())
+    {
         PhongMaterial* mat = pmc.getMaterial();
         if (!mat || mat->getIndex() < 0) continue;
+        if (!mc.isResolved() || !mc.getMesh()) continue;
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
 
         cmdBuf->bindDescriptorSets(_phongGBufferPPL.get(), 0, {_frameAndLightDS, _phongMatPool.resourceDS(idx), _phongMatPool.paramDS(idx)});

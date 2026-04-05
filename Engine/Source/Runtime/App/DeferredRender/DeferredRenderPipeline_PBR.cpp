@@ -133,6 +133,7 @@ void DeferredRenderPipeline::drawPBR(ICommandBuffer* cmdBuf, Scene* scene)
          reg.view<MeshComponent, TransformComponent, PBRMaterialComponent>().each()) {
         PBRMaterial* mat = pmc.getMaterial();
         if (!mat || mat->getIndex() < 0) continue;
+        if (!mc.isResolved() || !mc.getMesh()) continue;
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
 
         cmdBuf->bindDescriptorSets(_pbrGBufferPPL.get(), 0, {_frameAndLightDS, _pbrMatPool.resourceDS(idx), _pbrMatPool.paramDS(idx)});

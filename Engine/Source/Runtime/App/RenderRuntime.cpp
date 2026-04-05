@@ -283,7 +283,7 @@ void RenderRuntime::init(const InitDesc& desc)
                        "Failed to create fallback skybox cubemap");
 
         _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-        _sceneSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
+        _sceneSkyboxDS    = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
         updateSkyboxDescriptorSet(_fallbackSkyboxDS, _fallbackSkyboxTexture.get());
         updateSkyboxDescriptorSet(_sceneSkyboxDS, _fallbackSkyboxTexture.get());
     }
@@ -379,8 +379,8 @@ void RenderRuntime::shutdown()
 
     _fallbackSkyboxTexture.reset();
     _boundSceneSkyboxTexture = nullptr;
-    _sceneSkyboxDS = nullptr;
-    _fallbackSkyboxDS = nullptr;
+    _sceneSkyboxDS           = nullptr;
+    _fallbackSkyboxDS        = nullptr;
     _skyboxSampler.reset();
     _skyboxDSP.reset();
     _skyboxDSL.reset();
@@ -410,8 +410,8 @@ void RenderRuntime::resetSkyboxPool()
 
     // Return cached skybox descriptor sets back to the pool and rebuild them.
     _skyboxDSP->resetPool();
-    _sceneSkyboxDS = nullptr;
-    _fallbackSkyboxDS = nullptr;
+    _sceneSkyboxDS           = nullptr;
+    _fallbackSkyboxDS        = nullptr;
     _boundSceneSkyboxTexture = nullptr;
 
     _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
@@ -427,13 +427,31 @@ void RenderRuntime::resetSkyboxPool()
 
 void RenderRuntime::offScreenRender()
 {
-    // from a cylinder to cubemap
+    if (!_render || !_app || !_offscreenCmdBuf || !_app->taskManager.hasOffscreenTasks()) {
+        return;
+    }
+
+    // Offscreen conversion work can be queued independently from the main viewport path.
+    // Synchronize locally so this command buffer is never reset while still pending,
+    // even if the frame exits early before the normal render wait point.
+    _render->waitIdle();
+
     auto cmdBuf = _offscreenCmdBuf;
     cmdBuf->reset();
-    cmdBuf->begin();
+    if (!cmdBuf->begin()) {
+        YA_CORE_ERROR("Failed to begin offscreen command buffer");
+        return;
+    }
+
     _app->taskManager.updateOffscreenTasks(cmdBuf.get());
-    cmdBuf->end();
+
+    if (!cmdBuf->end()) {
+        YA_CORE_ERROR("Failed to end offscreen command buffer");
+        return;
+    }
+
     _render->submitToQueue({cmdBuf->getHandle()}, {}, {});
+    _render->waitIdle();
 }
 
 // MARK: render

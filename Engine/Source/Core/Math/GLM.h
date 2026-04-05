@@ -61,7 +61,7 @@ YA_REFLECT_END_EXTERNAL()
 namespace glm
 {
 
-inline void to_json(nlohmann::json &j, const glm::vec2 &vec)
+inline void to_json(nlohmann::json& j, const glm::vec2& vec)
 {
     j = nlohmann::json{{"x", vec.x}, {"y", vec.y}};
 }
@@ -144,6 +144,7 @@ inline void deserializeGlmVec4FromArray(glm::vec4 &value, const nlohmann::json &
 
 } // namespace ya::reflection::detail
 
+// TODO: use virtual function to save memory in reflection
 YA_REGISTER_SERIALIZER_HOOK(glm::vec2, ::ya::reflection::detail::serializeGlmVec2AsArray, ::ya::reflection::detail::deserializeGlmVec2FromArray)
 YA_REGISTER_SERIALIZER_HOOK(glm::vec3, ::ya::reflection::detail::serializeGlmVec3AsArray, ::ya::reflection::detail::deserializeGlmVec3FromArray)
 YA_REGISTER_SERIALIZER_HOOK(glm::vec4, ::ya::reflection::detail::serializeGlmVec4AsArray, ::ya::reflection::detail::deserializeGlmVec4FromArray)

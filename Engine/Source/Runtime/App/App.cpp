@@ -140,6 +140,9 @@ void App::init(AppDesc ci)
     auto& configManager       = ConfigManager::get();
     _ci.bEnableRenderDoc      = _ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
     _ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", _ci.disabledGraphicsCards);
+    if (!_ci.defaultScenePath) {
+        _ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
+    }
 
     _renderRuntime = std::make_unique<RenderRuntime>();
     _renderRuntime->init(RenderRuntime::InitDesc{
@@ -155,6 +158,7 @@ void App::init(AppDesc ci)
 
 
     _sceneManager = new SceneManager();
+    _sceneManager->setAppState(_appState);
     _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
     _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
     _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
@@ -227,7 +231,8 @@ void App::init(AppDesc ci)
     }
 
 
-    loadScene(ci.defaultScenePath);
+    auto p= _ci.defaultScenePath.value_or("");
+    loadScene(p);
 
     camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -244,7 +249,7 @@ int App::dispatchEvent(const T& event)
 }
 
 // MARK: on init
-void App::onInit(AppDesc ci)
+void App::onInit(const AppDesc& ci)
 {
     // auto &bus = *MessageBus::get();
     FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
@@ -274,8 +279,6 @@ void App::onPostInit()
 
     ya::AssetManager::get()->loadTextureSync("face", faceTexturePath);
     ya::AssetManager::get()->loadTextureSync("uv1", uv1TexturePath);
-
-    onScenePostInit.broadcast();
 }
 
 
@@ -754,8 +757,10 @@ bool App::loadScene(const std::string& path)
 {
     switch (_appState) {
     case AppState::Runtime:
-    case AppState::Simulation:
         stopRuntime();
+        break;
+    case AppState::Simulation:
+        stopSimulation();
         break;
     case AppState::Editor:
         break;
@@ -792,7 +797,10 @@ void App::onSceneDestroy(Scene* scene)
 
 void App::onSceneActivated(Scene* scene)
 {
-    _editorLayer->setSceneContext(scene);
+    (void)scene;
+    if (_editorLayer && _sceneManager) {
+        _editorLayer->setSceneContext(_sceneManager->getEditorScene());
+    }
 
     // Engine core initialization - basic scene setup
     // Application-specific logic should be in derived classes (e.g., HelloMaterial)
@@ -811,9 +819,15 @@ void App::startRuntime()
     }
 
     YA_CORE_INFO("Starting runtime...");
-    _sceneManager->onStartRuntime();
-    _appState = AppState::Runtime;
+    if (!_sceneManager || !_sceneManager->enterPlayMode(AppState::Runtime)) {
+        YA_CORE_ERROR("Failed to enter runtime mode");
+        return;
+    }
 
+    _appState = AppState::Runtime;
+    if (_sceneManager) {
+        _sceneManager->setAppState(_appState);
+    }
 
     onEnterRuntime();
 }
@@ -826,7 +840,15 @@ void App::startSimulation()
     }
 
     YA_CORE_INFO("Starting simulation...");
+    if (!_sceneManager || !_sceneManager->enterPlayMode(AppState::Simulation)) {
+        YA_CORE_ERROR("Failed to enter simulation mode");
+        return;
+    }
+
     _appState = AppState::Simulation;
+    if (_sceneManager) {
+        _sceneManager->setAppState(_appState);
+    }
 
     onEnterSimulation();
 }
@@ -839,9 +861,16 @@ void App::stopRuntime()
     }
 
     YA_CORE_INFO("Stopping runtime");
+    if (_sceneManager) {
+        _sceneManager->exitPlayMode();
+    }
     _appState = AppState::Editor;
-    _sceneManager->onStopRuntime();
-    _luaScriptingSystem->onStop();
+    if (_sceneManager) {
+        _sceneManager->setAppState(_appState);
+    }
+    if (_luaScriptingSystem) {
+        _luaScriptingSystem->onStop();
+    }
 }
 
 void App::stopSimulation()
@@ -852,7 +881,13 @@ void App::stopSimulation()
     }
 
     YA_CORE_INFO("Stopping simulation");
+    if (_sceneManager) {
+        _sceneManager->exitPlayMode();
+    }
     _appState = AppState::Editor;
+    if (_sceneManager) {
+        _sceneManager->setAppState(_appState);
+    }
 
     onExitSimulation();
 }

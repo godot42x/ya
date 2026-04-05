@@ -8,8 +8,10 @@
 
 #include "Editor/EditorLayer.h"
 
+#include "Runtime/App/AppState.h"
 #include "Runtime/App/FPSCtrl.h"
 #include "Runtime/App/RenderRuntime.h"
+
 
 #include "Render/Render.h"
 #include "Render/Shader.h"
@@ -49,20 +51,6 @@ enum AppMode : int
     Drawing,
 };
 
-/**
- * @brief Application runtime state
- *
- * Editor: Editing mode, no gameplay simulation
- * Simulation: Play mode in editor, can pause/step
- * Runtime: Standalone game mode
- */
-enum class AppState
-{
-    Editor,     // Editing scene, no gameplay
-    Simulation, // Playing in editor (can pause/step)
-    Runtime     // Standalone runtime (game build)
-};
-
 // enum class SimulationState
 // {
 //     Stopped,
@@ -80,7 +68,8 @@ struct AppDesc
     int         width      = 1024;
     int         height     = 768;
     bool        fullscreen = false;
-    std::string defaultScenePath;
+
+    std::optional<std::string> defaultScenePath;
 
     bool                     bEnableRenderDoc          = false;
     std::string              renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
@@ -114,6 +103,9 @@ struct TaskManager
     // TODO: use vector for fast execution, but it's not the bottleneck and most important things for now
     std::deque<std::function<void()>>                tasks;
     std::deque<std::function<void(ICommandBuffer*)>> offscreenTasks;
+
+    [[nodiscard]] bool hasFrameTasks() const { return !tasks.empty(); }
+    [[nodiscard]] bool hasOffscreenTasks() const { return !offscreenTasks.empty(); }
 
     void registerFrameTask(std::function<void()> task)
     {
@@ -209,7 +201,6 @@ struct App
 
     EditorLayer* _editorLayer;
 
-    MulticastDelegate<void()> onScenePostInit;
 
     LuaScriptingSystem* _luaScriptingSystem;
 
@@ -233,12 +224,17 @@ struct App
 
     void requestQuit()
     {
-        stopRuntime();
+        if (isRuntimeMode()) {
+            stopRuntime();
+        }
+        else if (isSimulationMode()) {
+            stopSimulation();
+        }
         bRunning = false;
     }
 
     // before render context created
-    virtual void onInit(AppDesc ci);
+    virtual void onInit(const AppDesc& ci);
     //  after render context created
     virtual void onPostInit();
     virtual void onQuit() {}

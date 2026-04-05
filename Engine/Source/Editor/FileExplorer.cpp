@@ -13,8 +13,8 @@ FileExplorer::~FileExplorer()
     flushConfig();
 }
 
-void FileExplorer::init(const std::vector<MountPoint>  &mountPoints,
-                        const std::vector<std::string> &extensions,
+void FileExplorer::init(const std::vector<MountPoint>&  mountPoints,
+                        const std::vector<std::string>& extensions,
                         FilterMode                      filterMode,
                         SelectionMode                   selectionMode)
 {
@@ -45,7 +45,7 @@ void FileExplorer::initFromVFS()
     auto vfs = VirtualFileSystem::get();
     if (!vfs) return;
 
-    for (const auto &[mountName, root] : vfs->getMountPoints())
+    for (const auto& [mountName, root] : vfs->getMountPoints())
     {
         auto contentPath = root / "Content";
 
@@ -83,7 +83,7 @@ void FileExplorer::initFromVFS()
     }
 
     // Sort: Engine first, then Game, then alphabetically
-    std::ranges::sort(_mountPoints, [](const MountPoint &a, const MountPoint &b) {
+    std::ranges::sort(_mountPoints, [](const MountPoint& a, const MountPoint& b) {
         if (a.name == "Engine") return true;
         if (b.name == "Engine") return false;
         if (a.name == "Game") return true;
@@ -113,7 +113,7 @@ void FileExplorer::loadConfig()
         return;
     }
 
-    const std::string baseKey = makeConfigKey("");
+    const std::string baseKey  = makeConfigKey("");
     int               viewMode = cfg.getOr<int>("editor", baseKey + "viewMode", static_cast<int>(_viewMode));
     if (viewMode >= static_cast<int>(ViewMode::List) && viewMode <= static_cast<int>(ViewMode::Icon)) {
         _viewMode = static_cast<ViewMode>(viewMode);
@@ -187,7 +187,7 @@ std::string FileExplorer::makeConfigKey(std::string_view suffix) const
     return key;
 }
 
-void FileExplorer::switchToMountPoint(MountPoint *mp)
+void FileExplorer::switchToMountPoint(MountPoint* mp)
 {
     if (!mp) return;
 
@@ -204,7 +204,7 @@ void FileExplorer::switchToMountPoint(MountPoint *mp)
     _selectedPath.clear();
 }
 
-bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path &path) const
+bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& path) const
 {
     if (!_activeMountPoint) return false;
 
@@ -212,12 +212,12 @@ bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path &pat
     return !relativePath.empty() && !relativePath.string().starts_with("..");
 }
 
-void FileExplorer::setSelectedPath(const std::filesystem::path &path)
+void FileExplorer::setSelectedPath(const std::filesystem::path& path)
 {
     _selectedPath = path;
 
     // Try to navigate to the parent directory if it's within a mount point
-    for (auto &mp : _mountPoints)
+    for (auto& mp : _mountPoints)
     {
         auto relativePath = std::filesystem::relative(path, mp.path);
         if (!relativePath.empty() && !relativePath.string().starts_with(".."))
@@ -236,23 +236,26 @@ void FileExplorer::setSelectedPath(const std::filesystem::path &path)
     }
 }
 
-bool FileExplorer::matchesExtension(const std::filesystem::path &path) const
+bool FileExplorer::matchesExtension(const std::filesystem::path& path) const
 {
     if (_extensions.empty()) return true;
 
-    std::string ext = path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    // std::string ext = path.extension().string();
+    // std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-    for (const auto &allowedExt : _extensions)
+    for (const auto& allowedExt : _extensions)
     {
-        std::string lowerAllowed = allowedExt;
-        std::transform(lowerAllowed.begin(), lowerAllowed.end(), lowerAllowed.begin(), ::tolower);
-        if (ext == lowerAllowed) return true;
+        if (std::string_view(path.string()).ends_with(allowedExt)) {
+            return true;
+        }
+        // std::string lowerAllowed = allowedExt;
+        // std::transform(lowerAllowed.begin(), lowerAllowed.end(), lowerAllowed.begin(), ::tolower);
+        // if (ext == lowerAllowed) return true;
     }
     return false;
 }
 
-bool FileExplorer::matchesSearch(const std::string &name) const
+bool FileExplorer::matchesSearch(const std::string& name) const
 {
     if (_searchBuffer[0] == '\0') return true;
 
@@ -336,7 +339,7 @@ void FileExplorer::render(SelectionCallback onSelect, float height)
 
     if (_showViewModeToggle)
     {
-        const char *viewModeLabel = (_viewMode == ViewMode::List) ? "➖" : "📄";
+        const char* viewModeLabel = (_viewMode == ViewMode::List) ? "➖" : "📄";
         if (ImGui::Button(viewModeLabel))
         {
             _viewMode = (_viewMode == ViewMode::List) ? ViewMode::Icon : ViewMode::List;
@@ -375,9 +378,9 @@ void FileExplorer::renderMountPointSelector()
         return;
     }
 
-    for (auto &mp : _mountPoints)
+    for (auto& mp : _mountPoints)
     {
-        const char *icon  = "[+]";
+        const char* icon  = "[+]";
         ImVec4      color = ImVec4(1.0f, 0.7f, 0.3f, 1.0f); // Orange for plugins
 
         if (mp.name == "Engine")
@@ -432,9 +435,9 @@ void FileExplorer::renderDirectoryContents(SelectionCallback onSelect)
 
     try
     {
-        for (const auto &entry : std::filesystem::directory_iterator(_currentDirectory))
+        for (const auto& entry : std::filesystem::directory_iterator(_currentDirectory))
         {
-            const auto &path     = entry.path();
+            const auto& path     = entry.path();
             std::string filename = path.filename().string();
 
             // Skip hidden files
@@ -460,13 +463,13 @@ void FileExplorer::renderDirectoryContents(SelectionCallback onSelect)
         }
 
         // Sort alphabetically
-        auto sortByName = [](const auto &a, const auto &b) {
+        auto sortByName = [](const auto& a, const auto& b) {
             return a.path().filename() < b.path().filename();
         };
         std::sort(directories.begin(), directories.end(), sortByName);
         std::sort(files.begin(), files.end(), sortByName);
     }
-    catch (const std::exception &e)
+    catch (const std::exception& e)
     {
         ImGui::TextColored(ImVec4(1, 0, 0, 1), "Error: %s", e.what());
         return;
@@ -484,15 +487,15 @@ void FileExplorer::renderDirectoryContents(SelectionCallback onSelect)
 }
 
 void FileExplorer::renderListView(SelectionCallback                                    onSelect,
-                                  const std::vector<std::filesystem::directory_entry> &directories,
-                                  const std::vector<std::filesystem::directory_entry> &files)
+                                  const std::vector<std::filesystem::directory_entry>& directories,
+                                  const std::vector<std::filesystem::directory_entry>& files)
 {
     ImGui::BeginChild("ItemsList", ImVec2(0, 0), true);
 
     // Render directories
-    for (const auto &entry : directories)
+    for (const auto& entry : directories)
     {
-        const auto &path        = entry.path();
+        const auto& path        = entry.path();
         std::string filename    = path.filename().string();
         std::string displayName = "📁 " + filename;
 
@@ -531,9 +534,9 @@ void FileExplorer::renderListView(SelectionCallback                             
     }
 
     // Render files
-    for (const auto &entry : files)
+    for (const auto& entry : files)
     {
-        const auto &path        = entry.path();
+        const auto& path        = entry.path();
         std::string filename    = path.filename().string();
         std::string displayName = "📄 " + filename;
 
@@ -576,8 +579,8 @@ void FileExplorer::renderListView(SelectionCallback                             
 }
 
 void FileExplorer::renderIconView(SelectionCallback                                    onSelect,
-                                  const std::vector<std::filesystem::directory_entry> &directories,
-                                  const std::vector<std::filesystem::directory_entry> &files)
+                                  const std::vector<std::filesystem::directory_entry>& directories,
+                                  const std::vector<std::filesystem::directory_entry>& files)
 {
     float cellSize    = _thumbnailSize + _padding;
     float panelWidth  = ImGui::GetContentRegionAvail().x;
@@ -589,9 +592,9 @@ void FileExplorer::renderIconView(SelectionCallback                             
     ImGui::Columns(columnCount, nullptr, false);
 
     // Render directories
-    for (const auto &entry : directories)
+    for (const auto& entry : directories)
     {
-        const auto &path     = entry.path();
+        const auto& path     = entry.path();
         std::string filename = path.filename().string();
 
         ImGui::PushID(filename.c_str());
@@ -658,9 +661,9 @@ void FileExplorer::renderIconView(SelectionCallback                             
     }
 
     // Render files
-    for (const auto &entry : files)
+    for (const auto& entry : files)
     {
-        const auto &path     = entry.path();
+        const auto& path     = entry.path();
         std::string filename = path.filename().string();
 
         ImGui::PushID(filename.c_str());

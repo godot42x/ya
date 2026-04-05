@@ -45,12 +45,21 @@ void ContentBrowserPanel::init()
     _fileExplorer.setShowSizeSlider(true);
 
     // Set item action callback for opening scene files
-    _fileExplorer.setItemActionCallback([](const std::filesystem::path& path) {
+    _fileExplorer.setItemActionCallback([this](const std::filesystem::path& path) {
         if (path.string().ends_with(".scene.json"))
         {
+            const std::string scenePath = path.string();
+            if (_pendingSceneOpenPath == scenePath) {
+                return;
+            }
+
+            _pendingSceneOpenPath = scenePath;
             App::get()->taskManager.registerFrameTask(
-                [scenePath = path.string()]() {
+                [this, scenePath]() {
                     App::get()->loadScene(scenePath);
+                    if (_pendingSceneOpenPath == scenePath) {
+                        _pendingSceneOpenPath.clear();
+                    }
                 });
         }
     });

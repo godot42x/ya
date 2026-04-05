@@ -26,7 +26,6 @@
 
 
 
-#include "WindowProvider.h"
 #include <Render/Shader.h>
 
 

@@ -9,8 +9,10 @@
  * - 嵌套容器
  */
 
+#include "Core/Math/GLM.h"
 #include "Core/Reflection/Reflection.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include <chrono>
 #include <gtest/gtest.h>
 #include <map>
@@ -21,6 +23,22 @@
 
 using namespace ya;
 using namespace ya::reflection;
+
+namespace
+{
+
+void ensureContainerSerializationReflectionReady();
+
+}
+
+class ContainerSerializationTest : public ::testing::Test
+{
+  protected:
+    static void SetUpTestSuite()
+    {
+        ensureContainerSerializationReflectionReady();
+    }
+};
 
 // ============================================================================
 // 嵌套容器类型注册
@@ -67,17 +85,25 @@ struct TestData
     }
 };
 
-// 手动注册 TestData 的构造函数
-static struct TestDataConstructorRegistrar {
-    TestDataConstructorRegistrar() {
-        ClassRegistry::instance().addPostStaticInitializer([]() {
-            auto& registry = ClassRegistry::instance();
-            if (auto* cls = registry.getClass(ya::type_index_v<TestData>)) {
-                cls->registerConstructor<TestData>(); // 注册默认构造函数
-            }
-        });
+namespace
+{
+
+void ensureContainerSerializationReflectionReady()
+{
+    static bool bInitialized = false;
+    if (!bInitialized) {
+        ya::reflection::DeferredInitializerQueue::instance().executeAll();
+
+        auto& registry = ClassRegistry::instance();
+        if (auto* cls = registry.getClass(ya::type_index_v<TestData>)) {
+            cls->registerConstructor<TestData>();
+        }
+
+        bInitialized = true;
     }
-} testDataConstructorRegistrar;
+}
+
+} // namespace
 
 // 包含各类容器的测试类
 struct ContainerTestObject
@@ -111,7 +137,7 @@ struct NestedContainerTest
 // Vector 容器测试
 // ============================================================================
 
-TEST(ContainerSerializationTest, VectorInt_Serialize)
+TEST_F(ContainerSerializationTest, VectorInt_Serialize)
 {
     ContainerTestObject obj;
     obj.intVector = {1, 2, 3, 4, 5};
@@ -125,7 +151,7 @@ TEST(ContainerSerializationTest, VectorInt_Serialize)
     EXPECT_EQ(json["intVector"][4], 5);
 }
 
-TEST(ContainerSerializationTest, VectorInt_Deserialize)
+TEST_F(ContainerSerializationTest, VectorInt_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", {10, 20, 30, 40}},
@@ -142,7 +168,7 @@ TEST(ContainerSerializationTest, VectorInt_Deserialize)
     EXPECT_EQ(obj.intVector[3], 40);
 }
 
-TEST(ContainerSerializationTest, VectorString_Serialize)
+TEST_F(ContainerSerializationTest, VectorString_Serialize)
 {
     ContainerTestObject obj;
     obj.stringVector = {"hello", "world", "test"};
@@ -156,7 +182,7 @@ TEST(ContainerSerializationTest, VectorString_Serialize)
     EXPECT_EQ(json["stringVector"][2], "test");
 }
 
-TEST(ContainerSerializationTest, VectorString_Deserialize)
+TEST_F(ContainerSerializationTest, VectorString_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -174,7 +200,7 @@ TEST(ContainerSerializationTest, VectorString_Deserialize)
     EXPECT_EQ(obj.stringVector[2], "gamma");
 }
 
-TEST(ContainerSerializationTest, VectorObject_Serialize)
+TEST_F(ContainerSerializationTest, VectorObject_Serialize)
 {
     ContainerTestObject obj;
     obj.objectVector = {
@@ -196,7 +222,7 @@ TEST(ContainerSerializationTest, VectorObject_Serialize)
     EXPECT_EQ(json["objectVector"][1]["name"], "Second");
 }
 
-TEST(ContainerSerializationTest, VectorObject_Deserialize)
+TEST_F(ContainerSerializationTest, VectorObject_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -218,7 +244,7 @@ TEST(ContainerSerializationTest, VectorObject_Deserialize)
     EXPECT_FLOAT_EQ(obj.objectVector[1].value, 20.5f);
 }
 
-TEST(ContainerSerializationTest, VectorEmpty_Serialize)
+TEST_F(ContainerSerializationTest, VectorEmpty_Serialize)
 {
     ContainerTestObject obj;
     obj.intVector = {};
@@ -230,7 +256,7 @@ TEST(ContainerSerializationTest, VectorEmpty_Serialize)
     EXPECT_EQ(json["intVector"].size(), 0);
 }
 
-TEST(ContainerSerializationTest, VectorEmpty_Deserialize)
+TEST_F(ContainerSerializationTest, VectorEmpty_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -257,7 +283,7 @@ TEST(ContainerSerializationTest, VectorEmpty_Deserialize)
 // Set 容器测试
 // ============================================================================
 
-TEST(ContainerSerializationTest, SetInt_Serialize)
+TEST_F(ContainerSerializationTest, SetInt_Serialize)
 {
     ContainerTestObject obj;
     obj.intSet = {5, 3, 1, 4, 2};
@@ -273,7 +299,7 @@ TEST(ContainerSerializationTest, SetInt_Serialize)
     EXPECT_EQ(json["intSet"][4], 5);
 }
 
-TEST(ContainerSerializationTest, SetInt_Deserialize)
+TEST_F(ContainerSerializationTest, SetInt_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -291,7 +317,7 @@ TEST(ContainerSerializationTest, SetInt_Deserialize)
     EXPECT_TRUE(obj.intSet.count(300));
 }
 
-TEST(ContainerSerializationTest, SetEmpty_Serialize)
+TEST_F(ContainerSerializationTest, SetEmpty_Serialize)
 {
     ContainerTestObject obj;
     obj.intSet = {};
@@ -303,7 +329,7 @@ TEST(ContainerSerializationTest, SetEmpty_Serialize)
     EXPECT_EQ(json["intSet"].size(), 0);
 }
 
-TEST(ContainerSerializationTest, SetEmpty_Deserialize)
+TEST_F(ContainerSerializationTest, SetEmpty_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -327,7 +353,7 @@ TEST(ContainerSerializationTest, SetEmpty_Deserialize)
 // Map 容器测试
 // ============================================================================
 
-TEST(ContainerSerializationTest, MapStringInt_Serialize)
+TEST_F(ContainerSerializationTest, MapStringInt_Serialize)
 {
     ContainerTestObject obj;
     obj.stringIntMap = {
@@ -346,7 +372,7 @@ TEST(ContainerSerializationTest, MapStringInt_Serialize)
     EXPECT_EQ(json["stringIntMap"]["stamina"], 80);
 }
 
-TEST(ContainerSerializationTest, MapStringInt_Deserialize)
+TEST_F(ContainerSerializationTest, MapStringInt_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -364,7 +390,7 @@ TEST(ContainerSerializationTest, MapStringInt_Deserialize)
     EXPECT_EQ(obj.stringIntMap["gold"], 500);
 }
 
-TEST(ContainerSerializationTest, MapEmpty_Serialize)
+TEST_F(ContainerSerializationTest, MapEmpty_Serialize)
 {
     ContainerTestObject obj;
     obj.stringIntMap = {};
@@ -376,7 +402,7 @@ TEST(ContainerSerializationTest, MapEmpty_Serialize)
     EXPECT_EQ(json["stringIntMap"].size(), 0);
 }
 
-TEST(ContainerSerializationTest, MapEmpty_Deserialize)
+TEST_F(ContainerSerializationTest, MapEmpty_Deserialize)
 {
     nlohmann::json json = {
         {"intVector", nlohmann::json::array()},
@@ -400,7 +426,7 @@ TEST(ContainerSerializationTest, MapEmpty_Deserialize)
 // 嵌套容器测试
 // ============================================================================
 
-TEST(ContainerSerializationTest, NestedVector_Serialize)
+TEST_F(ContainerSerializationTest, NestedVector_Serialize)
 {
     NestedContainerTest obj;
     obj.objectMatrix = {
@@ -419,7 +445,7 @@ TEST(ContainerSerializationTest, NestedVector_Serialize)
     EXPECT_FLOAT_EQ(json["objectMatrix"][0]["value"], 1.1f);
 }
 
-TEST(ContainerSerializationTest, NestedVector_Deserialize)
+TEST_F(ContainerSerializationTest, NestedVector_Deserialize)
 {
     nlohmann::json json = {
         {"objectMatrix", {
@@ -439,7 +465,7 @@ TEST(ContainerSerializationTest, NestedVector_Deserialize)
     EXPECT_EQ(obj.objectMatrix[1].name, "test2");
     EXPECT_FLOAT_EQ(obj.objectMatrix[1].value, 20.5f);
 }
-TEST(ContainerSerializationTest, NestedVector_Empty_Serialize)
+TEST_F(ContainerSerializationTest, NestedVector_Empty_Serialize)
 {
     NestedContainerTest obj;
     // objectMatrix 为空
@@ -450,7 +476,7 @@ TEST(ContainerSerializationTest, NestedVector_Empty_Serialize)
     EXPECT_TRUE(json["objectMatrix"].is_array());
     EXPECT_EQ(json["objectMatrix"].size(), 0);
 }
-TEST(ContainerSerializationTest, NestedVector_Empty_Deserialize)
+TEST_F(ContainerSerializationTest, NestedVector_Empty_Deserialize)
 {
     nlohmann::json json = {
         {"objectMatrix", nlohmann::json::array()}};
@@ -470,7 +496,7 @@ TEST(ContainerSerializationTest, NestedVector_Empty_Deserialize)
 // 完整场景测试
 // ============================================================================
 
-TEST(ContainerSerializationTest, FullObject_Roundtrip)
+TEST_F(ContainerSerializationTest, FullObject_Roundtrip)
 {
     // 准备原始数据
     ContainerTestObject original;
@@ -508,7 +534,7 @@ TEST(ContainerSerializationTest, FullObject_Roundtrip)
     EXPECT_EQ(deserialized.stringIntMap, original.stringIntMap);
 }
 
-TEST(ContainerSerializationTest, MixedContainers_Serialize)
+TEST_F(ContainerSerializationTest, MixedContainers_Serialize)
 {
     ContainerTestObject obj;
 
@@ -535,7 +561,7 @@ TEST(ContainerSerializationTest, MixedContainers_Serialize)
     EXPECT_EQ(json["stringIntMap"].size(), 1);
 }
 
-TEST(ContainerSerializationTest, LargeContainers_Performance)
+TEST_F(ContainerSerializationTest, LargeContainers_Performance)
 {
     ContainerTestObject obj;
 

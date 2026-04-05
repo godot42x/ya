@@ -78,6 +78,7 @@ bool ReflectionCopier::copyPropertyValue(const Property& prop, void* dstObj, con
         return false;
     }
 
+    // avoid shallow copy: not copying pointer, just serialize/deserialize the pointed value
     if (prop.bPointer) {
         const auto jsonValue = ReflectionSerializer::serializeProperty(srcObj, prop);
         ReflectionSerializer::deserializeProperty(prop, dstObj, jsonValue);

@@ -152,7 +152,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     // Pipeline creation helpers
-    void createPipelineInternal();
+    bool createPipelineInternal();
 
     void queryPhysicalDeviceLimits();
 
@@ -197,7 +197,7 @@ struct VulkanComputePipeline : public ya::IComputePipeline
 
   private:
     ComputePipelineCreateInfo _ci;
-    void                      createPipelineInternal();
+    bool                      createPipelineInternal();
 };
 
 } // namespace ya

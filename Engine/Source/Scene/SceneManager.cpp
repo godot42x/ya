@@ -1,33 +1,22 @@
 #include "SceneManager.h"
+
 #include "Core/Log.h"
 #include "Core/Serialization/SceneSerializer.h"
-#include "Core/System/VirtualFileSystem.h"
-#include "ECS/Component.h"
-
 
 namespace ya
 {
 
 SceneManager::~SceneManager()
 {
-    // First cleanup _currentScene if it's different from _editorScene
-    if (_currentScene && _currentScene != _editorScene) {
-        onSceneDestroyInternal(_currentScene.get());
-        _currentScene.reset();
-    }
-    
-    // Then cleanup _editorScene
-    if (_editorScene) {
-        onSceneDestroyInternal(_editorScene.get());
-        _editorScene.reset();
-    }
-    
-    // Clear the mapping (should already be empty, but just in case)
+    destroySceneIfNeeded(_playScene);
+    destroySceneIfNeeded(_editorScene);
+    _activeScene.reset();
+
     _reg2scene.clear();
     _knownScenes.clear();
 }
 
-void SceneManager::registerScenePointer(const Scene *ptr)
+void SceneManager::registerScenePointer(const Scene* ptr)
 {
     if (!ptr) {
         return;
@@ -35,7 +24,7 @@ void SceneManager::registerScenePointer(const Scene *ptr)
     _knownScenes.insert(ptr);
 }
 
-void SceneManager::unregisterScenePointer(const Scene *ptr)
+void SceneManager::unregisterScenePointer(const Scene* ptr)
 {
     if (!ptr) {
         return;
@@ -43,68 +32,111 @@ void SceneManager::unregisterScenePointer(const Scene *ptr)
     _knownScenes.erase(ptr);
 }
 
-bool SceneManager::loadScene(const std::string &path)
+bool SceneManager::loadScene(const std::string& path)
 {
-    // Unload existing scene first
-    if (_currentScene) {
-        // YA_CORE_WARN("Scene already loaded, unloading previous scene: {}", _currentScenePath);
-        unloadScene();
+    if (isInPlayMode()) {
+        YA_CORE_WARN("SceneManager::loadScene called while play mode is active, exiting play mode first");
+        exitPlayMode();
     }
 
-    // VirtualFileSystem::get()->getGameRoot()
+    auto nextScene = makeShared<Scene>();
+    SceneSerializer serializer(nextScene.get());
+    if (!serializer.loadFromFile(path)) {
+        YA_CORE_ERROR("Failed to load scene: {}, falling back to an empty scene", path);
+        nextScene->setName("Untitled Scene");
+        return setEditorScene(nextScene);
+    }
 
-    // Create new scene
-    _editorScene = makeShared<Scene>();
-    // _currentScenePath = path;
-    SceneSerializer serializer(_editorScene.get());
-    serializer.loadFromFile(path);
-
-    onSceneInitInternal(_editorScene.get());
-    // Call initialization callback if set
-    setActiveScene(_editorScene);
-
-    YA_CORE_INFO("Scene loaded: {}", path);
-    return true;
+    return setEditorScene(nextScene);
 }
 
 bool SceneManager::unloadScene()
 {
-    // UNIMPLEMENTED();
-    if (!_currentScene) {
+    if (isInPlayMode()) {
+        exitPlayMode();
+    }
+
+    const bool bHadScene = (_editorScene != nullptr);
+    destroySceneIfNeeded(_editorScene);
+    _appState = AppState::Editor;
+    _activeScene.reset();
+    return bHadScene;
+}
+
+bool SceneManager::setEditorScene(stdptr<Scene> scene)
+{
+    if (isInPlayMode()) {
+        YA_CORE_WARN("Cannot replace editor scene while play mode is active");
         return false;
     }
-    onSceneDestroyInternal(_currentScene.get());
 
-    _currentScene.reset();
-    // YA_CORE_INFO("Scene unloaded: {}", _currentScenePath);
-    // _currentScenePath.clear();
+    if (_editorScene == scene) {
+        setActiveScene(_editorScene);
+        return true;
+    }
 
+    destroySceneIfNeeded(_editorScene);
+    _editorScene = scene;
+    initSceneIfNeeded(_editorScene.get());
+    _appState = AppState::Editor;
+    setActiveScene(_editorScene);
     return true;
 }
 
-void SceneManager::setActiveScene(stdptr<Scene> scene)
+bool SceneManager::enterPlayMode(AppState state)
 {
-    // Don't do anything if setting the same scene
-    if (_currentScene == scene) {
-        return;
+    YA_CORE_ASSERT(state != AppState::Editor, "enterPlayMode requires a play state");
+
+    if (!_editorScene) {
+        YA_CORE_WARN("Cannot enter play mode without an editor scene");
+        return false;
     }
-    
-    // Cleanup old current scene if it's not the editor scene (runtime scene)
-    if (_currentScene && _currentScene != _editorScene) {
-        onSceneDestroyInternal(_currentScene.get());
+
+    if (isInPlayMode()) {
+        if (_appState == state) {
+            return true;
+        }
+        exitPlayMode();
     }
-    
-    _currentScene = scene;
-    
-    // Register new scene if not already registered (e.g., cloned scene)
-    if (scene && !_reg2scene.contains(&scene->getRegistry())) {
-        onSceneInitInternal(scene.get());
+
+    auto playScene = _editorScene->clone();
+    if (!playScene) {
+        YA_CORE_ERROR("Failed to clone editor scene for play mode");
+        return false;
     }
-    
-    onSceneActivated.broadcast(scene.get());
+
+    _appState = state;
+    _playScene = std::move(playScene);
+    initSceneIfNeeded(_playScene.get());
+    setActiveScene(_playScene);
+    return true;
 }
 
-void SceneManager::serializeToFile(const std::string &path, Scene *scene) const
+bool SceneManager::exitPlayMode()
+{
+    if (!isInPlayMode()) {
+        setActiveScene(_editorScene);
+        _appState = AppState::Editor;
+        return false;
+    }
+
+    destroySceneIfNeeded(_playScene);
+    _appState = AppState::Editor;
+    setActiveScene(_editorScene);
+    return true;
+}
+
+bool SceneManager::isSceneValid(const Scene* ptr)
+{
+    return ptr && _knownScenes.contains(ptr);
+}
+
+stdptr<Scene> SceneManager::cloneScene(Scene* scene) const
+{
+    return scene ? scene->clone() : nullptr;
+}
+
+void SceneManager::serializeToFile(const std::string& path, Scene* scene) const
 {
     if (!scene) {
         YA_CORE_WARN("No scene loaded to serialize");
@@ -120,7 +152,7 @@ void SceneManager::serializeToFile(const std::string &path, Scene *scene) const
     }
 }
 
-void SceneManager::deserializeFromFile(const std::string &path, Scene *scene)
+void SceneManager::deserializeFromFile(const std::string& path, Scene* scene)
 {
     if (!scene) {
         YA_CORE_WARN("No scene provided to deserialize into");
@@ -136,47 +168,55 @@ void SceneManager::deserializeFromFile(const std::string &path, Scene *scene)
     }
 }
 
-void SceneManager::onStartRuntime()
+void SceneManager::setActiveScene(stdptr<Scene> scene)
 {
-    auto newScene = getEditorScene()->clone();
-    // Note: setActiveScene will register the cloned scene to _reg2scene
-    setActiveScene(newScene);
+    if (_activeScene == scene) {
+        return;
+    }
+
+    _activeScene = scene;
+    onSceneActivated.broadcast(_activeScene.get());
 }
 
-void SceneManager::onStopRuntime()
+void SceneManager::initSceneIfNeeded(Scene* scene)
 {
-    // setActiveScene will cleanup the runtime scene and switch back to editor
-    setActiveScene(_editorScene);
+    if (!scene || _reg2scene.contains(&scene->getRegistry())) {
+        return;
+    }
+
+    onSceneInitInternal(scene);
 }
 
-bool SceneManager::isSceneValid(const Scene *ptr)
-{
-    return ptr && _knownScenes.contains(ptr);
-}
-
-stdptr<Scene> SceneManager::cloneScene(Scene *scene) const
-{
-    return scene->clone();
-}
-
-void SceneManager::onSceneInitInternal(Scene *scene)
-{
-    YA_CORE_ASSERT(!_reg2scene.contains(&scene->getRegistry()), "Scene registry already exists");
-    _reg2scene[&scene->getRegistry()] = scene;
-
-    onSceneInit.broadcast(scene);
-}
-
-void SceneManager::onSceneDestroyInternal(Scene *scene)
+void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
 {
     if (!scene) {
         return;
     }
-    
-    // Broadcast destroy event first (while scene is still valid)
+
+    if (_activeScene == scene) {
+        _activeScene.reset();
+    }
+
+    onSceneDestroyInternal(scene.get());
+    scene.reset();
+}
+
+void SceneManager::onSceneInitInternal(Scene* scene)
+{
+    YA_CORE_ASSERT(scene, "SceneManager::onSceneInitInternal got null scene");
+    YA_CORE_ASSERT(!_reg2scene.contains(&scene->getRegistry()), "Scene registry already exists");
+    _reg2scene[&scene->getRegistry()] = scene;
+    onSceneInit.broadcast(scene);
+}
+
+void SceneManager::onSceneDestroyInternal(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
     onSceneDestroy.broadcast(scene);
-    
-    // Then remove from registry mapping
+
     auto it = _reg2scene.find(&scene->getRegistry());
     if (it != _reg2scene.end()) {
         _reg2scene.erase(it);

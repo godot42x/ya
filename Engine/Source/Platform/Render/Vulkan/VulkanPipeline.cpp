@@ -131,10 +131,17 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
     clearDirty();
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
-        createPipelineInternal();
+        if (!createPipelineInternal()) {
+            YA_CORE_ERROR("Failed to create graphics pipeline for {}", _name.toString());
+            return false;
+        }
     }
     catch (const std::exception& e) {
         YA_CORE_ERROR("Failed to create pipeline: {}", e.what());
+        return false;
+    }
+    if (_pipeline == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("Graphics pipeline handle is null after recreate: {}", _name.toString());
         return false;
     }
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, _pipeline, _name.toString().c_str());
@@ -310,7 +317,7 @@ void VulkanPipeline::renderGUI()
 }
 
 
-void VulkanPipeline::createPipelineInternal()
+bool VulkanPipeline::createPipelineInternal()
 {
 
     Deleter deleter;
@@ -329,15 +336,17 @@ void VulkanPipeline::createPipelineInternal()
         }
         catch (const std::exception& e) {
             YA_CORE_ERROR("Failed to load shader: {}", e.what());
-            YA_CORE_ASSERT(_pipeline != VK_NULL_HANDLE, "Pipeline should not be null even if shader loading(reload) failed");
-            return;
+            return _pipeline != VK_NULL_HANDLE;
         }
         if (!stage2Spirv) {
             YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
-            return;
+            return false;
         }
     }
-    YA_CORE_ASSERT(stage2Spirv, "Shader not found in cache: {}", shaderCacheKey);
+    if (!stage2Spirv) {
+        YA_CORE_ERROR("Shader not found in cache: {}", shaderCacheKey);
+        return false;
+    }
 
     // Create shader modules
     auto vertShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Vertex));
@@ -733,8 +742,12 @@ void VulkanPipeline::createPipelineInternal()
                                                 &gplCI,
                                                 _render->getAllocator(),
                                                 &newPipeline);
-    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create graphics pipeline!");
-    YA_CORE_ASSERT(newPipeline != VK_NULL_HANDLE, "Failed to create graphics pipeline!");
+    if (result != VK_SUCCESS || newPipeline == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("Failed to create graphics pipeline '{}' (vk result: {})",
+                      shaderCacheKey,
+                      static_cast<int32_t>(result));
+        return false;
+    }
 
     VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
     _pipeline = newPipeline;
@@ -742,6 +755,7 @@ void VulkanPipeline::createPipelineInternal()
     YA_CORE_TRACE("Vulkan graphics pipeline created successfully: {}  <= {}", (uintptr_t)_pipeline, shaderCacheKey);
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getVkHandle(), std::format("Pipeline_{}", _name.toString()).c_str());
+    return true;
 }
 
 
@@ -779,17 +793,24 @@ bool VulkanComputePipeline::recreate(const ComputePipelineCreateInfo& ci)
     _ci             = ci;
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
     try {
-        createPipelineInternal();
+        if (!createPipelineInternal()) {
+            YA_CORE_ERROR("Failed to create compute pipeline for {}", _name);
+            return false;
+        }
     }
     catch (const std::exception& e) {
         YA_CORE_ERROR("Failed to create compute pipeline: {}", e.what());
+        return false;
+    }
+    if (_pipeline == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("Compute pipeline handle is null after recreate: {}", _name);
         return false;
     }
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, _pipeline, _name.c_str());
     return true;
 }
 
-void VulkanComputePipeline::createPipelineInternal()
+bool VulkanComputePipeline::createPipelineInternal()
 {
     Deleter deleter;
 
@@ -806,15 +827,17 @@ void VulkanComputePipeline::createPipelineInternal()
         }
         catch (const std::exception& e) {
             YA_CORE_ERROR("Failed to load compute shader: {}", e.what());
-            YA_CORE_ASSERT(_pipeline != VK_NULL_HANDLE, "Pipeline should not be null even if shader loading failed");
-            return;
+            return _pipeline != VK_NULL_HANDLE;
         }
         if (!stage2Spirv) {
             YA_CORE_ERROR("Failed to load compute shader: {}", shaderCacheKey);
-            return;
+            return false;
         }
     }
-    YA_CORE_ASSERT(stage2Spirv, "Compute shader not found in cache: {}", shaderCacheKey);
+    if (!stage2Spirv) {
+        YA_CORE_ERROR("Compute shader not found in cache: {}", shaderCacheKey);
+        return false;
+    }
 
     auto computeShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Compute));
     deleter.push("", computeShaderModule, [this](void* handle) {
@@ -872,14 +895,19 @@ void VulkanComputePipeline::createPipelineInternal()
                                                &computeCI,
                                                _render->getAllocator(),
                                                &newPipeline);
-    YA_CORE_ASSERT(result == VK_SUCCESS, "Failed to create compute pipeline!");
-    YA_CORE_ASSERT(newPipeline != VK_NULL_HANDLE, "Failed to create compute pipeline!");
+    if (result != VK_SUCCESS || newPipeline == VK_NULL_HANDLE) {
+        YA_CORE_ERROR("Failed to create compute pipeline '{}' (vk result: {})",
+                      shaderCacheKey,
+                      static_cast<int32_t>(result));
+        return false;
+    }
 
     VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
     _pipeline = newPipeline;
 
     YA_CORE_TRACE("Vulkan compute pipeline created: {} <= {}", (uintptr_t)_pipeline, shaderCacheKey);
     _render->setDebugObjectName(VK_OBJECT_TYPE_PIPELINE, getVkHandle(), std::format("Pipeline_{}", _name).c_str());
+    return true;
 }
 
 } // namespace ya

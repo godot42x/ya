@@ -816,6 +816,20 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
             if (j.is_array()) {
                 uint32_t elementTypeIndex = accessor->getElementTypeIndex();
 
+                if (accessor->isFixedSize()) {
+                    const size_t count = std::min(j.size(), accessor->getFixedSize());
+                    for (size_t i = 0; i < count; ++i) {
+                        const auto& elementJson = j[i];
+                        void*       elementPtr  = accessor->getElementPtr(containerPtr, i);
+                        if (!elementPtr) {
+                            continue;
+                        }
+
+                        deserializeAnyValue(elementPtr, elementTypeIndex, elementJson);
+                    }
+                    return;
+                }
+
                 for (size_t i = 0; i < j.size(); ++i) {
                     const auto &elementJson = j[i];
 

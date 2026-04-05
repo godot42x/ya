@@ -21,7 +21,7 @@ struct HelloMaterial : public ya::App
 
     // Editor layer
 
-    void onInit(ya::AppDesc ci) override
+    void onInit(const ya::AppDesc& ci) override
     {
         Super::onInit(ci);
 
@@ -60,8 +60,8 @@ struct HelloMaterial : public ya::App
             // 1. Scene serialization/deserialization
             // 2. Scene cloning
             // 3. Scene load/init/unload/destroy
-            createMaterials();
-            createEntities(scene);
+            // createMaterials();
+            // createEntities(scene);
         });
 
         // Initialize editor layer

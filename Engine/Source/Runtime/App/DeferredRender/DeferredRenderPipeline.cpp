@@ -435,6 +435,10 @@ void DeferredRenderPipeline::updateUBOs(const TickDesc& desc, Scene* scene)
     int pli = 0;
     for (const auto& [et, plc, tc] :
          reg.view<PointLightComponent, TransformComponent>().each()) {
+        if (pli >= static_cast<int>(MAX_POINT_LIGHTS)) {
+            YA_CORE_WARN("DeferredRenderPipeline: clamping point lights from scene to MAX_POINT_LIGHTS={}.", MAX_POINT_LIGHTS);
+            break;
+        }
         _lightPassLightData.pointLights[pli] = {
             .pos       = tc.getPosition(),
             .color     = plc.color,

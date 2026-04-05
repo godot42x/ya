@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/Delegate.h"
+#include "Runtime/App/AppState.h"
 #include "Scene/Scene.h"
 #include <functional>
 #include <memory>
@@ -25,8 +26,10 @@ struct SceneManager
     using SceneInitCallback = std::function<void(Scene*)>;
 
   private:
-    stdptr<Scene> _currentScene;
+    stdptr<Scene> _activeScene = nullptr;
     stdptr<Scene> _editorScene = nullptr;
+    stdptr<Scene> _playScene   = nullptr;
+    AppState      _appState    = AppState::Editor;
     // std::string   _currentScenePath;
     std::unordered_map<entt::registry*, Scene*> _reg2scene;
     std::unordered_set<const Scene*>            _knownScenes;
@@ -61,18 +64,21 @@ struct SceneManager
 
     bool unloadScene();
 
-    void                 setActiveScene(stdptr<Scene> scene);
-    [[nodiscard]] Scene* getActiveScene() const { return _currentScene.get(); }
+    bool                 setEditorScene(stdptr<Scene> scene);
+    bool                 enterPlayMode(AppState state);
+    bool                 exitPlayMode();
+    [[nodiscard]] Scene* getActiveScene() const { return _activeScene.get(); }
     [[nodiscard]] Scene* getEditorScene() const { return _editorScene.get(); }
-    bool                 hasScene() const { return _currentScene != nullptr; }
+    [[nodiscard]] Scene* getPlayScene() const { return _playScene.get(); }
+    bool                 hasScene() const { return _activeScene != nullptr; }
+    [[nodiscard]] bool   isInPlayMode() const { return _playScene != nullptr; }
 
 
     void serializeToFile(const std::string& path, Scene* scene) const;
     void deserializeFromFile(const std::string& path, Scene* scene);
-    void setCurrentScene(stdptr<Scene> scene) { _currentScene = scene; }
 
-    void onStartRuntime();
-    void onStopRuntime();
+    void                   setAppState(AppState state) { _appState = state; }
+    [[nodiscard]] AppState getAppState() const { return _appState; }
 
     bool isSceneValid(const Scene* ptr);
     void registerScenePointer(const Scene* ptr);
@@ -91,11 +97,14 @@ struct SceneManager
         }
         return nullptr;
     }
-    
+
     /// @brief Check if we're in shutdown state (no scenes registered)
-    bool isShuttingDown() const { return _reg2scene.empty() && !_currentScene && !_editorScene; }
+    bool isShuttingDown() const { return _reg2scene.empty() && !_activeScene && !_editorScene && !_playScene; }
 
   private:
+    void setActiveScene(stdptr<Scene> scene);
+    void initSceneIfNeeded(Scene* scene);
+    void destroySceneIfNeeded(stdptr<Scene>& scene);
     void onSceneInitInternal(Scene* scene);
     void onSceneDestroyInternal(Scene* scene);
     // void onSceneActivatedInternal(Scene *scene);
