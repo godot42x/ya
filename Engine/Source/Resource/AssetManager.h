@@ -86,6 +86,18 @@ class AssetManager : public IResourceCache
         ForceRGBA,
     };
 
+    /// Describes the payload/precision/channel properties implied by a given EFormat.
+    /// Single source of truth — used both for forward resolution and format override.
+    struct TextureFormatTraits
+    {
+        ETexturePayloadType     payloadType;
+        ETextureDecodePrecision decodePrecision;
+        uint32_t                channels;
+    };
+
+    /// Returns the traits for a supported texture upload format, or nullptr if unknown.
+    static const TextureFormatTraits* getFormatTraits(EFormat::T format);
+
     struct TextureSourceInfo
     {
         std::string        filepath;
@@ -105,14 +117,23 @@ class AssetManager : public IResourceCache
 
     struct ResolvedTextureImportSettings
     {
-        TextureSourceInfo       sourceInfo;
-        ETextureColorSpace      colorSpace       = ETextureColorSpace::SRGB;
-        ETextureSourceKind      sourceKind       = ETextureSourceKind::LDR;
-        ETextureDecodePrecision decodePrecision  = ETextureDecodePrecision::U8;
-        ETextureChannelPolicy   channelPolicy    = ETextureChannelPolicy::ForceRGBA;
-        ETexturePayloadType     payloadType      = ETexturePayloadType::U8;
-        EFormat::T              resolvedFormat   = EFormat::R8G8B8A8_UNORM;
-        uint32_t                resolvedChannels = 4;
+        TextureSourceInfo  sourceInfo;
+        ETextureColorSpace colorSpace = ETextureColorSpace::SRGB;
+        ETextureSourceKind sourceKind = ETextureSourceKind::LDR;
+
+        /// User/meta hint for decode bit-depth (Auto/U8/F16/F32).
+        /// Drives payloadType derivation during settings resolution.
+        /// Not read after resolution — payloadType is the runtime source of truth.
+        ETextureDecodePrecision decodePrecision = ETextureDecodePrecision::U8;
+
+        ETextureChannelPolicy channelPolicy = ETextureChannelPolicy::ForceRGBA;
+
+        /// Resolved decode action — determines stbi_load (U8) vs stbi_loadf (F16/F32)
+        /// dispatch in decodeTextureToMemory(). Derived from decodePrecision + sourceKind.
+        ETexturePayloadType payloadType = ETexturePayloadType::U8;
+
+        EFormat::T resolvedFormat   = EFormat::R8G8B8A8_UNORM;
+        uint32_t   resolvedChannels = 4;
 
         [[nodiscard]] bool isHDR() const
         {
@@ -281,9 +302,6 @@ class AssetManager : public IResourceCache
      */
     // ── Explicit synchronous loading ────────────────────────────────────
 
-    std::shared_ptr<Texture> loadTextureSync(const std::string& filepath,
-                                             ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
-
     std::shared_ptr<Texture> loadTextureSync(const std::string& name,
                                              const std::string& filepath,
                                              ETextureColorSpace colorSpace = ETextureColorSpace::SRGB);
@@ -372,6 +390,9 @@ class AssetManager : public IResourceCache
     std::shared_ptr<Model> loadModelImpl(const std::string& filepath, const std::string& identifier);
 
     std::vector<std::string> findCacheKeysForPath(const std::string& filepath) const;
+
+    /// Deferred-delete all cached textures/models matching the given asset path.
+    void evictCachedAsset(const std::string& assetPath);
 
     /// Get or compute+cache the cacheKey for a filepath. Returns a stable reference.
     const std::string& getOrBuildCacheKey(const std::string& filepath);

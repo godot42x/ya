@@ -2,6 +2,8 @@
 
 #include "Resource/AssetMeta.h"
 #include "Render/Core/Texture.h"
+
+#include <array>
 #include <string>
 
 namespace ya
@@ -19,6 +21,11 @@ struct AssetInspectorPanel
     AssetMeta   _meta;
     bool        _bVisible = false;
     bool        _bDirty   = false; // meta was edited, needs save
+    std::shared_ptr<Texture> _previewTexture;
+    bool                     _bPreviewRequested = false;
+    std::array<bool, 4>      _previewChannelEnabled = {true, true, true, true};
+    std::shared_ptr<IImageView> _previewMaskedView;
+    IImageView*                 _previewLastBase = nullptr;
 
     // Preview
     const ImGuiImageEntry* _previewImGuiID = nullptr;
@@ -44,6 +51,9 @@ struct AssetInspectorPanel
 
   private:
     void renderTextureInspector();
+    bool renderPreviewMaskControls();
+    void updatePreviewMaskView(bool bForceRefresh = false);
+    void resetPreviewState();
 
     /// Save current meta to disk and trigger hot-reload
     void applyMetaChanges();

@@ -78,8 +78,8 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
 
     const int desiredChannels = static_cast<int>(settings.resolvedChannels);
 
-    int width = -1;
-    int height = -1;
+    int width    = -1;
+    int height   = -1;
     int channels = -1;
 
     if (settings.payloadType == AssetManager::ETexturePayloadType::CompressedBytes ||
@@ -104,7 +104,7 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         return result;
     }
 
-    float*   rawFloat = stbi_loadf(settings.sourceInfo.filepath.c_str(), &width, &height, &channels, desiredChannels);
+    float* rawFloat = stbi_loadf(settings.sourceInfo.filepath.c_str(), &width, &height, &channels, desiredChannels);
     if (!rawFloat) {
         YA_CORE_ERROR("decodeTextureToMemory: Failed to load HDR texture '{}'", settings.sourceInfo.filepath);
         return result;
@@ -137,7 +137,43 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
 
     return result;
 }
+
+// ── Enum parse helpers (string from meta JSON → enum) ──────────────────
+
+AssetManager::ETextureColorSpace parseColorSpace(const std::string& raw, AssetManager::ETextureColorSpace fallback)
+{
+    const std::string s = toLowerCopy(raw);
+    if (s == "linear") return AssetManager::ETextureColorSpace::Linear;
+    if (s == "srgb")   return AssetManager::ETextureColorSpace::SRGB;
+    return fallback;
 }
+
+AssetManager::ETextureSourceKind parseSourceKind(const std::string& raw, AssetManager::ETextureSourceKind detected)
+{
+    const std::string s = toLowerCopy(raw);
+    if (s == "hdr")        return AssetManager::ETextureSourceKind::HDR;
+    if (s == "ldr")        return AssetManager::ETextureSourceKind::LDR;
+    if (s == "data")       return AssetManager::ETextureSourceKind::Data;
+    if (s == "compressed") return AssetManager::ETextureSourceKind::Compressed;
+    return detected; // "auto" or unrecognized → keep detected kind
+}
+
+AssetManager::ETextureChannelPolicy parseChannelPolicy(const std::string& raw)
+{
+    return (toLowerCopy(raw) == "preserve")
+               ? AssetManager::ETextureChannelPolicy::Preserve
+               : AssetManager::ETextureChannelPolicy::ForceRGBA;
+}
+
+AssetManager::ETextureDecodePrecision parseDecodePrecision(const std::string& raw)
+{
+    const std::string s = toLowerCopy(raw);
+    if (s == "u8")  return AssetManager::ETextureDecodePrecision::U8;
+    if (s == "f16") return AssetManager::ETextureDecodePrecision::F16;
+    if (s == "f32") return AssetManager::ETextureDecodePrecision::F32;
+    return AssetManager::ETextureDecodePrecision::Auto;
+}
+} // namespace
 
 // ============================================================================
 // Singleton
@@ -199,7 +235,7 @@ const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
     }
     else {
         // Also try VFS-translated path
-        auto* vfs           = VirtualFileSystem::get();
+        auto* vfs            = VirtualFileSystem::get();
         auto  translatedPath = vfs->translatePath(metaPath).string();
         if (std::filesystem::exists(translatedPath)) {
             meta = AssetMeta::loadFromFile(translatedPath);
@@ -234,7 +270,7 @@ const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
 const AssetMeta& AssetManager::reloadMeta(const std::string& assetPath)
 {
     _metaCache.erase(assetPath);
-    _cacheKeyCache.erase(assetPath);  // Force re-compute on next loadTexture
+    _cacheKeyCache.erase(assetPath); // Force re-compute on next loadTexture
     return getOrLoadMeta(assetPath);
 }
 
@@ -253,7 +289,7 @@ const std::string& AssetManager::getOrBuildCacheKey(const std::string& filepath)
     if (it != _cacheKeyCache.end())
         return it->second;
 
-    const auto& meta = getOrLoadMeta(filepath);
+    const auto& meta   = getOrLoadMeta(filepath);
     auto [inserted, _] = _cacheKeyCache.emplace(filepath, makeCacheKey(filepath, meta));
     return inserted->second;
 }
@@ -283,14 +319,31 @@ AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FNam
     return ETextureColorSpace::SRGB;
 }
 
+const AssetManager::TextureFormatTraits* AssetManager::getFormatTraits(EFormat::T format)
+{
+    // Single source of truth for format → (payloadType, decodePrecision, channels).
+    // Used by both forward resolution and preferredUploadFormat override.
+    static const std::unordered_map<EFormat::T, TextureFormatTraits> kTraits = {
+        {EFormat::R8_UNORM,             {ETexturePayloadType::U8,  ETextureDecodePrecision::U8,  1}},
+        {EFormat::R8G8_UNORM,           {ETexturePayloadType::U8,  ETextureDecodePrecision::U8,  2}},
+        {EFormat::R8G8B8A8_UNORM,       {ETexturePayloadType::U8,  ETextureDecodePrecision::U8,  4}},
+        {EFormat::R8G8B8A8_SRGB,        {ETexturePayloadType::U8,  ETextureDecodePrecision::U8,  4}},
+        {EFormat::R16G16B16A16_SFLOAT,  {ETexturePayloadType::F16, ETextureDecodePrecision::F16, 4}},
+        {EFormat::R32_SFLOAT,           {ETexturePayloadType::F32, ETextureDecodePrecision::F32, 1}},
+    };
+
+    const auto it = kTraits.find(format);
+    return (it != kTraits.end()) ? &it->second : nullptr;
+}
+
 AssetManager::TextureSourceInfo AssetManager::inspectTextureSource(const std::string& filepath) const
 {
     TextureSourceInfo info;
     info.filepath  = filepath;
     info.extension = textureExtension(filepath);
 
-    int width = -1;
-    int height = -1;
+    int width    = -1;
+    int height   = -1;
     int channels = -1;
     if (!stbi_info(filepath.c_str(), &width, &height, &channels)) {
         YA_CORE_ERROR("inspectTextureSource: Failed to inspect '{}'", filepath);
@@ -313,7 +366,7 @@ std::optional<EFormat::T> AssetManager::parseTextureFormatOverride(const std::st
         return std::nullopt;
     }
 
-    const std::string key = toLowerCopy(formatName);
+    const std::string                                        key      = toLowerCopy(formatName);
     static const std::unordered_map<std::string, EFormat::T> kFormats = {
         {"r8_unorm", EFormat::R8_UNORM},
         {"r8g8_unorm", EFormat::R8G8_UNORM},
@@ -334,33 +387,48 @@ std::optional<EFormat::T> AssetManager::parseTextureFormatOverride(const std::st
 const char* AssetManager::textureSourceKindName(ETextureSourceKind kind)
 {
     switch (kind) {
-    case ETextureSourceKind::Auto: return "auto";
-    case ETextureSourceKind::LDR: return "ldr";
-    case ETextureSourceKind::HDR: return "hdr";
-    case ETextureSourceKind::Data: return "data";
-    case ETextureSourceKind::Compressed: return "compressed";
-    default: return "unknown";
+    case ETextureSourceKind::Auto:
+        return "auto";
+    case ETextureSourceKind::LDR:
+        return "ldr";
+    case ETextureSourceKind::HDR:
+        return "hdr";
+    case ETextureSourceKind::Data:
+        return "data";
+    case ETextureSourceKind::Compressed:
+        return "compressed";
+    default:
+        return "unknown";
     }
 }
 
 const char* AssetManager::texturePayloadTypeName(ETexturePayloadType type)
 {
     switch (type) {
-    case ETexturePayloadType::None: return "none";
-    case ETexturePayloadType::U8: return "u8";
-    case ETexturePayloadType::F16: return "f16";
-    case ETexturePayloadType::F32: return "f32";
-    case ETexturePayloadType::CompressedBytes: return "compressed";
-    default: return "unknown";
+    case ETexturePayloadType::None:
+        return "none";
+    case ETexturePayloadType::U8:
+        return "u8";
+    case ETexturePayloadType::F16:
+        return "f16";
+    case ETexturePayloadType::F32:
+        return "f32";
+    case ETexturePayloadType::CompressedBytes:
+        return "compressed";
+    default:
+        return "unknown";
     }
 }
 
 const char* AssetManager::textureColorSpaceName(ETextureColorSpace colorSpace)
 {
     switch (colorSpace) {
-    case ETextureColorSpace::SRGB: return "srgb";
-    case ETextureColorSpace::Linear: return "linear";
-    default: return "unknown";
+    case ETextureColorSpace::SRGB:
+        return "srgb";
+    case ETextureColorSpace::Linear:
+        return "linear";
+    default:
+        return "unknown";
     }
 }
 
@@ -372,31 +440,8 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
 
     const AssetMeta& meta = getOrLoadMeta(filepath);
 
-    const std::string colorSpace = toLowerCopy(meta.getString("colorSpace", ""));
-    if (colorSpace == "linear") {
-        settings.colorSpace = ETextureColorSpace::Linear;
-    }
-    else if (colorSpace == "srgb") {
-        settings.colorSpace = ETextureColorSpace::SRGB;
-    }
-    else {
-        settings.colorSpace = codeHint;
-    }
-
-    settings.sourceKind = settings.sourceInfo.detectedKind;
-    const std::string sourceKind = toLowerCopy(meta.getString("sourceKind", "auto"));
-    if (sourceKind == "hdr") {
-        settings.sourceKind = ETextureSourceKind::HDR;
-    }
-    else if (sourceKind == "ldr") {
-        settings.sourceKind = ETextureSourceKind::LDR;
-    }
-    else if (sourceKind == "data") {
-        settings.sourceKind = ETextureSourceKind::Data;
-    }
-    else if (sourceKind == "compressed") {
-        settings.sourceKind = ETextureSourceKind::Compressed;
-    }
+    settings.colorSpace = parseColorSpace(meta.getString("colorSpace", ""), codeHint);
+    settings.sourceKind = parseSourceKind(meta.getString("sourceKind", "auto"), settings.sourceInfo.detectedKind);
 
     if (settings.sourceKind == ETextureSourceKind::Compressed) {
         YA_CORE_ERROR("resolveTextureImportSettings: Compressed source '{}' is not implemented in runtime importer yet",
@@ -408,26 +453,13 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
         YA_CORE_WARN("Texture '{}' is forced to HDR by meta, but the detected source is not HDR-capable", filepath);
     }
 
-    const std::string channelPolicy = toLowerCopy(meta.getString("channelPolicy", "force_rgba"));
-    settings.channelPolicy = (channelPolicy == "preserve") ? ETextureChannelPolicy::Preserve : ETextureChannelPolicy::ForceRGBA;
+    settings.channelPolicy = parseChannelPolicy(meta.getString("channelPolicy", "force_rgba"));
 
     settings.resolvedChannels = settings.channelPolicy == ETextureChannelPolicy::Preserve
-                              ? std::clamp(settings.sourceInfo.detectedChannels, 1u, 4u)
-                              : 4u;
+                                  ? std::clamp(settings.sourceInfo.detectedChannels, 1u, 4u)
+                                  : 4u;
 
-    const std::string decodePrecision = toLowerCopy(meta.getString("decodePrecision", "auto"));
-    if (decodePrecision == "u8") {
-        settings.decodePrecision = ETextureDecodePrecision::U8;
-    }
-    else if (decodePrecision == "f16") {
-        settings.decodePrecision = ETextureDecodePrecision::F16;
-    }
-    else if (decodePrecision == "f32") {
-        settings.decodePrecision = ETextureDecodePrecision::F32;
-    }
-    else {
-        settings.decodePrecision = ETextureDecodePrecision::Auto;
-    }
+    settings.decodePrecision = parseDecodePrecision(meta.getString("decodePrecision", "auto"));
 
     if (settings.sourceKind == ETextureSourceKind::HDR) {
         if (settings.decodePrecision == ETextureDecodePrecision::Auto) {
@@ -440,8 +472,8 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
             settings.resolvedChannels = 4;
         }
         settings.payloadType    = (settings.decodePrecision == ETextureDecodePrecision::F32)
-                                ? ETexturePayloadType::F32
-                                : ETexturePayloadType::F16;
+                                    ? ETexturePayloadType::F32
+                                    : ETexturePayloadType::F16;
         settings.resolvedFormat = EFormat::R16G16B16A16_SFLOAT;
     }
     else {
@@ -457,8 +489,8 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
         else {
             settings.resolvedChannels = 4;
             settings.resolvedFormat   = (settings.colorSpace == ETextureColorSpace::SRGB)
-                                      ? EFormat::R8G8B8A8_SRGB
-                                      : EFormat::R8G8B8A8_UNORM;
+                                          ? EFormat::R8G8B8A8_SRGB
+                                          : EFormat::R8G8B8A8_UNORM;
         }
     }
 
@@ -471,36 +503,16 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
                           filepath);
         }
         else {
-            settings.resolvedFormat = *overrideFormat;
-            switch (*overrideFormat) {
-            case EFormat::R8_UNORM:
-                settings.payloadType      = ETexturePayloadType::U8;
-                settings.decodePrecision  = ETextureDecodePrecision::U8;
-                settings.resolvedChannels = 1;
-                break;
-            case EFormat::R8G8_UNORM:
-                settings.payloadType      = ETexturePayloadType::U8;
-                settings.decodePrecision  = ETextureDecodePrecision::U8;
-                settings.resolvedChannels = 2;
-                break;
-            case EFormat::R8G8B8A8_UNORM:
-            case EFormat::R8G8B8A8_SRGB:
-                settings.payloadType      = ETexturePayloadType::U8;
-                settings.decodePrecision  = ETextureDecodePrecision::U8;
-                settings.resolvedChannels = 4;
-                break;
-            case EFormat::R16G16B16A16_SFLOAT:
-                settings.payloadType      = ETexturePayloadType::F16;
-                settings.decodePrecision  = ETextureDecodePrecision::F16;
-                settings.resolvedChannels = 4;
-                break;
-            case EFormat::R32_SFLOAT:
-                settings.payloadType      = ETexturePayloadType::F32;
-                settings.decodePrecision  = ETextureDecodePrecision::F32;
-                settings.resolvedChannels = 1;
-                break;
-            default:
-                break;
+            const auto* traits = getFormatTraits(*overrideFormat);
+            if (!traits) {
+                YA_CORE_ERROR("resolveTextureImportSettings: No traits for format override '{}' in '{}'",
+                              preferredUploadFormat, filepath);
+            }
+            else {
+                settings.resolvedFormat   = *overrideFormat;
+                settings.payloadType      = traits->payloadType;
+                settings.decodePrecision  = traits->decodePrecision;
+                settings.resolvedChannels = traits->channels;
             }
         }
     }
@@ -510,16 +522,6 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
         YA_CORE_WARN("Texture '{}' requested float upload format for non-HDR source; decode will still use stb float path",
                      filepath);
     }
-
-    YA_CORE_INFO("Texture import plan '{}' : detected={} {}x{} ch={} -> format={} payload={} colorSpace={}",
-                 filepath,
-                 textureSourceKindName(settings.sourceInfo.detectedKind),
-                 settings.sourceInfo.width,
-                 settings.sourceInfo.height,
-                 settings.sourceInfo.detectedChannels,
-                 static_cast<int>(settings.resolvedFormat),
-                 texturePayloadTypeName(settings.payloadType),
-                 textureColorSpaceName(settings.colorSpace));
 
     return settings;
 }
@@ -532,15 +534,14 @@ TextureFuture AssetManager::loadTexture(const TextureLoadRequest& request)
 
     if (request.textureSemantic.has_value()) {
         TextureLoadRequest normalized = request;
-        normalized.colorSpace = inferTextureColorSpace(*request.textureSemantic);
+        normalized.colorSpace         = inferTextureColorSpace(*request.textureSemantic);
         normalized.textureSemantic.reset();
         return loadTexture(normalized);
     }
 
-    const auto  settings   = resolveTextureImportSettings(request.filepath, request.colorSpace);
-    const auto& cacheKey   = getOrBuildCacheKey(request.filepath);
+    const auto& cacheKey = getOrBuildCacheKey(request.filepath);
 
-    // Already loaded? Return immediately.
+    // Already loaded? Return immediately — no disk I/O needed.
     {
         const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
@@ -558,6 +559,7 @@ TextureFuture AssetManager::loadTexture(const TextureLoadRequest& request)
 
     // Submit async decode if not already in flight
     if (!isTextureLoadPending(cacheKey)) {
+        const auto settings = resolveTextureImportSettings(request.filepath, request.colorSpace);
         submitTextureLoad(request.filepath, cacheKey, settings, request.name);
     }
 
@@ -629,8 +631,8 @@ void AssetManager::loadTextureBatch(const TextureBatchLoadRequest& request)
 AssetManager::TextureBatchMemoryHandle AssetManager::loadTextureBatchIntoMemory(
     const TextureBatchMemoryLoadRequest& request)
 {
-    const auto& filepaths = request.filepaths;
-    const auto  colorSpace = request.colorSpace;
+    const auto&                                filepaths  = request.filepaths;
+    const auto                                 colorSpace = request.colorSpace;
     std::vector<ResolvedTextureImportSettings> settingsList;
     settingsList.reserve(filepaths.size());
 
@@ -695,80 +697,26 @@ bool AssetManager::consumeTextureBatchMemory(TextureBatchMemoryHandle handle,
 // Explicit synchronous loading
 // ============================================================================
 
-std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& filepath,
-                                                        ETextureColorSpace colorSpace)
-{
-    const auto         settings   = resolveTextureImportSettings(filepath, colorSpace);
-    const auto&        cacheKey   = getOrBuildCacheKey(filepath);
-
-    // Check cache
-    {
-        const auto it = _textureViews.find(cacheKey);
-        if (it != _textureViews.end()) {
-            return it->second;
-        }
-    }
-
-    // Legacy path-only key backward compat
-    {
-        auto it = _textureViews.find(filepath);
-        if (it != _textureViews.end()) {
-            auto tex            = it->second;
-            auto expectedFormat = settings.resolvedFormat;
-            if (tex && tex->getFormat() != expectedFormat) {
-                YA_CORE_WARN("Texture '{}' already loaded as format {}, requested {}. Loading a new copy.",
-                             filepath, (int)tex->getFormat(), (int)expectedFormat);
-            }
-            else {
-                _textureViews[cacheKey] = tex;
-                return tex;
-            }
-        }
-    }
-
-    // Synchronous: decode + GPU upload on calling thread
-    auto decoded = decodeTextureToMemory(settings);
-    if (!decoded.isValid()) {
-        YA_CORE_WARN("loadTextureSync: Failed to decode texture: {}", filepath);
-        return nullptr;
-    }
-
-    auto texture = Texture::fromMemory(TextureMemoryCreateInfo{
-        .filepath = decoded.filepath,
-        .label    = decoded.filepath,
-        .memory   = TextureMemoryView{
-            .width    = decoded.width,
-            .height   = decoded.height,
-            .channels = decoded.channels,
-            .format   = decoded.format,
-            .data     = decoded.data(),
-            .dataSize = decoded.dataSize(),
-        },
-    });
-    if (!texture) {
-        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", filepath);
-        return nullptr;
-    }
-
-    _textureViews[cacheKey] = texture;
-    return texture;
-}
-
 std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
-                                                        const std::string& filepath,
-                                                        ETextureColorSpace colorSpace)
+                                                       const std::string& filepath,
+                                                       ETextureColorSpace colorSpace)
 {
-    const auto  settings   = resolveTextureImportSettings(filepath, colorSpace);
-    const auto& cacheKey   = getOrBuildCacheKey(filepath);
+    const auto& cacheKey = getOrBuildCacheKey(filepath);
 
+    // Check cache first — avoids disk I/O for already-loaded textures
     {
         const auto it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
+            if (!name.empty()) {
+                _textureName2Path[name] = cacheKey;
+            }
             return it->second;
         }
     }
 
-    auto decoded = decodeTextureToMemory(settings);
+    // Synchronous: inspect source + decode + GPU upload on calling thread
+    const auto settings = resolveTextureImportSettings(filepath, colorSpace);
+    auto       decoded  = decodeTextureToMemory(settings);
     if (!decoded.isValid()) {
         YA_CORE_WARN("loadTextureSync: Failed to decode texture: {}", filepath);
         return nullptr;
@@ -778,12 +726,12 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
         .filepath = decoded.filepath,
         .label    = name.empty() ? decoded.filepath : name,
         .memory   = TextureMemoryView{
-            .width    = decoded.width,
-            .height   = decoded.height,
-            .channels = decoded.channels,
-            .format   = decoded.format,
-            .data     = decoded.data(),
-            .dataSize = decoded.dataSize(),
+              .width    = decoded.width,
+              .height   = decoded.height,
+              .channels = decoded.channels,
+              .format   = decoded.format,
+              .data     = decoded.data(),
+              .dataSize = decoded.dataSize(),
         },
     });
     if (!texture) {
@@ -792,7 +740,9 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
     }
 
     _textureViews[cacheKey] = texture;
-    _textureName2Path[name] = cacheKey;
+    if (!name.empty()) {
+        _textureName2Path[name] = cacheKey;
+    }
     return texture;
 }
 
@@ -800,10 +750,10 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
 // Core async texture pipeline
 // ============================================================================
 
-void AssetManager::submitTextureLoad(const std::string& filepath,
-                                     const std::string& cacheKey,
+void AssetManager::submitTextureLoad(const std::string&            filepath,
+                                     const std::string&            cacheKey,
                                      ResolvedTextureImportSettings settings,
-                                     const std::string& name)
+                                     const std::string&            name)
 {
     YA_CORE_INFO("submitTextureLoad: async decode '{}' (format={}, payload={})",
                  filepath,
@@ -823,10 +773,10 @@ void AssetManager::submitTextureLoad(const std::string& filepath,
             // Another load may have raced and filled the cache already
             {
                 std::lock_guard lock(_cacheMutex);
-                auto existing = _textureViews.find(cacheKey);
+                auto            existing = _textureViews.find(cacheKey);
                 if (existing != _textureViews.end()) {
                     _pendingTextureLoads.erase(cacheKey);
-                    callbacks = takeTextureCallbacks(cacheKey);
+                    callbacks    = takeTextureCallbacks(cacheKey);
                     readyTexture = existing->second;
                 }
             }
@@ -852,12 +802,12 @@ void AssetManager::submitTextureLoad(const std::string& filepath,
                 .filepath = decoded.filepath,
                 .label    = decoded.filepath,
                 .memory   = TextureMemoryView{
-                    .width    = decoded.width,
-                    .height   = decoded.height,
-                    .channels = decoded.channels,
-                    .format   = decoded.format,
-                    .data     = decoded.data(),
-                    .dataSize = decoded.dataSize(),
+                      .width    = decoded.width,
+                      .height   = decoded.height,
+                      .channels = decoded.channels,
+                      .format   = decoded.format,
+                      .data     = decoded.data(),
+                      .dataSize = decoded.dataSize(),
                 },
             });
             if (!texture) {
@@ -915,7 +865,7 @@ void AssetManager::registerTextureCallback(const std::string& cacheKey, TextureR
     std::shared_ptr<Texture> readyTexture;
     {
         std::lock_guard lock(_cacheMutex);
-        auto loadedIt = _textureViews.find(cacheKey);
+        auto            loadedIt = _textureViews.find(cacheKey);
         if (loadedIt != _textureViews.end()) {
             readyTexture = loadedIt->second;
         }
@@ -939,7 +889,7 @@ void AssetManager::registerModelCallback(const std::string& filepath, ModelReady
     std::shared_ptr<Model> readyModel;
     {
         std::lock_guard lock(_cacheMutex);
-        auto loadedIt = modelCache.find(filepath);
+        auto            loadedIt = modelCache.find(filepath);
         if (loadedIt != modelCache.end()) {
             readyModel = loadedIt->second;
         }
@@ -1025,7 +975,7 @@ void AssetManager::bumpResourceVersion(const std::string& assetPath)
 bool AssetManager::isTextureLoadPending(const std::string& cacheKey) const
 {
     std::lock_guard lock(_cacheMutex);
-    auto it = _pendingTextureLoads.find(cacheKey);
+    auto            it = _pendingTextureLoads.find(cacheKey);
     if (it == _pendingTextureLoads.end()) return false;
     return !it->second.isReady();
 }
@@ -1042,9 +992,9 @@ static uint64_t getCurrentFrameIdx()
 
 size_t AssetManager::collectUnused()
 {
-    size_t released = 0;
-    auto&  ddq      = DeferredDeletionQueue::get();
-    uint64_t frame  = getCurrentFrameIdx();
+    size_t   released = 0;
+    auto&    ddq      = DeferredDeletionQueue::get();
+    uint64_t frame    = getCurrentFrameIdx();
 
     // Textures
     for (auto it = _textureViews.begin(); it != _textureViews.end();) {
@@ -1115,7 +1065,7 @@ AssetManager::CacheStats AssetManager::getStats() const
     for (auto& [key, tex] : _textureViews) {
         if (tex) {
             stats.textureMemoryEstimate += static_cast<size_t>(tex->getWidth()) *
-                                            tex->getHeight() * tex->getChannels();
+                                           tex->getHeight() * tex->getChannels();
         }
     }
 
@@ -1148,24 +1098,7 @@ void AssetManager::onMetaFileChanged(const std::string& metaPath)
 
     YA_CORE_INFO("onMetaFileChanged: meta changed for '{}', reloading affected resources", assetPath);
 
-    // Find and defer-delete all cache entries for this asset path
-    auto&    ddq   = DeferredDeletionQueue::get();
-    uint64_t frame = getCurrentFrameIdx();
-
-    auto keys = findCacheKeysForPath(assetPath);
-    for (auto& key : keys) {
-        // Move GPU resources into deferred queue before erasing
-        auto texIt = _textureViews.find(key);
-        if (texIt != _textureViews.end()) {
-            ddq.enqueueResource(frame, std::move(texIt->second));
-            _textureViews.erase(texIt);
-        }
-        auto modelIt = modelCache.find(key);
-        if (modelIt != modelCache.end()) {
-            ddq.enqueueResource(frame, std::move(modelIt->second));
-            modelCache.erase(modelIt);
-        }
-    }
+    evictCachedAsset(assetPath);
 
     // Reload with new meta
     if (newMeta.type == "texture") {
@@ -1187,23 +1120,7 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
 {
     YA_CORE_INFO("onAssetFileChanged: '{}' changed, reloading", assetPath);
 
-    // Defer-delete all cache entries for this path
-    auto&    ddq   = DeferredDeletionQueue::get();
-    uint64_t frame = getCurrentFrameIdx();
-
-    auto keys = findCacheKeysForPath(assetPath);
-    for (auto& key : keys) {
-        auto texIt = _textureViews.find(key);
-        if (texIt != _textureViews.end()) {
-            ddq.enqueueResource(frame, std::move(texIt->second));
-            _textureViews.erase(texIt);
-        }
-        auto modelIt = modelCache.find(key);
-        if (modelIt != modelCache.end()) {
-            ddq.enqueueResource(frame, std::move(modelIt->second));
-            modelCache.erase(modelIt);
-        }
-    }
+    evictCachedAsset(assetPath);
 
     // Also invalidate meta cache (in case the file type changed, unlikely but safe)
     _metaCache.erase(assetPath);
@@ -1232,7 +1149,7 @@ std::shared_ptr<Texture> AssetManager::getTextureByPath(const std::string& filep
     auto metaIt = _metaCache.find(filepath);
     if (metaIt != _metaCache.end()) {
         std::string cacheKey = makeCacheKey(filepath, metaIt->second);
-        auto it = _textureViews.find(cacheKey);
+        auto        it       = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) return it->second;
     }
 
@@ -1287,26 +1204,13 @@ void AssetManager::registerTexture(const std::string& name, const stdptr<Texture
 
 void AssetManager::invalidate(const std::string& filepath)
 {
-    auto&    ddq   = DeferredDeletionQueue::get();
-    uint64_t frame = getCurrentFrameIdx();
-
-    // Defer-delete all cache keys matching this filepath
-    auto keys = findCacheKeysForPath(filepath);
-    for (auto& key : keys) {
-        auto texIt = _textureViews.find(key);
-        if (texIt != _textureViews.end()) {
-            ddq.enqueueResource(frame, std::move(texIt->second));
-            _textureViews.erase(texIt);
-        }
-        auto modelIt = modelCache.find(key);
-        if (modelIt != modelCache.end()) {
-            ddq.enqueueResource(frame, std::move(modelIt->second));
-            modelCache.erase(modelIt);
-        }
-    }
+    evictCachedAsset(filepath);
 
     // Also try exact match (legacy keys)
     {
+        auto&    ddq   = DeferredDeletionQueue::get();
+        uint64_t frame = getCurrentFrameIdx();
+
         auto texIt = _textureViews.find(filepath);
         if (texIt != _textureViews.end()) {
             ddq.enqueueResource(frame, std::move(texIt->second));
@@ -1329,7 +1233,7 @@ void AssetManager::invalidate(const std::string& filepath)
 std::vector<std::string> AssetManager::findCacheKeysForPath(const std::string& filepath) const
 {
     std::vector<std::string> result;
-    std::string prefix = filepath + "|";
+    std::string              prefix = filepath + "|";
 
     for (auto& [key, _] : _textureViews) {
         if (key.starts_with(prefix) || key == filepath) {
@@ -1343,6 +1247,26 @@ std::vector<std::string> AssetManager::findCacheKeysForPath(const std::string& f
     }
 
     return result;
+}
+
+void AssetManager::evictCachedAsset(const std::string& assetPath)
+{
+    auto&    ddq   = DeferredDeletionQueue::get();
+    uint64_t frame = getCurrentFrameIdx();
+
+    auto keys = findCacheKeysForPath(assetPath);
+    for (auto& key : keys) {
+        auto texIt = _textureViews.find(key);
+        if (texIt != _textureViews.end()) {
+            ddq.enqueueResource(frame, std::move(texIt->second));
+            _textureViews.erase(texIt);
+        }
+        auto modelIt = modelCache.find(key);
+        if (modelIt != modelCache.end()) {
+            ddq.enqueueResource(frame, std::move(modelIt->second));
+            modelCache.erase(modelIt);
+        }
+    }
 }
 
 // ============================================================================
@@ -1427,10 +1351,10 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
             // Race check
             {
                 std::lock_guard lock(_cacheMutex);
-                auto existing = modelCache.find(filepath);
+                auto            existing = modelCache.find(filepath);
                 if (existing != modelCache.end()) {
                     _pendingModelLoads.erase(filepath);
-                    callbacks = takeModelCallbacks(filepath);
+                    callbacks  = takeModelCallbacks(filepath);
                     readyModel = existing->second;
                 }
             }
@@ -1477,7 +1401,9 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
             dispatchModelCallbacks(callbacks, model);
 
             YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials)",
-                          filepath, model->meshes.size(), model->embeddedMaterials.size());
+                         filepath,
+                         model->meshes.size(),
+                         model->embeddedMaterials.size());
         });
 
     std::lock_guard lock(_cacheMutex);
@@ -1487,7 +1413,7 @@ void AssetManager::submitModelLoad(const std::string& filepath, const std::strin
 bool AssetManager::isModelLoadPending(const std::string& filepath) const
 {
     std::lock_guard lock(_cacheMutex);
-    auto it = _pendingModelLoads.find(filepath);
+    auto            it = _pendingModelLoads.find(filepath);
     if (it == _pendingModelLoads.end()) return false;
     return !it->second.isReady();
 }

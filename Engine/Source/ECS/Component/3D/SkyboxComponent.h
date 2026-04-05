@@ -5,7 +5,6 @@
 #include <array>
 
 #include "ECS/Component.h"
-#include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Texture.h"
 #include "Resource/AssetManager.h"
 
@@ -37,13 +36,13 @@ struct SkyboxComponent : public IComponent
 
     struct PendingOffscreenProcessState
     {
-        stdptr<Texture> sourceTexture = nullptr;
-        stdptr<Texture> outputTexture = nullptr;
-        bool            bFlipVertical = false;
-        bool            bTaskQueued   = false;
-        bool            bTaskFinished = false;
+        stdptr<Texture> sourceTexture  = nullptr;
+        stdptr<Texture> outputTexture  = nullptr;
+        bool            bFlipVertical  = false;
+        bool            bTaskQueued    = false;
+        bool            bTaskFinished  = false;
         bool            bTaskSucceeded = false;
-        bool            bCancelled    = false;
+        bool            bCancelled     = false;
     };
 
     struct CubemapSource
@@ -78,33 +77,33 @@ struct SkyboxComponent : public IComponent
     YA_REFLECT_FIELD(cylindricalSource)
     YA_REFLECT_END()
 
-    ESkyboxSourceType                      sourceType          = ESkyboxSourceType::CubeFaces;
-    CubemapSource                          cubemapSource;
-    CylindricalSource                      cylindricalSource;
-    stdptr<Texture>                        cubemapTexture      = nullptr;
-    stdptr<Texture>                        sourcePreviewTexture = nullptr;
+    ESkyboxSourceType                              sourceType = ESkyboxSourceType::CubeFaces;
+    CubemapSource                                  cubemapSource;
+    CylindricalSource                              cylindricalSource;
+    stdptr<Texture>                                cubemapTexture       = nullptr;
+    stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
-    DescriptorSetHandle                    cubeMapDS           = nullptr;
-    std::shared_ptr<PendingBatchLoadState> _pendingBatchLoad;
-    std::shared_ptr<PendingOffscreenProcessState> _pendingOffscreenProcess;
+    std::shared_ptr<PendingBatchLoadState>         _pendingBatchLoad;
+    std::shared_ptr<PendingOffscreenProcessState>  _pendingOffscreenProcess;
+    std::optional<TextureFuture>                   _pendingCylindricalFuture;
 
     ESkyboxResolveState resolveState     = ESkyboxResolveState::Dirty;
-    bool                bDescriptorDirty = true;
 
-    void setFace(ECubeFace face, const std::string& path);
-    void setCubemapSource(const CubeMapCreateInfo& createInfo);
-    void setCylindricalSource(const std::string& filepath);
-    bool hasSource() const;
-    bool hasCubemapSource() const;
-    bool hasCylindricalSource() const;
-    bool resolve();
-    bool hasRenderableCubemap() const;
-    void rebuildCubemapPreviewViews();
-    void clearCubemapPreviewViews();
+    void        setFace(ECubeFace face, const std::string& path);
+    void        setCubemapSource(const CubeMapCreateInfo& createInfo);
+    void        setCylindricalSource(const std::string& filepath);
+    bool        hasSource() const;
+    bool        hasCubemapSource() const;
+    bool        hasCylindricalSource() const;
+    bool        resolve();
+    bool        hasRenderableCubemap() const;
+    void        rebuildCubemapPreviewViews();
+    void        clearCubemapPreviewViews();
     IImageView* getCubemapFacePreviewView(uint32_t faceIndex) const;
-    void invalidate();
-    bool isLoading() const;
-    void onPostSerialize() override;
+    void        invalidate();
+    bool        isLoading() const;
+    void        onPostSerialize() override;
+    bool        isValid() { return resolveState == ESkyboxResolveState::Ready; }
 };
 
 } // namespace ya

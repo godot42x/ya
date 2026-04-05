@@ -27,11 +27,22 @@ int comboIndexForValue(const char* const* labels, int count, std::string_view va
     }
     return defaultIndex;
 }
+
 }
 
 AssetInspectorPanel::AssetInspectorPanel(EditorLayer* owner)
     : _owner(owner)
 {
+}
+
+void AssetInspectorPanel::resetPreviewState()
+{
+    _previewTexture        = nullptr;
+    _bPreviewRequested     = false;
+    _previewChannelEnabled = {true, true, true, true};
+    _previewMaskedView.reset();
+    _previewLastBase = nullptr;
+    _previewImGuiID  = nullptr;
 }
 
 void AssetInspectorPanel::inspectTexture(const std::string& relativePath)
@@ -48,7 +59,7 @@ void AssetInspectorPanel::inspectTexture(const std::string& relativePath)
     _meta          = AssetManager::get()->getOrLoadMeta(relativePath);
     _bVisible      = true;
     _bDirty        = false;
-    _previewImGuiID = nullptr; // Will be refreshed on next render
+    resetPreviewState();
 
     if (auto* window = ImGui::FindWindowByName(kWindowTitle)) {
         ImGui::FocusWindow(window);
@@ -58,9 +69,38 @@ void AssetInspectorPanel::inspectTexture(const std::string& relativePath)
 void AssetInspectorPanel::clear()
 {
     _inspectedPath.clear();
-    _meta    = {};
-    _bDirty  = false;
-    _previewImGuiID = nullptr;
+    _meta   = {};
+    _bDirty = false;
+    resetPreviewState();
+}
+
+bool AssetInspectorPanel::renderPreviewMaskControls()
+{
+    return ImGuiHelper::RenderRGBAChannelMaskButtons(_previewChannelEnabled);
+}
+
+void AssetInspectorPanel::updatePreviewMaskView(bool bForceRefresh)
+{
+    IImageView* baseView = _previewTexture ? _previewTexture->getImageView() : nullptr;
+    const bool  baseChanged = baseView != _previewLastBase;
+    if (!bForceRefresh && !baseChanged) {
+        return;
+    }
+
+    _previewLastBase = baseView;
+    _previewImGuiID  = nullptr;
+
+    if (!_previewTexture || !_previewTexture->getImageShared() || ImGuiHelper::IsIdentityRGBAChannelMask(_previewChannelEnabled)) {
+        _previewMaskedView.reset();
+        return;
+    }
+
+    ImageViewCreateInfo ci;
+    ci.label       = _inspectedPath + "_preview_mask";
+    ci.viewType    = EImageViewType::View2D;
+    ci.aspectFlags = EImageAspect::Color;
+    ci.components  = ImGuiHelper::BuildRGBAChannelMaskMapping(_previewChannelEnabled);
+    _previewMaskedView = ITextureFactory::get()->createImageView(_previewTexture->getImageShared(), ci);
 }
 
 void AssetInspectorPanel::onImGuiRender()
@@ -89,17 +129,32 @@ void AssetInspectorPanel::renderTextureInspector()
     ImGui::Separator();
 
     // ── Preview ─────────────────────────────────────────────────────────
-    auto texFuture = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
-        .filepath = _inspectedPath,
-    });
-    if (texFuture.isReady()) {
-        auto* texture = texFuture.get();
+    if (!_previewTexture && !_bPreviewRequested) {
+        _bPreviewRequested = true;
+        AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
+            .filepath = _inspectedPath,
+            .onReady  = [this](const std::shared_ptr<Texture>& texture) {
+                _previewTexture = texture;
+                _bPreviewRequested = false;
+                _previewImGuiID = nullptr;
+            },
+        });
+    }
+
+    if (_previewTexture) {
+        auto* texture = _previewTexture.get();
         if (texture && texture->isValid()) {
+            bool maskChanged = renderPreviewMaskControls();
+            updatePreviewMaskView(maskChanged);
+
             // Create/get ImGui texture ID for preview
             auto sampler = TextureLibrary::get().getLinearSampler();
+            IImageView* displayView = (ImGuiHelper::IsIdentityRGBAChannelMask(_previewChannelEnabled) || !_previewMaskedView)
+                                   ? texture->getImageView()
+                                   : _previewMaskedView.get();
             if (sampler && !_previewImGuiID) {
                 _previewImGuiID = _owner->getOrCreateImGuiTextureID(
-                    texture->getImageView(), sampler);
+                    displayView, sampler);
             }
 
             if (_previewImGuiID) {
@@ -199,8 +254,9 @@ void AssetInspectorPanel::renderTextureInspector()
     }
     ImGui::SameLine();
     if (ImGui::Button("Revert")) {
-        _meta   = AssetManager::get()->reloadMeta(_inspectedPath);
-        _bDirty = false;
+        _meta              = AssetManager::get()->reloadMeta(_inspectedPath);
+        _bDirty            = false;
+        resetPreviewState();
     }
     ImGui::EndDisabled();
 
@@ -225,7 +281,7 @@ void AssetInspectorPanel::applyMetaChanges()
     AssetManager::get()->onMetaFileChanged(metaPath);
 
     _bDirty         = false;
-    _previewImGuiID = nullptr; // Force refresh after reload
+    resetPreviewState();
 
     YA_CORE_INFO("AssetInspectorPanel: Applied meta changes for '{}'", _inspectedPath);
 }

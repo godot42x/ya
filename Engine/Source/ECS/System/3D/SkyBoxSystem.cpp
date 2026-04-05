@@ -190,6 +190,10 @@ void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         return;
     }
 
+    auto* runtime = App::get()->getRenderRuntime();
+    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
+    auto skyboxDS = runtime->getSceneSkyboxDescriptorSet(scene);
+
 
 
 
@@ -228,7 +232,7 @@ void SkyBoxSystem::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
                                0,
                                {
                                    _dsPerFrame[_index],
-                                   skyboxComp->cubeMapDS,
+                                   skyboxDS,
                                });
 
     meshComp->getMesh()->draw(cmdBuf);

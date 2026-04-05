@@ -3,11 +3,12 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "TypeRenderer.h"
+
 
 
 #include "ECS/Component.h"
@@ -25,13 +26,14 @@
 
 #include "EditorLayer.h"
 #include "ImGuiHelper.h"
-#include "Resource/TextureLibrary.h"
 #include "Render/Core/TextureFactory.h"
+#include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
+
 
 
 namespace ya
@@ -40,11 +42,11 @@ namespace ya
 namespace
 {
 
-constexpr size_t DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
-constexpr size_t DETAILS_SKYBOX_INPUT_BUFFER_SIZE = 512;
-constexpr const char* SKYBOX_SOURCE_TYPE_LABELS = "Cube Faces\0Cylindrical\0";
-constexpr float SKYBOX_PREVIEW_MAX_HEIGHT = 180.0f;
-constexpr std::array<const char*, CubeFace_Count> SKYBOX_FACE_LABELS = {
+constexpr size_t                                  DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
+constexpr size_t                                  DETAILS_SKYBOX_INPUT_BUFFER_SIZE = 512;
+constexpr const char*                             SKYBOX_SOURCE_TYPE_LABELS        = "Cube Faces\0Cylindrical\0";
+constexpr float                                   SKYBOX_PREVIEW_MAX_HEIGHT        = 180.0f;
+constexpr std::array<const char*, CubeFace_Count> SKYBOX_FACE_LABELS               = {
     "+X",
     "-X",
     "+Y",
@@ -90,11 +92,11 @@ void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, f
         return;
     }
 
-    const float scale = std::min(maxWidth / static_cast<float>(extent.width),
+    const float  scale   = std::min(maxWidth / static_cast<float>(extent.width),
                                  maxHeight / static_cast<float>(extent.height));
-    const ImVec2 size = ImVec2(static_cast<float>(extent.width) * scale,
+    const ImVec2 size    = ImVec2(static_cast<float>(extent.width) * scale,
                                static_cast<float>(extent.height) * scale);
-    auto sampler = TextureLibrary::get().getLinearSampler();
+    auto         sampler = TextureLibrary::get().getLinearSampler();
     if (!sampler) {
         ImGui::TextDisabled("Preview sampler unavailable");
         return;
@@ -150,6 +152,12 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
         int sourceType = static_cast<int>(sc->sourceType);
         if (ImGui::Combo("Source Type", &sourceType, SKYBOX_SOURCE_TYPE_LABELS)) {
             sc->sourceType = static_cast<ESkyboxSourceType>(sourceType);
+            if (sc->sourceType == ESkyboxSourceType::Cylindrical) {
+                sc->cubemapSource.files.fill("");
+            }
+            else {
+                sc->cylindricalSource.filepath.clear();
+            }
             bSourceChanged = true;
         }
 
@@ -160,7 +168,7 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
             bool flipVertical = sc->cubemapSource.flipVertical;
             if (ImGui::Checkbox("Flip Vertical", &flipVertical)) {
                 sc->cubemapSource.flipVertical = flipVertical;
-                bSourceChanged = true;
+                bSourceChanged                 = true;
             }
 
             for (size_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -174,7 +182,7 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
                 ImGui::SameLine();
                 if (ImGui::Button("Browse")) {
                     _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex](const std::string& newPath) {
-                        sc->sourceType = ESkyboxSourceType::CubeFaces;
+                        sc->sourceType                     = ESkyboxSourceType::CubeFaces;
                         sc->cubemapSource.files[faceIndex] = newPath;
                         sc->invalidate();
                     });
@@ -188,7 +196,7 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
             bool flipVertical = sc->cylindricalSource.flipVertical;
             if (ImGui::Checkbox("Flip Vertical##SkyboxCylindrical", &flipVertical)) {
                 sc->cylindricalSource.flipVertical = flipVertical;
-                bSourceChanged = true;
+                bSourceChanged                     = true;
             }
 
             if (ImGui::BeginTable("SkyboxCylindricalPathTable", 2, ImGuiTableFlags_SizingStretchProp)) {
@@ -348,29 +356,33 @@ void DetailsView::drawComponents(Entity& entity)
     Scene* scene = entity.getScene();
     Node*  node  = scene ? scene->getNodeByEntity(&entity) : nullptr;
 
-    ImGui::PushID("Name");
-    if (node) {
-        // 使用 Node 的名字
-        char        buffer[256];
-        std::string name = node->getName();
-        strncpy_s(buffer, name.c_str(), sizeof(buffer) - 1);
-        buffer[sizeof(buffer) - 1] = '\0';
+    {
+        ImGuiStyleScope style;
+        style.pushColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.5f, 1.0f));
+        ImGui::PushID("Name");
+        if (node) {
+            // 使用 Node 的名字
+            char        buffer[256];
+            std::string name = node->getName();
+            strncpy_s(buffer, name.c_str(), sizeof(buffer) - 1);
+            buffer[sizeof(buffer) - 1] = '\0';
 
-        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
-            node->setName(buffer);
+            if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+                node->setName(buffer);
+            }
         }
-    }
-    else {
-        // Fallback: 使用 Entity::name（兼容 flat entity）
-        char buffer[256];
-        strncpy_s(buffer, entity.name.c_str(), sizeof(buffer) - 1);
-        buffer[sizeof(buffer) - 1] = '\0';
+        else {
+            // Fallback: 使用 Entity::name（兼容 flat entity）
+            char buffer[256];
+            strncpy_s(buffer, entity.name.c_str(), sizeof(buffer) - 1);
+            buffer[sizeof(buffer) - 1] = '\0';
 
-        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
-            entity.name = buffer;
+            if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+                entity.name = buffer;
+            }
         }
+        ImGui::PopID();
     }
-    ImGui::PopID();
     std::set<ya::type_index_t> hasDraw;
 
     // TODO: support function reflection
@@ -587,12 +599,11 @@ void DetailsView::drawComponents(Entity& entity)
             lsc->scripts.erase(eraseIt);
         }
     });
-
 }
 
 void DetailsView::drawAddComponentButton(Entity& entity)
 {
-    ImGui::Separator();
+    // ImGui::Separator();
 
     // Center the button
     float buttonWidth = 200.0f;

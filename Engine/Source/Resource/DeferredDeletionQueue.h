@@ -90,6 +90,19 @@ class DeferredDeletionQueue
     }
 
     /**
+     * @brief Convenience: retire a shared_ptr resource using the current frame index.
+     *
+     * Equivalent to enqueueResource(currentFrame(), resource) — avoids the
+     * repetitive pattern of fetching the singleton + current frame at every call site.
+     */
+    template <typename T>
+    void retireResource(std::shared_ptr<T> resource)
+    {
+        if (!resource) return;
+        enqueueResource(_currentFrame, std::move(resource));
+    }
+
+    /**
      * @brief Flush (execute & remove) all entries that are safe to delete.
      *
      * Call this once per frame, **after** waiting on the frame fence, with

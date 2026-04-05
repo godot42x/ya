@@ -8,6 +8,7 @@
 #include "Render/Material/UnlitMaterial.h"
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/TextureLibrary.h"
+#include "Runtime/App/App.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 
@@ -131,6 +132,7 @@ void DeferredRenderPipeline::initLightPassPipeline()
             .label    = "Deferred_LightPass_GBuffer_DSL",
             .set      = 1,
             .bindings = {
+                // GBuffer 1-4
                 {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
                 {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
                 {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
@@ -139,7 +141,14 @@ void DeferredRenderPipeline::initLightPassPipeline()
         }});
 
     _lightPPL = IPipelineLayout::create(
-        _render, "Deferred_Light_PPL", {PushConstantRange{.offset = 0, .size = sizeof(LightPassPushConstant), .stageFlags = EShaderStage::Vertex}}, {_frameAndLightDSL, _lightGBufferDSL});
+        _render,
+        "Deferred_Light_PPL",
+        {PushConstantRange{.offset = 0, .size = sizeof(LightPassPushConstant), .stageFlags = EShaderStage::Vertex}},
+        {
+            _frameAndLightDSL,
+            _lightGBufferDSL,
+            App::get()->getRenderRuntime()->getSkyboxDescriptorSetLayout(),
+        });
 
     GraphicsPipelineCreateInfo ci{
         .pipelineRenderingInfo = {
@@ -222,7 +231,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 {
     shutdown();
 
-    _render = desc.render;
+    _render            = desc.render;
     _bViewportPassOpen = false;
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
@@ -607,22 +616,33 @@ void DeferredRenderPipeline::executeLightPass(const TickDesc& desc)
     const uint32_t vpW    = static_cast<uint32_t>(desc.viewportRect.extent.x);
     const uint32_t vpH    = static_cast<uint32_t>(desc.viewportRect.extent.y);
 
+    auto* scene    = desc.sceneManager ? desc.sceneManager->getActiveScene() : nullptr;
+    auto* runtime  = App::get()->getRenderRuntime();
+    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
+    auto  skyboxDS = runtime->getSceneSkyboxDescriptorSet(scene);
+
     cmdBuf->debugBeginLabel("Light Pass");
 
     auto  sampler = TextureLibrary::get().getDefaultSampler();
     auto* fb      = _gBufferRT->getCurFrameBuffer();
     // TODO: each fb has it's ds cache
-    _render->getDescriptorHelper()->updateDescriptorSets({
+    std::vector updateResources = {
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 0, fb->getColorTexture(0)->getImageView(), sampler.get()),
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 1, fb->getColorTexture(1)->getImageView(), sampler.get()),
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 2, fb->getColorTexture(2)->getImageView(), sampler.get()),
         IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 3, fb->getColorTexture(3)->getImageView(), sampler.get()),
-    });
+    };
+    _render->getDescriptorHelper()->updateDescriptorSets(updateResources);
 
     cmdBuf->bindPipeline(_lightPipeline.get());
     cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH));
     cmdBuf->setScissor(0, 0, vpW, vpH);
-    cmdBuf->bindDescriptorSets(_lightPPL.get(), 0, {_frameAndLightDS, _lightTexturesDS});
+    std::vector Dss = {
+        _frameAndLightDS,
+        _lightTexturesDS,
+        skyboxDS,
+    };
+    cmdBuf->bindDescriptorSets(_lightPPL.get(), 0, Dss);
 
     PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad)->draw(cmdBuf);
 

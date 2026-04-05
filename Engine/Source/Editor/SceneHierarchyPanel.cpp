@@ -33,7 +33,28 @@ void SceneHierarchyPanel::onImGuiRender()
 void SceneHierarchyPanel::setSelection(Entity* entity)
 {
     _selection = entity;
+    _pendingScrollSelection = entity;
     _owner->setSelectedEntity(entity);
+}
+
+bool SceneHierarchyPanel::shouldAutoOpenForSelection(Node* node) const
+{
+    if (!node || !_context || !_pendingScrollSelection) {
+        return false;
+    }
+
+    Node* selectedNode = _context->getNodeByEntity(_pendingScrollSelection);
+    if (!selectedNode) {
+        return false;
+    }
+
+    for (Node* current = selectedNode->getParent(); current != nullptr; current = current->getParent()) {
+        if (current == node) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void SceneHierarchyPanel::sceneTree()
@@ -48,6 +69,11 @@ void SceneHierarchyPanel::sceneTree()
 
     if (_context)
     {
+        if (_selection && (!_selection->isValid() || _selection->getScene() != _context)) {
+            _selection              = nullptr;
+            _pendingScrollSelection = nullptr;
+        }
+
         // Render Node hierarchy tree
         Node* rootNode = _context->getRootNode();
         if (rootNode && rootNode->hasChildren())
@@ -169,7 +195,15 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
+    if (shouldAutoOpenForSelection(node)) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    }
+
     bool opened = ImGui::TreeNodeEx((void*)(intptr_t)entity->getId(), flags, "%s", name.c_str());
+    if (selected && _pendingScrollSelection == entity) {
+        ImGui::SetScrollHereY(0.5f);
+        _pendingScrollSelection = nullptr;
+    }
 
     if (ImGui::IsItemClicked()) {
         setSelection(entity);
@@ -251,6 +285,11 @@ void SceneHierarchyPanel::drawFlatEntity(Entity& entity)
     }
 
     bool opened = ImGui::TreeNodeEx((void*)(intptr_t)entity.getId(), flags, "%s", name);
+    if (selected && _pendingScrollSelection == &entity)
+    {
+        ImGui::SetScrollHereY(0.5f);
+        _pendingScrollSelection = nullptr;
+    }
 
     if (ImGui::IsItemClicked())
     {

@@ -1233,7 +1233,6 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     Slang::ComPtr<slang::IEntryPoint> entryPoint;
     if (SLANG_FAILED(slangModule->findEntryPointByName(std::string(entryName).c_str(), entryPoint.writeRef())))
     {
-        YA_CORE_ERROR("[Slang] Entry point '{}' not found in: {}", entryName, filePath);
         return false;
     }
 

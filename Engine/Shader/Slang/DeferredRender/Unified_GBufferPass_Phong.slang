@@ -47,7 +47,8 @@ struct LightData{
 // Set 1: Phong material textures
 [[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
 [[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
-[[vk::binding(2, 1)]]  Sampler2D  uTexNormal;
+[[vk::binding(2, 1)]]  Sampler2D  uTexReflection;
+[[vk::binding(3, 1)]]  Sampler2D  uTexNormal;
 
 // Set 2: Phong material params UBO
 public struct TextureParams{
@@ -94,7 +95,7 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
 
 struct FragmentOutput{
     float4 posShininess      : SV_Target0;  // (position.xyz, shininess=0.0)
-    float4 normalAO          : SV_Target1;  // (normal.xyz,   ao(unused))
+    float4 normalReflect     : SV_Target1;  // (normal.xyz,   ao(unused))
     float4 albedoSpecular    : SV_Target2;  // (albedo.rgb(diffuse * diffuseTexture.rgb),  specular)
     float  shadingModelID    : SV_Target3;  // shading model ID (2=Phong, encoded as id/255.0)
 };
@@ -126,7 +127,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 
     // Normal — ao unused in Phong, fill 1.0 (no darkening)
     vec3 N = normalize(IN.normal);
-    OUT.normalAO.xyz = N;
+    OUT.normalReflect.xyz = N;
     if(uParams.textures[ETextureSlot::Normal].bEnable){
         vec2 uv = mul(uParams.textures[ETextureSlot::Normal].uvTransform , vec3(IN.uv, 0)).xy;
         vec3 T = normalize(IN.tangent);
@@ -135,9 +136,16 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
         // vec2 uv = (TBN * vec3(IN.uv,0)).xy;
         vec3 normal = uTexNormal.Sample(uv).xyz;
         // vec3 normal = normalize(uTexNormal.Sample(IN.uv).xyz);
-        normal = normalize(normal * 2.0 - 1.0);
+        normal = normalize(normal * 2.0 - 1.0);  // from UNORM texture
+        N = normalize(TBN * normal);
         // normal = normalize(normal);
-        OUT.normalAO.xyz = normalize(TBN*  normal);
+        OUT.normalReflect.xyz = N;
+    }
+
+    OUT.normalReflect.a =  0.0f;
+    if(uParams.textures[ETextureSlot::Reflection].bEnable){
+        float reflectionRatio = uTexReflection.Sample(IN.uv).a;
+        OUT.normalReflect.a =  reflectionRatio;
     }
 
 }

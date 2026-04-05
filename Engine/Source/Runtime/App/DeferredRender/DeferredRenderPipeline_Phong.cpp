@@ -23,6 +23,7 @@ void DeferredRenderPipeline::initPhong()
                     {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
                     {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
                     {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
                 },
             },
             DescriptorSetLayoutDesc{
@@ -119,7 +120,8 @@ void DeferredRenderPipeline::preparePhong(Scene* scene)
                     {
                         IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
                         IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
-                        IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PhongMaterial::EResource::ReflectionTexture)),
+                        IDescriptorSetHelper::writeOneImage(ds, 3, m->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
                     },
                     {});
             });

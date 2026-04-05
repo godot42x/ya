@@ -6,19 +6,6 @@
 namespace ya
 {
 
-namespace
-{
-void retireTextureForDeferredDeletion(const stdptr<Texture>& texture)
-{
-    if (!texture) {
-        return;
-    }
-
-    auto& ddq = DeferredDeletionQueue::get();
-    ddq.enqueueResource(ddq.currentFrame(), texture);
-}
-} // namespace
-
 bool SkyboxComponent::CubemapSource::hasAllFaces() const
 {
     for (const auto& file : files) {
@@ -84,8 +71,7 @@ bool SkyboxComponent::resolve()
         cubemapTexture.reset();
         sourcePreviewTexture.reset();
         clearCubemapPreviewViews();
-        resolveState     = ESkyboxResolveState::Empty;
-        bDescriptorDirty = false;
+        resolveState = ESkyboxResolveState::Empty;
         return false;
     }
 
@@ -96,6 +82,16 @@ bool SkyboxComponent::resolve()
             _pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
                 AssetManager::TextureBatchMemoryLoadRequest{
                     .filepaths = facePaths,
+                });
+        }
+        else if (hasCylindricalSource()) {
+            _pendingCylindricalFuture = AssetManager::get()->loadTexture(
+                AssetManager::TextureLoadRequest{
+                    .filepath        = cylindricalSource.filepath,
+                    .name            = "SkyboxCylindricalSource",
+                    .onReady         = {},
+                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
+                    .textureSemantic = std::nullopt,
                 });
         }
         resolveState = ESkyboxResolveState::ResolvingSource;
@@ -141,33 +137,35 @@ bool SkyboxComponent::resolve()
             return false;
         }
 
-        cubemapTexture   = std::move(cubemap);
+        cubemapTexture = std::move(cubemap);
         rebuildCubemapPreviewViews();
-        resolveState     = ESkyboxResolveState::Ready;
-        bDescriptorDirty = true;
+        resolveState = ESkyboxResolveState::Ready;
         return true;
     }
 
     if (hasCylindricalSource() && resolveState == ESkyboxResolveState::ResolvingSource) {
-        const auto future = AssetManager::get()->loadTexture(
-            AssetManager::TextureLoadRequest{
-                .filepath        = cylindricalSource.filepath,
-                .name            = "SkyboxCylindricalSource",
-                .onReady         = {},
-                .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
-                .textureSemantic = std::nullopt,
-            });
-        if (!future.isReady()) {
+        if (!_pendingCylindricalFuture) {
+            _pendingCylindricalFuture = AssetManager::get()->loadTexture(
+                AssetManager::TextureLoadRequest{
+                    .filepath        = cylindricalSource.filepath,
+                    .name            = "SkyboxCylindricalSource",
+                    .onReady         = {},
+                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
+                    .textureSemantic = std::nullopt,
+                });
+        }
+        if (!_pendingCylindricalFuture->isReady()) {
             return false;
         }
 
-        auto sourceTexture = future.getShared();
+        auto sourceTexture = _pendingCylindricalFuture->getShared();
+        _pendingCylindricalFuture.reset();
         if (!sourceTexture || !sourceTexture->getImageView()) {
             resolveState = ESkyboxResolveState::Failed;
             return false;
         }
 
-        sourcePreviewTexture                     = sourceTexture;
+        sourcePreviewTexture                    = sourceTexture;
         _pendingOffscreenProcess                = std::make_shared<PendingOffscreenProcessState>();
         _pendingOffscreenProcess->sourceTexture = std::move(sourceTexture);
         _pendingOffscreenProcess->bFlipVertical = cylindricalSource.flipVertical;
@@ -191,8 +189,7 @@ bool SkyboxComponent::resolve()
         cubemapTexture = std::move(_pendingOffscreenProcess->outputTexture);
         rebuildCubemapPreviewViews();
         _pendingOffscreenProcess.reset();
-        resolveState     = ESkyboxResolveState::Ready;
-        bDescriptorDirty = true;
+        resolveState = ESkyboxResolveState::Ready;
         return true;
     }
 
@@ -201,8 +198,7 @@ bool SkyboxComponent::resolve()
 
 bool SkyboxComponent::hasRenderableCubemap() const
 {
-    return resolveState == ESkyboxResolveState::Ready && cubeMapDS && cubemapTexture &&
-           cubemapTexture->getImageView() && !bDescriptorDirty;
+    return resolveState == ESkyboxResolveState::Ready && cubemapTexture && cubemapTexture->getImageView();
 }
 
 void SkyboxComponent::rebuildCubemapPreviewViews()
@@ -250,9 +246,10 @@ IImageView* SkyboxComponent::getCubemapFacePreviewView(uint32_t faceIndex) const
 void SkyboxComponent::invalidate()
 {
     _pendingBatchLoad.reset();
+    _pendingCylindricalFuture.reset();
     if (_pendingOffscreenProcess) {
         _pendingOffscreenProcess->bCancelled = true;
-        retireTextureForDeferredDeletion(_pendingOffscreenProcess->outputTexture);
+        DeferredDeletionQueue::get().retireResource(_pendingOffscreenProcess->outputTexture);
         _pendingOffscreenProcess->outputTexture.reset();
         _pendingOffscreenProcess.reset();
     }
@@ -264,8 +261,7 @@ void SkyboxComponent::invalidate()
         ddq.enqueueResource(ddq.currentFrame(), std::move(cubemapTexture));
         cubemapTexture = nullptr;
     }
-    resolveState     = hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty;
-    bDescriptorDirty = true;
+    resolveState = hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty;
 }
 
 bool SkyboxComponent::isLoading() const

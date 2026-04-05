@@ -22,7 +22,7 @@ struct SceneHierarchyPanel
     EditorLayer *_owner;
     Scene       *_context       = nullptr;
     Entity      *_selection     = {};
-    Entity      *_lastSelection = {};
+    Entity      *_pendingScrollSelection = {};
 
   public:
     SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
@@ -32,8 +32,8 @@ struct SceneHierarchyPanel
         _context = scene;
         // 清空选中实体，防止指向已销毁场景中的实体
         if (_selection && (!_selection->isValid() || _selection->getScene() != scene)) {
-            _selection     = nullptr;
-            _lastSelection = nullptr;
+            _selection              = nullptr;
+            _pendingScrollSelection = nullptr;
         }
     }
     void onImGuiRender();
@@ -43,6 +43,7 @@ struct SceneHierarchyPanel
 
 
     void sceneTree();
+    bool shouldAutoOpenForSelection(Node *node) const;
 
     // Node hierarchy rendering
     void drawNodeRecursive(Node *node);

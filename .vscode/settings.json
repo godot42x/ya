@@ -94,6 +94,7 @@
         "Swapchains",
         "typealias",
         "UBO",
+        "UNORM",
         "uvec",
         "vertexbuffer",
         "VERTEXELEMENTFORMAT",

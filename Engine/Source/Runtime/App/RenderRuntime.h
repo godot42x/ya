@@ -17,6 +17,7 @@ struct App;
 struct AppDesc;
 enum AppMode : int;
 struct SceneManager;
+struct Scene;
 struct EditorLayer;
 struct ForwardRenderPipeline;
 struct Texture;
@@ -77,6 +78,8 @@ struct RenderRuntime
     stdptr<Sampler>              _skyboxSampler         = nullptr;
     stdptr<Texture>              _fallbackSkyboxTexture = nullptr;
     DescriptorSetHandle          _fallbackSkyboxDS      = nullptr;
+    DescriptorSetHandle          _sceneSkyboxDS         = nullptr;
+    Texture*                     _boundSceneSkyboxTexture = nullptr;
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
@@ -112,6 +115,7 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout>   getSkyboxDescriptorSetLayout() const { return _skyboxDSL; }
     [[nodiscard]] Sampler*                       getSkyboxSampler() const { return _skyboxSampler.get(); }
     [[nodiscard]] DescriptorSetHandle            getFallbackSkyboxDescriptorSet() const { return _fallbackSkyboxDS; }
+    [[nodiscard]] DescriptorSetHandle            getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
 
     /**
      * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
@@ -129,6 +133,8 @@ struct RenderRuntime
     void initActivePipeline();
     void shutdownActivePipeline();
     void applyPendingShadingModelSwitch();
+    void updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
+    [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
 };
 
 } // namespace ya

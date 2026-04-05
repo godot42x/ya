@@ -19,6 +19,9 @@
 #include "Resource/ResourceRegistry.h"
 #include "Resource/TextureLibrary.h"
 
+#include "Scene/Scene.h"
+#include "Scene/SceneManager.h"
+
 #include "Core/Async/TaskQueue.h"
 
 #include "Core/UI/UIManager.h"
@@ -33,6 +36,70 @@
 
 namespace ya
 {
+
+Texture* RenderRuntime::findSceneSkyboxTexture(Scene* scene) const
+{
+    if (!scene) {
+        return nullptr;
+    }
+
+    for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+        (void)entity;
+        if (sc.hasRenderableCubemap()) {
+            return sc.cubemapTexture.get();
+        }
+        break;
+    }
+
+    return nullptr;
+}
+
+void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture)
+{
+    if (!ds || !texture || !texture->getImageView() || !_skyboxSampler) {
+        return;
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets(
+        {
+            IDescriptorSetHelper::genImageWrite(
+                ds,
+                0,
+                0,
+                EPipelineDescriptorType::CombinedImageSampler,
+                {
+                    DescriptorImageInfo(
+                        texture->getImageView()->getHandle(),
+                        _skyboxSampler->getHandle(),
+                        EImageLayout::ShaderReadOnlyOptimal),
+                }),
+        },
+        {});
+}
+
+DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
+{
+    if (!_sceneSkyboxDS) {
+        return _fallbackSkyboxDS;
+    }
+
+    if (!scene && _app && _app->getSceneManager()) {
+        scene = _app->getSceneManager()->getActiveScene();
+    }
+
+    auto* texture = findSceneSkyboxTexture(scene);
+    if (!texture) {
+        _boundSceneSkyboxTexture = nullptr;
+        return _fallbackSkyboxDS;
+    }
+
+    if (texture != _boundSceneSkyboxTexture) {
+        updateSkyboxDescriptorSet(_sceneSkyboxDS, texture);
+        _boundSceneSkyboxTexture = texture;
+    }
+
+    return _sceneSkyboxDS;
+}
 
 static void openDirectoryInOS(const std::string& filePath)
 {
@@ -216,21 +283,9 @@ void RenderRuntime::init(const InitDesc& desc)
                        "Failed to create fallback skybox cubemap");
 
         _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genImageWrite(
-                    _fallbackSkyboxDS,
-                    0,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    {
-                        DescriptorImageInfo(
-                            _fallbackSkyboxTexture->getImageView()->getHandle(),
-                            _skyboxSampler->getHandle(),
-                            EImageLayout::ShaderReadOnlyOptimal),
-                    }),
-            },
-            {});
+        _sceneSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
+        updateSkyboxDescriptorSet(_fallbackSkyboxDS, _fallbackSkyboxTexture.get());
+        updateSkyboxDescriptorSet(_sceneSkyboxDS, _fallbackSkyboxTexture.get());
     }
 
     initActivePipeline();
@@ -323,6 +378,8 @@ void RenderRuntime::shutdown()
     ResourceRegistry::get().clearAll();
 
     _fallbackSkyboxTexture.reset();
+    _boundSceneSkyboxTexture = nullptr;
+    _sceneSkyboxDS = nullptr;
     _fallbackSkyboxDS = nullptr;
     _skyboxSampler.reset();
     _skyboxDSP.reset();
@@ -351,30 +408,20 @@ void RenderRuntime::resetSkyboxPool()
         return;
     }
 
-    // Return ALL descriptor sets back to the pool (including the fallback DS).
+    // Return cached skybox descriptor sets back to the pool and rebuild them.
     _skyboxDSP->resetPool();
+    _sceneSkyboxDS = nullptr;
     _fallbackSkyboxDS = nullptr;
+    _boundSceneSkyboxTexture = nullptr;
 
-    // Re-allocate the permanent fallback descriptor set.
     _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
+    _sceneSkyboxDS    = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
     YA_CORE_ASSERT(_fallbackSkyboxDS, "Failed to re-allocate fallback skybox descriptor set");
+    YA_CORE_ASSERT(_sceneSkyboxDS, "Failed to re-allocate scene skybox descriptor set");
 
-    if (_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView() && _skyboxSampler) {
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genImageWrite(
-                    _fallbackSkyboxDS,
-                    0,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    {
-                        DescriptorImageInfo(
-                            _fallbackSkyboxTexture->getImageView()->getHandle(),
-                            _skyboxSampler->getHandle(),
-                            EImageLayout::ShaderReadOnlyOptimal),
-                    }),
-            },
-            {});
+    if (_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView()) {
+        updateSkyboxDescriptorSet(_fallbackSkyboxDS, _fallbackSkyboxTexture.get());
+        updateSkyboxDescriptorSet(_sceneSkyboxDS, _fallbackSkyboxTexture.get());
     }
 }
 

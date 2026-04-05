@@ -783,9 +783,8 @@ void App::onSceneInit(Scene* scene)
 
 void App::onSceneDestroy(Scene* scene)
 {
-    // Reset the skybox descriptor pool so the DS allocated for this scene's
-    // SkyboxComponent is returned.  Without this, each scene load leaks one DS
-    // and eventually the pool overflows with VK_ERROR_OUT_OF_POOL_MEMORY.
+    // Drop runtime skybox descriptor bindings so scene-local cubemap textures
+    // are no longer referenced after the scene is destroyed.
     if (_renderRuntime) {
         _renderRuntime->resetSkyboxPool();
     }

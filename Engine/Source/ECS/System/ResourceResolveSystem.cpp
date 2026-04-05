@@ -89,29 +89,6 @@ stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
 
     return Texture::wrap(image, cubeView, label);
 }
-
-void retireEquidistantTransientView(const stdptr<IImageView>& transientOutputArrayView)
-{
-    if (!transientOutputArrayView) {
-        return;
-    }
-
-    auto&      ddq   = DeferredDeletionQueue::get();
-    const auto frame = ddq.currentFrame();
-
-    ddq.enqueueResource(frame, transientOutputArrayView);
-}
-
-void retireTextureResource(const stdptr<Texture>& texture)
-{
-    if (!texture) {
-        return;
-    }
-
-    auto&      ddq   = DeferredDeletionQueue::get();
-    const auto frame = ddq.currentFrame();
-    ddq.enqueueResource(frame, texture);
-}
 } // namespace
 
 void ResourceResolveSystem::init()
@@ -217,30 +194,21 @@ void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
 void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 {
     auto* app     = App::get();
-    auto* runtime = app->getRenderRuntime();
     auto* render  = app->getRender();
-    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
     auto& registry = scene->getRegistry();
 
     for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each())
     {
         (void)entity;
 
+        if (sc.resolveState == ESkyboxResolveState::Ready) {
+            continue;
+        }
+
         if (sc.resolveState == ESkyboxResolveState::Dirty ||
             sc.resolveState == ESkyboxResolveState::ResolvingSource ||
             sc.resolveState == ESkyboxResolveState::Preprocessing) {
             sc.resolve();
-        }
-
-        // Lazy-allocate DS from App-layer pool on first use
-        if (!sc.cubeMapDS) {
-            auto skyboxDSP = runtime->getSkyboxDescriptorPool();
-            auto skyboxDSL = runtime->getSkyboxDescriptorSetLayout();
-            YA_CORE_ASSERT(skyboxDSP && skyboxDSL, "Skybox shared descriptor resources are not initialized");
-            sc.cubeMapDS = skyboxDSP->allocateDescriptorSets(skyboxDSL);
-            render->as<VulkanRender>()->setDebugObjectName(
-                VK_OBJECT_TYPE_DESCRIPTOR_SET, sc.cubeMapDS.ptr, "Skybox_CubeMap_DS_Shared");
-            sc.bDescriptorDirty = true; // force initial write
         }
 
         if (sc.resolveState == ESkyboxResolveState::Preprocessing &&
@@ -254,10 +222,14 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             const auto cubemapLabel = std::format("SkyboxCubemap_{}", static_cast<uint32_t>(entity));
             app->taskManager.enqueueOffscreenTask(
                 [this, render, pending, cubemapLabel](ICommandBuffer* cmdBuf) {
+                    auto failTask = [&pending]() {
+                        pending->bTaskFinished  = true;
+                        pending->bTaskSucceeded = false;
+                    };
+
                     if (!pending || !cmdBuf || pending->bCancelled || !pending->sourceTexture || !pending->sourceTexture->getImageView()) {
                         if (pending) {
-                            pending->bTaskFinished  = true;
-                            pending->bTaskSucceeded = false;
+                            failTask();
                         }
                         return;
                     }
@@ -268,8 +240,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                                                                        faceSize,
                                                                        chooseSkyboxCubemapFormat(pending->sourceTexture->getFormat()));
                     if (!outputTexture) {
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = false;
+                        failTask();
                         return;
                     }
 
@@ -281,17 +252,15 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                             .bFlipVertical = pending->bFlipVertical,
                         });
                     if (!executeResult.bSuccess) {
-                        retireEquidistantTransientView(executeResult.transientOutputArrayView);
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = false;
+                        DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
+                        failTask();
                         return;
                     }
 
-                    retireEquidistantTransientView(executeResult.transientOutputArrayView);
+                    DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
                     if (pending->bCancelled) {
-                        retireTextureResource(outputTexture);
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = false;
+                        DeferredDeletionQueue::get().retireResource(outputTexture);
+                        failTask();
                         return;
                     }
 
@@ -301,26 +270,6 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 });
         }
 
-        if (sc.bDescriptorDirty && sc.cubemapTexture && sc.cubemapTexture->getImageView()) {
-            auto* skyboxSampler = runtime->getSkyboxSampler();
-            YA_CORE_ASSERT(skyboxSampler, "Skybox sampler is not initialized");
-            render->getDescriptorHelper()->updateDescriptorSets(
-                {
-                    IDescriptorSetHelper::genImageWrite(
-                        sc.cubeMapDS,
-                        0,
-                        0,
-                        EPipelineDescriptorType::CombinedImageSampler,
-                        {
-                            DescriptorImageInfo(
-                                sc.cubemapTexture->getImageView()->getHandle(),
-                                skyboxSampler->getHandle(),
-                                EImageLayout::ShaderReadOnlyOptimal),
-                        }),
-                },
-                {});
-            sc.bDescriptorDirty = false;
-        }
     }
 }
 

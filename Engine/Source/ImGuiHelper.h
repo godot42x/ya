@@ -163,6 +163,10 @@ using ImguiState = ImGuiManager;
 
 namespace ImGuiHelper
 {
+ComponentMapping BuildRGBAChannelMaskMapping(const std::array<bool, 4>& channelEnabled);
+bool             IsIdentityRGBAChannelMask(const std::array<bool, 4>& channelEnabled);
+bool             RenderRGBAChannelMaskButtons(std::array<bool, 4>& channelEnabled, float frameRounding = 6.0f);
+
 void BeginFrame();
 
 bool Image(IImageView        *imageView,
