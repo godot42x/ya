@@ -24,7 +24,7 @@ TextureResource textureResourceFromPath(std::string_view propPath)
     if (propPath.starts_with("_normalSlot"))    return TextureResource::NormalTexture;
     if (propPath.starts_with("_metallicSlot"))  return TextureResource::MetallicTexture;
     if (propPath.starts_with("_roughnessSlot")) return TextureResource::RoughnessTexture;
-    if (propPath.starts_with("_aoSlot"))        return TextureResource::AOTexture;
+    if (propPath.starts_with("_aoSlot")) return TextureResource::AOTexture;
     return TextureResource::Count;
 }
 
@@ -108,6 +108,7 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
 
     if (slot->isReady()) {
         getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
+        getMaterial()->setTextureParam(resourceEnum, *slot);
     }
     else if (slot->hasPath() && slot->textureRef.isLoading()) {
         // Texture is being reloaded — old GPU resources may be destroyed.
@@ -115,13 +116,16 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         auto sampler     = TextureLibrary::get().getDefaultSampler();
         if (placeholder && sampler) {
-            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+            getMaterial()->getParamsMut().textures[resourceEnum].bEnable = slot->bEnable;
+            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{.texture = placeholder, .sampler = sampler});
         }
         else {
+            getMaterial()->disableTextureParams(resourceEnum);
             getMaterial()->clearTextureBinding(resourceEnum);
         }
     }
     else {
+        getMaterial()->disableTextureParams(resourceEnum);
         getMaterial()->clearTextureBinding(resourceEnum);
     }
 }
@@ -132,8 +136,8 @@ EMaterialResolveResult PBRMaterialComponent::resolve()
         return EMaterialResolveResult::Ready;
     }
 
-    _resolveState = EMaterialResolveState::Resolving;
-    bool success = true;
+    _resolveState           = EMaterialResolveState::Resolving;
+    bool success            = true;
     bool hasPendingTextures = false;
 
     // 1. Create runtime material if not exists

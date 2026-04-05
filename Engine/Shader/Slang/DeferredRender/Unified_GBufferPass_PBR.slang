@@ -50,6 +50,16 @@ struct LightData{
 [[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
 [[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
 
+
+enum ETextureSlot{
+   Albedo = 0,
+   Normal = 1,
+   Metallic = 2,
+   Roughness = 3,
+   AO = 4,
+   Count = 5,
+};
+
 // Set 1: PBR material textures (5 slots)
 [[vk::binding(0, 1)]]  Sampler2D  uTexAlbedo;
 [[vk::binding(1, 1)]]  Sampler2D  uTexNormal;
@@ -57,12 +67,20 @@ struct LightData{
 [[vk::binding(3, 1)]]  Sampler2D  uTexRoughness;
 [[vk::binding(4, 1)]]  Sampler2D  uTexAO;
 
+struct TextureParams{
+    bool bEnable;
+    float rotationRadius;
+    vec2  translation;
+    vec2  scale;
+};
+
 // Set 2: PBR material params UBO
 struct PBRParamsData{
     vec3  albedo;
     float metallic;
     float roughness;
     float ao;
+    TextureParams textures[ETextureSlot::Count];
 };
 [[vk::binding(0, 2)]] ConstantBuffer<PBRParamsData,Std140DataLayout> uParams;
 
@@ -93,14 +111,32 @@ struct FragmentOutput{
 };
 
 
+vec2 getUV(ETextureSlot slot, vec2 uv)
+{
+    TextureParams params = uParams.textures[(int)slot];
+    if (!params.bEnable){
+        return uv;
+    }
+    uv +=   params.translation;
+    float c = cos(params.rotationRadius);
+    float s = sin(params.rotationRadius);
+    uv = vec2 (
+        uv.x * c - uv.y * s,
+        uv.x * s + uv.y * c
+    );
+    uv *= params.scale;
+    return uv;
+}
+
+
 [shader("fragment")]
 void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
     // Albedo from texture modulated by UBO albedo color
-    vec3  albedo    = uParams.albedo * uTexAlbedo.Sample(IN.uv).rgb;
-    float metallic  = uParams.metallic  * uTexMetallic.Sample(IN.uv).r;
-    float roughness = uParams.roughness * uTexRoughness.Sample(IN.uv).r;
-    float ao        = uParams.ao        * uTexAO.Sample(IN.uv).r;
+    vec3  albedo    = uParams.albedo * uTexAlbedo.Sample(getUV(ETextureSlot::Albedo, IN.uv)).rgb;
+    float metallic  = uParams.metallic  * uTexMetallic.Sample(getUV(ETextureSlot::Metallic, IN.uv)).r;
+    float roughness = uParams.roughness * uTexRoughness.Sample(getUV(ETextureSlot::Roughness, IN.uv)).r;
+    float ao        = uParams.ao        * uTexAO.Sample(getUV(ETextureSlot::AO, IN.uv)).r;
 
     // Pack into GBuffer — no extra RT, roughness/ao ride the unused alpha channels
     OUT.posRoughness   = vec4(IN.pos, roughness);

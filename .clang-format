@@ -11,6 +11,8 @@ AlwaysBreakTemplateDeclarations: MultiLine
 AllowShortFunctionsOnASingleLine: All
 AllowShortBlocksOnASingleLine: Always
 AllowShortIfStatementsOnASingleLine: OnlyFirstIf
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortCaseExpressionOnASingleLine: true
 AllowShortCompoundRequirementOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 
@@ -52,6 +54,14 @@ AlignConsecutiveAssignments: Consecutive
 
 # 连续声明时，对齐所有声明的变量名
 AlignConsecutiveDeclarations: Consecutive
+
+# 允许紧凑 switch return 风格，并对齐短 case 语句
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseArrows: false
+  AlignCaseColons: false
 
 # 保留在块开始处的空行
 KeepEmptyLinesAtTheStartOfBlocks: true

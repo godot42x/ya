@@ -40,14 +40,6 @@ public inline float3x3 operator*(float3x3 a, float3x3 b) { return mul(a, b); }
 public inline float2x2 operator*(float2x2 a, float2x2 b) { return mul(a, b); }
 
 
-namespace ETextureSlot{
-// public enum  ETextureSlot{
-   static const int Diffuse = 0;
-   static const int Specular = 1;
-   static const int Reflection = 2;
-   static const int Normal = 3;
-   static const int Count = 4;
-};
 
 static const float4 RED = float4(1,0,0,1);
 static const float4 GREEN = float4(0,1,0,1);

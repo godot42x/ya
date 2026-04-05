@@ -61,18 +61,18 @@ struct TextureSlot
 {
     YA_REFLECT_BEGIN(TextureSlot)
     YA_REFLECT_FIELD(textureRef)
+    YA_REFLECT_FIELD(bEnable)
     YA_REFLECT_FIELD(uvScale)
     YA_REFLECT_FIELD(uvOffset)
     YA_REFLECT_FIELD(uvRotation)
-    YA_REFLECT_FIELD(bEnable)
     YA_REFLECT_FIELD(samplerConfig)
     YA_REFLECT_END()
 
     TextureRef    textureRef; // Serialized as path, auto-loaded on deserialize
+    bool          bEnable = true;
     glm::vec2     uvScale{1.0f};
     glm::vec2     uvOffset{0.0f};
     float         uvRotation = 0.0f;
-    bool          bEnable    = true;
     SamplerConfig samplerConfig; ///< Optional sampler override (default uses global sampler)
 
     TextureSlot() = default;
@@ -159,8 +159,6 @@ struct TextureSlot
     }
 };
 
-/// Texture slot map type: maps resource enum (as int) to TextureSlot
-using TextureSlotMap = std::unordered_map<int, TextureSlot>;
 
 
 //  MARK: Material

@@ -56,6 +56,15 @@ public struct TextureParams{
     mat3 uvTransform;
 };
 
+namespace ETextureSlot{
+// public enum  ETextureSlot{
+   static const int Diffuse = 0;
+   static const int Specular = 1;
+   static const int Reflection = 2;
+   static const int Normal = 3;
+   static const int Count = 4;
+};
+
 struct ParamsData{
     vec3 ambient;
     vec3 specular;

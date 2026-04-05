@@ -5,7 +5,7 @@
 #include "Material.h"
 #include "Render/Core/Std140Types.h"
 
-#include "DeferredRender.PBR_GBufferPass.slang.h"
+#include "DeferredRender.Unified_GBufferPass_PBR.slang.h"
 
 namespace ya
 {
@@ -38,7 +38,7 @@ struct PBRMaterial : public Material
     };
 
     /// GPU UBO struct — sourced from shader, do NOT redefine in C++.
-    using ParamUBO = slang_types::DeferredRender::PBR_GBufferPass::PBRParamsData;
+    using ParamUBO = slang_types::DeferredRender::Unified_GBufferPass_PBR::PBRParamsData;
 
     // ========================================
     // Reflection Registration
@@ -135,6 +135,27 @@ struct PBRMaterial : public Material
     [[nodiscard]] SamplerHandle getSamplerHandle(EResource type) const
     {
         return _textureBindings[static_cast<size_t>(type)].getSamplerHandle();
+    }
+
+    void disableTextureParams(EResource type)
+    {
+        _params.textures[type] = {
+            .bEnable        = false,
+            .rotationRadius = 0,
+            .translation    = {0, 0},
+            .scale          = {1, 1},
+        };
+        setParamDirty();
+    }
+    void setTextureParam(EResource type, const TextureSlot& slot)
+    {
+        _params.textures[static_cast<size_t>(type)] = {
+            .bEnable        = slot.bEnable,
+            .rotationRadius = glm::radians(slot.uvRotation),
+            .translation    = slot.uvOffset,
+            .scale          = slot.uvScale,
+        };
+        setParamDirty();
     }
 
     // ========================================

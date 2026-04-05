@@ -49,12 +49,67 @@ SCALAR_MAP = {
 }
 
 
+ENUM_BASE_TYPE_MAP = {
+    "int": "int32_t",
+    "int32": "int32_t",
+    "int32_t": "int32_t",
+    "uint": "uint32_t",
+    "uint32": "uint32_t",
+    "uint32_t": "uint32_t",
+    "short": "int16_t",
+    "int16": "int16_t",
+    "int16_t": "int16_t",
+    "ushort": "uint16_t",
+    "uint16": "uint16_t",
+    "uint16_t": "uint16_t",
+    "char": "int8_t",
+    "int8": "int8_t",
+    "int8_t": "int8_t",
+    "uchar": "uint8_t",
+    "uint8": "uint8_t",
+    "uint8_t": "uint8_t",
+}
+
+
 
 # Maps macro name -> int value, extracted from .slang source
 SLANG_DEFINES: dict[str, int] = {}
 
+# Parsed enum definitions from .slang source.
+SLANG_ENUMS: list[dict] = []
+
 # Reverse map: int value -> list of macro names (for array size substitution)
 _VALUE_TO_DEFINES: dict[int, list[str]] = {}
+_VALUE_TO_ENUM_MEMBERS: dict[int, list[tuple[str, str]]] = {}
+
+
+def _strip_comments(source: str) -> str:
+    source = re.sub(r"//.*?$", "", source, flags=re.MULTILINE)
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    return source
+
+
+def _parse_int_literal(value_str: str) -> int:
+    value_str = value_str.strip()
+    if not value_str:
+        raise ValueError("empty integer literal")
+    return int(value_str, 0)
+
+
+def _resolve_enum_value(expr: str, enum_values: dict[str, int]) -> int:
+    expr = expr.strip()
+    if not expr:
+        raise ValueError("empty enum expression")
+
+    if expr in enum_values:
+        return enum_values[expr]
+
+    if "::" in expr:
+        _, rhs = expr.rsplit("::", 1)
+        if rhs in enum_values:
+            return enum_values[rhs]
+
+    return _parse_int_literal(expr)
 
 
 def extract_defines(slang_source: str):
@@ -76,6 +131,54 @@ def extract_defines(slang_source: str):
         value = int(m.group(2), 0)  # auto-detect base
         SLANG_DEFINES[name] = value
         _VALUE_TO_DEFINES.setdefault(value, []).append(name)
+
+
+def extract_enums(slang_source: str):
+    """Extract simple enum declarations from .slang source code."""
+    SLANG_ENUMS.clear()
+    _VALUE_TO_ENUM_MEMBERS.clear()
+
+    source = _strip_comments(slang_source)
+    enum_pattern = re.compile(
+        r"\benum\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*([A-Za-z_][A-Za-z0-9_]*))?\s*\{(.*?)\}\s*;",
+        re.DOTALL,
+    )
+
+    for match in enum_pattern.finditer(source):
+        enum_name = match.group(1)
+        raw_base_type = (match.group(2) or "int32_t").strip()
+        cpp_base_type = ENUM_BASE_TYPE_MAP.get(raw_base_type, raw_base_type)
+        body = match.group(3)
+
+        members = []
+        enum_values: dict[str, int] = {}
+        next_value = 0
+        for raw_item in body.split(","):
+            item = raw_item.strip()
+            if not item:
+                continue
+
+            name, sep, value_expr = item.partition("=")
+            member_name = name.strip()
+            if not member_name:
+                continue
+
+            if sep:
+                member_value = _resolve_enum_value(value_expr, enum_values)
+            else:
+                member_value = next_value
+
+            enum_values[member_name] = member_value
+            members.append((member_name, member_value))
+            _VALUE_TO_ENUM_MEMBERS.setdefault(member_value, []).append((enum_name, member_name))
+            next_value = member_value + 1
+
+        if members:
+            SLANG_ENUMS.append({
+                "name": enum_name,
+                "base_type": cpp_base_type,
+                "members": members,
+            })
 
 
 # GLM vector type prefix for each scalar base type
@@ -141,6 +244,11 @@ def slang_type_to_cpp(type_node: dict) -> tuple[str, str]:
         elif len(candidates) > 1:
             # Multiple macros have the same value; keep literal to avoid ambiguity
             pass
+        else:
+            enum_candidates = _VALUE_TO_ENUM_MEMBERS.get(count, [])
+            if len(enum_candidates) == 1:
+                enum_name, member_name = enum_candidates[0]
+                count_str = f"static_cast<size_t>({enum_name}::{member_name})"
         return base, f'[{count_str}]{suffix}'
     elif kind == "struct":
         return type_node["name"], ""
@@ -282,6 +390,7 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
     """Parse reflection JSON and emit C++ header."""
     # Extract #define macros from .slang source before generating
     extract_defines(slang_source)
+    extract_enums(slang_source)
 
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -326,6 +435,15 @@ def generate_header(json_path: str, output_path: str, namespace: str, slang_sour
         for macro_name, macro_val in SLANG_DEFINES.items():
             lines.append(f"constexpr uint32_t {macro_name} = {macro_val};")
         lines.append("")
+    if SLANG_ENUMS:
+        lines.append("// Enums extracted from .slang source")
+        for enum_info in SLANG_ENUMS:
+            lines.append(f"enum class {enum_info['name']} : {enum_info['base_type']}")
+            lines.append("{")
+            for member_name, member_value in enum_info["members"]:
+                lines.append(f"    {member_name} = {member_value},")
+            lines.append("};")
+            lines.append("")
     for struct_node in ordered:
         lines.append(gen_struct(struct_node, struct_sizes))
     if namespace:
