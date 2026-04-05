@@ -1,15 +1,16 @@
 #pragma once
 
+#include <concepts>
 #include <entt/entt.hpp>
-#include <functional>
+#include <memory>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
 #include "Bus/SceneBus.h"
 #include "Core/FName.h"
 #include "Core/TypeIndex.h"
-#include "reflects-core/lib.h"
 
 
 namespace ya
@@ -24,16 +25,45 @@ struct ECSRegistry
     static ECSRegistry& get();
 
 
-    using component_getter  = std::function<void*(const entt::registry&, entt::entity)>;
-    using component_creator = std::function<void*(entt::registry&, entt::entity)>;
 
+    // TODO: optimize and profile memory
+    // method 1: store 1 object
+    struct IComponentOps
+    {
+        virtual ~IComponentOps()                                               = default;
+        virtual void* create(entt::registry& registry, entt::entity entity)    = 0;
+        virtual void* get(const entt::registry& registry, entt::entity entity) = 0;
+        virtual bool  remove(entt::registry& registry, entt::entity entity)    = 0;
+    };
+
+    template <typename T>
+    struct ComponentOps : public IComponentOps
+    {
+        void* create(entt::registry& registry, entt::entity entity) override
+        {
+            return &registry.emplace<T>(entity);
+        }
+        void* get(const entt::registry& registry, entt::entity entity) override
+        {
+            if (registry.all_of<T>(entity)) {
+                return const_cast<T*>(&registry.get<T>(entity));
+            }
+            return nullptr;
+        }
+        bool remove(entt::registry& registry, entt::entity entity) override
+        {
+            if (registry.all_of<T>(entity)) {
+                registry.remove<T>(entity);
+                SceneBus::get().onComponentRemoved.broadcast(registry, entity, ya::type_index_v<T>);
+                return true;
+            }
+            return false;
+        }
+    };
 
   private:
-    std::unordered_map<FName, uint32_t> _typeIndexCache;
-    // TODO: use one function for get,add,remove to reduce memory?
-    std::unordered_map<uint32_t, component_getter>  _componentGetters;
-    std::unordered_map<uint32_t, component_creator> _componentCreators;
-    std::unordered_map<uint32_t, component_creator> _componentRemovers;
+    std::unordered_map<FName, uint32_t>          _typeIndexCache;
+    std::unordered_map<uint32_t, IComponentOps*> _componentOps;
 
   public:
 
@@ -41,25 +71,17 @@ struct ECSRegistry
     void registerComponent(const std::string& name /*, auto &&componentGetter, auto &&componentCreator*/)
     {
         if constexpr (std::derived_from<T, ::ya::IComponent>) {
-            uint32_t typeIndex           = ya::TypeIndex<T>::value();
-            _componentGetters[typeIndex] = [](const entt::registry& registry, entt::entity entity) -> void* {
-                if (registry.all_of<T>(entity)) {
-                    return (void*)&registry.get<T>(entity);
-                }
-                return nullptr;
-            };
-            _componentCreators[typeIndex] = [](entt::registry& registry, entt::entity entity) -> void* {
-                return (void*)&registry.emplace<T>(entity);
-            };
-            _componentRemovers[typeIndex] = [](entt::registry& registry, entt::entity entity) -> void* {
-                if (registry.all_of<T>(entity)) {
-                    registry.remove<T>(entity);
-                    SceneBus::get().onComponentRemoved.broadcast(registry, entity, ya::type_index_v<T>);
-                    return nullptr;
-                }
-                return nullptr;
-            };
-            _typeIndexCache[FName(name)] = typeIndex;
+            const uint32_t typeIndex       = ya::TypeIndex<T>::value();
+            IComponentOps* componentOpsPtr = new ComponentOps<T>{};
+            _componentOps[typeIndex]       = componentOpsPtr;
+            _typeIndexCache[FName(name)]   = typeIndex;
+        }
+    }
+
+    ~ECSRegistry()
+    {
+        for (auto& [_, opsPtr] : _componentOps) {
+            delete opsPtr;
         }
     }
 
@@ -79,8 +101,8 @@ struct ECSRegistry
 
     bool hasComponent(ya::type_index_t typeIndex, const entt::registry& registry, entt::entity entity)
     {
-        if (auto getterIt = _componentGetters.find(typeIndex); getterIt != _componentGetters.end()) {
-            return getterIt->second(registry, entity) != nullptr;
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->get(registry, entity) != nullptr;
         }
         return false;
     }
@@ -95,8 +117,8 @@ struct ECSRegistry
 
     void* getComponent(ya::type_index_t typeIndex, const entt::registry& registry, entt::entity entity)
     {
-        if (auto getterIt = _componentGetters.find(typeIndex); getterIt != _componentGetters.end()) {
-            return getterIt->second(registry, entity);
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->get(registry, entity);
         }
         return nullptr;
     }
@@ -110,8 +132,8 @@ struct ECSRegistry
 
     void* addComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
     {
-        if (auto creatorIt = _componentCreators.find(typeIndex); creatorIt != _componentCreators.end()) {
-            return creatorIt->second(registry, entity);
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->create(registry, entity);
         }
         return nullptr;
     }
@@ -125,16 +147,5 @@ struct ECSRegistry
 
     const std::unordered_map<FName, uint32_t>& getTypeIndexCache() const { return _typeIndexCache; }
 };
-
-
-#if 1
-namespace
-{
-void test()
-{
-    ECSRegistry::get().registerComponent<ECSRegistry>("TestComponent");
-}
-} // namespace
-#endif
 
 } // namespace ya

@@ -24,6 +24,23 @@ SceneManager::~SceneManager()
     
     // Clear the mapping (should already be empty, but just in case)
     _reg2scene.clear();
+    _knownScenes.clear();
+}
+
+void SceneManager::registerScenePointer(const Scene *ptr)
+{
+    if (!ptr) {
+        return;
+    }
+    _knownScenes.insert(ptr);
+}
+
+void SceneManager::unregisterScenePointer(const Scene *ptr)
+{
+    if (!ptr) {
+        return;
+    }
+    _knownScenes.erase(ptr);
 }
 
 bool SceneManager::loadScene(const std::string &path)
@@ -134,7 +151,7 @@ void SceneManager::onStopRuntime()
 
 bool SceneManager::isSceneValid(const Scene *ptr)
 {
-    return ptr == _currentScene.get() || ptr == _editorScene.get();
+    return ptr && _knownScenes.contains(ptr);
 }
 
 stdptr<Scene> SceneManager::cloneScene(Scene *scene) const

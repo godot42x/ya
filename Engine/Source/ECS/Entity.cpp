@@ -12,7 +12,8 @@ namespace ya
 Entity::operator bool() const
 {
     return _entityHandle != entt::null &&
-           App::get()->getSceneManager()->isSceneValid(_scene) &&
+           _scene &&
+           _scene->isValid() &&
            _scene->isValidEntity(this);
 }
 

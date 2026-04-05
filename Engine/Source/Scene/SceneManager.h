@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 namespace ya
 {
@@ -28,6 +29,7 @@ struct SceneManager
     stdptr<Scene> _editorScene = nullptr;
     // std::string   _currentScenePath;
     std::unordered_map<entt::registry*, Scene*> _reg2scene;
+    std::unordered_set<const Scene*>            _knownScenes;
 
   public:
     /**
@@ -73,6 +75,8 @@ struct SceneManager
     void onStopRuntime();
 
     bool isSceneValid(const Scene* ptr);
+    void registerScenePointer(const Scene* ptr);
+    void unregisterScenePointer(const Scene* ptr);
 
     stdptr<Scene> cloneScene(Scene* scene) const;
 

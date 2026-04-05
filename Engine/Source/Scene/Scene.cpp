@@ -13,8 +13,12 @@
 #include <algorithm>
 
 #include "Core/Reflection/ECSRegistry.h"
+#include "Core/Reflection/ReflectionCopier.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "reflects-core/lib.h"
+
+#include "Runtime/App/App.h"
+#include "Scene/SceneManager.h"
 
 #include "Core/UUID.h"
 
@@ -37,11 +41,23 @@ using components_to_copy = refl::type_list<
 Scene::Scene(const std::string &name)
     : _name(name)
 {
+    if (auto *app = App::get()) {
+        if (auto *sceneManager = app->getSceneManager()) {
+            sceneManager->registerScenePointer(this);
+        }
+    }
 }
 
 Scene::~Scene()
 {
     _magic = 0xDEADBEEF; // Mark as destroyed
+
+    if (auto *app = App::get()) {
+        if (auto *sceneManager = app->getSceneManager()) {
+            sceneManager->unregisterScenePointer(this);
+        }
+    }
+
     clear();
 }
 
@@ -220,8 +236,23 @@ bool Scene::isValidEntity(const Entity *entity) const
 // Check if Scene pointer is safe to access
 bool Scene::isValid() const
 {
-    SceneManager *sceneManager = App::get()->getSceneManager();
-    return sceneManager->isSceneValid(this) && _magic == SCENE_MAGIC;
+    if (_magic != SCENE_MAGIC) {
+        return false;
+    }
+
+    auto *app = App::get();
+    if (!app) {
+        YA_CORE_ASSERT(false, "App instance not found");
+        return false;
+    }
+
+    auto *sceneManager = app->getSceneManager();
+    if (!sceneManager) {
+        YA_CORE_ASSERT(false, "SceneManager instance not found");
+        return false;
+    }
+
+    return sceneManager->isSceneValid(this);
 }
 
 
@@ -333,9 +364,9 @@ stdptr<Scene> Scene::clone()
 {
     YA_PROFILE_FUNCTION_LOG();
 
-    return Scene::cloneScene(this);
+    // return Scene::cloneScene(this);
     // TODO: 暂时不支持 ScriptComponent、Container Property的克隆
-    // return Scene::cloneSceneByReflection(this);
+    return Scene::cloneSceneByReflection(this);
 }
 
 template <typename Component>
@@ -358,8 +389,50 @@ static void copyComponents(const entt::registry &srcReg, entt::registry &dstReg,
     }
 }
 
+static Node *cloneReferencedNodeTree(Node *srcNode, Scene *dstScene, Node *dstParent,
+                                     const std::unordered_map<UUID, entt::entity> &dstEntityMap)
+{
+    if (!srcNode || !dstScene) {
+        return nullptr;
+    }
+
+    Entity *dstEntity = nullptr;
+    if (const Entity *srcEntity = srcNode->getEntity()) {
+        const auto *idComponent = srcEntity->getComponent<IDComponent>();
+        if (!idComponent) {
+            YA_CORE_WARN("Node '{}' has no IDComponent during clone", srcNode->getName());
+            return nullptr;
+        }
+
+        const auto dstEntityIt = dstEntityMap.find(idComponent->_id);
+        if (dstEntityIt == dstEntityMap.end()) {
+            YA_CORE_WARN("Node '{}' references unmapped entity UUID {} during clone", srcNode->getName(), idComponent->_id.value);
+            return nullptr;
+        }
+
+        dstEntity = dstScene->getEntityByEnttID(dstEntityIt->second);
+        if (!dstEntity) {
+            YA_CORE_WARN("Node '{}' failed to resolve destination entity during clone", srcNode->getName());
+            return nullptr;
+        }
+    }
+
+    Node *dstNode = dstScene->createNode(srcNode->getName(), dstParent, dstEntity);
+    if (!dstNode) {
+        YA_CORE_ERROR("Failed to clone node '{}'", srcNode->getName());
+        return nullptr;
+    }
+
+    for (Node *child : srcNode->getChildren()) {
+        cloneReferencedNodeTree(child, dstScene, dstNode, dstEntityMap);
+    }
+
+    return dstNode;
+}
+
 // Helper function to copy a component from source to destination entity using reflection
 static void copyComponentByReflection(
+    Scene                *dstScene,
     const entt::registry &srcRegistry,
     entt::registry       &dstRegistry,
     entt::entity          srcEntity,
@@ -390,12 +463,29 @@ static void copyComponentByReflection(
     }
 
     // data -> json -> data
-    // TODO: iterate properties?
     try {
-        // Serialize source component to JSON
-        auto json =
-            ya::ReflectionSerializer::serializeByRuntimeReflection(srcComponent, componentTypeIndex, cls->getName());
-        ya::ReflectionSerializer::deserializeByRuntimeReflection(dstComponent, componentTypeIndex, json, cls->getName());
+        const bool copied = ya::ReflectionCopier::copyByRuntimeReflection(
+            dstComponent,
+            srcComponent,
+            componentTypeIndex,
+            cls->getName());
+
+            // fallback
+        if (!copied) {
+            const auto json = ya::ReflectionSerializer::serializeByRuntimeReflection(
+                srcComponent, componentTypeIndex, cls->getName());
+            ya::ReflectionSerializer::deserializeByRuntimeReflection(
+                dstComponent, componentTypeIndex, json, cls->getName());
+        }
+
+        if (auto *component = static_cast<IComponent *>(dstComponent)) {
+            if (dstScene) {
+                if (auto *entity = dstScene->getEntityByEnttID(dstEntity)) {
+                    component->setOwner(entity);
+                }
+            }
+            component->onPostSerialize();
+        }
     }
     catch (const std::exception &e) {
         YA_CORE_ERROR("Failed to copy component {}: {}", componentName, e.what());
@@ -461,7 +551,7 @@ stdptr<Scene> Scene::cloneScene(const Scene *scene)
 
 stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
 {
-    stdptr<Scene> newScene = makeShared<Scene>();
+    stdptr<Scene> newScene = makeShared<Scene>(scene ? scene->getName() : "Untitled Scene");
 
     std::unordered_map<UUID, entt::entity> srcEntityMap;
     std::unordered_map<UUID, entt::entity> dstEntityMap;
@@ -469,8 +559,15 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
     const auto &srcRegistry = scene->getRegistry();
     auto       &dstRegistry = newScene->getRegistry();
 
+    const entt::entity srcRootHandle =
+        (scene->_rootNode && scene->_rootNode->getEntity()) ? scene->_rootNode->getEntity()->getHandle() : entt::null;
+
 
     srcRegistry.view<IDComponent>().each([&](auto entity, const IDComponent &id) {
+        if (entity == srcRootHandle) {
+            return;
+        }
+
         const Entity     *srcEntity = scene->getEntityByEnttID(entity);
         const std::string name      = srcEntity ? srcEntity->name : "Entity";
         entt::entity      newEntity = newScene->createEntityWithUUID(id._id, name)->getHandle();
@@ -500,7 +597,21 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
             if (!ecsRegistry.hasComponent(fName, srcRegistry, srcEntity)) {
                 continue;
             }
-            copyComponentByReflection(srcRegistry, dstRegistry, srcEntity, dstEntity, componentName, typeIndex);
+            copyComponentByReflection(
+                newScene.get(),
+                srcRegistry,
+                dstRegistry,
+                srcEntity,
+                dstEntity,
+                componentName,
+                typeIndex);
+        }
+    }
+
+    if (scene->_rootNode && scene->_rootNode->hasChildren()) {
+        Node *dstRootNode = newScene->getRootNode();
+        for (Node *child : scene->_rootNode->getChildren()) {
+            cloneReferencedNodeTree(child, newScene.get(), dstRootNode, dstEntityMap);
         }
     }
 
