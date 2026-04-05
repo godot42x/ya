@@ -80,13 +80,14 @@ struct SkyboxComponent : public IComponent
     ESkyboxSourceType                              sourceType = ESkyboxSourceType::CubeFaces;
     CubemapSource                                  cubemapSource;
     CylindricalSource                              cylindricalSource;
+
+    // transients
     stdptr<Texture>                                cubemapTexture       = nullptr;
     stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
     std::shared_ptr<PendingBatchLoadState>         _pendingBatchLoad;
     std::shared_ptr<PendingOffscreenProcessState>  _pendingOffscreenProcess;
     std::optional<TextureFuture>                   _pendingCylindricalFuture;
-
     ESkyboxResolveState resolveState     = ESkyboxResolveState::Dirty;
 
     void        setFace(ECubeFace face, const std::string& path);

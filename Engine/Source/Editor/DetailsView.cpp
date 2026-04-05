@@ -27,6 +27,7 @@
 #include "EditorLayer.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/TextureFactory.h"
+#include "Resource/DeferredDeletionQueue.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Scene/Node.h"
@@ -152,11 +153,12 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
         int sourceType = static_cast<int>(sc->sourceType);
         if (ImGui::Combo("Source Type", &sourceType, SKYBOX_SOURCE_TYPE_LABELS)) {
             sc->sourceType = static_cast<ESkyboxSourceType>(sourceType);
-            if (sc->sourceType == ESkyboxSourceType::Cylindrical) {
-                sc->cubemapSource.files.fill("");
-            }
-            else {
-                sc->cylindricalSource.filepath.clear();
+            sc->sourcePreviewTexture.reset();
+            sc->clearCubemapPreviewViews();
+            if (sc->cubemapTexture) {
+                auto& ddq = DeferredDeletionQueue::get();
+                ddq.enqueueResource(ddq.currentFrame(), std::move(sc->cubemapTexture));
+                sc->cubemapTexture = nullptr;
             }
             bSourceChanged = true;
         }

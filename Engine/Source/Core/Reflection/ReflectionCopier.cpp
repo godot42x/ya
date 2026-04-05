@@ -48,9 +48,9 @@ bool ReflectionCopier::copyClassProperties(const Class* classPtr, void* dstObj, 
         success = copyClassProperties(parentClass, dstParentObj, srcParentObj) && success;
     }
 
-    for (const auto& [propName, prop] : classPtr->properties) {
+    classPtr->visitOwnProperties([&](const std::string& propName, const Property& prop) {
         if (prop.metadata.hasFlag(FieldFlags::NotSerialized)) {
-            continue;
+            return;
         }
 
         try {
@@ -60,7 +60,7 @@ bool ReflectionCopier::copyClassProperties(const Class* classPtr, void* dstObj, 
             YA_CORE_WARN("ReflectionCopier: Failed to copy property '{}.{}': {}", classPtr->name, propName, e.what());
             success = false;
         }
-    }
+    });
 
     return success;
 }

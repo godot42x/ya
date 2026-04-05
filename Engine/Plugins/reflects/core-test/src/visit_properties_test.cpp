@@ -13,6 +13,13 @@ struct Derived : public Base
     float derivedValue = 3.14f;
 };
 
+struct OrderedProperties
+{
+    int   first  = 1;
+    float second = 2.0f;
+    bool  third  = true;
+};
+
 
 TEST(ReflectsCore, VisitAllPropertiesRecursiveAndNonRecursive)
 {
@@ -70,6 +77,28 @@ TEST(ReflectsCore, VisitAllPropertiesRecursiveAndNonRecursive)
     EXPECT_EQ(names[0], "derivedValue");
     EXPECT_EQ(types[0], "float");
     EXPECT_NEAR(std::stof(values[0]), 2.718f, 1e-5f);
+}
+
+TEST(ReflectsCore, VisitPropertiesKeepRegistrationOrder)
+{
+    Register<OrderedProperties>("OrderedProperties")
+        .property("first", &OrderedProperties::first)
+        .property("second", &OrderedProperties::second)
+        .property("third", &OrderedProperties::third);
+
+    OrderedProperties obj;
+    Class*            cls = ClassRegistry::instance().getClass("OrderedProperties");
+    ASSERT_NE(cls, nullptr);
+
+    std::vector<std::string> names;
+    cls->visitAllProperties(&obj, [&](const std::string& name, const Property&, void*) {
+        names.push_back(name);
+    }, false);
+
+    ASSERT_EQ(names.size(), 3u);
+    EXPECT_EQ(names[0], "first");
+    EXPECT_EQ(names[1], "second");
+    EXPECT_EQ(names[2], "third");
 }
 
 // gtest main

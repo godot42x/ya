@@ -102,7 +102,7 @@ void renderReflectedType(const std::string& name,
                 }
 
                 // 然后渲染当前类的属性
-                for (auto& [propName, prop] : cache->classPtr->properties) {
+                cache->classPtr->visitOwnProperties([&](const std::string& propName, Property& prop) {
                     auto subPropInstancePtr = prop.addressGetterMutable(instance);
 
                     // 从缓存获取属性渲染上下文
@@ -153,7 +153,7 @@ void renderReflectedType(const std::string& name,
                             renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, ctx, depth + 1, &propCtxCache);
                         }
                     }
-                }
+                });
             };
 
             if (depth == 0)

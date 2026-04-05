@@ -3,6 +3,7 @@
 #include "function.h"
 #include "lib.h"
 #include <memory>
+#include <vector>
 
 
 // ============================================================================
@@ -53,6 +54,7 @@ struct Class : public Field
     // std::unordered_map<std::string, std::shared_ptr<Field>> fields;
     // 属性和函数存储
     std::unordered_map<std::string, Property> properties;
+    std::vector<std::string>                  propertyOrder;
     std::unordered_map<std::string, Function> functions;
 
     // 构造函数工厂 - 支持多个重载
@@ -178,9 +180,9 @@ struct Class : public Field
         }
 
         // 访问当前类的属性
-        for (const auto &[name, prop] : properties) {
+        visitOwnProperties([&](const std::string &name, const Property &prop) {
             std::forward<VisitorFunc>(visitor)(name, prop, obj);
-        }
+        });
     }
 
     // 访问所有属性（可选递归访问父类）- const 版本（用于只读操作，如序列化）
@@ -202,9 +204,9 @@ struct Class : public Field
         }
 
         // 2. 访问当前类的属性
-        for (const auto &[name, prop] : properties) {
+        visitOwnProperties([&](const std::string &name, const Property &prop) {
             std::forward<VisitorFunc>(visitor)(name, prop, obj);
-        }
+        });
     }
 
     // 按类分组访问属性（用于序列化等需要区分类层次的场景）
@@ -226,9 +228,9 @@ struct Class : public Field
         }
 
         // 2. 访问当前类的属性，传递 Class 指针
-        for (const auto &[name, prop] : properties) {
+        visitOwnProperties([&](const std::string &name, const Property &prop) {
             std::forward<VisitorFunc>(visitor)(this, name, prop, obj);
-        }
+        });
     }
 
     // 非 const 版本
@@ -275,8 +277,35 @@ struct Class : public Field
     // 共用逻辑：插入或更新 property 并返回引用
     Property &insertProperty(const std::string &inName, Property &&prop)
     {
-        auto it = properties.insert_or_assign(inName, std::move(prop));
+        const bool bExists = properties.find(inName) != properties.end();
+        auto       it      = properties.insert_or_assign(inName, std::move(prop));
+        if (!bExists) {
+            // TODO: optimize the visitor
+            propertyOrder.push_back(inName);
+        }
         return it.first->second;
+    }
+
+    template <typename VisitorFunc>
+    void visitOwnProperties(VisitorFunc &&visitor) const
+    {
+        for (const auto &name : propertyOrder) {
+            auto it = properties.find(name);
+            if (it != properties.end()) {
+                std::forward<VisitorFunc>(visitor)(name, it->second);
+            }
+        }
+    }
+
+    template <typename VisitorFunc>
+    void visitOwnProperties(VisitorFunc &&visitor)
+    {
+        for (const auto &name : propertyOrder) {
+            auto it = properties.find(name);
+            if (it != properties.end()) {
+                std::forward<VisitorFunc>(visitor)(name, it->second);
+            }
+        }
     }
 
     // Register normal member variable (read-write)

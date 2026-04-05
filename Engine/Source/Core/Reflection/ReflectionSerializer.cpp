@@ -532,9 +532,9 @@ nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *ob
     nlohmann::json baseJson = serializeBaseClasses(classPtr, obj);
 
     // 2. 遍历当前类的属性（不包括父类）
-    for (const auto &[propName, prop] : classPtr->properties) {
+    classPtr->visitOwnProperties([&](const std::string &propName, const Property &prop) {
         if (prop.metadata.hasFlag(FieldFlags::NotSerialized)) {
-            continue;
+            return;
         }
 
         try {
@@ -546,7 +546,7 @@ nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *ob
                          propName,
                          e.what());
         }
-    }
+    });
 
     // 3. 如果有父类属性，添加 __base__ 字段
     if (!baseJson.empty()) {
@@ -641,9 +641,9 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
     nlohmann::json baseJson = serializeBaseClasses(classPtr, nestedObjPtr);
 
     // 2. 遍历当前类的属性（不包括父类）
-    for (const auto &[propName, subProp] : classPtr->properties) {
+    classPtr->visitOwnProperties([&](const std::string &propName, const Property &subProp) {
         if (subProp.metadata.hasFlag(FieldFlags::NotSerialized)) {
-            continue;
+            return;
         }
 
         try {
@@ -665,7 +665,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
                          propName,
                          e.what());
         }
-    }
+    });
 
     // 3. 如果有父类属性，添加 __base__ 字段
     if (!baseJson.empty()) {

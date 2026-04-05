@@ -69,9 +69,9 @@ ReflectionCache* getOrCreateReflectionCache(uint32_t typeIndex)
 
     // cache properties
     if (ret->classPtr) {
-        for (auto& [propName, prop] : ret->classPtr->properties) {
+        ret->classPtr->visitOwnProperties([&](const std::string& propName, const Property& prop) {
             ret->propertyContexts[propName] = PropertyRenderContext::createFrom(ret, prop, propName);
-        }
+        });
     }
 
     return ret;

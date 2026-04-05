@@ -50,7 +50,7 @@ Scene::Scene(const std::string &name)
 
 Scene::~Scene()
 {
-    _magic = 0xDEADBEEF; // Mark as destroyed
+    // _magic = 0xDEADBEEF; // Mark as destroyed
 
     if (auto *app = App::get()) {
         if (auto *sceneManager = app->getSceneManager()) {
@@ -236,9 +236,9 @@ bool Scene::isValidEntity(const Entity *entity) const
 // Check if Scene pointer is safe to access
 bool Scene::isValid() const
 {
-    if (_magic != SCENE_MAGIC) {
-        return false;
-    }
+    // if (_magic != SCENE_MAGIC) {
+    //     return false;
+    // }
 
     auto *app = App::get();
     if (!app) {

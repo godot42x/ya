@@ -16,8 +16,8 @@ struct [[refl]] Scene
     friend struct Entity;
 
     // Magic number for dangling pointer detection
-    static constexpr uint32_t SCENE_MAGIC = 0x5343454E; // 'SCEN'
-    uint32_t                  _magic      = SCENE_MAGIC;
+    // static constexpr uint32_t SCENE_MAGIC = 0x5343454E; // 'SCEN'
+    // uint32_t                  _magic      = SCENE_MAGIC;
 
     std::string    _name;
     entt::registry _registry;
@@ -141,7 +141,7 @@ struct [[refl]] Scene
     // === Internal ECS API (Engine Systems Only) ===
     /**
      * @brief Create raw Entity without Node wrapper
-    * @note Only for internal systems (Serialization, ModelInstantiation, ResourceResolve, etc.)
+     * @note Only for internal systems (Serialization, ModelInstantiation, ResourceResolve, etc.)
      * @note Application code should use createNode() instead
      */
     Entity* createEntity(const std::string& name = "Entity");
