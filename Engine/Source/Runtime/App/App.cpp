@@ -40,6 +40,7 @@
 
 // ECS
 
+#include "ECS/Component.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Entity.h"
@@ -797,9 +798,16 @@ void App::onSceneDestroy(Scene* scene)
 
 void App::onSceneActivated(Scene* scene)
 {
+    uint64_t selectedUUID = _editorLayer ? _editorLayer->getSelectedEntityUUID() : 0;
+
     if (_editorLayer) {
-        _editorLayer->setSelectedEntity(nullptr);
         _editorLayer->setSceneContext(scene);
+
+        Entity* remappedEntity = nullptr;
+        if (scene && selectedUUID != 0) {
+            remappedEntity = scene->getEntityByUUID(selectedUUID);
+        }
+        _editorLayer->selectEntity(remappedEntity);
     }
 
     // Engine core initialization - basic scene setup

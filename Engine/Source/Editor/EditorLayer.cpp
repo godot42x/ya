@@ -39,6 +39,20 @@ Scene* EditorLayer::getEditableScene() const
     return sceneManager ? sceneManager->getEditorScene() : nullptr;
 }
 
+Scene* EditorLayer::getViewportInteractionScene() const
+{
+    if (!_app) {
+        return nullptr;
+    }
+
+    auto* sceneManager = _app->getSceneManager();
+    if (!sceneManager) {
+        return nullptr;
+    }
+
+    return sceneManager->getActiveScene();
+}
+
 void EditorLayer::syncEditorSettingsFromConfig()
 {
     const std::string defaultScenePath = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
@@ -1231,8 +1245,9 @@ void EditorLayer::renderGizmo()
         return;
     }
 
-    glm::mat4 view = app->camera.getViewMatrix();
-    glm::mat4 proj = app->camera.getProjectionMatrix();
+    const auto& frameState = app->getRenderFrameState();
+    glm::mat4   view       = frameState.view;
+    glm::mat4   proj       = frameState.projection;
 
     // Setup ImGuizmo context
     ImGuizmo::SetOrthographic(false);
@@ -1312,26 +1327,14 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         return;
     }
 
-    // Get active scene
-    auto* scene = getEditableScene();
+    auto* scene = getViewportInteractionScene();
     if (!scene) {
         return;
     }
-    glm::mat4 view{}, projection{};
 
-    // Focus DO NOT support orbit camera for now
-    // if (app->_viewportRT->isUseEntityCamera()) {
-    //     auto *entityCam = app->_viewportRT->getCamera();
-    //     YA_CORE_ASSERT(entityCam->isValid(), "Entity camera is null despite isUseEntityCamera being true");
-    //     if (auto *camComp = entityCam->getComponent<CameraComponent>()) {
-    //         view       = camComp->getOrbitView();
-    //         projection = camComp->getProjection();
-    //     }
-    // }
-    // else {
-    view       = app->camera.getViewMatrix();
-    projection = app->camera.getProjectionMatrix();
-    // }
+    const auto& frameState = app->getRenderFrameState();
+    glm::mat4   view       = frameState.view;
+    glm::mat4   projection = frameState.projection;
 
     // Use RayCastMousePickingSystem to pick entity
     // viewportLocalX/Y are in viewport space (0,0 = top-left of viewport)

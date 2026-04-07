@@ -1,0 +1,190 @@
+PHONG MATERIAL SYSTEM - FLOW DIAGRAM
+
+OVERALL RENDER PIPELINE:
+=======================
+
+ForwardRenderPipeline::tick()
+    |
+    +-- beginFrame() [Line 425]
+    |
+    +-- renderScene() [Line 470]
+    |   |
+    |   +-- simpleMaterialSystem->tick(cmdBuf, dt, ctx)
+    |   +-- unlitMaterialSystem->tick(cmdBuf, dt, ctx)
+    |   +-- phongMaterialSystem->tick(cmdBuf, dt, ctx)
+    |   +-- debugRenderSystem->tick(cmdBuf, dt, ctx)
+    |   +-- skyboxSystem->tick(cmdBuf, dt, ctx)
+    |
+    +-- endViewportPass()
+
+
+PHONG MATERIAL SYSTEM::onRender() - DETAILED FLOW
+==================================================
+
+Line 313: QUERY ENTITIES
+    |
+    Query: view = registry.view<PhongMaterialComponent, MeshComponent, TransformComponent>
+    
+    Result: All entities with ALL THREE components
+
+
+Lines 348-365: SORT PHASE
+    |
+    1. Create entries vector
+    2. Iterate: for (const auto& [entity, lmc, mc, tc] : view.each())
+       - Structured binding unpacks components in query order
+    3. Sort entries by Z depth (world forward = -Z)
+
+
+Lines 372-428: MAIN RENDER LOOP
+    |
+    For each sorted (entity, transform) pair:
+    
+    ├-- Line 374: Get all components
+    |   const auto& [lmc, meshComp, tc2] = view.get(entity)
+    |
+    ├-- Line 379: Get runtime material
+    |   PhongMaterial* material = lmc.getMaterial()
+    |
+    ├-- Lines 387-401: LAZY UPDATE DESCRIPTOR SETS
+    |   ├-- Get material instance index
+    |   ├-- Get resource and param descriptor sets from pool
+    |   ├-- If not updated yet this frame:
+    |   |   ├-- updateMaterialParamUBO() - colors, shininess
+    |   |   └-- updateMaterialResourceDS() - textures
+    |   └-- Mark material as updated
+    |
+    ├-- Lines 405-412: BIND DESCRIPTOR SETS (5 total)
+    |   ├-- Set 0: Frame data (camera, lighting)
+    |   ├-- Set 1: Material resources (textures)
+    |   ├-- Set 2: Material parameters (colors)
+    |   ├-- Set 3: Skybox cubemap
+    |   └-- Set 4: Shadow maps
+    |
+    ├-- Lines 415-418: PUSH CONSTANTS
+    |   └-- Model matrix to vertex/geometry shaders
+    |
+    └-- Lines 423-426: DRAW MESH
+        Mesh* mesh = meshComp.getMesh()
+        mesh->draw(cmdBuf)
+
+
+COMPONENT UNPACKING
+===================
+
+Query: view<PhongMaterialComponent, MeshComponent, TransformComponent>
+
+First iteration (Lines 350, 358):
+    for (const auto& [entity, lmc, mc, tc] : view.each())
+    
+    [0] = entity (entt::entity)
+    [1] = PhongMaterialComponent (first in template)
+    [2] = MeshComponent (second in template)
+    [3] = TransformComponent (third in template)
+
+Second iteration (Line 374):
+    const auto& [lmc, meshComp, tc2] = view.get(entity)
+    
+    Order same as query:
+    [0] = PhongMaterialComponent
+    [1] = MeshComponent
+    [2] = TransformComponent
+
+
+DESCRIPTOR SETS BINDING (Lines 405-412)
+=======================================
+
+Set 0: FRAME DATA (Per-Pass, Same for All Entities)
+    - Projection matrix
+    - View matrix
+    - Camera position
+    - Directional light (1 light)
+    - Point lights (array of up to 8)
+    - Time, resolution, debug params
+
+Set 1: MATERIAL RESOURCES (Per-Material)
+    - Diffuse texture
+    - Specular texture
+    - Reflection texture
+    - Normal map
+
+Set 2: MATERIAL PARAMETERS (Per-Material)
+    - Ambient color
+    - Diffuse color
+    - Specular color
+    - Shininess factor
+
+Set 3: SKYBOX (Per-Pass, Same for All Entities)
+    - Cubemap texture
+
+Set 4: SHADOW MAPS (Per-Pass, Same for All Entities)
+    - Directional shadow map
+    - Point light shadow cubemaps (array)
+
+
+LAZY UPDATE OPTIMIZATION
+=========================
+
+Material descriptor sets updated at most once per frame:
+
+    updatedMaterial[materialIndex] tracks which materials already updated
+
+    Entity 1 (Material 0):
+        - Check: updatedMaterial[0] = false
+        - Update: flushDirty(Material 0)
+        - Set: updatedMaterial[0] = true
+
+    Entity 2 (Material 0):
+        - Check: updatedMaterial[0] = true
+        - Skip: Don't update again
+
+    Entity 3 (Material 1):
+        - Check: updatedMaterial[1] = false
+        - Update: flushDirty(Material 1)
+        - Set: updatedMaterial[1] = true
+
+Benefits: Material data synced once regardless of entity count using that material
+
+
+COMPARISON: UnlitMaterialSystem (Lines 259-357)
+================================================
+
+Query: view<UnlitMaterialComponent, MeshComponent, TransformComponent>
+Same pattern as Phong
+
+Differences:
+- NO SORTING (direct iteration)
+- FEWER DESCRIPTOR SETS (only 3: frame, param, resource)
+- No skybox set
+- No shadow maps
+- Uses frame slot advancement for multi-frame buffering
+
+
+COMPARISON: SimpleMaterialSystem (Lines 172-284)
+================================================
+
+Queries: TWO separate views
+    view1<TransformComponent, SimpleMaterialComponent, MeshComponent>
+    view2<TransformComponent, DirectionComponent>
+
+Differences:
+- NO DESCRIPTOR SETS AT ALL
+- Uses only push constants
+- Lambda-based iteration with .each()
+- Minimal data transfer
+
+
+SYSTEM EXECUTION ORDER (ForwardRenderPipeline.cpp, Lines 585-594)
+==================================================================
+
+renderScene(cmdBuf, dt, ctx, phongScenePassResources)
+    |
+    1. simpleMaterialSystem->tick()      - Basic geometry
+    2. unlitMaterialSystem->tick()       - Unlit textured
+    3. phongMaterialSystem->tick()       - Lit with shadows
+    4. debugRenderSystem->tick()         - Debug visualization
+    5. skyboxSystem->tick()              - Skybox (last)
+
+All render to SAME render target in SAME render pass.
+Systems render in sequence; results accumulate.
+

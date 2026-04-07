@@ -103,6 +103,7 @@ struct [[refl]] Scene
     }
 
     Entity* getEntityByName(const std::string& name);
+    Entity* getEntityByUUID(uint64_t uuid);
 
     // Scene management
     void clear();

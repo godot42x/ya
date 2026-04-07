@@ -265,6 +265,19 @@ Entity *Scene::getEntityByName(const std::string &name)
     return nullptr;
 }
 
+Entity *Scene::getEntityByUUID(uint64_t uuid)
+{
+    for (auto &[id, entity] : _entityMap)
+    {
+        if (auto *idComponent = entity.getComponent<IDComponent>()) {
+            if (idComponent->_id.value == uuid) {
+                return &entity;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void Scene::clear()
 {
     _entityMap.clear();

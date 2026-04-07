@@ -269,9 +269,10 @@ struct App
     [[nodiscard]] bool                   isPostprocessingEnabled() const;
 
     // Getters for subsystems
-    [[nodiscard]] SceneManager* getSceneManager() const { return _sceneManager; }
-    [[nodiscard]] uint32_t      getFrameIndex() const { return _frameIndex; }
-    [[nodiscard]] uint64_t      getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
+    [[nodiscard]] SceneManager*           getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] const RenderFrameState& getRenderFrameState() const { return _renderFrameState; }
+    [[nodiscard]] uint32_t                getFrameIndex() const { return _frameIndex; }
+    [[nodiscard]] uint64_t                getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
 
     // State getters
     [[nodiscard]] AppState getAppState() const { return _appState; }

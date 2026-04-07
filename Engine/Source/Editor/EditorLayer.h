@@ -76,7 +76,8 @@ struct EditorViewportContext
 struct EditorLayer
 {
   private:
-    App*                 _app = nullptr;
+    App*                 _app                = nullptr;
+    uint64_t             _selectedEntityUUID = 0;
     std::vector<Entity*> _selections;
 
     // Editor panels
@@ -179,15 +180,26 @@ struct EditorLayer
     {
         _sceneHierarchyPanel.setContext(scene);
     }
+    void selectEntity(Entity* entity)
+    {
+        _sceneHierarchyPanel.setSelection(entity);
+    }
 
     // Entity selection bus - notifies DetailsView of selection changes
     void setSelectedEntity(Entity* entity)
     {
         if (entity && entity->isValid()) {
             _selections = {entity};
+            if (auto* idComponent = entity->getComponent<IDComponent>()) {
+                _selectedEntityUUID = idComponent->_id.value;
+            }
+            else {
+                _selectedEntityUUID = 0;
+            }
         }
         else {
             _selections.clear();
+            _selectedEntityUUID = 0;
         }
     }
 
@@ -277,6 +289,7 @@ struct EditorLayer
 
   private:
     Scene* getEditableScene() const;
+    Scene* getViewportInteractionScene() const;
     void   syncEditorSettingsFromConfig();
 
     // UI Methods
@@ -315,6 +328,8 @@ struct EditorLayer
     bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
     bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>& getSelections() const { return _selections; }
+    Entity*                     getSelectedEntity() const { return _sceneHierarchyPanel.getSelectedEntity(); }
+    uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 
