@@ -4,6 +4,8 @@
 #include "Scene/Node.h"
 #include "Scene/SceneManager.h"
 
+#include "ECS/Component/ManagedChildComponent.h"
+
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
@@ -138,6 +140,9 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
         YA_CORE_ERROR("ModelInstantiationSystem: Child node has no entity");
         return nullptr;
     }
+
+    // Mark as managed child — serializer will skip this entity (recreated at runtime)
+    childEntity->addComponent<ManagedChildComponent>();
 
     auto* meshComp = childEntity->addComponent<MeshComponent>();
     meshComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());

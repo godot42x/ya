@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "ECS/Component/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 
 
@@ -75,13 +76,19 @@ nlohmann::json SceneSerializer::serialize()
         sceneRootHandle = _scene->_rootNode->getEntity()->getHandle();
     }
 
-    registry.view<entt::entity>().each([&](auto entityID) {
+    registry.view<entt::entity>(entt::exclude<ManagedChildComponent>).each([&](auto entityID) {
         Entity* entity = _scene->getEntityByEnttID(entityID);
         if (entity) {
             // ★ 跳过 scene_root Entity（使用句柄比较代替字符串比较，性能更好）
             if (entity->getHandle() == sceneRootHandle) {
                 return;
             }
+
+            // ★ 跳过被父组件动态管理的子 Entity（运行时由父组件重建，不持久化）
+            // if (registry.any_of<ManagedChildComponent>(entityID)) {
+            //     return;
+            // }
+
             j["entities"].push_back(serializeEntity(entity));
         }
     });
@@ -251,10 +258,16 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
         }
     }
 
-    // ★ 递归序列化子节点
+    // ★ 递归序列化子节点（跳过被动态管理的子节点）
     if (node->hasChildren()) {
         j["children"] = nlohmann::json::array();
         for (Node* child : node->getChildren()) {
+            // 跳过 ManagedChildComponent 标记的子节点（及其子树）
+            if (Entity* childEntity = child->getEntity()) {
+                if (_scene->getRegistry().any_of<ManagedChildComponent>(childEntity->getHandle())) {
+                    continue;
+                }
+            }
             j["children"].push_back(serializeNodeTree(child));
         }
     }

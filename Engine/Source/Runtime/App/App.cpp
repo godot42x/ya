@@ -797,9 +797,9 @@ void App::onSceneDestroy(Scene* scene)
 
 void App::onSceneActivated(Scene* scene)
 {
-    (void)scene;
-    if (_editorLayer && _sceneManager) {
-        _editorLayer->setSceneContext(_sceneManager->getEditorScene());
+    if (_editorLayer) {
+        _editorLayer->setSelectedEntity(nullptr);
+        _editorLayer->setSceneContext(scene);
     }
 
     // Engine core initialization - basic scene setup

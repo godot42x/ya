@@ -2,7 +2,6 @@
 
 #include <concepts>
 #include <entt/entt.hpp>
-#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -17,6 +16,22 @@ namespace ya
 {
 
 struct IComponent;
+
+/**
+ * @brief How to copy a component during clone/duplicate.
+ * - CopyCtor:   Fast. Uses C++ copy constructor directly.
+ *               Requires the component to have a correct copy ctor
+ *               that resets runtime state (pointers, caches, etc.).
+ * - Reflection: Safe. Copies only reflected (serializable) fields via
+ *               ReflectionCopier, with serialize→deserialize fallback.
+ *               Runtime state stays default-initialized. Slower but
+ *               always correct even if copy ctor does shallow copy.
+ */
+enum class EClonePolicy : uint8_t
+{
+    CopyCtor,
+    Reflection,
+};
 struct ECSRegistry
 {
 
@@ -34,6 +49,15 @@ struct ECSRegistry
         virtual void* create(entt::registry& registry, entt::entity entity)    = 0;
         virtual void* get(const entt::registry& registry, entt::entity entity) = 0;
         virtual bool  remove(entt::registry& registry, entt::entity entity)    = 0;
+
+        /**
+         * @brief Clone component from srcEntity to dstEntity.
+         * @param policy CopyCtor for fast copy, Reflection for safe deep copy.
+         * @return Pointer to newly created component, or nullptr if src has no such component.
+         */
+        virtual void* clone(const entt::registry& srcRegistry, entt::entity srcEntity,
+                            entt::registry& dstRegistry, entt::entity dstEntity,
+                            EClonePolicy policy) = 0;
     };
 
     template <typename T>
@@ -59,6 +83,9 @@ struct ECSRegistry
             }
             return false;
         }
+        void* clone(const entt::registry& srcRegistry, entt::entity srcEntity,
+                     entt::registry& dstRegistry, entt::entity dstEntity,
+                     EClonePolicy policy) override;
     };
 
   private:
@@ -145,7 +172,73 @@ struct ECSRegistry
         return nullptr;
     }
 
-    const std::unordered_map<FName, uint32_t>& getTypeIndexCache() const { return _typeIndexCache; }
+    /**
+     * @brief Clone component from srcEntity to dstEntity.
+     * @param policy CopyCtor = fast via copy ctor; Reflection = safe via reflected fields only.
+     */
+    void* cloneComponent(ya::type_index_t typeIndex,
+                         const entt::registry& srcRegistry, entt::entity srcEntity,
+                         entt::registry& dstRegistry, entt::entity dstEntity,
+                         EClonePolicy policy = EClonePolicy::Reflection)
+    {
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->clone(srcRegistry, srcEntity, dstRegistry, dstEntity, policy);
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] const std::unordered_map<FName, uint32_t>& getTypeIndexCache() const { return _typeIndexCache; }
 };
+
+} // namespace ya
+
+// ============================================================================
+// ComponentOps<T>::clone — defined after ECSRegistry to keep the class body clean.
+// Needs ReflectionCopier / ReflectionSerializer only for the Reflection path.
+// ============================================================================
+#include "Core/Reflection/ReflectionCopier.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "reflects-core/lib.h"
+
+namespace ya
+{
+
+template <typename T>
+void* ECSRegistry::ComponentOps<T>::clone(
+    const entt::registry& srcRegistry, entt::entity srcEntity,
+    entt::registry& dstRegistry, entt::entity dstEntity,
+    EClonePolicy policy)
+{
+    if (!srcRegistry.all_of<T>(srcEntity)) {
+        return nullptr;
+    }
+
+    if (policy == EClonePolicy::CopyCtor) {
+        // Fast path: C++ copy constructor (caller must ensure T's copy ctor is correct)
+        const T& src = srcRegistry.get<T>(srcEntity);
+        return &dstRegistry.emplace_or_replace<T>(dstEntity, src);
+    }
+
+    // Safe path: default-construct, then copy only reflected fields
+    T&          dst = dstRegistry.emplace_or_replace<T>(dstEntity);
+    const T&    src = srcRegistry.get<T>(srcEntity);
+    uint32_t    typeIndex = ya::TypeIndex<T>::value();
+    const auto* cls = ClassRegistry::instance().getClass(typeIndex);
+
+    if (cls) {
+        bool copied = ReflectionCopier::copyByRuntimeReflection(
+            &dst, &src, typeIndex, cls->getName());
+
+        if (!copied) {
+            // Fallback: serialize → deserialize
+            auto json = ReflectionSerializer::serializeByRuntimeReflection(
+                &src, typeIndex, cls->getName());
+            ReflectionSerializer::deserializeByRuntimeReflection(
+                &dst, typeIndex, json, cls->getName());
+        }
+    }
+
+    return &dst;
+}
 
 } // namespace ya

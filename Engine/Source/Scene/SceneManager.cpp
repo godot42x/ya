@@ -100,6 +100,7 @@ bool SceneManager::enterPlayMode(AppState state)
     }
 
     auto playScene = _editorScene->clone();
+    playScene->setName(_editorScene->getName() + " (Play Mode)");
     if (!playScene) {
         YA_CORE_ERROR("Failed to clone editor scene for play mode");
         return false;
