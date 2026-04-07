@@ -861,6 +861,9 @@ void App::stopRuntime()
     }
 
     YA_CORE_INFO("Stopping runtime");
+    if (auto* render = getRender()) {
+        render->waitIdle();
+    }
     if (_sceneManager) {
         _sceneManager->exitPlayMode();
     }
@@ -881,6 +884,9 @@ void App::stopSimulation()
     }
 
     YA_CORE_INFO("Stopping simulation");
+    if (auto* render = getRender()) {
+        render->waitIdle();
+    }
     if (_sceneManager) {
         _sceneManager->exitPlayMode();
     }

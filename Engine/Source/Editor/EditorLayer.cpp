@@ -532,7 +532,11 @@ void EditorLayer::toolbar()
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isEditorMode()) {
-            _app->startRuntime();
+            App::get()->taskManager.registerFrameTask([app = _app]() {
+                if (app && app->isEditorMode()) {
+                    app->startRuntime();
+                }
+            });
         }
     }
     ImGui::SameLine();
@@ -540,7 +544,11 @@ void EditorLayer::toolbar()
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isEditorMode()) {
-            _app->startSimulation();
+            App::get()->taskManager.registerFrameTask([app = _app]() {
+                if (app && app->isEditorMode()) {
+                    app->startSimulation();
+                }
+            });
         }
     }
     // if (ImGui::ImageButton("Pause", pauseDS, ImVec2(size * 2, size)))
@@ -549,12 +557,17 @@ void EditorLayer::toolbar()
     ImGui::SameLine();
     if (ImGui::ImageButton("Stop", *_stopIcon, ImVec2(size, size)))
     {
-        if (_app->isRuntimeMode()) {
-            _app->stopRuntime();
-        }
-        else if (_app->isSimulationMode()) {
-            _app->stopSimulation();
-        }
+        App::get()->taskManager.registerFrameTask([app = _app]() {
+            if (!app) {
+                return;
+            }
+            if (app->isRuntimeMode()) {
+                app->stopRuntime();
+            }
+            else if (app->isSimulationMode()) {
+                app->stopSimulation();
+            }
+        });
     }
 
     // style RAII auto-pop
