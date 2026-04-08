@@ -1,12 +1,12 @@
 #pragma once
 
-#include "ContainerProperty.h"
-#include "Core/Log.h"
 #include "Core/TypeIndex.h"
-#include "reflects-core/lib.h"
 
 #include <string>
 #include <unordered_set>
+
+struct Class;
+struct Property;
 
 namespace ya
 {
@@ -36,10 +36,7 @@ struct ReflectionCopier
         return baseTypes.contains(typeIdx);
     }
 
-    static bool isEnumType(uint32_t typeIndex)
-    {
-        return EnumRegistry::instance().hasEnum(typeIndex);
-    }
+    static bool isEnumType(uint32_t typeIndex);
 };
 
 } // namespace ya

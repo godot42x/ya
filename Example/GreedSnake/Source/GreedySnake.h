@@ -9,7 +9,7 @@ struct GreedySnake : public ya::App
     using Super = ya::App;
 
 
-    void onInit(ya::AppDesc ci) override
+    void onInit(const ya::AppDesc& ci) override
     {
         Super::onInit(ci);
     }

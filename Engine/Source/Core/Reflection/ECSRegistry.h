@@ -196,8 +196,8 @@ struct ECSRegistry
 // ComponentOps<T>::clone — defined after ECSRegistry to keep the class body clean.
 // Needs ReflectionCopier / ReflectionSerializer only for the Reflection path.
 // ============================================================================
-#include "Core/Reflection/ReflectionCopier.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/ReflectionCopier.h"
 #include "reflects-core/lib.h"
 
 namespace ya

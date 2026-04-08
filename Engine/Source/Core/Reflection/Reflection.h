@@ -12,10 +12,6 @@
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/PropertyExtensions.h"
 
-
-// TODO: should not be in core?
-#include "Core/Reflection/ECSRegistry.h"
-
 namespace ya
 {
 struct IComponent;
@@ -352,3 +348,6 @@ struct Visitor<void>
     };                                        \
     } /* close ya::reflection::detail */
 // clang-format on
+
+// TODO: should not be in core?
+#include "Core/Reflection/ECSRegistry.h"

@@ -1,10 +1,16 @@
 #include "ReflectionCopier.h"
 
+#include "Core/Log.h"
 #include "PropertyExtensions.h"
 #include "ReflectionSerializer.h"
 
 namespace ya
 {
+
+bool ReflectionCopier::isEnumType(uint32_t typeIndex)
+{
+    return EnumRegistry::instance().hasEnum(typeIndex);
+}
 
 bool ReflectionCopier::copyByRuntimeReflection(void* dstObj, const void* srcObj, uint32_t typeIndex, const std::string& className)
 {

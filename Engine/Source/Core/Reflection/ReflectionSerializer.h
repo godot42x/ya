@@ -2,7 +2,6 @@
 #pragma once
 
 #include "ContainerProperty.h"
-#include "Core/Log.h"
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/TypeIndex.h"
