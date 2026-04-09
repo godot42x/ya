@@ -30,7 +30,6 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
 
             .shaderName = "Shadow/CombinedShadowMappingGenerate.glsl",
             // .shaderName        = "CombineShadowMappingGenerate.slang",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,

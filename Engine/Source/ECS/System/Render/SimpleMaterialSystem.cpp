@@ -62,7 +62,6 @@ void SimpleMaterialSystem::onInitImpl(const InitParams& initParams)
 
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/SimpleMaterial.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,

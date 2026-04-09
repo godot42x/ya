@@ -101,7 +101,6 @@ void UnlitMaterialSystem::onInitImpl(const InitParams& initParams)
 
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/Unlit.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,

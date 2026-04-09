@@ -53,7 +53,6 @@ void DeferredRenderPipeline::initPBR()
         .shaderDesc     = ShaderDesc{
 
             .shaderName        = "DeferredRender/Unified_GBufferPass_PBR.slang",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = _commonVertexAttributes,
         },

@@ -66,7 +66,6 @@ void PhongMaterialSystem::onInitImpl(const InitParams& initParams)
         .shaderDesc = ShaderDesc{
             // .shaderName        = "PhongLit.slang",
             .shaderName        = "PhongLit/PhongLit.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,

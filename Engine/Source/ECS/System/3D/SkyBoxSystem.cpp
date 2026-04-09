@@ -35,7 +35,6 @@ void SkyBoxSystem::onInitImpl(const InitParams& initParams)
         .shaderDesc            = {
 
             .shaderName        = "Skybox.glsl",
-            .bDeriveFromShader = false,
 
             // also a cube mesh
             .vertexBufferDescs = {

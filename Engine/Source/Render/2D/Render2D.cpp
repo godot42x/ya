@@ -188,7 +188,6 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
         .shaderDesc = ShaderDesc{
             .shaderName        = "Sprite2D_Screen.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
@@ -303,7 +302,6 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
         .shaderDesc = ShaderDesc{
             .shaderName        = "Sprite2D_World.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,

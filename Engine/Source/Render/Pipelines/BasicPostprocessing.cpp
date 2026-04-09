@@ -36,7 +36,6 @@ void BasicPostprocessing::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
                        .shaderName        = "PostProcessing/Basic.glsl",
-                       .bDeriveFromShader = false,
                        .vertexBufferDescs = {
                 VertexBufferDescription{
                                .slot  = 0,

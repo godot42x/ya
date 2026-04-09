@@ -162,6 +162,22 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
 
 }; // namespace EShaderStage
 
+struct ShaderReflectionConfig
+{
+    bool vertexInput       = false;
+    bool descriptorLayouts = false;
+    bool pushConstants     = false;
+
+    [[nodiscard]] bool hasPipelineLayout() const
+    {
+        return descriptorLayouts || pushConstants;
+    }
+
+    [[nodiscard]] bool any() const
+    {
+        return vertexInput || hasPipelineLayout();
+    }
+};
 
 
 struct ShaderDesc
@@ -181,7 +197,7 @@ struct ShaderDesc
     ESourceMode                          sourceMode = ESourceMode::SingleShader;
     std::string                          shaderName; // we use single glsl now
     std::vector<StageFile>               stageFiles{};
-    bool                                 bDeriveFromShader = false; // UNIMPLEMENTED: whether to use vertex layout by the shader's reflection
+    ShaderReflectionConfig               reflection{};
     std::vector<VertexBufferDescription> vertexBufferDescs{};
     std::vector<VertexAttribute>         vertexAttributes{};
     std::vector<std::string>             defines = {}; // #define in shader

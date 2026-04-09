@@ -417,9 +417,51 @@ bool VulkanPipeline::createPipelineInternal()
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
     std::vector<VkVertexInputBindingDescription>   vertexBindingDescriptions;
 
-    const auto& config = _ci.shaderDesc;
+    const auto& config                = _ci.shaderDesc;
+    const bool  reflectVertexInput    = config.reflection.vertexInput;
+    const bool  reflectPipelineLayout = config.reflection.hasPipelineLayout();
+    const bool  useShaderReflection   = config.reflection.any();
 
-    if (_ci.shaderDesc.bDeriveFromShader) {
+    auto appendManualVertexLayout = [&]() {
+        if (!config.vertexBufferDescs.empty()) {
+            vertexBindingDescriptions.clear();
+            for (const auto& bufferDesc : config.vertexBufferDescs) {
+                vertexBindingDescriptions.push_back({
+                    .binding   = bufferDesc.slot,
+                    .stride    = static_cast<uint32_t>(bufferDesc.pitch),
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                });
+            }
+        }
+
+        if (!config.vertexAttributes.empty()) {
+            for (const auto& attr : config.vertexAttributes) {
+                const auto vkAttr = VkVertexInputAttributeDescription{
+                    .location = attr.location,
+                    .binding  = attr.bufferSlot,
+                    .format   = toVk(attr.format),
+                    .offset   = static_cast<uint32_t>(attr.offset),
+                };
+
+                auto it = std::find_if(vertexAttributeDescriptions.begin(),
+                                       vertexAttributeDescriptions.end(),
+                                       [&](const auto& existing) {
+                                           return existing.location == attr.location;
+                                       });
+                if (it != vertexAttributeDescriptions.end()) {
+                    *it = vkAttr;
+                }
+                else {
+                    vertexAttributeDescriptions.push_back(vkAttr);
+                }
+            }
+        }
+    };
+
+    _derivedDSLs.clear();
+    _derivedPipelineLayout.reset();
+
+    if (useShaderReflection) {
         // Reflect all shader stages
         auto                                           processor = shaderStorage->selectProcessor(_ci.shaderDesc);
         std::vector<ShaderReflection::ShaderResources> allStageResources;
@@ -432,50 +474,29 @@ bool VulkanPipeline::createPipelineInternal()
         // Merge reflection data from all stages
         auto merged = ShaderReflection::merge(allStageResources);
 
-        // --- Vertex Input from merged reflection ---
-        auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat {
-            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Float)) {
-                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
-                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
-                if (type.vecsize == 2) return VK_FORMAT_R32G32_SFLOAT;
-                if (type.vecsize == 1) return VK_FORMAT_R32_SFLOAT;
-            }
-            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Int)) {
-                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SINT;
-                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SINT;
-                if (type.vecsize == 2) return VK_FORMAT_R32G32_SINT;
-                if (type.vecsize == 1) return VK_FORMAT_R32_SINT;
-            }
-            if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::UInt)) {
-                if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_UINT;
-                if (type.vecsize == 3) return VK_FORMAT_R32G32B32_UINT;
-                if (type.vecsize == 2) return VK_FORMAT_R32G32_UINT;
-                if (type.vecsize == 1) return VK_FORMAT_R32_UINT;
-            }
-            return VK_FORMAT_R32G32B32_SFLOAT; // Default fallback
-        };
+        if (reflectVertexInput) {
+            auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat {
+                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Float)) {
+                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
+                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
+                    if (type.vecsize == 2) return VK_FORMAT_R32G32_SFLOAT;
+                    if (type.vecsize == 1) return VK_FORMAT_R32_SFLOAT;
+                }
+                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Int)) {
+                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SINT;
+                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SINT;
+                    if (type.vecsize == 2) return VK_FORMAT_R32G32_SINT;
+                    if (type.vecsize == 1) return VK_FORMAT_R32_SINT;
+                }
+                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::UInt)) {
+                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_UINT;
+                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_UINT;
+                    if (type.vecsize == 2) return VK_FORMAT_R32G32_UINT;
+                    if (type.vecsize == 1) return VK_FORMAT_R32_UINT;
+                }
+                return VK_FORMAT_R32G32B32_SFLOAT;
+            };
 
-        // Allow manual vertex layout override
-        if (!config.vertexBufferDescs.empty()) {
-            // Use provided vertex layout configuration (override)
-            for (const auto& bufferDesc : config.vertexBufferDescs) {
-                vertexBindingDescriptions.push_back({
-                    .binding   = bufferDesc.slot,
-                    .stride    = static_cast<uint32_t>(bufferDesc.pitch),
-                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-                });
-            }
-            for (const auto& attr : config.vertexAttributes) {
-                vertexAttributeDescriptions.push_back({
-                    .location = attr.location,
-                    .binding  = attr.bufferSlot,
-                    .format   = toVk(attr.format),
-                    .offset   = static_cast<uint32_t>(attr.offset),
-                });
-            }
-        }
-        else {
-            // Auto-derive from shader reflection
             uint32_t maxStride = 0;
             for (const auto& input : merged.vertexInputs) {
                 vertexAttributeDescriptions.push_back({
@@ -486,7 +507,7 @@ bool VulkanPipeline::createPipelineInternal()
                 });
                 maxStride = std::max(maxStride, input.offset + input.size);
             }
-            // Align stride to 4 bytes
+
             maxStride = (maxStride + 3u) & ~3u;
             if (!vertexAttributeDescriptions.empty()) {
                 vertexBindingDescriptions.push_back({
@@ -497,42 +518,27 @@ bool VulkanPipeline::createPipelineInternal()
             }
         }
 
-        // --- Auto-create Descriptor Set Layouts and Pipeline Layout ---
-        _derivedDSLs.clear();
-        std::vector<stdptr<IDescriptorSetLayout>> dslPtrs;
-        for (const auto& dslDesc : merged.descriptorSetLayouts) {
-            auto dsl = IDescriptorSetLayout::create(reinterpret_cast<IRender*>(_render), dslDesc);
-            _derivedDSLs.push_back(dsl);
-            dslPtrs.push_back(dsl);
+        appendManualVertexLayout();
+
+        if (reflectPipelineLayout) {
+            std::vector<stdptr<IDescriptorSetLayout>> dslPtrs;
+            for (const auto& dslDesc : merged.descriptorSetLayouts) {
+                auto dsl = IDescriptorSetLayout::create(reinterpret_cast<IRender*>(_render), dslDesc);
+                _derivedDSLs.push_back(dsl);
+                dslPtrs.push_back(dsl);
+            }
+
+            _derivedPipelineLayout = IPipelineLayout::create(
+                reinterpret_cast<IRender*>(_render),
+                std::format("Derived_PipelineLayout_{}", shaderCacheKey),
+                merged.pushConstants,
+                dslPtrs);
+
+            _pipelineLayout = _derivedPipelineLayout->as<VulkanPipelineLayout>();
         }
-
-        _derivedPipelineLayout = IPipelineLayout::create(
-            reinterpret_cast<IRender*>(_render),
-            std::format("Derived_PipelineLayout_{}", shaderCacheKey),
-            merged.pushConstants,
-            dslPtrs);
-
-        // Override the pipeline layout pointer so the rest of the pipeline creation uses it
-        _pipelineLayout = _derivedPipelineLayout->as<VulkanPipelineLayout>();
     }
     else {
-        // Use provided vertex layout configuration
-        for (const auto& bufferDesc : config.vertexBufferDescs) {
-            vertexBindingDescriptions.push_back({
-                .binding   = bufferDesc.slot,
-                .stride    = static_cast<uint32_t>(bufferDesc.pitch),
-                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-            });
-        }
-
-        for (const auto& attr : config.vertexAttributes) {
-            vertexAttributeDescriptions.push_back({
-                .location = attr.location,
-                .binding  = attr.bufferSlot,
-                .format   = toVk(attr.format),
-                .offset   = static_cast<uint32_t>(attr.offset),
-            });
-        }
+        appendManualVertexLayout();
     }
 
     VkPipelineVertexInputStateCreateInfo vertexInputStateCI{
@@ -866,13 +872,17 @@ bool VulkanComputePipeline::createPipelineInternal()
         .pSpecializationInfo = nullptr,
     };
 
-    if (_ci.shaderDesc.bDeriveFromShader) {
+    const bool reflectPipelineLayout = _ci.shaderDesc.reflection.hasPipelineLayout();
+
+    _derivedDSLs.clear();
+    _derivedPipelineLayout.reset();
+
+    if (reflectPipelineLayout) {
         auto processor = shaderStorage->selectProcessor(_ci.shaderDesc);
         auto res       = processor->reflect(EShaderStage::Compute, stage2Spirv->at(EShaderStage::Compute));
 
         auto merged = ShaderReflection::merge({res});
 
-        _derivedDSLs.clear();
         std::vector<stdptr<IDescriptorSetLayout>> dslPtrs;
         for (const auto& dslDesc : merged.descriptorSetLayouts) {
             auto dsl = IDescriptorSetLayout::create(reinterpret_cast<IRender*>(_render), dslDesc);

@@ -37,7 +37,6 @@ void DebugRenderSystem::onInitImpl(const InitParams& initParams)
 
         .shaderDesc = ShaderDesc{
             .shaderName        = "Test/DebugRender.glsl",
-            .bDeriveFromShader = false,
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
