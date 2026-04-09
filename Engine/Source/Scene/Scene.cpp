@@ -518,6 +518,29 @@ Node *Scene::duplicateNode(Node *node, Node *parent)
     return newNode;
 }
 
+bool Scene::moveNode(Node* node, Node* newParent, size_t childIndex)
+{
+    if (!node) {
+        return false;
+    }
+
+    Node* rootNode = getRootNode();
+    if (!rootNode || node == rootNode) {
+        return false;
+    }
+
+    if (!newParent) {
+        newParent = rootNode;
+    }
+
+    if (node == newParent || node->isAncestorOf(newParent)) {
+        return false;
+    }
+
+    node->setParent(newParent, childIndex);
+    return true;
+}
+
 
 
 } // namespace ya

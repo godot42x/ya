@@ -13,6 +13,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
@@ -46,6 +47,7 @@ namespace
 constexpr size_t                                  DETAILS_SCRIPT_INPUT_BUFFER_SIZE = 256;
 constexpr size_t                                  DETAILS_SKYBOX_INPUT_BUFFER_SIZE = 512;
 constexpr const char*                             SKYBOX_SOURCE_TYPE_LABELS        = "Cube Faces\0Cylindrical\0";
+constexpr const char*                             ENVIRONMENT_LIGHTING_SOURCE_TYPE_LABELS = "Scene Skybox\0Cube Faces\0Cylindrical\0";
 constexpr float                                   SKYBOX_PREVIEW_MAX_HEIGHT        = 180.0f;
 constexpr std::array<const char*, CubeFace_Count> SKYBOX_FACE_LABELS               = {
     "+X",
@@ -72,10 +74,6 @@ Texture* getSkyboxSourcePreviewTexture(const SkyboxComponent& skybox)
 {
     if (skybox.sourcePreviewTexture && skybox.sourcePreviewTexture->getImageView()) {
         return skybox.sourcePreviewTexture.get();
-    }
-    if (skybox._pendingOffscreenProcess && skybox._pendingOffscreenProcess->sourceTexture &&
-        skybox._pendingOffscreenProcess->sourceTexture->getImageView()) {
-        return skybox._pendingOffscreenProcess->sourceTexture.get();
     }
     return nullptr;
 }
@@ -109,6 +107,134 @@ void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, f
 }
 
 } // namespace
+
+void DetailsView::drawEnvironmentLightingStatus(const EnvironmentLightingComponent& environmentLighting)
+{
+    const char* label = "Status: Unknown";
+    ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+
+    switch (environmentLighting.resolveState) {
+    case EEnvironmentLightingResolveState::Empty:
+        label = environmentLighting.usesSceneSkybox() ? "Status: Waiting for scene skybox" : "Status: No environment source";
+        break;
+    case EEnvironmentLightingResolveState::Dirty:
+        label = "Status: Dirty";
+        color = ImVec4(1.0f, 0.85f, 0.35f, 1.0f);
+        break;
+    case EEnvironmentLightingResolveState::ResolvingSource:
+        label = "Status: Resolving source";
+        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        break;
+    case EEnvironmentLightingResolveState::PreprocessingEnvironment:
+        label = "Status: Building environment cubemap";
+        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        break;
+    case EEnvironmentLightingResolveState::PreprocessingIrradiance:
+        label = "Status: Building irradiance cubemap";
+        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        break;
+    case EEnvironmentLightingResolveState::Ready:
+        label = "Status: Ready";
+        color = ImVec4(0.45f, 1.0f, 0.45f, 1.0f);
+        break;
+    case EEnvironmentLightingResolveState::Failed:
+        label = "Status: Failed";
+        color = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
+        break;
+    }
+
+    ImGui::TextColored(color, "%s", label);
+}
+
+void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
+{
+    componentWrapper<EnvironmentLightingComponent>("Environment Lighting", entity, [this](EnvironmentLightingComponent* elc) {
+        bool bSourceChanged = false;
+
+        int sourceType = static_cast<int>(elc->sourceType);
+        if (ImGui::Combo("Source Type##EnvironmentLighting", &sourceType, ENVIRONMENT_LIGHTING_SOURCE_TYPE_LABELS)) {
+            elc->sourceType = static_cast<EEnvironmentLightingSourceType>(sourceType);
+            bSourceChanged  = true;
+        }
+
+        int irradianceFaceSize = static_cast<int>(elc->irradianceFaceSize);
+        if (ImGui::DragInt("Irradiance Face Size", &irradianceFaceSize, 1.0f, 4, 256)) {
+            elc->irradianceFaceSize = static_cast<uint32_t>(std::max(4, irradianceFaceSize));
+            bSourceChanged          = true;
+        }
+
+        ImGui::Separator();
+        if (elc->sourceType == EEnvironmentLightingSourceType::SceneSkybox) {
+            ImGui::TextDisabled("Reuse the scene skybox cubemap as the environment-lighting source.");
+        }
+        else if (elc->sourceType == EEnvironmentLightingSourceType::CubeFaces) {
+            bool flipVertical = elc->cubemapSource.flipVertical;
+            if (ImGui::Checkbox("Flip Vertical##EnvironmentLightingCubeFaces", &flipVertical)) {
+                elc->cubemapSource.flipVertical = flipVertical;
+                bSourceChanged                  = true;
+            }
+
+            for (size_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                ImGui::PushID(static_cast<int>(faceIndex));
+                ImGui::TextUnformatted(SKYBOX_FACE_LABELS[faceIndex]);
+                ImGui::SetNextItemWidth(-90.0f);
+                if (drawPathInput("##EnvironmentLightingFacePath", elc->cubemapSource.files[faceIndex], DETAILS_SKYBOX_INPUT_BUFFER_SIZE)) {
+                    bSourceChanged = true;
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Browse##EnvironmentLightingFace")) {
+                    _filePicker.openTexturePicker(elc->cubemapSource.files[faceIndex], [elc, faceIndex](const std::string& newPath) {
+                        elc->sourceType                      = EEnvironmentLightingSourceType::CubeFaces;
+                        elc->cubemapSource.files[faceIndex] = newPath;
+                        elc->invalidate();
+                    });
+                }
+                ImGui::PopID();
+            }
+        }
+        else {
+            bool flipVertical = elc->cylindricalSource.flipVertical;
+            if (ImGui::Checkbox("Flip Vertical##EnvironmentLightingCylindrical", &flipVertical)) {
+                elc->cylindricalSource.flipVertical = flipVertical;
+                bSourceChanged                      = true;
+            }
+
+            if (ImGui::BeginTable("EnvironmentLightingCylindricalPathTable", 2, ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Path", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Browse", ImGuiTableColumnFlags_WidthFixed, 88.0f);
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::SetNextItemWidth(-1.0f);
+                if (drawPathInput("Cylindrical Source##EnvironmentLighting", elc->cylindricalSource.filepath, DETAILS_SKYBOX_INPUT_BUFFER_SIZE)) {
+                    bSourceChanged = true;
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                if (ImGui::Button("Browse##EnvironmentLightingCylindrical", ImVec2(-1.0f, 0.0f))) {
+                    _filePicker.openTexturePicker(elc->cylindricalSource.filepath, [elc](const std::string& newPath) {
+                        elc->setCylindricalSource(newPath);
+                    });
+                }
+                ImGui::EndTable();
+            }
+        }
+
+        if (bSourceChanged) {
+            elc->invalidate();
+        }
+
+        ImGui::Separator();
+        drawEnvironmentLightingStatus(*elc);
+        if (elc->isLoading()) {
+            ImGui::TextDisabled("Waiting for environment-lighting resolve to finish");
+        }
+        if (ImGui::Button("Invalidate##EnvironmentLighting")) {
+            elc->invalidate();
+        }
+    });
+}
 
 void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
 {
@@ -153,13 +279,6 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
         int sourceType = static_cast<int>(sc->sourceType);
         if (ImGui::Combo("Source Type", &sourceType, SKYBOX_SOURCE_TYPE_LABELS)) {
             sc->sourceType = static_cast<ESkyboxSourceType>(sourceType);
-            sc->sourcePreviewTexture.reset();
-            sc->clearCubemapPreviewViews();
-            if (sc->cubemapTexture) {
-                auto& ddq = DeferredDeletionQueue::get();
-                ddq.enqueueResource(ddq.currentFrame(), std::move(sc->cubemapTexture));
-                sc->cubemapTexture = nullptr;
-            }
             bSourceChanged = true;
         }
 
@@ -442,6 +561,7 @@ void DetailsView::drawComponents(Entity& entity)
         bc->invalidate();
     });
     drawSkyboxComponent(entity);
+    drawEnvironmentLightingComponent(entity);
 
     drawReflectedComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc, const ya::RenderContext& ctx) {
         if (ctx.hasModifications()) {
@@ -645,8 +765,8 @@ void DetailsView::drawAddComponentButton(Entity& entity)
                 }
             }
 
-            auto& registry = entity.getScene()->getRegistry();
-            if (ecsRegistry.hasComponent(typeIndex, registry, entity.getHandle())) {
+            auto* scene = entity.getScene();
+            if (ecsRegistry.hasComponent(typeIndex, *scene, entity.getHandle())) {
                 ImGui::BeginDisabled();
                 ImGui::MenuItem(componentName.c_str());
                 ImGui::EndDisabled();
@@ -654,7 +774,7 @@ void DetailsView::drawAddComponentButton(Entity& entity)
             else {
                 if (ImGui::MenuItem(componentName.c_str())) {
                     // Create the component
-                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, registry, entity.getHandle())) {
+                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, *scene, entity.getHandle())) {
                         YA_CORE_INFO("Added component '{}' to entity '{}' {}", componentName, entity.getName(), compPtr);
                     }
                     ImGui::CloseCurrentPopup();

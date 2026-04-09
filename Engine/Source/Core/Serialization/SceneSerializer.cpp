@@ -221,7 +221,7 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             auto typeIndex = reg.getTypeIndex(FName(typeName));
             if (typeIndex) {
                 auto  id           = *typeIndex;
-                void* componentPtr = reg.addComponent(FName(typeName), registry, entity->getHandle());
+                void* componentPtr = reg.addComponent(FName(typeName), *_scene, entity->getHandle());
                 auto  cls          = ClassRegistry::instance().getClass(id);
                 if (cls) {
                     ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);

@@ -52,6 +52,8 @@ struct Node : public disable_copy
     void                             setName(const std::string &name) { _name = name; }
 
     // === Hierarchy Management ===
+    static constexpr size_t NPOS = static_cast<size_t>(-1);
+
     [[nodiscard]] Node *getParent() const { return _parent; }
     [[nodiscard]] bool  hasParent() const { return _parent != nullptr; }
 
@@ -62,9 +64,13 @@ struct Node : public disable_copy
     {
         return index < _children.size() ? _children[index] : nullptr;
     }
+    [[nodiscard]] size_t getChildIndex(const Node *child) const;
+    [[nodiscard]] bool   isAncestorOf(const Node *node) const;
 
     void setParent(Node *parent);
+    void setParent(Node *parent, size_t childIndex);
     void addChild(Node *child);
+    void insertChild(Node *child, size_t childIndex);
     void removeChild(Node *child);
     void removeFromParent();
     void clearChildren();

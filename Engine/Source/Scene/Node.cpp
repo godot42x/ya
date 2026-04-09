@@ -11,22 +11,61 @@ namespace ya
 // Node Implementation (Pure Hierarchy)
 // ============================================================================
 
+size_t Node::getChildIndex(const Node *child) const
+{
+    auto it = std::find(_children.begin(), _children.end(), child);
+    return it != _children.end() ? static_cast<size_t>(std::distance(_children.begin(), it)) : NPOS;
+}
+
+bool Node::isAncestorOf(const Node *node) const
+{
+    for (const Node *current = node; current != nullptr; current = current->getParent()) {
+        if (current == this) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Node::setParent(Node *parent)
 {
-    if (_parent == parent) {
+    setParent(parent, parent ? parent->_children.size() : 0);
+}
+
+void Node::setParent(Node *parent, size_t childIndex)
+{
+    if (parent == this) {
+        YA_CORE_WARN("Node::setParent: Cannot set self as parent");
         return;
     }
 
-    // Remove from old parent
-    if (_parent) {
-        _parent->removeChildInternal(this);
+    if (parent && isAncestorOf(parent)) {
+        YA_CORE_WARN("Node::setParent: Cannot reparent node to its descendant");
+        return;
+    }
+
+    Node   *oldParent    = _parent;
+    size_t oldChildIndex = oldParent ? oldParent->getChildIndex(this) : NPOS;
+
+    if (oldParent == parent && parent) {
+        childIndex = std::min(childIndex, parent->_children.size());
+        if (oldChildIndex != NPOS && childIndex > oldChildIndex) {
+            --childIndex;
+        }
+        if (childIndex == oldChildIndex) {
+            return;
+        }
+    }
+
+    if (oldParent) {
+        oldParent->removeChildInternal(this);
     }
 
     _parent = parent;
 
-    // Add to new parent
     if (parent) {
-        parent->_children.push_back(this);
+        childIndex = std::min(childIndex, parent->_children.size());
+        parent->_children.insert(parent->_children.begin() + static_cast<std::ptrdiff_t>(childIndex), this);
     }
 
     // Notify derived classes (Node3D will update cached parent TC)
@@ -38,21 +77,21 @@ void Node::setParent(Node *parent)
 
 void Node::addChild(Node *child)
 {
+    insertChild(child, _children.size());
+}
+
+void Node::insertChild(Node *child, size_t childIndex)
+{
     if (!child || child == this) {
         return;
     }
 
-    // Prevent circular reference
-    Node *ancestor = _parent;
-    while (ancestor) {
-        if (ancestor == child) {
-            YA_CORE_WARN("Node::addChild: Cannot add ancestor as child (circular reference)");
-            return;
-        }
-        ancestor = ancestor->_parent;
+    if (child->isAncestorOf(this)) {
+        YA_CORE_WARN("Node::insertChild: Cannot add ancestor as child (circular reference)");
+        return;
     }
 
-    child->setParent(this);
+    child->setParent(this, childIndex);
 }
 
 void Node::removeChild(Node *child)

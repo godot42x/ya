@@ -7,15 +7,16 @@
 #include <string>
 #include <unordered_map>
 
-#include "Bus/SceneBus.h"
 #include "Core/FName.h"
 #include "Core/TypeIndex.h"
+#include "ECS/ComponentMutation.h"
 
 
 namespace ya
 {
 
 struct IComponent;
+struct Scene;
 
 /**
  * @brief How to copy a component during clone/duplicate.
@@ -65,7 +66,7 @@ struct ECSRegistry
     {
         void* create(entt::registry& registry, entt::entity entity) override
         {
-            return &registry.emplace<T>(entity);
+            return detail_component_mutation::addComponent<T>(registry, entity);
         }
         void* get(const entt::registry& registry, entt::entity entity) override
         {
@@ -76,12 +77,7 @@ struct ECSRegistry
         }
         bool remove(entt::registry& registry, entt::entity entity) override
         {
-            if (registry.all_of<T>(entity)) {
-                registry.remove<T>(entity);
-                SceneBus::get().onComponentRemoved.broadcast(registry, entity, ya::type_index_v<T>);
-                return true;
-            }
-            return false;
+            return detail_component_mutation::removeComponent<T>(registry, entity);
         }
         void* clone(const entt::registry& srcRegistry, entt::entity srcEntity,
                      entt::registry& dstRegistry, entt::entity dstEntity,
@@ -141,6 +137,8 @@ struct ECSRegistry
         }
         return false;
     }
+    bool hasComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
+    bool hasComponent(FName name, const Scene& scene, entt::entity entity);
 
     void* getComponent(ya::type_index_t typeIndex, const entt::registry& registry, entt::entity entity)
     {
@@ -156,21 +154,13 @@ struct ECSRegistry
         }
         return nullptr;
     }
+    void* getComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
+    void* getComponent(FName name, const Scene& scene, entt::entity entity);
 
-    void* addComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
-    {
-        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
-            return opsIt->second->create(registry, entity);
-        }
-        return nullptr;
-    }
-    void* addComponent(FName name, entt::registry& registry, entt::entity entity)
-    {
-        if (auto typeIndex = getTypeIndex(name)) {
-            return addComponent(typeIndex.value(), registry, entity);
-        }
-        return nullptr;
-    }
+    void* addComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
+    void* addComponent(FName name, Scene& scene, entt::entity entity);
+    bool removeComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
+    bool removeComponent(FName name, Scene& scene, entt::entity entity);
 
     /**
      * @brief Clone component from srcEntity to dstEntity.

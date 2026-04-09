@@ -1,10 +1,18 @@
 #pragma once
 
+#include "Bus/SceneBus.h"
+#include "Core/Common/Types.h"
+#include "Core/Log.h"
 #include "Core/Debug/Instrumentor.h"
+#include "Core/TypeIndex.h"
+#include "ECS/Component.h"
+#include "ECS/ComponentMutation.h"
 #include "Node.h"
 #include "Render/Model.h"
 #include <entt/entt.hpp>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -53,7 +61,7 @@ struct [[refl]] Scene
             YA_CORE_WARN("Scene is invalid");
             return nullptr;
         }
-        return &_registry.emplace<ComponentType>(entity, std::forward<Args>(args)...);
+        return detail_component_mutation::addComponent<ComponentType>(_registry, entity, std::forward<Args>(args)...);
     }
 
     template <typename ComponentType>
@@ -63,8 +71,7 @@ struct [[refl]] Scene
             YA_CORE_WARN("Scene is invalid");
             return;
         }
-        _registry.remove<ComponentType>(entity);
-        SceneBus::get().onComponentRemoved.broadcast(_registry, entity, type_index_v<ComponentType>);
+        detail_component_mutation::removeComponent<ComponentType>(_registry, entity);
     }
     /**
      * @brief Destroy a Node and its underlying Entity
@@ -136,6 +143,7 @@ struct [[refl]] Scene
     static stdptr<Scene> cloneSceneByReflection(const Scene* scene);
 
     Node* duplicateNode(Node* node, Node* parent = nullptr);
+    bool  moveNode(Node* node, Node* newParent, size_t childIndex);
 
   private:
     // === Internal ECS API (Engine Systems Only) ===
