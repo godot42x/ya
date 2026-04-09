@@ -19,10 +19,22 @@ struct Node;
 
 struct SceneHierarchyPanel
 {
+    enum class ENodeDropPosition
+    {
+        Before,
+        Into,
+        After,
+    };
+
+    static constexpr const char *NODE_DRAG_DROP_PAYLOAD = "SCENE_HIERARCHY_NODE";
+
     EditorLayer *_owner;
     Scene       *_context       = nullptr;
     Entity      *_selection     = {};
     Entity      *_pendingScrollSelection = {};
+    Node        *_pendingDraggedNode = nullptr;
+    Node        *_pendingDropTarget  = nullptr;
+    ENodeDropPosition _pendingDropPosition = ENodeDropPosition::Into;
 
   public:
     SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
@@ -51,6 +63,11 @@ struct SceneHierarchyPanel
 
     void               drawFlatEntity(Entity &entity);
     const std::string &getNodeName(Node *node);
+    Node               *getSelectedNode() const;
+    ENodeDropPosition   getDropPosition(float itemMinY, float itemMaxY) const;
+    void                queueMoveNode(Node *draggedNode, Node *targetNode, ENodeDropPosition dropPosition);
+    void                flushPendingNodeMove();
+    bool                moveNode(Node *draggedNode, Node *targetNode, ENodeDropPosition dropPosition);
 };
 
 } // namespace ya
