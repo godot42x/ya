@@ -72,6 +72,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
 
   private:
     ya::GraphicsPipelineCreateInfo _ci;
+    bool                           _forceShaderReload = false;
 
     VulkanRender*         _render         = nullptr;
     VulkanPipelineLayout* _pipelineLayout = nullptr;

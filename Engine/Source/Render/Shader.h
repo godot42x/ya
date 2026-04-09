@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -158,6 +161,29 @@ struct GLSLShader : public Shader
     uint32_t m_ShaderID{0};
 };
 
+enum class EShaderProcessMode
+{
+    UseCache,
+    ForceRecompile,
+};
+
+struct ShaderDiskCacheHeader
+{
+    static constexpr uint32_t MAGIC   = 0x59415343; // YASC
+    static constexpr uint32_t VERSION = 1;
+
+    uint32_t magic      = MAGIC;
+    uint32_t version    = VERSION;
+    uint64_t sourceHash = 0;
+    uint32_t stageCount = 0;
+};
+
+struct ShaderDiskCacheStageHeader
+{
+    uint32_t stage     = 0;
+    uint32_t wordCount = 0;
+};
+
 struct IShaderProcessor
 {
     friend class ShaderProcessorFactory;
@@ -185,11 +211,9 @@ struct IShaderProcessor
 
   public:
 
-
-    virtual std::optional<stage2spirv_t>                    process(const ShaderDesc& ci)                                      = 0;
-    [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) = 0;
+    virtual std::optional<stage2spirv_t>                    process(const ShaderDesc& ci, EShaderProcessMode mode = EShaderProcessMode::UseCache) = 0;
+    [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)                      = 0;
 };
-
 
 struct GLSLProcessor : public IShaderProcessor
 {
@@ -207,7 +231,7 @@ struct GLSLProcessor : public IShaderProcessor
 
   public:
 
-    std::optional<stage2spirv_t>      process(const ShaderDesc& ci) override;
+    std::optional<stage2spirv_t>      process(const ShaderDesc& ci, EShaderProcessMode mode = EShaderProcessMode::UseCache) override;
     ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) override;
 
     auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string>& defines, std::vector<ir_t>& outSpv) -> bool;
@@ -216,9 +240,7 @@ struct GLSLProcessor : public IShaderProcessor
 
   private:
 
-    std::filesystem::path GetCachePath(bool bVulkan, EShaderStage::T stage);
-    std::filesystem::path GetCacheMetaPath();
-
+    std::filesystem::path GetCachePath(bool bVulkan) const;
 
     bool                                             processCombinedSource(const stdpath& filepath, const std::vector<std::string>& defines, stage2spirv_t& outSpvMap);
     std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath& filepath);
@@ -237,7 +259,7 @@ struct SlangProcessor : public IShaderProcessor
     friend class ShaderProcessorFactory;
 
   public:
-    std::optional<stage2spirv_t>      process(const ShaderDesc& ci) override;
+    std::optional<stage2spirv_t>      process(const ShaderDesc& ci, EShaderProcessMode mode = EShaderProcessMode::UseCache) override;
     ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) override;
 
   private:
@@ -259,9 +281,13 @@ struct SlangProcessor : public IShaderProcessor
 
 struct ShaderStorage
 {
-    std::shared_ptr<IShaderProcessor>                                _processor;
-    std::shared_ptr<IShaderProcessor>                                _slangProcessor; // optional, for .slang files
-    std::unordered_map<std::string, IShaderProcessor::stage2spirv_t> _shaderCache;
+    using stage2spirv_t = IShaderProcessor::stage2spirv_t;
+    using cache_value_t = std::shared_ptr<stage2spirv_t>;
+
+    std::shared_ptr<IShaderProcessor>               _processor;
+    std::shared_ptr<IShaderProcessor>               _slangProcessor; // optional, for .slang files
+    std::unordered_map<std::string, cache_value_t>  _shaderCache;
+    mutable std::mutex                              _cacheMutex;
 
     ShaderStorage(std::shared_ptr<IShaderProcessor> processor)
         : _processor(std::move(processor)) {}
@@ -281,18 +307,15 @@ struct ShaderStorage
     {
         if (_slangProcessor)
         {
-            // SingleShader mode: check shaderName extension
             if (ci.sourceMode == ShaderDesc::ESourceMode::SingleShader &&
                 !ci.shaderName.empty())
             {
                 auto name = ci.shaderName;
                 if (!name.ends_with(".slang"))
-                    name += ".slang"; // mimic GLSLProcessor's ".glsl" append logic
-                // Only route to Slang if the original name already had .slang
+                    name += ".slang";
                 if (ci.shaderName.ends_with(".slang"))
                     return _slangProcessor;
             }
-            // StageFiles mode: route to Slang if any stage file ends with .slang
             if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
             {
                 for (const auto& sf : ci.stageFiles)
@@ -305,18 +328,20 @@ struct ShaderStorage
         return _processor;
     }
 
-    [[nodiscard]] const IShaderProcessor::stage2spirv_t* getCache(const std::string& key) const
+    [[nodiscard]] std::shared_ptr<const stage2spirv_t> getCache(const std::string& key) const
     {
+        std::lock_guard lock(_cacheMutex);
         auto it = _shaderCache.find(key);
         if (it == _shaderCache.end()) {
             YA_CORE_WARN("Shader not found in cache: {}", key);
-            return nullptr;
+            return {};
         }
-        return &it->second;
+        return it->second;
     }
 
     void removeCache(const std::string& key)
     {
+        std::lock_guard lock(_cacheMutex);
         auto it = _shaderCache.find(key);
         if (it != _shaderCache.end()) {
             _shaderCache.erase(it);
@@ -324,27 +349,45 @@ struct ShaderStorage
         }
     }
 
-    const IShaderProcessor::stage2spirv_t* load(const ShaderDesc& ci)
+    [[nodiscard]] std::shared_ptr<const stage2spirv_t> load(const ShaderDesc& ci, EShaderProcessMode mode = EShaderProcessMode::UseCache)
     {
         const auto cacheKey = ci.cacheKey();
         YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
 
+        if (mode == EShaderProcessMode::UseCache) {
+            std::lock_guard lock(_cacheMutex);
+            auto it = _shaderCache.find(cacheKey);
+            if (it != _shaderCache.end()) {
+                return it->second;
+            }
+        }
+
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", cacheKey).c_str());
-        auto opt = selectProcessor(ci)->process(ci);
+        auto opt = selectProcessor(ci)->process(ci, mode);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
-        _shaderCache[cacheKey] = std::move(*opt);
-        return &_shaderCache.at(cacheKey);
+
+        auto compiled = std::make_shared<stage2spirv_t>(std::move(*opt));
+        {
+            std::lock_guard lock(_cacheMutex);
+            _shaderCache[cacheKey] = compiled;
+        }
+        return compiled;
     }
 
-    auto validate(const ShaderDesc& ci)
+    [[nodiscard]] std::shared_ptr<const stage2spirv_t> reload(const ShaderDesc& ci)
+    {
+        return load(ci, EShaderProcessMode::ForceRecompile);
+    }
+
+    void validate(const ShaderDesc& ci)
     {
         const auto cacheKey = ci.cacheKey();
         YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
 
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", cacheKey).c_str());
-        auto opt = selectProcessor(ci)->process(ci);
+        auto opt = selectProcessor(ci)->process(ci, EShaderProcessMode::ForceRecompile);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }

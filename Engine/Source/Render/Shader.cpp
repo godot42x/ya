@@ -12,7 +12,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstring>
+#include <fstream>
 #include <map>
+#include <sstream>
+#include <system_error>
+#include <unordered_set>
 #include <shaderc/shaderc.h>
 #include <shaderc/shaderc.hpp>
 #include <stdio.h>
@@ -143,18 +149,323 @@ SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
 }
 } // namespace EShaderStage
 
-
-
-std::filesystem::path GLSLProcessor::GetCachePath(bool bVulkan, EShaderStage::T stage)
+namespace
 {
-    // auto cached_dir = GetBaseCachePath();
-    // auto filename   = m_FilePath.filename().string() +
-    //                 (bVulkan
-    //                      ? utils::ShaderStage2CachedFileExtension_Vulkan(stage)
-    //                      : utils::ShaderStage2CachedFileExtension_OpenGL(stage));
-    // return cached_dir / filename;
+using ShaderStageSpirvMap = ya::IShaderProcessor::stage2spirv_t;
+using ShaderStageIr       = ya::IShaderProcessor::ir_t;
 
-    return "";
+struct ShaderStageSource
+{
+    ya::EShaderStage::T stage = ya::EShaderStage::Vertex;
+    std::string         path;
+    std::string         source;
+};
+
+constexpr uint64_t SHADER_HASH_OFFSET = 14695981039346656037ull;
+constexpr uint64_t SHADER_HASH_PRIME  = 1099511628211ull;
+
+uint64_t hashBytes(uint64_t seed, const void* data, size_t size)
+{
+    auto hash  = seed;
+    auto bytes = static_cast<const uint8_t*>(data);
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= bytes[i];
+        hash *= SHADER_HASH_PRIME;
+    }
+    return hash;
+}
+
+template <typename T>
+void hashAppendPod(uint64_t& hash, const T& value)
+{
+    hash = hashBytes(hash, &value, sizeof(T));
+}
+
+void hashAppendString(uint64_t& hash, std::string_view value)
+{
+    const uint64_t size = value.size();
+    hashAppendPod(hash, size);
+    if (!value.empty()) {
+        hash = hashBytes(hash, value.data(), value.size());
+    }
+}
+
+uint64_t hashString(std::string_view value)
+{
+    auto hash = SHADER_HASH_OFFSET;
+    hashAppendString(hash, value);
+    return hash;
+}
+
+std::optional<std::string> resolveShaderIncludePath(std::string_view requestedSource, std::string_view requestingSource)
+{
+    auto reqPath = std::filesystem::path(requestedSource);
+    auto srcPath = std::filesystem::path(requestingSource);
+
+    auto resolvedPath = reqPath.is_absolute()
+        ? reqPath
+        : (srcPath.parent_path() / reqPath).lexically_normal();
+    auto resolvedName = resolvedPath.generic_string();
+    if (VFS::get()->isFileExists(resolvedName)) {
+        return resolvedName;
+    }
+
+    auto fallback = (std::filesystem::path("Engine/Shader/GLSL") / reqPath).lexically_normal();
+    auto fallbackName = fallback.generic_string();
+    if (VFS::get()->isFileExists(fallbackName)) {
+        return fallbackName;
+    }
+    return std::nullopt;
+}
+
+bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<std::string>& visitedFiles, uint64_t& hash)
+{
+    auto normalizedPath = std::filesystem::path(filePath).lexically_normal().generic_string();
+    if (visitedFiles.contains(normalizedPath)) {
+        return true;
+    }
+    visitedFiles.insert(normalizedPath);
+
+    std::string content;
+    if (!VirtualFileSystem::get()->readFileToString(normalizedPath, content)) {
+        return false;
+    }
+
+    hashAppendString(hash, normalizedPath);
+    hashAppendString(hash, content);
+
+    std::istringstream input(content);
+    std::string line;
+    while (std::getline(input, line)) {
+        auto trimmed = ut::str::trim(std::string_view(line));
+        if (!trimmed.starts_with("#include")) {
+            continue;
+        }
+
+        const auto begin = trimmed.find_first_of("\"<");
+        if (begin == std::string_view::npos) {
+            continue;
+        }
+
+        const auto endToken = trimmed[begin] == '<' ? '>' : '"';
+        const auto end      = trimmed.find(endToken, begin + 1);
+        if (end == std::string_view::npos || end <= begin + 1) {
+            continue;
+        }
+
+        const auto includeName = trimmed.substr(begin + 1, end - begin - 1);
+        auto resolvedPath      = resolveShaderIncludePath(includeName, normalizedPath);
+        if (!resolvedPath.has_value()) {
+            return false;
+        }
+        if (!appendShaderDependencyHash(*resolvedPath, visitedFiles, hash)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+uint64_t buildShaderSourceHash(const std::vector<ShaderStageSource>& stageSources, const std::vector<std::string>& defines)
+{
+    auto sortedStages = stageSources;
+    std::sort(sortedStages.begin(), sortedStages.end(), [](const ShaderStageSource& lhs, const ShaderStageSource& rhs) {
+        if (lhs.stage != rhs.stage) {
+            return lhs.stage < rhs.stage;
+        }
+        return lhs.path < rhs.path;
+    });
+
+    auto hash = SHADER_HASH_OFFSET;
+    for (const auto& define : defines) {
+        hashAppendString(hash, define);
+    }
+
+    std::unordered_set<std::string> visitedFiles;
+    for (const auto& stageSource : sortedStages) {
+        const auto stage = static_cast<uint32_t>(stageSource.stage);
+        hashAppendPod(hash, stage);
+        hashAppendString(hash, stageSource.path);
+
+        if (!stageSource.path.empty() && appendShaderDependencyHash(stageSource.path, visitedFiles, hash)) {
+            continue;
+        }
+
+        hashAppendString(hash, stageSource.source);
+    }
+    return hash;
+}
+
+std::string sanitizeCacheStem(std::string_view value)
+{
+    std::string sanitized;
+    sanitized.reserve(value.size());
+    for (char ch : value) {
+        const auto uch = static_cast<unsigned char>(ch);
+        sanitized.push_back(std::isalnum(uch) ? ch : '_');
+    }
+    while (!sanitized.empty() && sanitized.back() == '_') {
+        sanitized.pop_back();
+    }
+    if (sanitized.empty()) {
+        sanitized = "shader";
+    }
+    constexpr size_t MAX_STEM_LENGTH = 48;
+    if (sanitized.size() > MAX_STEM_LENGTH) {
+        sanitized.resize(MAX_STEM_LENGTH);
+    }
+    return sanitized;
+}
+
+std::string makeCacheFileName(std::string_view cacheKey)
+{
+    return std::format("{}-{:016x}.spvcache", sanitizeCacheStem(cacheKey), hashString(cacheKey));
+}
+
+bool isValidSpirvModule(const std::vector<ShaderStageIr>& spirv)
+{
+    return !spirv.empty() && spirv.front() == 0x07230203;
+}
+
+std::vector<std::pair<ya::EShaderStage::T, const std::vector<ShaderStageIr>*>> collectSortedStages(const ShaderStageSpirvMap& spvMap)
+{
+    std::vector<std::pair<ya::EShaderStage::T, const std::vector<ShaderStageIr>*>> stages;
+    stages.reserve(spvMap.size());
+    for (const auto& [stage, spirv] : spvMap) {
+        stages.emplace_back(stage, &spirv);
+    }
+    std::sort(stages.begin(), stages.end(), [](const auto& lhs, const auto& rhs) {
+        return lhs.first < rhs.first;
+    });
+    return stages;
+}
+
+bool loadShaderDiskCache(const std::filesystem::path& cachePath, uint64_t expectedHash, ShaderStageSpirvMap& outSpvMap)
+{
+    outSpvMap.clear();
+
+    std::ifstream input(cachePath, std::ios::binary);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    ya::ShaderDiskCacheHeader header{};
+    input.read(reinterpret_cast<char*>(&header), sizeof(header));
+    if (!input.good()) {
+        return false;
+    }
+    if (header.magic != ya::ShaderDiskCacheHeader::MAGIC ||
+        header.version != ya::ShaderDiskCacheHeader::VERSION ||
+        header.sourceHash != expectedHash ||
+        header.stageCount == 0) {
+        return false;
+    }
+
+    std::vector<ya::ShaderDiskCacheStageHeader> stageHeaders(header.stageCount);
+    input.read(reinterpret_cast<char*>(stageHeaders.data()), static_cast<std::streamsize>(stageHeaders.size() * sizeof(ya::ShaderDiskCacheStageHeader)));
+    if (!input.good()) {
+        return false;
+    }
+
+    for (const auto& stageHeader : stageHeaders) {
+        if (stageHeader.wordCount == 0) {
+            outSpvMap.clear();
+            return false;
+        }
+
+        auto stage = static_cast<ya::EShaderStage::T>(stageHeader.stage);
+        if (outSpvMap.contains(stage)) {
+            outSpvMap.clear();
+            return false;
+        }
+
+        std::vector<ShaderStageIr> spirv(stageHeader.wordCount);
+        input.read(reinterpret_cast<char*>(spirv.data()), static_cast<std::streamsize>(spirv.size() * sizeof(ShaderStageIr)));
+        if (!input.good() || !isValidSpirvModule(spirv)) {
+            outSpvMap.clear();
+            return false;
+        }
+
+        outSpvMap[stage] = std::move(spirv);
+    }
+
+    return !outSpvMap.empty();
+}
+
+bool saveShaderDiskCache(const std::filesystem::path& cachePath, uint64_t sourceHash, const ShaderStageSpirvMap& spvMap)
+{
+    const auto stages = collectSortedStages(spvMap);
+    if (stages.empty()) {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(cachePath.parent_path(), ec);
+    if (ec) {
+        return false;
+    }
+
+    auto tempPath = cachePath;
+    tempPath += ".tmp";
+    std::filesystem::remove(tempPath, ec);
+    ec.clear();
+
+    std::ofstream output(tempPath, std::ios::binary | std::ios::trunc);
+    if (!output.is_open()) {
+        return false;
+    }
+
+    ya::ShaderDiskCacheHeader header{};
+    header.sourceHash = sourceHash;
+    header.stageCount = static_cast<uint32_t>(stages.size());
+    output.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+    std::vector<ya::ShaderDiskCacheStageHeader> stageHeaders;
+    stageHeaders.reserve(stages.size());
+    for (const auto& [stage, spirv] : stages) {
+        if (!isValidSpirvModule(*spirv)) {
+            output.close();
+            std::filesystem::remove(tempPath, ec);
+            return false;
+        }
+        stageHeaders.push_back(ya::ShaderDiskCacheStageHeader{
+            .stage     = static_cast<uint32_t>(stage),
+            .wordCount = static_cast<uint32_t>(spirv->size()),
+        });
+    }
+
+    output.write(reinterpret_cast<const char*>(stageHeaders.data()), static_cast<std::streamsize>(stageHeaders.size() * sizeof(ya::ShaderDiskCacheStageHeader)));
+    for (const auto& [_, spirv] : stages) {
+        output.write(reinterpret_cast<const char*>(spirv->data()), static_cast<std::streamsize>(spirv->size() * sizeof(ShaderStageIr)));
+    }
+    output.flush();
+    if (!output.good()) {
+        output.close();
+        std::filesystem::remove(tempPath, ec);
+        return false;
+    }
+    output.close();
+
+    std::filesystem::rename(tempPath, cachePath, ec);
+    if (ec) {
+        ec.clear();
+        std::filesystem::remove(cachePath, ec);
+        ec.clear();
+        std::filesystem::rename(tempPath, cachePath, ec);
+    }
+    if (ec) {
+        std::filesystem::remove(tempPath, ec);
+        return false;
+    }
+    return true;
+}
+} // namespace
+
+std::filesystem::path GLSLProcessor::GetCachePath(bool bVulkan) const
+{
+    auto cacheDir = stdpath(intermediateStoragePath) / (bVulkan ? "Vulkan" : "OpenGL");
+    auto cacheKey = curFileName.empty() ? curFilePath.generic_string() : curFileName;
+    return cacheDir / makeCacheFileName(cacheKey);
 }
 
 
@@ -841,36 +1152,37 @@ bool GLSLProcessor::processCombinedSource(const stdpath& filepath, const std::ve
 }
 
 
-std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc& ci)
+std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderDesc& ci, EShaderProcessMode mode)
 {
     const auto cacheKey = ci.cacheKey();
     YA_CORE_ASSERT(!cacheKey.empty(), "ShaderDesc cache key cannot be empty");
 
     stage2spirv_t ret;
+    uint64_t      sourceHash = 0;
 
-    auto compileStageFromFile = [&](EShaderStage::T stage, const std::string& stagePath, const char* errorTag) -> bool {
-        std::string stageSource;
-        if (!VirtualFileSystem::get()->readFileToString(stagePath, stageSource)) {
-            YA_CORE_ERROR("Failed to read {} shader source: {}", errorTag, stagePath);
-            return false;
+    auto hasValidStageSet = [&](const stage2spirv_t& stageMap) {
+        if (stageMap.contains(EShaderStage::Vertex) && stageMap.contains(EShaderStage::Fragment)) {
+            return true;
         }
-
-        std::vector<ir_t> spv;
-        if (!compileToSpv(stagePath, stageSource, stage, ci.defines, spv)) {
-            YA_CORE_ERROR("Failed to compile {} shader stage: {}", errorTag, stagePath);
-            return false;
-        }
-
-        ret[stage] = std::move(spv);
-        return true;
+        return stageMap.contains(EShaderStage::Compute) && stageMap.size() == 1;
     };
 
-    auto hasRequiredGraphicsStages = [&]() {
-        return ret.contains(EShaderStage::Vertex) && ret.contains(EShaderStage::Fragment);
+    auto compileStageSource = [&](const ShaderStageSource& stageSource, const char* errorTag) -> bool {
+        std::vector<ir_t> spv;
+        if (!compileToSpv(stageSource.path, stageSource.source, stageSource.stage, ci.defines, spv)) {
+            YA_CORE_ERROR("Failed to compile {} shader stage: {}", errorTag, stageSource.path);
+            return false;
+        }
+
+        ret[stageSource.stage] = std::move(spv);
+        return true;
     };
 
     if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
     {
+        std::vector<ShaderStageSource> stageSources;
+        stageSources.reserve(ci.stageFiles.size());
+
         for (const auto& stageFile : ci.stageFiles)
         {
             if (ret.contains(stageFile.stage)) {
@@ -883,19 +1195,45 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
                 stagePath = stdpath(shaderStoragePath) / stagePath;
             }
 
-            const auto stagePathStr = stagePath.generic_string();
-            if (!compileStageFromFile(stageFile.stage, stagePathStr, "explicit stage-file")) {
+            auto stagePathStr = stagePath.generic_string();
+            std::string stageSource;
+            if (!VirtualFileSystem::get()->readFileToString(stagePathStr, stageSource)) {
+                YA_CORE_ERROR("Failed to read explicit stage-file shader source: {}", stagePathStr);
+                return {};
+            }
+
+            stageSources.push_back(ShaderStageSource{
+                .stage  = stageFile.stage,
+                .path   = stagePathStr,
+                .source = std::move(stageSource),
+            });
+            ret[stageFile.stage] = {};
+        }
+
+        ret.clear();
+        curFileName = cacheKey;
+        curFilePath.clear();
+        sourceHash = buildShaderSourceHash(stageSources, ci.defines);
+        const auto cachePath = GetCachePath(true);
+        if (mode == EShaderProcessMode::UseCache && loadShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_INFO("Loaded shader disk cache for {}", cacheKey);
+            return {std::move(ret)};
+        }
+
+        for (const auto& stageSource : stageSources) {
+            if (!compileStageSource(stageSource, "explicit stage-file")) {
                 return {};
             }
         }
 
-        if (!hasRequiredGraphicsStages()) {
-            YA_CORE_ERROR("Explicit stage-files mode requires at least vertex and fragment stages: {}", cacheKey);
+        if (!hasValidStageSet(ret)) {
+            YA_CORE_ERROR("Explicit stage-files mode requires vertex+fragment or compute-only stages: {}", cacheKey);
             return {};
         }
 
-        curFileName = cacheKey;
-        curFilePath = stdpath(shaderStoragePath) / cacheKey;
+        if (!saveShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_WARN("Failed to write shader disk cache: {}", cachePath.generic_string());
+        }
         YA_CORE_INFO("Preprocessed explicit stage-files shader for {}: {} stages found", cacheKey, ret.size());
     }
     else
@@ -909,43 +1247,24 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
         curFileName = ut::str::replace(shaderName, ".glsl", "");
         curFilePath = stdpath(shaderStoragePath) / shaderName;
 
-        // 1. detect file changed unimplemented for now
-        // TODO: use hash to detect shader source change, and output to "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" and a "xxx.metadata" file
+        std::string shaderSource;
+        if (!VirtualFileSystem::get()->readFileToString(curFilePath.generic_string(), shaderSource)) {
+            YA_CORE_ERROR("Failed to read shader source: {}", curFilePath.generic_string());
+            return {};
+        }
 
-        // 2. find the "xxx.cached.vert.spv" or "xxxx.cached.frag.spv" file
-        // auto vertFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Vertex));
-        // auto fragFile = std::format("{}/{}.{}", this->intermediateStoragePath, filename, EShaderStage::getSpvOutputExtension(EShaderStage::Fragment));
-        // if (VirtualFileSystem::get()->isFileExists(vertFile) && VirtualFileSystem::get()->isFileExists(fragFile))
-        // {
-        //     if (processSpvFiles(vertFile, fragFile, ret)) {
-        //         return std::move(ret);
-        //     }
-        // }
-
-
-        // TODO: use a config file as options to remap to different single shader file
-        // if (ci.shaderName.ends_with(".ya.shader")) {
-        //     try {
-        //         auto j    = nlohmann::json::parse(ci.shaderName);
-        //         auto type = j["type"];
-        //         if (type.is_string() && type.get<std::string>() == "splits") {
-        //             // load from  different single shader file
-        //             auto vertFile = j["vertex"];
-        //             auto fragFile = j["fragment"];
-        //             auto geomFile = j["geometry"];
-        //         }
-        //     }
-        //     catch (const std::exception& e)
-        //     {
-        //         YA_CORE_ERROR("Failed to parse shader config file: {}", e.what());
-        //         return {};
-        //     }
-        // }
-
+        sourceHash = buildShaderSourceHash({ShaderStageSource{
+            .stage  = EShaderStage::Vertex,
+            .path   = curFilePath.generic_string(),
+            .source = shaderSource,
+        }}, ci.defines);
+        const auto cachePath = GetCachePath(true);
+        if (mode == EShaderProcessMode::UseCache && loadShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_INFO("Loaded shader disk cache for {}", shaderName);
+            return {std::move(ret)};
+        }
 
         ret.clear();
-
-        // SingleShader mode only supports combined source with #type sections.
         if (processCombinedSource(curFilePath, ci.defines, ret)) {
             YA_CORE_INFO("Preprocessed shader source for {}: {} stages found", shaderName, ret.size());
         }
@@ -954,24 +1273,22 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
             return {};
         }
 
-        if (!hasRequiredGraphicsStages()) {
-            // Allow compute-only shaders (single compute stage, no vertex/fragment)
-            if (!ret.contains(EShaderStage::Compute) || ret.size() != 1) {
-                YA_CORE_ERROR("SingleShader mode requires at least vertex and fragment stages: {}", shaderName);
-                return {};
-            }
+        if (!hasValidStageSet(ret)) {
+            YA_CORE_ERROR("SingleShader mode requires vertex+fragment or compute-only stages: {}", shaderName);
+            return {};
+        }
+
+        if (!saveShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_WARN("Failed to write shader disk cache: {}", cachePath.generic_string());
         }
     }
 
-    // Validate SPIR-V magic number
     for (const auto& [stage, spirv] : ret) {
-        if (spirv.empty() || spirv[0] != 0x07230203) {
+        if (!isValidSpirvModule(spirv)) {
             YA_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::T2Strings[stage]);
             YA_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::T2Strings[stage]);
         }
     }
-
-
 
     return {std::move(ret)};
 }
@@ -1282,8 +1599,9 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
 // ---------------------------------------------------------------------------
 // SlangProcessor::process
 // ---------------------------------------------------------------------------
-std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const ShaderDesc& ci)
+std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const ShaderDesc& ci, EShaderProcessMode mode)
 {
+    (void)mode;
     const auto cacheKey = ci.cacheKey();
     YA_CORE_ASSERT(!cacheKey.empty(), "ShaderDesc cache key cannot be empty");
 

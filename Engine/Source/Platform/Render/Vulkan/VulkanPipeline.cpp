@@ -150,11 +150,7 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 
 void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
 {
-    _ci                       = ci;
-    const auto shaderCacheKey = _ci.shaderDesc.cacheKey();
-    ya::App::get()
-        ->getShaderStorage()
-        ->removeCache(shaderCacheKey);
+    _ci = ci;
     markDirty();
 }
 
@@ -165,6 +161,9 @@ void VulkanPipeline::beginFrame()
         clearDirty();
         if (!recreate(pendingCI)) {
             markDirty();
+        }
+        else {
+            _forceShaderReload = false;
         }
     }
 }
@@ -232,7 +231,8 @@ void VulkanPipeline::renderGUI()
     bool bDirty = false;
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
     if (ImGui::Button("Reload Shaders")) {
-        bDirty = true;
+        _forceShaderReload = true;
+        bDirty             = true;
     }
     ImGui::PopStyleColor();
     int cull = static_cast<int>(_ci.rasterizationState.cullMode);
@@ -328,19 +328,30 @@ bool VulkanPipeline::createPipelineInternal()
     _name = shaderCacheKey;
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
     auto shaderStorage = ya::App::get()->getShaderStorage();
-    auto stage2Spirv   = shaderStorage->getCache(shaderCacheKey);
-    if (!stage2Spirv) {
+    std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
+    if (_forceShaderReload) {
         try {
-
-            stage2Spirv = shaderStorage->load(_ci.shaderDesc);
+            stage2Spirv = shaderStorage->reload(_ci.shaderDesc);
         }
         catch (const std::exception& e) {
-            YA_CORE_ERROR("Failed to load shader: {}", e.what());
+            YA_CORE_ERROR("Failed to reload shader: {}", e.what());
             return _pipeline != VK_NULL_HANDLE;
         }
+    }
+    else {
+        stage2Spirv = shaderStorage->getCache(shaderCacheKey);
         if (!stage2Spirv) {
-            YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
-            return false;
+            try {
+                stage2Spirv = shaderStorage->load(_ci.shaderDesc);
+            }
+            catch (const std::exception& e) {
+                YA_CORE_ERROR("Failed to load shader: {}", e.what());
+                return _pipeline != VK_NULL_HANDLE;
+            }
+            if (!stage2Spirv) {
+                YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
+                return false;
+            }
         }
     }
     if (!stage2Spirv) {
