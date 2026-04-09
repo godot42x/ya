@@ -1,56 +1,50 @@
-#include "EquidistantCylindrical2CubeMap.h"
+#include "CubeMap2IrradianceMap.h"
 
+#include "Core/Math/Math.h"
 #include "Render/Render.h"
+#include "Resource/DeferredDeletionQueue.h"
+#include "Resource/PrimitiveMeshCache.h"
 
 namespace ya
 {
 
 namespace
 {
-PipelineLayoutDesc makePipelineLayoutDesc()
+
+
+glm::mat4 buildCubeMap2IrradianceCaptureView(uint32_t faceIndex)
 {
-    return PipelineLayoutDesc{
-        .label         = "EquidistantCylindrical2CubeMap_PipelineLayout",
-        .pushConstants = {
-            PushConstantRange{
-                .offset     = 0,
-                .size       = sizeof(EquidistantCylindrical2CubeMap::PushConstant),
-                .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
-            },
-        },
-        .descriptorSetLayouts = {
-            DescriptorSetLayoutDesc{
-                .label    = "EquidistantCylindrical2CubeMap_DSL",
-                .set      = 0,
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            },
-        },
-    };
+    const glm::vec3 origin{0.0f, 0.0f, 0.0f};
+    const glm::vec3 down{0.0f, -1.0f, 0.0f};
+    const glm::vec3 backward{0.0f, 0.0f, 1.0f};
+
+    switch (static_cast<ECubeFace>(faceIndex)) {
+    case CubeFace_PosX:
+        return FMath::lookAt(origin, origin + glm::vec3(1.0f, 0.0f, 0.0f), down);
+    case CubeFace_NegX:
+        return FMath::lookAt(origin, origin + glm::vec3(-1.0f, 0.0f, 0.0f), down);
+    case CubeFace_PosY:
+        return FMath::lookAt(origin, origin + glm::vec3(0.0f, 1.0f, 0.0f), backward);
+    case CubeFace_NegY:
+        return FMath::lookAt(origin, origin + glm::vec3(0.0f, -1.0f, 0.0f), -backward);
+    case CubeFace_PosZ:
+        return FMath::lookAt(origin, origin + glm::vec3(0.0f, 0.0f, 1.0f), down);
+    case CubeFace_NegZ:
+        return FMath::lookAt(origin, origin + glm::vec3(0.0f, 0.0f, -1.0f), down);
+    case CubeFace_Count:
+        break;
+    }
+
+    return glm::mat4(1.0f);
 }
 
-DescriptorPoolCreateInfo makeDescriptorPoolCreateInfo()
+glm::mat4 buildCubeMap2IrradianceCaptureProjection()
 {
-    return DescriptorPoolCreateInfo{
-        .label     = "EquidistantCylindrical2CubeMap_DSP",
-        .maxSets   = 1,
-        .poolSizes = {
-            DescriptorPoolSize{
-                .type            = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = 1,
-            },
-        },
-    };
+    return FMath::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
 }
 } // namespace
 
-void EquidistantCylindrical2CubeMap::init(IRender* render)
+void CubeMap2IrradianceMap::init(IRender* render)
 {
     if (_render == render && _pipelineLayout && _descriptorPool && _inputSampler) {
         return;
@@ -62,11 +56,10 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
         return;
     }
 
-    _pipelineLayoutDesc = makePipelineLayoutDesc();
 
     const auto descriptorSetLayouts = IDescriptorSetLayout::create(
         _render, _pipelineLayoutDesc.descriptorSetLayouts);
-    YA_CORE_ASSERT(!descriptorSetLayouts.empty(), "Failed to create EquidistantCylindrical2CubeMap descriptor set layout");
+    YA_CORE_ASSERT(!descriptorSetLayouts.empty(), "Failed to create CubeMap2IrradianceMap descriptor set layout");
     _descriptorSetLayout = descriptorSetLayouts[0];
     _pipelineLayout      = IPipelineLayout::create(_render,
                                               _pipelineLayoutDesc.label,
@@ -74,11 +67,11 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
                                               descriptorSetLayouts);
 
     _pipeline       = IGraphicsPipeline::create(_render);
-    _descriptorPool = IDescriptorPool::create(_render, makeDescriptorPoolCreateInfo());
+    _descriptorPool = IDescriptorPool::create(_render, _dspCI);
     _inputSampler   = Sampler::create(
         SamplerDesc{
-              .label        = "EquidistantCylindrical2CubeMap_InputSampler",
-              .addressModeU = ESamplerAddressMode::Repeat,
+              .label        = "CubeMap2IrradianceMap_InputSampler",
+              .addressModeU = ESamplerAddressMode::ClampToEdge,
               .addressModeV = ESamplerAddressMode::ClampToEdge,
               .addressModeW = ESamplerAddressMode::ClampToEdge,
         });
@@ -86,11 +79,11 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
     std::vector<DescriptorSetHandle> descriptorSets;
     const bool                       bAllocateOK = _descriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
     YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
-                   "Failed to allocate EquidistantCylindrical2CubeMap descriptor set");
+                   "Failed to allocate CubeMap2IrradianceMap descriptor set");
     _descriptorSet = descriptorSets[0];
 }
 
-void EquidistantCylindrical2CubeMap::shutdown()
+void CubeMap2IrradianceMap::shutdown()
 {
     _descriptorSet = nullptr;
     _pipeline.reset();
@@ -102,7 +95,7 @@ void EquidistantCylindrical2CubeMap::shutdown()
     _render              = nullptr;
 }
 
-bool EquidistantCylindrical2CubeMap::ensurePipeline(EFormat::T colorFormat)
+bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
 {
     if (!_render || !_pipeline || !_pipelineLayout) {
         return false;
@@ -115,7 +108,7 @@ bool EquidistantCylindrical2CubeMap::ensurePipeline(EFormat::T colorFormat)
         GraphicsPipelineCreateInfo{
             .renderPass            = nullptr,
             .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "EquidistantCylindrical2CubeMap",
+                .label                   = "CubeMap2IrradianceMap",
                 .viewMask                = 0,
                 .colorAttachmentFormats  = {colorFormat},
                 .depthAttachmentFormat   = EFormat::Undefined,
@@ -123,7 +116,21 @@ bool EquidistantCylindrical2CubeMap::ensurePipeline(EFormat::T colorFormat)
             },
             .pipelineLayout = _pipelineLayout.get(),
             .shaderDesc     = ShaderDesc{
-                .shaderName        = "Misc/EquidistantCylindrical2CubeMap.slang",
+                    .shaderName        = "Misc/CubeMap2IrradianceMap.slang",
+                    .vertexBufferDescs = {
+                    VertexBufferDescription{
+                            .slot  = 0,
+                            .pitch = sizeof(ya::Vertex),
+                    },
+                },
+                    .vertexAttributes = {
+                    VertexAttribute{
+                            .bufferSlot = 0,
+                            .location   = 0,
+                            .format     = EVertexAttributeFormat::Float3,
+                            .offset     = offsetof(ya::Vertex, position),
+                    },
+                },
             },
             .dynamicFeatures = {
                 EPipelineDynamicFeature::Viewport,
@@ -158,7 +165,7 @@ bool EquidistantCylindrical2CubeMap::ensurePipeline(EFormat::T colorFormat)
                 .scissors  = {Scissor::defaults()},
             },
         });
-    YA_CORE_ASSERT(bPipelineOK, "Failed to create EquidistantCylindrical2CubeMap pipeline");
+    YA_CORE_ASSERT(bPipelineOK, "Failed to create CubeMap2IrradianceMap pipeline");
     if (!bPipelineOK) {
         return false;
     }
@@ -167,48 +174,31 @@ bool EquidistantCylindrical2CubeMap::ensurePipeline(EFormat::T colorFormat)
     return true;
 }
 
-EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::execute(const ExecuteContext& ctx)
+CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const ExecuteContext& ctx)
 {
-
     ExecuteResult result{};
     if (!_render || !ctx.cmdBuf || !ctx.input || !ctx.output) {
         return result;
     }
 
     YA_CORE_ASSERT(ctx.input->getImageView(),
-                   "EquidistantCylindrical2CubeMap input texture must have a valid image view");
+                   "CubeMap2IrradianceMap input texture must have a valid image view");
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),
-                   "EquidistantCylindrical2CubeMap output texture must own a valid image and cube view");
+                   "CubeMap2IrradianceMap output texture must own a valid image and cube view");
     YA_CORE_ASSERT(ctx.output->getImage()->getArrayLayers() >= CubeFace_Count,
-                   "EquidistantCylindrical2CubeMap output must be a 6-layer cubemap image");
-    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf,"EquidistantCylindrical2CubeMap");
+                   "CubeMap2IrradianceMap output must be a 6-layer cubemap image");
+
+    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "CubeMap2IrradianceMap");
 
     if (!ensurePipeline(ctx.output->getFormat())) {
         return result;
     }
 
-    auto* textureFactory = _render->getTextureFactory();
-
-    // iamgeView from output image
-    // why: make sure the image view is a View2DArray for color attachment not a cubeMap by input created
-    result.transientOutputArrayView = textureFactory->createImageView(
-        ctx.output->getImageShared(),
-        ImageViewCreateInfo{
-            .label          = std::format("{}_RenderArray", ctx.output->getLabel()),
-            .viewType       = EImageViewType::View2DArray,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = CubeFace_Count,
-        });
-    YA_CORE_ASSERT(result.transientOutputArrayView,
-                   "Failed to create EquidistantCylindrical2CubeMap output array view");
-
-    auto outputRenderTexture = Texture::wrap(
-        ctx.output->getImageShared(),
-        result.transientOutputArrayView,
-        std::format("{}_RenderArray", ctx.output->getLabel()));
+    auto* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+    YA_CORE_ASSERT(cubeMesh, "CubeMap2IrradianceMap requires a cube primitive mesh");
+    if (!cubeMesh) {
+        return result;
+    }
 
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
@@ -228,27 +218,53 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
         .baseMipLevel   = 0,
         .levelCount     = 1,
         .baseArrayLayer = 0,
-        .layerCount     = CubeFace_Count,
+        .layerCount     = CubeFace_Count, // convert all layers
     };
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
 
-    const auto extent = ctx.output->getExtent();
+    auto*      textureFactory   = _render->getTextureFactory();
+    const auto extent           = ctx.output->getExtent();
+    bool       bAllFacesSuccess = true;
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-        const auto pushConstant = buildPushConstant(face, ctx.bFlipVertical);
+
+        // temp imageview to make sure a View2D
+        const auto faceView = textureFactory->createImageView(
+            ctx.output->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = face,
+                .layerCount     = 1,
+            });
+        YA_CORE_ASSERT(faceView, "Failed to create CubeMap2IrradianceMap output face view");
+        if (!faceView) {
+            bAllFacesSuccess = false;
+            break;
+        }
+
+        const auto faceTexture = Texture::wrap(
+            ctx.output->getImageShared(),
+            faceView,
+            std::format("{}_Face_{}", ctx.output->getLabel(), face));
+        const auto pushConstant = buildPushConstant(face);
+
         RenderingInfo renderInfo{
-            .label      = std::format("EquidistantCylindrical2CubeMap_Face_{}", face),
+            .label      = std::format("CubeMap2IrradianceMap_Face_{}", face),
             .renderArea = Rect2D{
                 .pos    = {0.0f, 0.0f},
                 .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
             },
-            .layerCount       = CubeFace_Count,
+            .layerCount       = 1,
             .colorClearValues = {ctx.clearColor},
             .depthClearValue  = ClearValue(1.0f, 0),
             .colorAttachments = {
                 RenderingInfo::ImageSpec{
-                    .texture = outputRenderTexture.get(),
-                    .loadOp  = (face == 0) ? EAttachmentLoadOp::Clear : EAttachmentLoadOp::Load,
+                    .texture = faceTexture.get(),
+                    .loadOp  = EAttachmentLoadOp::Clear,
                     .storeOp = EAttachmentStoreOp::Store,
                 },
             },
@@ -265,25 +281,27 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
         ctx.cmdBuf->setScissor(0, 0, extent.width, extent.height);
         ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet});
         ctx.cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                                  EShaderStage::Vertex | EShaderStage::Fragment,
                                   0,
                                   sizeof(PushConstant),
                                   &pushConstant);
-        ctx.cmdBuf->draw(3, 1, 0, 0);
+        cubeMesh->draw(ctx.cmdBuf);
         ctx.cmdBuf->endRendering(renderInfo);
+
+        DeferredDeletionQueue::get().retireResource(faceView);
     }
 
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
-    result.bSuccess = true;
+    result.bSuccess = bAllFacesSuccess;
     return result;
 }
 
-EquidistantCylindrical2CubeMap::PushConstant EquidistantCylindrical2CubeMap::buildPushConstant(uint32_t faceIndex,
-                                                                                               bool bFlipVertical)
+CubeMap2IrradianceMap::PushConstant CubeMap2IrradianceMap::buildPushConstant(uint32_t faceIndex)
 {
     PushConstant pushConstant{};
-    pushConstant.faceIndex = faceIndex;
-    pushConstant.flipVertical = bFlipVertical;
+    pushConstant.view       = buildCubeMap2IrradianceCaptureView(faceIndex);
+    pushConstant.projection = buildCubeMap2IrradianceCaptureProjection();
+    pushConstant.faceIndex  = faceIndex;
     return pushConstant;
 }
 

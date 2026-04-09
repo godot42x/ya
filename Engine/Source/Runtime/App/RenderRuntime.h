@@ -27,6 +27,7 @@ struct IRenderPass;
 struct DeferredRenderPipeline;
 struct RenderDocCapture;
 struct Sampler;
+struct EnvironmentLightingComponent;
 
 struct RenderRuntime
 {
@@ -81,6 +82,14 @@ struct RenderRuntime
     DescriptorSetHandle          _sceneSkyboxDS         = nullptr;
     Texture*                     _boundSceneSkyboxTexture = nullptr;
 
+    stdptr<IDescriptorPool>      _environmentLightingDSP            = nullptr;
+    stdptr<IDescriptorSetLayout> _environmentLightingDSL            = nullptr;
+    stdptr<Texture>              _fallbackIrradianceTexture         = nullptr;
+    DescriptorSetHandle          _fallbackEnvironmentLightingDS     = nullptr;
+    DescriptorSetHandle          _sceneEnvironmentLightingDS        = nullptr;
+    Texture*                     _boundEnvironmentCubemapTexture    = nullptr;
+    Texture*                     _boundEnvironmentIrradianceTexture = nullptr;
+
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
 
@@ -116,6 +125,8 @@ struct RenderRuntime
     [[nodiscard]] Sampler*                       getSkyboxSampler() const { return _skyboxSampler.get(); }
     [[nodiscard]] DescriptorSetHandle            getFallbackSkyboxDescriptorSet() const { return _fallbackSkyboxDS; }
     [[nodiscard]] DescriptorSetHandle            getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] stdptr<IDescriptorSetLayout>   getEnvironmentLightingDescriptorSetLayout() const { return _environmentLightingDSL; }
+    [[nodiscard]] DescriptorSetHandle            getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
 
     /**
      * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
@@ -125,6 +136,7 @@ struct RenderRuntime
      * Without this, each scene load leaks one DS until the pool overflows.
      */
     void                        resetSkyboxPool();
+    void                        resetEnvironmentLightingPool();
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;
@@ -134,7 +146,10 @@ struct RenderRuntime
     void shutdownActivePipeline();
     void applyPendingShadingModelSwitch();
     void updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
+    void updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture);
     [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
+    [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
+    [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;
 };
 
 } // namespace ya

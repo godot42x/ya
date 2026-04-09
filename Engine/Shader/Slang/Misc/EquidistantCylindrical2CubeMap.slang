@@ -4,8 +4,6 @@ import Common.Helper;
 struct PushConstants {
     uint faceIndex;
     uint flipVertical;
-    uint _pad0;
-    uint _pad1;
 };
 
 [[vk::push_constant]] PushConstants pc;

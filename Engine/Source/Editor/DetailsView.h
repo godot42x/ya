@@ -13,6 +13,7 @@ namespace ya
 struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
+struct EnvironmentLightingComponent;
 struct SkyboxComponent;
 struct Texture;
 
@@ -43,6 +44,8 @@ struct DetailsView
   private:
     void drawComponents(Entity &entity);
     void drawAddComponentButton(Entity &entity); // Add component popup
+    void drawEnvironmentLightingComponent(Entity& entity);
+    void drawEnvironmentLightingStatus(const EnvironmentLightingComponent& environmentLighting);
     void drawSkyboxComponent(Entity& entity);
     void drawSkyboxStatus(const SkyboxComponent& skybox);
     void drawSkyboxPreviewSection(const SkyboxComponent& skybox);

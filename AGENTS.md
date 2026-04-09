@@ -92,6 +92,10 @@ Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
 
 Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW`
 
+## Self improvement
+
+在每次成功完成任务后，判断是否需要记录一下进度和经验到Memory.md中，以便后续参考。并且如果改动了架构，需要及时更新skills和文档中的落后说明与归档。
+
 ## Code Style
 
 ### Naming

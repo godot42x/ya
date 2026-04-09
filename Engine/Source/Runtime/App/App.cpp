@@ -793,6 +793,7 @@ void App::onSceneDestroy(Scene* scene)
     // are no longer referenced after the scene is destroyed.
     if (_renderRuntime) {
         _renderRuntime->resetSkyboxPool();
+        _renderRuntime->resetEnvironmentLightingPool();
     }
 }
 

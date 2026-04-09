@@ -232,7 +232,7 @@ struct ICommandBuffer
     }
 #else
     // ========== Virtual Mode: Direct virtual function calls ==========
-    virtual void bindPipeline(IGraphicsPipeline* pipeline) = 0;
+    virtual void bindPipeline(IGraphicsPipeline* pipeline)       = 0;
     virtual void bindComputePipeline(IComputePipeline* pipeline) = 0;
 #endif
 
@@ -412,11 +412,11 @@ struct ICommandBuffer
                                EShaderStage::T  stages,
                                uint32_t         offset,
                                uint32_t         size,
-                               const void*      data)                                                     = 0;
+                               const void*      data)                                             = 0;
     virtual void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
-                            uint64_t srcOffset = 0, uint64_t dstOffset = 0)                          = 0;
-    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)           = 0;
-    virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                              = 0;
+                            uint64_t srcOffset = 0, uint64_t dstOffset = 0)                  = 0;
+    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)  = 0;
+    virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                      = 0;
 
     /**
      * @brief Copy data from buffer to image
@@ -440,10 +440,10 @@ struct ICommandBuffer
      * @param regions Copy regions
      */
     virtual void copyImage(
-        IImage*                      srcImage,
-        EImageLayout::T              srcImageLayout,
-        IImage*                      dstImage,
-        EImageLayout::T              dstImageLayout,
+        IImage*                       srcImage,
+        EImageLayout::T               srcImageLayout,
+        IImage*                       dstImage,
+        EImageLayout::T               dstImageLayout,
         const std::vector<ImageCopy>& regions) = 0;
 
     virtual void beginRendering(const RenderingInfo& info) = 0;
@@ -480,6 +480,25 @@ struct ICommandBuffer
     virtual void executeAll() { recordedCommands.clear(); }
     #endif
 #endif
+
+    struct LabelScope : public disable_copy
+    {
+        ICommandBuffer* cmdBuf;
+
+        LabelScope(ICommandBuffer* cmdBuf, const char* label, const float* color = nullptr)
+            : cmdBuf(cmdBuf)
+        {
+            cmdBuf->debugBeginLabel(label, color);
+        }
+
+
+        ~LabelScope()
+        {
+            cmdBuf->debugEndLabel();
+        }
+    };
 };
+
+
 
 } // namespace ya

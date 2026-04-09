@@ -1,5 +1,6 @@
 #include "TextureFactory.h"
 
+#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Platform/Render/Vulkan/VulkanTextureFactory.h"
 #include "Render/Render.h"
 #include "Runtime/App/App.h"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/StateTransition.h"
 #include "Core/Reflection/Reflection.h"
 
 #include <array>
@@ -25,6 +26,22 @@ enum class ESkyboxResolveState : uint8_t
     Preprocessing,
     Ready,
     Failed,
+};
+
+template <>
+struct StateTraits<ESkyboxResolveState>
+{
+    static constexpr bool hasFailedState    = true;
+    static constexpr bool hasTerminalStates = true;
+
+    static constexpr ESkyboxResolveState failedState() { return ESkyboxResolveState::Failed; }
+
+    static constexpr bool isTerminal(ESkyboxResolveState state)
+    {
+        return state == ESkyboxResolveState::Empty ||
+               state == ESkyboxResolveState::Ready ||
+               state == ESkyboxResolveState::Failed;
+    }
 };
 
 struct SkyboxComponent : public IComponent
@@ -85,10 +102,7 @@ struct SkyboxComponent : public IComponent
     stdptr<Texture>                                cubemapTexture       = nullptr;
     stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
-    std::shared_ptr<PendingBatchLoadState>         _pendingBatchLoad;
-    std::shared_ptr<PendingOffscreenProcessState>  _pendingOffscreenProcess;
-    std::optional<TextureFuture>                   _pendingCylindricalFuture;
-    ESkyboxResolveState resolveState     = ESkyboxResolveState::Dirty;
+    ESkyboxResolveState                            resolveState         = ESkyboxResolveState::Dirty;
 
     void        setFace(ECubeFace face, const std::string& path);
     void        setCubemapSource(const CubeMapCreateInfo& createInfo);
@@ -96,11 +110,11 @@ struct SkyboxComponent : public IComponent
     bool        hasSource() const;
     bool        hasCubemapSource() const;
     bool        hasCylindricalSource() const;
-    bool        resolve();
     bool        hasRenderableCubemap() const;
     void        rebuildCubemapPreviewViews();
     void        clearCubemapPreviewViews();
     IImageView* getCubemapFacePreviewView(uint32_t faceIndex) const;
+    void        prepareForRemove();
     void        invalidate();
     bool        isLoading() const;
     void        onPostSerialize() override;

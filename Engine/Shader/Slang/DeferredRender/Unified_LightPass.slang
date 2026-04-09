@@ -98,6 +98,10 @@ vec3 F_fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+vec3 F_fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
 
 // ── Shading functions ──
@@ -111,10 +115,12 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
     // Directional light
     if (uLight.hasDirLight)
     {
+        // per-light radiance
         vec3 L = normalize(-uLight.dirLight.dir);
         vec3 H = normalize(V + L);
-        vec3 radiance = uLight.dirLight.color;
+        vec3 radiance = uLight.dirLight.color; // raw light
 
+        // Cook-Torrance BRDF
         float NDF = D_normalDistribution_GGX(N, H, roughness);
         float G   = G_geometrySmith(N, V, L, roughness);
         vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
@@ -128,22 +134,40 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
     // Point lights
     for (int i = 0; i < uLight.numPointLight; ++i)
     {
+        // per-light radiance
         vec3 L = normalize(uLight.pointLights[i].pos - worldPos);
         vec3 H = normalize(V + L);
         float dist = length(uLight.pointLights[i].pos - worldPos);
-        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
+        // raw light
+        vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity 
+                        / (dist * dist);
 
+        // Cook-Torrance BRDF
         float NDF = D_normalDistribution_GGX(N, H, roughness);
         float G   = G_geometrySmith(N, V, L, roughness);
         vec3 F    = F_fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
-        vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.000001);
+        vec3 kS = F;
+        vec3 kD =  vec3(1.0) - kS; // 能量守恒, 除非自发光
+        kD =  kD *(1.0 - metallic);
+
+        vec3 numerator = NDF* G* F;
+        float denominator = 4.0 * max(dot(N,V), 0.0) * max(dot(N,L), 0.0) + 0.000001;
+        vec3 specular = numerator / denominator;
 
         Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
     }
 
-    return uLight.ambient * albedo * ao + Lo;
+    // ambient lighting(IBL)
+    // vec3 kS = F_fresnelSchlick(max(dot(N, V), 0.0), F0);
+    vec3 kS = F_fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kD = vec3(1.0)- kS;
+    kD *= 1.0 - metallic;
+    vec3 irradiance = uTexIrradianceCubemap.Sample(N).rgb;
+    vec3 diffuse  = irradiance * albedo;
+    vec3 ambient    = (kD * diffuse) * ao;
+
+    return ambient + Lo;
 }
 
 // MARK: Phong
@@ -156,7 +180,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
     {
         vec3 I = normalize(V);
         vec3 reflectDir = reflect(I, N);
-        R = uTexCubemap.Sample(reflectDir).xyz;
+        R = uTexEnvironmentCubemap.Sample(reflectDir).xyz;
         R *= specIntensity;
     }
 
@@ -204,7 +228,8 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(2,1)]] Sampler2D uTexRT2; // RT2: (albedo.rgb, metallic/specIntensity)
 [[vk::binding(3,1)]] Sampler2D uTexRT3; // RT3: shadingModelID
 
-[[vk::binding(0,2)]] SamplerCube uTexCubemap;     
+[[vk::binding(0,2)]] SamplerCube uTexEnvironmentCubemap; // skybox
+[[vk::binding(1,2)]] SamplerCube uTexIrradianceCubemap; 
 
 
 struct FragmentOutput{

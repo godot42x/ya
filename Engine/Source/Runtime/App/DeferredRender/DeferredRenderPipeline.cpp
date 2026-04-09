@@ -147,7 +147,7 @@ void DeferredRenderPipeline::initLightPassPipeline()
         {
             _frameAndLightDSL,
             _lightGBufferDSL,
-            App::get()->getRenderRuntime()->getSkyboxDescriptorSetLayout(),
+            App::get()->getRenderRuntime()->getEnvironmentLightingDescriptorSetLayout(),
         });
 
     GraphicsPipelineCreateInfo ci{
@@ -159,7 +159,6 @@ void DeferredRenderPipeline::initLightPassPipeline()
         .pipelineLayout = _lightPPL.get(),
         .shaderDesc     = ShaderDesc{
                 .shaderName        = "DeferredRender/Unified_LightPass.slang",
-                .bDeriveFromShader = false,
                 .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
                 .vertexAttributes  = _commonVertexAttributes,
         },
@@ -623,7 +622,7 @@ void DeferredRenderPipeline::executeLightPass(const TickDesc& desc)
     auto* scene    = desc.sceneManager ? desc.sceneManager->getActiveScene() : nullptr;
     auto* runtime  = App::get()->getRenderRuntime();
     YA_CORE_ASSERT(runtime, "RenderRuntime is null");
-    auto  skyboxDS = runtime->getSceneSkyboxDescriptorSet(scene);
+    auto  environmentLightingDS = runtime->getSceneEnvironmentLightingDescriptorSet(scene);
 
     cmdBuf->debugBeginLabel("Light Pass");
 
@@ -644,7 +643,7 @@ void DeferredRenderPipeline::executeLightPass(const TickDesc& desc)
     std::vector Dss = {
         _frameAndLightDS,
         _lightTexturesDS,
-        skyboxDS,
+        environmentLightingDS,
     };
     cmdBuf->bindDescriptorSets(_lightPPL.get(), 0, Dss);
 

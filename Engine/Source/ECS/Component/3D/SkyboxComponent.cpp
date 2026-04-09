@@ -65,137 +65,6 @@ bool SkyboxComponent::hasCylindricalSource() const
     return sourceType == ESkyboxSourceType::Cylindrical && cylindricalSource.hasFile();
 }
 
-bool SkyboxComponent::resolve()
-{
-    if (!hasSource()) {
-        cubemapTexture.reset();
-        sourcePreviewTexture.reset();
-        clearCubemapPreviewViews();
-        resolveState = ESkyboxResolveState::Empty;
-        return false;
-    }
-
-    if (resolveState == ESkyboxResolveState::Dirty) {
-        if (hasCubemapSource()) {
-            std::vector<std::string> facePaths(cubemapSource.files.begin(), cubemapSource.files.end());
-            _pendingBatchLoad              = std::make_shared<PendingBatchLoadState>();
-            _pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
-                AssetManager::TextureBatchMemoryLoadRequest{
-                    .filepaths = facePaths,
-                });
-        }
-        else if (hasCylindricalSource()) {
-            _pendingCylindricalFuture = AssetManager::get()->loadTexture(
-                AssetManager::TextureLoadRequest{
-                    .filepath        = cylindricalSource.filepath,
-                    .name            = "SkyboxCylindricalSource",
-                    .onReady         = {},
-                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
-                    .textureSemantic = std::nullopt,
-                });
-        }
-        resolveState = ESkyboxResolveState::ResolvingSource;
-        return false;
-    }
-
-    if (hasCubemapSource() && resolveState == ESkyboxResolveState::ResolvingSource) {
-        AssetManager::TextureBatchMemory batchMemory;
-        if (!_pendingBatchLoad ||
-            !AssetManager::get()->consumeTextureBatchMemory(_pendingBatchLoad->batchHandle, batchMemory)) {
-            return false;
-        }
-
-        _pendingBatchLoad.reset();
-
-        if (batchMemory.textures.size() != CubeFace_Count || !batchMemory.isValid()) {
-            cubemapTexture.reset();
-            resolveState = ESkyboxResolveState::Failed;
-            return false;
-        }
-
-        CubeMapMemoryCreateInfo createInfo;
-        createInfo.label        = "SkyboxCubemap";
-        createInfo.flipVertical = cubemapSource.flipVertical;
-
-        for (size_t index = 0; index < CubeFace_Count; ++index) {
-            const auto& face        = batchMemory.textures[index];
-            createInfo.faces[index] = TextureMemoryView{
-                .width    = face.width,
-                .height   = face.height,
-                .channels = face.channels,
-                .format   = face.format,
-                .data     = face.bytes.data(),
-                .dataSize = face.bytes.size(),
-            };
-        }
-
-        auto cubemap = Texture::createCubeMapFromMemory(createInfo);
-        if (!cubemap || !cubemap->isValid()) {
-            cubemapTexture.reset();
-            clearCubemapPreviewViews();
-            resolveState = ESkyboxResolveState::Failed;
-            return false;
-        }
-
-        cubemapTexture = std::move(cubemap);
-        rebuildCubemapPreviewViews();
-        resolveState = ESkyboxResolveState::Ready;
-        return true;
-    }
-
-    if (hasCylindricalSource() && resolveState == ESkyboxResolveState::ResolvingSource) {
-        if (!_pendingCylindricalFuture) {
-            _pendingCylindricalFuture = AssetManager::get()->loadTexture(
-                AssetManager::TextureLoadRequest{
-                    .filepath        = cylindricalSource.filepath,
-                    .name            = "SkyboxCylindricalSource",
-                    .onReady         = {},
-                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
-                    .textureSemantic = std::nullopt,
-                });
-        }
-        if (!_pendingCylindricalFuture->isReady()) {
-            return false;
-        }
-
-        auto sourceTexture = _pendingCylindricalFuture->getShared();
-        _pendingCylindricalFuture.reset();
-        if (!sourceTexture || !sourceTexture->getImageView()) {
-            resolveState = ESkyboxResolveState::Failed;
-            return false;
-        }
-
-        sourcePreviewTexture                    = sourceTexture;
-        _pendingOffscreenProcess                = std::make_shared<PendingOffscreenProcessState>();
-        _pendingOffscreenProcess->sourceTexture = std::move(sourceTexture);
-        _pendingOffscreenProcess->bFlipVertical = cylindricalSource.flipVertical;
-        resolveState                            = ESkyboxResolveState::Preprocessing;
-        return false;
-    }
-
-    if (hasCylindricalSource() && resolveState == ESkyboxResolveState::Preprocessing) {
-        if (!_pendingOffscreenProcess || !_pendingOffscreenProcess->bTaskFinished) {
-            return false;
-        }
-
-        if (!_pendingOffscreenProcess->bTaskSucceeded || !_pendingOffscreenProcess->outputTexture) {
-            _pendingOffscreenProcess.reset();
-            cubemapTexture.reset();
-            clearCubemapPreviewViews();
-            resolveState = ESkyboxResolveState::Failed;
-            return false;
-        }
-
-        cubemapTexture = std::move(_pendingOffscreenProcess->outputTexture);
-        rebuildCubemapPreviewViews();
-        _pendingOffscreenProcess.reset();
-        resolveState = ESkyboxResolveState::Ready;
-        return true;
-    }
-
-    return resolveState == ESkyboxResolveState::Ready;
-}
-
 bool SkyboxComponent::hasRenderableCubemap() const
 {
     return resolveState == ESkyboxResolveState::Ready && cubemapTexture && cubemapTexture->getImageView();
@@ -243,16 +112,8 @@ IImageView* SkyboxComponent::getCubemapFacePreviewView(uint32_t faceIndex) const
     return cubemapFacePreviewViews[faceIndex].get();
 }
 
-void SkyboxComponent::invalidate()
+void SkyboxComponent::prepareForRemove()
 {
-    _pendingBatchLoad.reset();
-    _pendingCylindricalFuture.reset();
-    if (_pendingOffscreenProcess) {
-        _pendingOffscreenProcess->bCancelled = true;
-        DeferredDeletionQueue::get().retireResource(_pendingOffscreenProcess->outputTexture);
-        _pendingOffscreenProcess->outputTexture.reset();
-        _pendingOffscreenProcess.reset();
-    }
     sourcePreviewTexture.reset();
     clearCubemapPreviewViews();
 
@@ -261,7 +122,14 @@ void SkyboxComponent::invalidate()
         ddq.enqueueResource(ddq.currentFrame(), std::move(cubemapTexture));
         cubemapTexture = nullptr;
     }
-    resolveState = hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty;
+}
+
+void SkyboxComponent::invalidate()
+{
+    prepareForRemove();
+    auto transition = makeTransition(resolveState, "Skybox");
+    transition.to(hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty,
+                  "invalidate");
 }
 
 bool SkyboxComponent::isLoading() const

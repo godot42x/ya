@@ -1171,9 +1171,9 @@
                         0.0390625
                     ],
                     "_color": [
-                        1.0,
-                        1.0,
-                        1.0
+                        0.11392402648925781,
+                        0.11392402648925781,
+                        0.11392402648925781
                     ],
                     "_diffuse": [
                         0.1171875,
@@ -13465,11 +13465,57 @@
             },
             "id": 14059833978832671346,
             "name": "Player"
+        },
+        {
+            "components": {
+                "EnvironmentLightingComponent": {
+                    "cubemapSource": {
+                        "files": [
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            ""
+                        ],
+                        "flipVertical": false
+                    },
+                    "cylindricalSource": {
+                        "filepath": "",
+                        "flipVertical": false
+                    },
+                    "irradianceFaceSize": 32,
+                    "sourceType": "SceneSkybox"
+                },
+                "TransformComponent": {
+                    "_position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 14886455398585154065,
+            "name": "New Node"
         }
     ],
     "name": "Untitled Scene (Play Mode)",
     "nodeTree": {
         "children": [
+            {
+                "entityRef": 14886455398585154065,
+                "name": "Environment Lighting"
+            },
             {
                 "entityRef": 2216115674986966606,
                 "name": "Skybox"
