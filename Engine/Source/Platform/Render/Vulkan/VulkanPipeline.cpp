@@ -29,56 +29,6 @@ void VulkanPipelineLayout::create(const std::vector<PushConstantRange>          
         });
     }
 
-    // Create it outside the ci
-    // _descriptorSetLayouts.resize(_ci.descriptorSetLayouts.size(), VK_NULL_HANDLE);
-
-    // int i = 0;
-    // for (const auto &setLayout : _ci.descriptorSetLayouts) {
-
-    //     std::vector<VkDescriptorSetLayoutBinding> bindings = {};
-    //     for (const auto &binding : setLayout.bindings) {
-    //         bindings.push_back(VkDescriptorSetLayoutBinding{
-    //             .binding            = binding.binding,
-    //             .descriptorType     = toVk(binding.descriptorType),
-    //             .descriptorCount    = binding.descriptorCount,
-    //             .stageFlags         = toVk(binding.stageFlags),
-    //             .pImmutableSamplers = nullptr, // TODO: handle immutable samplers
-    //         });
-    //     }
-
-    //     VkDescriptorSetLayoutCreateInfo dslCI{
-    //         .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-    //         .pNext        = nullptr,
-    //         .flags        = 0,
-    //         .bindingCount = static_cast<uint32_t>(bindings.size()),
-    //         .pBindings    = bindings.data(),
-    //     };
-
-    //     vkCreateDescriptorSetLayout(_render->getDevice(),
-    //                                 &dslCI,
-    //                                 _render->getAllocator(),
-    //                                 &_descriptorSetLayouts[i]);
-    //     ++i;
-    // }
-
-
-    // example for the descriptor set meaning:
-
-    // layout(set=2, binding=0) uniform sampler2D uTexture0; // see comment of SDL_CreateGPUShader, the set is the rule of SDL3!!!
-
-    // layout(set = 3, binding = 0) uniform CameraBuffer{
-    //     mat4 model;
-    //     mat4 view;
-    //     mat4 projection;
-    // } uCamera;
-
-    // layout(set = 3, binding = 1) uniform LightBuffer {
-    //     vec4 lightDir;
-    //     vec4 lightColor;
-    //     float ambientIntensity;
-    //     float specularPower;
-    // } uLight;
-
     std::vector<VkDescriptorSetLayout> vkLayouts;
     for (const auto& layout : layouts) {
         vkLayouts.push_back(layout->getHandleAs<VkDescriptorSetLayout>());
@@ -90,8 +40,6 @@ void VulkanPipelineLayout::create(const std::vector<PushConstantRange>          
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
-        // .setLayoutCount         = static_cast<uint32_t>(_descriptorSetLayouts.size()),
-        // .pSetLayouts            = _descriptorSetLayouts.data(),
         .setLayoutCount         = static_cast<uint32_t>(vkLayouts.size()),
         .pSetLayouts            = vkLayouts.data(),
         .pushConstantRangeCount = static_cast<uint32_t>(vkPSs.size()),
@@ -112,9 +60,6 @@ void VulkanPipelineLayout::create(const std::vector<PushConstantRange>          
 void VulkanPipelineLayout::cleanup()
 {
     VK_DESTROY(PipelineLayout, _render->getDevice(), _pipelineLayout);
-    // for (auto layout : _descriptorSetLayouts) {
-    //     VK_DESTROY(DescriptorSetLayout, _render->getDevice(), layout);
-    // }
 }
 
 
@@ -295,21 +240,6 @@ void VulkanPipeline::renderGUI()
         }
     }
 
-
-    // SampleCount need the render pass/render target compatibility,
-    //  so we can only allow changing it in a limited scope:
-    //  change renderpass(optional) -> change rt/recreate attachments -> change pipeline
-    // int sampleCount = toSampleCountIndex(_ci.multisampleState.sampleCount);
-    // if (ImGui::Combo("Sample Count", &sampleCount, "1\0"
-    //                                                "2\0"
-    //                                                "4\0"
-    //                                                "8\0"
-    //                                                "16\0"
-    //                                                "32\0"
-    //                                                "64\0")) {
-    //     setSampleCount(toSampleCount(sampleCount));
-    // }
-
     if (bDirty) {
         updateDesc(_ci);
     }
@@ -329,33 +259,15 @@ bool VulkanPipeline::createPipelineInternal()
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
     auto shaderStorage = ya::App::get()->getShaderStorage();
     std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
-    if (_forceShaderReload) {
-        try {
-            stage2Spirv = shaderStorage->reload(_ci.shaderDesc);
-        }
-        catch (const std::exception& e) {
-            YA_CORE_ERROR("Failed to reload shader: {}", e.what());
-            return _pipeline != VK_NULL_HANDLE;
-        }
+    try {
+        stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc, _forceShaderReload);
     }
-    else {
-        stage2Spirv = shaderStorage->getCache(shaderCacheKey);
-        if (!stage2Spirv) {
-            try {
-                stage2Spirv = shaderStorage->load(_ci.shaderDesc);
-            }
-            catch (const std::exception& e) {
-                YA_CORE_ERROR("Failed to load shader: {}", e.what());
-                return _pipeline != VK_NULL_HANDLE;
-            }
-            if (!stage2Spirv) {
-                YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
-                return false;
-            }
-        }
+    catch (const std::exception& e) {
+        YA_CORE_ERROR("Failed to load shader: {}", e.what());
+        return _pipeline != VK_NULL_HANDLE;
     }
     if (!stage2Spirv) {
-        YA_CORE_ERROR("Shader not found in cache: {}", shaderCacheKey);
+        YA_CORE_ERROR("Failed to load shader: {}", shaderCacheKey);
         return false;
     }
 
@@ -837,22 +749,16 @@ bool VulkanComputePipeline::createPipelineInternal()
     YA_CORE_INFO("Creating compute pipeline for: {}", _name);
 
     auto shaderStorage = ya::App::get()->getShaderStorage();
-    auto stage2Spirv   = shaderStorage->getCache(shaderCacheKey);
-    if (!stage2Spirv) {
-        try {
-            stage2Spirv = shaderStorage->load(_ci.shaderDesc);
-        }
-        catch (const std::exception& e) {
-            YA_CORE_ERROR("Failed to load compute shader: {}", e.what());
-            return _pipeline != VK_NULL_HANDLE;
-        }
-        if (!stage2Spirv) {
-            YA_CORE_ERROR("Failed to load compute shader: {}", shaderCacheKey);
-            return false;
-        }
+    std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
+    try {
+        stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc);
+    }
+    catch (const std::exception& e) {
+        YA_CORE_ERROR("Failed to load compute shader: {}", e.what());
+        return _pipeline != VK_NULL_HANDLE;
     }
     if (!stage2Spirv) {
-        YA_CORE_ERROR("Compute shader not found in cache: {}", shaderCacheKey);
+        YA_CORE_ERROR("Failed to load compute shader: {}", shaderCacheKey);
         return false;
     }
 

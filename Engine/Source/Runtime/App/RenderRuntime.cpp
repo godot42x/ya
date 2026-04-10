@@ -271,19 +271,20 @@ void RenderRuntime::init(const InitDesc& desc)
                               .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
                               .FactoryNew<SlangProcessor>();
     _shaderStorage->setSlangProcessor(slangProcessor);
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/Unlit.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Sprite2D_World.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Test/DebugRender.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Skybox.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"});
-    _shaderStorage->load(ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"});
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-    // _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/GBufferPass.slang"});
-    // _shaderStorage->load(ShaderDesc{.shaderName = "DeferredRender/LightPass.slang"});
-    // _shaderStorage->load(ShaderDesc{.shaderName = "DebugChannelExtract.comp.glsl"});
+
+    // Launch async shader preloading — compiles on a background thread while
+    // Vulkan context, descriptor pools, etc. are initialized on the main thread.
+    _shaderStorage->preloadAsync({
+        ShaderDesc{.shaderName = "Test/Unlit.glsl"},
+        ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"},
+        ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"},
+        ShaderDesc{.shaderName = "Sprite2D_World.glsl"},
+        ShaderDesc{.shaderName = "Test/DebugRender.glsl"},
+        ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"},
+        ShaderDesc{.shaderName = "Skybox.glsl"},
+        ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
+        ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
+    });
 
     if (ci.bEnableRenderDoc) {
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();
@@ -443,6 +444,10 @@ void RenderRuntime::init(const InitDesc& desc)
                                                _fallbackSkyboxTexture.get(),
                                                _fallbackIrradianceTexture.get());
     }
+
+    // Wait for all shaders to finish compiling before creating pipelines
+    _shaderStorage->waitForPreload();
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
 
     initActivePipeline();
 

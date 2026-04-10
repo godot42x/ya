@@ -238,28 +238,63 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
     std::string line;
     while (std::getline(input, line)) {
         auto trimmed = ut::str::trim(std::string_view(line));
-        if (!trimmed.starts_with("#include")) {
+
+        // Parse C-style #include "path" or #include <path>
+        if (trimmed.starts_with("#include")) {
+            const auto begin = trimmed.find_first_of("\"<");
+            if (begin == std::string_view::npos) {
+                continue;
+            }
+
+            const auto endToken = trimmed[begin] == '<' ? '>' : '"';
+            const auto end      = trimmed.find(endToken, begin + 1);
+            if (end == std::string_view::npos || end <= begin + 1) {
+                continue;
+            }
+
+            const auto includeName = trimmed.substr(begin + 1, end - begin - 1);
+            auto resolvedPath      = resolveShaderIncludePath(includeName, normalizedPath);
+            if (!resolvedPath.has_value()) {
+                return false;
+            }
+            if (!appendShaderDependencyHash(*resolvedPath, visitedFiles, hash)) {
+                return false;
+            }
             continue;
         }
 
-        const auto begin = trimmed.find_first_of("\"<");
-        if (begin == std::string_view::npos) {
-            continue;
-        }
+        // Parse Slang "import Module.Sub;" → "Module/Sub.slang"
+        if (trimmed.starts_with("import ")) {
+            auto importBody   = trimmed.substr(7); // skip "import "
+            auto semicolonPos = importBody.find(';');
+            if (semicolonPos == std::string_view::npos) {
+                continue;
+            }
+            auto moduleName = ut::str::trim(importBody.substr(0, semicolonPos));
+            if (moduleName.empty()) {
+                continue;
+            }
 
-        const auto endToken = trimmed[begin] == '<' ? '>' : '"';
-        const auto end      = trimmed.find(endToken, begin + 1);
-        if (end == std::string_view::npos || end <= begin + 1) {
-            continue;
-        }
+            // Convert dot-separated module path to file path: Common.Helper → Common/Helper.slang
+            std::string moduleFilePath(moduleName);
+            std::replace(moduleFilePath.begin(), moduleFilePath.end(), '.', '/');
+            moduleFilePath += ".slang";
 
-        const auto includeName = trimmed.substr(begin + 1, end - begin - 1);
-        auto resolvedPath      = resolveShaderIncludePath(includeName, normalizedPath);
-        if (!resolvedPath.has_value()) {
-            return false;
-        }
-        if (!appendShaderDependencyHash(*resolvedPath, visitedFiles, hash)) {
-            return false;
+            // Resolve: relative to current file, then Engine/Shader/GLSL fallback, then Slang base dir
+            auto resolvedPath = resolveShaderIncludePath(moduleFilePath, normalizedPath);
+            if (!resolvedPath.has_value()) {
+                auto slangFallback    = (std::filesystem::path("Engine/Shader/Slang") / moduleFilePath).lexically_normal();
+                auto slangFallbackStr = slangFallback.generic_string();
+                if (VFS::get()->isFileExists(slangFallbackStr)) {
+                    resolvedPath = slangFallbackStr;
+                }
+            }
+            if (resolvedPath.has_value()) {
+                if (!appendShaderDependencyHash(*resolvedPath, visitedFiles, hash)) {
+                    return false;
+                }
+            }
+            continue;
         }
     }
 
@@ -492,31 +527,14 @@ uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType& type)
         break;
     }
 
-    // TODO: handled this
-    // Handle alignment requirements for vec3 (which is actually 16 bytes in many GPU APIs)
-    // This is a critical consideration when working with struct data in shaders
-    // if (type.basetype == spirv_cross::SPIRType::Float && type.vecsize == 3 && type.columns == 1) {
-    // vec3 is typically padded to 16 bytes (4 floats) for alignment
-    // return 16;
-    // }
-
     return size;
 }
 
 // Get the offset for a member in a struct with proper C++ alignment
 uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType& type)
 {
-    // Determine the alignment requirement based on std140 layout rules
     uint32_t alignment = 4; // Default to 4 bytes for basic types
-
     return (current_offset + alignment) % alignment == 0 ? current_offset : current_offset + alignment;
-
-
-    // if ((current_offset + size) % alignment != 0) {
-    //     // Align to the next multiple of the alignment size
-    //     current_offset += (alignment - (current_offset % alignment));
-    // }
-    // return aligned_offset;
 }
 
 namespace ShaderReflection
@@ -608,7 +626,7 @@ uint32_t getDataTypeSize(DataType type)
 
 } // namespace ShaderReflection
 
-ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)
+ShaderReflection::ShaderResources ShaderReflection::reflectSpirvCross(EShaderStage::T stage, const std::vector<uint32_t>& spirvData, std::string_view debugName)
 {
     std::vector<uint32_t>        spirv_ir(spirvData.begin(), spirvData.end());
     spirv_cross::Compiler        compiler(spirv_ir);
@@ -620,7 +638,7 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
     resources.spirvResources = spirvResources; // Store original spirv resources
 
     YA_CORE_TRACE("===============================================================================");
-    YA_CORE_TRACE("OpenGLShader:Reflect {} -> {}", curFileName, EShaderStage::T2Strings[stage]);
+    YA_CORE_TRACE("ShaderReflection:reflectSpirvCross {} -> {}", debugName, EShaderStage::T2Strings[stage]);
     YA_CORE_TRACE("\t {} uniform buffers ", spirvResources.uniform_buffers.size());
     YA_CORE_TRACE("\t {} storage buffers ", spirvResources.storage_buffers.size());
     YA_CORE_TRACE("\t {} stage inputs ", spirvResources.stage_inputs.size());
@@ -631,8 +649,7 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
 
     // Process stage inputs with alignment information
     YA_CORE_TRACE("Stage Inputs (with alignment information):");
-    uint32_t   struct_offset      = 0;
-    const bool IS_CPP_STRUCT_PACK = true;
+    uint32_t struct_offset = 0;
     for (const auto& input : spirvResources.stage_inputs) {
 
         uint32_t location = compiler.get_decoration(input.id, spv::DecorationLocation);
@@ -715,9 +732,8 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
         YA_CORE_TRACE("\tSet = {0}", set);
         YA_CORE_TRACE("\tMembers = {0}", member_count);
 
-        // Process each member of the uniform buffer with alignment information
-        YA_CORE_TRACE("\tMembers with alignment:");
-        uint32_t struct_offset = 0;
+        // Process each member of the uniform buffer
+        YA_CORE_TRACE("\tMembers:");
 
         for (int i = 0; i < member_count; i++) {
             const std::string memberName   = compiler.get_member_name(buffer_type.self, i);
@@ -725,34 +741,19 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
             uint32_t          memberOffset = compiler.type_struct_member_offset(buffer_type, i);
             uint32_t          memberSize   = compiler.get_declared_struct_member_size(buffer_type, i);
 
-            // Calculate proper C++ aligned offset
-            // uint32_t aligned_offset = SPIRVHelper::getAlignedOffset(struct_offset, memberType);
-            // struct_offset           = aligned_offset + SPIRVHelper::getSpirvTypeSize(memberType);
-
-            // Create uniform buffer member
             ShaderReflection::UniformBufferMember member;
             member.name   = memberName;
             member.type   = ShaderReflection::getSpirvBaseType(memberType);
             member.offset = memberOffset;
             member.size   = memberSize;
 
-            // Add to uniform buffer
             uniformBuffer.members.push_back(member);
 
-            YA_CORE_TRACE("\t\t-Member {0} (shader offset: {1}, C++ aligned offset: {2}, size: {3}, type: {4})",
+            YA_CORE_TRACE("\t\t-Member {0} (offset: {1}, size: {2}, type: {3})",
                           memberName,
                           memberOffset,
-                          -1,
                           memberSize,
                           ShaderReflection::DataType2Strings[member.type]);
-
-            // Check for alignment mismatches between shader and C++
-            // if (memberOffset != aligned_offset) {
-            //     YA_CORE_WARN("\t\t  ⚠️ ALIGNMENT MISMATCH: Shader offset {0} != C++ aligned offset {1} for member {2}",
-            //                  memberOffset,
-            //                  aligned_offset,
-            //                  memberName);
-            // }
         }
 
         // Add uniform buffer to resources
@@ -805,6 +806,11 @@ ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, 
     }
 
     return resources;
+}
+
+ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)
+{
+    return ShaderReflection::reflectSpirvCross(stage, spirvData, curFileName);
 }
 
 auto getOption(bool bOptimized)
@@ -888,19 +894,6 @@ struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
             if (!ok) {
                 data->content = std::format("#error \"Failed to include file: {}\"\n or fallback file: {}", data->sourceName, fallbackName);
                 YA_CORE_ERROR("Shader include failed: '{}' or '{}' requested by '{}'", data->sourceName, fallbackName, requesting_source ? requesting_source : "");
-            }
-        }
-
-        if (!VirtualFileSystem::get()->readFileToString(data->sourceName, data->content)) {
-            // Fallback: search Engine/Shader/GLSL base directory
-            auto fallback     = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
-            auto fallbackName = fallback.generic_string();
-            if (VirtualFileSystem::get()->readFileToString(fallbackName, data->content)) {
-                data->sourceName = fallbackName;
-            }
-            else {
-                data->content = std::format("#error \"Failed to include file: {}\"\n", data->sourceName);
-                YA_CORE_ERROR("Shader include failed: '{}' requested by '{}'", data->sourceName, requesting_source ? requesting_source : "");
             }
         }
 
@@ -1298,6 +1291,36 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 // ============================================================
 
 // ---------------------------------------------------------------------------
+// Reusable ISlangBlob wrapping a std::string
+// ---------------------------------------------------------------------------
+struct SlangStringBlob : public ISlangBlob
+{
+    std::string           data;
+    std::atomic<uint32_t> rc{1};
+
+    uint32_t addRef() override { return ++rc; }
+    uint32_t release() override
+    {
+        uint32_t r = --rc;
+        if (r == 0) delete this;
+        return r;
+    }
+    SlangResult queryInterface(const SlangUUID& uuid, void** out) override
+    {
+        if (uuid == ISlangBlob::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid())
+        {
+            addRef();
+            *out = static_cast<ISlangBlob*>(this);
+            return SLANG_OK;
+        }
+        *out = nullptr;
+        return SLANG_E_NO_INTERFACE;
+    }
+    const void* getBufferPointer() override { return data.data(); }
+    size_t      getBufferSize() override { return data.size(); }
+};
+
+// ---------------------------------------------------------------------------
 // VFS-backed ISlangFileSystem so Slang can resolve #include / import via VFS
 // ---------------------------------------------------------------------------
 struct SlangVfsFileSystem : public ISlangFileSystem
@@ -1347,39 +1370,10 @@ struct SlangVfsFileSystem : public ISlangFileSystem
         if (!VirtualFileSystem::get()->readFileToString(path, content))
         {
             YA_CORE_ERROR("[SlangVFS] Failed to load: {}", path);
-            throw "1";
             return SLANG_E_NOT_FOUND;
         }
 
-        // Wrap content in a simple blob
-        struct StringBlob : public ISlangBlob
-        {
-            std::string           data;
-            std::atomic<uint32_t> rc{1};
-
-            uint32_t addRef() override { return ++rc; }
-            uint32_t release() override
-            {
-                uint32_t r = --rc;
-                if (r == 0) delete this;
-                return r;
-            }
-            SlangResult queryInterface(const SlangUUID& uuid, void** out) override
-            {
-                if (uuid == ISlangBlob::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid())
-                {
-                    addRef();
-                    *out = static_cast<ISlangBlob*>(this);
-                    return SLANG_OK;
-                }
-                *out = nullptr;
-                return SLANG_E_NO_INTERFACE;
-            }
-            const void* getBufferPointer() override { return data.data(); }
-            size_t      getBufferSize() override { return data.size(); }
-        };
-
-        auto* blob = new StringBlob();
+        auto* blob = new SlangStringBlob();
         blob->data = std::move(content);
         *outBlob   = blob;
         return SLANG_OK;
@@ -1388,27 +1382,6 @@ struct SlangVfsFileSystem : public ISlangFileSystem
   private:
     std::atomic<uint32_t> _refCount{1};
 };
-
-// ---------------------------------------------------------------------------
-// Map EShaderStage to Slang stage enum
-// ---------------------------------------------------------------------------
-static SlangStage toSlangStage(EShaderStage::T stage)
-{
-    switch (stage)
-    {
-    case EShaderStage::Vertex:
-        return SLANG_STAGE_VERTEX;
-    case EShaderStage::Fragment:
-        return SLANG_STAGE_FRAGMENT;
-    case EShaderStage::Geometry:
-        return SLANG_STAGE_GEOMETRY;
-    case EShaderStage::Compute:
-        return SLANG_STAGE_COMPUTE;
-    default:
-        YA_CORE_ASSERT(false, "Unknown shader stage");
-        return SLANG_STAGE_NONE;
-    }
-}
 
 // ---------------------------------------------------------------------------
 // SlangProcessor::compileToSpv
@@ -1437,7 +1410,7 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     std::vector<slang::PreprocessorMacroDesc> macros;
     macros.reserve(defines.size() + 1);
     // Always define YA_PLATFORM_VULKAN
-    macros.push_back({"YA_PLATFORM_VULKAN", "1"});
+    macros.push_back({.name="YA_PLATFORM_VULKAN", .value="1"});
     // User-supplied defines (format: "NAME" or "NAME=VALUE")
     std::vector<std::pair<std::string, std::string>> macroStorage;
     macroStorage.reserve(defines.size());
@@ -1490,36 +1463,8 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
 
     // 3. Load module from source string
     Slang::ComPtr<slang::IBlob> diagBlob;
-    Slang::ComPtr<slang::IBlob> sourceBlob;
 
-    // Wrap source in a blob
-    struct SourceBlob : public ISlangBlob
-    {
-        virtual ~SourceBlob() = default;
-        std::string           data;
-        std::atomic<uint32_t> rc{1};
-        uint32_t              addRef() override { return ++rc; }
-        uint32_t              release() override
-        {
-            uint32_t r = --rc;
-            if (r == 0) delete this;
-            return r;
-        }
-        SlangResult queryInterface(const SlangUUID& uuid, void** out) override
-        {
-            if (uuid == ISlangBlob::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid())
-            {
-                addRef();
-                *out = static_cast<ISlangBlob*>(this);
-                return SLANG_OK;
-            }
-            *out = nullptr;
-            return SLANG_E_NO_INTERFACE;
-        }
-        const void* getBufferPointer() override { return data.data(); }
-        size_t      getBufferSize() override { return data.size(); }
-    };
-    auto* srcBlob = new SourceBlob();
+    auto* srcBlob = new SlangStringBlob();
     srcBlob->data = std::string(source);
 
     // Module name derived from file path (without extension)
@@ -1601,7 +1546,6 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
 // ---------------------------------------------------------------------------
 std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const ShaderDesc& ci, EShaderProcessMode mode)
 {
-    (void)mode;
     const auto cacheKey = ci.cacheKey();
     YA_CORE_ASSERT(!cacheKey.empty(), "ShaderDesc cache key cannot be empty");
 
@@ -1629,16 +1573,25 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         return true;
     };
 
+    // Helper: compute cache path using the shared infrastructure
+    auto getCachePath = [&]() -> std::filesystem::path {
+        auto cacheDir = stdpath(intermediateStoragePath) / "Slang";
+        auto key      = curFileName.empty() ? curFilePath.generic_string() : curFileName;
+        return cacheDir / makeCacheFileName(key);
+    };
+
     if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
     {
-        // Each StageFile specifies an explicit source file.
-        // Entry point convention: "vertMain" / "fragMain" / "geomMain"
         static const std::unordered_map<EShaderStage::T, std::string> stageEntryNames = {
             {EShaderStage::Vertex, "vertMain"},
             {EShaderStage::Fragment, "fragMain"},
             {EShaderStage::Geometry, "geomMain"},
             {EShaderStage::Compute, "compMain"},
         };
+
+        // Collect stage source paths for hashing
+        std::vector<ShaderStageSource> stageSources;
+        stageSources.reserve(ci.stageFiles.size());
 
         for (const auto& sf : ci.stageFiles)
         {
@@ -1648,6 +1601,39 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
                 return {};
             }
 
+            std::filesystem::path stagePath(sf.file);
+            if (!stagePath.is_absolute())
+                stagePath = stdpath(shaderStoragePath) / stagePath;
+
+            std::string stageSource;
+            if (!VirtualFileSystem::get()->readFileToString(stagePath.generic_string(), stageSource)) {
+                YA_CORE_ERROR("[Slang] Failed to read stage-file shader source: {}", stagePath.generic_string());
+                return {};
+            }
+
+            stageSources.push_back(ShaderStageSource{
+                .stage  = sf.stage,
+                .path   = stagePath.generic_string(),
+                .source = std::move(stageSource),
+            });
+            ret[sf.stage] = {};
+        }
+
+        ret.clear();
+        curFileName = cacheKey;
+        curFilePath = stdpath(shaderStoragePath) / cacheKey;
+
+        // Disk cache: try loading cached SPIR-V
+        uint64_t sourceHash = buildShaderSourceHash(stageSources, ci.defines);
+        const auto cachePath = getCachePath();
+        if (mode == EShaderProcessMode::UseCache && loadShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_INFO("[Slang] Loaded shader disk cache for {}", cacheKey);
+            return {std::move(ret)};
+        }
+
+        // Compile each stage
+        for (const auto& sf : ci.stageFiles)
+        {
             std::filesystem::path stagePath(sf.file);
             if (!stagePath.is_absolute())
                 stagePath = stdpath(shaderStoragePath) / stagePath;
@@ -1665,13 +1651,14 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             return {};
         }
 
-        curFileName = cacheKey;
-        curFilePath = stdpath(shaderStoragePath) / cacheKey;
+        if (!saveShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_WARN("[Slang] Failed to write shader disk cache: {}", cachePath.generic_string());
+        }
         YA_CORE_INFO("[Slang] Compiled {} stages for: {}", ret.size(), cacheKey);
     }
     else
     {
-        // SingleShader mode: one .slang file may contain vertex/fragment/geometry/compute entry points.
+        // SingleShader mode
         std::string shaderName = ci.shaderName;
         YA_CORE_ASSERT(!shaderName.empty(), "SingleShader mode requires shaderName");
         if (!shaderName.ends_with(".slang"))
@@ -1685,6 +1672,18 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         {
             YA_CORE_ERROR("[Slang] Failed to read shader: {}", curFilePath.generic_string());
             return {};
+        }
+
+        // Disk cache: try loading cached SPIR-V
+        uint64_t sourceHash = buildShaderSourceHash({ShaderStageSource{
+            .stage  = EShaderStage::Vertex,
+            .path   = curFilePath.generic_string(),
+            .source = source,
+        }}, ci.defines);
+        const auto cachePath = getCachePath();
+        if (mode == EShaderProcessMode::UseCache && loadShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_INFO("[Slang] Loaded shader disk cache for {}", shaderName);
+            return {std::move(ret)};
         }
 
         struct StageEntryCandidate
@@ -1719,13 +1718,16 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             }
         }
 
+        if (!saveShaderDiskCache(cachePath, sourceHash, ret)) {
+            YA_CORE_WARN("[Slang] Failed to write shader disk cache: {}", cachePath.generic_string());
+        }
         YA_CORE_INFO("[Slang] Compiled {} stages for: {}", ret.size(), shaderName);
     }
 
     // Validate SPIR-V magic number
     for (const auto& [stage, spirv] : ret)
     {
-        if (spirv.empty() || spirv[0] != 0x07230203)
+        if (!isValidSpirvModule(spirv))
         {
             YA_CORE_ERROR("[Slang] Invalid SPIR-V magic for stage {}: {}",
                           EShaderStage::T2Strings[stage],
@@ -1863,16 +1865,42 @@ ShaderReflection::MergedResources ShaderReflection::merge(
 }
 
 // ---------------------------------------------------------------------------
-// SlangProcessor::reflect  — reuse GLSLProcessor's SPIRV-Cross based reflect
+// SlangProcessor::reflect — delegates to shared SPIRV-Cross reflection
 // ---------------------------------------------------------------------------
 ShaderReflection::ShaderResources SlangProcessor::reflect(EShaderStage::T          stage,
                                                           const std::vector<ir_t>& spirvData)
 {
-    // Delegate to the same SPIRV-Cross reflection logic used by GLSLProcessor.
-    GLSLProcessor glslProc;
-    glslProc.curFileName = curFileName;
-    glslProc.curFilePath = curFilePath;
-    return glslProc.reflect(stage, spirvData);
+    return ShaderReflection::reflectSpirvCross(stage, spirvData, curFileName);
+}
+
+// ============================================================
+// ShaderStorage async preloading
+// ============================================================
+
+void ShaderStorage::preloadAsync(std::vector<ShaderDesc> shaders)
+{
+    YA_CORE_ASSERT(!_preloadThread, "preloadAsync called while preload is already in progress");
+    _preloadThread = std::make_unique<std::thread>([this, shaders = std::move(shaders)]() {
+        YA_PROFILE_SCOPE_LOG("ShaderStorage::preloadAsync");
+        for (const auto& desc : shaders) {
+            try {
+                load(desc);
+            }
+            catch (const std::exception& e) {
+                YA_CORE_ERROR("Preload failed for shader '{}': {}", desc.cacheKey(), e.what());
+            }
+        }
+    });
+}
+
+void ShaderStorage::waitForPreload()
+{
+    if (_preloadThread && _preloadThread->joinable()) {
+        YA_PROFILE_SCOPE_LOG("ShaderStorage::waitForPreload");
+        _preloadThread->join();
+        _preloadThread.reset();
+        YA_CORE_INFO("Shader preload completed");
+    }
 }
 
 } // namespace ya

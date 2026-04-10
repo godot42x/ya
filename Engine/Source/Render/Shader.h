@@ -5,6 +5,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include "Render.h"
@@ -137,6 +138,10 @@ struct MergedResources
 /// carry a distinct `stage` value.
 MergedResources merge(const std::vector<ShaderResources>& stageResources);
 
+/// Reflect SPIR-V binary into ShaderResources using SPIRV-Cross.
+/// This is the shared implementation used by all processor backends.
+ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint32_t>& spirvData, std::string_view debugName = {});
+
 // Utility functions for shader reflection
 DataType SpirType2DataType(const spirv_cross::SPIRType& type);
 uint32_t getDataTypeSize(DataType type);
@@ -254,6 +259,7 @@ struct GLSLProcessor : public IShaderProcessor
 // the Slang runtime API, and reflects shader resources using
 // SPIRV-Cross (same as GLSLProcessor).
 // ============================================================
+// MARK: Slang
 struct SlangProcessor : public IShaderProcessor
 {
     friend class ShaderProcessorFactory;
@@ -288,6 +294,7 @@ struct ShaderStorage
     std::shared_ptr<IShaderProcessor>               _slangProcessor; // optional, for .slang files
     std::unordered_map<std::string, cache_value_t>  _shaderCache;
     mutable std::mutex                              _cacheMutex;
+    std::unique_ptr<std::thread>                    _preloadThread;
 
     ShaderStorage(std::shared_ptr<IShaderProcessor> processor)
         : _processor(std::move(processor)) {}
@@ -381,6 +388,13 @@ struct ShaderStorage
         return load(ci, EShaderProcessMode::ForceRecompile);
     }
 
+    /// Single entry point for the render layer: loads from cache or recompiles.
+    /// Encapsulates all cache-check / reload logic so callers don't need to manage it.
+    [[nodiscard]] std::shared_ptr<const stage2spirv_t> getOrLoad(const ShaderDesc& ci, bool forceReload = false)
+    {
+        return load(ci, forceReload ? EShaderProcessMode::ForceRecompile : EShaderProcessMode::UseCache);
+    }
+
     void validate(const ShaderDesc& ci)
     {
         const auto cacheKey = ci.cacheKey();
@@ -392,6 +406,13 @@ struct ShaderStorage
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
     }
+
+    /// Launch a background thread that loads all given shaders.
+    /// Call waitForPreload() before any code that depends on the results.
+    void preloadAsync(std::vector<ShaderDesc> shaders);
+
+    /// Block until the background preload thread completes.
+    void waitForPreload();
 };
 
 
