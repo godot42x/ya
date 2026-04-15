@@ -1246,6 +1246,8 @@ using CommandBufferHandle = Handle<CommandBufferHandleTag>;
 /**
  * @brief Frame context containing per-frame camera data
  */
+struct RenderFrameData; // forward declaration
+
 struct FrameContext
 {
     // camera
@@ -1295,6 +1297,9 @@ struct FrameContext
 
     entt::entity viewOwner = entt::null;
     Extent2D     extent    = {.width = 640, .height = 480};
+
+    /// Points to the current frame's render snapshot (nullptr if not yet migrated).
+    RenderFrameData* frameData = nullptr;
 };
 
 } // namespace ya

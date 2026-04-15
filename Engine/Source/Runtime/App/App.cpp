@@ -52,6 +52,8 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
 
+#include "Runtime/App/RenderFrameExtractor.h"
+
 
 
 // Render
@@ -177,6 +179,7 @@ void App::init(AppDesc ci)
     _systems.push_back(sys);
     auto sys2 = ya::makeShared<ResourceResolveSystem>();
     sys2->init();
+    _resourceResolveSystem = sys2.get();
     _systems.push_back(sys2);
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->init();
@@ -189,6 +192,7 @@ void App::init(AppDesc ci)
             sys->shutdown();
         }
         _systems.clear();
+        _resourceResolveSystem = nullptr;
     });
 
 
@@ -612,6 +616,20 @@ void App::tickRender(float dt)
         return;
     }
 
+    // Build render frame snapshot from the scene.
+    auto* scene = _sceneManager ? _sceneManager->getActiveScene() : nullptr;
+    RenderFrameExtractor::extract(
+        RenderFrameExtractor::ExtractInput{
+            .scene         = scene,
+            .view          = _renderFrameState.view,
+            .projection    = _renderFrameState.projection,
+            .cameraPos     = _renderFrameState.cameraPos,
+            .viewportExtent = renderRuntime->getViewportExtent(),
+            .frameIndex    = _frameIndex,
+            .deltaTime     = dt,
+        },
+        _renderFrameData);
+
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .dt                       = dt,
         .sceneManager             = _sceneManager,
@@ -623,6 +641,7 @@ void App::tickRender(float dt)
         .view                     = _renderFrameState.view,
         .projection               = _renderFrameState.projection,
         .cameraPos                = _renderFrameState.cameraPos,
+        .frameData                = &_renderFrameData,
     });
 }
 

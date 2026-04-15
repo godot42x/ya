@@ -12,6 +12,8 @@
 #include "Runtime/App/FPSCtrl.h"
 #include "Runtime/App/RenderRuntime.h"
 
+#include "Render/RenderFrameData.h"
+
 
 #include "Render/Render.h"
 #include "Render/Shader.h"
@@ -39,6 +41,7 @@ struct Sampler;
 struct RenderDocCapture;
 struct ForwardRenderPipeline;
 struct DeferredRenderPipeline;
+struct ResourceResolveSystem;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -193,10 +196,12 @@ struct App
 
     // other systems, eg: transform, resource resolve
     std::vector<stdptr<ISystem>> _systems;
+    ResourceResolveSystem*       _resourceResolveSystem = nullptr;
 
     bool bRenderMirror = false;
 
     RenderFrameState _renderFrameState;
+    RenderFrameData  _renderFrameData;
 
 
     EditorLayer* _editorLayer;
@@ -257,6 +262,7 @@ struct App
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const;
     [[nodiscard]] RenderRuntime*                 getRenderRuntime() const { return _renderRuntime.get(); }
+    [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
 
     [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
     [[nodiscard]] bool                   isShadowMappingEnabled() const;

@@ -15,6 +15,7 @@ struct EditorLayer;
 struct LuaScriptComponent;
 struct EnvironmentLightingComponent;
 struct SkyboxComponent;
+struct SkyboxPreviewInfo;
 struct Texture;
 
 // ============================================================================
@@ -48,9 +49,9 @@ struct DetailsView
     void drawEnvironmentLightingStatus(const EnvironmentLightingComponent& environmentLighting);
     void drawSkyboxComponent(Entity& entity);
     void drawSkyboxStatus(const SkyboxComponent& skybox);
-    void drawSkyboxPreviewSection(const SkyboxComponent& skybox);
-    void drawSkyboxSourcePreview(const SkyboxComponent& skybox);
-    void drawSkyboxCubemapPreviewGrid(const SkyboxComponent& skybox);
+    void drawSkyboxPreviewSection(const Entity& entity, const SkyboxComponent& skybox);
+    void drawSkyboxSourcePreview(const SkyboxPreviewInfo& preview, const SkyboxComponent& skybox);
+    void drawSkyboxCubemapPreviewGrid(const SkyboxPreviewInfo& preview);
     void renderScriptProperty(void *propPtr, void *scriptInstancePtr);
     void tryLoadScriptForEditor(void *scriptPtr);
     void testNewRenderInterface(Entity &entity);

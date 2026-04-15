@@ -16,8 +16,7 @@
 
 
 
-#include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/Core/Sampler.h"
+#include "Render/Core/TextureFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 
 
@@ -27,6 +26,38 @@ namespace ya
 
 namespace
 {
+void retireTexture(stdptr<Texture>& texture)
+{
+    if (!texture) {
+        return;
+    }
+
+    auto& ddq = DeferredDeletionQueue::get();
+    ddq.enqueueResource(ddq.currentFrame(), std::move(texture));
+    texture = nullptr;
+}
+
+void retireTextureNow(stdptr<Texture>& texture)
+{
+    if (!texture) {
+        return;
+    }
+
+    DeferredDeletionQueue::get().retireResource(texture);
+    texture.reset();
+}
+
+void cancelJob(std::shared_ptr<OffscreenPrecomputeJobState>& job)
+{
+    if (!job) {
+        return;
+    }
+
+    job->bCancelled = true;
+    retireTextureNow(job->outputTexture);
+    job.reset();
+}
+
 EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)
 {
     switch (sourceFormat) {
@@ -41,12 +72,8 @@ EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)
 
 EFormat::T chooseEnvironmentIrradianceFormat(EFormat::T sourceFormat)
 {
-    switch (sourceFormat) {
-    case EFormat::R16G16B16A16_SFLOAT:
-        return EFormat::R16G16B16A16_SFLOAT;
-    default:
-        return EFormat::R16G16B16A16_SFLOAT;
-    }
+    (void)sourceFormat;
+    return EFormat::R16G16B16A16_SFLOAT;
 }
 
 uint32_t computeSkyboxFaceSize(const Texture* sourceTexture)
@@ -78,29 +105,34 @@ uint32_t computeEnvironmentIrradianceFaceSize(const Texture* sourceTexture, uint
 stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
                                               const std::string& label,
                                               uint32_t           faceSize,
-                                              EFormat::T         format)
+                                              EFormat::T         format,
+                                              int                mips = -1)
 {
     auto* textureFactory = render ? render->getTextureFactory() : nullptr;
     if (!textureFactory || faceSize == 0 || format == EFormat::Undefined) {
         return nullptr;
     }
+    ImageCreateInfo ci{
+        .label  = std::format("{}_Image", label),
+        .format = format,
+        .extent = {
+            .width  = faceSize,
+            .height = faceSize,
+            .depth  = 1,
+        },
+        .mipLevels     = 1,
+        .arrayLayers   = CubeFace_Count,
+        .samples       = ESampleCount::Sample_1,
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::Sampled),
+        .initialLayout = EImageLayout::Undefined,
+        .flags         = EImageCreateFlag::CubeCompatible,
+    };
+    if (mips > 0) {
+        ci.mipLevels = mips;
+        ci.usage     = static_cast<EImageUsage::T>(ci.usage | EImageUsage::TransferDst | EImageUsage::TransferSrc);
+    }
 
-    auto image = textureFactory->createImage(
-        ImageCreateInfo{
-            .label  = std::format("{}_Image", label),
-            .format = format,
-            .extent = {
-                .width  = faceSize,
-                .height = faceSize,
-                .depth  = 1,
-            },
-            .mipLevels     = 1,
-            .arrayLayers   = CubeFace_Count,
-            .samples       = ESampleCount::Sample_1,
-            .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::Sampled),
-            .initialLayout = EImageLayout::Undefined,
-            .flags         = EImageCreateFlag::CubeCompatible,
-        });
+    auto image = textureFactory->createImage(ci);
     if (!image) {
         return nullptr;
     }
@@ -113,49 +145,232 @@ stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
     return Texture::wrap(image, cubeView, label);
 }
 
-void retireSkyboxCubemapTexture(SkyboxComponent& component)
+OffscreenPrecomputeOutputSpec makeCubemapSpec(const std::string& label,
+                                              uint32_t           faceSize,
+                                              EFormat::T         format,
+                                              int                mipLevels = 1)
 {
-    if (component.cubemapTexture) {
-        auto& ddq = DeferredDeletionQueue::get();
-        ddq.enqueueResource(ddq.currentFrame(), std::move(component.cubemapTexture));
-        component.cubemapTexture = nullptr;
-    }
-    component.clearCubemapPreviewViews();
+    return OffscreenPrecomputeOutputSpec{
+        .outputType = EOffscreenPrecomputeOutputType::Cubemap,
+        .label      = label,
+        .width      = faceSize,
+        .height     = faceSize,
+        .format     = format,
+        .mipLevels  = mipLevels,
+        .layerCount = CubeFace_Count,
+    };
 }
 
-void clearSkyboxPendingState(SkyboxPendingState& state)
+stdptr<Texture> createJobTexture(IRender* const render, const OffscreenPrecomputeOutputSpec& spec)
+{
+    if (!render || !spec.isValid()) {
+        return nullptr;
+    }
+
+    if (spec.outputType == EOffscreenPrecomputeOutputType::Cubemap) {
+        return createRenderableSkyboxCubemap(render, spec.label, spec.width, spec.format, spec.mipLevels);
+    }
+
+    return Texture::createRenderTexture(RenderTextureCreateInfo{
+        .label      = spec.label,
+        .width      = spec.width,
+        .height     = spec.height,
+        .format     = spec.format,
+        .usage      = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::Sampled),
+        .samples    = ESampleCount::Sample_1,
+        .isDepth    = false,
+        .layerCount = spec.layerCount,
+        .mipLevels  = static_cast<uint32_t>(spec.mipLevels),
+    });
+}
+
+TextureFuture requestSkyboxCyl(const SkyboxComponent& component)
+{
+    return AssetManager::get()->loadTexture(
+        AssetManager::TextureLoadRequest{
+            .filepath        = component.cylindricalSource.filepath,
+            .name            = "SkyboxCylindricalSource",
+            .onReady         = {},
+            .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
+            .textureSemantic = std::nullopt,
+        });
+}
+
+TextureFuture requestEnvCyl(const EnvironmentLightingComponent& component)
+{
+    return AssetManager::get()->loadTexture(
+        AssetManager::TextureLoadRequest{
+            .filepath        = component.cylindricalSource.filepath,
+            .name            = "EnvironmentLightingCylindricalSource",
+            .onReady         = {},
+            .colorSpace      = AssetManager::ETextureColorSpace::Linear,
+            .textureSemantic = std::nullopt,
+        });
+}
+
+// ── Common helpers ───────────────────────────────────────────────────
+
+void clearSkyboxViews(SkyboxRuntimeState& state)
+{
+    for (auto& faceView : state.cubemapFacePreviewViews) {
+        if (!faceView) {
+            continue;
+        }
+
+        DeferredDeletionQueue::get().retireResource(std::move(faceView));
+    }
+}
+
+void retireSkyboxResources(SkyboxRuntimeState& state)
+{
+    retireTexture(state.cubemapTexture);
+    retireTexture(state.sourcePreviewTexture);
+    clearSkyboxViews(state);
+}
+
+void rebuildSkyboxViews(SkyboxRuntimeState& state)
+{
+    clearSkyboxViews(state);
+    if (!state.cubemapTexture || !state.cubemapTexture->getImageShared() || !state.cubemapTexture->getImageView()) {
+        return;
+    }
+
+    auto* textureFactory = ITextureFactory::get();
+    if (!textureFactory) {
+        return;
+    }
+
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        state.cubemapFacePreviewViews[faceIndex] = textureFactory->createImageView(
+            state.cubemapTexture->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("SkyboxPreviewFace{}", faceIndex),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = faceIndex,
+                .layerCount     = 1,
+            });
+    }
+}
+
+void resetSkyboxPending(SkyboxRuntimeState& state)
 {
     state.pendingBatchLoad.reset();
     state.pendingCylindricalFuture.reset();
-    if (state.pendingOffscreenProcess) {
-        state.pendingOffscreenProcess->bCancelled = true;
-        DeferredDeletionQueue::get().retireResource(state.pendingOffscreenProcess->outputTexture);
-        state.pendingOffscreenProcess->outputTexture.reset();
-        state.pendingOffscreenProcess.reset();
-    }
+    cancelJob(state.pendingOffscreenProcess);
 }
 
-void checkSkyboxSourceLoad(SkyboxComponent& component, SkyboxPendingState& pendingState)
+void resetSkyboxState(SkyboxRuntimeState& state)
+{
+    resetSkyboxPending(state);
+    retireSkyboxResources(state);
+    state.resultVersion = 0;
+}
+
+void retireEnvTextures(EnvironmentLightingRuntimeState& state)
+{
+    retireTexture(state.cubemapTexture);
+    retireTexture(state.irradianceTexture);
+}
+
+void resetEnvPending(EnvironmentLightingRuntimeState& state)
+{
+    state.pendingBatchLoad.reset();
+    state.pendingCylindricalFuture.reset();
+    state.lastSceneSkyboxResultVersion = 0;
+    cancelJob(state.pendingEnvironmentOffscreen);
+    cancelJob(state.pendingIrradianceOffscreen);
+}
+
+void resetEnvState(EnvironmentLightingRuntimeState& state)
+{
+    resetEnvPending(state);
+    retireEnvTextures(state);
+    state.resultVersion = 0;
+}
+
+// ── Generic resolve helpers (Phase 3: template-based deduplication) ──
+
+/// Check if an offscreen job has finished and extract its output texture.
+/// Returns the outputTexture on success, nullptr if not yet finished or failed.
+/// On failure, calls onFail and transitions to Failed state.
+template <typename TResolveState>
+stdptr<Texture> consumeFinishedJob(
+    TResolveState&                                resolveState,
+    std::shared_ptr<OffscreenPrecomputeJobState>& job,
+    TResolveState                                 expectedState,
+    std::string_view                              label,
+    std::function<void()>                         onFail = {})
+{
+    auto transition = makeTransition(resolveState, label);
+    if (resolveState != expectedState || !job || !job->bTaskFinished) {
+        return nullptr;
+    }
+
+    if (!job->bTaskSucceeded || !job->outputTexture) {
+        job.reset();
+        if (onFail) onFail();
+        transition.fail("preprocess failed");
+        return nullptr;
+    }
+
+    auto output = std::move(job->outputTexture);
+    job.reset();
+    return output;
+}
+
+/// Check authoring version and source availability.
+/// Resets state on version mismatch. Returns true if the component has a source and resolve should continue.
+template <typename TComponent, typename TState, typename TEnum, typename FnResetState, typename FnResetPending>
+bool checkVersionAndSource(
+    TComponent&      component,
+    TState&          state,
+    TEnum            emptyState,
+    TEnum            dirtyState,
+    std::string_view label,
+    FnResetState     resetStateFn,
+    FnResetPending   resetPendingFn)
+{
+    if (state.authoringVersion != component.authoringVersion) {
+        resetStateFn(state);
+        state.authoringVersion = component.authoringVersion;
+    }
+
+    if (!component.hasSource()) {
+        if (component.resolveState != emptyState) {
+            makeTransition(component.resolveState, label).to(emptyState, "no source");
+            resetStateFn(state);
+        }
+        return false;
+    }
+
+    if (component.resolveState == dirtyState || component.resolveState == emptyState) {
+        resetPendingFn(state);
+    }
+    return true;
+}
+
+// ── Skybox resolve ───────────────────────────────────────────────────
+
+void stepSkyboxSource(ResourceResolveSystem& system,
+                      entt::entity           entity,
+                      SkyboxComponent&       component,
+                      SkyboxRuntimeState&    state)
 {
     auto transition = makeTransition(component.resolveState, "Skybox");
     if (component.resolveState == ESkyboxResolveState::Dirty) {
         if (component.hasCubemapSource()) {
             std::vector<std::string> facePaths(component.cubemapSource.files.begin(), component.cubemapSource.files.end());
-            pendingState.pendingBatchLoad              = std::make_shared<SkyboxComponent::PendingBatchLoadState>();
-            pendingState.pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
+            state.pendingBatchLoad              = std::make_shared<SkyboxPendingBatchLoadState>();
+            state.pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
                 AssetManager::TextureBatchMemoryLoadRequest{
                     .filepaths = facePaths,
                 });
         }
         else if (component.hasCylindricalSource()) {
-            pendingState.pendingCylindricalFuture = AssetManager::get()->loadTexture(
-                AssetManager::TextureLoadRequest{
-                    .filepath        = component.cylindricalSource.filepath,
-                    .name            = "SkyboxCylindricalSource",
-                    .onReady         = {},
-                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
-                    .textureSemantic = std::nullopt,
-                });
+            state.pendingCylindricalFuture = requestSkyboxCyl(component);
         }
         transition.to(ESkyboxResolveState::ResolvingSource, "source load requested");
         return;
@@ -167,14 +382,14 @@ void checkSkyboxSourceLoad(SkyboxComponent& component, SkyboxPendingState& pendi
 
     if (component.hasCubemapSource()) {
         AssetManager::TextureBatchMemory batchMemory;
-        if (!pendingState.pendingBatchLoad ||
-            !AssetManager::get()->consumeTextureBatchMemory(pendingState.pendingBatchLoad->batchHandle, batchMemory)) {
+        if (!state.pendingBatchLoad ||
+            !AssetManager::get()->consumeTextureBatchMemory(state.pendingBatchLoad->batchHandle, batchMemory)) {
             return;
         }
 
-        pendingState.pendingBatchLoad.reset();
+        state.pendingBatchLoad.reset();
         if (batchMemory.textures.size() != CubeFace_Count || !batchMemory.isValid()) {
-            retireSkyboxCubemapTexture(component);
+            retireSkyboxResources(state);
             transition.fail("cubemap batch invalid");
             return;
         }
@@ -197,109 +412,126 @@ void checkSkyboxSourceLoad(SkyboxComponent& component, SkyboxPendingState& pendi
 
         auto cubemap = Texture::createCubeMapFromMemory(createInfo);
         if (!cubemap || !cubemap->isValid()) {
-            retireSkyboxCubemapTexture(component);
+            retireSkyboxResources(state);
             transition.fail("cubemap creation failed");
             return;
         }
 
-        component.cubemapTexture = std::move(cubemap);
-        component.rebuildCubemapPreviewViews();
+        state.cubemapTexture = std::move(cubemap);
+        rebuildSkyboxViews(state);
+        ++state.resultVersion;
         transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
         return;
     }
 
     if (component.hasCylindricalSource()) {
-        if (!pendingState.pendingCylindricalFuture) {
-            pendingState.pendingCylindricalFuture = AssetManager::get()->loadTexture(
-                AssetManager::TextureLoadRequest{
-                    .filepath        = component.cylindricalSource.filepath,
-                    .name            = "SkyboxCylindricalSource",
-                    .onReady         = {},
-                    .colorSpace      = AssetManager::ETextureColorSpace::SRGB,
-                    .textureSemantic = std::nullopt,
-                });
+        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
+            state.pendingCylindricalFuture = requestSkyboxCyl(component);
         }
-        if (!pendingState.pendingCylindricalFuture->isReady()) {
+        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
             return;
         }
 
-        auto sourceTexture = pendingState.pendingCylindricalFuture->getShared();
-        pendingState.pendingCylindricalFuture.reset();
+        auto sourceTexture = state.pendingCylindricalFuture->getShared();
+        state.pendingCylindricalFuture.reset();
         if (!sourceTexture || !sourceTexture->getImageView()) {
             transition.fail("cylindrical source invalid");
             return;
         }
 
-        component.sourcePreviewTexture                      = sourceTexture;
-        pendingState.pendingOffscreenProcess                = std::make_shared<SkyboxComponent::PendingOffscreenProcessState>();
-        pendingState.pendingOffscreenProcess->sourceTexture = std::move(sourceTexture);
-        pendingState.pendingOffscreenProcess->bFlipVertical = component.cylindricalSource.flipVertical;
+        state.sourcePreviewTexture = sourceTexture;
+
+        // Create a self-describing job — the lambda captures the pipeline directly.
+        auto job      = std::make_shared<OffscreenPrecomputeJobState>();
+        job->executeFn = [&pipeline = system.getCylindrical2CubePipeline(),
+                          src       = sourceTexture.get(),
+                          flipV     = component.cylindricalSource.flipVertical]
+                         (ICommandBuffer* cmdBuf, Texture* output) -> bool {
+            auto result = pipeline.execute({
+                .cmdBuf        = cmdBuf,
+                .input         = src,
+                .output        = output,
+                .bFlipVertical = flipV,
+            });
+            if (result.transientOutputArrayView) {
+                DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);
+            }
+            return result.bSuccess;
+        };
+        job->outputSpec    = makeCubemapSpec(
+            std::format("SkyboxCubemap_{}", static_cast<uint32_t>(entity)),
+            computeSkyboxFaceSize(sourceTexture.get()),
+            chooseSkyboxCubemapFormat(sourceTexture->getFormat()));
+        job->sourceTexture = std::move(sourceTexture);
+
+        state.pendingOffscreenProcess = std::move(job);
         transition.to(ESkyboxResolveState::Preprocessing, "queue cylindrical preprocess");
         return;
     }
 
-    clearSkyboxPendingState(pendingState);
+    resetSkyboxPending(state);
     transition.to(ESkyboxResolveState::Empty, "active source changed while resolving");
 }
 
-void consumeSkyboxPreprocess(SkyboxComponent& component, SkyboxPendingState& pendingState)
+void tryQueueJob(ResourceResolveSystem& system, const std::shared_ptr<OffscreenPrecomputeJobState>& job)
 {
-    auto transition = makeTransition(component.resolveState, "Skybox");
-    if (component.resolveState != ESkyboxResolveState::Preprocessing ||
-        !pendingState.pendingOffscreenProcess ||
-        !pendingState.pendingOffscreenProcess->bTaskFinished) {
+    if (!job || !job->isReadyToQueue()) {
         return;
     }
 
-    if (!pendingState.pendingOffscreenProcess->bTaskSucceeded ||
-        !pendingState.pendingOffscreenProcess->outputTexture) {
-        pendingState.pendingOffscreenProcess.reset();
-        retireSkyboxCubemapTexture(component);
-        transition.fail("preprocess failed");
+    system.queueOffscreenPrecomputeJob(job);
+}
+
+void stepSkybox(ResourceResolveSystem& system,
+                entt::entity           entity,
+                SkyboxComponent&       component,
+                SkyboxRuntimeState&    state)
+{
+    if (!checkVersionAndSource(
+            component, state,
+            ESkyboxResolveState::Empty, ESkyboxResolveState::Dirty,
+            "Skybox", resetSkyboxState, resetSkyboxPending)) {
         return;
     }
 
-    component.cubemapTexture = std::move(pendingState.pendingOffscreenProcess->outputTexture);
-    component.rebuildCubemapPreviewViews();
-    pendingState.pendingOffscreenProcess.reset();
-    transition.to(ESkyboxResolveState::Ready, "preprocess completed");
-}
+    switch (component.resolveState) {
+    case ESkyboxResolveState::Dirty:
+    case ESkyboxResolveState::ResolvingSource:
+        stepSkyboxSource(system, entity, component, state);
+        break;
 
-void retireEnvironmentLightingTextures(EnvironmentLightingComponent& component)
-{
-    auto& ddq = DeferredDeletionQueue::get();
-    if (component.cubemapTexture) {
-        ddq.enqueueResource(ddq.currentFrame(), std::move(component.cubemapTexture));
-        component.cubemapTexture = nullptr;
-    }
-    if (component.irradianceTexture) {
-        ddq.enqueueResource(ddq.currentFrame(), std::move(component.irradianceTexture));
-        component.irradianceTexture = nullptr;
-    }
-}
+    case ESkyboxResolveState::Preprocessing:
+        if (auto tex = consumeFinishedJob(
+                component.resolveState,
+                state.pendingOffscreenProcess,
+                ESkyboxResolveState::Preprocessing,
+                "Skybox",
+                [&] { retireSkyboxResources(state); })) {
+            state.cubemapTexture = std::move(tex);
+            rebuildSkyboxViews(state);
+            ++state.resultVersion;
+            makeTransition(component.resolveState, "Skybox").to(ESkyboxResolveState::Ready, "preprocess completed");
+        }
+        else if (component.resolveState == ESkyboxResolveState::Preprocessing) {
+            tryQueueJob(system, state.pendingOffscreenProcess);
+        }
+        break;
 
-void clearEnvironmentLightingPendingState(EnvironmentLightingPendingState& state)
-{
-    state.pendingBatchLoad.reset();
-    state.pendingCylindricalFuture.reset();
-    state.lastSceneSkyboxSource = nullptr;
-    if (state.pendingEnvironmentOffscreen) {
-        state.pendingEnvironmentOffscreen->bCancelled = true;
-        DeferredDeletionQueue::get().retireResource(state.pendingEnvironmentOffscreen->outputTexture);
-        state.pendingEnvironmentOffscreen->outputTexture.reset();
-        state.pendingEnvironmentOffscreen.reset();
-    }
-    if (state.pendingIrradianceOffscreen) {
-        state.pendingIrradianceOffscreen->bCancelled = true;
-        DeferredDeletionQueue::get().retireResource(state.pendingIrradianceOffscreen->outputTexture);
-        state.pendingIrradianceOffscreen->outputTexture.reset();
-        state.pendingIrradianceOffscreen.reset();
+    case ESkyboxResolveState::Empty:
+    case ESkyboxResolveState::Ready:
+    case ESkyboxResolveState::Failed:
+    default:
+        break;
     }
 }
 
-void environmentLighting_JumpToIrradianceFromResolvedCubemap(EnvironmentLightingComponent&    component,
-                                        EnvironmentLightingPendingState& pendingState,
-                                        stdptr<Texture>                  sourceCubemap)
+// ── Environment lighting resolve ─────────────────────────────────────
+
+void beginEnvIrradiance(ResourceResolveSystem&          system,
+                        entt::entity                    entity,
+                        EnvironmentLightingComponent&   component,
+                        EnvironmentLightingRuntimeState& state,
+                        stdptr<Texture>                 sourceCubemap)
 {
     auto transition = makeTransition(component.resolveState, "EnvironmentLighting");
     if (!sourceCubemap || !sourceCubemap->getImageView()) {
@@ -307,45 +539,66 @@ void environmentLighting_JumpToIrradianceFromResolvedCubemap(EnvironmentLighting
         return;
     }
 
-    DeferredDeletionQueue::get().retireResource(component.irradianceTexture);
-    component.irradianceTexture.reset();
+    retireTextureNow(state.irradianceTexture);
 
-    pendingState.pendingIrradianceOffscreen                = std::make_shared<EnvironmentLightingComponent::PendingOffscreenProcessState>();
-    pendingState.pendingIrradianceOffscreen->sourceTexture = std::move(sourceCubemap);
+    auto job       = std::make_shared<OffscreenPrecomputeJobState>();
+    job->executeFn = [&pipeline = system.getCube2IrradiancePipeline(),
+                      src       = sourceCubemap.get()]
+                     (ICommandBuffer* cmdBuf, Texture* output) -> bool {
+        auto result = pipeline.execute({
+            .cmdBuf = cmdBuf,
+            .input  = src,
+            .output = output,
+        });
+        return result.bSuccess;
+    };
+    job->outputSpec    = makeCubemapSpec(
+        std::format("EnvironmentIrradiance_{}", static_cast<uint32_t>(entity)),
+        computeEnvironmentIrradianceFaceSize(sourceCubemap.get(), component.getResolvedIrradianceFaceSize()),
+        chooseEnvironmentIrradianceFormat(sourceCubemap->getFormat()));
+    job->sourceTexture = std::move(sourceCubemap);
+
+    state.pendingIrradianceOffscreen = std::move(job);
     transition.to(EEnvironmentLightingResolveState::PreprocessingIrradiance, "queue irradiance preprocess");
 }
 
-void syncEnvironmentLightingSceneSkyboxDependency(EnvironmentLightingComponent&    component,
-                                                  EnvironmentLightingPendingState& pendingState,
-                                                  const stdptr<Texture>&           sceneSkyboxTexture)
+stdptr<Texture> syncEnvSkybox(EnvironmentLightingComponent&   component,
+                              EnvironmentLightingRuntimeState& state,
+                              const SkyboxRuntimeState*       sceneSkyboxState)
 {
     if (!component.usesSceneSkybox()) {
-        return;
+        return nullptr;
     }
 
-    auto* currentSkyboxSource = sceneSkyboxTexture.get();
-    if (pendingState.lastSceneSkyboxSource != currentSkyboxSource) {
-        component.invalidate();
-        clearEnvironmentLightingPendingState(pendingState);
-        pendingState.lastSceneSkyboxSource = currentSkyboxSource;
+    const uint64_t currentResultVersion = sceneSkyboxState ? sceneSkyboxState->resultVersion : 0;
+    if (state.lastSceneSkyboxResultVersion != currentResultVersion) {
+        resetEnvState(state);
+        state.lastSceneSkyboxResultVersion = currentResultVersion;
+        auto transition = makeTransition(component.resolveState, "EnvironmentLighting");
+        transition.to(currentResultVersion == 0 ? EEnvironmentLightingResolveState::Empty : EEnvironmentLightingResolveState::Dirty,
+                      "scene skybox dependency changed");
     }
 
-    if (currentSkyboxSource && component.resolveState == EEnvironmentLightingResolveState::Dirty) {
-        // jump to irradiance generate process directly
-        environmentLighting_JumpToIrradianceFromResolvedCubemap(component, pendingState, sceneSkyboxTexture);
+    if (sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap() &&
+        component.resolveState == EEnvironmentLightingResolveState::Dirty) {
+        return sceneSkyboxState->cubemapTexture;
     }
+
+    return nullptr;
 }
 
-void checkEnvironmentLightingSourceLoad(EnvironmentLightingComponent&    component,
-                                        EnvironmentLightingPendingState& pendingState)
+stdptr<Texture> stepEnvSource(ResourceResolveSystem&          system,
+                              entt::entity                    entity,
+                              EnvironmentLightingComponent&   component,
+                              EnvironmentLightingRuntimeState& state)
 {
     auto transition = makeTransition(component.resolveState, "EnvironmentLighting");
 
     if (component.resolveState == EEnvironmentLightingResolveState::Dirty) {
         if (component.hasCubemapSource()) {
             std::vector<std::string> facePaths(component.cubemapSource.files.begin(), component.cubemapSource.files.end());
-            pendingState.pendingBatchLoad              = std::make_shared<EnvironmentLightingComponent::PendingBatchLoadState>();
-            pendingState.pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
+            state.pendingBatchLoad              = std::make_shared<EnvironmentLightingPendingBatchLoadState>();
+            state.pendingBatchLoad->batchHandle = AssetManager::get()->loadTextureBatchIntoMemory(
                 AssetManager::TextureBatchMemoryLoadRequest{
                     .filepaths  = facePaths,
                     .colorSpace = AssetManager::ETextureColorSpace::Linear,
@@ -353,35 +606,28 @@ void checkEnvironmentLightingSourceLoad(EnvironmentLightingComponent&    compone
             transition.to(EEnvironmentLightingResolveState::ResolvingSource, "source load requested");
         }
         else if (component.hasCylindricalSource()) {
-            pendingState.pendingCylindricalFuture = AssetManager::get()->loadTexture(
-                AssetManager::TextureLoadRequest{
-                    .filepath        = component.cylindricalSource.filepath,
-                    .name            = "EnvironmentLightingCylindricalSource",
-                    .onReady         = {},
-                    .colorSpace      = AssetManager::ETextureColorSpace::Linear,
-                    .textureSemantic = std::nullopt,
-                });
+            state.pendingCylindricalFuture = requestEnvCyl(component);
             transition.to(EEnvironmentLightingResolveState::ResolvingSource, "source load requested");
         }
-        return;
+        return nullptr;
     }
 
     if (component.resolveState != EEnvironmentLightingResolveState::ResolvingSource) {
-        return;
+        return nullptr;
     }
 
     if (component.hasCubemapSource()) {
         AssetManager::TextureBatchMemory batchMemory;
-        if (!pendingState.pendingBatchLoad ||
-            !AssetManager::get()->consumeTextureBatchMemory(pendingState.pendingBatchLoad->batchHandle, batchMemory)) {
-            return;
+        if (!state.pendingBatchLoad ||
+            !AssetManager::get()->consumeTextureBatchMemory(state.pendingBatchLoad->batchHandle, batchMemory)) {
+            return nullptr;
         }
 
-        pendingState.pendingBatchLoad.reset();
+        state.pendingBatchLoad.reset();
         if (batchMemory.textures.size() != CubeFace_Count || !batchMemory.isValid()) {
-            retireEnvironmentLightingTextures(component);
+            retireEnvTextures(state);
             transition.fail("cubemap batch invalid");
-            return;
+            return nullptr;
         }
 
         CubeMapMemoryCreateInfo createInfo;
@@ -402,83 +648,157 @@ void checkEnvironmentLightingSourceLoad(EnvironmentLightingComponent&    compone
 
         auto cubemap = Texture::createCubeMapFromMemory(createInfo);
         if (!cubemap || !cubemap->isValid()) {
-            retireEnvironmentLightingTextures(component);
+            retireEnvTextures(state);
             transition.fail("cubemap creation failed");
-            return;
+            return nullptr;
         }
 
-        component.cubemapTexture = std::move(cubemap);
-        environmentLighting_JumpToIrradianceFromResolvedCubemap(component, pendingState, component.cubemapTexture);
-        return;
+        state.cubemapTexture = std::move(cubemap);
+        return state.cubemapTexture;
     }
 
     if (component.hasCylindricalSource()) {
-        if (!pendingState.pendingCylindricalFuture || !pendingState.pendingCylindricalFuture->isReady()) {
-            return;
+        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
+            state.pendingCylindricalFuture = requestEnvCyl(component);
+        }
+        if (!state.pendingCylindricalFuture.has_value() || !state.pendingCylindricalFuture->isReady()) {
+            return nullptr;
         }
 
-        auto sourceTexture = pendingState.pendingCylindricalFuture->getShared();
-        pendingState.pendingCylindricalFuture.reset();
+        auto sourceTexture = state.pendingCylindricalFuture->getShared();
+        state.pendingCylindricalFuture.reset();
         if (!sourceTexture || !sourceTexture->getImageView()) {
-            retireEnvironmentLightingTextures(component);
+            retireEnvTextures(state);
             transition.fail("cylindrical source invalid");
-            return;
+            return nullptr;
         }
 
-        pendingState.pendingEnvironmentOffscreen                = std::make_shared<EnvironmentLightingComponent::PendingOffscreenProcessState>();
-        pendingState.pendingEnvironmentOffscreen->sourceTexture = std::move(sourceTexture);
-        pendingState.pendingEnvironmentOffscreen->bFlipVertical = component.cylindricalSource.flipVertical;
-        // to cylindrical -> cubemap process
+        // Self-describing job for cylindrical→cubemap conversion
+        auto job       = std::make_shared<OffscreenPrecomputeJobState>();
+        job->executeFn = [&pipeline = system.getCylindrical2CubePipeline(),
+                          src       = sourceTexture.get(),
+                          flipV     = component.cylindricalSource.flipVertical]
+                         (ICommandBuffer* cmdBuf, Texture* output) -> bool {
+            auto result = pipeline.execute({
+                .cmdBuf        = cmdBuf,
+                .input         = src,
+                .output        = output,
+                .bFlipVertical = flipV,
+            });
+            if (result.transientOutputArrayView) {
+                DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);
+            }
+            return result.bSuccess;
+        };
+        job->outputSpec    = makeCubemapSpec(
+            std::format("EnvironmentCubemap_{}", static_cast<uint32_t>(entity)),
+            computeSkyboxFaceSize(sourceTexture.get()),
+            chooseSkyboxCubemapFormat(sourceTexture->getFormat()));
+        job->sourceTexture = std::move(sourceTexture);
+
+        state.pendingEnvironmentOffscreen = std::move(job);
         transition.to(EEnvironmentLightingResolveState::PreprocessingEnvironment,
                       "queue environment preprocess");
     }
+
+    return nullptr;
 }
 
-void consumeEnvironmentCubemapPreprocess(EnvironmentLightingComponent&    component,
-                                         EnvironmentLightingPendingState& pendingState)
+void stepEnvLighting(ResourceResolveSystem&          system,
+                     entt::entity                    entity,
+                     EnvironmentLightingComponent&   component,
+                     EnvironmentLightingRuntimeState& state,
+                     const SkyboxRuntimeState*       sceneSkyboxState)
 {
-    auto transition = makeTransition(component.resolveState, "EnvironmentLighting");
-    if (component.resolveState != EEnvironmentLightingResolveState::PreprocessingEnvironment ||
-        !pendingState.pendingEnvironmentOffscreen ||
-        !pendingState.pendingEnvironmentOffscreen->bTaskFinished) {
+    if (!checkVersionAndSource(
+            component, state,
+            EEnvironmentLightingResolveState::Empty,
+            EEnvironmentLightingResolveState::Dirty,
+            "EnvironmentLighting", resetEnvState, resetEnvPending)) {
         return;
     }
 
-    if (!pendingState.pendingEnvironmentOffscreen->bTaskSucceeded ||
-        !pendingState.pendingEnvironmentOffscreen->outputTexture) {
-        pendingState.pendingEnvironmentOffscreen.reset();
-        retireEnvironmentLightingTextures(component);
-        transition.fail("environment preprocess failed");
+    if (const auto sourceCubemap = syncEnvSkybox(component, state, sceneSkyboxState)) {
+        beginEnvIrradiance(system, entity, component, state, sourceCubemap);
         return;
     }
 
-    component.cubemapTexture = std::move(pendingState.pendingEnvironmentOffscreen->outputTexture);
-    pendingState.pendingEnvironmentOffscreen.reset();
-    environmentLighting_JumpToIrradianceFromResolvedCubemap(component, pendingState, component.cubemapTexture);
+    switch (component.resolveState) {
+    case EEnvironmentLightingResolveState::Dirty:
+    case EEnvironmentLightingResolveState::ResolvingSource:
+        if (const auto sourceCubemap = stepEnvSource(system, entity, component, state)) {
+            beginEnvIrradiance(system, entity, component, state, sourceCubemap);
+        }
+        break;
+
+    case EEnvironmentLightingResolveState::PreprocessingEnvironment:
+        if (auto tex = consumeFinishedJob(
+                component.resolveState,
+                state.pendingEnvironmentOffscreen,
+                EEnvironmentLightingResolveState::PreprocessingEnvironment,
+                "EnvironmentLighting",
+                [&] { retireEnvTextures(state); })) {
+            state.cubemapTexture = std::move(tex);
+            beginEnvIrradiance(system, entity, component, state, state.cubemapTexture);
+        }
+        else if (component.resolveState == EEnvironmentLightingResolveState::PreprocessingEnvironment) {
+            tryQueueJob(system, state.pendingEnvironmentOffscreen);
+        }
+        break;
+
+    case EEnvironmentLightingResolveState::PreprocessingIrradiance:
+        if (auto tex = consumeFinishedJob(
+                component.resolveState,
+                state.pendingIrradianceOffscreen,
+                EEnvironmentLightingResolveState::PreprocessingIrradiance,
+                "EnvironmentLighting",
+                [&] { retireTextureNow(state.irradianceTexture); })) {
+            state.irradianceTexture = std::move(tex);
+            ++state.resultVersion;
+            makeTransition(component.resolveState, "EnvironmentLighting")
+                .to(EEnvironmentLightingResolveState::Ready, "irradiance preprocess completed");
+        }
+        else if (component.resolveState == EEnvironmentLightingResolveState::PreprocessingIrradiance) {
+            tryQueueJob(system, state.pendingIrradianceOffscreen);
+        }
+        break;
+
+    case EEnvironmentLightingResolveState::Empty:
+    case EEnvironmentLightingResolveState::Ready:
+    case EEnvironmentLightingResolveState::Failed:
+    default:
+        break;
+    }
 }
 
-void consumeEnvironmentIrradiancePreprocess(EnvironmentLightingComponent&    component,
-                                            EnvironmentLightingPendingState& pendingState)
+// ── Material resolve (unchanged) ─────────────────────────────────────
+
+template <typename TMaterialComponent>
+void resolvePendingMaterialComponents(entt::registry& registry)
 {
-    auto transition = makeTransition(component.resolveState, "EnvironmentLighting");
-    if (component.resolveState != EEnvironmentLightingResolveState::PreprocessingIrradiance ||
-        !pendingState.pendingIrradianceOffscreen ||
-        !pendingState.pendingIrradianceOffscreen->bTaskFinished) {
-        return;
-    }
+    registry.view<TMaterialComponent>().each([](auto entity, TMaterialComponent& materialComponent) {
+        (void)entity;
+        if (materialComponent.needsResolve()) {
+            materialComponent.resolve();
+        }
+        else if (materialComponent.isResolved()) {
+            materialComponent.checkTexturesStaleness();
+        }
+    });
+}
 
-    if (!pendingState.pendingIrradianceOffscreen->bTaskSucceeded ||
-        !pendingState.pendingIrradianceOffscreen->outputTexture) {
-        pendingState.pendingIrradianceOffscreen.reset();
-        DeferredDeletionQueue::get().retireResource(component.irradianceTexture);
-        component.irradianceTexture.reset();
-        transition.fail("irradiance preprocess failed");
-        return;
+template <typename TComponent, typename TRuntimeState, typename TMap, typename TClearFn>
+void eraseInvalidRuntimeStates(entt::registry& registry, TMap& states, TClearFn clearFn)
+{
+    for (auto it = states.begin(); it != states.end();) {
+        if (!registry.valid(it->first) || !registry.all_of<TComponent>(it->first)) {
+            clearFn(it->second);
+            it = states.erase(it);
+        }
+        else {
+            ++it;
+        }
     }
-
-    component.irradianceTexture = std::move(pendingState.pendingIrradianceOffscreen->outputTexture);
-    pendingState.pendingIrradianceOffscreen.reset();
-    transition.to(EEnvironmentLightingResolveState::Ready, "irradiance preprocess completed");
 }
 } // namespace
 
@@ -490,16 +810,16 @@ void ResourceResolveSystem::init()
 
 void ResourceResolveSystem::clearPendingResolveStates()
 {
-    for (auto& [entity, pendingState] : _skyboxPendingStates) {
+    for (auto& [entity, pendingState] : _skyboxStates) {
         (void)entity;
-        clearSkyboxPendingState(pendingState);
+        resetSkyboxState(pendingState);
     }
-    for (auto& [entity, pendingState] : _environmentPendingStates) {
+    for (auto& [entity, pendingState] : _environmentStates) {
         (void)entity;
-        clearEnvironmentLightingPendingState(pendingState);
+        resetEnvState(pendingState);
     }
-    _skyboxPendingStates.clear();
-    _environmentPendingStates.clear();
+    _skyboxStates.clear();
+    _environmentStates.clear();
     _pendingStateScene = nullptr;
 }
 
@@ -531,196 +851,70 @@ void ResourceResolveSystem::onUpdate(float dt)
     resolvePendingBillboards(scene);
     resolvePendingSkybox(scene);
     resolvePendingEnvironmentLighting(scene);
+}
 
-    // Add more component types here as needed:
-    // - SkeletalMeshComponent
-    // - etc.
+void ResourceResolveSystem::queueOffscreenPrecomputeJob(const std::shared_ptr<OffscreenPrecomputeJobState>& job)
+{
+    auto* const app    = App::get();
+    auto* const render = app ? app->getRender() : nullptr;
+    if (!job || !app || !render || !job->isReadyToQueue()) {
+        if (job) {
+            job->bTaskFinished  = true;
+            job->bTaskSucceeded = false;
+        }
+        return;
+    }
+
+    // Create the output texture on the main thread, before recording commands.
+    job->outputTexture = createJobTexture(render, job->outputSpec);
+    if (!job->outputTexture) {
+        job->bTaskFinished  = true;
+        job->bTaskSucceeded = false;
+        return;
+    }
+
+    job->bTaskQueued = true;
+    app->taskManager.enqueueOffscreenTask(
+        [job](ICommandBuffer* cmdBuf) {
+            if (!job || job->bCancelled || !cmdBuf || !job->executeFn) {
+                if (job) {
+                    job->bTaskFinished  = true;
+                    job->bTaskSucceeded = false;
+                }
+                return;
+            }
+
+            bool bSuccess = job->executeFn(cmdBuf, job->outputTexture.get());
+
+            if (!bSuccess || job->bCancelled) {
+                DeferredDeletionQueue::get().retireResource(job->outputTexture);
+                job->outputTexture  = nullptr;
+                job->bTaskFinished  = true;
+                job->bTaskSucceeded = false;
+                return;
+            }
+
+            job->bTaskFinished  = true;
+            job->bTaskSucceeded = true;
+        });
 }
 
 void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
 {
-    auto*           app                = App::get();
-    auto*           render             = app->getRender();
-    auto&           registry           = scene->getRegistry();
-    stdptr<Texture> sceneSkyboxTexture = nullptr;
-
-    for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
-        (void)entity;
-        if (sc.hasRenderableCubemap()) {
-            sceneSkyboxTexture = sc.cubemapTexture;
-            break;
-        }
-    }
+    auto&       registry         = scene->getRegistry();
+    const auto* sceneSkyboxState = findFirstSceneSkyboxState(scene);
 
     for (auto&& [entity, elc] : registry.view<EnvironmentLightingComponent>().each()) {
-        auto& pendingState = _environmentPendingStates[entity];
-        if (!elc.hasSource()) {
-            if (elc.resolveState != EEnvironmentLightingResolveState::Empty) {
-                elc.invalidate();
-                clearEnvironmentLightingPendingState(pendingState);
-            }
-            continue;
-        }
-
-        if (elc.resolveState == EEnvironmentLightingResolveState::Dirty ||
-            elc.resolveState == EEnvironmentLightingResolveState::Empty) {
-            clearEnvironmentLightingPendingState(pendingState);
-        }
-
-        syncEnvironmentLightingSceneSkyboxDependency(elc, pendingState, sceneSkyboxTexture);
-
-        switch (elc.resolveState) {
-        case EEnvironmentLightingResolveState::Dirty:
-        case EEnvironmentLightingResolveState::ResolvingSource:
-            checkEnvironmentLightingSourceLoad(elc, pendingState);
-            break;
-
-        case EEnvironmentLightingResolveState::PreprocessingEnvironment:
-        {
-            consumeEnvironmentCubemapPreprocess(elc, pendingState);
-            if (elc.resolveState != EEnvironmentLightingResolveState::PreprocessingEnvironment ||
-                !pendingState.pendingEnvironmentOffscreen ||
-                !pendingState.pendingEnvironmentOffscreen->sourceTexture ||
-                pendingState.pendingEnvironmentOffscreen->bTaskQueued) {
-                break;
-            }
-
-            auto pending         = pendingState.pendingEnvironmentOffscreen;
-            pending->bTaskQueued = true;
-
-            const auto cubemapLabel = std::format("EnvironmentCubemap_{}", static_cast<uint32_t>(entity));
-            app->taskManager.enqueueOffscreenTask(
-                [this, render, pending, cubemapLabel](ICommandBuffer* cmdBuf) {
-                    auto failTask = [&pending]() {
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = false;
-                    };
-
-                    if (!pending || !cmdBuf || pending->bCancelled || !pending->sourceTexture || !pending->sourceTexture->getImageView()) {
-                        if (pending) {
-                            failTask();
-                        }
-                        return;
-                    }
-
-                    const auto faceSize      = computeSkyboxFaceSize(pending->sourceTexture.get());
-                    auto       outputTexture = createRenderableSkyboxCubemap(
-                        render,
-                        cubemapLabel,
-                        faceSize,
-                        chooseSkyboxCubemapFormat(pending->sourceTexture->getFormat()));
-                    if (!outputTexture) {
-                        failTask();
-                        return;
-                    }
-
-                    auto executeResult = _equidistantCylindrical2CubeMap.execute(
-                        EquidistantCylindrical2CubeMap::ExecuteContext{
-                            .cmdBuf        = cmdBuf,
-                            .input         = pending->sourceTexture.get(),
-                            .output        = outputTexture.get(),
-                            .bFlipVertical = pending->bFlipVertical,
-                        });
-                    if (!executeResult.bSuccess) {
-                        DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
-                        failTask();
-                        return;
-                    }
-
-                    DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
-                    if (pending->bCancelled) {
-                        DeferredDeletionQueue::get().retireResource(outputTexture);
-                        failTask();
-                        return;
-                    }
-
-                    pending->outputTexture  = std::move(outputTexture);
-                    pending->bTaskFinished  = true;
-                    pending->bTaskSucceeded = true;
-                });
-        } break;
-
-        case EEnvironmentLightingResolveState::PreprocessingIrradiance:
-            consumeEnvironmentIrradiancePreprocess(elc, pendingState);
-            if (elc.resolveState != EEnvironmentLightingResolveState::PreprocessingIrradiance ||
-                !pendingState.pendingIrradianceOffscreen ||
-                !pendingState.pendingIrradianceOffscreen->sourceTexture ||
-                pendingState.pendingIrradianceOffscreen->bTaskQueued) {
-                break;
-            }
-
-            {
-                auto pending         = pendingState.pendingIrradianceOffscreen;
-                pending->bTaskQueued = true;
-
-                const auto irradianceLabel = std::format("EnvironmentIrradiance_{}", static_cast<uint32_t>(entity));
-                app->taskManager.enqueueOffscreenTask(
-                    [this, render, pending, irradianceLabel, faceSize = elc.getResolvedIrradianceFaceSize()](ICommandBuffer* cmdBuf) {
-                        auto failTask = [&pending]() {
-                            pending->bTaskFinished  = true;
-                            pending->bTaskSucceeded = false;
-                        };
-
-                        if (!pending || !cmdBuf || pending->bCancelled || !pending->sourceTexture || !pending->sourceTexture->getImageView()) {
-                            if (pending) {
-                                failTask();
-                            }
-                            return;
-                        }
-
-                        const auto outputFaceSize = computeEnvironmentIrradianceFaceSize(pending->sourceTexture.get(), faceSize);
-                        auto       outputTexture  = createRenderableSkyboxCubemap(
-                            render,
-                            irradianceLabel,
-                            outputFaceSize,
-                            chooseEnvironmentIrradianceFormat(pending->sourceTexture->getFormat()));
-                        if (!outputTexture) {
-                            failTask();
-                            return;
-                        }
-
-                        auto executeResult = _cubeMap2IrradianceMap.execute(
-                            CubeMap2IrradianceMap::ExecuteContext{
-                                .cmdBuf = cmdBuf,
-                                .input  = pending->sourceTexture.get(),
-                                .output = outputTexture.get(),
-                            });
-                        if (!executeResult.bSuccess) {
-                            DeferredDeletionQueue::get().retireResource(outputTexture);
-                            failTask();
-                            return;
-                        }
-
-                        if (pending->bCancelled) {
-                            DeferredDeletionQueue::get().retireResource(outputTexture);
-                            failTask();
-                            return;
-                        }
-
-                        pending->outputTexture  = std::move(outputTexture);
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = true;
-                    });
-            }
-            break;
-
-        case EEnvironmentLightingResolveState::Empty:
-        case EEnvironmentLightingResolveState::Ready:
-        case EEnvironmentLightingResolveState::Failed:
-        default:
-            break;
-        }
+        auto& pendingState = _environmentStates[entity];
+        stepEnvLighting(*this, entity, elc, pendingState, sceneSkyboxState);
     }
 
-    for (auto it = _environmentPendingStates.begin(); it != _environmentPendingStates.end();) {
-        if (!registry.valid(it->first) || !registry.all_of<EnvironmentLightingComponent>(it->first)) {
-            clearEnvironmentLightingPendingState(it->second);
-            it = _environmentPendingStates.erase(it);
-        }
-        else {
-            ++it;
-        }
-    }
+    eraseInvalidRuntimeStates<EnvironmentLightingComponent, EnvironmentLightingRuntimeState>(
+        registry,
+        _environmentStates,
+        [](EnvironmentLightingRuntimeState& state) {
+            resetEnvState(state);
+        });
 }
 
 void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)
@@ -739,34 +933,9 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
-    registry.view<PhongMaterialComponent>().each([&](auto entity, PhongMaterialComponent& materialComponent) {
-        (void)entity;
-        if (materialComponent.needsResolve()) {
-            materialComponent.resolve();
-        }
-        else if (materialComponent.isResolved()) {
-            materialComponent.checkTexturesStaleness();
-        }
-    });
-
-    registry.view<PBRMaterialComponent>().each([&](auto entity, PBRMaterialComponent& materialComponent) {
-        (void)entity;
-        if (materialComponent.needsResolve()) {
-            materialComponent.resolve();
-        }
-        else if (materialComponent.isResolved()) {
-            materialComponent.checkTexturesStaleness();
-        }
-    });
-    registry.view<UnlitMaterialComponent>().each([&](auto entity, UnlitMaterialComponent& materialComponent) {
-        (void)entity;
-        if (materialComponent.needsResolve()) {
-            materialComponent.resolve();
-        }
-        else if (materialComponent.isResolved()) {
-            materialComponent.checkTexturesStaleness();
-        }
-    });
+    resolvePendingMaterialComponents<PhongMaterialComponent>(registry);
+    resolvePendingMaterialComponents<PBRMaterialComponent>(registry);
+    resolvePendingMaterialComponents<UnlitMaterialComponent>(registry);
 }
 
 void ResourceResolveSystem::resolvePendingUI(Scene* scene)
@@ -796,127 +965,152 @@ void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
 
 void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 {
-    auto* app      = App::get();
-    auto* render   = app->getRender();
     auto& registry = scene->getRegistry();
 
     for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
-        auto& pendingState = _skyboxPendingStates[entity];
-        if (sc.resolveState == ESkyboxResolveState::Dirty ||
-            sc.resolveState == ESkyboxResolveState::Empty) {
-            clearSkyboxPendingState(pendingState);
-        }
+        auto& pendingState = _skyboxStates[entity];
+        stepSkybox(*this, entity, sc, pendingState);
+    }
 
-        if (!sc.hasSource()) {
-            if (sc.resolveState != ESkyboxResolveState::Empty) {
-                sc.invalidate();
-                clearSkyboxPendingState(pendingState);
-            }
+    eraseInvalidRuntimeStates<SkyboxComponent, SkyboxRuntimeState>(
+        registry,
+        _skyboxStates,
+        [](SkyboxRuntimeState& state) {
+            resetSkyboxState(state);
+        });
+}
+
+const SkyboxRuntimeState* ResourceResolveSystem::findSkyboxState(entt::entity entity) const
+{
+    const auto it = _skyboxStates.find(entity);
+    return it == _skyboxStates.end() ? nullptr : &it->second;
+}
+
+const SkyboxRuntimeState* ResourceResolveSystem::findFirstSceneSkyboxState(Scene* scene) const
+{
+    if (!scene) {
+        return nullptr;
+    }
+
+    for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+        const auto* state = findSkyboxState(entity);
+        if (sc.resolveState == ESkyboxResolveState::Ready && state && state->hasRenderableCubemap()) {
+            return state;
+        }
+    }
+
+    return nullptr;
+}
+
+const EnvironmentLightingRuntimeState* ResourceResolveSystem::findEnvironmentLightingState(entt::entity entity) const
+{
+    const auto it = _environmentStates.find(entity);
+    return it == _environmentStates.end() ? nullptr : &it->second;
+}
+
+const EnvironmentLightingRuntimeState* ResourceResolveSystem::findFirstSceneEnvironmentLightingState(Scene* scene) const
+{
+    if (!scene) {
+        return nullptr;
+    }
+
+    for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
+        const auto* state = findEnvironmentLightingState(entity);
+        if (elc.resolveState == EEnvironmentLightingResolveState::Ready && state && state->hasIrradianceMap()) {
+            return state;
+        }
+    }
+
+    return nullptr;
+}
+
+Texture* ResourceResolveSystem::findSceneSkyboxTexture(Scene* scene) const
+{
+    const auto* state = findFirstSceneSkyboxState(scene);
+    return state ? state->cubemapTexture.get() : nullptr;
+}
+
+Texture* ResourceResolveSystem::findSceneEnvironmentCubemapTexture(Scene* scene) const
+{
+    if (!scene) {
+        return nullptr;
+    }
+
+    const auto* skyboxState = findFirstSceneSkyboxState(scene);
+    for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
+        (void)entity;
+        const auto* state = findEnvironmentLightingState(entity);
+        if (!state || elc.resolveState != EEnvironmentLightingResolveState::Ready) {
             continue;
         }
 
-        switch (sc.resolveState) {
-        case ESkyboxResolveState::Dirty:
-        case ESkyboxResolveState::ResolvingSource:
-            checkSkyboxSourceLoad(sc, pendingState);
-            break;
+        if (elc.usesSceneSkybox()) {
+            return skyboxState ? skyboxState->cubemapTexture.get() : nullptr;
+        }
 
-        case ESkyboxResolveState::Preprocessing:
-        {
-            consumeSkyboxPreprocess(sc, pendingState);
-            if (sc.resolveState != ESkyboxResolveState::Preprocessing ||
-                !pendingState.pendingOffscreenProcess ||
-                !pendingState.pendingOffscreenProcess->sourceTexture ||
-                pendingState.pendingOffscreenProcess->bTaskQueued) {
-                break;
-            }
-
-            auto pending         = pendingState.pendingOffscreenProcess;
-            pending->bTaskQueued = true;
-
-            const auto cubemapLabel = std::format("SkyboxCubemap_{}", static_cast<uint32_t>(entity));
-            app->taskManager.enqueueOffscreenTask(
-                [this, render, pending, cubemapLabel](ICommandBuffer* cmdBuf) {
-                    auto failTask = [&pending]() {
-                        pending->bTaskFinished  = true;
-                        pending->bTaskSucceeded = false;
-                    };
-
-                    if (!pending || !cmdBuf || pending->bCancelled || !pending->sourceTexture || !pending->sourceTexture->getImageView()) {
-                        if (pending) {
-                            failTask();
-                        }
-                        return;
-                    }
-
-                    const auto faceSize      = computeSkyboxFaceSize(pending->sourceTexture.get());
-                    auto       outputTexture = createRenderableSkyboxCubemap(render,
-                                                                       cubemapLabel,
-                                                                       faceSize,
-                                                                       chooseSkyboxCubemapFormat(pending->sourceTexture->getFormat()));
-                    if (!outputTexture) {
-                        failTask();
-                        return;
-                    }
-
-                    auto executeResult = _equidistantCylindrical2CubeMap.execute(
-                        EquidistantCylindrical2CubeMap::ExecuteContext{
-                            .cmdBuf        = cmdBuf,
-                            .input         = pending->sourceTexture.get(),
-                            .output        = outputTexture.get(),
-                            .bFlipVertical = pending->bFlipVertical,
-                        });
-                    if (!executeResult.bSuccess) {
-                        DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
-                        failTask();
-                        return;
-                    }
-
-                    DeferredDeletionQueue::get().retireResource(executeResult.transientOutputArrayView);
-                    if (pending->bCancelled) {
-                        DeferredDeletionQueue::get().retireResource(outputTexture);
-                        failTask();
-                        return;
-                    }
-
-                    pending->outputTexture  = std::move(outputTexture);
-                    pending->bTaskFinished  = true;
-                    pending->bTaskSucceeded = true;
-                });
-        } break;
-        case ESkyboxResolveState::Empty:
-        case ESkyboxResolveState::Ready:
-        case ESkyboxResolveState::Failed:
-        default:
-            break;
+        if (state->hasRenderableCubemap()) {
+            return state->cubemapTexture.get();
         }
     }
 
-    for (auto it = _skyboxPendingStates.begin(); it != _skyboxPendingStates.end();) {
-        if (!registry.valid(it->first) || !registry.all_of<SkyboxComponent>(it->first)) {
-            clearSkyboxPendingState(it->second);
-            it = _skyboxPendingStates.erase(it);
-        }
-        else {
-            ++it;
-        }
+    return skyboxState ? skyboxState->cubemapTexture.get() : nullptr;
+}
+
+Texture* ResourceResolveSystem::findSceneEnvironmentIrradianceTexture(Scene* scene) const
+{
+    const auto* state = findFirstSceneEnvironmentLightingState(scene);
+    return state ? state->irradianceTexture.get() : nullptr;
+}
+
+stdptr<Texture> ResourceResolveSystem::findSceneSkyboxTextureShared(Scene* scene) const
+{
+    const auto* state = findFirstSceneSkyboxState(scene);
+    return state ? state->cubemapTexture : nullptr;
+}
+
+stdptr<Texture> ResourceResolveSystem::findSceneEnvironmentIrradianceTextureShared(Scene* scene) const
+{
+    const auto* state = findFirstSceneEnvironmentLightingState(scene);
+    return state ? state->irradianceTexture : nullptr;
+}
+
+// ── Read-only preview queries (Phase 4: Editor decoupling) ───────────
+
+SkyboxPreviewInfo ResourceResolveSystem::getSkyboxPreview(entt::entity entity) const
+{
+    SkyboxPreviewInfo info{};
+
+    const auto* state = findSkyboxState(entity);
+    if (!state) {
+        return info;
     }
+
+    info.sourcePreviewTexture  = state->sourcePreviewTexture.get();
+    info.cubemapTexture        = state->cubemapTexture.get();
+    info.bHasRenderableCubemap = state->hasRenderableCubemap();
+
+    for (uint32_t i = 0; i < CubeFace_Count; ++i) {
+        info.cubemapFaceViews[i] = state->cubemapFacePreviewViews[i].get();
+    }
+
+    return info;
+}
+
+EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPreview(entt::entity entity) const
+{
+    EnvironmentLightingPreviewInfo info{};
+
+    const auto* state = findEnvironmentLightingState(entity);
+    if (!state) {
+        return info;
+    }
+
+    info.cubemapTexture        = state->cubemapTexture.get();
+    info.irradianceTexture     = state->irradianceTexture.get();
+    info.bHasRenderableCubemap = state->hasRenderableCubemap();
+    info.bHasIrradianceMap     = state->hasIrradianceMap();
+
+    return info;
 }
 
 } // namespace ya
-
-
-/*
-
-StateMachine()
-    .state(A, onTick)
-    .state(B, onTick)
-    .state(C, onTick)
-    ....
-    .transition(A, [](){
-        some condition -> B
-        some another condtion ->C
-    })
-    .build();
-
-*/

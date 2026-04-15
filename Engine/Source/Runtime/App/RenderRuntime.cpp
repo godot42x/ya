@@ -26,8 +26,7 @@
 
 #include "Core/UI/UIManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
 
 #include "utility.cc/ranges.h"
 
@@ -40,24 +39,16 @@ namespace ya
 
 Texture* RenderRuntime::findSceneSkyboxTexture(Scene* scene) const
 {
-    if (!scene) {
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
         return nullptr;
     }
 
-    for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-        (void)entity;
-        if (sc.hasRenderableCubemap()) {
-            return sc.cubemapTexture.get();
-        }
-        break;
-    }
-
-    return nullptr;
+    return _app->getResourceResolveSystem()->findSceneSkyboxTexture(scene);
 }
 
 void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture)
 {
-    if (!ds || !texture || !texture->getImageView() || !_skyboxSampler) {
+    if (!ds || !texture || !texture->getImageView() || !_cubemapSampler) {
         return;
     }
 
@@ -71,7 +62,7 @@ void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* t
                 {
                     DescriptorImageInfo(
                         texture->getImageView()->getHandle(),
-                        _skyboxSampler->getHandle(),
+                        _cubemapSampler->getHandle(),
                         EImageLayout::ShaderReadOnlyOptimal),
                 }),
         },
@@ -81,7 +72,7 @@ void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* t
 void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture)
 {
     if (!ds || !cubemapTexture || !irradianceTexture || !cubemapTexture->getImageView() ||
-        !irradianceTexture->getImageView() || !_skyboxSampler) {
+        !irradianceTexture->getImageView() || !_cubemapSampler) {
         return;
     }
 
@@ -95,7 +86,7 @@ void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle d
                 {
                     DescriptorImageInfo(
                         cubemapTexture->getImageView()->getHandle(),
-                        _skyboxSampler->getHandle(),
+                        _cubemapSampler->getHandle(),
                         EImageLayout::ShaderReadOnlyOptimal),
                 }),
             IDescriptorSetHelper::genImageWrite(
@@ -106,7 +97,7 @@ void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle d
                 {
                     DescriptorImageInfo(
                         irradianceTexture->getImageView()->getHandle(),
-                        _skyboxSampler->getHandle(),
+                        _cubemapSampler->getHandle(),
                         EImageLayout::ShaderReadOnlyOptimal),
                 }),
         },
@@ -115,8 +106,8 @@ void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle d
 
 DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
 {
-    if (!_sceneSkyboxDS) {
-        return _fallbackSkyboxDS;
+    if (!_skybox.sceneDS) {
+        return _skybox.fallbackDS;
     }
 
     if (!scene && _app && _app->getSceneManager()) {
@@ -125,63 +116,40 @@ DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
 
     auto* texture = findSceneSkyboxTexture(scene);
     if (!texture) {
-        _boundSceneSkyboxTexture = nullptr;
-        return _fallbackSkyboxDS;
+        _skybox.boundSceneTexture = nullptr;
+        return _skybox.fallbackDS;
     }
 
-    if (texture != _boundSceneSkyboxTexture) {
-        updateSkyboxDescriptorSet(_sceneSkyboxDS, texture);
-        _boundSceneSkyboxTexture = texture;
+    if (texture != _skybox.boundSceneTexture) {
+        updateSkyboxDescriptorSet(_skybox.sceneDS, texture);
+        _skybox.boundSceneTexture = texture;
     }
 
-    return _sceneSkyboxDS;
+    return _skybox.sceneDS;
 }
 
 Texture* RenderRuntime::findSceneEnvironmentCubemapTexture(Scene* scene) const
 {
-    if (!scene) {
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
         return nullptr;
     }
 
-    Texture* skyboxTexture = findSceneSkyboxTexture(scene);
-    for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
-        (void)entity;
-        if (elc.resolveState != EEnvironmentLightingResolveState::Ready) {
-            continue;
-        }
-
-        if (elc.usesSceneSkybox()) {
-            return skyboxTexture;
-        }
-
-        if (elc.hasRenderableCubemap()) {
-            return elc.cubemapTexture.get();
-        }
-    }
-
-    return skyboxTexture;
+    return _app->getResourceResolveSystem()->findSceneEnvironmentCubemapTexture(scene);
 }
 
 Texture* RenderRuntime::findSceneEnvironmentIrradianceTexture(Scene* scene) const
 {
-    if (!scene) {
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
         return nullptr;
     }
 
-    for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
-        (void)entity;
-        if (elc.resolveState == EEnvironmentLightingResolveState::Ready && elc.hasIrradianceMap()) {
-            return elc.irradianceTexture.get();
-        }
-    }
-
-    return nullptr;
+    return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
 }
 
 DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
 {
-    if (!_sceneEnvironmentLightingDS) {
-        return _fallbackEnvironmentLightingDS;
+    if (!_environmentLighting.sceneDS) {
+        return _environmentLighting.fallbackDS;
     }
 
     if (!scene && _app && _app->getSceneManager()) {
@@ -191,24 +159,24 @@ DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scen
     auto* cubemapTexture    = findSceneEnvironmentCubemapTexture(scene);
     auto* irradianceTexture = findSceneEnvironmentIrradianceTexture(scene);
     if (!cubemapTexture) {
-        cubemapTexture = _fallbackSkyboxTexture.get();
+        cubemapTexture = _skybox.fallbackTexture.get();
     }
     if (!irradianceTexture) {
-        irradianceTexture = _fallbackIrradianceTexture.get();
+        irradianceTexture = _environmentLighting.fallbackIrradianceTexture.get();
     }
 
     if (!cubemapTexture || !irradianceTexture) {
-        return _fallbackEnvironmentLightingDS;
+        return _environmentLighting.fallbackDS;
     }
 
-    if (cubemapTexture != _boundEnvironmentCubemapTexture ||
-        irradianceTexture != _boundEnvironmentIrradianceTexture) {
-        updateEnvironmentLightingDescriptorSet(_sceneEnvironmentLightingDS, cubemapTexture, irradianceTexture);
-        _boundEnvironmentCubemapTexture    = cubemapTexture;
-        _boundEnvironmentIrradianceTexture = irradianceTexture;
+    if (cubemapTexture != _environmentLighting.boundCubemapTexture ||
+        irradianceTexture != _environmentLighting.boundIrradianceTexture) {
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS, cubemapTexture, irradianceTexture);
+        _environmentLighting.boundCubemapTexture    = cubemapTexture;
+        _environmentLighting.boundIrradianceTexture = irradianceTexture;
     }
 
-    return _sceneEnvironmentLightingDS;
+    return _environmentLighting.sceneDS;
 }
 
 static void openDirectoryInOS(const std::string& filePath)
@@ -285,6 +253,9 @@ void RenderRuntime::init(const InitDesc& desc)
         ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
         ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
     });
+    _deleter.push("ShaderStorage", [this](void*) {
+        _shaderStorage.reset();
+    });
 
     if (ci.bEnableRenderDoc) {
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();
@@ -308,6 +279,12 @@ void RenderRuntime::init(const InitDesc& desc)
                 break;
             default:
                 break;
+            }
+        });
+        _deleter.push("RenderDocCapture", [this](void*) {
+            if (_renderDocCapture) {
+                _renderDocCapture->shutdown();
+                _renderDocCapture.reset();
             }
         });
     }
@@ -355,7 +332,7 @@ void RenderRuntime::init(const InitDesc& desc)
     }
 
     {
-        _skyboxDSL = IDescriptorSetLayout::create(
+        _skybox.dsl = IDescriptorSetLayout::create(
             _render,
             DescriptorSetLayoutDesc{
                 .label    = "App_Skybox_CubeMap_DSL",
@@ -369,7 +346,7 @@ void RenderRuntime::init(const InitDesc& desc)
                 },
             });
 
-        _skyboxDSP = IDescriptorPool::create(
+        _skybox.dsp = IDescriptorPool::create(
             _render,
             DescriptorPoolCreateInfo{
                 .label     = "App_Skybox_DSP",
@@ -382,23 +359,23 @@ void RenderRuntime::init(const InitDesc& desc)
                 },
             });
 
-        _skyboxSampler = Sampler::create(SamplerDesc{
+        _cubemapSampler = Sampler::create(SamplerDesc{
             .label        = "App_SkyboxSampler",
             .addressModeU = ESamplerAddressMode::Repeat,
             .addressModeV = ESamplerAddressMode::Repeat,
             .addressModeW = ESamplerAddressMode::Repeat,
         });
 
-        _fallbackSkyboxTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
-        YA_CORE_ASSERT(_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView(),
+        _skybox.fallbackTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
+        YA_CORE_ASSERT(_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView(),
                        "Failed to create fallback skybox cubemap");
 
-        _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-        _sceneSkyboxDS    = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-        updateSkyboxDescriptorSet(_fallbackSkyboxDS, _fallbackSkyboxTexture.get());
-        updateSkyboxDescriptorSet(_sceneSkyboxDS, _fallbackSkyboxTexture.get());
+        _skybox.fallbackDS = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
+        _skybox.sceneDS    = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
+        updateSkyboxDescriptorSet(_skybox.fallbackDS, _skybox.fallbackTexture.get());
+        updateSkyboxDescriptorSet(_skybox.sceneDS, _skybox.fallbackTexture.get());
 
-        _environmentLightingDSL = IDescriptorSetLayout::create(
+        _environmentLighting.dsl = IDescriptorSetLayout::create(
             _render,
             DescriptorSetLayoutDesc{
                 .label    = "App_EnvironmentLighting_DSL",
@@ -415,10 +392,16 @@ void RenderRuntime::init(const InitDesc& desc)
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
                     },
+                    DescriptorSetLayoutBinding{
+                        .binding         = 1,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
                 },
             });
 
-        _environmentLightingDSP = IDescriptorPool::create(
+        _environmentLighting.dsp = IDescriptorPool::create(
             _render,
             DescriptorPoolCreateInfo{
                 .label     = "App_EnvironmentLighting_DSP",
@@ -431,18 +414,22 @@ void RenderRuntime::init(const InitDesc& desc)
                 },
             });
 
-        _fallbackIrradianceTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
-        YA_CORE_ASSERT(_fallbackIrradianceTexture && _fallbackIrradianceTexture->getImageView(),
+        _environmentLighting.fallbackIrradianceTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
+        YA_CORE_ASSERT(_environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView(),
                        "Failed to create fallback irradiance cubemap");
 
-        _fallbackEnvironmentLightingDS = _environmentLightingDSP->allocateDescriptorSets(_environmentLightingDSL);
-        _sceneEnvironmentLightingDS    = _environmentLightingDSP->allocateDescriptorSets(_environmentLightingDSL);
-        updateEnvironmentLightingDescriptorSet(_fallbackEnvironmentLightingDS,
-                                               _fallbackSkyboxTexture.get(),
-                                               _fallbackIrradianceTexture.get());
-        updateEnvironmentLightingDescriptorSet(_sceneEnvironmentLightingDS,
-                                               _fallbackSkyboxTexture.get(),
-                                               _fallbackIrradianceTexture.get());
+        _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
+        _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
+                                               _skybox.fallbackTexture.get(),
+                                               _environmentLighting.fallbackIrradianceTexture.get());
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
+                                               _skybox.fallbackTexture.get(),
+                                               _environmentLighting.fallbackIrradianceTexture.get());
+
+        _deleter.push("RenderBindings", [this](void*) {
+            releaseRenderOwnedResources();
+        });
     }
 
     // Wait for all shaders to finish compiling before creating pipelines
@@ -494,6 +481,14 @@ void RenderRuntime::init(const InitDesc& desc)
                     _screenRT->recreate();
                 }
             });
+
+        _deleter.push("ScreenRT", [this](void*) {
+            if (_screenRT) {
+                _screenRT->destroy();
+                _screenRT.reset();
+            }
+            _screenRenderPass.reset();
+        });
     }
 
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
@@ -502,8 +497,32 @@ void RenderRuntime::init(const InitDesc& desc)
     _offscreenCmdBuf = cmdBufs.back();
     _deleter.push("CmdBufs", [this](void*) {
         _commandBuffers.clear();
-        _offscreenCmdBuf->reset();
+        _offscreenCmdBuf.reset();
     });
+
+    // Create a dedicated fence for offscreen work so we don't need waitIdle().
+    {
+        auto* vkRender = static_cast<VulkanRender*>(_render);
+        VkFenceCreateInfo fenceCI{
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0, // initially unsignaled
+        };
+        VkFence fence = VK_NULL_HANDLE;
+        VkResult ret = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
+        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
+        _offscreenFence   = fence;
+        _offscreenPending = false;
+        _deleter.push("OffscreenFence", [this](void*) {
+            if (_offscreenFence) {
+                auto* vkR = static_cast<VulkanRender*>(_render);
+                vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
+                _offscreenFence   = nullptr;
+                _offscreenPending = false;
+            }
+        });
+    }
 
     ImGuiManager::get().init(_render, nullptr);
     _render->waitIdle();
@@ -520,49 +539,23 @@ void RenderRuntime::init(const InitDesc& desc)
 
 void RenderRuntime::shutdown()
 {
+    if (_render) {
+        _render->waitIdle();
+    }
+
     shutdownActivePipeline();
 
     ImGuiManager::get().shutdown();
 
-    if (_screenRT) {
-        _screenRT->destroy();
-        _screenRT.reset();
-    }
-
-    _screenRenderPass.reset();
-
-    if (_renderDocCapture) {
-        _renderDocCapture->shutdown();
-        _renderDocCapture.reset();
-    }
-
     ResourceRegistry::get().clearAll();
 
-    _fallbackSkyboxTexture.reset();
-    _boundSceneSkyboxTexture = nullptr;
-    _sceneSkyboxDS           = nullptr;
-    _fallbackSkyboxDS        = nullptr;
-    _fallbackIrradianceTexture.reset();
-    _boundEnvironmentCubemapTexture    = nullptr;
-    _boundEnvironmentIrradianceTexture = nullptr;
-    _sceneEnvironmentLightingDS        = nullptr;
-    _fallbackEnvironmentLightingDS     = nullptr;
-    _environmentLightingDSP.reset();
-    _environmentLightingDSL.reset();
-    _skyboxSampler.reset();
-    _skyboxDSP.reset();
-    _skyboxDSL.reset();
+    TaskQueue::get().stop();
 
     _deleter.clear();
 
     if (_render) {
-        _render->waitIdle();
-
         // GPU is idle — safe to execute ALL pending resource destructors now.
         DeferredDeletionQueue::get().flushAll();
-
-        // Stop async task queue (join worker threads).
-        TaskQueue::get().stop();
 
         _render->destroy();
         delete _render;
@@ -570,54 +563,74 @@ void RenderRuntime::shutdown()
     }
 }
 
+void RenderRuntime::releaseRenderOwnedResources()
+{
+    _skybox.fallbackTexture.reset();
+    _skybox.boundSceneTexture = nullptr;
+    _skybox.sceneDS           = nullptr;
+    _skybox.fallbackDS        = nullptr;
+    _skybox.dsp.reset();
+    _skybox.dsl.reset();
+
+    _environmentLighting.fallbackIrradianceTexture.reset();
+    _environmentLighting.boundCubemapTexture    = nullptr;
+    _environmentLighting.boundIrradianceTexture = nullptr;
+    _environmentLighting.sceneDS                = nullptr;
+    _environmentLighting.fallbackDS             = nullptr;
+    _environmentLighting.dsp.reset();
+    _environmentLighting.dsl.reset();
+
+    _cubemapSampler.reset();
+}
+
 void RenderRuntime::resetSkyboxPool()
 {
-    if (!_skyboxDSP || !_skyboxDSL) {
+    if (!_skybox.dsp || !_skybox.dsl) {
         return;
     }
 
     // Return cached skybox descriptor sets back to the pool and rebuild them.
-    _skyboxDSP->resetPool();
-    _sceneSkyboxDS           = nullptr;
-    _fallbackSkyboxDS        = nullptr;
-    _boundSceneSkyboxTexture = nullptr;
+    _skybox.dsp->resetPool();
+    _skybox.sceneDS           = nullptr;
+    _skybox.fallbackDS        = nullptr;
+    _skybox.boundSceneTexture = nullptr;
 
-    _fallbackSkyboxDS = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-    _sceneSkyboxDS    = _skyboxDSP->allocateDescriptorSets(_skyboxDSL);
-    YA_CORE_ASSERT(_fallbackSkyboxDS, "Failed to re-allocate fallback skybox descriptor set");
-    YA_CORE_ASSERT(_sceneSkyboxDS, "Failed to re-allocate scene skybox descriptor set");
+    _skybox.fallbackDS = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
+    _skybox.sceneDS    = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
+    YA_CORE_ASSERT(_skybox.fallbackDS, "Failed to re-allocate fallback skybox descriptor set");
+    YA_CORE_ASSERT(_skybox.sceneDS, "Failed to re-allocate scene skybox descriptor set");
 
-    if (_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView()) {
-        updateSkyboxDescriptorSet(_fallbackSkyboxDS, _fallbackSkyboxTexture.get());
-        updateSkyboxDescriptorSet(_sceneSkyboxDS, _fallbackSkyboxTexture.get());
+    if (_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView()) {
+        updateSkyboxDescriptorSet(_skybox.fallbackDS, _skybox.fallbackTexture.get());
+        updateSkyboxDescriptorSet(_skybox.sceneDS, _skybox.fallbackTexture.get());
     }
 }
 
 void RenderRuntime::resetEnvironmentLightingPool()
 {
-    if (!_environmentLightingDSP || !_environmentLightingDSL) {
+    if (!_environmentLighting.dsp || !_environmentLighting.dsl) {
         return;
     }
 
-    _environmentLightingDSP->resetPool();
-    _sceneEnvironmentLightingDS        = nullptr;
-    _fallbackEnvironmentLightingDS     = nullptr;
-    _boundEnvironmentCubemapTexture    = nullptr;
-    _boundEnvironmentIrradianceTexture = nullptr;
+    _environmentLighting.dsp->resetPool();
+    _environmentLighting.sceneDS                = nullptr;
+    _environmentLighting.fallbackDS             = nullptr;
+    _environmentLighting.boundCubemapTexture    = nullptr;
+    _environmentLighting.boundIrradianceTexture = nullptr;
 
-    _fallbackEnvironmentLightingDS = _environmentLightingDSP->allocateDescriptorSets(_environmentLightingDSL);
-    _sceneEnvironmentLightingDS    = _environmentLightingDSP->allocateDescriptorSets(_environmentLightingDSL);
-    YA_CORE_ASSERT(_fallbackEnvironmentLightingDS, "Failed to re-allocate fallback environment lighting descriptor set");
-    YA_CORE_ASSERT(_sceneEnvironmentLightingDS, "Failed to re-allocate scene environment lighting descriptor set");
+    _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
+    _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
+    YA_CORE_ASSERT(_environmentLighting.fallbackDS, "Failed to re-allocate fallback environment lighting descriptor set");
+    YA_CORE_ASSERT(_environmentLighting.sceneDS, "Failed to re-allocate scene environment lighting descriptor set");
 
-    if (_fallbackSkyboxTexture && _fallbackSkyboxTexture->getImageView() &&
-        _fallbackIrradianceTexture && _fallbackIrradianceTexture->getImageView()) {
-        updateEnvironmentLightingDescriptorSet(_fallbackEnvironmentLightingDS,
-                                               _fallbackSkyboxTexture.get(),
-                                               _fallbackIrradianceTexture.get());
-        updateEnvironmentLightingDescriptorSet(_sceneEnvironmentLightingDS,
-                                               _fallbackSkyboxTexture.get(),
-                                               _fallbackIrradianceTexture.get());
+    if (_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView() &&
+        _environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView()) {
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
+                                               _skybox.fallbackTexture.get(),
+                                               _environmentLighting.fallbackIrradianceTexture.get());
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
+                                               _skybox.fallbackTexture.get(),
+                                               _environmentLighting.fallbackIrradianceTexture.get());
     }
 }
 
@@ -627,10 +640,14 @@ void RenderRuntime::offScreenRender()
         return;
     }
 
-    // Offscreen conversion work can be queued independently from the main viewport path.
-    // Synchronize locally so this command buffer is never reset while still pending,
-    // even if the frame exits early before the normal render wait point.
-    _render->waitIdle();
+    // Wait for the previous offscreen batch to finish (fence, not waitIdle).
+    if (_offscreenPending && _offscreenFence) {
+        auto* vkRender = static_cast<VulkanRender*>(_render);
+        VkFence fence = static_cast<VkFence>(_offscreenFence);
+        vkWaitForFences(vkRender->getDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(vkRender->getDevice(), 1, &fence);
+        _offscreenPending = false;
+    }
 
     auto cmdBuf = _offscreenCmdBuf;
     cmdBuf->reset();
@@ -646,8 +663,9 @@ void RenderRuntime::offScreenRender()
         return;
     }
 
-    _render->submitToQueue({cmdBuf->getHandle()}, {}, {});
-    _render->waitIdle();
+    // Submit with fence — does not block.
+    _render->submitToQueue({cmdBuf->getHandle()}, {}, {}, _offscreenFence);
+    _offscreenPending = true;
 }
 
 // MARK: render
@@ -708,6 +726,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             .viewportFrameBufferScale = _viewportFrameBufferScale,
             .appMode                  = static_cast<int>(input.appMode),
             .clicked                  = input.clicked,
+            .frameData                = input.frameData,
         });
     }
     else {
@@ -722,6 +741,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             .viewportFrameBufferScale = _viewportFrameBufferScale,
             .appMode                  = static_cast<int>(input.appMode),
             .clicked                  = input.clicked,
+            .frameData                = input.frameData,
         });
     }
 
@@ -765,6 +785,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
         auto scene = input.sceneManager ? input.sceneManager->getActiveScene() : nullptr;
         if (scene) {
+            // TODO: migrate billboard rendering to RenderFrameData snapshot
             const glm::vec2 screenSize(30, 30);
             const float     viewPortHeight = static_cast<float>(viewportExtent.height);
             const float     scaleFactor    = screenSize.x / viewPortHeight;
@@ -867,38 +888,43 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             }
 
             if (auto* scene = _app->getSceneManager()->getActiveScene()) {
-                for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-                    (void)entity;
-                    if (!sc.cubemapTexture || !sc.cubemapTexture->getImageShared() || !sc.cubemapTexture->getImageView()) {
-                        continue;
-                    }
-
-                    EditorViewportContext::DebugSpec::Group skyboxGroup{
-                        .label      = "Skybox Cubemap",
-                        .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
-                        .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-                        .groupSize  = CubeFace_Count,
-                    };
-
-                    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-                        auto* faceView = sc.getCubemapFacePreviewView(faceIndex);
-                        if (!faceView) {
+                auto* resolver = _app->getResourceResolveSystem();
+                // Use the read-only preview API instead of accessing SkyboxRuntimeState directly.
+                if (resolver) {
+                    for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
+                        auto preview = resolver->getSkyboxPreview(entity);
+                        if (!preview.bHasRenderableCubemap || !preview.cubemapTexture ||
+                            !preview.cubemapTexture->getImageShared() || !preview.cubemapTexture->getImageView()) {
                             continue;
                         }
 
-                        ctx.debugSpec.slots.push_back({
-                            .label       = std::format("SkyboxFace{}", faceIndex),
-                            .defaultView = faceView,
-                            .ownedView   = sc.cubemapFacePreviewViews[faceIndex],
-                            .image       = sc.cubemapTexture->getImageShared(),
-                        });
-                    }
+                        EditorViewportContext::DebugSpec::Group skyboxGroup{
+                            .label      = "Skybox Cubemap",
+                            .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                            .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                            .groupSize  = CubeFace_Count,
+                        };
 
-                    skyboxGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - skyboxGroup.beginIndex;
-                    if (skyboxGroup.slotCount >= skyboxGroup.groupSize) {
-                        ctx.debugSpec.groups.push_back(std::move(skyboxGroup));
+                        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                            auto* faceView = preview.cubemapFaceViews[faceIndex];
+                            if (!faceView) {
+                                continue;
+                            }
+
+                            ctx.debugSpec.slots.push_back({
+                                .label       = std::format("SkyboxFace{}", faceIndex),
+                                .defaultView = faceView,
+                                .ownedView   = nullptr,
+                                .image       = preview.cubemapTexture->getImageShared(),
+                            });
+                        }
+
+                        skyboxGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - skyboxGroup.beginIndex;
+                        if (skyboxGroup.slotCount >= skyboxGroup.groupSize) {
+                            ctx.debugSpec.groups.push_back(std::move(skyboxGroup));
+                        }
+                        break; // only first skybox
                     }
-                    break;
                 }
             }
 

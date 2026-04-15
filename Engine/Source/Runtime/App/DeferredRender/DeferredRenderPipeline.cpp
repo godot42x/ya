@@ -1,15 +1,6 @@
 #include "DeferredRenderPipeline.h"
 
-#include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
-#include "Render/Core/TextureFactory.h"
-#include "Render/Material/MaterialFactory.h"
-#include "Render/Material/UnlitMaterial.h"
-#include "Resource/PrimitiveMeshCache.h"
-#include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
-#include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 
 namespace ya
@@ -29,7 +20,6 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .extent           = extent,
         .frameBufferCount = 1,
         .attachments      = {
-
             .colorAttach = {
                 AttachmentDescription{
                     .index         = 0,
@@ -79,7 +69,6 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .bSwapChainTarget = false,
         .extent           = extent,
         .attachments      = {
-
             .colorAttach = {
                 AttachmentDescription{
                     .index          = 0,
@@ -110,118 +99,6 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
     });
 }
 
-void DeferredRenderPipeline::initSharedResources()
-{
-    _frameAndLightDSL = IDescriptorSetLayout::create(
-        _render,
-        {DescriptorSetLayoutDesc{
-            .label    = "Deferred_Frame_And_Light_DSL",
-            .set      = 0,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-            },
-        }});
-}
-
-void DeferredRenderPipeline::initLightPassPipeline()
-{
-    _lightGBufferDSL = IDescriptorSetLayout::create(
-        _render,
-        {DescriptorSetLayoutDesc{
-            .label    = "Deferred_LightPass_GBuffer_DSL",
-            .set      = 1,
-            .bindings = {
-                // GBuffer 1-4
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-            },
-        }});
-
-    _lightPPL = IPipelineLayout::create(
-        _render,
-        "Deferred_Light_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(LightPassPushConstant), .stageFlags = EShaderStage::Vertex}},
-        {
-            _frameAndLightDSL,
-            _lightGBufferDSL,
-            App::get()->getRenderRuntime()->getEnvironmentLightingDescriptorSetLayout(),
-        });
-
-    GraphicsPipelineCreateInfo ci{
-        .pipelineRenderingInfo = {
-            .label                  = "Deferred Light Pass",
-            .colorAttachmentFormats = {LINEAR_FORMAT},
-            .depthAttachmentFormat  = DEPTH_FORMAT,
-        },
-        .pipelineLayout = _lightPPL.get(),
-        .shaderDesc     = ShaderDesc{
-                .shaderName        = "DeferredRender/Unified_LightPass.slang",
-                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-                .vertexAttributes  = _commonVertexAttributes,
-        },
-        .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise},
-        .depthStencilState  = {.bDepthTestEnable = false, .bDepthWriteEnable = false},
-        .colorBlendState    = {.attachments = {ColorBlendAttachmentState{
-                                   .index          = 0,
-                                   .bBlendEnable   = false,
-                                   .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                            }}},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
-    };
-
-    _lightPipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_lightPipeline && _lightPipeline->recreate(ci), "Failed to create Light pipeline");
-}
-
-void DeferredRenderPipeline::initDescriptorsAndUBOs()
-{
-    _deferredDSP = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Deferred_DSP",
-            .maxSets   = 2,
-            .poolSizes = {
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 2},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 4},
-            },
-        });
-
-    _frameAndLightDS = _deferredDSP->allocateDescriptorSets(_frameAndLightDSL);
-    _lightTexturesDS = _deferredDSP->allocateDescriptorSets(_lightGBufferDSL);
-
-    _frameUBO = IBuffer::create(
-        _render,
-        BufferCreateInfo{
-            .label       = "Deferred_Frame_UBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(PBRGBufferFrameData),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    _lightUBO = IBuffer::create(
-        _render,
-        BufferCreateInfo{
-            .label       = "Deferred_Light_UBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(LightPassLightData),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-
-    _frameUBO->writeData(&_gBufferPassFrameData, sizeof(_gBufferPassFrameData), 0);
-    _frameUBO->flush();
-    _lightUBO->writeData(&_lightPassLightData, sizeof(_lightPassLightData), 0);
-    _lightUBO->flush();
-
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 0, _frameUBO.get()),
-        IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS, 1, _lightUBO.get()),
-    });
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Init / Shutdown
 // ═══════════════════════════════════════════════════════════════════════
@@ -239,61 +116,20 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
         .height = static_cast<uint32_t>(desc.windowH),
     };
 
-    // Setup: RT + shared resources + light pass
     initRenderTargets(extent);
-    initSharedResources();
-    initLightPassPipeline();
-    initDescriptorsAndUBOs();
 
-    // Per-shading-model init
-    initPBR();
-    initPhong();
-    initUnlit();
+    // GBufferStage — owns frame/light UBOs, pipelines, material pools
+    _gBufferStage = ya::makeShared<GBufferStage>();
+    _gBufferStage->init(_render);
 
-    // Fallback material (magenta checkerboard for meshes without material)
-    {
-        _fallbackMaterial = MaterialFactory::get()->createMaterial<UnlitMaterial>("__fallback_checkerboard__");
-        auto& params      = _fallbackMaterial->getParamsMut();
-        params.baseColor0 = glm::vec3(1.0f, 0.0f, 1.0f);
-        params.baseColor1 = glm::vec3(1.0f, 0.0f, 1.0f);
-        params.mixValue   = 0.0f;
+    // LightStage — borrows frame+light DS from GBufferStage, reads GBuffer textures
+    _lightStage = ya::makeShared<LightStage>();
+    _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
+    _lightStage->init(_render);
 
-        auto checkerTex = TextureLibrary::get().getCheckerboardTexture();
-        if (checkerTex) {
-            TextureBinding tb;
-            tb.texture = checkerTex.get();
-            tb.sampler = TextureLibrary::get().getNearestSampler();
-            _fallbackMaterial->setTextureBinding(UnlitMaterial::BaseColor0, tb);
-            params.textureParams[0].bEnable = true;
-        }
-        _fallbackMaterial->setParamDirty();
-        _fallbackMaterial->setResourceDirty();
-    }
-
-    // Skybox
-    _skyboxSystem = ya::makeShared<SkyBoxSystem>();
-    _skyboxSystem->init(IRenderSystem::InitParams{
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                   = "Deferred Skybox Pipeline",
-            .colorAttachmentFormats  = {LINEAR_FORMAT},
-            .depthAttachmentFormat   = DEPTH_FORMAT,
-            .stencilAttachmentFormat = EFormat::Undefined,
-        },
-    });
-    _skyboxSystem->bReverseViewportY = true;
-
-    // Simple material system (forward overlay — debug vis, direction cones)
-    _simpleMaterialSystem = ya::makeShared<SimpleMaterialSystem>();
-    _simpleMaterialSystem->init(IRenderSystem::InitParams{
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "Deferred SimpleMaterial Overlay",
-            .colorAttachmentFormats = {LINEAR_FORMAT},
-            .depthAttachmentFormat  = DEPTH_FORMAT,
-        },
-    });
-    _simpleMaterialSystem->bReverseViewportY = true;
+    // ViewportOverlayStage — skybox + forward overlay (SimpleMaterial debug)
+    _overlayStage = ya::makeShared<ViewportOverlayStage>();
+    _overlayStage->init(_render);
 
     // PostProcess
     _postProcessStage.init(PostProcessStage::InitDesc{
@@ -308,59 +144,30 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 
 void DeferredRenderPipeline::shutdown()
 {
-    shutdownAll();
-    _render = nullptr;
-}
-
-void DeferredRenderPipeline::shutdownAll()
-{
     _bViewportPassOpen = false;
     _postProcessStage.shutdown();
     viewportTexture = nullptr;
-
-    // Release fallback material reference (owned by MaterialFactory)
-    _fallbackMaterial = nullptr;
 
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
 
-    if (_skyboxSystem) {
-        _skyboxSystem->onDestroy();
-        _skyboxSystem.reset();
+    if (_overlayStage) {
+        _overlayStage->destroy();
+        _overlayStage.reset();
+    }
+    if (_lightStage) {
+        _lightStage->destroy();
+        _lightStage.reset();
+    }
+    if (_gBufferStage) {
+        _gBufferStage->destroy();
+        _gBufferStage.reset();
     }
 
-    if (_simpleMaterialSystem) {
-        _simpleMaterialSystem->onDestroy();
-        _simpleMaterialSystem.reset();
-    }
-
-    // Render resources (reverse init order)
-    _lightUBO.reset();
-    _frameUBO.reset();
-    _deferredDSP.reset();
-    _lightPipeline.reset();
-    _lightPPL.reset();
-    _lightGBufferDSL.reset();
-
-    _pbrGBufferPipeline.reset();
-    _pbrGBufferPPL.reset();
-    _pbrParamsDSL.reset();
-    _pbrMaterialResourceDSL.reset();
-
-    _phongGBufferPipeline.reset();
-    _phongGBufferPPL.reset();
-    _phongParamsDSL.reset();
-    _phongMaterialResourceDSL.reset();
-
-    _unlitGBufferPipeline.reset();
-    _unlitGBufferPPL.reset();
-    _unlitParamsDSL.reset();
-    _unlitMaterialResourceDSL.reset();
-
-    _frameAndLightDSL.reset();
     _viewportRT.reset();
     _gBufferRT.reset();
+    _render = nullptr;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -377,128 +184,80 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         return;
     }
 
-    // Begin frame
-    if (_skyboxSystem) _skyboxSystem->beginFrame();
-    if (_simpleMaterialSystem) _simpleMaterialSystem->beginFrame();
-    _postProcessStage.beginFrame();
-    _pbrGBufferPipeline->beginFrame();
-    _phongGBufferPipeline->beginFrame();
-    _unlitGBufferPipeline->beginFrame();
-    _lightPipeline->beginFrame();
-
-    _viewportRT->flushDirty();
-    _gBufferRT->flushDirty();
-
-    auto* sceneManager = desc.sceneManager;
-    auto* scene        = sceneManager ? sceneManager->getActiveScene() : nullptr;
-    if (!scene) {
+    if (!desc.frameData) {
         desc.cmdBuf->debugEndLabel();
         return;
     }
 
-    // Prepare + Execute
-    preparePBR(scene);
-    preparePhong(scene);
-    prepareUnlit(scene);
-    updateUBOs(desc, scene);
-    executeGBufferPass(desc, scene);
+    // Begin frame
+    _postProcessStage.beginFrame();
+    _viewportRT->flushDirty();
+    _gBufferRT->flushDirty();
+
+    const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
+    const uint32_t vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
+
+    // Build stage context
+    // NOTE: flightIndex is 0 for now (flightFrameSize=1); will come from VulkanRender when changed to 2.
+    RenderStageContext stageCtx{
+        .cmdBuf         = desc.cmdBuf,
+        .frameData      = desc.frameData,
+        .flightIndex    = 0,
+        .deltaTime      = desc.dt,
+        .viewportExtent = {.width = vpW, .height = vpH},
+    };
+
+    // ── GBuffer Pass ─────────────────────────────────────────────
+    _gBufferStage->prepare(stageCtx);
+
+    {
+        RenderingInfo gBufferRI{
+            .label            = "GBuffer Pass",
+            .renderArea       = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
+            .layerCount       = 1,
+            .colorClearValues = {
+                ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+            },
+            .depthClearValue = ClearValue(1.0f, 0),
+            .renderTarget    = _gBufferRT.get(),
+        };
+        desc.cmdBuf->beginRendering(gBufferRI);
+
+        float gbVpY = 0.0f;
+        float gbVpH = static_cast<float>(vpH);
+        if (_bReverseViewportY) {
+            gbVpY = static_cast<float>(vpH);
+            gbVpH = -gbVpH;
+        }
+        desc.cmdBuf->setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
+        desc.cmdBuf->setScissor(0, 0, vpW, vpH);
+
+        _gBufferStage->execute(stageCtx);
+
+        desc.cmdBuf->endRendering(gBufferRI);
+    }
+
     copyGBufferDepthToViewport(desc.cmdBuf);
 
-    // Viewport pass (all stages share one render pass)
+    // ── Viewport Pass (Light + Skybox + Overlay) ─────────────────
     beginViewportRendering(desc);
-    executeLightPass(desc);
-    executeSkybox(desc);
-    executeForwardOverlay(desc);
-    // executeTransparentPass(desc); // TODO
 
+    _lightStage->prepare(stageCtx);
+    _lightStage->execute(stageCtx);
+
+    _overlayStage->prepare(stageCtx);
+    _overlayStage->execute(stageCtx);
+
+    // Viewport pass left open for App-level 2D rendering
     desc.cmdBuf->debugEndLabel();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// UBO Updates
+// Depth Copy
 // ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::updateUBOs(const TickDesc& desc, Scene* scene)
-{
-    auto& reg = scene->getRegistry();
-
-    _lightPassLightData.hasDirLight = false;
-    for (const auto& [et, dlc, tc] :
-         reg.view<DirectionalLightComponent, TransformComponent>().each()) {
-        _lightPassLightData.dirLight.dir   = tc.getForward();
-        _lightPassLightData.dirLight.color = dlc._color;
-        _lightPassLightData.ambient        = glm::vec3(0.03);
-        _lightPassLightData.hasDirLight    = true;
-    }
-
-    int pli = 0;
-    for (const auto& [et, plc, tc] :
-         reg.view<PointLightComponent, TransformComponent>().each()) {
-        if (pli >= static_cast<int>(MAX_POINT_LIGHTS)) {
-            YA_CORE_WARN("DeferredRenderPipeline: clamping point lights from scene to MAX_POINT_LIGHTS={}.", MAX_POINT_LIGHTS);
-            break;
-        }
-        _lightPassLightData.pointLights[pli] = {
-            .pos       = tc.getPosition(),
-            .color     = plc.color,
-            .intensity = plc.intensity,
-        };
-        ++pli;
-    }
-    _lightPassLightData.numPointLight = pli;
-    // _lightPassLightData.dirLight.shininess = 32;
-
-    _gBufferPassFrameData.viewPos    = desc.cameraPos;
-    _gBufferPassFrameData.projMatrix = desc.projection;
-    _gBufferPassFrameData.viewMatrix = desc.view;
-
-    _frameUBO->writeData(&_gBufferPassFrameData, sizeof(_gBufferPassFrameData), 0);
-    _frameUBO->flush();
-    _lightUBO->writeData(&_lightPassLightData, sizeof(_lightPassLightData), 0);
-    _lightUBO->flush();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// GBuffer Pass (orchestrates per-model draw calls)
-// ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, Scene* scene)
-{
-    auto           cmdBuf = desc.cmdBuf;
-    const uint32_t vpW    = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH    = static_cast<uint32_t>(desc.viewportRect.extent.y);
-
-    RenderingInfo gBufferRI{
-        .label            = "GBuffer Pass",
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
-        .layerCount       = 1,
-        .colorClearValues = {
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-        },
-        .depthClearValue = ClearValue(1.0f, 0),
-        .renderTarget    = _gBufferRT.get(),
-    };
-    cmdBuf->beginRendering(gBufferRI);
-
-    float gbVpY = 0.0f;
-    float gbVpH = static_cast<float>(vpH);
-    if (_bReverseViewportY) {
-        gbVpY = static_cast<float>(vpH);
-        gbVpH = -gbVpH;
-    }
-    cmdBuf->setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
-    cmdBuf->setScissor(0, 0, vpW, vpH);
-
-    drawPBR(cmdBuf, scene);
-    drawPhong(cmdBuf, scene);
-    drawUnlit(cmdBuf, scene);
-    drawFallback(cmdBuf, scene);
-
-    cmdBuf->endRendering(gBufferRI);
-}
 
 void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
 {
@@ -522,15 +281,10 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
         .layerCount     = 1,
     };
 
-    cmdBuf->debugBeginLabel("Deferred Depth Copy");
-    cmdBuf->transitionImageLayoutAuto(srcImage,
-                                      //   EImageLayout::ShaderReadOnlyOptimal,
-                                      EImageLayout::TransferSrc,
-                                      &depthRange);
-    cmdBuf->transitionImageLayoutAuto(dstImage,
-                                      //   EImageLayout::ShaderReadOnlyOptimal,
-                                      EImageLayout::TransferDst,
-                                      &depthRange);
+    cmdBuf->debugBeginLabel("Copy GBuffer Depth → Viewport");
+
+    cmdBuf->transitionImageLayoutAuto(srcImage, EImageLayout::TransferSrc, &depthRange);
+    cmdBuf->transitionImageLayoutAuto(dstImage, EImageLayout::TransferDst, &depthRange);
 
     cmdBuf->copyImage(
         srcImage,
@@ -557,20 +311,13 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
             },
         });
 
-    cmdBuf->transitionImageLayoutAuto(srcImage,
-                                      //   EImageLayout::TransferSrc,
-                                      EImageLayout::ShaderReadOnlyOptimal,
-                                      &depthRange);
-    cmdBuf->transitionImageLayoutAuto(dstImage,
-                                      //   EImageLayout::TransferDst,
-                                      EImageLayout::ShaderReadOnlyOptimal,
-                                      &depthRange);
+    cmdBuf->transitionImageLayoutAuto(srcImage, EImageLayout::ShaderReadOnlyOptimal, &depthRange);
+    cmdBuf->transitionImageLayoutAuto(dstImage, EImageLayout::ShaderReadOnlyOptimal, &depthRange);
     cmdBuf->debugEndLabel();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Viewport Pass — stages sharing one render pass (viewport RT + viewport depth)
-// Order: Light → Skybox → ForwardOverlay → (future) Transparent
+// Viewport Pass
 // ═══════════════════════════════════════════════════════════════════════
 
 void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
@@ -589,13 +336,7 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
         .label            = "Viewport Pass",
         .renderArea       = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
         .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 0.0f)},
-        // .colorAttachments = {RenderingInfo::ImageSpec{
-        //     .texture       = _viewportRT->getCurFrameBuffer()->getColorTexture(0),
-        //     .initialLayout = EImageLayout::ColorAttachmentOptimal,
-        //     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        // }},
-        // .depthAttachment  = &_viewportDepthSpec,
-        .renderTarget = _viewportRT.get(),
+        .renderTarget     = _viewportRT.get(),
     };
 
     cmdBuf->beginRendering(_viewportRI);
@@ -611,106 +352,6 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
         .extent     = {.width = vpW, .height = vpH},
     };
     _lastTickDesc = desc;
-}
-
-void DeferredRenderPipeline::executeLightPass(const TickDesc& desc)
-{
-    auto           cmdBuf = desc.cmdBuf;
-    const uint32_t vpW    = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH    = static_cast<uint32_t>(desc.viewportRect.extent.y);
-
-    auto* scene    = desc.sceneManager ? desc.sceneManager->getActiveScene() : nullptr;
-    auto* runtime  = App::get()->getRenderRuntime();
-    YA_CORE_ASSERT(runtime, "RenderRuntime is null");
-    auto  environmentLightingDS = runtime->getSceneEnvironmentLightingDescriptorSet(scene);
-
-    cmdBuf->debugBeginLabel("Light Pass");
-
-    auto  sampler = TextureLibrary::get().getDefaultSampler();
-    auto* fb      = _gBufferRT->getCurFrameBuffer();
-    // TODO: each fb has it's ds cache
-    std::vector updateResources = {
-        IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 0, fb->getColorTexture(0)->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 1, fb->getColorTexture(1)->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 2, fb->getColorTexture(2)->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_lightTexturesDS, 3, fb->getColorTexture(3)->getImageView(), sampler.get()),
-    };
-    _render->getDescriptorHelper()->updateDescriptorSets(updateResources);
-
-    cmdBuf->bindPipeline(_lightPipeline.get());
-    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH));
-    cmdBuf->setScissor(0, 0, vpW, vpH);
-    std::vector Dss = {
-        _frameAndLightDS,
-        _lightTexturesDS,
-        environmentLightingDS,
-    };
-    cmdBuf->bindDescriptorSets(_lightPPL.get(), 0, Dss);
-
-    PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad)->draw(cmdBuf);
-
-    cmdBuf->debugEndLabel();
-}
-
-void DeferredRenderPipeline::executeSkybox(const TickDesc& desc)
-{
-    if (!_skyboxSystem || !_skyboxSystem->bEnabled) return;
-
-    auto           cmdBuf = desc.cmdBuf;
-    const uint32_t vpW    = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH    = static_cast<uint32_t>(desc.viewportRect.extent.y);
-
-    cmdBuf->debugBeginLabel("Deferred Skybox");
-    FrameContext skyboxCtx{
-        .view       = desc.view,
-        .projection = desc.projection,
-        .cameraPos  = desc.cameraPos,
-        .extent     = {.width = vpW, .height = vpH},
-    };
-    _skyboxSystem->tick(cmdBuf, desc.dt, &skyboxCtx);
-    cmdBuf->debugEndLabel();
-}
-
-void DeferredRenderPipeline::executeForwardOverlay(const TickDesc& desc)
-{
-    if (!_simpleMaterialSystem) return;
-
-    auto           cmdBuf = desc.cmdBuf;
-    const uint32_t vpW    = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH    = static_cast<uint32_t>(desc.viewportRect.extent.y);
-
-    cmdBuf->debugBeginLabel("Forward Overlay");
-    FrameContext ctx{
-        .view       = desc.view,
-        .projection = desc.projection,
-        .cameraPos  = desc.cameraPos,
-        .extent     = {.width = vpW, .height = vpH},
-    };
-    _simpleMaterialSystem->tick(cmdBuf, desc.dt, &ctx);
-    cmdBuf->debugEndLabel();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// GUI / Viewport / Debug
-// ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::renderGUI()
-{
-    if (!ImGui::TreeNode("Deferred Pipeline")) return;
-
-    ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
-    ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
-
-    if (_pbrGBufferPipeline) _pbrGBufferPipeline->renderGUI();
-    if (_phongGBufferPipeline) _phongGBufferPipeline->renderGUI();
-    if (_unlitGBufferPipeline) _unlitGBufferPipeline->renderGUI();
-    if (_lightPipeline) _lightPipeline->renderGUI();
-
-    if (_skyboxSystem) _skyboxSystem->renderGUI();
-    if (_simpleMaterialSystem) _simpleMaterialSystem->renderGUI();
-    _postProcessStage.renderGUI();
-
-    ImGui::TreePop();
 }
 
 void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
@@ -743,5 +384,23 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
     _postProcessStage.onViewportResized(newExtent);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// GUI
+// ═══════════════════════════════════════════════════════════════════════
+
+void DeferredRenderPipeline::renderGUI()
+{
+    if (!ImGui::TreeNode("Deferred Pipeline")) return;
+
+    ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
+    ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
+
+    if (_gBufferStage) _gBufferStage->renderGUI();
+    if (_lightStage) _lightStage->renderGUI();
+    if (_overlayStage) _overlayStage->renderGUI();
+    _postProcessStage.renderGUI();
+
+    ImGui::TreePop();
+}
 
 } // namespace ya

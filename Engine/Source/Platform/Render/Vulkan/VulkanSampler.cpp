@@ -9,6 +9,8 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc& ci)
 {
     auto vkRender = ya::App::get()->getRender<VulkanRender>();
     vkRender      = static_cast<VulkanRender*>(ya::App::get()->getRender());
+    _device       = vkRender->getDevice();
+    _allocator    = vkRender->getAllocator();
 
     VkSamplerCreateInfo vkCI{
         .sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -84,7 +86,7 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc& ci)
     }
 
     _label = ci.label;
-    VK_CALL(vkCreateSampler(vkRender->getDevice(), &vkCI, vkRender->getAllocator(), &_handle));
+    VK_CALL(vkCreateSampler(_device, &vkCI, _allocator, &_handle));
     vkRender->setDebugObjectName(VK_OBJECT_TYPE_SAMPLER, _handle, ci.label.c_str());
     YA_CORE_TRACE("Created sampler {}: {}", ci.label, (uintptr_t)_handle);
     YA_CORE_ASSERT(_handle != VK_NULL_HANDLE, "Failed to create sampler");
@@ -92,7 +94,11 @@ VulkanSampler::VulkanSampler(const ya::SamplerDesc& ci)
 
 VulkanSampler::~VulkanSampler()
 {
-    VK_DESTROY(Sampler, ya::App::get()->getRender<VulkanRender>()->getDevice(), _handle);
+    if (_device == VK_NULL_HANDLE || _handle == VK_NULL_HANDLE) {
+        return;
+    }
+
+    VK_DESTROY_A(Sampler, _device, _handle, _allocator);
 }
 
 // namespace ya

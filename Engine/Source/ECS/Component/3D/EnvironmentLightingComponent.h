@@ -4,11 +4,9 @@
 #include "Core/Reflection/Reflection.h"
 
 #include <array>
-#include <optional>
 
 #include "ECS/Component.h"
 #include "Render/Core/Texture.h"
-#include "Resource/AssetManager.h"
 
 namespace ya
 {
@@ -52,22 +50,6 @@ struct StateTraits<EEnvironmentLightingResolveState>
 
 struct EnvironmentLightingComponent : public IComponent
 {
-    struct PendingBatchLoadState
-    {
-        AssetManager::TextureBatchMemoryHandle batchHandle = 0;
-    };
-
-    struct PendingOffscreenProcessState
-    {
-        stdptr<Texture> sourceTexture  = nullptr;
-        stdptr<Texture> outputTexture  = nullptr;
-        bool            bFlipVertical  = false;
-        bool            bTaskQueued    = false;
-        bool            bTaskFinished  = false;
-        bool            bTaskSucceeded = false;
-        bool            bCancelled     = false;
-    };
-
     struct CubemapSource
     {
         YA_REFLECT_BEGIN(CubemapSource)
@@ -101,28 +83,39 @@ struct EnvironmentLightingComponent : public IComponent
     YA_REFLECT_FIELD(irradianceFaceSize)
     YA_REFLECT_END()
 
-    EEnvironmentLightingSourceType               sourceType          = EEnvironmentLightingSourceType::SceneSkybox;
-    CubemapSource                                cubemapSource;
-    CylindricalSource                            cylindricalSource;
-    uint32_t                                     irradianceFaceSize  = 32;
+    EEnvironmentLightingSourceType sourceType = EEnvironmentLightingSourceType::SceneSkybox;
+    CubemapSource                  cubemapSource;
+    CylindricalSource              cylindricalSource;
+    uint32_t                       irradianceFaceSize = 32;
+    uint64_t                       authoringVersion   = 1;
 
-    stdptr<Texture>                  cubemapTexture    = nullptr;
-    stdptr<Texture>                  irradianceTexture = nullptr;
     EEnvironmentLightingResolveState resolveState      = EEnvironmentLightingResolveState::Dirty;
 
     void setFace(ECubeFace face, const std::string& path);
     void setCubemapSource(const CubeMapCreateInfo& createInfo);
     void setCylindricalSource(const std::string& filepath);
-    bool hasSource() const;
+
+    bool hasSource() const
+    {
+        if (usesSceneSkybox()) {
+            return true;
+        }
+        if (sourceType == EEnvironmentLightingSourceType::CubeFaces) {
+            return hasCubemapSource();
+        }
+        return hasCylindricalSource();
+    }
+
     bool usesSceneSkybox() const;
-    bool hasCubemapSource() const;
-    bool hasCylindricalSource() const;
-    void invalidate();
-    bool isLoading() const;
-    bool hasRenderableCubemap() const;
-    bool hasIrradianceMap() const;
+    bool hasCubemapSource() const
+    {
+        return sourceType == EEnvironmentLightingSourceType::CubeFaces && cubemapSource.hasAllFaces();
+    }
+    bool     hasCylindricalSource() const;
+    void     invalidate();
+    bool     isLoading() const;
     uint32_t getResolvedIrradianceFaceSize() const;
-    void onPostSerialize() override;
+    void     onPostSerialize() override;
 };
 
 } // namespace ya

@@ -13,6 +13,8 @@ namespace ya
 struct VulkanSampler : public ya::Sampler
 {
     std::string _label;
+    VkDevice    _device    = VK_NULL_HANDLE;
+    const VkAllocationCallbacks* _allocator = nullptr;
     VkSampler   _handle;
 
     VulkanSampler(const ya::SamplerDesc &ci);

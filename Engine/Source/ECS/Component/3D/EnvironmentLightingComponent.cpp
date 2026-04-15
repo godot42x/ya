@@ -1,25 +1,7 @@
 #include "EnvironmentLightingComponent.h"
 
-#include "Resource/DeferredDeletionQueue.h"
-
 namespace ya
 {
-
-namespace
-{
-void clearResolvedTextures(EnvironmentLightingComponent& component)
-{
-    auto& ddq = DeferredDeletionQueue::get();
-    if (component.cubemapTexture) {
-        ddq.enqueueResource(ddq.currentFrame(), std::move(component.cubemapTexture));
-        component.cubemapTexture = nullptr;
-    }
-    if (component.irradianceTexture) {
-        ddq.enqueueResource(ddq.currentFrame(), std::move(component.irradianceTexture));
-        component.irradianceTexture = nullptr;
-    }
-}
-} // namespace
 
 bool EnvironmentLightingComponent::CubemapSource::hasAllFaces() const
 {
@@ -62,25 +44,9 @@ void EnvironmentLightingComponent::setCylindricalSource(const std::string& filep
     invalidate();
 }
 
-bool EnvironmentLightingComponent::hasSource() const
-{
-    if (usesSceneSkybox()) {
-        return true;
-    }
-    if (sourceType == EEnvironmentLightingSourceType::CubeFaces) {
-        return hasCubemapSource();
-    }
-    return hasCylindricalSource();
-}
-
 bool EnvironmentLightingComponent::usesSceneSkybox() const
 {
     return sourceType == EEnvironmentLightingSourceType::SceneSkybox;
-}
-
-bool EnvironmentLightingComponent::hasCubemapSource() const
-{
-    return sourceType == EEnvironmentLightingSourceType::CubeFaces && cubemapSource.hasAllFaces();
 }
 
 bool EnvironmentLightingComponent::hasCylindricalSource() const
@@ -90,7 +56,7 @@ bool EnvironmentLightingComponent::hasCylindricalSource() const
 
 void EnvironmentLightingComponent::invalidate()
 {
-    clearResolvedTextures(*this);
+    ++authoringVersion;
     auto transition = makeTransition(resolveState, "EnvironmentLighting");
     transition.to(hasSource() ? EEnvironmentLightingResolveState::Dirty : EEnvironmentLightingResolveState::Empty,
                   "invalidate");
@@ -101,16 +67,6 @@ bool EnvironmentLightingComponent::isLoading() const
     return resolveState == EEnvironmentLightingResolveState::ResolvingSource ||
            resolveState == EEnvironmentLightingResolveState::PreprocessingEnvironment ||
            resolveState == EEnvironmentLightingResolveState::PreprocessingIrradiance;
-}
-
-bool EnvironmentLightingComponent::hasRenderableCubemap() const
-{
-    return cubemapTexture && cubemapTexture->getImageView();
-}
-
-bool EnvironmentLightingComponent::hasIrradianceMap() const
-{
-    return irradianceTexture && irradianceTexture->getImageView();
 }
 
 uint32_t EnvironmentLightingComponent::getResolvedIrradianceFaceSize() const

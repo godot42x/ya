@@ -1,8 +1,5 @@
 #include "SkyboxComponent.h"
 
-#include "Render/Core/TextureFactory.h"
-#include "Resource/DeferredDeletionQueue.h"
-
 namespace ya
 {
 
@@ -65,68 +62,9 @@ bool SkyboxComponent::hasCylindricalSource() const
     return sourceType == ESkyboxSourceType::Cylindrical && cylindricalSource.hasFile();
 }
 
-bool SkyboxComponent::hasRenderableCubemap() const
-{
-    return resolveState == ESkyboxResolveState::Ready && cubemapTexture && cubemapTexture->getImageView();
-}
-
-void SkyboxComponent::rebuildCubemapPreviewViews()
-{
-    clearCubemapPreviewViews();
-    if (!cubemapTexture || !cubemapTexture->getImageShared() || !cubemapTexture->getImageView()) {
-        return;
-    }
-
-    auto* textureFactory = ITextureFactory::get();
-    if (!textureFactory) {
-        return;
-    }
-
-    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-        cubemapFacePreviewViews[faceIndex] = textureFactory->createImageView(
-            cubemapTexture->getImageShared(),
-            ImageViewCreateInfo{
-                .label          = std::format("SkyboxPreviewFace{}", faceIndex),
-                .viewType       = EImageViewType::View2D,
-                .aspectFlags    = EImageAspect::Color,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = faceIndex,
-                .layerCount     = 1,
-            });
-    }
-}
-
-void SkyboxComponent::clearCubemapPreviewViews()
-{
-    for (auto& faceView : cubemapFacePreviewViews) {
-        faceView.reset();
-    }
-}
-
-IImageView* SkyboxComponent::getCubemapFacePreviewView(uint32_t faceIndex) const
-{
-    if (faceIndex >= CubeFace_Count || !cubemapFacePreviewViews[faceIndex]) {
-        return nullptr;
-    }
-    return cubemapFacePreviewViews[faceIndex].get();
-}
-
-void SkyboxComponent::prepareForRemove()
-{
-    sourcePreviewTexture.reset();
-    clearCubemapPreviewViews();
-
-    if (cubemapTexture) {
-        auto& ddq = DeferredDeletionQueue::get();
-        ddq.enqueueResource(ddq.currentFrame(), std::move(cubemapTexture));
-        cubemapTexture = nullptr;
-    }
-}
-
 void SkyboxComponent::invalidate()
 {
-    prepareForRemove();
+    ++authoringVersion;
     auto transition = makeTransition(resolveState, "Skybox");
     transition.to(hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty,
                   "invalidate");

@@ -22,13 +22,13 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
 
 
 
 #include "EditorLayer.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/TextureFactory.h"
-#include "Resource/DeferredDeletionQueue.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Scene/Node.h"
@@ -70,13 +70,6 @@ bool drawPathInput(const char* id, std::string& path, size_t bufferSize)
     return true;
 }
 
-Texture* getSkyboxSourcePreviewTexture(const SkyboxComponent& skybox)
-{
-    if (skybox.sourcePreviewTexture && skybox.sourcePreviewTexture->getImageView()) {
-        return skybox.sourcePreviewTexture.get();
-    }
-    return nullptr;
-}
 
 void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, float maxHeight)
 {
@@ -273,7 +266,7 @@ void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
 
 void DetailsView::drawSkyboxComponent(Entity& entity)
 {
-    componentWrapper<SkyboxComponent>("Skybox", entity, [this](SkyboxComponent* sc) {
+    componentWrapper<SkyboxComponent>("Skybox", entity, [this, &entity](SkyboxComponent* sc) {
         bool bSourceChanged = false;
 
         int sourceType = static_cast<int>(sc->sourceType);
@@ -354,19 +347,22 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
             sc->invalidate();
         }
 
-        drawSkyboxPreviewSection(*sc);
+        drawSkyboxPreviewSection(entity, *sc);
     });
 }
 
-void DetailsView::drawSkyboxPreviewSection(const SkyboxComponent& skybox)
+void DetailsView::drawSkyboxPreviewSection(const Entity& entity, const SkyboxComponent& skybox)
 {
+    auto* resolver = App::get()->getResourceResolveSystem();
+    auto preview = resolver ? resolver->getSkyboxPreview(static_cast<entt::entity>(entity)) : SkyboxPreviewInfo{};
+
     ImGui::Separator();
     ImGui::TextUnformatted("Preview");
-    drawSkyboxSourcePreview(skybox);
-    drawSkyboxCubemapPreviewGrid(skybox);
+    drawSkyboxSourcePreview(preview, skybox);
+    drawSkyboxCubemapPreviewGrid(preview);
 }
 
-void DetailsView::drawSkyboxSourcePreview(const SkyboxComponent& skybox)
+void DetailsView::drawSkyboxSourcePreview(const SkyboxPreviewInfo& preview, const SkyboxComponent& skybox)
 {
     if (skybox.sourceType != ESkyboxSourceType::Cylindrical) {
         return;
@@ -374,8 +370,8 @@ void DetailsView::drawSkyboxSourcePreview(const SkyboxComponent& skybox)
 
     ImGui::Spacing();
     ImGui::TextDisabled("Source Image");
-    auto* sourceTexture = getSkyboxSourcePreviewTexture(skybox);
-    if (!sourceTexture) {
+    auto* sourceTexture = preview.sourcePreviewTexture;
+    if (!sourceTexture || !sourceTexture->getImageView()) {
         ImGui::TextDisabled("Source preview unavailable until the texture is loaded.");
         return;
     }
@@ -384,10 +380,10 @@ void DetailsView::drawSkyboxSourcePreview(const SkyboxComponent& skybox)
     drawTexturePreviewImage("SkyboxSourcePreview", sourceTexture, previewWidth, SKYBOX_PREVIEW_MAX_HEIGHT);
 }
 
-void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxComponent& skybox)
+void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxPreviewInfo& preview)
 {
-    auto* cubemapTexture = skybox.cubemapTexture.get();
-    if (!cubemapTexture || !cubemapTexture->getImageShared() || !cubemapTexture->getImageView()) {
+    if (!preview.bHasRenderableCubemap || !preview.cubemapTexture ||
+        !preview.cubemapTexture->getImageShared() || !preview.cubemapTexture->getImageView()) {
         ImGui::Spacing();
         ImGui::TextDisabled("Cubemap face previews unavailable until preprocessing completes.");
         return;
@@ -416,8 +412,8 @@ void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxComponent& skybox)
         ImGui::PushID(static_cast<int>(faceIndex));
         ImGui::TextUnformatted(SKYBOX_FACE_LABELS[faceIndex]);
 
-        if (auto* faceView = skybox.getCubemapFacePreviewView(faceIndex)) {
-            ImGuiHelper::Image(faceView, sampler.get(), "No Preview", ImVec2(cellWidth, cellHeight));
+        if (preview.cubemapFaceViews[faceIndex]) {
+            ImGuiHelper::Image(preview.cubemapFaceViews[faceIndex], sampler.get(), "No Preview", ImVec2(cellWidth, cellHeight));
         }
         else {
             ImGui::Dummy(ImVec2(cellWidth, cellHeight));

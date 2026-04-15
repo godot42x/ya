@@ -7,7 +7,6 @@
 
 #include "ECS/Component.h"
 #include "Render/Core/Texture.h"
-#include "Resource/AssetManager.h"
 
 namespace ya
 {
@@ -46,22 +45,6 @@ struct StateTraits<ESkyboxResolveState>
 
 struct SkyboxComponent : public IComponent
 {
-    struct PendingBatchLoadState
-    {
-        AssetManager::TextureBatchMemoryHandle batchHandle = 0;
-    };
-
-    struct PendingOffscreenProcessState
-    {
-        stdptr<Texture> sourceTexture  = nullptr;
-        stdptr<Texture> outputTexture  = nullptr;
-        bool            bFlipVertical  = false;
-        bool            bTaskQueued    = false;
-        bool            bTaskFinished  = false;
-        bool            bTaskSucceeded = false;
-        bool            bCancelled     = false;
-    };
-
     struct CubemapSource
     {
         YA_REFLECT_BEGIN(CubemapSource)
@@ -94,27 +77,19 @@ struct SkyboxComponent : public IComponent
     YA_REFLECT_FIELD(cylindricalSource)
     YA_REFLECT_END()
 
-    ESkyboxSourceType                              sourceType = ESkyboxSourceType::CubeFaces;
-    CubemapSource                                  cubemapSource;
-    CylindricalSource                              cylindricalSource;
+    ESkyboxSourceType sourceType = ESkyboxSourceType::CubeFaces;
+    CubemapSource     cubemapSource;
+    CylindricalSource cylindricalSource;
+    uint64_t          authoringVersion = 1;
 
-    // transients
-    stdptr<Texture>                                cubemapTexture       = nullptr;
-    stdptr<Texture>                                sourcePreviewTexture = nullptr;
-    std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
-    ESkyboxResolveState                            resolveState         = ESkyboxResolveState::Dirty;
+    ESkyboxResolveState resolveState = ESkyboxResolveState::Dirty;
 
-    void        setFace(ECubeFace face, const std::string& path);
-    void        setCubemapSource(const CubeMapCreateInfo& createInfo);
-    void        setCylindricalSource(const std::string& filepath);
-    bool        hasSource() const;
-    bool        hasCubemapSource() const;
-    bool        hasCylindricalSource() const;
-    bool        hasRenderableCubemap() const;
-    void        rebuildCubemapPreviewViews();
-    void        clearCubemapPreviewViews();
-    IImageView* getCubemapFacePreviewView(uint32_t faceIndex) const;
-    void        prepareForRemove();
+    void setFace(ECubeFace face, const std::string& path);
+    void setCubemapSource(const CubeMapCreateInfo& createInfo);
+    void setCylindricalSource(const std::string& filepath);
+    bool hasSource() const;
+    bool hasCubemapSource() const;
+    bool hasCylindricalSource() const;
     void        invalidate();
     bool        isLoading() const;
     void        onPostSerialize() override;

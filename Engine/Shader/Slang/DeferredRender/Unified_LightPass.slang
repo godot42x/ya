@@ -180,7 +180,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
     {
         vec3 I = normalize(V);
         vec3 reflectDir = reflect(I, N);
-        R = uTexEnvironmentCubemap.Sample(reflectDir).xyz;
+        R = uTexSkyBoxMap.Sample(reflectDir).xyz;
         R *= specIntensity;
     }
 
@@ -228,8 +228,11 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(2,1)]] Sampler2D uTexRT2; // RT2: (albedo.rgb, metallic/specIntensity)
 [[vk::binding(3,1)]] Sampler2D uTexRT3; // RT3: shadingModelID
 
-[[vk::binding(0,2)]] SamplerCube uTexEnvironmentCubemap; // skybox
+[[vk::binding(0,2)]] SamplerCube uTexSkyBoxMap; // skybox -> preFilteredEnvironmentMap
 [[vk::binding(1,2)]] SamplerCube uTexIrradianceCubemap; 
+[[vk::binding(2,2)]] SamplerCube uTexEnvironmentMap;  // pbr: prefilter map lut
+[[vk::binding(3,2)]] Sampler2D uTexBrdfLUT;  
+
 
 
 struct FragmentOutput{

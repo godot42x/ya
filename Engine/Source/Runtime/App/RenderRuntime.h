@@ -28,6 +28,7 @@ struct DeferredRenderPipeline;
 struct RenderDocCapture;
 struct Sampler;
 struct EnvironmentLightingComponent;
+struct RenderFrameData;
 
 struct RenderRuntime
 {
@@ -55,6 +56,7 @@ struct RenderRuntime
         glm::mat4               view                     = glm::mat4(1.0f);
         glm::mat4               projection               = glm::mat4(1.0f);
         glm::vec3               cameraPos                = glm::vec3(0.0f);
+        RenderFrameData*        frameData                = nullptr;
     };
 
     App* _app = nullptr;
@@ -63,9 +65,10 @@ struct RenderRuntime
 
     IRender*                                                _render = nullptr;
     stdptr<ICommandBuffer>                                  _offscreenCmdBuf;
+    void*                                                   _offscreenFence   = nullptr;
+    bool                                                    _offscreenPending = false;
     std::vector<std::shared_ptr<ICommandBuffer>>            _commandBuffers;
     std::shared_ptr<ShaderStorage>                          _shaderStorage = nullptr;
-    std::vector<std::pair<std::string, IGraphicsPipeline*>> _monitorPipelines;
 
     ERenderAPI::T currentRenderAPI     = ERenderAPI::None;
     EShadingModel _shadingModel        = EShadingModel::Deferred;
@@ -74,21 +77,31 @@ struct RenderRuntime
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
-    stdptr<IDescriptorPool>      _skyboxDSP             = nullptr;
-    stdptr<IDescriptorSetLayout> _skyboxDSL             = nullptr;
-    stdptr<Sampler>              _skyboxSampler         = nullptr;
-    stdptr<Texture>              _fallbackSkyboxTexture = nullptr;
-    DescriptorSetHandle          _fallbackSkyboxDS      = nullptr;
-    DescriptorSetHandle          _sceneSkyboxDS         = nullptr;
-    Texture*                     _boundSceneSkyboxTexture = nullptr;
+    struct SkyboxResources
+    {
+        stdptr<IDescriptorPool>      dsp               = nullptr;
+        stdptr<IDescriptorSetLayout> dsl               = nullptr;
+        stdptr<Texture>              fallbackTexture   = nullptr;
+        DescriptorSetHandle          fallbackDS        = nullptr;
+        DescriptorSetHandle          sceneDS           = nullptr;
+        Texture*                     boundSceneTexture = nullptr;
+    };
 
-    stdptr<IDescriptorPool>      _environmentLightingDSP            = nullptr;
-    stdptr<IDescriptorSetLayout> _environmentLightingDSL            = nullptr;
-    stdptr<Texture>              _fallbackIrradianceTexture         = nullptr;
-    DescriptorSetHandle          _fallbackEnvironmentLightingDS     = nullptr;
-    DescriptorSetHandle          _sceneEnvironmentLightingDS        = nullptr;
-    Texture*                     _boundEnvironmentCubemapTexture    = nullptr;
-    Texture*                     _boundEnvironmentIrradianceTexture = nullptr;
+    struct EnvironmentLightingResources
+    {
+        stdptr<IDescriptorPool>      dsp                       = nullptr;
+        stdptr<IDescriptorSetLayout> dsl                       = nullptr;
+        DescriptorSetHandle          fallbackDS                = nullptr;
+        DescriptorSetHandle          sceneDS                   = nullptr;
+        stdptr<Texture>              fallbackIrradianceTexture = nullptr;
+        Texture*                     boundCubemapTexture       = nullptr;
+        Texture*                     boundIrradianceTexture    = nullptr;
+    };
+
+    SkyboxResources              _skybox{};
+    EnvironmentLightingResources _environmentLighting{};
+    stdptr<Sampler>              _cubemapSampler = nullptr;
+
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
@@ -118,15 +131,17 @@ struct RenderRuntime
     [[nodiscard]] IRenderTarget*                 getShadowDepthRT() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] Texture*                       getPostprocessOutputTexture() const;
-    [[nodiscard]] bool                           isPostprocessingEnabled() const;
-    [[nodiscard]] stdptr<IDescriptorPool>        getSkyboxDescriptorPool() const { return _skyboxDSP; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout>   getSkyboxDescriptorSetLayout() const { return _skyboxDSL; }
-    [[nodiscard]] Sampler*                       getSkyboxSampler() const { return _skyboxSampler.get(); }
-    [[nodiscard]] DescriptorSetHandle            getFallbackSkyboxDescriptorSet() const { return _fallbackSkyboxDS; }
-    [[nodiscard]] DescriptorSetHandle            getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
-    [[nodiscard]] stdptr<IDescriptorSetLayout>   getEnvironmentLightingDescriptorSetLayout() const { return _environmentLightingDSL; }
-    [[nodiscard]] DescriptorSetHandle            getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
+
+    [[nodiscard]] Texture* getPostprocessOutputTexture() const;
+    [[nodiscard]] bool     isPostprocessingEnabled() const;
+
+    [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _skybox.dsp; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _skybox.dsl; }
+    [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _cubemapSampler.get(); }
+    [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _skybox.fallbackDS; }
+    [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
+    [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
 
     /**
      * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
@@ -142,11 +157,12 @@ struct RenderRuntime
     [[nodiscard]] Extent2D      getViewportExtent() const;
 
   private:
-    void initActivePipeline();
-    void shutdownActivePipeline();
-    void applyPendingShadingModelSwitch();
-    void updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
-    void updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture);
+    void                   initActivePipeline();
+    void                   shutdownActivePipeline();
+    void                   releaseRenderOwnedResources();
+    void                   applyPendingShadingModelSwitch();
+    void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
+    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture);
     [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;
