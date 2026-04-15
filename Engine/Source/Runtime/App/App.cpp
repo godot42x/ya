@@ -392,6 +392,7 @@ void ya::App::quit()
         onQuit();
     }
 
+    _renderFrameData.clear();
     unloadScene();
 
     // CRITICAL: Destroy SceneManager BEFORE LuaScriptingSystem
@@ -808,6 +809,10 @@ void App::onSceneInit(Scene* scene)
 
 void App::onSceneDestroy(Scene* scene)
 {
+    (void)scene;
+
+    _renderFrameData.clear();
+
     // Drop runtime skybox descriptor bindings so scene-local cubemap textures
     // are no longer referenced after the scene is destroyed.
     if (_renderRuntime) {

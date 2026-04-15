@@ -945,7 +945,6 @@ inline auto toVk(T t) -> VkImageViewType
 
 namespace EComponentSwizzle
 {
-using namespace ya::EComponentSwizzle;
 inline auto toVk(T swizzle) -> VkComponentSwizzle
 {
     switch (swizzle) {

@@ -3,7 +3,7 @@
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
 
-#include <vk_mem_alloc.h>
+#include "VulkanMemoryAllocator.h"
 
 namespace ya
 {

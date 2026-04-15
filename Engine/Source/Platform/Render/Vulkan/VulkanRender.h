@@ -28,11 +28,10 @@
 
 #include <Render/Shader.h>
 
+#include "VulkanMemoryAllocator.h"
 
 
 #define panic(...) YA_CORE_ASSERT(false, __VA_ARGS__);
-
-#include <vk_mem_alloc.h>
 
 namespace ya
 {

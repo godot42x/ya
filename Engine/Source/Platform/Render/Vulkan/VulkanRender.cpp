@@ -15,9 +15,6 @@
 #include "Resource/DeferredDeletionQueue.h"
 #include "VulkanUtils.h"
 
-#define VMA_IMPLEMENTATION
-#include <vk_mem_alloc.h>
-
 
 #ifdef _WIN32
     #include <windows.h>
