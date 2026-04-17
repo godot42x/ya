@@ -103,40 +103,92 @@ void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, f
 
 void DetailsView::drawEnvironmentLightingStatus(const EnvironmentLightingComponent& environmentLighting)
 {
-    const char* label = "Status: Unknown";
-    ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+    auto drawSourceBranchState = [](const char* branchLabel,
+                                    EEnvironmentLightingSourceResolveState state,
+                                    const char* emptyLabel = "Empty") {
+        const char* label = emptyLabel;
+        ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
-    switch (environmentLighting.resolveState) {
-    case EEnvironmentLightingResolveState::Empty:
-        label = environmentLighting.usesSceneSkybox() ? "Status: Waiting for scene skybox" : "Status: No environment source";
-        break;
-    case EEnvironmentLightingResolveState::Dirty:
-        label = "Status: Dirty";
-        color = ImVec4(1.0f, 0.85f, 0.35f, 1.0f);
-        break;
-    case EEnvironmentLightingResolveState::ResolvingSource:
-        label = "Status: Resolving source";
-        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
-        break;
-    case EEnvironmentLightingResolveState::PreprocessingEnvironment:
-        label = "Status: Building environment cubemap";
-        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
-        break;
-    case EEnvironmentLightingResolveState::PreprocessingIrradiance:
-        label = "Status: Building irradiance cubemap";
-        color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
-        break;
-    case EEnvironmentLightingResolveState::Ready:
-        label = "Status: Ready";
-        color = ImVec4(0.45f, 1.0f, 0.45f, 1.0f);
-        break;
-    case EEnvironmentLightingResolveState::Failed:
-        label = "Status: Failed";
-        color = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
-        break;
-    }
+        switch (state) {
+        case EEnvironmentLightingSourceResolveState::Empty: {
+            label = emptyLabel;
+        } break;
+        case EEnvironmentLightingSourceResolveState::Dirty: {
+            label = "Dirty";
+            color = ImVec4(1.0f, 0.85f, 0.35f, 1.0f);
+        } break;
+        case EEnvironmentLightingSourceResolveState::ResolvingSource: {
+            label = "Resolving source";
+            color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        } break;
+        case EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap: {
+            label = "Building environment cubemap";
+            color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        } break;
+        case EEnvironmentLightingSourceResolveState::Ready: {
+            label = "Ready";
+            color = ImVec4(0.45f, 1.0f, 0.45f, 1.0f);
+        } break;
+        case EEnvironmentLightingSourceResolveState::Failed: {
+            label = "Failed";
+            color = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
+        } break;
+        }
 
-    ImGui::TextColored(color, "%s", label);
+        ImGui::TextUnformatted(branchLabel);
+        ImGui::SameLine();
+        ImGui::TextColored(color, "%s", label);
+    };
+
+    auto drawDerivedBranchState = [](const char* branchLabel,
+                                     auto state,
+                                     const char* buildingLabel,
+                                     const char* emptyLabel = "Empty") {
+        const char* label = emptyLabel;
+        ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+
+        switch (state) {
+        case decltype(state)::Empty: {
+            label = emptyLabel;
+        } break;
+        case decltype(state)::Disabled: {
+            label = "Disabled";
+            color = ImVec4(0.65f, 0.65f, 0.65f, 1.0f);
+        } break;
+        case decltype(state)::Dirty: {
+            label = "Dirty";
+            color = ImVec4(1.0f, 0.85f, 0.35f, 1.0f);
+        } break;
+        case decltype(state)::Building: {
+            label = buildingLabel;
+            color = ImVec4(0.45f, 0.75f, 1.0f, 1.0f);
+        } break;
+        case decltype(state)::Ready: {
+            label = "Ready";
+            color = ImVec4(0.45f, 1.0f, 0.45f, 1.0f);
+        } break;
+        case decltype(state)::Failed: {
+            label = "Failed";
+            color = ImVec4(1.0f, 0.35f, 0.35f, 1.0f);
+        } break;
+        }
+
+        ImGui::TextUnformatted(branchLabel);
+        ImGui::SameLine();
+        ImGui::TextColored(color, "%s", label);
+    };
+
+    drawSourceBranchState("Source:",
+                          environmentLighting.sourceState,
+                          environmentLighting.usesSceneSkybox() ? "Waiting for scene skybox" : "No environment source");
+    drawDerivedBranchState("Irradiance:",
+                           environmentLighting.irradianceState,
+                           "Building irradiance map",
+                           "Waiting for source");
+    drawDerivedBranchState("Prefilter:",
+                           environmentLighting.prefilterState,
+                           "Building prefilter map",
+                           "Waiting for source");
 }
 
 void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
@@ -154,6 +206,18 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
         if (ImGui::DragInt("Irradiance Face Size", &irradianceFaceSize, 1.0f, 4, 256)) {
             elc->irradianceFaceSize = static_cast<uint32_t>(std::max(4, irradianceFaceSize));
             bSourceChanged          = true;
+        }
+
+        bool bEnableIrradiance = elc->bEnableIrradiance;
+        if (ImGui::Checkbox("Enable Irradiance", &bEnableIrradiance)) {
+            elc->bEnableIrradiance = bEnableIrradiance;
+            bSourceChanged         = true;
+        }
+
+        bool bEnablePrefilter = elc->bEnablePrefilter;
+        if (ImGui::Checkbox("Enable Prefilter", &bEnablePrefilter)) {
+            elc->bEnablePrefilter = bEnablePrefilter;
+            bSourceChanged        = true;
         }
 
         ImGui::Separator();
@@ -220,6 +284,9 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
 
         ImGui::Separator();
         drawEnvironmentLightingStatus(*elc);
+        if (elc->bEnablePrefilter) {
+            ImGui::TextDisabled("Prefilter cubemap will appear in DebugWindow after resolve completes.");
+        }
         if (elc->isLoading()) {
             ImGui::TextDisabled("Waiting for environment-lighting resolve to finish");
         }

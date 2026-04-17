@@ -1,4 +1,4 @@
-import Common.Helper;
+#include "Common/Helper.slang"
 
 // Precompute
 // Irradiance convolution computing

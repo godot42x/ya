@@ -1,18 +1,15 @@
-
-// module Helper;
 #pragma once
-#define public
 
 static const float PI = 3.14159265358979323846;
 
-public typealias mat3 = float3x3;
-public typealias mat4 = float4x4;
-public typealias vec2 = float2;
-public typealias vec3 = float3;
-public typealias vec4 = float4;
+typealias mat3 = float3x3;
+typealias mat4 = float4x4;
+typealias vec2 = float2;
+typealias vec3 = float3;
+typealias vec4 = float4;
 
 
-public inline float3x3 inverse3x3(float3x3  m)
+inline float3x3 inverse3x3(float3x3  m)
 {
     float3 c0 = m[0], c1 = m[1], c2 = m[2];
     float3 t0 = cross(c1, c2);
@@ -30,14 +27,14 @@ public inline float3x3 inverse3x3(float3x3  m)
 
 
 // Matrix-vector multiplication overloads
-public inline float4 operator*(float4x4 mat, float4 vec) { return mul(mat, vec); }
-public inline float3 operator*(float3x3 mat, float3 vec) { return mul(mat, vec); }
-public inline float2 operator*(float2x2 mat, float2 vec) { return mul(mat, vec); }
+inline float4 operator*(float4x4 mat, float4 vec) { return mul(mat, vec); }
+inline float3 operator*(float3x3 mat, float3 vec) { return mul(mat, vec); }
+inline float2 operator*(float2x2 mat, float2 vec) { return mul(mat, vec); }
 
 // Matrix-matrix multiplication overloads
-public inline float4x4 operator*(float4x4 a, float4x4 b) { return mul(a, b); }
-public inline float3x3 operator*(float3x3 a, float3x3 b) { return mul(a, b); }
-public inline float2x2 operator*(float2x2 a, float2x2 b) { return mul(a, b); }
+inline float4x4 operator*(float4x4 a, float4x4 b) { return mul(a, b); }
+inline float3x3 operator*(float3x3 a, float3x3 b) { return mul(a, b); }
+inline float2x2 operator*(float2x2 a, float2x2 b) { return mul(a, b); }
 
 
 

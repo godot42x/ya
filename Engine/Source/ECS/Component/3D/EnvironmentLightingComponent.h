@@ -18,33 +18,92 @@ enum class EEnvironmentLightingSourceType : uint8_t
     Cylindrical,
 };
 
-enum class EEnvironmentLightingResolveState : uint8_t
+enum class EEnvironmentLightingSourceResolveState : uint8_t
 {
     Empty = 0,
     Dirty,
     ResolvingSource,
-    PreprocessingEnvironment,
-    PreprocessingIrradiance,
+    BuildingEnvironmentCubemap,
     Ready,
     Failed,
 };
 
 template <>
-struct StateTraits<EEnvironmentLightingResolveState>
+struct StateTraits<EEnvironmentLightingSourceResolveState>
 {
     static constexpr bool hasFailedState    = true;
     static constexpr bool hasTerminalStates = true;
 
-    static constexpr EEnvironmentLightingResolveState failedState()
+    static constexpr EEnvironmentLightingSourceResolveState failedState()
     {
-        return EEnvironmentLightingResolveState::Failed;
+        return EEnvironmentLightingSourceResolveState::Failed;
     }
 
-    static constexpr bool isTerminal(EEnvironmentLightingResolveState state)
+    static constexpr bool isTerminal(EEnvironmentLightingSourceResolveState state)
     {
-        return state == EEnvironmentLightingResolveState::Empty ||
-               state == EEnvironmentLightingResolveState::Ready ||
-               state == EEnvironmentLightingResolveState::Failed;
+        return state == EEnvironmentLightingSourceResolveState::Empty ||
+               state == EEnvironmentLightingSourceResolveState::Ready ||
+               state == EEnvironmentLightingSourceResolveState::Failed;
+    }
+};
+
+enum class EEnvironmentLightingIrradianceResolveState : uint8_t
+{
+    Empty = 0,
+    Disabled,
+    Dirty,
+    Building,
+    Ready,
+    Failed,
+};
+
+template <>
+struct StateTraits<EEnvironmentLightingIrradianceResolveState>
+{
+    static constexpr bool hasFailedState    = true;
+    static constexpr bool hasTerminalStates = true;
+
+    static constexpr EEnvironmentLightingIrradianceResolveState failedState()
+    {
+        return EEnvironmentLightingIrradianceResolveState::Failed;
+    }
+
+    static constexpr bool isTerminal(EEnvironmentLightingIrradianceResolveState state)
+    {
+        return state == EEnvironmentLightingIrradianceResolveState::Empty ||
+               state == EEnvironmentLightingIrradianceResolveState::Disabled ||
+               state == EEnvironmentLightingIrradianceResolveState::Ready ||
+               state == EEnvironmentLightingIrradianceResolveState::Failed;
+    }
+};
+
+enum class EEnvironmentLightingPrefilterResolveState : uint8_t
+{
+    Empty = 0,
+    Disabled,
+    Dirty,
+    Building,
+    Ready,
+    Failed,
+};
+
+template <>
+struct StateTraits<EEnvironmentLightingPrefilterResolveState>
+{
+    static constexpr bool hasFailedState    = true;
+    static constexpr bool hasTerminalStates = true;
+
+    static constexpr EEnvironmentLightingPrefilterResolveState failedState()
+    {
+        return EEnvironmentLightingPrefilterResolveState::Failed;
+    }
+
+    static constexpr bool isTerminal(EEnvironmentLightingPrefilterResolveState state)
+    {
+        return state == EEnvironmentLightingPrefilterResolveState::Empty ||
+               state == EEnvironmentLightingPrefilterResolveState::Disabled ||
+               state == EEnvironmentLightingPrefilterResolveState::Ready ||
+               state == EEnvironmentLightingPrefilterResolveState::Failed;
     }
 };
 
@@ -80,16 +139,22 @@ struct EnvironmentLightingComponent : public IComponent
     YA_REFLECT_FIELD(sourceType)
     YA_REFLECT_FIELD(cubemapSource)
     YA_REFLECT_FIELD(cylindricalSource)
+    YA_REFLECT_FIELD(bEnableIrradiance)
+    YA_REFLECT_FIELD(bEnablePrefilter)
     YA_REFLECT_FIELD(irradianceFaceSize)
     YA_REFLECT_END()
 
     EEnvironmentLightingSourceType sourceType = EEnvironmentLightingSourceType::SceneSkybox;
     CubemapSource                  cubemapSource;
     CylindricalSource              cylindricalSource;
+    bool                           bEnableIrradiance = true;
+    bool                           bEnablePrefilter  = true;
     uint32_t                       irradianceFaceSize = 32;
     uint64_t                       authoringVersion   = 1;
 
-    EEnvironmentLightingResolveState resolveState      = EEnvironmentLightingResolveState::Dirty;
+    EEnvironmentLightingSourceResolveState     sourceState     = EEnvironmentLightingSourceResolveState::Dirty;
+    EEnvironmentLightingIrradianceResolveState irradianceState = EEnvironmentLightingIrradianceResolveState::Dirty;
+    EEnvironmentLightingPrefilterResolveState  prefilterState  = EEnvironmentLightingPrefilterResolveState::Dirty;
 
     void setFace(ECubeFace face, const std::string& path);
     void setCubemapSource(const CubeMapCreateInfo& createInfo);
@@ -114,6 +179,9 @@ struct EnvironmentLightingComponent : public IComponent
     bool     hasCylindricalSource() const;
     void     invalidate();
     bool     isLoading() const;
+    bool     hasReadySource() const;
+    bool     hasReadyIrradiance() const;
+    bool     hasReadyPrefilter() const;
     uint32_t getResolvedIrradianceFaceSize() const;
     void     onPostSerialize() override;
 };
@@ -126,12 +194,29 @@ YA_REFLECT_ENUM_VALUE(CubeFaces)
 YA_REFLECT_ENUM_VALUE(Cylindrical)
 YA_REFLECT_ENUM_END()
 
-YA_REFLECT_ENUM_BEGIN(ya::EEnvironmentLightingResolveState)
+YA_REFLECT_ENUM_BEGIN(ya::EEnvironmentLightingSourceResolveState)
 YA_REFLECT_ENUM_VALUE(Empty)
 YA_REFLECT_ENUM_VALUE(Dirty)
 YA_REFLECT_ENUM_VALUE(ResolvingSource)
-YA_REFLECT_ENUM_VALUE(PreprocessingEnvironment)
-YA_REFLECT_ENUM_VALUE(PreprocessingIrradiance)
+YA_REFLECT_ENUM_VALUE(BuildingEnvironmentCubemap)
+YA_REFLECT_ENUM_VALUE(Ready)
+YA_REFLECT_ENUM_VALUE(Failed)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EEnvironmentLightingIrradianceResolveState)
+YA_REFLECT_ENUM_VALUE(Empty)
+YA_REFLECT_ENUM_VALUE(Disabled)
+YA_REFLECT_ENUM_VALUE(Dirty)
+YA_REFLECT_ENUM_VALUE(Building)
+YA_REFLECT_ENUM_VALUE(Ready)
+YA_REFLECT_ENUM_VALUE(Failed)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EEnvironmentLightingPrefilterResolveState)
+YA_REFLECT_ENUM_VALUE(Empty)
+YA_REFLECT_ENUM_VALUE(Disabled)
+YA_REFLECT_ENUM_VALUE(Dirty)
+YA_REFLECT_ENUM_VALUE(Building)
 YA_REFLECT_ENUM_VALUE(Ready)
 YA_REFLECT_ENUM_VALUE(Failed)
 YA_REFLECT_ENUM_END()

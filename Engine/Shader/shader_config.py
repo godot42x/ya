@@ -38,7 +38,21 @@ def _to_define_literal(value: int | float | str | bool) -> str:
     return str(value)
 
 
-def build_limits_content(config_path: str | Path) -> str:
+def build_glsl_limits_content(config_path: str | Path) -> str:
+    defines = extract_shader_defines(config_path)
+    header_lines = [
+        f"// Auto-generated from {config_path} - DO NOT EDIT.",
+        "// Modify Engine.jsonc shader.defines instead.",
+        "",
+    ]
+    for name, value in defines.items():
+        header_lines.append(f"#undef {name}")
+        header_lines.append(f"#define {name} {_to_define_literal(value)}")
+    header_lines.append("")
+    return "\n".join(header_lines)
+
+
+def build_slang_limits_content(config_path: str | Path) -> str:
     defines = extract_shader_defines(config_path)
     header_lines = [
         f"// Auto-generated from {config_path} - DO NOT EDIT.",
@@ -63,10 +77,11 @@ def write_if_changed(path: str | Path, content: str) -> bool:
 
 
 def sync_limits_files(config_path: str | Path, glsl_path: str | Path, slang_path: str | Path) -> None:
-    content = build_limits_content(config_path)
-    if write_if_changed(glsl_path, content):
+    glsl_content = build_glsl_limits_content(config_path)
+    slang_content = build_slang_limits_content(config_path)
+    if write_if_changed(glsl_path, glsl_content):
         print(f"[shader-config] Generated {glsl_path}")
-    if write_if_changed(slang_path, content):
+    if write_if_changed(slang_path, slang_content):
         print(f"[shader-config] Generated {slang_path}")
 
 

@@ -1461,14 +1461,25 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     }
     slangVfs->release(); // session holds a ref
 
+    auto buildModuleName = [&](std::string_view sourceFilePath) -> std::string {
+        const auto sourcePath = std::filesystem::path(sourceFilePath);
+        auto              relativePath   = sourcePath.lexically_relative(shaderStoragePath);
+        const std::string relativeString = relativePath.generic_string();
+        if (relativePath.empty() || relativeString == ".." || relativeString.starts_with("../")) {
+            relativePath = sourcePath.filename();
+        }
+
+        relativePath.replace_extension();
+        return relativePath.generic_string();
+    };
+
     // 3. Load module from source string
     Slang::ComPtr<slang::IBlob> diagBlob;
 
     auto* srcBlob = new SlangStringBlob();
     srcBlob->data = std::string(source);
 
-    // Module name derived from file path (without extension)
-    std::string moduleName = std::filesystem::path(filePath).stem().string();
+    const std::string moduleName = buildModuleName(filePath);
 
     Slang::ComPtr<slang::IModule> slangModule;
     slangModule = session->loadModuleFromSource(
@@ -1514,10 +1525,23 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
         return false;
     }
 
+    Slang::ComPtr<slang::IComponentType> linkedProgram;
+    Slang::ComPtr<slang::IBlob>          programDiag;
+    if (SLANG_FAILED(composedProgram->link(linkedProgram.writeRef(), programDiag.writeRef())))
+    {
+        if (programDiag && programDiag->getBufferSize() > 0)
+        {
+            std::string_view d(static_cast<const char*>(programDiag->getBufferPointer()),
+                               programDiag->getBufferSize());
+            YA_CORE_ERROR("[Slang] Link error for {}:\n{}", filePath, d);
+        }
+        return false;
+    }
+
     // 6. Get SPIR-V code for entry point 0, target 0
     Slang::ComPtr<slang::IBlob> spvBlob;
     Slang::ComPtr<slang::IBlob> codeDiag;
-    if (SLANG_FAILED(composedProgram->getEntryPointCode(0, 0, spvBlob.writeRef(), codeDiag.writeRef())))
+    if (SLANG_FAILED(linkedProgram->getEntryPointCode(0, 0, spvBlob.writeRef(), codeDiag.writeRef())))
     {
         if (codeDiag && codeDiag->getBufferSize() > 0)
         {

@@ -4,6 +4,7 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 
@@ -63,12 +64,12 @@ struct RenderRuntime
 
     ut::StackDeleter _deleter;
 
-    IRender*                                                _render = nullptr;
-    stdptr<ICommandBuffer>                                  _offscreenCmdBuf;
-    void*                                                   _offscreenFence   = nullptr;
-    bool                                                    _offscreenPending = false;
-    std::vector<std::shared_ptr<ICommandBuffer>>            _commandBuffers;
-    std::shared_ptr<ShaderStorage>                          _shaderStorage = nullptr;
+    IRender*                                     _render = nullptr;
+    stdptr<ICommandBuffer>                       _offscreenCmdBuf;
+    void*                                        _offscreenFence   = nullptr;
+    bool                                         _offscreenPending = false;
+    std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
+    std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T currentRenderAPI     = ERenderAPI::None;
     EShadingModel _shadingModel        = EShadingModel::Deferred;
@@ -94,13 +95,23 @@ struct RenderRuntime
         DescriptorSetHandle          fallbackDS                = nullptr;
         DescriptorSetHandle          sceneDS                   = nullptr;
         stdptr<Texture>              fallbackIrradianceTexture = nullptr;
+        stdptr<Texture>              fallbackPrefilterTexture  = nullptr;
         Texture*                     boundCubemapTexture       = nullptr;
         Texture*                     boundIrradianceTexture    = nullptr;
+        Texture*                     boundPrefilterTexture     = nullptr;
+    };
+    struct SharedResources
+    {
+        stdptr<Texture> pbrLUT = nullptr;
     };
 
     SkyboxResources              _skybox{};
     EnvironmentLightingResources _environmentLighting{};
+    SharedResources              _sharedResources{};
     stdptr<Sampler>              _cubemapSampler = nullptr;
+
+    // pipeline tool
+    PBRGenerateBrdfLUT           _pbrGenerateBrdfLUT{};
 
 
     Rect2D _viewportRect{};
@@ -162,10 +173,11 @@ struct RenderRuntime
     void                   releaseRenderOwnedResources();
     void                   applyPendingShadingModelSwitch();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
-    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture);
+    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, Texture* brdfLutTexture);
     [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;
+    [[nodiscard]] Texture* findSceneEnvironmentPrefilterTexture(Scene* scene) const;
 };
 
 } // namespace ya

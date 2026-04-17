@@ -105,6 +105,21 @@ static std::string buildDebugGroupItemConfigKey(const std::string& groupLabel, u
     return std::format("debugWindow.debugGroupViewerSelection.{}_item_{}", normalized, itemIndex);
 }
 
+static std::string buildDebugGroupSelectionConfigKey(const std::string& groupLabel)
+{
+    std::string normalized;
+    normalized.reserve(groupLabel.size() + 16);
+    for (char ch : groupLabel) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
+            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        else {
+            normalized.push_back('_');
+        }
+    }
+    return std::format("debugWindow.debugGroupSelection.{}", normalized);
+}
+
 static const char* const kCubeFaceLabels[6] = {
     "PosX",
     "NegX",
@@ -942,6 +957,44 @@ void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
         _debugImageSlotStates.resize(_viewportCtx.debugSpec.slots.size());
     }
 
+    auto renderCubeFaceSelector = [&](int& selectedFace, bool& anySelectionChanged) {
+        for (uint32_t rowIndex = 0; rowIndex < 2; ++rowIndex) {
+            float totalSpacing = GetStyle().ItemSpacing.x * 2.0f;
+            float buttonWidth  = (GetContentRegionAvail().x - totalSpacing) / 3.0f;
+            for (uint32_t columnIndex = 0; columnIndex < 3; ++columnIndex) {
+                const uint32_t faceIndex   = rowIndex * 3 + columnIndex;
+                const bool     bSelected   = (selectedFace == static_cast<int>(faceIndex));
+                ImVec4         buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
+                ImVec4         hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
+                ImVec4         activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
+
+                ya::ImGuiStyleScope buttonStyle;
+                buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
+                buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
+                buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
+                if (Button(kCubeFaceLabels[faceIndex], ImVec2(buttonWidth, 0.0f))) {
+                    selectedFace        = static_cast<int>(faceIndex);
+                    anySelectionChanged = true;
+                }
+
+                if (columnIndex < 2) {
+                    SameLine();
+                }
+            }
+        }
+    };
+
+    auto renderSlotViewer = [&](uint32_t slotIndex) {
+        auto& slot  = _viewportCtx.debugSpec.slots[slotIndex];
+        auto& state = _debugImageSlotStates[slotIndex];
+        syncDebugSlotState(slot, state);
+        bool maskChanged = renderDebugSlotMaskControls(slot, state);
+        updateDebugSlotImageView(slot, state, maskChanged);
+        const float viewerWidth  = GetContentRegionAvail().x;
+        const float viewerHeight = std::min(viewerWidth, panelSize.x);
+        renderDebugSlotImage(slot, state, viewerWidth, viewerHeight, sampler);
+    };
+
     for (int groupIndex = 0; groupIndex < static_cast<int>(groups.size()); ++groupIndex) {
         const auto& group = groups[groupIndex];
         if (group.slotCount == 0 || group.beginIndex >= _viewportCtx.debugSpec.slots.size()) {
@@ -963,9 +1016,13 @@ void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
         auto&             groupState = _debugGroupStates[groupIndex];
         const std::string configKey  = buildDebugGroupConfigKey(group.label);
         if (groupState.configKey != configKey) {
-            groupState.configKey = configKey;
+            groupState.configKey        = configKey;
+            groupState.selectedGroupIndex = 0;
             groupState.selectedSlots.clear();
+            (void)ConfigManager::get().tryGet<int>("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
         }
+
+        groupState.selectedGroupIndex = std::clamp(groupState.selectedGroupIndex, 0, static_cast<int>(groupCount) - 1);
 
         if (static_cast<uint32_t>(groupState.selectedSlots.size()) != groupCount) {
             groupState.selectedSlots.assign(groupCount, 0);
@@ -982,82 +1039,83 @@ void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
         }
 
         PushID(group.label.c_str());
-
         bool anySelectionChanged = false;
 
-        const int viewerColumns = std::max(1, std::min(2, static_cast<int>(groupCount)));
-        if (BeginTable("DebugGroupViewerTable", viewerColumns, ImGuiTableFlags_BordersInnerV)) {
-            for (int columnIndex = 0; columnIndex < viewerColumns; ++columnIndex) {
-                TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            }
-
+        if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces && groupSize == CubeFace_Count) {
+            std::string comboItems;
             for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-                if (groupItemIndex % static_cast<uint32_t>(viewerColumns) == 0) {
-                    TableNextRow();
-                }
-                TableSetColumnIndex(static_cast<int>(groupItemIndex % static_cast<uint32_t>(viewerColumns)));
-                PushID(static_cast<int>(groupItemIndex));
-
-                const uint32_t slotBase     = group.beginIndex + groupItemIndex * groupSize;
-                int&           selectedFace = groupState.selectedSlots[groupItemIndex];
-                selectedFace                = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
-
-                Text("Viewer %u", groupItemIndex);
-
-                if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == 6) {
-                    for (uint32_t rowIndex = 0; rowIndex < 2; ++rowIndex) {
-                        float totalSpacing = GetStyle().ItemSpacing.x * 2.0f;
-                        float buttonWidth  = (GetContentRegionAvail().x - totalSpacing) / 3.0f;
-                        for (uint32_t columnIndex = 0; columnIndex < 3; ++columnIndex) {
-                            const uint32_t faceIndex   = rowIndex * 3 + columnIndex;
-                            const bool     bSelected   = (selectedFace == static_cast<int>(faceIndex));
-                            ImVec4         buttonColor = bSelected ? ImVec4(0.22f, 0.58f, 0.98f, 0.95f) : ImVec4(0.18f, 0.20f, 0.24f, 0.85f);
-                            ImVec4         hoverColor  = bSelected ? ImVec4(0.30f, 0.66f, 1.00f, 1.00f) : ImVec4(0.24f, 0.27f, 0.32f, 0.95f);
-                            ImVec4         activeColor = bSelected ? ImVec4(0.16f, 0.48f, 0.88f, 1.00f) : ImVec4(0.20f, 0.23f, 0.28f, 1.00f);
-
-                            ya::ImGuiStyleScope buttonStyle;
-                            buttonStyle.pushColor(ImGuiCol_Button, buttonColor);
-                            buttonStyle.pushColor(ImGuiCol_ButtonHovered, hoverColor);
-                            buttonStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
-                            if (Button(kCubeFaceLabels[faceIndex], ImVec2(buttonWidth, 0.0f))) {
-                                selectedFace        = static_cast<int>(faceIndex);
-                                anySelectionChanged = true;
-                            }
-
-                            if (columnIndex < 2) {
-                                SameLine();
-                            }
-                        }
-                    }
+                if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
+                    comboItems += group.itemLabels[groupItemIndex];
                 }
                 else {
-                    std::string comboItems;
-                    for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
-                        comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
-                        comboItems.push_back('\0');
-                    }
-                    comboItems.push_back('\0');
-                    if (Combo("Viewer", &selectedFace, comboItems.c_str())) {
-                        anySelectionChanged = true;
-                    }
+                    comboItems += std::format("Mip {}", groupItemIndex);
                 }
+                comboItems.push_back('\0');
+            }
+            comboItems.push_back('\0');
 
-                auto& slot  = _viewportCtx.debugSpec.slots[slotBase + static_cast<uint32_t>(selectedFace)];
-                auto& state = _debugImageSlotStates[slotBase + static_cast<uint32_t>(selectedFace)];
-                syncDebugSlotState(slot, state);
-                bool maskChanged = renderDebugSlotMaskControls(slot, state);
-                updateDebugSlotImageView(slot, state, maskChanged);
-                const float viewerWidth  = GetContentRegionAvail().x;
-                const float viewerHeight = std::min(viewerWidth, panelSize.x);
-                renderDebugSlotImage(slot, state, viewerWidth, viewerHeight, sampler);
-
-                PopID();
+            if (Combo("Mip", &groupState.selectedGroupIndex, comboItems.c_str())) {
+                anySelectionChanged = true;
             }
 
-            EndTable();
+            const uint32_t selectedGroup = static_cast<uint32_t>(groupState.selectedGroupIndex);
+            const uint32_t slotBase      = group.beginIndex + selectedGroup * groupSize;
+            int&           selectedFace  = groupState.selectedSlots[selectedGroup];
+            selectedFace                 = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
+
+            renderCubeFaceSelector(selectedFace, anySelectionChanged);
+            renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
+        }
+        else {
+            const int viewerColumns = std::max(1, std::min(2, static_cast<int>(groupCount)));
+            if (BeginTable("DebugGroupViewerTable", viewerColumns, ImGuiTableFlags_BordersInnerV)) {
+                for (int columnIndex = 0; columnIndex < viewerColumns; ++columnIndex) {
+                    TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                }
+
+                for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+                    if (groupItemIndex % static_cast<uint32_t>(viewerColumns) == 0) {
+                        TableNextRow();
+                    }
+                    TableSetColumnIndex(static_cast<int>(groupItemIndex % static_cast<uint32_t>(viewerColumns)));
+                    PushID(static_cast<int>(groupItemIndex));
+
+                    const uint32_t slotBase     = group.beginIndex + groupItemIndex * groupSize;
+                    int&           selectedFace = groupState.selectedSlots[groupItemIndex];
+                    selectedFace                = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
+
+                    if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
+                        TextUnformatted(group.itemLabels[groupItemIndex].c_str());
+                    }
+                    else {
+                        Text("Viewer %u", groupItemIndex);
+                    }
+
+                    if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == CubeFace_Count) {
+                        renderCubeFaceSelector(selectedFace, anySelectionChanged);
+                    }
+                    else {
+                        std::string comboItems;
+                        for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
+                            comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
+                            comboItems.push_back('\0');
+                        }
+                        comboItems.push_back('\0');
+                        if (Combo("Viewer", &selectedFace, comboItems.c_str())) {
+                            anySelectionChanged = true;
+                        }
+                    }
+
+                    renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
+                    PopID();
+                }
+
+                EndTable();
+            }
         }
 
         if (anySelectionChanged) {
+            ConfigManager::get().set("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
             for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
                 ConfigManager::get().set("editor",
                                          buildDebugGroupItemConfigKey(group.label, groupItemIndex),

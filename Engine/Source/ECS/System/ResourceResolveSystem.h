@@ -4,11 +4,12 @@
 #include "Core/System/System.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "Render/Pipelines/CubeMap2IrradianceMap.h"
+#include "Render/Core/OffscreenJob.h"
+#include "Render/Pipelines/CubeMap2PBRIrradianceMap.h"
+#include "Render/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Render/Pipelines/EquidistantCylindrical2CubeMap.h"
 #include "Resource/AssetManager.h"
 
-#include <functional>
 #include <unordered_map>
 
 namespace ya
@@ -25,49 +26,6 @@ struct SkyboxPendingBatchLoadState
     AssetManager::TextureBatchMemoryHandle batchHandle = 0;
 };
 
-enum class EOffscreenPrecomputeOutputType
-{
-    Texture2D,
-    Cubemap,
-};
-
-struct OffscreenPrecomputeOutputSpec
-{
-    EOffscreenPrecomputeOutputType outputType = EOffscreenPrecomputeOutputType::Cubemap;
-    std::string                    label;
-    uint32_t                       width      = 0;
-    uint32_t                       height     = 0;
-    EFormat::T                     format     = EFormat::Undefined;
-    int                            mipLevels  = 1;
-    uint32_t                       layerCount = 1;
-
-    [[nodiscard]] bool isValid() const
-    {
-        return !label.empty() && width > 0 && height > 0 && format != EFormat::Undefined && mipLevels > 0 && layerCount > 0;
-    }
-};
-
-struct OffscreenPrecomputeJobState
-{
-    // Self-describing execution: the lambda captures the concrete pipeline and its parameters.
-    using ExecuteFn = std::function<bool(ICommandBuffer* cmdBuf, Texture* output)>;
-    ExecuteFn executeFn;
-
-    OffscreenPrecomputeOutputSpec outputSpec;
-    stdptr<Texture>               sourceTexture  = nullptr;
-    stdptr<Texture>               outputTexture  = nullptr;
-    bool                          bTaskQueued    = false;
-    bool                          bTaskFinished  = false;
-    bool                          bTaskSucceeded = false;
-    bool                          bCancelled     = false;
-
-    [[nodiscard]] bool isReadyToQueue() const
-    {
-        return executeFn && sourceTexture && sourceTexture->getImageView() &&
-               outputSpec.isValid() && !bTaskQueued;
-    }
-};
-
 struct SkyboxRuntimeState
 {
     uint64_t                                       authoringVersion     = 0;
@@ -75,8 +33,8 @@ struct SkyboxRuntimeState
     stdptr<Texture>                                cubemapTexture       = nullptr;
     stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
-    std::shared_ptr<SkyboxPendingBatchLoadState>   pendingBatchLoad;
-    std::shared_ptr<OffscreenPrecomputeJobState>   pendingOffscreenProcess;
+    std::shared_ptr<SkyboxPendingBatchLoadState>   pendingBatchLoadState;
+    std::shared_ptr<OffscreenJobState>             pendingOffscreenProcess;
     std::optional<TextureFuture>                   pendingCylindricalFuture;
 
     [[nodiscard]] bool hasRenderableCubemap() const
@@ -97,9 +55,11 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
     stdptr<Texture>                                           cubemapTexture               = nullptr;
     stdptr<Texture>                                           irradianceTexture            = nullptr;
+    stdptr<Texture>                                           prefilterTexture             = nullptr;
     std::shared_ptr<EnvironmentLightingPendingBatchLoadState> pendingBatchLoad;
-    std::shared_ptr<OffscreenPrecomputeJobState>              pendingEnvironmentOffscreen;
-    std::shared_ptr<OffscreenPrecomputeJobState>              pendingIrradianceOffscreen;
+    std::shared_ptr<OffscreenJobState>                        pendingEnvironmentOffscreen;
+    std::shared_ptr<OffscreenJobState>                        pendingIrradianceOffscreen;
+    std::shared_ptr<OffscreenJobState>                        pendingPrefilterOffscreen;
     std::optional<TextureFuture>                              pendingCylindricalFuture;
 
     [[nodiscard]] bool hasRenderableCubemap() const
@@ -111,14 +71,19 @@ struct EnvironmentLightingRuntimeState
     {
         return irradianceTexture && irradianceTexture->getImageView();
     }
+
+    [[nodiscard]] bool hasPrefilterMap() const
+    {
+        return prefilterTexture && prefilterTexture->getImageView();
+    }
 };
 
 // ── Read-only preview types for Editor / debug rendering ──────────────
 
 struct SkyboxPreviewInfo
 {
-    Texture*                                sourcePreviewTexture  = nullptr;
-    Texture*                                cubemapTexture        = nullptr;
+    Texture*                                sourcePreviewTexture = nullptr;
+    Texture*                                cubemapTexture       = nullptr;
     std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
     bool                                    bHasRenderableCubemap = false;
 };
@@ -127,8 +92,10 @@ struct EnvironmentLightingPreviewInfo
 {
     Texture* cubemapTexture        = nullptr;
     Texture* irradianceTexture     = nullptr;
+    Texture* prefilterTexture      = nullptr;
     bool     bHasRenderableCubemap = false;
     bool     bHasIrradianceMap     = false;
+    bool     bHasPrefilterMap      = false;
 };
 
 
@@ -137,7 +104,8 @@ struct ResourceResolveSystem : public ISystem
 
   private:
     EquidistantCylindrical2CubeMap                                    _equidistantCylindrical2CubeMap;
-    CubeMap2IrradianceMap                                             _cubeMap2IrradianceMap;
+    CubeMap2PBRIrradianceMap                                          _cubeMap2IrradianceMap;
+    CubeMap2PBRPrefilteredEnv                                         _cubeMap2PrefilterPipeline;
     Scene*                                                            _pendingStateScene = nullptr;
     std::unordered_map<entt::entity, SkyboxRuntimeState>              _skyboxStates;
     std::unordered_map<entt::entity, EnvironmentLightingRuntimeState> _environmentStates;
@@ -163,11 +131,10 @@ struct ResourceResolveSystem : public ISystem
     void resolvePendingSkybox(Scene* scene);
     void resolvePendingEnvironmentLighting(Scene* scene);
 
-    void queueOffscreenPrecomputeJob(const std::shared_ptr<OffscreenPrecomputeJobState>& job);
-
     // Pipeline accessors — used by step functions to bind concrete execute lambdas
     EquidistantCylindrical2CubeMap& getCylindrical2CubePipeline() { return _equidistantCylindrical2CubeMap; }
-    CubeMap2IrradianceMap&          getCube2IrradiancePipeline() { return _cubeMap2IrradianceMap; }
+    CubeMap2PBRIrradianceMap&       getCube2IrradiancePipeline() { return _cubeMap2IrradianceMap; }
+    CubeMap2PBRPrefilteredEnv&      getCube2PrefilterPipeline() { return _cubeMap2PrefilterPipeline; }
 
     // ── Internal state queries (used by rendering) ────────────────────
     [[nodiscard]] const SkyboxRuntimeState*              findSkyboxState(entt::entity entity) const;
@@ -177,6 +144,7 @@ struct ResourceResolveSystem : public ISystem
     [[nodiscard]] Texture*                               findSceneSkyboxTexture(Scene* scene) const;
     [[nodiscard]] Texture*                               findSceneEnvironmentCubemapTexture(Scene* scene) const;
     [[nodiscard]] Texture*                               findSceneEnvironmentIrradianceTexture(Scene* scene) const;
+    [[nodiscard]] Texture*                               findSceneEnvironmentPrefilterTexture(Scene* scene) const;
 
     // Shared-ownership texture queries (for snapshot lifetime safety)
     [[nodiscard]] stdptr<Texture> findSceneSkyboxTextureShared(Scene* scene) const;

@@ -3,6 +3,27 @@
 namespace ya
 {
 
+namespace
+{
+
+bool isEnvironmentLightingSourceStateLoading(EEnvironmentLightingSourceResolveState state)
+{
+    return state == EEnvironmentLightingSourceResolveState::ResolvingSource ||
+           state == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap;
+}
+
+bool isEnvironmentLightingIrradianceStateLoading(EEnvironmentLightingIrradianceResolveState state)
+{
+    return state == EEnvironmentLightingIrradianceResolveState::Building;
+}
+
+bool isEnvironmentLightingPrefilterStateLoading(EEnvironmentLightingPrefilterResolveState state)
+{
+    return state == EEnvironmentLightingPrefilterResolveState::Building;
+}
+
+} // namespace
+
 bool EnvironmentLightingComponent::CubemapSource::hasAllFaces() const
 {
     for (const auto& file : files) {
@@ -57,16 +78,43 @@ bool EnvironmentLightingComponent::hasCylindricalSource() const
 void EnvironmentLightingComponent::invalidate()
 {
     ++authoringVersion;
-    auto transition = makeTransition(resolveState, "EnvironmentLighting");
-    transition.to(hasSource() ? EEnvironmentLightingResolveState::Dirty : EEnvironmentLightingResolveState::Empty,
-                  "invalidate");
+    const bool bHasSource = hasSource();
+
+    makeTransition(sourceState, "EnvironmentLighting.Source")
+        .to(bHasSource ? EEnvironmentLightingSourceResolveState::Dirty : EEnvironmentLightingSourceResolveState::Empty,
+            "invalidate");
+    makeTransition(irradianceState, "EnvironmentLighting.Irradiance")
+        .to(bEnableIrradiance ? (bHasSource ? EEnvironmentLightingIrradianceResolveState::Dirty
+                                            : EEnvironmentLightingIrradianceResolveState::Empty)
+                              : EEnvironmentLightingIrradianceResolveState::Disabled,
+            "invalidate");
+    makeTransition(prefilterState, "EnvironmentLighting.Prefilter")
+        .to(bEnablePrefilter ? (bHasSource ? EEnvironmentLightingPrefilterResolveState::Dirty
+                                           : EEnvironmentLightingPrefilterResolveState::Empty)
+                             : EEnvironmentLightingPrefilterResolveState::Disabled,
+            "invalidate");
 }
 
 bool EnvironmentLightingComponent::isLoading() const
 {
-    return resolveState == EEnvironmentLightingResolveState::ResolvingSource ||
-           resolveState == EEnvironmentLightingResolveState::PreprocessingEnvironment ||
-           resolveState == EEnvironmentLightingResolveState::PreprocessingIrradiance;
+    return isEnvironmentLightingSourceStateLoading(sourceState) ||
+           isEnvironmentLightingIrradianceStateLoading(irradianceState) ||
+           isEnvironmentLightingPrefilterStateLoading(prefilterState);
+}
+
+bool EnvironmentLightingComponent::hasReadySource() const
+{
+    return sourceState == EEnvironmentLightingSourceResolveState::Ready;
+}
+
+bool EnvironmentLightingComponent::hasReadyIrradiance() const
+{
+    return bEnableIrradiance && irradianceState == EEnvironmentLightingIrradianceResolveState::Ready;
+}
+
+bool EnvironmentLightingComponent::hasReadyPrefilter() const
+{
+    return bEnablePrefilter && prefilterState == EEnvironmentLightingPrefilterResolveState::Ready;
 }
 
 uint32_t EnvironmentLightingComponent::getResolvedIrradianceFaceSize() const

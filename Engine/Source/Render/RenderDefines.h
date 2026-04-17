@@ -204,8 +204,22 @@ struct ShaderDesc
 
     [[nodiscard]] std::string cacheKey() const
     {
+        auto appendDefines = [&](std::string& key) {
+            if (defines.empty()) {
+                return;
+            }
+
+            key += "|defines:";
+            for (const auto& define : defines) {
+                key += define;
+                key += ";";
+            }
+        };
+
         if (!shaderName.empty()) {
-            return shaderName;
+            std::string key = shaderName;
+            appendDefines(key);
+            return key;
         }
         if (sourceMode != ESourceMode::StageFiles || stageFiles.empty()) {
             return {};
@@ -218,6 +232,7 @@ struct ShaderDesc
             key += sf.file;
             key += ";";
         }
+        appendDefines(key);
         return key;
     }
 

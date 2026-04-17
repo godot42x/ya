@@ -69,10 +69,15 @@ void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* t
         {});
 }
 
-void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture)
+void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds,
+                                                           Texture*            cubemapTexture,
+                                                           Texture*            irradianceTexture,
+                                                           Texture*            prefilterTexture,
+                                                           Texture*            brdfLutTexture)
 {
-    if (!ds || !cubemapTexture || !irradianceTexture || !cubemapTexture->getImageView() ||
-        !irradianceTexture->getImageView() || !_cubemapSampler) {
+    if (!ds || !cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture ||
+        !cubemapTexture->getImageView() || !irradianceTexture->getImageView() ||
+        !prefilterTexture->getImageView() || !brdfLutTexture->getImageView() || !_cubemapSampler) {
         return;
     }
 
@@ -97,6 +102,28 @@ void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle d
                 {
                     DescriptorImageInfo(
                         irradianceTexture->getImageView()->getHandle(),
+                        _cubemapSampler->getHandle(),
+                        EImageLayout::ShaderReadOnlyOptimal),
+                }),
+            IDescriptorSetHelper::genImageWrite(
+                ds,
+                2,
+                0,
+                EPipelineDescriptorType::CombinedImageSampler,
+                {
+                    DescriptorImageInfo(
+                        prefilterTexture->getImageView()->getHandle(),
+                        _cubemapSampler->getHandle(),
+                        EImageLayout::ShaderReadOnlyOptimal),
+                }),
+            IDescriptorSetHelper::genImageWrite(
+                ds,
+                3,
+                0,
+                EPipelineDescriptorType::CombinedImageSampler,
+                {
+                    DescriptorImageInfo(
+                        brdfLutTexture->getImageView()->getHandle(),
                         _cubemapSampler->getHandle(),
                         EImageLayout::ShaderReadOnlyOptimal),
                 }),
@@ -146,6 +173,15 @@ Texture* RenderRuntime::findSceneEnvironmentIrradianceTexture(Scene* scene) cons
     return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
 }
 
+Texture* RenderRuntime::findSceneEnvironmentPrefilterTexture(Scene* scene) const
+{
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
+        return nullptr;
+    }
+
+    return _app->getResourceResolveSystem()->findSceneEnvironmentPrefilterTexture(scene);
+}
+
 DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
 {
     if (!_environmentLighting.sceneDS) {
@@ -158,22 +194,33 @@ DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scen
 
     auto* cubemapTexture    = findSceneEnvironmentCubemapTexture(scene);
     auto* irradianceTexture = findSceneEnvironmentIrradianceTexture(scene);
+    auto* prefilterTexture  = findSceneEnvironmentPrefilterTexture(scene);
+    auto* brdfLutTexture    = _sharedResources.pbrLUT.get();
     if (!cubemapTexture) {
         cubemapTexture = _skybox.fallbackTexture.get();
     }
     if (!irradianceTexture) {
         irradianceTexture = _environmentLighting.fallbackIrradianceTexture.get();
     }
+    if (!prefilterTexture) {
+        prefilterTexture = _environmentLighting.fallbackPrefilterTexture.get();
+    }
 
-    if (!cubemapTexture || !irradianceTexture) {
+    if (!cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture) {
         return _environmentLighting.fallbackDS;
     }
 
     if (cubemapTexture != _environmentLighting.boundCubemapTexture ||
-        irradianceTexture != _environmentLighting.boundIrradianceTexture) {
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS, cubemapTexture, irradianceTexture);
+        irradianceTexture != _environmentLighting.boundIrradianceTexture ||
+        prefilterTexture != _environmentLighting.boundPrefilterTexture) {
+        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
+                                              cubemapTexture,
+                                              irradianceTexture,
+                                              prefilterTexture,
+                                              brdfLutTexture);
         _environmentLighting.boundCubemapTexture    = cubemapTexture;
         _environmentLighting.boundIrradianceTexture = irradianceTexture;
+        _environmentLighting.boundPrefilterTexture  = prefilterTexture;
     }
 
     return _environmentLighting.sceneDS;
@@ -252,6 +299,7 @@ void RenderRuntime::init(const InitDesc& desc)
         ShaderDesc{.shaderName = "Skybox.glsl"},
         ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
         ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
+        ShaderDesc{.shaderName = "Misc/pbr_generate_brdf_lut.slang"},
     });
     _deleter.push("ShaderStorage", [this](void*) {
         _shaderStorage.reset();
@@ -366,6 +414,27 @@ void RenderRuntime::init(const InitDesc& desc)
             .addressModeW = ESamplerAddressMode::Repeat,
         });
 
+        _pbrGenerateBrdfLUT.init(_render);
+        _sharedResources.pbrLUT = Texture::createRenderTexture(RenderTextureCreateInfo{
+            .label     = "App_PBR_BRDF_LUT",
+            .width     = 512,
+            .height    = 512,
+            .format    = EFormat::R16G16B16A16_SFLOAT,
+            .usage     = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .mipLevels = 1,
+        });
+        YA_CORE_ASSERT(_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView(),
+                       "Failed to create PBR BRDF LUT render texture");
+        if (_sharedResources.pbrLUT) {
+            auto* cmdBuf = _render->beginIsolateCommands("App_PBR_BRDF_LUT");
+            const auto result = _pbrGenerateBrdfLUT.execute({
+                .cmdBuf = cmdBuf,
+                .output = _sharedResources.pbrLUT.get(),
+            });
+            _render->endIsolateCommands(cmdBuf);
+            YA_CORE_ASSERT(result.bSuccess, "Failed to generate PBR BRDF LUT");
+        }
+
         _skybox.fallbackTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
         YA_CORE_ASSERT(_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView(),
                        "Failed to create fallback skybox cubemap");
@@ -393,7 +462,13 @@ void RenderRuntime::init(const InitDesc& desc)
                         .stageFlags      = EShaderStage::Fragment,
                     },
                     DescriptorSetLayoutBinding{
-                        .binding         = 1,
+                        .binding         = 2,
+                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Fragment,
+                    },
+                    DescriptorSetLayoutBinding{
+                        .binding         = 3,
                         .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
                         .descriptorCount = 1,
                         .stageFlags      = EShaderStage::Fragment,
@@ -409,7 +484,7 @@ void RenderRuntime::init(const InitDesc& desc)
                 .poolSizes = {
                     DescriptorPoolSize{
                         .type            = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 4,
+                        .descriptorCount = 8,
                     },
                 },
             });
@@ -417,15 +492,22 @@ void RenderRuntime::init(const InitDesc& desc)
         _environmentLighting.fallbackIrradianceTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
         YA_CORE_ASSERT(_environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView(),
                        "Failed to create fallback irradiance cubemap");
+        _environmentLighting.fallbackPrefilterTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackPrefilter");
+        YA_CORE_ASSERT(_environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView(),
+                   "Failed to create fallback prefilter cubemap");
 
         _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
         _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
         updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
                                                _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get());
+                                               _environmentLighting.fallbackIrradianceTexture.get(),
+                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _sharedResources.pbrLUT.get());
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                                _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get());
+                                               _environmentLighting.fallbackIrradianceTexture.get(),
+                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _sharedResources.pbrLUT.get());
 
         _deleter.push("RenderBindings", [this](void*) {
             releaseRenderOwnedResources();
@@ -573,12 +655,16 @@ void RenderRuntime::releaseRenderOwnedResources()
     _skybox.dsl.reset();
 
     _environmentLighting.fallbackIrradianceTexture.reset();
+    _environmentLighting.fallbackPrefilterTexture.reset();
     _environmentLighting.boundCubemapTexture    = nullptr;
     _environmentLighting.boundIrradianceTexture = nullptr;
+    _environmentLighting.boundPrefilterTexture  = nullptr;
     _environmentLighting.sceneDS                = nullptr;
     _environmentLighting.fallbackDS             = nullptr;
     _environmentLighting.dsp.reset();
     _environmentLighting.dsl.reset();
+    _sharedResources.pbrLUT.reset();
+    _pbrGenerateBrdfLUT.shutdown();
 
     _cubemapSampler.reset();
 }
@@ -617,6 +703,7 @@ void RenderRuntime::resetEnvironmentLightingPool()
     _environmentLighting.fallbackDS             = nullptr;
     _environmentLighting.boundCubemapTexture    = nullptr;
     _environmentLighting.boundIrradianceTexture = nullptr;
+    _environmentLighting.boundPrefilterTexture  = nullptr;
 
     _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
     _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
@@ -624,13 +711,19 @@ void RenderRuntime::resetEnvironmentLightingPool()
     YA_CORE_ASSERT(_environmentLighting.sceneDS, "Failed to re-allocate scene environment lighting descriptor set");
 
     if (_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView() &&
-        _environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView()) {
+        _environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView() &&
+        _environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView() &&
+        _sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
         updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
                                                _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get());
+                                               _environmentLighting.fallbackIrradianceTexture.get(),
+                                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _sharedResources.pbrLUT.get());
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                                _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get());
+                                               _environmentLighting.fallbackIrradianceTexture.get(),
+                                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _sharedResources.pbrLUT.get());
     }
 }
 
@@ -986,6 +1079,80 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
             });
         }
+
+        if (_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
+            ctx.debugSpec.slots.push_back({
+                .label       = "PBR_BRDF_LUT",
+                .defaultView = _sharedResources.pbrLUT->getImageView(),
+                .ownedView   = nullptr,
+                .image       = _sharedResources.pbrLUT->getImageShared(),
+            });
+        }
+
+        if (auto* scene = _app->getSceneManager()->getActiveScene()) {
+            auto* resolver       = _app->getResourceResolveSystem();
+            auto* textureFactory = _render ? _render->getTextureFactory() : nullptr;
+            if (resolver && textureFactory) {
+                for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
+                    (void)elc;
+                    auto preview = resolver->getEnvironmentLightingPreview(entity);
+                    if (!preview.bHasPrefilterMap || !preview.prefilterTexture ||
+                        !preview.prefilterTexture->getImageShared() || !preview.prefilterTexture->getImageView()) {
+                        continue;
+                    }
+
+                    auto prefilterImage = preview.prefilterTexture->getImageShared();
+                    if (!prefilterImage) {
+                        continue;
+                    }
+
+                    const uint32_t mipLevels = std::max(1u, prefilterImage->getMipLevels());
+                    EditorViewportContext::DebugSpec::Group prefilterGroup{
+                        .label      = "Environment Prefilter Cubemap",
+                        .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
+                        .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                        .groupSize  = CubeFace_Count,
+                    };
+                    prefilterGroup.itemLabels.reserve(mipLevels);
+
+                    for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
+                        const float roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mipIndex) / static_cast<float>(mipLevels - 1);
+                        prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
+
+                        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                            auto faceView = textureFactory->createImageView(
+                                prefilterImage,
+                                ImageViewCreateInfo{
+                                    .label          = std::format("EnvironmentPrefilter_Mip_{}_Face_{}", mipIndex, faceIndex),
+                                    .viewType       = EImageViewType::View2D,
+                                    .aspectFlags    = EImageAspect::Color,
+                                    .baseMipLevel   = mipIndex,
+                                    .levelCount     = 1,
+                                    .baseArrayLayer = faceIndex,
+                                    .layerCount     = 1,
+                                });
+                            if (!faceView) {
+                                continue;
+                            }
+
+                            ctx.debugSpec.slots.push_back({
+                                .label       = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
+                                .defaultView = faceView.get(),
+                                .ownedView   = faceView,
+                                .image       = prefilterImage,
+                            });
+                        }
+                    }
+
+                    prefilterGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - prefilterGroup.beginIndex;
+                    if (prefilterGroup.slotCount >= prefilterGroup.groupSize) {
+                        ctx.debugSpec.groups.push_back(std::move(prefilterGroup));
+                    }
+                    break; // only first environment lighting preview
+                }
+            }
+        }
+
         input.editorLayer->setViewportContext(ctx);
     }
 

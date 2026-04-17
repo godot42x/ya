@@ -58,15 +58,17 @@ struct EditorViewportContext
         {
             Generic,
             CubeMapFaces,
+            CubeMapMipFaces,
         };
 
         struct Group
         {
-            std::string label;
-            EGroupType  type       = EGroupType::Generic;
-            uint32_t    beginIndex = 0;
-            uint32_t    slotCount  = 0;
-            uint32_t    groupSize  = 1;
+            std::string              label;
+            EGroupType               type       = EGroupType::Generic;
+            uint32_t                 beginIndex = 0;
+            uint32_t                 slotCount  = 0;
+            uint32_t                 groupSize  = 1;
+            std::vector<std::string> itemLabels;
         };
 
         std::vector<Group> groups;
@@ -151,6 +153,7 @@ struct EditorLayer
     struct DebugGroupState
     {
         std::string      configKey;
+        int              selectedGroupIndex = 0;
         std::vector<int> selectedSlots;
     };
     std::vector<DebugGroupState> _debugGroupStates;

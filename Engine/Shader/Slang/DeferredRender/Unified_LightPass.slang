@@ -63,6 +63,16 @@ struct LightData{
     uint numPointLight;
 };
 
+#ifndef YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE
+    #define YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE 0
+#endif
+
+#ifndef YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR
+    #define YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR 0
+#endif
+
+static const float PBR_PREFILTER_MAX_REFLECTION_LOD = 4.0;
+
 
 // ── PBR BRDF functions ──
 
@@ -159,13 +169,28 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
     }
 
     // ambient lighting(IBL)
-    // vec3 kS = F_fresnelSchlick(max(dot(N, V), 0.0), F0);
-    vec3 kS = F_fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
-    vec3 kD = vec3(1.0)- kS;
+    float NdotV = max(dot(N, V), 0.0);
+    vec3 kS = F_fresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallic;
-    vec3 irradiance = uTexIrradianceCubemap.Sample(N).rgb;
-    vec3 diffuse  = irradiance * albedo;
-    vec3 ambient    = (kD * diffuse) * ao;
+
+    vec3 diffuseIBL = vec3(0.0);
+    vec3 specularIBL = vec3(0.0);
+
+#if YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE
+    vec3 irradiance = uTexPBRIrradianceCubemap.Sample(N).rgb;
+    diffuseIBL = kD * irradiance * albedo;
+#endif
+
+#if YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR
+    vec3 R = reflect(-V, N);
+    vec3 prefilteredColor = uTexPBRPrefilterMap.SampleLevel(R, roughness * PBR_PREFILTER_MAX_REFLECTION_LOD).rgb;
+    vec2 envBRDF = uTexPBRBrdfLUT.Sample(vec2(NdotV, roughness)).rg;
+    // vec2 envBRDF = uTexPBRBrdfLUT.Sample(vec2(roughness, NdotV)).rg;
+    specularIBL = prefilteredColor * (kS * envBRDF.x + envBRDF.y);
+#endif
+
+    vec3 ambient = (diffuseIBL + specularIBL) * ao;
 
     return ambient + Lo;
 }
@@ -229,9 +254,9 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(3,1)]] Sampler2D uTexRT3; // RT3: shadingModelID
 
 [[vk::binding(0,2)]] SamplerCube uTexSkyBoxMap; // skybox -> preFilteredEnvironmentMap
-[[vk::binding(1,2)]] SamplerCube uTexIrradianceCubemap; 
-[[vk::binding(2,2)]] SamplerCube uTexEnvironmentMap;  // pbr: prefilter map lut
-[[vk::binding(3,2)]] Sampler2D uTexBrdfLUT;  
+[[vk::binding(1,2)]] SamplerCube uTexPBRIrradianceCubemap; 
+[[vk::binding(2,2)]] SamplerCube uTexPBRPrefilterMap;  
+[[vk::binding(3,2)]] Sampler2D   uTexPBRBrdfLUT;  
 
 
 

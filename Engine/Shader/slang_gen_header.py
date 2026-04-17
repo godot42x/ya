@@ -523,6 +523,42 @@ def _detect_entry_and_stage(slang_source: str, preferred_entry: str) -> tuple[st
     return None
 
 
+def _iter_slang_dependencies(
+    slang_file: Path,
+    include_dirs: list[Path] | None,
+    visited: set[Path] | None = None,
+):
+    if visited is None:
+        visited = set()
+
+    try:
+        resolved_file = slang_file.resolve()
+    except FileNotFoundError:
+        return
+
+    if resolved_file in visited:
+        return
+    visited.add(resolved_file)
+    yield resolved_file
+
+    source = resolved_file.read_text(encoding="utf-8")
+    search_roots = [resolved_file.parent, *(include_dirs or [])]
+
+    for include_match in re.finditer(r'^\s*#\s*include\s+"([^"]+)"', source, re.MULTILINE):
+        include_name = include_match.group(1)
+        for root in search_roots:
+            candidate = (root / include_name).resolve()
+            if candidate.exists():
+                yield from _iter_slang_dependencies(candidate, include_dirs, visited)
+                break
+
+def _get_latest_dependency_mtime(slang_file: Path, include_dirs: list[Path] | None) -> float:
+    latest_mtime = 0.0
+    for dependency in _iter_slang_dependencies(slang_file, include_dirs):
+        latest_mtime = max(latest_mtime, dependency.stat().st_mtime)
+    return latest_mtime
+
+
 def _process_one_slang(
     slang_file: Path,
     output_dir: Path,
@@ -552,7 +588,7 @@ def _process_one_slang(
         return
     resolved_entry, resolved_stage = entry_stage
 
-    src_mtime = slang_file.stat().st_mtime
+    src_mtime = _get_latest_dependency_mtime(slang_file, include_dirs)
     if not force:
         # Skip if header is newer than source (success path)
         if header_path.exists() and src_mtime <= header_path.stat().st_mtime:

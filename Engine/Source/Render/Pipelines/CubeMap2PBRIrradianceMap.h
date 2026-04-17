@@ -1,35 +1,35 @@
 #pragma once
 
-#include "Misc.CubeMap2IrradianceMap.slang.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 
+#include "Misc.CubeMap2PBRIrradianceMap.slang.h"
 
 namespace ya
 {
 
 
-struct CubeMap2IrradianceMap
+struct CubeMap2PBRIrradianceMap
 {
-    using PushConstant = slang_types::Misc::CubeMap2IrradianceMap::PushConstants;
+    using PushConstant = slang_types::Misc::CubeMap2PBRIrradianceMap::PushConstants;
 
     IRender* _render = nullptr;
 
     PipelineLayoutDesc _pipelineLayoutDesc = PipelineLayoutDesc{
-        .label         = "CubeMap2IrradianceMap_PipelineLayout",
+        .label         = "CubeMap2PBRIrradianceMap_PipelineLayout",
         .pushConstants = {
             PushConstantRange{
                 .offset     = 0,
-                .size       = sizeof(CubeMap2IrradianceMap::PushConstant),
+                .size       = sizeof(CubeMap2PBRIrradianceMap::PushConstant),
                 .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
             },
         },
         .descriptorSetLayouts = {
             DescriptorSetLayoutDesc{
-                .label    = "CubeMap2IrradianceMap_DSL",
+                .label    = "CubeMap2PBRIrradianceMap_DSL",
                 .set      = 0,
                 .bindings = {
                     DescriptorSetLayoutBinding{
@@ -43,7 +43,7 @@ struct CubeMap2IrradianceMap
         },
     };
     DescriptorPoolCreateInfo _dspCI{
-        .label     = "CubeMap2IrradianceMap_DSP",
+        .label     = "CubeMap2PBRIrradianceMap_DSP",
         .maxSets   = 1,
         .poolSizes = {
             DescriptorPoolSize{

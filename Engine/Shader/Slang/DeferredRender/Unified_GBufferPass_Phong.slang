@@ -51,13 +51,13 @@ struct LightData{
 [[vk::binding(3, 1)]]  Sampler2D  uTexNormal;
 
 // Set 2: Phong material params UBO
-public struct TextureParams{
+struct TextureParams{
     bool bEnable;
     mat3 uvTransform;
 };
 
 namespace ETextureSlot{
-// public enum  ETextureSlot{
+// enum ETextureSlot {
    static const int Diffuse = 0;
    static const int Specular = 1;
    static const int Reflection = 2;

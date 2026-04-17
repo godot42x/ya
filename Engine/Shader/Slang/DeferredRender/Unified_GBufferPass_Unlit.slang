@@ -56,7 +56,7 @@ struct LightData{
 [[vk::binding(1, 1)]]  Sampler2D  uTexBaseColor1;
 
 // Set 2: Unlit material params UBO
-public struct TextureParams{
+struct TextureParams{
     bool bEnable;
     mat3 uvTransform;
 };

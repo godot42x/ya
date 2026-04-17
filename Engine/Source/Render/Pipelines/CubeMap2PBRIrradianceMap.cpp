@@ -1,4 +1,4 @@
-#include "CubeMap2IrradianceMap.h"
+#include "CubeMap2PBRIrradianceMap.h"
 
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
@@ -44,7 +44,7 @@ glm::mat4 buildCubeMap2IrradianceCaptureProjection()
 }
 } // namespace
 
-void CubeMap2IrradianceMap::init(IRender* render)
+void CubeMap2PBRIrradianceMap::init(IRender* render)
 {
     if (_render == render && _pipelineLayout && _descriptorPool && _inputSampler) {
         return;
@@ -59,31 +59,31 @@ void CubeMap2IrradianceMap::init(IRender* render)
 
     const auto descriptorSetLayouts = IDescriptorSetLayout::create(
         _render, _pipelineLayoutDesc.descriptorSetLayouts);
-    YA_CORE_ASSERT(!descriptorSetLayouts.empty(), "Failed to create CubeMap2IrradianceMap descriptor set layout");
+    YA_CORE_ASSERT(!descriptorSetLayouts.empty(), "Failed to create CubeMap2PBRIrradianceMap descriptor set layout");
     _descriptorSetLayout = descriptorSetLayouts[0];
     _pipelineLayout      = IPipelineLayout::create(_render,
-                                              _pipelineLayoutDesc.label,
-                                              _pipelineLayoutDesc.pushConstants,
-                                              descriptorSetLayouts);
+                                                   _pipelineLayoutDesc.label,
+                                                   _pipelineLayoutDesc.pushConstants,
+                                                   descriptorSetLayouts);
 
     _pipeline       = IGraphicsPipeline::create(_render);
     _descriptorPool = IDescriptorPool::create(_render, _dspCI);
     _inputSampler   = Sampler::create(
         SamplerDesc{
-              .label        = "CubeMap2IrradianceMap_InputSampler",
-              .addressModeU = ESamplerAddressMode::ClampToEdge,
-              .addressModeV = ESamplerAddressMode::ClampToEdge,
-              .addressModeW = ESamplerAddressMode::ClampToEdge,
+            .label        = "CubeMap2PBRIrradianceMap_InputSampler",
+            .addressModeU = ESamplerAddressMode::ClampToEdge,
+            .addressModeV = ESamplerAddressMode::ClampToEdge,
+            .addressModeW = ESamplerAddressMode::ClampToEdge,
         });
 
     std::vector<DescriptorSetHandle> descriptorSets;
     const bool                       bAllocateOK = _descriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
     YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
-                   "Failed to allocate CubeMap2IrradianceMap descriptor set");
+                   "Failed to allocate CubeMap2PBRIrradianceMap descriptor set");
     _descriptorSet = descriptorSets[0];
 }
 
-void CubeMap2IrradianceMap::shutdown()
+void CubeMap2PBRIrradianceMap::shutdown()
 {
     _descriptorSet = nullptr;
     _pipeline.reset();
@@ -95,7 +95,7 @@ void CubeMap2IrradianceMap::shutdown()
     _render              = nullptr;
 }
 
-bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
+bool CubeMap2PBRIrradianceMap::ensurePipeline(EFormat::T colorFormat)
 {
     if (!_render || !_pipeline || !_pipelineLayout) {
         return false;
@@ -108,7 +108,7 @@ bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
         GraphicsPipelineCreateInfo{
             .renderPass            = nullptr,
             .pipelineRenderingInfo = PipelineRenderingInfo{
-                .label                   = "CubeMap2IrradianceMap",
+                .label                   = "CubeMap2PBRIrradianceMap",
                 .viewMask                = 0,
                 .colorAttachmentFormats  = {colorFormat},
                 .depthAttachmentFormat   = EFormat::Undefined,
@@ -116,19 +116,19 @@ bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
             },
             .pipelineLayout = _pipelineLayout.get(),
             .shaderDesc     = ShaderDesc{
-                    .shaderName        = "Misc/CubeMap2IrradianceMap.slang",
-                    .vertexBufferDescs = {
+                .shaderName        = "Misc/CubeMap2PBRIrradianceMap.slang",
+                .vertexBufferDescs = {
                     VertexBufferDescription{
-                            .slot  = 0,
-                            .pitch = sizeof(ya::Vertex),
+                        .slot  = 0,
+                        .pitch = sizeof(ya::Vertex),
                     },
                 },
-                    .vertexAttributes = {
+                .vertexAttributes = {
                     VertexAttribute{
-                            .bufferSlot = 0,
-                            .location   = 0,
-                            .format     = EVertexAttributeFormat::Float3,
-                            .offset     = offsetof(ya::Vertex, position),
+                        .bufferSlot = 0,
+                        .location   = 0,
+                        .format     = EVertexAttributeFormat::Float3,
+                        .offset     = offsetof(ya::Vertex, position),
                     },
                 },
             },
@@ -165,7 +165,7 @@ bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
                 .scissors  = {Scissor::defaults()},
             },
         });
-    YA_CORE_ASSERT(bPipelineOK, "Failed to create CubeMap2IrradianceMap pipeline");
+    YA_CORE_ASSERT(bPipelineOK, "Failed to create CubeMap2PBRIrradianceMap pipeline");
     if (!bPipelineOK) {
         return false;
     }
@@ -174,7 +174,7 @@ bool CubeMap2IrradianceMap::ensurePipeline(EFormat::T colorFormat)
     return true;
 }
 
-CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const ExecuteContext& ctx)
+CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const ExecuteContext& ctx)
 {
     ExecuteResult result{};
     if (!_render || !ctx.cmdBuf || !ctx.input || !ctx.output) {
@@ -182,20 +182,20 @@ CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const Execut
     }
 
     YA_CORE_ASSERT(ctx.input->getImageView(),
-                   "CubeMap2IrradianceMap input texture must have a valid image view");
+                   "CubeMap2PBRIrradianceMap input texture must have a valid image view");
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),
-                   "CubeMap2IrradianceMap output texture must own a valid image and cube view");
+                   "CubeMap2PBRIrradianceMap output texture must own a valid image and cube view");
     YA_CORE_ASSERT(ctx.output->getImage()->getArrayLayers() >= CubeFace_Count,
-                   "CubeMap2IrradianceMap output must be a 6-layer cubemap image");
+                   "CubeMap2PBRIrradianceMap output must be a 6-layer cubemap image");
 
-    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "CubeMap2IrradianceMap");
+    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "CubeMap2PBRIrradianceMap");
 
     if (!ensurePipeline(ctx.output->getFormat())) {
         return result;
     }
 
     auto* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-    YA_CORE_ASSERT(cubeMesh, "CubeMap2IrradianceMap requires a cube primitive mesh");
+    YA_CORE_ASSERT(cubeMesh, "CubeMap2PBRIrradianceMap requires a cube primitive mesh");
     if (!cubeMesh) {
         return result;
     }
@@ -240,7 +240,7 @@ CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const Execut
                 .baseArrayLayer = face,
                 .layerCount     = 1,
             });
-        YA_CORE_ASSERT(faceView, "Failed to create CubeMap2IrradianceMap output face view");
+        YA_CORE_ASSERT(faceView, "Failed to create CubeMap2PBRIrradianceMap output face view");
         if (!faceView) {
             bAllFacesSuccess = false;
             break;
@@ -253,7 +253,7 @@ CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const Execut
         const auto pushConstant = buildPushConstant(face);
 
         RenderingInfo renderInfo{
-            .label      = std::format("CubeMap2IrradianceMap_Face_{}", face),
+            .label      = std::format("CubeMap2PBRIrradianceMap_Face_{}", face),
             .renderArea = Rect2D{
                 .pos    = {0.0f, 0.0f},
                 .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
@@ -296,7 +296,7 @@ CubeMap2IrradianceMap::ExecuteResult CubeMap2IrradianceMap::execute(const Execut
     return result;
 }
 
-CubeMap2IrradianceMap::PushConstant CubeMap2IrradianceMap::buildPushConstant(uint32_t faceIndex)
+CubeMap2PBRIrradianceMap::PushConstant CubeMap2PBRIrradianceMap::buildPushConstant(uint32_t faceIndex)
 {
     PushConstant pushConstant{};
     pushConstant.view       = buildCubeMap2IrradianceCaptureView(faceIndex);
