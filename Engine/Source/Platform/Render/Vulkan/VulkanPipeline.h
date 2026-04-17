@@ -113,6 +113,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
         name_cache = std::string(_name._data);
         return name_cache;
     }
+    const GraphicsPipelineCreateInfo& getDesc() const override { return _ci; }
 
     // Vulkan-specific methods
     void bindVk(VkCommandBuffer commandBuffer)

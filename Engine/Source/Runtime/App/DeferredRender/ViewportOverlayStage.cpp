@@ -31,16 +31,18 @@ void ViewportOverlayStage::init(IRender* render)
 void ViewportOverlayStage::initSkybox()
 {
     // DSLs
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "SkyboxOverlay_PerFrame_DSL", .set = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        },
-        DescriptorSetLayoutDesc{
-            .label = "SkyboxOverlay_Resource_DSL", .set = 1,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-    });
+    auto dsls          = IDescriptorSetLayout::create(_render, {
+                                                                   DescriptorSetLayoutDesc{
+                                                                       .label    = "SkyboxOverlay_PerFrame_DSL",
+                                                                       .set      = 0,
+                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
+                                                                   },
+                                                                   DescriptorSetLayoutDesc{
+                                                                       .label    = "SkyboxOverlay_Resource_DSL",
+                                                                       .set      = 1,
+                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                   },
+                                                               });
     _skyboxFrameDSL    = dsls[0];
     _skyboxResourceDSL = dsls[1];
 
@@ -76,19 +78,19 @@ void ViewportOverlayStage::initSkybox()
 
     // Per-flight UBO + DS
     _skyboxDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "SkyboxOverlay_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-    });
+                                                      .label     = "SkyboxOverlay_DSP",
+                                                      .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+                                                      .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
+                                                  });
 
     SkyboxFrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         _skyboxFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label       = std::format("SkyboxOverlay_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(SkyboxFrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                          .label       = std::format("SkyboxOverlay_Frame_UBO_{}", i),
+                                                          .usage       = EBufferUsage::UniformBuffer,
+                                                          .size        = sizeof(SkyboxFrameUBO),
+                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                      });
         _skyboxFrameUBO[i]->writeData(&initialData, sizeof(SkyboxFrameUBO), 0);
 
         _skyboxFrameDS[i] = _skyboxDSP->allocateDescriptorSets(_skyboxFrameDSL);
@@ -101,10 +103,8 @@ void ViewportOverlayStage::initSkybox()
 void ViewportOverlayStage::initOverlay()
 {
     constexpr auto pcSize = sizeof(OverlayPushConstant);
-    _overlayPPL = IPipelineLayout::create(
-        _render, "SimpleMaterialOverlay_PPL",
-        {PushConstantRange{.offset = 0, .size = pcSize, .stageFlags = EShaderStage::Vertex}},
-        {});
+    _overlayPPL           = IPipelineLayout::create(
+        _render, "SimpleMaterialOverlay_PPL", {PushConstantRange{.offset = 0, .size = pcSize, .stageFlags = EShaderStage::Vertex}}, {});
 
     GraphicsPipelineCreateInfo ci{
         .pipelineRenderingInfo = {
@@ -153,6 +153,13 @@ void ViewportOverlayStage::destroy()
 
 void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
 {
+    if (_skyboxPipeline) {
+        _skyboxPipeline->beginFrame();
+    }
+    if (_overlayPipeline) {
+        _overlayPipeline->beginFrame();
+    }
+
     if (!ctx.frameData) return;
 
     // Update skybox frame UBO (view without translation + projection)
@@ -240,8 +247,8 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     bool hasSimple = !fd.simpleDrawItems.empty();
 
     // Direction components (still from registry — editor visualization, TODO: migrate to snapshot)
-    const auto& dirView = scene->getRegistry().view<TransformComponent, DirectionComponent>();
-    bool hasDirection = dirView.begin() != dirView.end();
+    const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
+    bool        hasDirection = dirView.begin() != dirView.end();
 
     if (!hasSimple && !hasDirection) return;
 
@@ -264,7 +271,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     // Draw simple material entities from snapshot
     for (const auto& item : fd.simpleDrawItems) {
         if (!item.mesh || !item.material) continue;
-        auto* mat        = static_cast<SimpleMaterial*>(item.material);
+        auto* mat            = static_cast<SimpleMaterial*>(item.material);
         _overlayPC.model     = item.worldMatrix;
         _overlayPC.colorType = mat->colorType;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
@@ -309,6 +316,8 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
 void ViewportOverlayStage::renderGUI()
 {
     // Future: skybox toggle, overlay color type combo, etc.
+    _skyboxPipeline->renderGUI();
+    _overlayPipeline->renderGUI();
 }
 
 } // namespace ya

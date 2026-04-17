@@ -123,6 +123,7 @@ struct IGraphicsPipeline : public IPipeline
      * @brief Get the pipeline name
      */
     virtual const std::string& getName() const = 0;
+    virtual const GraphicsPipelineCreateInfo& getDesc() const = 0;
 
     virtual void            updateDesc(GraphicsPipelineCreateInfo ci)                          = 0;
     virtual void            setSampleCount(ESampleCount::T sampleCount)                        = 0;

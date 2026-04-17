@@ -53,18 +53,18 @@ void GBufferStage::initSharedResources()
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label       = std::format("GBuffer_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(PBRFrameData),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                    .label       = std::format("GBuffer_Frame_UBO_{}", i),
+                                                    .usage       = EBufferUsage::UniformBuffer,
+                                                    .size        = sizeof(PBRFrameData),
+                                                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                });
 
         _lightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label       = std::format("GBuffer_Light_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(LightPassLightData),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                    .label       = std::format("GBuffer_Light_UBO_{}", i),
+                                                    .usage       = EBufferUsage::UniformBuffer,
+                                                    .size        = sizeof(LightPassLightData),
+                                                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                });
 
         _frameAndLightDS[i] = _frameAndLightDSP->allocateDescriptorSets(_frameAndLightDSL);
 
@@ -77,29 +77,29 @@ void GBufferStage::initSharedResources()
 
 void GBufferStage::initPBR()
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_PBR_MatRes_DSL", .set = 1,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_PBR_Params_DSL", .set = 2,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-    });
+    auto dsls                = IDescriptorSetLayout::create(_render, {
+                                                                         DescriptorSetLayoutDesc{
+                                                                             .label    = "Deferred_PBR_MatRes_DSL",
+                                                                             .set      = 1,
+                                                                             .bindings = {
+                                                                                 {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                 {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                 {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                 {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                 {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                             },
+                                                                         },
+                                                                         DescriptorSetLayoutDesc{
+                                                                             .label    = "Deferred_PBR_Params_DSL",
+                                                                             .set      = 2,
+                                                                             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                         },
+                                                                     });
     _pbr.materialResourceDSL = dsls[0];
     _pbr.materialParamsDSL   = dsls[1];
 
     _pbr.pipelineLayout = IPipelineLayout::create(
-        _render, "Deferred_PBR_GBuffer_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(PBRPushConstant), .stageFlags = EShaderStage::Vertex}},
-        {_frameAndLightDSL, _pbr.materialResourceDSL, _pbr.materialParamsDSL});
+        _render, "Deferred_PBR_GBuffer_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PBRPushConstant), .stageFlags = EShaderStage::Vertex}}, {_frameAndLightDSL, _pbr.materialResourceDSL, _pbr.materialParamsDSL});
 
     std::vector<EFormat::T> gBufferFormats = {SIGNED_LINEAR_FORMAT, SIGNED_LINEAR_FORMAT, LINEAR_FORMAT, SHADING_MODEL_FORMAT};
 
@@ -116,52 +116,51 @@ void GBufferStage::initPBR()
         .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = ColorBlendState{.attachments = {
-            {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-        }},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                                  {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                              }},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _pbr.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_pbr.pipeline && _pbr.pipeline->recreate(ci), "Failed to create PBR GBuffer pipeline");
 
     const uint32_t texCount = static_cast<uint32_t>(_pbr.materialResourceDSL->getLayoutInfo().bindings.size());
-    _pbrMatPool.init(_render, _pbr.materialParamsDSL, _pbr.materialResourceDSL,
-        [texCount](uint32_t n) {
-            return std::vector<DescriptorPoolSize>{
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
-            };
-        }, 16);
+    _pbrMatPool.init(_render, _pbr.materialParamsDSL, _pbr.materialResourceDSL, [texCount](uint32_t n)
+                     { return std::vector<DescriptorPoolSize>{
+                           {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+                           {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
+                       }; },
+                     16);
 }
 
 void GBufferStage::initPhong()
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_Phong_MatRes_DSL", .set = 1,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_Phong_Params_DSL", .set = 2,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-    });
+    auto dsls                  = IDescriptorSetLayout::create(_render, {
+                                                                           DescriptorSetLayoutDesc{
+                                                                               .label    = "Deferred_Phong_MatRes_DSL",
+                                                                               .set      = 1,
+                                                                               .bindings = {
+                                                                                   {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                   {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                   {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                   {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                               },
+                                                                           },
+                                                                           DescriptorSetLayoutDesc{
+                                                                               .label    = "Deferred_Phong_Params_DSL",
+                                                                               .set      = 2,
+                                                                               .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                           },
+                                                                       });
     _phong.materialResourceDSL = dsls[0];
     _phong.materialParamsDSL   = dsls[1];
 
     _phong.pipelineLayout = IPipelineLayout::create(
-        _render, "Deferred_Phong_GBuffer_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(PhongPushConstant), .stageFlags = EShaderStage::Vertex}},
-        {_frameAndLightDSL, _phong.materialResourceDSL, _phong.materialParamsDSL});
+        _render, "Deferred_Phong_GBuffer_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongPushConstant), .stageFlags = EShaderStage::Vertex}}, {_frameAndLightDSL, _phong.materialResourceDSL, _phong.materialParamsDSL});
 
-    std::vector<EFormat::T> gBufferFormats = {SIGNED_LINEAR_FORMAT, SIGNED_LINEAR_FORMAT, LINEAR_FORMAT, SHADING_MODEL_FORMAT};
+    std::vector<EFormat::T>    gBufferFormats = {SIGNED_LINEAR_FORMAT, SIGNED_LINEAR_FORMAT, LINEAR_FORMAT, SHADING_MODEL_FORMAT};
     GraphicsPipelineCreateInfo ci{
         .pipelineRenderingInfo = {.label = "Phong GBuffer Pass", .colorAttachmentFormats = gBufferFormats, .depthAttachmentFormat = DEPTH_FORMAT},
         .pipelineLayout        = _phong.pipelineLayout.get(),
@@ -175,50 +174,49 @@ void GBufferStage::initPhong()
         .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = ColorBlendState{.attachments = {
-            {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-        }},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                                  {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                              }},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _phong.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_phong.pipeline && _phong.pipeline->recreate(ci), "Failed to create Phong GBuffer pipeline");
 
     const uint32_t texCount = static_cast<uint32_t>(_phong.materialResourceDSL->getLayoutInfo().bindings.size());
-    _phongMatPool.init(_render, _phong.materialParamsDSL, _phong.materialResourceDSL,
-        [texCount](uint32_t n) {
-            return std::vector<DescriptorPoolSize>{
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
-            };
-        }, 16);
+    _phongMatPool.init(_render, _phong.materialParamsDSL, _phong.materialResourceDSL, [texCount](uint32_t n)
+                       { return std::vector<DescriptorPoolSize>{
+                             {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+                             {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
+                         }; },
+                       16);
 }
 
 void GBufferStage::initUnlit()
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_Unlit_MatRes_DSL", .set = 1,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "Deferred_Unlit_Params_DSL", .set = 2,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-    });
+    auto dsls                  = IDescriptorSetLayout::create(_render, {
+                                                                           DescriptorSetLayoutDesc{
+                                                                               .label    = "Deferred_Unlit_MatRes_DSL",
+                                                                               .set      = 1,
+                                                                               .bindings = {
+                                                                                   {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                                   {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                                                                               },
+                                                                           },
+                                                                           DescriptorSetLayoutDesc{
+                                                                               .label    = "Deferred_Unlit_Params_DSL",
+                                                                               .set      = 2,
+                                                                               .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                           },
+                                                                       });
     _unlit.materialResourceDSL = dsls[0];
     _unlit.materialParamsDSL   = dsls[1];
 
     _unlit.pipelineLayout = IPipelineLayout::create(
-        _render, "Deferred_Unlit_GBuffer_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(UnlitPushConstant), .stageFlags = EShaderStage::Vertex}},
-        {_frameAndLightDSL, _unlit.materialResourceDSL, _unlit.materialParamsDSL});
+        _render, "Deferred_Unlit_GBuffer_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPushConstant), .stageFlags = EShaderStage::Vertex}}, {_frameAndLightDSL, _unlit.materialResourceDSL, _unlit.materialParamsDSL});
 
-    std::vector<EFormat::T> gBufferFormats = {SIGNED_LINEAR_FORMAT, SIGNED_LINEAR_FORMAT, LINEAR_FORMAT, SHADING_MODEL_FORMAT};
+    std::vector<EFormat::T>    gBufferFormats = {SIGNED_LINEAR_FORMAT, SIGNED_LINEAR_FORMAT, LINEAR_FORMAT, SHADING_MODEL_FORMAT};
     GraphicsPipelineCreateInfo ci{
         .pipelineRenderingInfo = {.label = "Unlit GBuffer Pass", .colorAttachmentFormats = gBufferFormats, .depthAttachmentFormat = DEPTH_FORMAT},
         .pipelineLayout        = _unlit.pipelineLayout.get(),
@@ -232,24 +230,23 @@ void GBufferStage::initUnlit()
         .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = ColorBlendState{.attachments = {
-            {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-            {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-        }},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                                  {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                                  {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                                              }},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _unlit.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_unlit.pipeline && _unlit.pipeline->recreate(ci), "Failed to create Unlit GBuffer pipeline");
 
     const uint32_t texCount = static_cast<uint32_t>(_unlit.materialResourceDSL->getLayoutInfo().bindings.size());
-    _unlitMatPool.init(_render, _unlit.materialParamsDSL, _unlit.materialResourceDSL,
-        [texCount](uint32_t n) {
-            return std::vector<DescriptorPoolSize>{
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
-            };
-        }, 16);
+    _unlitMatPool.init(_render, _unlit.materialParamsDSL, _unlit.materialResourceDSL, [texCount](uint32_t n)
+                       { return std::vector<DescriptorPoolSize>{
+                             {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+                             {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * texCount},
+                         }; },
+                       16);
 }
 
 void GBufferStage::initFallbackMaterial()
@@ -295,6 +292,16 @@ void GBufferStage::destroy()
 
 void GBufferStage::prepare(const RenderStageContext& ctx)
 {
+    if (_pbr.pipeline) {
+        _pbr.pipeline->beginFrame();
+    }
+    if (_phong.pipeline) {
+        _phong.pipeline->beginFrame();
+    }
+    if (_unlit.pipeline) {
+        _unlit.pipeline->beginFrame();
+    }
+
     if (!ctx.frameData) return;
     updateFrameUBOs(ctx);
     preparePBR(*ctx.frameData);
@@ -307,7 +314,7 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
     using LightPassLightData = slang_types::DeferredRender::Unified_LightPass::LightData;
 
     const auto& fd = *ctx.frameData;
-    uint32_t fi    = ctx.flightIndex;
+    uint32_t    fi = ctx.flightIndex;
 
     // Frame UBO
     _frameData.viewPos    = fd.cameraPos;
@@ -327,7 +334,7 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
     }
     int pli = 0;
     for (uint32_t i = 0; i < fd.numPointLights && pli < static_cast<int>(MAX_POINT_LIGHTS); ++i) {
-        const auto& src = fd.pointLights[i];
+        const auto& src            = fd.pointLights[i];
         lightData.pointLights[pli] = {
             .pos       = src.position,
             .color     = src.diffuse,
@@ -352,19 +359,17 @@ void GBufferStage::preparePBR(const RenderFrameData& frameData)
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
         if (prepared[idx]) continue;
 
-        _pbrMatPool.flushDirty(mat, force,
-            [](IBuffer* ubo, PBRMaterial* m) {
-                ubo->writeData(&m->getParams(), sizeof(PBRParamUBO), 0);
-            },
-            [this](DescriptorSetHandle ds, PBRMaterial* m) {
-                _render->getDescriptorHelper()->updateDescriptorSets({
-                    IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 3, m->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 4, m->getTextureBinding(PBRMaterial::EResource::AOTexture)),
-                }, {});
-            });
+        _pbrMatPool.flushDirty(mat, force, [](IBuffer* ubo, PBRMaterial* m)
+                               { ubo->writeData(&m->getParams(), sizeof(PBRParamUBO), 0); },
+                               [this](DescriptorSetHandle ds, PBRMaterial* m)
+                               { _render->getDescriptorHelper()->updateDescriptorSets({
+                                                                                          IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
+                                                                                          IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
+                                                                                          IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
+                                                                                          IDescriptorSetHelper::writeOneImage(ds, 3, m->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
+                                                                                          IDescriptorSetHelper::writeOneImage(ds, 4, m->getTextureBinding(PBRMaterial::EResource::AOTexture)),
+                                                                                      },
+                                                                                      {}); });
         prepared[idx] = 1;
     }
 }
@@ -381,8 +386,8 @@ void GBufferStage::preparePhong(const RenderFrameData& frameData)
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
         if (prepared[idx]) continue;
 
-        _phongMatPool.flushDirty(mat, force,
-            [](IBuffer* ubo, PhongMaterial* m) {
+        _phongMatPool.flushDirty(mat, force, [](IBuffer* ubo, PhongMaterial* m)
+                                 {
                 PhongParamUBO params{};
                 const auto& srcParams = m->getParams();
                 params.ambient   = srcParams.ambient;
@@ -394,16 +399,15 @@ void GBufferStage::preparePhong(const RenderFrameData& frameData)
                     params.textures[i].bEnable     = src[i].bEnable;
                     params.textures[i].uvTransform = src[i].uvTransform;
                 }
-                ubo->writeData(&params, sizeof(PhongParamUBO), 0);
-            },
-            [this](DescriptorSetHandle ds, PhongMaterial* m) {
-                _render->getDescriptorHelper()->updateDescriptorSets({
-                    IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PhongMaterial::EResource::ReflectionTexture)),
-                    IDescriptorSetHelper::writeOneImage(ds, 3, m->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
-                }, {});
-            });
+                ubo->writeData(&params, sizeof(PhongParamUBO), 0); },
+                                 [this](DescriptorSetHandle ds, PhongMaterial* m)
+                                 { _render->getDescriptorHelper()->updateDescriptorSets({
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(PhongMaterial::EResource::DiffuseTexture)),
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(PhongMaterial::EResource::SpecularTexture)),
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 2, m->getTextureBinding(PhongMaterial::EResource::ReflectionTexture)),
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 3, m->getTextureBinding(PhongMaterial::EResource::NormalTexture)),
+                                                                                        },
+                                                                                        {}); });
         prepared[idx] = 1;
     }
 }
@@ -414,21 +418,20 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
     bool             force    = _unlitMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
 
-    auto flushOne = [&](UnlitMaterial* mat) {
+    auto flushOne = [&](UnlitMaterial* mat)
+    {
         if (!mat || mat->getIndex() < 0) return;
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
         if (prepared[idx]) return;
 
-        _unlitMatPool.flushDirty(mat, force,
-            [](IBuffer* ubo, UnlitMaterial* m) {
-                ubo->writeData(&m->getParams(), sizeof(UnlitParamUBO), 0);
-            },
-            [this](DescriptorSetHandle ds, UnlitMaterial* m) {
-                _render->getDescriptorHelper()->updateDescriptorSets({
-                    IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(UnlitMaterial::EResource::BaseColor0)),
-                    IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(UnlitMaterial::EResource::BaseColor1)),
-                }, {});
-            });
+        _unlitMatPool.flushDirty(mat, force, [](IBuffer* ubo, UnlitMaterial* m)
+                                 { ubo->writeData(&m->getParams(), sizeof(UnlitParamUBO), 0); },
+                                 [this](DescriptorSetHandle ds, UnlitMaterial* m)
+                                 { _render->getDescriptorHelper()->updateDescriptorSets({
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(UnlitMaterial::EResource::BaseColor0)),
+                                                                                            IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(UnlitMaterial::EResource::BaseColor1)),
+                                                                                        },
+                                                                                        {}); });
         prepared[idx] = 1;
     };
 
@@ -464,8 +467,7 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
     cmdBuf->bindPipeline(_pbr.pipeline.get());
     for (const auto& item : items) {
         if (!item.mesh || !item.material) continue;
-        cmdBuf->bindDescriptorSets(_pbr.pipelineLayout.get(), 0,
-            {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex)});
+        cmdBuf->bindDescriptorSets(_pbr.pipelineLayout.get(), 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex)});
         PBRPushConstant pc{.modelMat = item.worldMatrix};
         cmdBuf->pushConstants(_pbr.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(pc), &pc);
         item.mesh->draw(cmdBuf);
@@ -483,8 +485,7 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
     cmdBuf->bindPipeline(_phong.pipeline.get());
     for (const auto& item : items) {
         if (!item.mesh || !item.material) continue;
-        cmdBuf->bindDescriptorSets(_phong.pipelineLayout.get(), 0,
-            {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
+        cmdBuf->bindDescriptorSets(_phong.pipelineLayout.get(), 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
         PhongPushConstant pc{.modelMat = item.worldMatrix};
         cmdBuf->pushConstants(_phong.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(pc), &pc);
         item.mesh->draw(cmdBuf);
@@ -502,8 +503,7 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
     cmdBuf->bindPipeline(_unlit.pipeline.get());
     for (const auto& item : items) {
         if (!item.mesh || !item.material) continue;
-        cmdBuf->bindDescriptorSets(_unlit.pipelineLayout.get(), 0,
-            {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex)});
+        cmdBuf->bindDescriptorSets(_unlit.pipelineLayout.get(), 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex)});
         UnlitPushConstant pc{.modelMat = item.worldMatrix};
         cmdBuf->pushConstants(_unlit.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(pc), &pc);
         item.mesh->draw(cmdBuf);
@@ -524,8 +524,7 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
         if (!item.mesh) continue;
         if (!bound) {
             cmdBuf->bindPipeline(_unlit.pipeline.get());
-            cmdBuf->bindDescriptorSets(_unlit.pipelineLayout.get(), 0,
-                {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx)});
+            cmdBuf->bindDescriptorSets(_unlit.pipelineLayout.get(), 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx)});
             bound = true;
         }
         UnlitPushConstant pc{.modelMat = item.worldMatrix};
@@ -540,6 +539,10 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
 
 void GBufferStage::renderGUI()
 {
+    _pbr.pipeline->renderGUI();
+    _phong.pipeline->renderGUI();
+    _unlit.pipeline->renderGUI();
+
     // Future: material pool stats, per-pipeline toggle, etc.
 }
 

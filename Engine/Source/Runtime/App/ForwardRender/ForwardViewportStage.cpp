@@ -85,63 +85,62 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
     //   set 2: material params (UBO)
     //   set 3: skybox cubemap (1 combined image sampler) — shared with _skyboxResourceDSL
     //   set 4: shadow map (dir + point cubemaps)
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "FwdPhong_Frame_DSL", .set = 0,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                 .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                 .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                 .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdPhong_Resource_DSL", .set = 1,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdPhong_Param_DSL", .set = 2,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                 .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdPhong_Skybox_DSL", .set = 3,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-            },
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdPhong_Shadow_DSL", .set = 4,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_POINT_LIGHTS, .stageFlags = EShaderStage::Fragment},
-            },
-        },
-    });
+    auto dsls         = IDescriptorSetLayout::create(_render, {
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdPhong_Frame_DSL",
+                                                                      .set      = 0,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
+                                                                          {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdPhong_Resource_DSL",
+                                                                      .set      = 1,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                          {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                          {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdPhong_Param_DSL",
+                                                                      .set      = 2,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdPhong_Skybox_DSL",
+                                                                      .set      = 3,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdPhong_Shadow_DSL",
+                                                                      .set      = 4,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_POINT_LIGHTS, .stageFlags = EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                              });
     _phongFrameDSL    = dsls[0];
     _phongResourceDSL = dsls[1];
     _phongParamDSL    = dsls[2];
     // dsls[3] and dsls[4] are used only for pipeline layout creation
 
     _phongPPL = IPipelineLayout::create(
-        _render, "FwdPhong_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry}},
-        dsls);
+        _render, "FwdPhong_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry}}, dsls);
 
     _phongPipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _phongPPL.get(),
-        .shaderDesc = ShaderDesc{
+        .shaderDesc            = ShaderDesc{
             .shaderName        = "PhongLit/PhongLit.glsl",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes4,
@@ -153,36 +152,47 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
         .multisampleState   = {.sampleCount = ESampleCount::Sample_1},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = {.attachments = {{
-            .index = 0, .bBlendEnable = true,
-            .srcColorBlendFactor = EBlendFactor::SrcAlpha, .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, .colorBlendOp = EBlendOp::Add,
-            .srcAlphaBlendFactor = EBlendFactor::SrcAlpha, .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha, .alphaBlendOp = EBlendOp::Add,
-            .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-        }}},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                   .index               = 0,
+                                   .bBlendEnable        = true,
+                                   .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .colorBlendOp        = EBlendOp::Add,
+                                   .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .alphaBlendOp        = EBlendOp::Add,
+                                   .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                               }}},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _phongPipeline = IGraphicsPipeline::create(_render);
     _phongPipeline->recreate(_phongPipelineCI);
 
     // Per-flight frame DS (frame + light + debug UBOs)
     _phongFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "FwdPhong_Frame_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 3}},
-    });
+                                                          .label     = "FwdPhong_Frame_DSP",
+                                                          .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+                                                          .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 3}},
+                                                      });
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         _phongFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label = std::format("FwdPhong_Frame_UBO_{}", i), .usage = EBufferUsage::UniformBuffer,
-            .size = sizeof(PhongFrameUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                         .label       = std::format("FwdPhong_Frame_UBO_{}", i),
+                                                         .usage       = EBufferUsage::UniformBuffer,
+                                                         .size        = sizeof(PhongFrameUBO),
+                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                     });
         _phongLightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label = std::format("FwdPhong_Light_UBO_{}", i), .usage = EBufferUsage::UniformBuffer,
-            .size = sizeof(PhongLightUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                         .label       = std::format("FwdPhong_Light_UBO_{}", i),
+                                                         .usage       = EBufferUsage::UniformBuffer,
+                                                         .size        = sizeof(PhongLightUBO),
+                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                     });
         _phongDebugUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label = std::format("FwdPhong_Debug_UBO_{}", i), .usage = EBufferUsage::UniformBuffer,
-            .size = sizeof(PhongDebugUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                         .label       = std::format("FwdPhong_Debug_UBO_{}", i),
+                                                         .usage       = EBufferUsage::UniformBuffer,
+                                                         .size        = sizeof(PhongDebugUBO),
+                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                     });
 
         _phongFrameDS[i] = _phongFrameDSP->allocateDescriptorSets(_phongFrameDSL);
         _render->getDescriptorHelper()->updateDescriptorSets({
@@ -195,13 +205,11 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
     // Material pool
     constexpr uint32_t phongTextureCount = 4; // diffuse, specular, reflection, normal
     _phongMatPool.init(
-        _render, _phongParamDSL, _phongResourceDSL,
-        [phongTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize> {
-            return {
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * phongTextureCount},
-            };
-        },
+        _render, _phongParamDSL, _phongResourceDSL, [phongTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
+        { return {
+              {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+              {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * phongTextureCount},
+          }; },
         16);
     _phongPoolRecreated = true;
 
@@ -211,38 +219,38 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
 // ── Unlit ───────────────────────────────────────────────────────────
 void ForwardViewportStage::initUnlit(const InitDesc& desc)
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "FwdUnlit_Frame_DSL", .set = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                          .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdUnlit_Param_DSL", .set = 1,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdUnlit_Resource_DSL", .set = 2,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-            },
-        },
-    });
+    auto dsls         = IDescriptorSetLayout::create(_render, {
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdUnlit_Frame_DSL",
+                                                                      .set      = 0,
+                                                                      .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdUnlit_Param_DSL",
+                                                                      .set      = 1,
+                                                                      .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                  },
+                                                                  DescriptorSetLayoutDesc{
+                                                                      .label    = "FwdUnlit_Resource_DSL",
+                                                                      .set      = 2,
+                                                                      .bindings = {
+                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                                                                      },
+                                                                  },
+                                                              });
     _unlitFrameDSL    = dsls[0];
     _unlitParamDSL    = dsls[1];
     _unlitResourceDSL = dsls[2];
 
     _unlitPPL = IPipelineLayout::create(
-        _render, "FwdUnlit_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}},
-        dsls);
+        _render, "FwdUnlit_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, dsls);
 
     GraphicsPipelineCreateInfo ci{
         .renderPass            = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _unlitPPL.get(),
-        .shaderDesc = ShaderDesc{
+        .shaderDesc            = ShaderDesc{
             .shaderName        = "Test/Unlit.glsl",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes3,
@@ -253,41 +261,46 @@ void ForwardViewportStage::initUnlit(const InitDesc& desc)
         .multisampleState   = {.sampleCount = ESampleCount::Sample_1},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = {.attachments = {{
-            .index = 0, .bBlendEnable = false,
-            .srcColorBlendFactor = EBlendFactor::SrcAlpha, .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, .colorBlendOp = EBlendOp::Add,
-            .srcAlphaBlendFactor = EBlendFactor::One, .dstAlphaBlendFactor = EBlendFactor::Zero, .alphaBlendOp = EBlendOp::Add,
-            .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-        }}},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                   .index               = 0,
+                                   .bBlendEnable        = false,
+                                   .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .colorBlendOp        = EBlendOp::Add,
+                                   .srcAlphaBlendFactor = EBlendFactor::One,
+                                   .dstAlphaBlendFactor = EBlendFactor::Zero,
+                                   .alphaBlendOp        = EBlendOp::Add,
+                                   .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                               }}},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _unlitPipeline = IGraphicsPipeline::create(_render);
     _unlitPipeline->recreate(ci);
 
     // Frame DS ring buffer
     _unlitFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .maxSets   = UNLIT_FRAME_SLOTS,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = UNLIT_FRAME_SLOTS}},
-    });
+                                                          .maxSets   = UNLIT_FRAME_SLOTS,
+                                                          .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = UNLIT_FRAME_SLOTS}},
+                                                      });
     std::vector<DescriptorSetHandle> sets;
     _unlitFrameDSP->allocateDescriptorSets(_unlitFrameDSL, UNLIT_FRAME_SLOTS, sets);
     for (uint32_t i = 0; i < UNLIT_FRAME_SLOTS; ++i) {
-        _unlitFrameDSs[i] = sets[i];
+        _unlitFrameDSs[i]  = sets[i];
         _unlitFrameUBOs[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label = std::format("FwdUnlit_Frame_UBO_{}", i), .usage = EBufferUsage::UniformBuffer,
-            .size = sizeof(UnlitFrameUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                          .label       = std::format("FwdUnlit_Frame_UBO_{}", i),
+                                                          .usage       = EBufferUsage::UniformBuffer,
+                                                          .size        = sizeof(UnlitFrameUBO),
+                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                      });
     }
 
     // Material pool
     constexpr uint32_t unlitTextureCount = 2;
     _unlitMatPool.init(
-        _render, _unlitParamDSL, _unlitResourceDSL,
-        [unlitTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize> {
-            return {
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-                {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * unlitTextureCount},
-            };
-        },
+        _render, _unlitParamDSL, _unlitResourceDSL, [unlitTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
+        { return {
+              {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+              {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * unlitTextureCount},
+          }; },
         16);
     _unlitPoolRecreated = true;
 }
@@ -296,15 +309,13 @@ void ForwardViewportStage::initUnlit(const InitDesc& desc)
 void ForwardViewportStage::initSimple(const InitDesc& desc)
 {
     _simplePPL = IPipelineLayout::create(
-        _render, "FwdSimple_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(SimplePC), .stageFlags = EShaderStage::Vertex}},
-        {});
+        _render, "FwdSimple_PPL", {PushConstantRange{.offset = 0, .size = sizeof(SimplePC), .stageFlags = EShaderStage::Vertex}}, {});
 
     GraphicsPipelineCreateInfo ci{
         .renderPass            = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _simplePPL.get(),
-        .shaderDesc = ShaderDesc{
+        .shaderDesc            = ShaderDesc{
             .shaderName        = "Test/SimpleMaterial.glsl",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes3,
@@ -315,12 +326,17 @@ void ForwardViewportStage::initSimple(const InitDesc& desc)
         .multisampleState   = {.sampleCount = ESampleCount::Sample_1},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
         .colorBlendState    = {.attachments = {{
-            .index = 0, .bBlendEnable = false,
-            .srcColorBlendFactor = EBlendFactor::SrcAlpha, .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha, .colorBlendOp = EBlendOp::Add,
-            .srcAlphaBlendFactor = EBlendFactor::One, .dstAlphaBlendFactor = EBlendFactor::Zero, .alphaBlendOp = EBlendOp::Add,
-            .colorWriteMask = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
-        }}},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                   .index               = 0,
+                                   .bBlendEnable        = false,
+                                   .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .colorBlendOp        = EBlendOp::Add,
+                                   .srcAlphaBlendFactor = EBlendFactor::One,
+                                   .dstAlphaBlendFactor = EBlendFactor::Zero,
+                                   .alphaBlendOp        = EBlendOp::Add,
+                                   .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                               }}},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _simplePipeline = IGraphicsPipeline::create(_render);
     _simplePipeline->recreate(ci);
@@ -329,16 +345,18 @@ void ForwardViewportStage::initSimple(const InitDesc& desc)
 // ── Skybox ──────────────────────────────────────────────────────────
 void ForwardViewportStage::initSkybox(const InitDesc& desc)
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label = "FwdSkybox_PerFrame_DSL", .set = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        },
-        DescriptorSetLayoutDesc{
-            .label = "FwdSkybox_Resource_DSL", .set = 1,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        },
-    });
+    auto dsls          = IDescriptorSetLayout::create(_render, {
+                                                                   DescriptorSetLayoutDesc{
+                                                                       .label    = "FwdSkybox_PerFrame_DSL",
+                                                                       .set      = 0,
+                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
+                                                                   },
+                                                                   DescriptorSetLayoutDesc{
+                                                                       .label    = "FwdSkybox_Resource_DSL",
+                                                                       .set      = 1,
+                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+                                                                   },
+                                                               });
     _skyboxFrameDSL    = dsls[0];
     _skyboxResourceDSL = dsls[1];
 
@@ -348,7 +366,7 @@ void ForwardViewportStage::initSkybox(const InitDesc& desc)
         .renderPass            = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _skyboxPPL.get(),
-        .shaderDesc = ShaderDesc{
+        .shaderDesc            = ShaderDesc{
             .shaderName        = "Skybox.glsl",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes3,
@@ -365,17 +383,19 @@ void ForwardViewportStage::initSkybox(const InitDesc& desc)
 
     // Per-flight UBO + DS
     _skyboxDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "FwdSkybox_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-    });
+                                                      .label     = "FwdSkybox_DSP",
+                                                      .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+                                                      .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
+                                                  });
 
     SkyboxFrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         _skyboxFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-            .label = std::format("FwdSkybox_Frame_UBO_{}", i), .usage = EBufferUsage::UniformBuffer,
-            .size = sizeof(SkyboxFrameUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+                                                          .label       = std::format("FwdSkybox_Frame_UBO_{}", i),
+                                                          .usage       = EBufferUsage::UniformBuffer,
+                                                          .size        = sizeof(SkyboxFrameUBO),
+                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                      });
         _skyboxFrameUBO[i]->writeData(&initialData, sizeof(SkyboxFrameUBO), 0);
 
         _skyboxFrameDS[i] = _skyboxDSP->allocateDescriptorSets(_skyboxFrameDSL);
@@ -389,24 +409,22 @@ void ForwardViewportStage::initSkybox(const InitDesc& desc)
 void ForwardViewportStage::initDebug(const InitDesc& desc)
 {
     _debugDSL = IDescriptorSetLayout::create(_render,
-        DescriptorSetLayoutDesc{
-            .label = "FwdDebug_DSL", .set = 0,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1,
-                 .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
-            },
-        });
+                                             DescriptorSetLayoutDesc{
+                                                 .label    = "FwdDebug_DSL",
+                                                 .set      = 0,
+                                                 .bindings = {
+                                                     {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                                                 },
+                                             });
 
     _debugPPL = IPipelineLayout::create(
-        _render, "FwdDebug_PPL",
-        {PushConstantRange{.offset = 0, .size = sizeof(DebugModelPC), .stageFlags = EShaderStage::Vertex}},
-        {_debugDSL});
+        _render, "FwdDebug_PPL", {PushConstantRange{.offset = 0, .size = sizeof(DebugModelPC), .stageFlags = EShaderStage::Vertex}}, {_debugDSL});
 
     _debugPipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _debugPPL.get(),
-        .shaderDesc = ShaderDesc{
+        .shaderDesc            = ShaderDesc{
             .shaderName        = "Test/DebugRender.glsl",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes3,
@@ -416,28 +434,36 @@ void ForwardViewportStage::initDebug(const InitDesc& desc)
         .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::LessOrEqual},
         .colorBlendState    = {.attachments = {{
-            .index = 0, .bBlendEnable = false,
-            .srcColorBlendFactor = EBlendFactor::One, .dstColorBlendFactor = EBlendFactor::Zero, .colorBlendOp = EBlendOp::Add,
-            .srcAlphaBlendFactor = EBlendFactor::One, .dstAlphaBlendFactor = EBlendFactor::Zero, .alphaBlendOp = EBlendOp::Add,
-            .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-        }}},
-        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+                                   .index               = 0,
+                                   .bBlendEnable        = false,
+                                   .srcColorBlendFactor = EBlendFactor::One,
+                                   .dstColorBlendFactor = EBlendFactor::Zero,
+                                   .colorBlendOp        = EBlendOp::Add,
+                                   .srcAlphaBlendFactor = EBlendFactor::One,
+                                   .dstAlphaBlendFactor = EBlendFactor::Zero,
+                                   .alphaBlendOp        = EBlendOp::Add,
+                                   .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                               }}},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _debugPipeline = IGraphicsPipeline::create(_render);
     _debugPipeline->recreate(_debugPipelineCI);
 
-    _debugDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .maxSets   = 1,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1}},
-    });
-    _debugUboDS = _debugDSP->allocateDescriptorSets(_debugDSL);
+    _debugDSP       = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
+                                                           .maxSets   = 1,
+                                                           .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1}},
+                                                       });
+    _debugUboDS     = _debugDSP->allocateDescriptorSets(_debugDSL);
     _debugUboBuffer = IBuffer::create(_render, BufferCreateInfo{
-        .label = "FwdDebug_UBO", .usage = EBufferUsage::UniformBuffer,
-        .size = sizeof(DebugUBO), .memoryUsage = EMemoryUsage::CpuToGpu,
-    });
+                                                   .label       = "FwdDebug_UBO",
+                                                   .usage       = EBufferUsage::UniformBuffer,
+                                                   .size        = sizeof(DebugUBO),
+                                                   .memoryUsage = EMemoryUsage::CpuToGpu,
+                                               });
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genSingleBufferWrite(_debugUboDS, 0, EPipelineDescriptorType::UniformBuffer, _debugUboBuffer.get()),
-    }, {});
+                                                             IDescriptorSetHelper::genSingleBufferWrite(_debugUboDS, 0, EPipelineDescriptorType::UniformBuffer, _debugUboBuffer.get()),
+                                                         },
+                                                         {});
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -448,8 +474,11 @@ void ForwardViewportStage::destroy()
 {
     // Phong
     _phongMatPool = {};
-    _phongPipeline.reset(); _phongPPL.reset();
-    _phongFrameDSL.reset(); _phongResourceDSL.reset(); _phongParamDSL.reset();
+    _phongPipeline.reset();
+    _phongPPL.reset();
+    _phongFrameDSL.reset();
+    _phongResourceDSL.reset();
+    _phongParamDSL.reset();
     _phongFrameDSP.reset();
     for (auto& u : _phongFrameUBO) u.reset();
     for (auto& u : _phongLightUBO) u.reset();
@@ -457,23 +486,31 @@ void ForwardViewportStage::destroy()
 
     // Unlit
     _unlitMatPool = {};
-    _unlitPipeline.reset(); _unlitPPL.reset();
-    _unlitFrameDSL.reset(); _unlitParamDSL.reset(); _unlitResourceDSL.reset();
+    _unlitPipeline.reset();
+    _unlitPPL.reset();
+    _unlitFrameDSL.reset();
+    _unlitParamDSL.reset();
+    _unlitResourceDSL.reset();
     _unlitFrameDSP.reset();
     for (auto& u : _unlitFrameUBOs) u.reset();
 
     // Simple
-    _simplePipeline.reset(); _simplePPL.reset();
+    _simplePipeline.reset();
+    _simplePPL.reset();
 
     // Skybox
-    _skyboxPipeline.reset(); _skyboxPPL.reset();
-    _skyboxFrameDSL.reset(); _skyboxResourceDSL.reset();
+    _skyboxPipeline.reset();
+    _skyboxPPL.reset();
+    _skyboxFrameDSL.reset();
+    _skyboxResourceDSL.reset();
     _skyboxDSP.reset();
     for (auto& u : _skyboxFrameUBO) u.reset();
 
     // Debug
-    _debugPipeline.reset(); _debugPPL.reset();
-    _debugDSL.reset(); _debugDSP.reset();
+    _debugPipeline.reset();
+    _debugPPL.reset();
+    _debugDSL.reset();
+    _debugDSP.reset();
     _debugUboBuffer.reset();
 
     _render = nullptr;
@@ -485,6 +522,22 @@ void ForwardViewportStage::destroy()
 
 void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 {
+    if (_phongPipeline) {
+        _phongPipeline->beginFrame();
+    }
+    if (_unlitPipeline) {
+        _unlitPipeline->beginFrame();
+    }
+    if (_simplePipeline) {
+        _simplePipeline->beginFrame();
+    }
+    if (_skyboxPipeline) {
+        _skyboxPipeline->beginFrame();
+    }
+    if (_debugPipeline) {
+        _debugPipeline->beginFrame();
+    }
+
     if (!ctx.frameData) return;
 
     preparePhong(ctx);
@@ -501,7 +554,7 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
 {
     const auto& fd = *ctx.frameData;
-    uint32_t fi = ctx.flightIndex;
+    uint32_t    fi = ctx.flightIndex;
 
     // Ensure material pool capacity
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
@@ -510,7 +563,7 @@ void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
     }
 
     // Update frame UBO
-    auto* app = App::get();
+    auto*         app = App::get();
     PhongFrameUBO frameUBO{};
     frameUBO.projMat    = fd.projection;
     frameUBO.viewMat    = fd.view;
@@ -536,7 +589,7 @@ void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
     }
 
     // Update current slot frame UBO
-    auto*       app = App::get();
+    auto*         app = App::get();
     UnlitFrameUBO ubo{};
     ubo.projMat    = ctx.frameData->projection;
     ubo.viewMat    = ctx.frameData->view;
@@ -549,8 +602,9 @@ void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
 
     DescriptorBufferInfo bufferInfo(BufferHandle(_unlitFrameUBOs[slot]->getHandle()), 0, sizeof(UnlitFrameUBO));
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genBufferWrite(_unlitFrameDSs[slot], 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo}),
-    }, {});
+                                                             IDescriptorSetHelper::genBufferWrite(_unlitFrameDSs[slot], 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo}),
+                                                         },
+                                                         {});
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -614,14 +668,14 @@ void ForwardViewportStage::drawSkybox(const RenderStageContext& ctx)
 
 void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 {
-    const auto& fd  = *ctx.frameData;
+    const auto& fd     = *ctx.frameData;
     auto*       cmdBuf = ctx.cmdBuf;
-    uint32_t    fi  = ctx.flightIndex;
+    uint32_t    fi     = ctx.flightIndex;
 
     if (fd.phongDrawItems.empty()) return;
 
-    auto* runtime = App::get()->getRenderRuntime();
-    auto* scene   = App::get()->getSceneManager()->getActiveScene();
+    auto*               runtime  = App::get()->getRenderRuntime();
+    auto*               scene    = App::get()->getSceneManager()->getActiveScene();
     DescriptorSetHandle skyboxDS = (runtime && scene) ? runtime->getSceneSkyboxDescriptorSet(scene) : DescriptorSetHandle{};
 
     cmdBuf->debugBeginLabel("ForwardPhong");
@@ -643,39 +697,42 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
         if (!updatedMaterial[matIdx]) {
             _phongMatPool.flushDirty(
-                material, _phongPoolRecreated,
-                [&](IBuffer* ubo, PhongMaterial* mat) {
+                material, _phongPoolRecreated, [&](IBuffer* ubo, PhongMaterial* mat)
+                {
                     const auto& params = mat->getParams();
-                    ubo->writeData(&params, sizeof(PhongMaterial::ParamUBO), 0);
-                },
-                [&](DescriptorSetHandle ds, PhongMaterial* mat) {
+                    ubo->writeData(&params, sizeof(PhongMaterial::ParamUBO), 0); },
+                [&](DescriptorSetHandle ds, PhongMaterial* mat)
+                {
                     auto diffuse    = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture));
                     auto specular   = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture));
                     auto reflection = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture));
                     auto normal     = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture));
 
                     _render->getDescriptorHelper()->updateDescriptorSets({
-                        IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
-                        IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
-                        IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
-                        IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
-                    }, {});
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
+                                                                         },
+                                                                         {});
                 });
             updatedMaterial[matIdx] = 1;
         }
 
         cmdBuf->bindDescriptorSets(_phongPPL.get(), 0, {
-            _phongFrameDS[fi],
-            resourceDS,
-            paramDS,
-            skyboxDS,
-            _depthBufferShadowDS,
-        });
+                                                           _phongFrameDS[fi],
+                                                           resourceDS,
+                                                           paramDS,
+                                                           skyboxDS,
+                                                           _depthBufferShadowDS,
+                                                       });
 
         PhongModelPC pc{.modelMat = item.worldMatrix};
         cmdBuf->pushConstants(_phongPPL.get(),
                               EShaderStage::Vertex | EShaderStage::Geometry,
-                              0, sizeof(PhongModelPC), &pc);
+                              0,
+                              sizeof(PhongModelPC),
+                              &pc);
 
         item.mesh->draw(cmdBuf);
     }
@@ -688,7 +745,7 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
 void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
 {
-    const auto& fd  = *ctx.frameData;
+    const auto& fd     = *ctx.frameData;
     auto*       cmdBuf = ctx.cmdBuf;
 
     if (fd.unlitDrawItems.empty()) return;
@@ -711,12 +768,12 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
 
         if (!updatedMaterial[matIdx]) {
             _unlitMatPool.flushDirty(
-                material, _unlitPoolRecreated,
-                [&](IBuffer* ubo, UnlitMaterial* mat) {
+                material, _unlitPoolRecreated, [&](IBuffer* ubo, UnlitMaterial* mat)
+                {
                     const auto& params = mat->getParams();
-                    ubo->writeData(&params, sizeof(UnlitMaterial::ParamUBO), 0);
-                },
-                [&](DescriptorSetHandle ds, UnlitMaterial* mat) {
+                    ubo->writeData(&params, sizeof(UnlitMaterial::ParamUBO), 0); },
+                [&](DescriptorSetHandle ds, UnlitMaterial* mat)
+                {
                     DescriptorImageInfo img0(mat->getImageViewHandle(UnlitMaterial::BaseColor0),
                                              mat->getSamplerHandle(UnlitMaterial::BaseColor0),
                                              EImageLayout::ShaderReadOnlyOptimal);
@@ -724,9 +781,10 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
                                              mat->getSamplerHandle(UnlitMaterial::BaseColor1),
                                              EImageLayout::ShaderReadOnlyOptimal);
                     _render->getDescriptorHelper()->updateDescriptorSets({
-                        IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
-                        IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
-                    }, {});
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
+                                                                         },
+                                                                         {});
                 });
             updatedMaterial[matIdx] = true;
         }
@@ -740,7 +798,7 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
     }
 
     _unlitPoolRecreated = false;
-    _unlitFrameSlot = (_unlitFrameSlot + 1) % UNLIT_FRAME_SLOTS;
+    _unlitFrameSlot     = (_unlitFrameSlot + 1) % UNLIT_FRAME_SLOTS;
 
     cmdBuf->debugEndLabel();
 }
@@ -749,7 +807,7 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
 
 void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
 {
-    const auto& fd  = *ctx.frameData;
+    const auto& fd     = *ctx.frameData;
     auto*       cmdBuf = ctx.cmdBuf;
 
     auto* scene = App::get()->getSceneManager()->getActiveScene();
@@ -758,7 +816,7 @@ void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
     bool hasSimple = !fd.simpleDrawItems.empty();
 
     // Direction components (editor visualization — still from registry, TODO: migrate to snapshot)
-    const auto& dirView   = scene->getRegistry().view<TransformComponent, DirectionComponent>();
+    const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
     bool        hasDirection = dirView.begin() != dirView.end();
 
     if (!hasSimple && !hasDirection) return;
@@ -821,7 +879,8 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
     const auto& fd     = *ctx.frameData;
 
     // Collect all meshes (from all draw item buckets)
-    auto collectMeshes = [&]() -> bool {
+    auto collectMeshes = [&]() -> bool
+    {
         return !fd.pbrDrawItems.empty() || !fd.phongDrawItems.empty() ||
                !fd.unlitDrawItems.empty() || !fd.simpleDrawItems.empty() ||
                !fd.fallbackDrawItems.empty();
@@ -833,7 +892,7 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Update debug UBO
-    auto* app = App::get();
+    auto* app            = App::get();
     _debugUBO.projection = fd.projection;
     _debugUBO.view       = fd.view;
     _debugUBO.resolution = glm::ivec2(static_cast<int>(vpW), static_cast<int>(vpH));
@@ -845,7 +904,8 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
     setViewportAndScissor(cmdBuf, vpW, vpH);
 
     // Draw all items from all buckets
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items) {
+    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
+    {
         for (const auto& item : items) {
             if (!item.mesh) continue;
             DebugModelPC pc{.modelMat = item.worldMatrix};
@@ -877,15 +937,15 @@ void ForwardViewportStage::renderGUI()
         bool bDebugUV     = (_phongDebug.bDebugUV != 0);
 
         if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) _phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
-        if (ImGui::Checkbox("Debug Depth", &bDebugDepth))   _phongDebug.bDebugDepth  = bDebugDepth ? 1u : 0u;
-        if (ImGui::Checkbox("Debug UV", &bDebugUV))         _phongDebug.bDebugUV     = bDebugUV ? 1u : 0u;
+        if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) _phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
+        if (ImGui::Checkbox("Debug UV", &bDebugUV)) _phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
         ImGui::DragFloat4("Float Param", glm::value_ptr(_phongDebug.floatParam), 0.1f);
         ImGui::TreePop();
     }
 
     if (ImGui::TreeNode("Debug Render")) {
         const char* modeNames[] = {"None", "NormalColor", "NormalDir", "Depth", "UV"};
-        int mode = static_cast<int>(_debugMode);
+        int         mode        = static_cast<int>(_debugMode);
         if (ImGui::Combo("Mode", &mode, modeNames, IM_ARRAYSIZE(modeNames))) {
             EDebugMode newMode = static_cast<EDebugMode>(mode);
             if (newMode != _debugMode) {
@@ -897,13 +957,18 @@ void ForwardViewportStage::renderGUI()
                     _debugPipelineCI.shaderDesc.defines = {};
                     _debugPipeline->updateDesc(_debugPipelineCI);
                 }
-                _debugMode    = newMode;
+                _debugMode     = newMode;
                 _debugUBO.mode = static_cast<int>(_debugMode);
             }
         }
         ImGui::DragFloat4("Float Param", glm::value_ptr(_debugUBO.floatParam), 0.1f);
         ImGui::TreePop();
     }
+    _simplePipeline->renderGUI();
+    _unlitPipeline->renderGUI();
+    _phongPipeline->renderGUI();
+    _debugPipeline->renderGUI();
+    _skyboxPipeline->renderGUI();
 
     ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");
 
@@ -917,7 +982,7 @@ void ForwardViewportStage::renderGUI()
 void ForwardViewportStage::setShadowMappingEnabled(bool enabled)
 {
     if (_bShadowMapping == enabled) return;
-    _bShadowMapping = enabled;
+    _bShadowMapping                     = enabled;
     _phongPipelineCI.shaderDesc.defines = buildPhongShaderDefines(_bShadowMapping);
     _phongPipeline->updateDesc(_phongPipelineCI);
 }

@@ -6,8 +6,23 @@
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 
+#include <string>
+
 namespace ya
 {
+
+namespace
+{
+
+std::vector<std::string> buildLightPassShaderDefines(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL)
+{
+    return {
+        std::string("YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE=") + (bEnablePBRDiffuseIBL ? "1" : "0"),
+        std::string("YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR=") + (bEnablePBRSpecularIBL ? "1" : "0"),
+    };
+}
+
+} // namespace
 
 void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
 {
@@ -47,7 +62,7 @@ void LightStage::init(IRender* render)
         });
 
     // Pipeline
-    GraphicsPipelineCreateInfo ci{
+    _pipelineCI = GraphicsPipelineCreateInfo{
         .pipelineRenderingInfo = {
             .label                  = "Deferred Light Pass",
             .colorAttachmentFormats = {LINEAR_FORMAT},
@@ -58,6 +73,7 @@ void LightStage::init(IRender* render)
             .shaderName        = "DeferredRender/Unified_LightPass.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = _commonVertexAttributes,
+            .defines           = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL),
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
@@ -71,7 +87,7 @@ void LightStage::init(IRender* render)
         .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _pipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_pipeline && _pipeline->recreate(ci), "Failed to create Light pipeline");
+    YA_CORE_ASSERT(_pipeline && _pipeline->recreate(_pipelineCI), "Failed to create Light pipeline");
 
     // Descriptor pool for GBuffer texture DS
     _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
@@ -97,6 +113,11 @@ void LightStage::destroy()
 
 void LightStage::prepare(const RenderStageContext& ctx)
 {
+    (void)ctx;
+    if (_pipeline) {
+        _pipeline->beginFrame();
+    }
+
     if (!_gBufferRT) return;
 
     // Update GBuffer texture DS from current GBuffer RT frame buffer
@@ -141,6 +162,24 @@ void LightStage::execute(const RenderStageContext& ctx)
     PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad)->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
+}
+
+void LightStage::renderGUI()
+{
+    if (!_pipeline) {
+        return;
+    }
+
+    bool bDirty = false;
+    bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &_bEnablePBRDiffuseIBL);
+    bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &_bEnablePBRSpecularIBL);
+    if (bDirty) {
+        auto ci = _pipeline->getDesc();
+        ci.shaderDesc.defines = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
+        _pipeline->updateDesc(std::move(ci));
+    }
+
+    _pipeline->renderGUI();
 }
 
 } // namespace ya
