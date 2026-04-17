@@ -2,6 +2,7 @@
 
 #include "Render/Core/TextureFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
+#include "Runtime/App/App.h"
 #include "Runtime/App/OffscreenJobRunner.h"
 #include "Scene/Scene.h"
 
@@ -33,11 +34,16 @@ std::shared_ptr<OffscreenJobState> createEnvironmentPrefilterJob(ResourceResolve
 
 uint32_t computeEnvironmentPrefilterFaceSize(const Texture* sourceCubemap)
 {
+    static constexpr uint32_t MAX_PREFILTER_FACE_SIZE = 256;
+
     if (!sourceCubemap) {
         return 0;
     }
 
-    return std::max(1u, std::min(sourceCubemap->getWidth(), sourceCubemap->getHeight()));
+    return std::max(1u,
+                    std::min({sourceCubemap->getWidth(),
+                              sourceCubemap->getHeight(),
+                              MAX_PREFILTER_FACE_SIZE}));
 }
 
 uint32_t computeEnvironmentPrefilterMipLevels(uint32_t faceSize)
@@ -351,9 +357,9 @@ void clearPrefilterViews(EnvironmentLightingRuntimeState& state)
     state.prefilterPreviewMipCount = 0;
 }
 
-void rebuildCubeFaceViews(const stdptr<Texture>& texture,
+void rebuildCubeFaceViews(const stdptr<Texture>&                          texture,
                           std::array<stdptr<IImageView>, CubeFace_Count>& outViews,
-                          const std::string& labelPrefix)
+                          const std::string&                              labelPrefix)
 {
     clearCubeFaceViews(outViews);
     if (!texture || !texture->getImageShared() || !texture->getImageView()) {
@@ -405,8 +411,8 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
         return;
     }
 
-    const auto prefilterImage = state.prefilterTexture->getImageShared();
-    const uint32_t mipLevels  = std::min(prefilterImage->getMipLevels(), EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS);
+    const auto     prefilterImage  = state.prefilterTexture->getImageShared();
+    const uint32_t mipLevels       = std::min(prefilterImage->getMipLevels(), EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS);
     state.prefilterPreviewMipCount = mipLevels;
 
     for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
@@ -614,17 +620,32 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
                                             EnvironmentLightingRuntimeState& state)
 {
     auto transition = makeTransition(component.sourceState, "EnvironmentLighting.Source");
-    if (!state.pendingEnvironmentOffscreen || !state.pendingEnvironmentOffscreen->bTaskFinished) {
+    if (!state.pendingEnvironmentOffscreen) {
+        transition.fail("preprocess job missing");
+        failEnvironmentDerivedBranches(component, "preprocess job missing");
+        return;
+    }
+
+    if (state.pendingEnvironmentOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(state.pendingEnvironmentOffscreen);
         return;
     }
 
-    if (!state.pendingEnvironmentOffscreen->bTaskSucceeded || !state.pendingEnvironmentOffscreen->result ||
+    if (state.pendingEnvironmentOffscreen->phase == EOffscreenJobPhase::Queued ||
+        state.pendingEnvironmentOffscreen->phase == EOffscreenJobPhase::Recorded) {
+        return;
+    }
+
+    if (state.pendingEnvironmentOffscreen->hasFailed() || !state.pendingEnvironmentOffscreen->result ||
         !state.pendingEnvironmentOffscreen->result->outputTexture) {
         state.pendingEnvironmentOffscreen.reset();
         detail::retireEnvTextures(state);
         transition.fail("preprocess failed");
         failEnvironmentDerivedBranches(component, "preprocess failed");
+        return;
+    }
+
+    if (!state.pendingEnvironmentOffscreen->isGpuCompleted()) {
         return;
     }
 
@@ -648,17 +669,31 @@ void handleEnvironmentIrradianceDirty(ResourceResolveSystem&           system,
 void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    component,
                                          EnvironmentLightingRuntimeState& state)
 {
-    if (!state.pendingIrradianceOffscreen || !state.pendingIrradianceOffscreen->bTaskFinished) {
+    if (!state.pendingIrradianceOffscreen) {
+        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess job missing");
+        return;
+    }
+
+    if (state.pendingIrradianceOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(state.pendingIrradianceOffscreen);
         return;
     }
 
-    if (!state.pendingIrradianceOffscreen->bTaskSucceeded ||
+    if (state.pendingIrradianceOffscreen->phase == EOffscreenJobPhase::Queued ||
+        state.pendingIrradianceOffscreen->phase == EOffscreenJobPhase::Recorded) {
+        return;
+    }
+
+    if (state.pendingIrradianceOffscreen->hasFailed() ||
         !state.pendingIrradianceOffscreen->result ||
         !state.pendingIrradianceOffscreen->result->outputTexture) {
         state.pendingIrradianceOffscreen.reset();
         detail::retireTextureNow(state.irradianceTexture);
         makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess failed");
+        return;
+    }
+
+    if (!state.pendingIrradianceOffscreen->isGpuCompleted()) {
         return;
     }
 
@@ -686,17 +721,31 @@ void handleEnvironmentPrefilterDirty(ResourceResolveSystem&           system,
 void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    component,
                                         EnvironmentLightingRuntimeState& state)
 {
-    if (!state.pendingPrefilterOffscreen || !state.pendingPrefilterOffscreen->bTaskFinished) {
+    if (!state.pendingPrefilterOffscreen) {
+        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess job missing");
+        return;
+    }
+
+    if (state.pendingPrefilterOffscreen->phase == EOffscreenJobPhase::Pending) {
         detail::tryQueueJob(state.pendingPrefilterOffscreen);
         return;
     }
 
-    if (!state.pendingPrefilterOffscreen->bTaskSucceeded || !state.pendingPrefilterOffscreen->result ||
+    if (state.pendingPrefilterOffscreen->phase == EOffscreenJobPhase::Queued ||
+        state.pendingPrefilterOffscreen->phase == EOffscreenJobPhase::Recorded) {
+        return;
+    }
+
+    if (state.pendingPrefilterOffscreen->hasFailed() || !state.pendingPrefilterOffscreen->result ||
         !state.pendingPrefilterOffscreen->result->outputTexture) {
         state.pendingPrefilterOffscreen.reset();
         detail::retireTextureNow(state.prefilterTexture);
         detail::rebuildPrefilterViews(state);
         makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess failed");
+        return;
+    }
+
+    if (!state.pendingPrefilterOffscreen->isGpuCompleted()) {
         return;
     }
 

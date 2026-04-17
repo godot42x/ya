@@ -16,8 +16,12 @@ void failOffscreenJob(const std::shared_ptr<OffscreenJobState>& job)
         return;
     }
 
-    job->bTaskFinished  = true;
-    job->bTaskSucceeded = false;
+    if (job->bCancelled || job->phase == EOffscreenJobPhase::Cancelled) {
+        job->phase = EOffscreenJobPhase::Cancelled;
+        return;
+    }
+
+    job->phase = EOffscreenJobPhase::Failed;
 }
 } // namespace
 
@@ -34,8 +38,9 @@ void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<Offscree
         return;
     }
 
-    job->bTaskQueued = true;
+    job->phase = EOffscreenJobPhase::Queued;
     app->taskManager.enqueueOffscreenTask(
+        job,
         [job, outputTexture = std::move(outputTexture)](ICommandBuffer* cmdBuf) mutable
         {
             if (!job || job->bCancelled || !cmdBuf || !job->executeFn) {
@@ -60,8 +65,7 @@ void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<Offscree
             if (job->result) {
                 job->result->outputTexture = std::move(outputTexture);
             }
-            job->bTaskFinished  = true;
-            job->bTaskSucceeded = true;
+            job->phase = EOffscreenJobPhase::Recorded;
         });
 }
 
@@ -72,6 +76,7 @@ void cancelOffscreenJob(std::shared_ptr<OffscreenJobState>& job)
     }
 
     job->bCancelled = true;
+    job->phase      = EOffscreenJobPhase::Cancelled;
     if (job->result && job->result->outputTexture) {
         DeferredDeletionQueue::get().retireResource(job->result->outputTexture);
         job->result->outputTexture = nullptr;

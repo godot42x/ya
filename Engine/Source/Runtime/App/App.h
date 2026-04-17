@@ -41,7 +41,7 @@ struct Sampler;
 struct RenderDocCapture;
 struct ForwardRenderPipeline;
 struct DeferredRenderPipeline;
-struct ResourceResolveSystem;
+class ResourceResolveSystem;
 
 
 void imcFpsControl(FPSControl& fpsCtrl);
@@ -105,7 +105,7 @@ struct TaskManager
 {
     // TODO: use vector for fast execution, but it's not the bottleneck and most important things for now
     std::deque<std::function<void()>>                tasks;
-    std::deque<std::function<void(ICommandBuffer*)>> offscreenTasks;
+    std::deque<std::pair<std::shared_ptr<OffscreenJobState>, std::function<void(ICommandBuffer*)>>> offscreenTasks;
 
     [[nodiscard]] bool hasFrameTasks() const { return !tasks.empty(); }
     [[nodiscard]] bool hasOffscreenTasks() const { return !offscreenTasks.empty(); }
@@ -114,9 +114,9 @@ struct TaskManager
     {
         tasks.push_back(std::move(task));
     }
-    void enqueueOffscreenTask(std::function<void(ICommandBuffer*)> task)
+    void enqueueOffscreenTask(const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
     {
-        offscreenTasks.push_back(std::move(task));
+        offscreenTasks.emplace_back(job, std::move(task));
     }
 
     void update()
@@ -127,11 +127,14 @@ struct TaskManager
             task();
         }
     }
-    void updateOffscreenTasks(ICommandBuffer* cmdBuf)
+    void updateOffscreenTasks(ICommandBuffer* cmdBuf, std::vector<std::shared_ptr<OffscreenJobState>>* submittedJobs = nullptr)
     {
         while (!offscreenTasks.empty()) {
-            auto task = std::move(offscreenTasks.front());
+            auto [job, task] = std::move(offscreenTasks.front());
             offscreenTasks.pop_front();
+            if (submittedJobs && job) {
+                submittedJobs->push_back(job);
+            }
             task(cmdBuf);
         }
     }

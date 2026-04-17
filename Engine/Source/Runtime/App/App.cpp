@@ -787,6 +787,10 @@ bool App::loadScene(const std::string& path)
         break;
     }
 
+    if (auto* render = getRender()) {
+        render->waitIdle();
+    }
+
     if (_sceneManager) {
         return _sceneManager->loadScene(path);
     }
@@ -795,6 +799,10 @@ bool App::loadScene(const std::string& path)
 
 bool App::unloadScene()
 {
+    if (auto* render = getRender()) {
+        render->waitIdle();
+    }
+
     if (_sceneManager) {
         return _sceneManager->unloadScene();
     }

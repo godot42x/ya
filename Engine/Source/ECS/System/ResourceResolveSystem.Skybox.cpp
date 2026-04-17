@@ -2,6 +2,7 @@
 
 #include "Render/Core/TextureFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
+#include "Runtime/App/App.h"
 #include "Runtime/App/OffscreenJobRunner.h"
 #include "Scene/Scene.h"
 
@@ -248,20 +249,31 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 
         case ESkyboxResolveState::Preprocessing:
         {
-            // not completed
-            if (!pendingState.pendingOffscreenProcess ||
-                !pendingState.pendingOffscreenProcess->bTaskFinished) {
+            if (!pendingState.pendingOffscreenProcess) {
+                transition.fail("preprocess job missing");
+                break;
+            }
+
+            if (pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Pending) {
                 detail::tryQueueJob(pendingState.pendingOffscreenProcess);
                 break;
             }
 
-            // failed
-            if (!pendingState.pendingOffscreenProcess->bTaskSucceeded ||
+            if (pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Queued ||
+                pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Recorded) {
+                break;
+            }
+
+            if (pendingState.pendingOffscreenProcess->hasFailed() ||
                 !pendingState.pendingOffscreenProcess->result ||
                 !pendingState.pendingOffscreenProcess->result->outputTexture) {
                 pendingState.pendingOffscreenProcess.reset();
                 detail::retireSkyboxResources(pendingState);
                 transition.fail("preprocess failed");
+                break;
+            }
+
+            if (!pendingState.pendingOffscreenProcess->isGpuCompleted()) {
                 break;
             }
 

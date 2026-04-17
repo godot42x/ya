@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 
+#include "Render/Core/OffscreenJob.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
@@ -68,6 +69,7 @@ struct RenderRuntime
     stdptr<ICommandBuffer>                       _offscreenCmdBuf;
     void*                                        _offscreenFence   = nullptr;
     bool                                         _offscreenPending = false;
+    std::vector<std::shared_ptr<OffscreenJobState>> _submittedOffscreenJobs;
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
@@ -130,6 +132,7 @@ struct RenderRuntime
     void shutdown();
     void onViewportResized(Rect2D rect);
     void offScreenRender();
+    void finalizeCompletedOffscreenJobs();
     void renderFrame(const FrameInput& input);
     void renderGUI(float dt);
 
@@ -142,6 +145,7 @@ struct RenderRuntime
     [[nodiscard]] IRenderTarget*                 getShadowDepthRT() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] bool                           isOffscreenPending() const { return _offscreenPending; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;

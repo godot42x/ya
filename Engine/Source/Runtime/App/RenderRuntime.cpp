@@ -727,9 +727,14 @@ void RenderRuntime::resetEnvironmentLightingPool()
     }
 }
 
+void RenderRuntime::finalizeCompletedOffscreenJobs()
+{
+    ya::finalizeSubmittedOffscreenJobs(_submittedOffscreenJobs);
+}
+
 void RenderRuntime::offScreenRender()
 {
-    if (!_render || !_app || !_offscreenCmdBuf || !_app->taskManager.hasOffscreenTasks()) {
+    if (!_render || !_app || !_offscreenCmdBuf) {
         return;
     }
 
@@ -740,6 +745,11 @@ void RenderRuntime::offScreenRender()
         vkWaitForFences(vkRender->getDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
         vkResetFences(vkRender->getDevice(), 1, &fence);
         _offscreenPending = false;
+        finalizeCompletedOffscreenJobs();
+    }
+
+    if (!_app->taskManager.hasOffscreenTasks()) {
+        return;
     }
 
     auto cmdBuf = _offscreenCmdBuf;
@@ -749,7 +759,8 @@ void RenderRuntime::offScreenRender()
         return;
     }
 
-    _app->taskManager.updateOffscreenTasks(cmdBuf.get());
+    _submittedOffscreenJobs.clear();
+    _app->taskManager.updateOffscreenTasks(cmdBuf.get(), &_submittedOffscreenJobs);
 
     if (!cmdBuf->end()) {
         YA_CORE_ERROR("Failed to end offscreen command buffer");
