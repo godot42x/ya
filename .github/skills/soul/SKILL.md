@@ -24,10 +24,23 @@ description: 需求不确定时的澄清与决策引导
 ## 交接规则
 
 - 澄清完成后，立即切换主技能：
-	- 构建/报错 -> `BUILD`
-	- 渲染架构 -> `RENDER_ARCH`
-	- C++ 风格与生命周期 -> `CPP_STYLE`
-	- 崩溃排查与Review -> `DEBUG_REVIEW`
+	- 构建/报错 -> `build`
+	- VS Code / 调试配置 -> `vscode`
+	- 资源加载 / resolve -> `resource-system`
+	- 材质数据流 -> `material-flow`
+	- 渲染架构 -> `render-arch`
+	- C++ 风格与生命周期 -> `cpp-style`
+	- 崩溃排查与 review -> `debug-review`
+
+## 相关 skills
+
+- `build`：处理 XMake 构建、目标选择、测试与 shader 生成
+- `vscode`：处理工作区任务、调试配置、compile_commands
+- `resource-system`：处理资源加载、resolve、environment lighting
+- `material-flow`：处理材质 authoring / runtime 数据流
+- `render-arch`：处理 RenderRuntime、后端边界、layout / pass
+- `cpp-style`：处理风格、所有权与热路径约束
+- `debug-review`：处理崩溃排查、diff 自检与提交前 review
 
 ## 退出条件
 

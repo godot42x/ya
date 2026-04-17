@@ -6,7 +6,7 @@ IndentWidth: 4
 BreakBeforeBraces: Custom
 TabWidth: 4
 
-AlwaysBreakTemplateDeclarations: MultiLine
+BreakTemplateDeclarations: MultiLine
 
 AllowShortFunctionsOnASingleLine: All
 AllowShortBlocksOnASingleLine: Always
@@ -16,7 +16,7 @@ AllowShortCaseExpressionOnASingleLine: true
 AllowShortCompoundRequirementOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 
-AllowAllConstructorInitializersOnNextLine: true
+PackConstructorInitializers: NextLine
 
 # function (x , y ,z) 是否可以自定义组合。 false: 全在一行或者每个参数单独一行
 BinPackArguments: false
@@ -31,6 +31,7 @@ IndentPPDirectives: BeforeHash
 #BreakAfterAttributes: Leave
 
 # 大括号换行，只有当 BreakBeforeBraces 设置为Custom时才有效
+# clang-format 22 中 AfterControlStatement 只有 Never / MultiLine / Always，没有 Leave
 BraceWrapping:
   AfterCaseLabel: true
   AfterClass: true
@@ -48,6 +49,7 @@ BraceWrapping:
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
+  BeforeLambdaBody: true
 
 # 连续赋值时，对齐所有等号
 AlignConsecutiveAssignments: Consecutive
@@ -64,7 +66,8 @@ AlignConsecutiveShortCaseStatements:
   AlignCaseColons: false
 
 # 保留在块开始处的空行
-KeepEmptyLinesAtTheStartOfBlocks: true
+KeepEmptyLines:
+  AtStartOfBlock: true
 
 # 连续空行的最大数量
 MaxEmptyLinesToKeep: 3

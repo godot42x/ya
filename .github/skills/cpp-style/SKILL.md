@@ -1,146 +1,80 @@
 ---
 name: ya-cpp-style
-description: YA Engine C++ 编码约定与内存管理
+description: YA Engine C++ 编码约定、生命周期规则与热路径风格约束。
 ---
 
 ## 适用场景
 
-- 新增或重构 C++ 类/方法
-- 代码 review 风格一致性检查
-- 生命周期不清晰导致潜在崩溃
+- 新增或重构 C++ 类 / 方法
+- 做代码 review 风格一致性检查
+- 生命周期不清晰、所有权混乱、热路径有多余分配
 
 ## 命名规范
 
-- 类/结构体：PascalCase
-- 私有成员：`_memberName`
-- 公有成员：`memberName`
-- 局部变量/函数：camelCase
-- 常量：UPPER_SNAKE_CASE
+- 类型：`PascalCase`
+- 枚举：`E<Name>::T` 或 `enum class E<Name>`
+- 私有成员：`_camelCase`
+- 公有成员：`camelCase`
+- 局部变量 / 函数：`camelCase`
+- 常量：`UPPER_SNAKE_CASE`
+- 前缀：接口用 `I`，数据类型可用 `F`
 
-## 不可变优先（Rust 风格）
+## 类布局
 
-所有变量**默认 `const`**，仅在需要修改时去掉。
+1. 成员变量声明放在方法前面。
+2. 优先按数据组织类，而不是按 public / private 方法堆叠。
+3. 改类定义时先看数据布局是否更清晰，再决定是否要拆方法。
 
-```cpp
-// ✅ Good
-const auto  resolvedCS = resolveColorSpace(filepath, colorSpace);
-const bool  bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
-const auto& cacheKey   = getOrBuildCacheKey(filepath);
-const auto  it         = _textureViews.find(cacheKey);
+## const 与参数规则
 
-// ❌ Bad — 只读变量却不加 const
-auto resolvedCS = resolveColorSpace(filepath, colorSpace);
-bool bSRGB      = (resolvedCS == ETextureColorSpace::SRGB);
-```
+1. 只读局部变量默认加 `const`。
+2. 小型基础类型（`bool`、整数、浮点、枚举、裸指针）可值传递。
+3. 其余优先 `const T&` 传入。
+4. 返回值若引用的是缓存或成员中的稳定对象，优先返回 `const T&`，避免无意义拷贝。
 
-### 参数与返回值
+## 热路径规则
 
-- **值传递**仅用于 `sizeof(T) <= sizeof(uintptr_t)` 的基本类型（`bool`、`int`、`float`、`uint64_t`、枚举、裸指针）
-- 其余一律 `const T&` 传入、`const T&` 返回（若数据在缓存/成员中有稳定生命周期）
-- 需要调用方持有独立副本时才值返回，并加注释说明意图
+1. 每帧路径避免拷贝 `std::string`、`nlohmann::json`、`AssetMeta` 等堆分配对象。
+2. map / unordered_map 查询避免重复查找。
+3. 后缀判断优先 `ends_with`，不要用 `substr` 造临时字符串。
+4. 命中缓存时优先返回引用，不要把缓存值再拷贝一份返回。
 
-```cpp
-// ✅ 返回 cache 中的引用，零拷贝
-const AssetMeta& getOrLoadMeta(const std::string& assetPath);
-const std::string& getOrBuildCacheKey(const std::string& filepath);
-const std::string& getString(const std::string& key, const std::string& defaultValue) const;
+## 抽象与重复代码
 
-// ❌ 返回值拷贝 — 调用方只读时浪费堆分配
-AssetMeta getOrLoadMeta(const std::string& assetPath);
-std::string getString(const std::string& key, const std::string& defaultValue) const;
-```
+1. 先保证代码直白，再考虑抽象。
+2. 不要为一次性逻辑或仍在演化的状态流提前造 helper。
+3. 只有当重复已经稳定、抽象能明显降低复杂度时，才提取公共逻辑。
+4. 尤其是状态机 / resolve 流程，优先保留清晰的 `switch` / 分支结构，而不是勉强统一。
 
-## 避免不必要的内存分配
+## Switch 规则
 
-### 禁止热路径上的临时拷贝
+- `switch` 中每个 `case` / `default` 的主体都用大括号包住，再写 `break`。
+- 即使当前分支只有一两行，也保持同样风格，避免后续扩展时变乱。
 
-每帧调用的函数中，严禁拷贝 `std::string`、`nlohmann::json`、`AssetMeta` 等堆分配类型。
+## 内存与所有权
 
-```cpp
-// ❌ 每帧拷贝整个 AssetMeta（含 nlohmann::json 堆内存）
-AssetMeta meta = getOrLoadMeta(filepath);         // getOrLoadMeta 返回 const& 却拷贝了
+1. 生命周期不明确时，不要直接 `new/delete`。
+2. 优先使用智能指针；接口返回优先 `shared_ptr`。
+3. 项目约定别名：`stdptr<T>` = `std::shared_ptr<T>`。
+4. 构造辅助优先使用 `makeShared<T>(...)` / `makeUnique<T>(...)`，不要写错成 `makeshared`。
+5. 单例若使用 Meyers' Singleton，`instance()` 实现放 `.cpp`，头文件只保留声明，避免跨模块多实例。
 
-// ✅ 绑定到 const 引用
-const auto& meta = getOrLoadMeta(filepath);
-```
+## 相关 skills
 
-### 缓存查找结果应返回引用
-
-当缓存查找命中时，不要拷贝值再返回，直接返回引用。
-
-```cpp
-// ❌ 拷贝 cached string
-std::string cacheKey;
-auto it = _cache.find(key);
-if (it != _cache.end()) {
-    cacheKey = it->second;   // 堆分配
-}
-
-// ✅ 提取 helper 返回引用
-const std::string& getOrBuildCacheKey(const std::string& filepath);
-// 调用方：
-const auto& cacheKey = getOrBuildCacheKey(filepath);
-```
-
-### Map 操作：避免重复查找
-
-```cpp
-// ❌ 两次 map 查找
-_resourceVersion[assetPath]++;
-YA_CORE_TRACE("...", _resourceVersion[assetPath]);
-
-// ✅ 一次查找
-const auto newVersion = ++_resourceVersion[assetPath];
-YA_CORE_TRACE("...", newVersion);
-```
-
-### 后缀检查：用 `ends_with` 不要 `substr`
-
-```cpp
-// ❌ 分配临时 string
-metaPath.substr(metaPath.size() - suffix.size()) != suffix
-
-// ✅ 零分配
-!metaPath.ends_with(suffix)
-```
-
-## 消除重复代码
-
-- 多处相同的查找/构建逻辑 → 提取 private helper
-- 多个 MaterialComponent 中相同的模式 → 提取共享 utility 或用模板/回调泛化
-- 判断标准：3 处以上相同逻辑 ≥ 5 行 → 必须提取
-
-## 设计与内存规则
-
-1. 类成员变量优先集中在类顶部，先关注数据组织。
-2. 生命周期不明确时，禁止 `new/delete`，统一智能指针。
-3. 接口返回优先 `shared_ptr`，避免裸指针悬空。
-4. 常用别名：`stdptr<T>`、`makeshared<T>(...)`。
-5. 单例优先采用 Meyers' Singleton，但 `instance()` 实现必须放在 `.cpp`，头文件只保留声明，避免跨 DLL 因头内联而产生多实例。
-
-```cpp
-// Header
-class FooRegistry
-{
-  public:
-    static FooRegistry& instance();
-};
-
-// Cpp
-FooRegistry& FooRegistry::instance()
-{
-    static FooRegistry registry;
-    return registry;
-}
-```
+- `render-arch`：改渲染类边界、runtime 编排层时一起看
+- `resource-system`：改 resolve 状态机、runtime state、资源生命周期时一起看
+- `material-flow`：改材质组件 / runtime material 分层时一起看
+- `debug-review`：做提交前风格与风险复盘时一起看
+- `build`：改动引起编译错误或需要验证构建约束时一起看
 
 ## 变更约束
 
-- 做最小必要改动，不引入无关重构。
-- 注释克制：避免无价值解释性注释。
+1. 只做最小必要改动，不顺手做无关重构。
+2. 注释克制，不补显而易见的说明。
+3. 生成文件不直接改；若问题来自 shader 头或脚本生成物，回到生成链修。
 
 ## 退出条件
 
-- 代码通过构建，且命名/指针策略符合项目约定
-- 所有只读变量标记 `const`
-- 热路径无不必要的堆分配
+- 命名、成员布局、所有权策略符合仓库约定
+- 热路径没有明显多余分配或重复查找
+- 抽象层级没有因为“顺手整理”而变复杂

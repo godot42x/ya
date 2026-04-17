@@ -88,7 +88,7 @@ Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
 | `cpp-style` | C++ conventions, ownership rules, refactoring patterns |
 | `debug-review` | Crash investigation, log analysis, pre-commit review |
 | `vscode` | VS Code tasks, launch configs, clangd setup |
-| `build` | Build errors, target selection, compiler issues |
+| `ya-build` | Build errors, target selection, compiler issues |
 
 Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW`
 

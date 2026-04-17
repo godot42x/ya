@@ -1,227 +1,84 @@
 ---
 name: ya-render-arch
-description: YA Engine 渲染架构与模块边界
+description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链路。
 ---
 
 ## 适用场景
 
-- 用户修改渲染管线、材质、后端实现
-- 关键词涉及：`App.RenderPipeline`、`IRender`、`VulkanRender`、`OpenGLRender`
-- 需要判断改动应放在抽象层还是后端层
+- 修改渲染管线、RenderRuntime、后端实现或 RenderTarget / RenderPass
+- 需要判断改动应放在抽象层、运行时编排层，还是平台后端层
+- 关键词涉及：`RenderRuntime`、`IRender`、`IRenderTarget`、`IRenderPass`、`VulkanRender`、`OpenGLRender`
 
-## 架构要点
+## 当前架构要点
 
-- 多后端：`IRender` 抽象 + Vulkan / OpenGL 实现
-- `App` 直接持有 `IRender`
-- `IRenderTarget` 使用共享所有权（`shared_ptr`）
-- 兼容路径可含 `IRenderPass`，但优先遵循现有管线组织
+1. `App` 不再直接编排整条渲染管线；当前是 `App` 持有 `std::unique_ptr<RenderRuntime>`，由 `RenderRuntime` 持有 `IRender*`、管线对象、screen RT / render pass、offscreen command buffer。
+2. 渲染抽象仍以 `IRender` 为核心；Vulkan 是主后端，OpenGL 仍是兼容后端。
+3. `IRenderPass` / `IRenderTarget` 仍然是有效抽象，不要假设项目已经完全去掉 render pass 概念。
+4. 离屏预处理（如 cylindrical -> cubemap、cubemap -> irradiance）由 `ResourceResolveSystem` + `OffscreenJobRunner` 编排，不要把这类流程重新塞回组件里。
+5. 资源时序仍是 Vulkan 改动时的第一检查项：避免在 frame recording 中途重建正在使用的 GPU 资源，必要时延迟到下一帧。
 
 ## 目录锚点
 
-- `Engine/Source/Core/App/`
+- `Engine/Source/Runtime/App/`
 - `Engine/Source/Render/`
 - `Engine/Source/Platform/Render/Vulkan/`
 - `Engine/Source/Platform/Render/OpenGL/`
+- `Engine/Shader/`
+
+## 相关 skills
+
+- `build`：改到 shader 生成、xmake 目标、测试入口时一起看
+- `resource-system`：涉及 offscreen preprocess、skybox / environment lighting 时一起看
+- `material-flow`：涉及材质上传、descriptor、runtime material 时一起看
+- `cpp-style`：需要收敛类边界、生命周期、最小改动时一起看
+- `debug-review`：做 Vulkan 问题复盘或提交前自检时一起看
 
 ## 决策原则
 
 1. 公共能力先落抽象层，再按后端补实现。
-2. 后端差异仅在平台层扩散，不反向污染上层接口。
-3. 管线问题先查初始化顺序与资源生命周期，再查 shader / 状态配置。
+2. 后端差异只在平台层扩散，不反向污染上层接口。
+3. 渲染编排优先放在 `RenderRuntime` / pipeline / system，不要把 orchestration 打散到 component。
+4. 遇到渲染异常时，优先检查初始化顺序、资源生命周期、layout transition，再查 shader / pipeline state。
+5. 生成文件是只读产物；shader 头不对时修 `Shader.xmake.lua`、`slang_gen_header.py`、`glsl_gen_header.py`，不要直接改 `Generated/*`。
 
-## Shader 处理流程（配置 → Shader → C++ 头 → C++ 使用）
+## Shader 生成流程
 
-目标：让 shader 常量与布局定义能被 C++ 侧稳定复用，避免“运行时值 / 头文件值 / shader 值”三份漂移。
+当前链路不是单一 Slang 路径，而是配置 + Slang + GLSL 三段：
 
+```text
+Engine/Config/Engine.jsonc
+  -> Shader.xmake.lua Step 0
+  -> 生成 Engine/Shader/GLSL/Common/Limits.glsl
+  -> 生成 Engine/Shader/Slang/Common/Limits.slang
+
+Slang 源文件
+  -> slang_gen_header.py
+  -> Engine/Shader/Slang/Generated/*.slang.h
+
+GLSL 源文件
+  -> glsl_gen_header.py
+  -> Engine/Shader/GLSL/Generated/*.glsl.h
+
+C++
+  -> include 生成头
+  -> 使用 slang_types:: / ya::glsl_types 命名空间中的常量与结构体
 ```
-Engine/Config/Engine.json
-  └─ shader.defines（例如 MAX_POINT_LIGHTS）
-  ↓
-Engine/Shader/Shader.xmake.lua (Step 0)
-  └─ 生成 Engine/Shader/GLSL/Common/Limits.glsl
-  └─ 生成 Engine/Shader/Slang/Common/Limits.slang
-  ↓
-GLSL/Slang 源文件通过 #include 引入 Limits
-  ↓
-glsl_gen_header.py / slang_gen_header.py 生成 C++ 头
-  └─ Engine/Shader/GLSL/Generated/*.h
-  └─ Engine/Shader/Slang/Generated/*.h
-  ↓
-C++（如 RenderDefines.h）include 生成头并 using 常量/结构体
-```
-
-推荐做法：
-- C++ 仅引用生成头里的常量（例如 `Common.Limits.glsl.h`），不要再手写重复常量。
-- shader 编译参数避免重复注入同名宏（例如 MAX_POINT_LIGHTS），防止覆盖统一源。
-
-## Shader.xmake.lua 设计思路
-
-`target("shader")` 的职责不是“编译业务代码”，而是“生成与同步 shader 相关中间产物”。
-
-分层设计：
-1. **Step 0（配置落盘）**：从 `Engine.json` 生成 `Common/Limits.*`，做统一常量出口。
-2. **Step 1（Slang 头生成）**：批量调用 `slang_gen_header.py` 产出反射头。
-3. **Step 2（GLSL 头生成）**：批量调用 `glsl_gen_header.py` 产出 std140 对齐头。
-
-实现原则：
-- **批处理优先**：一次 Python 进程处理多文件，减少启动开销。
-- **增量优先**：只在内容变化时写文件，减少无意义 mtime 变化。
-- **职责单一**：xmake 负责 orchestrate（编排），脚本负责 parse/generate（解析与生成）。
-
-## 统一数据源思路（Single Source of Truth）
-
-核心：同一个配置值只能有一个权威来源，其余路径只“消费”不“重定义”。
-
-以 `MAX_POINT_LIGHTS` 为例：
-- 权威来源：`Engine/Config/Engine.json`
-- 派生文件：`Common/Limits.glsl` / `Common/Limits.slang`
-- C++ 来源：`Common.Limits.glsl.h` 中的 `constexpr`
 
 落地规则：
-1. 不在各 shader 文件中硬编码重复值。
-2. 不在 C++ shader desc 里重复注入同名宏覆盖配置值。
-3. 当值变更时，只改 `Engine.json`，其余由生成链自动收敛。
 
-## Image 与 RenderTarget 的 Layout 完整生命周期
+1. 不要手写与 shader uniform 对应的 C++ 结构体。
+2. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
+3. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。
 
-> 实现文件：`VulkanImage.cpp`、`VulkanRenderTarget.cpp`、`VulkanCommandBuffer.cpp`
+## Dynamic Rendering / Layout 约束
 
-### 1. Image 创建（`VulkanImage::allocate`）
-
-```
-vkCreateImage → initialLayout 强制为 VK_IMAGE_LAYOUT_UNDEFINED
-VulkanImage::_layout = UNDEFINED
-
-if (ci.initialLayout != Undefined):
-    beginIsolateCommands("ImageInitialLayout")   ← 独立 cmdBuf，立即 submit + waitIdle
-    transitionImageLayout(this, Undefined → ci.initialLayout)
-        ← subresourceRange 使用 VK_REMAINING_ARRAY_LAYERS + VK_REMAINING_MIP_LEVELS
-        ← 覆盖所有 layer（含多 layer shadow map）
-        ← image._layout = ci.initialLayout
-    endIsolateCommands
-```
-
-Shadow Map depth image 配置：`initialLayout = DepthStencilAttachmentOptimal`  
-→ 创建后所有 layer 立即处于 `DepthStencilAttachmentOptimal`
-
-### 2. RenderTarget 创建（`VulkanRenderTarget::recreateImagesAndFrameBuffer`）
-
-```
-对每个 framebuffer:
-    color / depth / resolve image → VulkanImage::create(ci) → allocate()
-    IFrameBuffer::create(images)  ← 仅打包引用，不做 layout 操作
-```
-
-### 3. `beginRendering`（Dynamic Rendering 路径）
-
-```
-renderTarget->beginFrame(cmdBuf)       ← 若 bDirty 则 recreate RT
-collectRenderTargetTransitions(rt, bInitial=true)
-    ← color:   initialLayout（默认 ColorAttachmentOptimal）
-    ← depth:   initialLayout（DepthStencilAttachmentOptimal）
-    ← 若 old == new → 跳过，不产生 barrier
-VulkanImage::transitionLayouts(barriers)
-    ← VK_REMAINING_ARRAY_LAYERS 覆盖全部 layer
-    ← image._layout = newLayout
-vkCmdBeginRendering(layerCount=1)      ← 硬编码 imageLayout（见上表）
-```
-
-### 4. `endRendering`（Dynamic Rendering 路径）
-
-```
-vkCmdEndRendering()
-collectRenderTargetTransitions(rt, bInitial=false)
-    ← depth:  finalLayout → ShaderReadOnlyOptimal
-    ← 若 finalLayout == Undefined → 跳过
-VulkanImage::transitionLayouts(barriers)
-    ← VK_REMAINING_ARRAY_LAYERS 覆盖全部 layer
-    ← image._layout = ShaderReadOnlyOptimal
-renderTarget->endFrame(cmdBuf)         ← 更新 _currentFrameIndex
-```
-
-### 5. Shadow Map 全帧时序
-
-```
-App 初始化：
-  allocate shadow image → isolateCmd: UNDEFINED → DepthStencilAttachmentOptimal [all layers]
-
-每帧：
-  beginRendering(shadow)
-    → DepthStencilAttachmentOptimal → DepthStencilAttachmentOptimal (skip)
-    → vkCmdBeginRendering
-
-  shadow draw calls → 写深度
-
-  endRendering(shadow)
-    → DepthStencilAttachmentOptimal → ShaderReadOnlyOptimal [all layers]
-
-  phong pass → 采样 shadow map (ShaderReadOnlyOptimal ✓)
-
-  下帧 beginRendering(shadow)
-    → ShaderReadOnlyOptimal → DepthStencilAttachmentOptimal [all layers]
-```
-
-### 6. 关键陷阱：多 layer image 的 barrier 覆盖
-
-`transitionLayout`（无显式 range）和 `transitionLayouts`（`useRange=false`）  
-**必须**使用 `VK_REMAINING_ARRAY_LAYERS` / `VK_REMAINING_MIP_LEVELS`，否则只过渡 layer 0，  
-其余 layer 停在 UNDEFINED，shader 读时触发 `VUID-vkCmdDraw-None-09600`。
-
-```cpp
-// 正确写法
-barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-```
-
-## Dynamic Rendering 的 Layout Transition 机制
-
-> 实现文件：`Engine/Source/Platform/Render/Vulkan/VulkanCommandBuffer.cpp`
-
-YA 使用 `VK_KHR_dynamic_rendering`（无 VkRenderPass），通过手动 pipeline barrier 模拟 RenderPass 的 layout 管理。
-
-### 每帧流程
-
-```
-[begin frame]
-  collectRenderTargetTransitions(rt, bInitial=true)   → 读 attachmentDesc.initialLayout
-  VulkanImage::transitionLayouts(...)                 → 发出 barrier，图像进入 initialLayout
-  beginDynamicRenderingFromRenderTarget(rt, ...)      → 开始 dynamic rendering
-    └─ 硬编码 imageLayout = COLOR_ATTACHMENT_OPTIMAL
-               depthstencil = DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-  [draw calls]
-  vkCmdEndRenderingKHR
-  collectRenderTargetTransitions(rt, bInitial=false)  → 读 attachmentDesc.finalLayout
-  VulkanImage::transitionLayouts(...)                 → 发出 barrier，图像进入 finalLayout
-[end frame]
-```
-
-### 关键约束
-
-`beginDynamicRenderingFromRenderTarget` 硬编码告诉驱动当前图像在哪个 layout：
-
-| 附件类型   | 硬编码 imageLayout                      |
-|----------|----------------------------------------|
-| color    | `COLOR_ATTACHMENT_OPTIMAL`             |
-| depth    | `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`     |
-| resolve  | `COLOR_ATTACHMENT_OPTIMAL`             |
-
-**`AttachmentDescription::initialLayout` 必须与之一致**，否则 barrier 把图像转到错误 layout，驱动（尤其 Intel Arc）会拒绝写入 → 残留旧内容 → 马赛克。
-
-### RenderTarget 描述约定
-
-```cpp
-// color / resolve 附件
-.initialLayout = EImageLayout::ColorAttachmentOptimal,   // ← 必须
-.finalLayout   = EImageLayout::ShaderReadOnlyOptimal,    // 供下帧采样
-
-// depth 附件
-.initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-.finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
-```
-
-> ❌ 常见错误：`initialLayout = ShaderReadOnlyOptimal` 或 `Undefined`
-> — barrier 目标错误，dynamic rendering 期望的 layout 不满足 → 驱动静默丢弃写入
+1. Vulkan 路径仍依赖显式 layout transition，不要假设驱动会自动兜底。
+2. `AttachmentDescription::initialLayout` / `finalLayout` 必须与实际 begin / end rendering 约定一致。
+3. 多 layer image 的 barrier 必须覆盖所有 layer / mip，避免只过渡 layer 0。
+4. 若怀疑 layout 问题，先看 `VulkanCommandBuffer`、`VulkanImage`、`VulkanRenderTarget` 的 transition 路径是否一致。
 
 ## 退出条件
 
-- 改动边界清晰：抽象层、平台层、业务层职责不混杂
+- 能明确回答一段逻辑属于抽象层、RenderRuntime / pipeline 编排层，还是平台后端层
+- shader 常量、生成头与 C++ 使用链路一致
+- 渲染问题已经定位到初始化、时序、layout、shader 或 pipeline state 之一，而不是混在一起
