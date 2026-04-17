@@ -28,6 +28,8 @@ void retireSkyboxResources(SkyboxRuntimeState& state);
 void resetSkyboxPending(SkyboxRuntimeState& state);
 void resetSkyboxState(SkyboxRuntimeState& state);
 
+void rebuildEnvironmentCubemapViews(EnvironmentLightingRuntimeState& state);
+void rebuildEnvironmentIrradianceViews(EnvironmentLightingRuntimeState& state);
 void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state);
 void retireEnvTextures(EnvironmentLightingRuntimeState& state);
 void resetEnvPending(EnvironmentLightingRuntimeState& state);

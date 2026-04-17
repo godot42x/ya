@@ -60,11 +60,11 @@ void EditorLayer::syncEditorSettingsFromConfig()
     _bDefaultScenePathDirty = false;
 }
 
-static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
+static std::string normalizeConfigLabel(const std::string& label)
 {
     std::string normalized;
-    normalized.reserve(slotLabel.size());
-    for (char ch : slotLabel) {
+    normalized.reserve(label.size());
+    for (char ch : label) {
         if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
             normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
         }
@@ -72,52 +72,27 @@ static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
             normalized.push_back('_');
         }
     }
-    return std::format("debugWindow.debugSlotImageMask.{}", normalized);
+    return normalized;
+}
+
+static std::string buildDeferredMaskConfigKey(const std::string& slotLabel)
+{
+    return std::format("debugWindow.debugSlotImageMask.{}", normalizeConfigLabel(slotLabel));
 }
 
 static std::string buildDebugGroupConfigKey(const std::string& groupLabel)
 {
-    std::string normalized;
-    normalized.reserve(groupLabel.size());
-    for (char ch : groupLabel) {
-        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
-            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        }
-        else {
-            normalized.push_back('_');
-        }
-    }
-    return std::format("debugWindow.debugGroupViewer.{}", normalized);
+    return std::format("debugWindow.debugGroupViewer.{}", normalizeConfigLabel(groupLabel));
 }
 
 static std::string buildDebugGroupItemConfigKey(const std::string& groupLabel, uint32_t itemIndex)
 {
-    std::string normalized;
-    normalized.reserve(groupLabel.size() + 16);
-    for (char ch : groupLabel) {
-        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
-            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        }
-        else {
-            normalized.push_back('_');
-        }
-    }
-    return std::format("debugWindow.debugGroupViewerSelection.{}_item_{}", normalized, itemIndex);
+    return std::format("debugWindow.debugGroupViewerSelection.{}_item_{}", normalizeConfigLabel(groupLabel), itemIndex);
 }
 
 static std::string buildDebugGroupSelectionConfigKey(const std::string& groupLabel)
 {
-    std::string normalized;
-    normalized.reserve(groupLabel.size() + 16);
-    for (char ch : groupLabel) {
-        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
-            normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-        }
-        else {
-            normalized.push_back('_');
-        }
-    }
-    return std::format("debugWindow.debugGroupSelection.{}", normalized);
+    return std::format("debugWindow.debugGroupSelection.{}", normalizeConfigLabel(groupLabel));
 }
 
 static const char* const kCubeFaceLabels[6] = {
@@ -148,15 +123,6 @@ void EditorLayer::onAttach()
 
     syncEditorSettingsFromConfig();
 
-    // Subscribe to scene activation events to cleanup stale entity references
-    // _app->getSceneManager()->onSceneActivated.addLambda(this, [this](Scene* newScene) {
-    //     YA_CORE_INFO("EditorLayer: Scene activated, clearing selection");
-    //     // Clear selection to avoid dangling pointer to destroyed entities
-    //     _sceneHierarchyPanel.setSelection(nullptr);
-    //     // Update hierarchy panel context
-    //     _sceneHierarchyPanel.setContext(newScene);
-    // });
-
     // Initialize editor panels
     if (auto scene = _app->getSceneManager()->getEditorScene())
     {
@@ -185,21 +151,6 @@ void EditorLayer::onAttach()
     _pauseIcon      = getOrCreateImGuiTextureID(pauseIcon->getImageView());
     _stopIcon       = getOrCreateImGuiTextureID(stopIcon->getImageView());
     _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
-
-    // Subscribe to viewport framebuffer recreation to cleanup stale ImGui textures
-    // if (_app->_viewportRT) {
-    // _app->_viewportRT->onFrameBufferRecreated.addLambda(this, [this]() {
-    //     YA_CORE_INFO("EditorLayer: Viewport framebuffer recreated, cleaning up cached viewport image");
-    //     // Clear the cached viewport image since the old ImageView/DescriptorSet is now invalid
-    //     if (_viewportImage && _viewportImage->ds) {
-    //         removeImGuiTexture(_viewportImage);
-    //         _viewportImage              = nullptr;
-    //         _currentViewportImageHandle = nullptr;
-    //     }
-    // });
-
-    //     YA_CORE_INFO("EditorLayer attached successfully");
-    // }
 }
 
 void EditorLayer::onDetach()
@@ -389,17 +340,17 @@ void EditorLayer::setupDockspace()
     YA_PROFILE_FUNCTION();
     ImGuiIO& io = ImGui::GetIO();
 
-    ImGuiStyle& style          = ImGui::GetStyle();
-    float       minWindowWidth = style.WindowMinSize.x;
-    style.WindowMinSize.x      = 320.f;
-    style.WindowMinSize.x      = minWindowWidth;
+    ImGuiStyle& style     = ImGui::GetStyle();
+    float       savedMinW = style.WindowMinSize.x;
+    style.WindowMinSize.x = 320.f;
 
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
     {
         ImGuiID dockspaceId = ImGui::GetID("MainDockSpace");
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), _dockspaceFlags);
-        // ImGui::DockSpaceOverViewport();
     }
+
+    style.WindowMinSize.x = savedMinW;
 }
 
 
@@ -580,9 +531,6 @@ void EditorLayer::toolbar()
             });
         }
     }
-    // if (ImGui::ImageButton("Pause", pauseDS, ImVec2(size * 2, size)))
-    // {
-    // }
     ImGui::SameLine();
     if (ImGui::ImageButton("Stop", *_stopIcon, ImVec2(size, size)))
     {
@@ -617,10 +565,6 @@ void EditorLayer::viewportWindow()
         return;
     }
 
-    // Update focus/hover state
-    bViewportFocused = ImGui::IsWindowFocused();
-    bViewportHovered = ImGui::IsWindowHovered();
-
     // Get viewport panel size
     ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 
@@ -638,18 +582,9 @@ void EditorLayer::viewportWindow()
     _viewportBounds[0] = {minBound.x, minBound.y};
     _viewportBounds[1] = {maxBound.x, maxBound.y};
 
-
     // Update viewport size if changed
     if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
     {
-        // if (_resizeTimerHandle != 0) {
-
-        //
-        //     Facade.timerManager.cancelTimer(_resizeTimerHandle);
-        //     _resizeTimerHandle = 0;
-        // }
-        // else {
-        // Always update size immediately for correct display
         _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
 
         // Queue the viewport resize event to be processed in next frame before render
@@ -939,22 +874,67 @@ void EditorLayer::renderDebugSlotImage(const EditorViewportContext::ImageSlot& s
                        {slot.tint.x, slot.tint.y, slot.tint.z, slot.tint.w});
 }
 
-void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
+bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::Group& group,
+                                        int                                           groupIndex,
+                                        const ImVec2&                                 panelSize,
+                                        bool                                          bUseCollapsingHeader,
+                                        float                                         maxPreviewSize)
 {
     using namespace ImGui;
-    Sampler*    sampler = TextureLibrary::get().getLinearSampler();
-    const auto& groups  = _viewportCtx.debugSpec.groups;
-
-    if (groups.empty()) {
-        return;
-    }
-
-    if (static_cast<int>(_debugGroupStates.size()) < static_cast<int>(groups.size())) {
-        _debugGroupStates.resize(groups.size());
-    }
+    Sampler* sampler = TextureLibrary::get().getLinearSampler();
 
     if (_viewportCtx.debugSpec.slots.size() > _debugImageSlotStates.size()) {
         _debugImageSlotStates.resize(_viewportCtx.debugSpec.slots.size());
+    }
+    if (static_cast<int>(_debugGroupStates.size()) < static_cast<int>(_viewportCtx.debugSpec.groups.size())) {
+        _debugGroupStates.resize(_viewportCtx.debugSpec.groups.size());
+    }
+
+    if (group.slotCount == 0 || group.beginIndex >= _viewportCtx.debugSpec.slots.size()) {
+        return false;
+    }
+
+    const uint32_t availableSlots = static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()) - group.beginIndex;
+    const uint32_t slotCount      = std::min(group.slotCount, availableSlots);
+    if (slotCount == 0) {
+        return false;
+    }
+
+    const uint32_t groupSize  = std::max(1u, group.groupSize);
+    const uint32_t groupCount = slotCount / groupSize;
+    if (groupCount == 0) {
+        return false;
+    }
+
+    auto&             groupState = _debugGroupStates[groupIndex];
+    const std::string configKey  = buildDebugGroupConfigKey(group.label);
+    if (groupState.configKey != configKey) {
+        groupState.configKey          = configKey;
+        groupState.selectedGroupIndex = 0;
+        groupState.selectedSlots.clear();
+        (void)ConfigManager::get().tryGet<int>("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
+    }
+
+    groupState.selectedGroupIndex = std::clamp(groupState.selectedGroupIndex, 0, static_cast<int>(groupCount) - 1);
+
+    if (static_cast<uint32_t>(groupState.selectedSlots.size()) != groupCount) {
+        groupState.selectedSlots.assign(groupCount, 0);
+        for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+            int               selectedSlot = 0;
+            const std::string key          = buildDebugGroupItemConfigKey(group.label, groupItemIndex);
+            (void)ConfigManager::get().tryGet<int>("editor", key, selectedSlot);
+            groupState.selectedSlots[groupItemIndex] = selectedSlot;
+        }
+    }
+
+    if (bUseCollapsingHeader) {
+        if (!CollapsingHeader(group.label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            return false;
+        }
+    }
+    else {
+        TextUnformatted(group.label.c_str());
+        Separator();
     }
 
     auto renderCubeFaceSelector = [&](int& selectedFace, bool& anySelectionChanged) {
@@ -990,164 +970,209 @@ void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize)
         syncDebugSlotState(slot, state);
         bool maskChanged = renderDebugSlotMaskControls(slot, state);
         updateDebugSlotImageView(slot, state, maskChanged);
-        const float viewerWidth  = GetContentRegionAvail().x;
-        const float viewerHeight = std::min(viewerWidth, panelSize.x);
+
+        const float availableWidth = GetContentRegionAvail().x;
+        const float viewerWidth    = availableWidth;
+        const float viewerHeight   = maxPreviewSize > 0.0f ? std::min(viewerWidth, maxPreviewSize) : std::min(viewerWidth, panelSize.x);
         renderDebugSlotImage(slot, state, viewerWidth, viewerHeight, sampler);
     };
 
-    for (int groupIndex = 0; groupIndex < static_cast<int>(groups.size()); ++groupIndex) {
-        const auto& group = groups[groupIndex];
-        if (group.slotCount == 0 || group.beginIndex >= _viewportCtx.debugSpec.slots.size()) {
-            continue;
-        }
+    PushID(group.label.c_str());
+    bool anySelectionChanged = false;
 
-        const uint32_t availableSlots = static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()) - group.beginIndex;
-        const uint32_t slotCount      = std::min(group.slotCount, availableSlots);
-        if (slotCount == 0) {
-            continue;
-        }
-
-        const uint32_t groupSize  = std::max(1u, group.groupSize);
-        const uint32_t groupCount = slotCount / groupSize;
-        if (groupCount == 0) {
-            continue;
-        }
-
-        auto&             groupState = _debugGroupStates[groupIndex];
-        const std::string configKey  = buildDebugGroupConfigKey(group.label);
-        if (groupState.configKey != configKey) {
-            groupState.configKey        = configKey;
-            groupState.selectedGroupIndex = 0;
-            groupState.selectedSlots.clear();
-            (void)ConfigManager::get().tryGet<int>("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
-        }
-
-        groupState.selectedGroupIndex = std::clamp(groupState.selectedGroupIndex, 0, static_cast<int>(groupCount) - 1);
-
-        if (static_cast<uint32_t>(groupState.selectedSlots.size()) != groupCount) {
-            groupState.selectedSlots.assign(groupCount, 0);
-            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-                int               selectedSlot = 0;
-                const std::string key          = buildDebugGroupItemConfigKey(group.label, groupItemIndex);
-                (void)ConfigManager::get().tryGet<int>("editor", key, selectedSlot);
-                groupState.selectedSlots[groupItemIndex] = selectedSlot;
+    if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces && groupSize == CubeFace_Count) {
+        std::string comboItems;
+        for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+            if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
+                comboItems += group.itemLabels[groupItemIndex];
             }
-        }
-
-        if (!CollapsingHeader(group.label.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            continue;
-        }
-
-        PushID(group.label.c_str());
-        bool anySelectionChanged = false;
-
-        if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces && groupSize == CubeFace_Count) {
-            std::string comboItems;
-            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-                if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
-                    comboItems += group.itemLabels[groupItemIndex];
-                }
-                else {
-                    comboItems += std::format("Mip {}", groupItemIndex);
-                }
-                comboItems.push_back('\0');
+            else {
+                comboItems += std::format("Mip {}", groupItemIndex);
             }
             comboItems.push_back('\0');
-
-            if (Combo("Mip", &groupState.selectedGroupIndex, comboItems.c_str())) {
-                anySelectionChanged = true;
-            }
-
-            const uint32_t selectedGroup = static_cast<uint32_t>(groupState.selectedGroupIndex);
-            const uint32_t slotBase      = group.beginIndex + selectedGroup * groupSize;
-            int&           selectedFace  = groupState.selectedSlots[selectedGroup];
-            selectedFace                 = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
-
-            renderCubeFaceSelector(selectedFace, anySelectionChanged);
-            renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
         }
-        else {
-            const int viewerColumns = std::max(1, std::min(2, static_cast<int>(groupCount)));
-            if (BeginTable("DebugGroupViewerTable", viewerColumns, ImGuiTableFlags_BordersInnerV)) {
-                for (int columnIndex = 0; columnIndex < viewerColumns; ++columnIndex) {
-                    TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-                }
+        comboItems.push_back('\0');
 
-                for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-                    if (groupItemIndex % static_cast<uint32_t>(viewerColumns) == 0) {
-                        TableNextRow();
-                    }
-                    TableSetColumnIndex(static_cast<int>(groupItemIndex % static_cast<uint32_t>(viewerColumns)));
-                    PushID(static_cast<int>(groupItemIndex));
-
-                    const uint32_t slotBase     = group.beginIndex + groupItemIndex * groupSize;
-                    int&           selectedFace = groupState.selectedSlots[groupItemIndex];
-                    selectedFace                = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
-
-                    if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
-                        TextUnformatted(group.itemLabels[groupItemIndex].c_str());
-                    }
-                    else {
-                        Text("Viewer %u", groupItemIndex);
-                    }
-
-                    if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == CubeFace_Count) {
-                        renderCubeFaceSelector(selectedFace, anySelectionChanged);
-                    }
-                    else {
-                        std::string comboItems;
-                        for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
-                            comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
-                            comboItems.push_back('\0');
-                        }
-                        comboItems.push_back('\0');
-                        if (Combo("Viewer", &selectedFace, comboItems.c_str())) {
-                            anySelectionChanged = true;
-                        }
-                    }
-
-                    renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
-                    PopID();
-                }
-
-                EndTable();
-            }
+        if (Combo("Mip", &groupState.selectedGroupIndex, comboItems.c_str())) {
+            anySelectionChanged = true;
         }
 
-        if (anySelectionChanged) {
-            ConfigManager::get().set("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
-            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-                ConfigManager::get().set("editor",
-                                         buildDebugGroupItemConfigKey(group.label, groupItemIndex),
-                                         groupState.selectedSlots[groupItemIndex]);
-            }
-            ConfigManager::get().flushDocument("editor");
-        }
+        const uint32_t selectedGroup = static_cast<uint32_t>(groupState.selectedGroupIndex);
+        const uint32_t slotBase      = group.beginIndex + selectedGroup * groupSize;
+        int&           selectedFace  = groupState.selectedSlots[selectedGroup];
+        selectedFace                 = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
 
-        PopID();
+        renderCubeFaceSelector(selectedFace, anySelectionChanged);
+        renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
     }
+    else {
+        const int viewerColumns = std::max(1, std::min(2, static_cast<int>(groupCount)));
+        if (BeginTable("DebugGroupViewerTable", viewerColumns, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
+            for (int columnIndex = 0; columnIndex < viewerColumns; ++columnIndex) {
+                TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            }
+
+            for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+                if (groupItemIndex % static_cast<uint32_t>(viewerColumns) == 0) {
+                    TableNextRow();
+                }
+                TableSetColumnIndex(static_cast<int>(groupItemIndex % static_cast<uint32_t>(viewerColumns)));
+                PushID(static_cast<int>(groupItemIndex));
+
+                const uint32_t slotBase     = group.beginIndex + groupItemIndex * groupSize;
+                int&           selectedFace = groupState.selectedSlots[groupItemIndex];
+                selectedFace                = std::clamp(selectedFace, 0, static_cast<int>(groupSize) - 1);
+
+                if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
+                    TextUnformatted(group.itemLabels[groupItemIndex].c_str());
+                }
+                else {
+                    Text("Viewer %u", groupItemIndex);
+                }
+
+                if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == CubeFace_Count) {
+                    renderCubeFaceSelector(selectedFace, anySelectionChanged);
+                }
+                else {
+                    std::string comboItems;
+                    for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
+                        comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
+                        comboItems.push_back('\0');
+                    }
+                    comboItems.push_back('\0');
+                    if (Combo("Viewer", &selectedFace, comboItems.c_str())) {
+                        anySelectionChanged = true;
+                    }
+                }
+
+                renderSlotViewer(slotBase + static_cast<uint32_t>(selectedFace));
+                PopID();
+            }
+
+            EndTable();
+        }
+    }
+
+    if (anySelectionChanged) {
+        ConfigManager::get().set("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
+        for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
+            ConfigManager::get().set("editor",
+                                     buildDebugGroupItemConfigKey(group.label, groupItemIndex),
+                                     groupState.selectedSlots[groupItemIndex]);
+        }
+        ConfigManager::get().flushDocument("editor");
+    }
+
+    PopID();
+    return true;
 }
 
-
-void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize)
+void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter)
 {
-    using namespace ImGui;
-    Sampler*    sampler    = TextureLibrary::get().getLinearSampler();
-    const auto& slots      = _viewportCtx.debugSpec.slots;
-    const int   totalSlots = static_cast<int>(slots.size());
-    if (totalSlots <= 0) {
-        TextDisabled("No debug images");
+    const auto& groups = _viewportCtx.debugSpec.groups;
+    if (groups.empty()) {
         return;
     }
 
-    if (totalSlots > static_cast<int>(_debugImageSlotStates.size())) {
-        _debugImageSlotStates.resize(totalSlots);
+    for (int groupIndex = 0; groupIndex < static_cast<int>(groups.size()); ++groupIndex) {
+        const auto& group = groups[groupIndex];
+        if (categoryFilter >= 0 && static_cast<int>(group.categoryIndex) != categoryFilter) {
+            continue;
+        }
+        renderDebugImageGroup(group, groupIndex, panelSize, true, 0.0f);
+    }
+}
+
+void EditorLayer::renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize)
+{
+    using namespace ImGui;
+    const auto& groups = _viewportCtx.debugSpec.groups;
+    if (groups.empty()) {
+        return;
+    }
+
+    std::vector<int> groupIndices;
+    groupIndices.reserve(groups.size());
+    for (int groupIndex = 0; groupIndex < static_cast<int>(groups.size()); ++groupIndex) {
+        if (categoryFilter >= 0 && static_cast<int>(groups[groupIndex].categoryIndex) != categoryFilter) {
+            continue;
+        }
+        groupIndices.push_back(groupIndex);
+    }
+
+    if (groupIndices.empty()) {
+        return;
+    }
+
+    const int columnCount = std::max(1, std::min(3, static_cast<int>(panelSize.x / 360.0f)));
+    if (!BeginTable("DebugGroupGrid",
+                    columnCount,
+                    ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersInnerH)) {
+        return;
+    }
+
+    for (int columnIndex = 0; columnIndex < columnCount; ++columnIndex) {
+        TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+    }
+
+    for (int filteredIndex = 0; filteredIndex < static_cast<int>(groupIndices.size()); ++filteredIndex) {
+        if (filteredIndex % columnCount == 0) {
+            TableNextRow();
+        }
+        TableSetColumnIndex(filteredIndex % columnCount);
+
+        const int groupIndex = groupIndices[filteredIndex];
+        PushID(groupIndex);
+        renderDebugImageGroup(groups[groupIndex], groupIndex, ImVec2(GetContentRegionAvail().x, panelSize.y), false, maxPreviewSize);
+        PopID();
+    }
+
+    EndTable();
+}
+
+
+void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter)
+{
+    using namespace ImGui;
+    Sampler*    sampler = TextureLibrary::get().getLinearSampler();
+    const auto& slots   = _viewportCtx.debugSpec.slots;
+    std::vector<bool> groupedSlotMask(slots.size(), false);
+    for (const auto& group : _viewportCtx.debugSpec.groups) {
+        if (categoryFilter >= 0 && static_cast<int>(group.categoryIndex) != categoryFilter) {
+            continue;
+        }
+
+        const uint32_t slotEnd = std::min<uint32_t>(group.beginIndex + group.slotCount, static_cast<uint32_t>(slots.size()));
+        for (uint32_t slotIndex = group.beginIndex; slotIndex < slotEnd; ++slotIndex) {
+            groupedSlotMask[slotIndex] = true;
+        }
+    }
+
+    std::vector<int> filteredSlotIndices;
+    filteredSlotIndices.reserve(slots.size());
+    for (int slotIndex = 0; slotIndex < static_cast<int>(slots.size()); ++slotIndex) {
+        if (groupedSlotMask[slotIndex]) {
+            continue;
+        }
+        if (categoryFilter >= 0 && static_cast<int>(slots[slotIndex].categoryIndex) != categoryFilter) {
+            continue;
+        }
+        filteredSlotIndices.push_back(slotIndex);
+    }
+
+    const int totalSlots = static_cast<int>(filteredSlotIndices.size());
+    if (totalSlots <= 0) {
+        return;
+    }
+
+    if (static_cast<int>(slots.size()) > static_cast<int>(_debugImageSlotStates.size())) {
+        _debugImageSlotStates.resize(slots.size());
     }
 
     const int rowSize = std::max(1, std::min(4, totalSlots));
 
-    for (int i = 0; i < totalSlots; ++i) {
-        syncDebugSlotState(slots[i], _debugImageSlotStates[i]);
+    for (const int slotIndex : filteredSlotIndices) {
+        syncDebugSlotState(slots[slotIndex], _debugImageSlotStates[slotIndex]);
     }
 
     if (!ImGui::BeginTable("DebugImageGrid", rowSize, ImGuiTableFlags_BordersInnerV)) {
@@ -1162,18 +1187,22 @@ void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize)
     const float colWidth  = (panelSize.x - padding * static_cast<float>(rowSize - 1)) / static_cast<float>(rowSize);
     const float imgHeight = colWidth;
 
-    for (int i = 0; i < totalSlots; ++i) {
-        if (i % rowSize == 0) {
+    for (int filteredIndex = 0; filteredIndex < totalSlots; ++filteredIndex) {
+        if (filteredIndex % rowSize == 0) {
             TableNextRow();
         }
 
-        const int columnIndex = i % rowSize;
+        const int columnIndex = filteredIndex % rowSize;
         TableSetColumnIndex(columnIndex);
-        Text("%s", slots[i].label.c_str());
-        ImGui::PushID(("debug-imageSlot-" + slots[i].label).c_str());
-        bool maskChanged = renderDebugSlotMaskControls(slots[i], _debugImageSlotStates[i]);
-        updateDebugSlotImageView(slots[i], _debugImageSlotStates[i], maskChanged);
-        renderDebugSlotImage(slots[i], _debugImageSlotStates[i], colWidth, imgHeight, sampler);
+
+        const int  slotIndex = filteredSlotIndices[filteredIndex];
+        const auto& slot     = slots[slotIndex];
+        auto&       state    = _debugImageSlotStates[slotIndex];
+        Text("%s", slot.label.c_str());
+        ImGui::PushID(slotIndex);
+        bool maskChanged = renderDebugSlotMaskControls(slot, state);
+        updateDebugSlotImageView(slot, state, maskChanged);
+        renderDebugSlotImage(slot, state, colWidth, imgHeight, sampler);
         ImGui::PopID();
     }
 
@@ -1188,12 +1217,30 @@ void EditorLayer::debugWindow()
         ImGui::End();
         return;
     }
+
     const ImVec2 panelSize = ImGui::GetContentRegionAvail();
-    renderDebugImageGroups(panelSize);
-    if (!_viewportCtx.debugSpec.groups.empty()) {
-        ImGui::Separator();
+    const auto&  categories = _viewportCtx.debugSpec.categories;
+    if (categories.empty()) {
+            renderDebugImageGroupsGrid(panelSize, -1, 0.0f);
+        renderDebugImageSlots(panelSize, -1);
+        ImGui::End();
+        return;
     }
-    renderDebugImageSlots(panelSize);
+
+    if (ImGui::BeginTabBar("DebugCategories")) {
+        for (int categoryIndex = 0; categoryIndex < static_cast<int>(categories.size()); ++categoryIndex) {
+            const auto& category = categories[categoryIndex];
+            if (!ImGui::BeginTabItem(category.label.c_str())) {
+                continue;
+            }
+
+            renderDebugImageGroupsGrid(panelSize, categoryIndex, 0.0f);
+            renderDebugImageSlots(panelSize, categoryIndex);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
     ImGui::End();
 }
 
@@ -1416,24 +1463,6 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     }
 }
 
-glm::vec3 extractEulerAnglesFromViewMatrix(const glm::mat4& viewMatrix)
-{
-    glm::mat3 rotMat  = glm::mat3(viewMatrix);
-    glm::vec3 forward = -rotMat[2];
-    glm::vec3 right   = rotMat[0];
-    glm::vec3 up      = rotMat[1];
-
-    // 计算 yaw（偏航，绕y轴）
-    float yaw = atan2(forward.x, forward.z);
-    // 计算 pitch（俯仰，绕x轴）
-    float pitch = asin(forward.y);
-    // 计算 roll（翻滚，绕z轴），此处因锁定worldUp，roll应为0
-    float roll = atan2(-right.y, up.y);
-
-    // 转换为角度制（若你的 Camera::setRotation 期望角度而非弧度，根据需求调整）
-    return glm::vec3(glm::degrees(pitch), glm::degrees(yaw), glm::degrees(roll));
-}
-
 void EditorLayer::focusCameraOnEntity(Entity* entity)
 {
     if (!entity || !entity->isValid()) {
@@ -1479,11 +1508,8 @@ void EditorLayer::focusCameraOnEntity(Entity* entity)
         }
         float yaw = glm::degrees(std::atan2(newCamToEntity.x, newCamToEntity.z));
 
-
-        // float pitch    = glm::degrees(std::atan2(newCamToEntity.y, newCamToEntity.z));
         newCamRotation = glm::vec3(pitch, yaw, 0.0f);
     }
-
 
     app->camera.setPosition(newCamPos);
     app->camera.setRotation(newCamRotation);

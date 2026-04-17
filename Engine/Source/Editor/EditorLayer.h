@@ -46,12 +46,20 @@ struct EditorViewportContext
         IImageView*             defaultView = nullptr; // identity view from Texture
         std::shared_ptr<IImageView> ownedView;
         std::shared_ptr<IImage> image;                 // for createImageView()
-        EImageAspect::T         aspectFlags = EImageAspect::Color;
-        glm::vec4               tint        = glm::vec4(1.0);
+        uint32_t                categoryIndex = 0;
+        EImageAspect::T         aspectFlags   = EImageAspect::Color;
+        glm::vec4               tint          = glm::vec4(1.0);
     };
 
     struct DebugSpec
     {
+        struct Category
+        {
+            std::string id;
+            std::string label;
+        };
+
+        std::vector<Category>  categories;
         std::vector<ImageSlot> slots;
 
         enum class EGroupType
@@ -64,10 +72,11 @@ struct EditorViewportContext
         struct Group
         {
             std::string              label;
-            EGroupType               type       = EGroupType::Generic;
-            uint32_t                 beginIndex = 0;
-            uint32_t                 slotCount  = 0;
-            uint32_t                 groupSize  = 1;
+            EGroupType               type          = EGroupType::Generic;
+            uint32_t                 categoryIndex = 0;
+            uint32_t                 beginIndex    = 0;
+            uint32_t                 slotCount     = 0;
+            uint32_t                 groupSize     = 1;
             std::vector<std::string> itemLabels;
         };
 
@@ -306,8 +315,14 @@ struct EditorLayer
 
     // --
     void debugWindow();
-    void renderDebugImageGroups(const ImVec2& panelSize);
-    void renderDebugImageSlots(const ImVec2& panelSize);
+    bool renderDebugImageGroup(const EditorViewportContext::DebugSpec::Group& group,
+                               int                                           groupIndex,
+                               const ImVec2&                                 panelSize,
+                               bool                                          bUseCollapsingHeader = true,
+                               float                                         maxPreviewSize       = 0.0f);
+    void renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter = -1);
+    void renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize = 0.0f);
+    void renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter = -1);
     void syncDebugSlotState(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
     bool renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
     void updateDebugSlotImageView(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, bool bForceRefresh = false);

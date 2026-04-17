@@ -267,6 +267,11 @@ EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPrev
     info.bHasIrradianceMap     = state->hasIrradianceMap();
     info.bHasPrefilterMap      = state->hasPrefilterMap();
 
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        info.cubemapFaceViews[faceIndex]    = state->cubemapFacePreviewViews[faceIndex].get();
+        info.irradianceFaceViews[faceIndex] = state->irradianceFacePreviewViews[faceIndex].get();
+    }
+
     for (uint32_t mipIndex = 0; mipIndex < state->prefilterPreviewMipCount; ++mipIndex) {
         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
             info.prefilterMipFaceViews[mipIndex][faceIndex] = state->prefilterMipFacePreviewViews[mipIndex][faceIndex].get();

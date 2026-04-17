@@ -56,7 +56,9 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
     stdptr<Texture>                                           cubemapTexture               = nullptr;
+    std::array<stdptr<IImageView>, CubeFace_Count>            cubemapFacePreviewViews{};
     stdptr<Texture>                                           irradianceTexture            = nullptr;
+    std::array<stdptr<IImageView>, CubeFace_Count>            irradianceFacePreviewViews{};
     stdptr<Texture>                                           prefilterTexture             = nullptr;
     std::array<std::array<stdptr<IImageView>, CubeFace_Count>, MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFacePreviewViews{};
     uint32_t                                                  prefilterPreviewMipCount     = 0;
@@ -95,7 +97,9 @@ struct SkyboxPreviewInfo
 struct EnvironmentLightingPreviewInfo
 {
     Texture*                                cubemapTexture        = nullptr;
+    std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
     Texture*                                irradianceTexture     = nullptr;
+    std::array<IImageView*, CubeFace_Count> irradianceFaceViews{};
     Texture*                                prefilterTexture      = nullptr;
     std::array<std::array<IImageView*, CubeFace_Count>, EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFaceViews{};
     uint32_t                                prefilterMipCount     = 0;

@@ -940,35 +940,52 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         ctx.viewportTexture          = (_shadingModel == EShadingModel::Forward)
                                          ? (_forwardPipeline ? _forwardPipeline->viewportTexture : nullptr)
                                          : (_deferredPipeline ? _deferredPipeline->viewportTexture : nullptr);
+        ctx.debugSpec.categories = {
+            {.id = "shadow", .label = "Shadow"},
+            {.id = "skybox", .label = "Skybox"},
+            {.id = "environment", .label = "Environment"},
+            {.id = "gbuffer", .label = "GBuffer"},
+            {.id = "viewport", .label = "Viewport"},
+            {.id = "shared", .label = "Shared"},
+        };
+        constexpr uint32_t CATEGORY_SHADOW      = 0;
+        constexpr uint32_t CATEGORY_SKYBOX      = 1;
+        constexpr uint32_t CATEGORY_ENVIRONMENT = 2;
+        constexpr uint32_t CATEGORY_GBUFFER     = 3;
+        constexpr uint32_t CATEGORY_VIEWPORT    = 4;
+        constexpr uint32_t CATEGORY_SHARED      = 5;
 
         // TODO: cache each frame's debug, change if modified
         if (_shadingModel == EShadingModel::Forward) {
             if (isShadowMappingEnabled()) {
                 if (auto* directionalDepth = getShadowDirectionalDepthIV()) {
                     ctx.debugSpec.slots.push_back({
-                        .label       = "ShadowDirectionalDepth",
-                        .defaultView = directionalDepth,
-                        .ownedView   = nullptr,
-                        .image       = nullptr,
+                        .label         = "ShadowDirectionalDepth",
+                        .defaultView   = directionalDepth,
+                        .ownedView     = nullptr,
+                        .image         = nullptr,
+                        .categoryIndex = CATEGORY_SHADOW,
                     });
                 }
 
                 EditorViewportContext::DebugSpec::Group pointShadowGroup{
-                    .label      = "Point Shadow Cubemap",
-                    .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
-                    .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-                    .groupSize  = 6,
+                    .label         = "Point Shadow Cubemap",
+                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                    .categoryIndex = CATEGORY_SHADOW,
+                    .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                    .groupSize     = 6,
                 };
                 for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
                     for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
                         if (auto* faceIV = getShadowPointFaceDepthIV(pointLightIndex, faceIndex))
                         {
                             auto slot = EditorViewportContext::ImageSlot{
-                                .label       = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
-                                .defaultView = faceIV,
-                                .ownedView   = nullptr,
-                                .image       = nullptr,
-                                .aspectFlags = EImageAspect::Depth,
+                                .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
+                                .defaultView   = faceIV,
+                                .ownedView     = nullptr,
+                                .image         = nullptr,
+                                .categoryIndex = CATEGORY_SHADOW,
+                                .aspectFlags   = EImageAspect::Depth,
                             };
                             ctx.debugSpec.slots.push_back(std::move(slot));
                         }
@@ -992,10 +1009,11 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         }
 
                         EditorViewportContext::DebugSpec::Group skyboxGroup{
-                            .label      = "Skybox Cubemap",
-                            .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
-                            .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-                            .groupSize  = CubeFace_Count,
+                            .label         = "Skybox Cubemap",
+                            .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                            .categoryIndex = CATEGORY_SKYBOX,
+                            .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                            .groupSize     = CubeFace_Count,
                         };
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -1005,10 +1023,11 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                             }
 
                             ctx.debugSpec.slots.push_back({
-                                .label       = std::format("SkyboxFace{}", faceIndex),
-                                .defaultView = faceView,
-                                .ownedView   = nullptr,
-                                .image       = preview.cubemapTexture->getImageShared(),
+                                .label         = std::format("SkyboxFace{}", faceIndex),
+                                .defaultView   = faceView,
+                                .ownedView     = nullptr,
+                                .image         = preview.cubemapTexture->getImageShared(),
+                                .categoryIndex = CATEGORY_SKYBOX,
                             });
                         }
 
@@ -1023,11 +1042,12 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
             if (auto* viewportDepth = _forwardPipeline->viewportRT->getCurFrameBuffer()->getDepthTexture()) {
                 ctx.debugSpec.slots.push_back({
-                    .label       = "ViewportDepth",
-                    .defaultView = viewportDepth->getImageView(),
-                    .ownedView   = nullptr,
-                    .image       = viewportDepth->getImageShared(),
-                    .aspectFlags = EImageAspect::Depth,
+                    .label         = "ViewportDepth",
+                    .defaultView   = viewportDepth->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = viewportDepth->getImageShared(),
+                    .categoryIndex = CATEGORY_VIEWPORT,
+                    .aspectFlags   = EImageAspect::Depth,
                 });
             }
         }
@@ -1035,57 +1055,64 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             auto& fb            = *_deferredPipeline->_gBufferRT->getCurFrameBuffer();
             ctx.debugSpec.slots = {
                 {
-                    .label       = "Position",
-                    .defaultView = fb.getColorTexture(0)->getImageView(),
-                    .ownedView   = nullptr,
-                    .image       = fb.getColorTexture(0)->getImageShared(),
+                    .label         = "Position",
+                    .defaultView   = fb.getColorTexture(0)->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = fb.getColorTexture(0)->getImageShared(),
+                    .categoryIndex = CATEGORY_GBUFFER,
                 },
                 {
-                    .label       = "Normal",
-                    .defaultView = fb.getColorTexture(1)->getImageView(),
-                    .ownedView   = nullptr,
-                    .image       = fb.getColorTexture(1)->getImageShared(),
+                    .label         = "Normal",
+                    .defaultView   = fb.getColorTexture(1)->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = fb.getColorTexture(1)->getImageShared(),
+                    .categoryIndex = CATEGORY_GBUFFER,
                 },
                 {
-                    .label       = "AlbedoSpec",
-                    .defaultView = fb.getColorTexture(2)->getImageView(),
-                    .ownedView   = nullptr,
-                    .image       = fb.getColorTexture(2)->getImageShared(),
+                    .label         = "AlbedoSpec",
+                    .defaultView   = fb.getColorTexture(2)->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = fb.getColorTexture(2)->getImageShared(),
+                    .categoryIndex = CATEGORY_GBUFFER,
                 },
                 {
-                    .label       = "Depth",
-                    .defaultView = fb.getDepthTexture()->getImageView(),
-                    .ownedView   = nullptr,
-                    .image       = fb.getDepthTexture()->getImageShared(),
-                    .aspectFlags = EImageAspect::Depth,
-                    .tint        = {1, 0, 0, 1}, // only red mask
+                    .label         = "Depth",
+                    .defaultView   = fb.getDepthTexture()->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = fb.getDepthTexture()->getImageShared(),
+                    .categoryIndex = CATEGORY_GBUFFER,
+                    .aspectFlags   = EImageAspect::Depth,
+                    .tint          = {1, 0, 0, 1}, // only red mask
                 },
             };
 
             auto viewPortRT = _deferredPipeline->_viewportRT->getCurFrameBuffer();
             ctx.debugSpec.slots.push_back({
-                .label       = "ViewPortColor0",
-                .defaultView = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageView() : nullptr,
-                .ownedView   = nullptr,
-                .image       = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageShared() : nullptr,
+                .label         = "ViewPortColor0",
+                .defaultView   = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageView() : nullptr,
+                .ownedView     = nullptr,
+                .image         = viewPortRT->getColorTexture(0) ? viewPortRT->getColorTexture(0)->getImageShared() : nullptr,
+                .categoryIndex = CATEGORY_VIEWPORT,
             });
             ctx.debugSpec.slots.push_back({
-                .label       = "ViewportDepth",
-                .defaultView = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageView() : nullptr,
-                .ownedView   = nullptr,
-                .image       = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageShared() : nullptr,
-                .aspectFlags = EImageAspect::Depth,
-                .tint        = {1, 0, 0, 1}, // only red mask
+                .label         = "ViewportDepth",
+                .defaultView   = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageView() : nullptr,
+                .ownedView     = nullptr,
+                .image         = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageShared() : nullptr,
+                .categoryIndex = CATEGORY_VIEWPORT,
+                .aspectFlags   = EImageAspect::Depth,
+                .tint          = {1, 0, 0, 1}, // only red mask
 
             });
         }
 
         if (_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
             ctx.debugSpec.slots.push_back({
-                .label       = "PBR_BRDF_LUT",
-                .defaultView = _sharedResources.pbrLUT->getImageView(),
-                .ownedView   = nullptr,
-                .image       = _sharedResources.pbrLUT->getImageShared(),
+                .label         = "PBR_BRDF_LUT",
+                .defaultView   = _sharedResources.pbrLUT->getImageView(),
+                .ownedView     = nullptr,
+                .image         = _sharedResources.pbrLUT->getImageShared(),
+                .categoryIndex = CATEGORY_SHARED,
             });
         }
 
@@ -1095,48 +1122,110 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
                     (void)elc;
                     auto preview = resolver->getEnvironmentLightingPreview(entity);
-                    if (!preview.bHasPrefilterMap || !preview.prefilterTexture || preview.prefilterMipCount == 0 ||
-                        !preview.prefilterTexture->getImageShared() || !preview.prefilterTexture->getImageView()) {
-                        continue;
-                    }
 
-                    auto prefilterImage = preview.prefilterTexture->getImageShared();
-                    if (!prefilterImage) {
-                        continue;
-                    }
-
-                    const uint32_t mipLevels = preview.prefilterMipCount;
-                    EditorViewportContext::DebugSpec::Group prefilterGroup{
-                        .label      = "Environment Prefilter Cubemap",
-                        .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
-                        .beginIndex = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-                        .groupSize  = CubeFace_Count,
-                    };
-                    prefilterGroup.itemLabels.reserve(mipLevels);
-
-                    for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
-                        const float roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mipIndex) / static_cast<float>(mipLevels - 1);
-                        prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
+                    if (preview.bHasRenderableCubemap && preview.cubemapTexture &&
+                        preview.cubemapTexture->getImageShared() && preview.cubemapTexture->getImageView()) {
+                        EditorViewportContext::DebugSpec::Group cubemapGroup{
+                            .label         = "Environment Cubemap",
+                            .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                            .categoryIndex = CATEGORY_ENVIRONMENT,
+                            .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                            .groupSize     = CubeFace_Count,
+                        };
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-                            auto* faceView = preview.prefilterMipFaceViews[mipIndex][faceIndex];
+                            auto* faceView = preview.cubemapFaceViews[faceIndex];
                             if (!faceView) {
                                 continue;
                             }
 
                             ctx.debugSpec.slots.push_back({
-                                .label       = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
-                                .defaultView = faceView,
-                                .ownedView   = nullptr,
-                                .image       = prefilterImage,
+                                .label         = std::format("EnvironmentFace{}", faceIndex),
+                                .defaultView   = faceView,
+                                .ownedView     = nullptr,
+                                .image         = preview.cubemapTexture->getImageShared(),
+                                .categoryIndex = CATEGORY_ENVIRONMENT,
                             });
+                        }
+
+                        cubemapGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - cubemapGroup.beginIndex;
+                        if (cubemapGroup.slotCount >= cubemapGroup.groupSize) {
+                            ctx.debugSpec.groups.push_back(std::move(cubemapGroup));
                         }
                     }
 
-                    prefilterGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - prefilterGroup.beginIndex;
-                    if (prefilterGroup.slotCount >= prefilterGroup.groupSize) {
-                        ctx.debugSpec.groups.push_back(std::move(prefilterGroup));
+                    if (preview.bHasIrradianceMap && preview.irradianceTexture &&
+                        preview.irradianceTexture->getImageShared() && preview.irradianceTexture->getImageView()) {
+                        EditorViewportContext::DebugSpec::Group irradianceGroup{
+                            .label         = "Environment Irradiance Cubemap",
+                            .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                            .categoryIndex = CATEGORY_ENVIRONMENT,
+                            .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                            .groupSize     = CubeFace_Count,
+                        };
+
+                        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                            auto* faceView = preview.irradianceFaceViews[faceIndex];
+                            if (!faceView) {
+                                continue;
+                            }
+
+                            ctx.debugSpec.slots.push_back({
+                                .label         = std::format("IrradianceFace{}", faceIndex),
+                                .defaultView   = faceView,
+                                .ownedView     = nullptr,
+                                .image         = preview.irradianceTexture->getImageShared(),
+                                .categoryIndex = CATEGORY_ENVIRONMENT,
+                            });
+                        }
+
+                        irradianceGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - irradianceGroup.beginIndex;
+                        if (irradianceGroup.slotCount >= irradianceGroup.groupSize) {
+                            ctx.debugSpec.groups.push_back(std::move(irradianceGroup));
+                        }
                     }
+
+                    if (preview.bHasPrefilterMap && preview.prefilterTexture && preview.prefilterMipCount > 0 &&
+                        preview.prefilterTexture->getImageShared() && preview.prefilterTexture->getImageView()) {
+                        auto prefilterImage = preview.prefilterTexture->getImageShared();
+                        if (prefilterImage) {
+                            const uint32_t mipLevels = preview.prefilterMipCount;
+                            EditorViewportContext::DebugSpec::Group prefilterGroup{
+                                .label         = "Environment Prefilter Cubemap",
+                                .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
+                                .categoryIndex = CATEGORY_ENVIRONMENT,
+                                .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                                .groupSize     = CubeFace_Count,
+                            };
+                            prefilterGroup.itemLabels.reserve(mipLevels);
+
+                            for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
+                                const float roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mipIndex) / static_cast<float>(mipLevels - 1);
+                                prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
+
+                                for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                                    auto* faceView = preview.prefilterMipFaceViews[mipIndex][faceIndex];
+                                    if (!faceView) {
+                                        continue;
+                                    }
+
+                                    ctx.debugSpec.slots.push_back({
+                                        .label         = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
+                                        .defaultView   = faceView,
+                                        .ownedView     = nullptr,
+                                        .image         = prefilterImage,
+                                        .categoryIndex = CATEGORY_ENVIRONMENT,
+                                    });
+                                }
+                            }
+
+                            prefilterGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - prefilterGroup.beginIndex;
+                            if (prefilterGroup.slotCount >= prefilterGroup.groupSize) {
+                                ctx.debugSpec.groups.push_back(std::move(prefilterGroup));
+                            }
+                        }
+                    }
+
                     break; // only first environment lighting preview
                 }
             }

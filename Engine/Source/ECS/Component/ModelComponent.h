@@ -30,20 +30,14 @@ class PhongMaterial;
 
 struct Node;
 
-/**
- * @brief ModelComponent - Asset loading entry point for 3D models
- *
- * Serialization format:
- * @code
- * {
- *   "ModelComponent": {
- *     "_modelRef": { "_path": "Content/Models/character.fbx" },
- *     "_useEmbeddedMaterials": true,
- *     "_autoCreateChildEntities": true
- *   }
- * }
- * @endcode
- */
+
+// TODO: support n material types + custom material
+//       types: custom(with a material path, maybe a json file or a asset some what), PBR, Unlit, etc.
+//       If not custom the modelComponent will load with that shading model of this type,
+//         and create the corresponding material component, auto fill image by detected
+//       when change the type in editor, it will be refresh quickly to new material type
+//       Maybe the meta data and the textures of the model file(fbx, gltf) can be load in mem
+//       then we do a fast material component change
 struct ModelComponent : public IComponent
 {
     YA_REFLECT_BEGIN(ModelComponent)

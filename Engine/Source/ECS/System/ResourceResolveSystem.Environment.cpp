@@ -60,6 +60,7 @@ void completeEnvironmentSource(EnvironmentLightingComponent&    component,
                                EnvironmentLightingRuntimeState& state,
                                const char*                      reason)
 {
+    detail::rebuildEnvironmentCubemapViews(state);
     makeTransition(component.sourceState, "EnvironmentLighting.Source")
         .to(EEnvironmentLightingSourceResolveState::Ready, reason);
     ++state.resultVersion;
@@ -80,6 +81,7 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
     if (!component.bEnableIrradiance) {
         cancelOffscreenJob(state.pendingIrradianceOffscreen);
         detail::retireTextureNow(state.irradianceTexture);
+        detail::rebuildEnvironmentIrradianceViews(state);
         if (component.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
             makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
                 .to(EEnvironmentLightingIrradianceResolveState::Disabled, "irradiance disabled");
@@ -329,21 +331,66 @@ namespace detail
 namespace
 {
 
+template <typename TViews>
+void clearCubeFaceViews(TViews& views)
+{
+    for (auto& faceView : views) {
+        if (!faceView) {
+            continue;
+        }
+
+        DeferredDeletionQueue::get().retireResource(std::move(faceView));
+    }
+}
+
 void clearPrefilterViews(EnvironmentLightingRuntimeState& state)
 {
     for (auto& mipViews : state.prefilterMipFacePreviewViews) {
-        for (auto& faceView : mipViews) {
-            if (!faceView) {
-                continue;
-            }
-
-            DeferredDeletionQueue::get().retireResource(std::move(faceView));
-        }
+        clearCubeFaceViews(mipViews);
     }
     state.prefilterPreviewMipCount = 0;
 }
 
+void rebuildCubeFaceViews(const stdptr<Texture>& texture,
+                          std::array<stdptr<IImageView>, CubeFace_Count>& outViews,
+                          const std::string& labelPrefix)
+{
+    clearCubeFaceViews(outViews);
+    if (!texture || !texture->getImageShared() || !texture->getImageView()) {
+        return;
+    }
+
+    auto* textureFactory = ITextureFactory::get();
+    if (!textureFactory) {
+        return;
+    }
+
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        outViews[faceIndex] = textureFactory->createImageView(
+            texture->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Face_{}", labelPrefix, faceIndex),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = faceIndex,
+                .layerCount     = 1,
+            });
+    }
+}
+
 } // namespace
+
+void rebuildEnvironmentCubemapViews(EnvironmentLightingRuntimeState& state)
+{
+    rebuildCubeFaceViews(state.cubemapTexture, state.cubemapFacePreviewViews, "EnvironmentCubemap");
+}
+
+void rebuildEnvironmentIrradianceViews(EnvironmentLightingRuntimeState& state)
+{
+    rebuildCubeFaceViews(state.irradianceTexture, state.irradianceFacePreviewViews, "EnvironmentIrradiance");
+}
 
 void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
 {
@@ -381,6 +428,8 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
 
 void retireEnvTextures(EnvironmentLightingRuntimeState& state)
 {
+    clearCubeFaceViews(state.cubemapFacePreviewViews);
+    clearCubeFaceViews(state.irradianceFacePreviewViews);
     clearPrefilterViews(state);
     retireTexture(state.cubemapTexture);
     retireTexture(state.irradianceTexture);
@@ -615,6 +664,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
 
     // ok
     state.irradianceTexture = std::move(state.pendingIrradianceOffscreen->result->outputTexture);
+    detail::rebuildEnvironmentIrradianceViews(state);
     state.pendingIrradianceOffscreen.reset();
     ++state.resultVersion;
     makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
