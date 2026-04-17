@@ -50,12 +50,16 @@ struct EnvironmentLightingPendingBatchLoadState
 
 struct EnvironmentLightingRuntimeState
 {
+    static constexpr uint32_t                                 MAX_PREFILTER_PREVIEW_MIPS = 16;
+
     uint64_t                                                  authoringVersion             = 0;
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
     stdptr<Texture>                                           cubemapTexture               = nullptr;
     stdptr<Texture>                                           irradianceTexture            = nullptr;
     stdptr<Texture>                                           prefilterTexture             = nullptr;
+    std::array<std::array<stdptr<IImageView>, CubeFace_Count>, MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFacePreviewViews{};
+    uint32_t                                                  prefilterPreviewMipCount     = 0;
     std::shared_ptr<EnvironmentLightingPendingBatchLoadState> pendingBatchLoad;
     std::shared_ptr<OffscreenJobState>                        pendingEnvironmentOffscreen;
     std::shared_ptr<OffscreenJobState>                        pendingIrradianceOffscreen;
@@ -90,12 +94,14 @@ struct SkyboxPreviewInfo
 
 struct EnvironmentLightingPreviewInfo
 {
-    Texture* cubemapTexture        = nullptr;
-    Texture* irradianceTexture     = nullptr;
-    Texture* prefilterTexture      = nullptr;
-    bool     bHasRenderableCubemap = false;
-    bool     bHasIrradianceMap     = false;
-    bool     bHasPrefilterMap      = false;
+    Texture*                                cubemapTexture        = nullptr;
+    Texture*                                irradianceTexture     = nullptr;
+    Texture*                                prefilterTexture      = nullptr;
+    std::array<std::array<IImageView*, CubeFace_Count>, EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFaceViews{};
+    uint32_t                                prefilterMipCount     = 0;
+    bool                                    bHasRenderableCubemap = false;
+    bool                                    bHasIrradianceMap     = false;
+    bool                                    bHasPrefilterMap      = false;
 };
 
 

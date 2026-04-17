@@ -1090,13 +1090,12 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         }
 
         if (auto* scene = _app->getSceneManager()->getActiveScene()) {
-            auto* resolver       = _app->getResourceResolveSystem();
-            auto* textureFactory = _render ? _render->getTextureFactory() : nullptr;
-            if (resolver && textureFactory) {
+            auto* resolver = _app->getResourceResolveSystem();
+            if (resolver) {
                 for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
                     (void)elc;
                     auto preview = resolver->getEnvironmentLightingPreview(entity);
-                    if (!preview.bHasPrefilterMap || !preview.prefilterTexture ||
+                    if (!preview.bHasPrefilterMap || !preview.prefilterTexture || preview.prefilterMipCount == 0 ||
                         !preview.prefilterTexture->getImageShared() || !preview.prefilterTexture->getImageView()) {
                         continue;
                     }
@@ -1106,7 +1105,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         continue;
                     }
 
-                    const uint32_t mipLevels = std::max(1u, prefilterImage->getMipLevels());
+                    const uint32_t mipLevels = preview.prefilterMipCount;
                     EditorViewportContext::DebugSpec::Group prefilterGroup{
                         .label      = "Environment Prefilter Cubemap",
                         .type       = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
@@ -1120,25 +1119,15 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-                            auto faceView = textureFactory->createImageView(
-                                prefilterImage,
-                                ImageViewCreateInfo{
-                                    .label          = std::format("EnvironmentPrefilter_Mip_{}_Face_{}", mipIndex, faceIndex),
-                                    .viewType       = EImageViewType::View2D,
-                                    .aspectFlags    = EImageAspect::Color,
-                                    .baseMipLevel   = mipIndex,
-                                    .levelCount     = 1,
-                                    .baseArrayLayer = faceIndex,
-                                    .layerCount     = 1,
-                                });
+                            auto* faceView = preview.prefilterMipFaceViews[mipIndex][faceIndex];
                             if (!faceView) {
                                 continue;
                             }
 
                             ctx.debugSpec.slots.push_back({
                                 .label       = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
-                                .defaultView = faceView.get(),
-                                .ownedView   = faceView,
+                                .defaultView = faceView,
+                                .ownedView   = nullptr,
                                 .image       = prefilterImage,
                             });
                         }

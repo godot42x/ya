@@ -1,5 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
+#include "Render/Core/TextureFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/App/OffscreenJobRunner.h"
 #include "Scene/Scene.h"
@@ -92,6 +93,7 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
     if (!component.bEnablePrefilter) {
         cancelOffscreenJob(state.pendingPrefilterOffscreen);
         detail::retireTextureNow(state.prefilterTexture);
+        detail::rebuildPrefilterViews(state);
         if (component.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
             makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
                 .to(EEnvironmentLightingPrefilterResolveState::Disabled, "prefilter disabled");
@@ -324,8 +326,62 @@ stdptr<Texture> syncEnvSkybox(EnvironmentLightingComponent&    component,
 namespace detail
 {
 
+namespace
+{
+
+void clearPrefilterViews(EnvironmentLightingRuntimeState& state)
+{
+    for (auto& mipViews : state.prefilterMipFacePreviewViews) {
+        for (auto& faceView : mipViews) {
+            if (!faceView) {
+                continue;
+            }
+
+            DeferredDeletionQueue::get().retireResource(std::move(faceView));
+        }
+    }
+    state.prefilterPreviewMipCount = 0;
+}
+
+} // namespace
+
+void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
+{
+    clearPrefilterViews(state);
+    if (!state.prefilterTexture || !state.prefilterTexture->getImageShared() ||
+        !state.prefilterTexture->getImageView()) {
+        return;
+    }
+
+    auto* textureFactory = ITextureFactory::get();
+    if (!textureFactory) {
+        return;
+    }
+
+    const auto prefilterImage = state.prefilterTexture->getImageShared();
+    const uint32_t mipLevels  = std::min(prefilterImage->getMipLevels(), EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS);
+    state.prefilterPreviewMipCount = mipLevels;
+
+    for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+            state.prefilterMipFacePreviewViews[mipIndex][faceIndex] = textureFactory->createImageView(
+                prefilterImage,
+                ImageViewCreateInfo{
+                    .label          = std::format("EnvironmentPrefilter_Mip_{}_Face_{}", mipIndex, faceIndex),
+                    .viewType       = EImageViewType::View2D,
+                    .aspectFlags    = EImageAspect::Color,
+                    .baseMipLevel   = mipIndex,
+                    .levelCount     = 1,
+                    .baseArrayLayer = faceIndex,
+                    .layerCount     = 1,
+                });
+        }
+    }
+}
+
 void retireEnvTextures(EnvironmentLightingRuntimeState& state)
 {
+    clearPrefilterViews(state);
     retireTexture(state.cubemapTexture);
     retireTexture(state.irradianceTexture);
     retireTexture(state.prefilterTexture);
@@ -589,11 +645,13 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
         !state.pendingPrefilterOffscreen->result->outputTexture) {
         state.pendingPrefilterOffscreen.reset();
         detail::retireTextureNow(state.prefilterTexture);
+        detail::rebuildPrefilterViews(state);
         makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess failed");
         return;
     }
 
     state.prefilterTexture = std::move(state.pendingPrefilterOffscreen->result->outputTexture);
+    detail::rebuildPrefilterViews(state);
     state.pendingPrefilterOffscreen.reset();
     ++state.resultVersion;
     makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")

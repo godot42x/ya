@@ -262,9 +262,16 @@ EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPrev
     info.cubemapTexture        = state->cubemapTexture.get();
     info.irradianceTexture     = state->irradianceTexture.get();
     info.prefilterTexture      = state->prefilterTexture.get();
+    info.prefilterMipCount     = state->prefilterPreviewMipCount;
     info.bHasRenderableCubemap = state->hasRenderableCubemap();
     info.bHasIrradianceMap     = state->hasIrradianceMap();
     info.bHasPrefilterMap      = state->hasPrefilterMap();
+
+    for (uint32_t mipIndex = 0; mipIndex < state->prefilterPreviewMipCount; ++mipIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+            info.prefilterMipFaceViews[mipIndex][faceIndex] = state->prefilterMipFacePreviewViews[mipIndex][faceIndex].get();
+        }
+    }
 
     return info;
 }
