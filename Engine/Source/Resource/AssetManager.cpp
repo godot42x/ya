@@ -7,7 +7,9 @@
 #include "Resource/DeferredDeletionQueue.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
+#include "ktx.h"
 #include "stb/stb_image.h"
+#include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 #include <atomic>
@@ -22,6 +24,18 @@ namespace ya
 
 namespace
 {
+struct KtxTextureHandleDeleter
+{
+    void operator()(ktxTexture* texture) const
+    {
+        if (texture) {
+            ktxTexture_Destroy(texture);
+        }
+    }
+};
+
+using KtxTextureHandle = std::unique_ptr<ktxTexture, KtxTextureHandleDeleter>;
+
 std::string toLowerCopy(std::string value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
@@ -33,6 +47,268 @@ std::string toLowerCopy(std::string value)
 std::string textureExtension(const std::string& filepath)
 {
     return toLowerCopy(std::filesystem::path(filepath).extension().string());
+}
+
+bool isKtxPath(const std::string& filepath)
+{
+    const std::string extension = textureExtension(filepath);
+    return extension == ".ktx" || extension == ".ktx2";
+}
+
+uint32_t textureChannelCount(EFormat::T format)
+{
+    switch (format) {
+    case EFormat::R8_UNORM:
+    case EFormat::R32_SFLOAT:
+    case EFormat::BC4_UNORM_BLOCK:
+    case EFormat::BC4_SNORM_BLOCK:
+        return 1;
+    case EFormat::R8G8_UNORM:
+    case EFormat::BC5_UNORM_BLOCK:
+    case EFormat::BC5_SNORM_BLOCK:
+        return 2;
+    case EFormat::BC1_RGB_UNORM_BLOCK:
+    case EFormat::BC1_RGB_SRGB_BLOCK:
+    case EFormat::ETC2_R8G8B8_UNORM_BLOCK:
+    case EFormat::ETC2_R8G8B8_SRGB_BLOCK:
+        return 3;
+    default:
+        return 4;
+    }
+}
+
+EFormat::T vkFormatToTextureFormat(uint32_t vkFormat)
+{
+    switch (vkFormat) {
+    case VK_FORMAT_R8_UNORM:
+        return EFormat::R8_UNORM;
+    case VK_FORMAT_R8G8_UNORM:
+        return EFormat::R8G8_UNORM;
+    case VK_FORMAT_R8G8B8A8_UNORM:
+        return EFormat::R8G8B8A8_UNORM;
+    case VK_FORMAT_R8G8B8A8_SRGB:
+        return EFormat::R8G8B8A8_SRGB;
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return EFormat::R16G16B16A16_SFLOAT;
+    case VK_FORMAT_R32_SFLOAT:
+        return EFormat::R32_SFLOAT;
+    case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+        return EFormat::BC1_RGB_UNORM_BLOCK;
+    case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+        return EFormat::BC1_RGB_SRGB_BLOCK;
+    case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+        return EFormat::BC1_RGBA_UNORM_BLOCK;
+    case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+        return EFormat::BC1_RGBA_SRGB_BLOCK;
+    case VK_FORMAT_BC3_UNORM_BLOCK:
+        return EFormat::BC3_UNORM_BLOCK;
+    case VK_FORMAT_BC3_SRGB_BLOCK:
+        return EFormat::BC3_SRGB_BLOCK;
+    case VK_FORMAT_BC4_UNORM_BLOCK:
+        return EFormat::BC4_UNORM_BLOCK;
+    case VK_FORMAT_BC4_SNORM_BLOCK:
+        return EFormat::BC4_SNORM_BLOCK;
+    case VK_FORMAT_BC5_UNORM_BLOCK:
+        return EFormat::BC5_UNORM_BLOCK;
+    case VK_FORMAT_BC5_SNORM_BLOCK:
+        return EFormat::BC5_SNORM_BLOCK;
+    case VK_FORMAT_BC7_UNORM_BLOCK:
+        return EFormat::BC7_UNORM_BLOCK;
+    case VK_FORMAT_BC7_SRGB_BLOCK:
+        return EFormat::BC7_SRGB_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK:
+        return EFormat::ETC2_R8G8B8_UNORM_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+        return EFormat::ETC2_R8G8B8_SRGB_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK:
+        return EFormat::ETC2_R8G8B8A1_UNORM_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+        return EFormat::ETC2_R8G8B8A1_SRGB_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK:
+        return EFormat::ETC2_R8G8B8A8_UNORM_BLOCK;
+    case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+        return EFormat::ETC2_R8G8B8A8_SRGB_BLOCK;
+    case VK_FORMAT_ASTC_4x4_UNORM_BLOCK:
+        return EFormat::ASTC_4x4_UNORM_BLOCK;
+    case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+        return EFormat::ASTC_4x4_SRGB_BLOCK;
+    case VK_FORMAT_ASTC_5x5_UNORM_BLOCK:
+        return EFormat::ASTC_5x5_UNORM_BLOCK;
+    case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+        return EFormat::ASTC_5x5_SRGB_BLOCK;
+    case VK_FORMAT_ASTC_6x6_UNORM_BLOCK:
+        return EFormat::ASTC_6x6_UNORM_BLOCK;
+    case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+        return EFormat::ASTC_6x6_SRGB_BLOCK;
+    case VK_FORMAT_ASTC_8x8_UNORM_BLOCK:
+        return EFormat::ASTC_8x8_UNORM_BLOCK;
+    case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+        return EFormat::ASTC_8x8_SRGB_BLOCK;
+    case VK_FORMAT_ASTC_10x10_UNORM_BLOCK:
+        return EFormat::ASTC_10x10_UNORM_BLOCK;
+    case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+        return EFormat::ASTC_10x10_SRGB_BLOCK;
+    default:
+        return EFormat::Undefined;
+    }
+}
+
+EFormat::T glInternalFormatToTextureFormat(uint32_t glInternalFormat)
+{
+    switch (glInternalFormat) {
+    case 0x8229:
+        return EFormat::R8_UNORM;
+    case 0x822B:
+        return EFormat::R8G8_UNORM;
+    case 0x8058:
+        return EFormat::R8G8B8A8_UNORM;
+    case 0x8C43:
+        return EFormat::R8G8B8A8_SRGB;
+    case 0x881A:
+        return EFormat::R16G16B16A16_SFLOAT;
+    case 0x822E:
+        return EFormat::R32_SFLOAT;
+    case 0x83F0:
+        return EFormat::BC1_RGB_UNORM_BLOCK;
+    case 0x8C4C:
+        return EFormat::BC1_RGB_SRGB_BLOCK;
+    case 0x83F1:
+        return EFormat::BC1_RGBA_UNORM_BLOCK;
+    case 0x8C4D:
+        return EFormat::BC1_RGBA_SRGB_BLOCK;
+    case 0x83F3:
+        return EFormat::BC3_UNORM_BLOCK;
+    case 0x8C4F:
+        return EFormat::BC3_SRGB_BLOCK;
+    case 0x8DBB:
+        return EFormat::BC4_UNORM_BLOCK;
+    case 0x8DBC:
+        return EFormat::BC4_SNORM_BLOCK;
+    case 0x8DBD:
+        return EFormat::BC5_UNORM_BLOCK;
+    case 0x8DBE:
+        return EFormat::BC5_SNORM_BLOCK;
+    case 0x8E8C:
+        return EFormat::BC7_UNORM_BLOCK;
+    case 0x8E8D:
+        return EFormat::BC7_SRGB_BLOCK;
+    case 0x9274:
+        return EFormat::ETC2_R8G8B8_UNORM_BLOCK;
+    case 0x9275:
+        return EFormat::ETC2_R8G8B8_SRGB_BLOCK;
+    case 0x9276:
+        return EFormat::ETC2_R8G8B8A1_UNORM_BLOCK;
+    case 0x9277:
+        return EFormat::ETC2_R8G8B8A1_SRGB_BLOCK;
+    case 0x9278:
+        return EFormat::ETC2_R8G8B8A8_UNORM_BLOCK;
+    case 0x9279:
+        return EFormat::ETC2_R8G8B8A8_SRGB_BLOCK;
+    case 0x93B0:
+        return EFormat::ASTC_4x4_UNORM_BLOCK;
+    case 0x93D0:
+        return EFormat::ASTC_4x4_SRGB_BLOCK;
+    case 0x93B2:
+        return EFormat::ASTC_5x5_UNORM_BLOCK;
+    case 0x93D2:
+        return EFormat::ASTC_5x5_SRGB_BLOCK;
+    case 0x93B4:
+        return EFormat::ASTC_6x6_UNORM_BLOCK;
+    case 0x93D4:
+        return EFormat::ASTC_6x6_SRGB_BLOCK;
+    case 0x93B7:
+        return EFormat::ASTC_8x8_UNORM_BLOCK;
+    case 0x93D7:
+        return EFormat::ASTC_8x8_SRGB_BLOCK;
+    case 0x93BB:
+        return EFormat::ASTC_10x10_UNORM_BLOCK;
+    case 0x93DB:
+        return EFormat::ASTC_10x10_SRGB_BLOCK;
+    default:
+        return EFormat::Undefined;
+    }
+}
+
+EFormat::T resolveKtxTextureFormat(const ktxTexture* texture)
+{
+    if (!texture) {
+        return EFormat::Undefined;
+    }
+
+    switch (texture->classId) {
+    case ktxTexture1_c: {
+        auto* texture1 = reinterpret_cast<const ktxTexture1*>(texture);
+        return glInternalFormatToTextureFormat(texture1->glInternalformat);
+    }
+    case ktxTexture2_c: {
+        auto* texture2 = reinterpret_cast<const ktxTexture2*>(texture);
+        return vkFormatToTextureFormat(texture2->vkFormat);
+    }
+    default:
+        return EFormat::Undefined;
+    }
+}
+
+KtxTextureHandle loadKtxTexture(const std::string& filepath, ktxTextureCreateFlags createFlags)
+{
+    ktxTexture* rawTexture = nullptr;
+    const auto  result = ktxTexture_CreateFromNamedFile(filepath.c_str(), createFlags, &rawTexture);
+    if (result != KTX_SUCCESS || rawTexture == nullptr) {
+        YA_CORE_ERROR("KTX load failed for '{}': {}", filepath, ktxErrorString(result));
+        return {};
+    }
+
+    return KtxTextureHandle(rawTexture);
+}
+
+bool applyKtxResolvedSettings(const std::string& filepath,
+                              AssetManager::ResolvedTextureImportSettings& settings)
+{
+    auto texture = loadKtxTexture(filepath, KTX_TEXTURE_CREATE_NO_FLAGS);
+    if (!texture) {
+        return false;
+    }
+
+    const auto format = resolveKtxTextureFormat(texture.get());
+    if (format == EFormat::Undefined) {
+        if (texture->classId == ktxTexture1_c) {
+            auto* texture1 = reinterpret_cast<ktxTexture1*>(texture.get());
+            YA_CORE_ERROR("Unsupported KTX1 glInternalformat {} for '{}'", texture1->glInternalformat, filepath);
+        }
+        else if (texture->classId == ktxTexture2_c) {
+            auto* texture2 = reinterpret_cast<ktxTexture2*>(texture.get());
+            YA_CORE_ERROR("Unsupported KTX vkFormat {} for '{}'", texture2->vkFormat, filepath);
+        }
+        return false;
+    }
+
+    settings.sourceKind                  = texture->isCompressed ? AssetManager::ETextureSourceKind::Compressed
+                                                                 : AssetManager::ETextureSourceKind::Data;
+    settings.sourceInfo.width            = texture->baseWidth;
+    settings.sourceInfo.height           = texture->baseHeight;
+    settings.sourceInfo.detectedChannels = textureChannelCount(format);
+    settings.sourceInfo.bIsCompressed    = texture->isCompressed;
+    settings.sourceInfo.detectedKind     = settings.sourceKind;
+    settings.resolvedFormat              = format;
+    settings.resolvedChannels            = textureChannelCount(format);
+    settings.colorSpace                  = EFormat::isSRGB(format)
+                                            ? AssetManager::ETextureColorSpace::SRGB
+                                            : AssetManager::ETextureColorSpace::Linear;
+
+    if (texture->isCompressed) {
+        settings.payloadType     = AssetManager::ETexturePayloadType::CompressedBytes;
+        settings.decodePrecision = AssetManager::ETextureDecodePrecision::Auto;
+        return true;
+    }
+
+    if (const auto* traits = AssetManager::getFormatTraits(format)) {
+        settings.payloadType     = traits->payloadType;
+        settings.decodePrecision = traits->decodePrecision;
+        return true;
+    }
+
+    YA_CORE_ERROR("Unsupported uncompressed KTX format for '{}'", filepath);
+    return false;
 }
 
 uint16_t floatToHalf(float value)
@@ -72,6 +348,7 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
     result.width          = settings.sourceInfo.width;
     result.height         = settings.sourceInfo.height;
     result.channels       = settings.resolvedChannels;
+    result.mipLevels      = 1;
     result.format         = settings.resolvedFormat;
     result.payloadType    = settings.payloadType;
     result.importSettings = settings;
@@ -82,10 +359,38 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
     int height   = -1;
     int channels = -1;
 
-    if (settings.payloadType == AssetManager::ETexturePayloadType::CompressedBytes ||
-        settings.sourceKind == AssetManager::ETextureSourceKind::Compressed) {
-        YA_CORE_ERROR("decodeTextureToMemory: Compressed texture import is not implemented for '{}'",
-                      settings.sourceInfo.filepath);
+    if (isKtxPath(settings.sourceInfo.filepath)) {
+        auto texture = loadKtxTexture(settings.sourceInfo.filepath, KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT);
+        if (!texture) {
+            return result;
+        }
+
+        if (texture->numFaces != 1 || texture->numLayers != 1 || texture->baseDepth > 1 || texture->isCubemap) {
+            YA_CORE_ERROR("decodeTextureToMemory: Only 2D KTX textures are supported for '{}'",
+                          settings.sourceInfo.filepath);
+            return result;
+        }
+
+        if (ktxTexture_NeedsTranscoding(texture.get())) {
+            YA_CORE_ERROR("decodeTextureToMemory: Basis-compressed KTX transcoding is not implemented for '{}'",
+                          settings.sourceInfo.filepath);
+            return result;
+        }
+
+        const auto size = static_cast<size_t>(ktxTexture_GetDataSize(texture.get()));
+        const auto* data = ktxTexture_GetData(texture.get());
+        if (size == 0 || data == nullptr) {
+            YA_CORE_ERROR("decodeTextureToMemory: KTX image data is empty for '{}'",
+                          settings.sourceInfo.filepath);
+            return result;
+        }
+
+        result.width     = texture->baseWidth;
+        result.height    = texture->baseHeight;
+        result.channels  = textureChannelCount(settings.resolvedFormat);
+        result.mipLevels = texture->numLevels > 0 ? texture->numLevels : 1;
+        result.bytes.resize(size);
+        std::memcpy(result.bytes.data(), data, size);
         return result;
     }
 
@@ -246,7 +551,7 @@ const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
             if (ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "bmp" ||
-                ext == "tga" || ext == "hdr" || ext == "dds") {
+                ext == "tga" || ext == "hdr" || ext == "dds" || ext == "ktx" || ext == "ktx2") {
                 meta = AssetMeta::defaultForTexture();
             }
             else if (ext == "obj" || ext == "fbx" || ext == "gltf" || ext == "glb" ||
@@ -341,6 +646,22 @@ AssetManager::TextureSourceInfo AssetManager::inspectTextureSource(const std::st
     TextureSourceInfo info;
     info.filepath  = filepath;
     info.extension = textureExtension(filepath);
+
+    if (isKtxPath(filepath)) {
+        auto texture = loadKtxTexture(filepath, KTX_TEXTURE_CREATE_NO_FLAGS);
+        if (!texture) {
+            return info;
+        }
+
+        info.width         = texture->baseWidth;
+        info.height        = texture->baseHeight;
+        info.bIsCompressed = texture->isCompressed;
+        info.detectedKind  = texture->isCompressed ? ETextureSourceKind::Compressed : ETextureSourceKind::Data;
+        const auto format  = resolveKtxTextureFormat(texture.get());
+        info.detectedChannels = textureChannelCount(format);
+        info.bIsHDR           = (format == EFormat::R16G16B16A16_SFLOAT || format == EFormat::R32_SFLOAT);
+        return info;
+    }
 
     int width    = -1;
     int height   = -1;
@@ -442,6 +763,13 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
 
     settings.colorSpace = parseColorSpace(meta.getString("colorSpace", ""), codeHint);
     settings.sourceKind = parseSourceKind(meta.getString("sourceKind", "auto"), settings.sourceInfo.detectedKind);
+
+    if (isKtxPath(filepath)) {
+        if (!applyKtxResolvedSettings(filepath, settings)) {
+            return settings;
+        }
+        return settings;
+    }
 
     if (settings.sourceKind == ETextureSourceKind::Compressed) {
         YA_CORE_ERROR("resolveTextureImportSettings: Compressed source '{}' is not implemented in runtime importer yet",
@@ -729,6 +1057,7 @@ std::shared_ptr<Texture> AssetManager::loadTextureSync(const std::string& name,
               .width    = decoded.width,
               .height   = decoded.height,
               .channels = decoded.channels,
+              .mipLevels = decoded.mipLevels,
               .format   = decoded.format,
               .data     = decoded.data(),
               .dataSize = decoded.dataSize(),
@@ -805,6 +1134,7 @@ void AssetManager::submitTextureLoad(const std::string&            filepath,
                       .width    = decoded.width,
                       .height   = decoded.height,
                       .channels = decoded.channels,
+                    .mipLevels = decoded.mipLevels,
                       .format   = decoded.format,
                       .data     = decoded.data(),
                       .dataSize = decoded.dataSize(),

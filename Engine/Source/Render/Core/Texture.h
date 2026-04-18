@@ -35,6 +35,7 @@ struct TextureMemoryView
     uint32_t   width    = 0;
     uint32_t   height   = 0;
     uint32_t   channels = 4;
+    uint32_t   mipLevels = 1;
     EFormat::T format   = EFormat::R8G8B8A8_UNORM;
     const void* data    = nullptr;
     size_t     dataSize = 0;

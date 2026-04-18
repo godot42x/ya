@@ -99,106 +99,6 @@ static bool copyFaceToStaging(uint8_t* dst, const TextureMemoryView& face, bool 
 }
 } // namespace
 
-static size_t getFormatPixelSize(EFormat::T format);
-static bool   isBlockCompressed(EFormat::T format);
-
-static size_t getFormatPixelSize(EFormat::T format)
-{
-    switch (format) {
-    case EFormat::R8_UNORM:
-        return 1;
-    case EFormat::R8G8_UNORM:
-        return 2;
-    case EFormat::R32_SFLOAT:
-        return 4;
-    case EFormat::R16G16B16A16_SFLOAT:
-        return 8;
-    case EFormat::R8G8B8A8_UNORM:
-    case EFormat::R8G8B8A8_SRGB:
-    case EFormat::B8G8R8A8_UNORM:
-    case EFormat::B8G8R8A8_SNORM:
-    case EFormat::B8G8R8A8_SRGB:
-    case EFormat::D32_SFLOAT:
-    case EFormat::D24_UNORM_S8_UINT:
-        return 4;
-    case EFormat::D32_SFLOAT_S8_UINT:
-        return 5;
-    case EFormat::BC1_RGB_UNORM_BLOCK:
-    case EFormat::BC1_RGBA_UNORM_BLOCK:
-    case EFormat::BC1_RGB_SRGB_BLOCK:
-    case EFormat::BC1_RGBA_SRGB_BLOCK:
-    case EFormat::BC4_UNORM_BLOCK:
-    case EFormat::BC4_SNORM_BLOCK:
-        return 8;
-    case EFormat::BC3_UNORM_BLOCK:
-    case EFormat::BC3_SRGB_BLOCK:
-    case EFormat::BC5_UNORM_BLOCK:
-    case EFormat::BC5_SNORM_BLOCK:
-    case EFormat::BC7_UNORM_BLOCK:
-    case EFormat::BC7_SRGB_BLOCK:
-        return 16;
-    case EFormat::ASTC_4x4_UNORM_BLOCK:
-    case EFormat::ASTC_4x4_SRGB_BLOCK:
-    case EFormat::ASTC_5x5_UNORM_BLOCK:
-    case EFormat::ASTC_5x5_SRGB_BLOCK:
-    case EFormat::ASTC_6x6_UNORM_BLOCK:
-    case EFormat::ASTC_6x6_SRGB_BLOCK:
-    case EFormat::ASTC_8x8_UNORM_BLOCK:
-    case EFormat::ASTC_8x8_SRGB_BLOCK:
-    case EFormat::ASTC_10x10_UNORM_BLOCK:
-    case EFormat::ASTC_10x10_SRGB_BLOCK:
-        return 16;
-    case EFormat::ETC2_R8G8B8_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8_SRGB_BLOCK:
-    case EFormat::ETC2_R8G8B8A1_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8A1_SRGB_BLOCK:
-        return 8;
-    case EFormat::ETC2_R8G8B8A8_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8A8_SRGB_BLOCK:
-        return 16;
-    default:
-        YA_CORE_WARN("Unknown format pixel size for format: {}", static_cast<int>(format));
-        return 4;
-    }
-}
-
-static bool isBlockCompressed(EFormat::T format)
-{
-    switch (format) {
-    case EFormat::BC1_RGB_UNORM_BLOCK:
-    case EFormat::BC1_RGBA_UNORM_BLOCK:
-    case EFormat::BC1_RGB_SRGB_BLOCK:
-    case EFormat::BC1_RGBA_SRGB_BLOCK:
-    case EFormat::BC3_UNORM_BLOCK:
-    case EFormat::BC3_SRGB_BLOCK:
-    case EFormat::BC4_UNORM_BLOCK:
-    case EFormat::BC4_SNORM_BLOCK:
-    case EFormat::BC5_UNORM_BLOCK:
-    case EFormat::BC5_SNORM_BLOCK:
-    case EFormat::BC7_UNORM_BLOCK:
-    case EFormat::BC7_SRGB_BLOCK:
-    case EFormat::ASTC_4x4_UNORM_BLOCK:
-    case EFormat::ASTC_4x4_SRGB_BLOCK:
-    case EFormat::ASTC_5x5_UNORM_BLOCK:
-    case EFormat::ASTC_5x5_SRGB_BLOCK:
-    case EFormat::ASTC_6x6_UNORM_BLOCK:
-    case EFormat::ASTC_6x6_SRGB_BLOCK:
-    case EFormat::ASTC_8x8_UNORM_BLOCK:
-    case EFormat::ASTC_8x8_SRGB_BLOCK:
-    case EFormat::ASTC_10x10_UNORM_BLOCK:
-    case EFormat::ASTC_10x10_SRGB_BLOCK:
-    case EFormat::ETC2_R8G8B8_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8_SRGB_BLOCK:
-    case EFormat::ETC2_R8G8B8A1_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8A1_SRGB_BLOCK:
-    case EFormat::ETC2_R8G8B8A8_UNORM_BLOCK:
-    case EFormat::ETC2_R8G8B8A8_SRGB_BLOCK:
-        return true;
-    default:
-        return false;
-    }
-}
-
 ITextureFactory* Texture::getTextureFactory()
 {
     auto render = ya::App::get()->getRender();
@@ -225,7 +125,8 @@ std::shared_ptr<Texture> Texture::fromMemory(const TextureMemoryCreateInfo& ci)
                           ci.memory.dataSize,
                           ci.memory.width,
                           ci.memory.height,
-                          ci.memory.format);
+                          ci.memory.format,
+                          ci.memory.mipLevels);
 
     YA_CORE_TRACE("Created texture from memory: {} ({}x{})", texture->_label, ci.memory.width, ci.memory.height);
     return texture;
@@ -518,7 +419,7 @@ void Texture::initFromData(const void* pixels,
         imageSize = dataSize;
     }
     else {
-        size_t pixelSize = getFormatPixelSize(format);
+        const size_t pixelSize = EFormat::getPixelSize(format);
         imageSize        = pixelSize * texWidth * texHeight;
     }
 
@@ -578,21 +479,24 @@ void Texture::initFromData(const void* pixels,
 
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
-    bool isCompressed = isBlockCompressed(format);
+    const bool isCompressed = EFormat::isBlockCompressed(format);
 
     if (isCompressed && mipLevels > 1 && dataSize > 0) {
         VkDeviceSize bufferOffset  = 0;
         uint32_t     currentWidth  = texWidth;
         uint32_t     currentHeight = texHeight;
+        const auto   blockExtent   = EFormat::getCompressedBlockExtent(format);
 
         for (uint32_t level = 0; level < mipLevels; level++) {
             currentWidth  = std::max(currentWidth, 1u);
             currentHeight = std::max(currentHeight, 1u);
 
-            uint32_t     blockSize = getFormatPixelSize(format);
-            uint32_t     blocksX   = (currentWidth + 3) / 4;
-            uint32_t     blocksY   = (currentHeight + 3) / 4;
-            VkDeviceSize levelSize = blocksX * blocksY * blockSize;
+            const uint32_t blockSize = static_cast<uint32_t>(EFormat::getPixelSize(format));
+            uint32_t     blocksX   = (currentWidth + blockExtent.width - 1) / blockExtent.width;
+            uint32_t     blocksY   = (currentHeight + blockExtent.height - 1) / blockExtent.height;
+            VkDeviceSize levelSize = static_cast<VkDeviceSize>(blocksX) *
+                                     static_cast<VkDeviceSize>(blocksY) *
+                                     static_cast<VkDeviceSize>(blockSize);
 
             if (bufferOffset + levelSize > imageSize) {
                 YA_CORE_ERROR("Mip level {} data exceeds buffer size: {} > {}",

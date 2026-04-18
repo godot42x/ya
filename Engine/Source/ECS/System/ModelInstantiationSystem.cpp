@@ -6,12 +6,15 @@
 
 #include "ECS/Component/ManagedChildComponent.h"
 
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Entity.h"
 
 #include "Render/Material/MaterialFactory.h"
+#include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Model.h"
 
@@ -19,6 +22,132 @@
 
 namespace ya
 {
+
+namespace
+{
+
+EModelMaterialType resolveMaterialTypeForInstantiation(const ModelComponent& modelComp, const MaterialData* matData)
+{
+    if (modelComp._materialType != EModelMaterialType::Custom) {
+        return modelComp._materialType;
+    }
+
+    if (!matData) {
+        return EModelMaterialType::Phong;
+    }
+
+    if (matData->type == "pbr") {
+        return EModelMaterialType::PBR;
+    }
+    if (matData->type == "unlit") {
+        return EModelMaterialType::Unlit;
+    }
+    return EModelMaterialType::Phong;
+}
+
+template <typename MaterialType>
+MaterialType* createSharedMaterialForModel(const std::string& label)
+{
+    return MaterialFactory::get()->createMaterial<MaterialType>(label);
+}
+
+template <typename MaterialComponentType>
+void assignCustomMaterialPath(MaterialComponentType& matComp, const ModelComponent& modelComp)
+{
+    if (modelComp.usesCustomMaterial()) {
+        matComp._materialPath = modelComp._customMaterialPath;
+    }
+    else {
+        matComp._materialPath.clear();
+    }
+}
+
+void configurePhongMaterial(PhongMaterialComponent& matComp,
+                            Model*                  model,
+                            uint32_t                meshIndex,
+                            ModelComponent&         modelComp)
+{
+    assignCustomMaterialPath(matComp, modelComp);
+
+    if (!modelComp._useEmbeddedMaterials) {
+        return;
+    }
+
+    const auto* matData = model->getMaterialForMesh(meshIndex);
+    if (!matData) {
+        return;
+    }
+
+    const int32_t matIndex = model->getMaterialIndex(meshIndex);
+    if (auto it = modelComp._cachedMaterials.find(matIndex); it != modelComp._cachedMaterials.end() && it->second != nullptr) {
+        matComp.importFromDescriptorWithSharedMaterial(*matData, static_cast<PhongMaterial*>(it->second));
+        return;
+    }
+
+    matComp.importFromDescriptor(*matData);
+}
+
+void configurePBRMaterial(PBRMaterialComponent& matComp,
+                          Model*                model,
+                          uint32_t              meshIndex,
+                          ModelComponent&       modelComp)
+{
+    assignCustomMaterialPath(matComp, modelComp);
+
+    if (!modelComp._useEmbeddedMaterials) {
+        return;
+    }
+
+    const auto* matData = model->getMaterialForMesh(meshIndex);
+    if (!matData) {
+        return;
+    }
+
+    const int32_t matIndex = model->getMaterialIndex(meshIndex);
+    if (auto it = modelComp._cachedMaterials.find(matIndex); it != modelComp._cachedMaterials.end() && it->second != nullptr) {
+        matComp.importFromDescriptorWithSharedMaterial(*matData, static_cast<PBRMaterial*>(it->second));
+        return;
+    }
+
+    matComp.importFromDescriptor(*matData);
+}
+
+void configureUnlitMaterial(UnlitMaterialComponent& matComp,
+                            Model*                  model,
+                            uint32_t                meshIndex,
+                            ModelComponent&         modelComp)
+{
+    assignCustomMaterialPath(matComp, modelComp);
+
+    if (!modelComp._useEmbeddedMaterials) {
+        return;
+    }
+
+    const auto* matData = model->getMaterialForMesh(meshIndex);
+    if (!matData) {
+        return;
+    }
+
+    matComp._baseColor0Slot.textureRef.setPathWithoutNotify("");
+    matComp._baseColor1Slot.textureRef.setPathWithoutNotify("");
+
+    if (matData->hasTexture(MatTexture::Diffuse)) {
+        matComp._baseColor0Slot.textureRef.setPathWithoutNotify(matData->resolveTexturePath(MatTexture::Diffuse));
+    }
+    if (matData->hasTexture(MatTexture::Emissive)) {
+        matComp._baseColor1Slot.textureRef.setPathWithoutNotify(matData->resolveTexturePath(MatTexture::Emissive));
+    }
+    if (matData->hasParam(MatParam::BaseColor)) {
+        matComp._params.baseColor0 = matData->getParam<glm::vec3>(MatParam::BaseColor, glm::vec3(1.0f));
+    }
+    else if (matData->hasParam(MatParam::Ambient)) {
+        matComp._params.baseColor0 = matData->getParam<glm::vec3>(MatParam::Ambient, glm::vec3(1.0f));
+    }
+
+    matComp.invalidate();
+}
+
+} // namespace
 
 void ModelInstantiationSystem::onUpdate(float dt)
 {
@@ -147,66 +276,68 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
     auto* meshComp = childEntity->addComponent<MeshComponent>();
     meshComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());
 
-    auto* matComp = childEntity->addComponent<PhongMaterialComponent>();
-    configureMeshMaterial(*matComp, model, meshIndex, modelComp);
+    const auto*        matData      = model->getMaterialForMesh(meshIndex);
+    const auto         materialType = resolveMaterialTypeForInstantiation(modelComp, matData);
+    switch (materialType) {
+    case EModelMaterialType::Phong: {
+        auto* matComp = childEntity->addComponent<PhongMaterialComponent>();
+        configurePhongMaterial(*matComp, model, meshIndex, modelComp);
+        break;
+    }
+    case EModelMaterialType::PBR: {
+        auto* matComp = childEntity->addComponent<PBRMaterialComponent>();
+        configurePBRMaterial(*matComp, model, meshIndex, modelComp);
+        break;
+    }
+    case EModelMaterialType::Unlit: {
+        auto* matComp = childEntity->addComponent<UnlitMaterialComponent>();
+        configureUnlitMaterial(*matComp, model, meshIndex, modelComp);
+        break;
+    }
+    case EModelMaterialType::Custom: {
+        YA_CORE_WARN("ModelInstantiationSystem: Custom material path '{}' is not wired to a material asset loader yet, falling back to embedded type for '{}'",
+                     modelComp._customMaterialPath,
+                     modelComp._modelRef.getPath());
+        auto* matComp = childEntity->addComponent<PhongMaterialComponent>();
+        configurePhongMaterial(*matComp, model, meshIndex, modelComp);
+        break;
+    }
+    }
 
     return childNode;
 }
 
 void ModelInstantiationSystem::buildSharedMaterials(Model* model, ModelComponent& modelComp)
 {
-    if (!modelComp._useEmbeddedMaterials || !model) {
+    if (!modelComp.canUseSharedEmbeddedMaterialCache() || !model) {
         return;
     }
 
     const auto& embeddedMaterials = model->getEmbeddedMaterials();
     for (size_t matIndex = 0; matIndex < embeddedMaterials.size(); ++matIndex) {
         std::string matLabel = model->getName() + "_Mat_" + std::to_string(matIndex);
-        auto*       litMat   = MaterialFactory::get()->createMaterial<PhongMaterial>(matLabel);
-        if (!litMat) {
+        Material*   material = nullptr;
+        switch (modelComp._materialType) {
+        case EModelMaterialType::Phong: {
+            material = createSharedMaterialForModel<PhongMaterial>(matLabel);
+            break;
+        }
+        case EModelMaterialType::PBR: {
+            material = createSharedMaterialForModel<PBRMaterial>(matLabel);
+            break;
+        }
+        case EModelMaterialType::Unlit:
+        case EModelMaterialType::Custom: {
+            break;
+        }
+        }
+
+        if (!material) {
             continue;
         }
 
-        modelComp._cachedMaterials[static_cast<int32_t>(matIndex)] = litMat;
+        modelComp._cachedMaterials[static_cast<int32_t>(matIndex)] = material;
     }
-}
-
-void ModelInstantiationSystem::configureMeshMaterial(PhongMaterialComponent& matComp,
-                                                     Model*                  model,
-                                                     uint32_t                meshIndex,
-                                                     ModelComponent&         modelComp)
-{
-    if (!modelComp._useEmbeddedMaterials) {
-        return;
-    }
-
-    int32_t matIndex = model->getMaterialIndex(meshIndex);
-    auto    it       = modelComp._cachedMaterials.find(matIndex);
-    if (it != modelComp._cachedMaterials.end() && it->second != nullptr) {
-        const MaterialData* matData = model->getMaterialForMesh(meshIndex);
-        if (matData) {
-            matComp.importFromDescriptorWithSharedMaterial(*matData, it->second);
-        }
-        else {
-            matComp.setSharedMaterial(it->second);
-        }
-        return;
-    }
-
-    const MaterialData* matData = model->getMaterialForMesh(meshIndex);
-    initMaterialFromEmbedded(matComp, matData, model->getDirectory());
-}
-
-void ModelInstantiationSystem::initMaterialFromEmbedded(PhongMaterialComponent& matComp,
-                                                        const MaterialData*     matData,
-                                                        const std::string&      modelDirectory)
-{
-    (void)modelDirectory;
-    if (!matData) {
-        return;
-    }
-
-    matComp.importFromDescriptor(*matData);
 }
 
 void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, ModelComponent& modelComp)

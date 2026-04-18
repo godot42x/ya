@@ -25,6 +25,66 @@ struct ComponentLinkageSystem : public ISystem
     DelegateHandle handle1;
     DelegateHandle handle2;
 
+    static bool hasAnyMaterialComponent(entt::registry& reg, const entt::entity entity)
+    {
+        return reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(entity);
+    }
+
+    static void applyMaterialComponentLinkage(Scene* scene, const entt::entity entity)
+    {
+        if (!scene) {
+            return;
+        }
+
+        auto& reg = scene->getRegistry();
+        if (!reg.valid(entity)) {
+            return;
+        }
+
+        if (hasAnyMaterialComponent(reg, entity)) {
+            if (!reg.all_of<RenderComponent>(entity)) {
+                scene->addComponent<RenderComponent>(entity);
+            }
+        }
+        else {
+            if (reg.all_of<RenderComponent>(entity)) {
+                scene->removeComponent<RenderComponent>(entity);
+            }
+        }
+    }
+
+    static void scheduleMaterialComponentLinkage(entt::registry& reg, const entt::entity entity)
+    {
+        auto* app = App::get();
+        if (!app) {
+            return;
+        }
+
+        auto* sceneManager = app->getSceneManager();
+        if (!sceneManager) {
+            return;
+        }
+
+        Scene* scene = sceneManager->getSceneByRegistry(&reg);
+        if (!scene) {
+            return;
+        }
+
+        app->taskManager.registerFrameTask([scene, entity]() {
+            auto* appLocal = App::get();
+            if (!appLocal) {
+                return;
+            }
+
+            auto* sceneManagerLocal = appLocal->getSceneManager();
+            if (!sceneManagerLocal || !sceneManagerLocal->isSceneValid(scene)) {
+                return;
+            }
+
+            applyMaterialComponentLinkage(scene, entity);
+        });
+    }
+
     ComponentLinkageSystem()
     {
         handle1 = App::get()->getSceneManager()->onSceneInit.addObject(this, &ComponentLinkageSystem::onSceneInit);
@@ -36,7 +96,7 @@ struct ComponentLinkageSystem : public ISystem
                     type == ya::type_index_v<UnlitMaterialComponent> ||
                     type == ya::type_index_v<SimpleMaterialComponent>)
                 {
-                    OnMaterialComponentChanged(reg, entity);
+                    scheduleMaterialComponentLinkage(reg, entity);
                 }
             });
     }
@@ -57,22 +117,7 @@ struct ComponentLinkageSystem : public ISystem
     // TODO: not only material components management?
     static void OnMaterialComponentChanged(entt::registry& reg, const entt::entity entity)
     {
-        if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(entity))
-        {
-            if (!reg.all_of<RenderComponent>(entity))
-            {
-                if (auto* scene = App::get()->getSceneManager()->getSceneByRegistry(&reg)) {
-                    scene->addComponent<RenderComponent>(entity);
-                }
-            }
-        }
-        else {
-            if (reg.all_of<RenderComponent>(entity)) {
-                if (auto* scene = App::get()->getSceneManager()->getSceneByRegistry(&reg)) {
-                    scene->removeComponent<RenderComponent>(entity);
-                }
-            }
-        }
+        scheduleMaterialComponentLinkage(reg, entity);
     }
 
     void onSceneInit(Scene* scene)

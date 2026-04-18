@@ -96,6 +96,7 @@ inline auto toVk(T format) -> VkFormat
 namespace ESampleCount
 {
 inline VkSampleCountFlagBits toVk(T sampleCount)
+
 {
     switch (sampleCount) {
     case Sample_1:

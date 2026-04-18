@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#include "Core/Base.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
@@ -26,27 +25,30 @@
 namespace ya
 {
 
-class PhongMaterial;
+struct Material;
 
 struct Node;
 
+enum class EModelMaterialType : uint8_t
+{
+    Phong = 0,
+    PBR,
+    Unlit,
+    Custom,
+};
 
-// TODO: support n material types + custom material
-//       types: custom(with a material path, maybe a json file or a asset some what), PBR, Unlit, etc.
-//       If not custom the modelComponent will load with that shading model of this type,
-//         and create the corresponding material component, auto fill image by detected
-//       when change the type in editor, it will be refresh quickly to new material type
-//       Maybe the meta data and the textures of the model file(fbx, gltf) can be load in mem
-//       then we do a fast material component change
+
 struct ModelComponent : public IComponent
 {
     YA_REFLECT_BEGIN(ModelComponent)
     YA_REFLECT_FIELD(_modelRef)
+    YA_REFLECT_FIELD(_materialType)
+    YA_REFLECT_FIELD(_customMaterialPath)
     YA_REFLECT_FIELD(_useEmbeddedMaterials)
     YA_REFLECT_FIELD(_autoCreateChildEntities)
     YA_REFLECT_END()
 
-    // Defined in ModelComponent.cpp — needs full PhongMaterial + MaterialFactory types.
+    // Defined in ModelComponent.cpp — needs full Material + MaterialFactory types.
     ~ModelComponent() override;
 
     // ========================================
@@ -54,6 +56,8 @@ struct ModelComponent : public IComponent
     // ========================================
 
     ModelRef _modelRef; ///< Reference to the Model asset
+    EModelMaterialType _materialType = EModelMaterialType::Phong;
+    std::string        _customMaterialPath;
 
     /**
      * @brief Whether to use materials embedded in the Model file
@@ -84,10 +88,10 @@ struct ModelComponent : public IComponent
     /**
      * @brief Cached runtime materials for this Model (one per material in model file)
      * Key: material index in Model's MaterialData array
-     * Value: runtime PhongMaterial pointer (managed by MaterialFactory)
+    * Value: runtime Material pointer (managed by MaterialFactory)
      * This allows multiple meshes to share the same material instance
      */
-    std::unordered_map<int32_t, PhongMaterial *> _cachedMaterials;
+    std::unordered_map<int32_t, Material*> _cachedMaterials;
 
     // ========================================
     // Interface
@@ -112,6 +116,12 @@ struct ModelComponent : public IComponent
      * @brief Check if this component has a valid Model reference
      */
     bool hasModelSource() const { return _modelRef.hasPath(); }
+    bool usesCustomMaterial() const { return _materialType == EModelMaterialType::Custom; }
+    bool canUseSharedEmbeddedMaterialCache() const
+    {
+        return _useEmbeddedMaterials && (_materialType == EModelMaterialType::Phong ||
+                                         _materialType == EModelMaterialType::PBR);
+    }
 
     /**
      * @brief Get the loaded Model (nullptr if not loaded)
@@ -137,3 +147,10 @@ struct ModelComponent : public IComponent
 };
 
 } // namespace ya
+
+YA_REFLECT_ENUM_BEGIN(ya::EModelMaterialType)
+YA_REFLECT_ENUM_VALUE(Phong)
+YA_REFLECT_ENUM_VALUE(PBR)
+YA_REFLECT_ENUM_VALUE(Unlit)
+YA_REFLECT_ENUM_VALUE(Custom)
+YA_REFLECT_ENUM_END()

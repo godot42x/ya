@@ -9,14 +9,10 @@ namespace ya
 {
 
 struct ModelComponent;
-struct MeshComponent;
-struct PhongMaterialComponent;
 struct Scene;
 struct Entity;
 struct Model;
-struct MaterialData;
 struct Node;
-class PhongMaterial;
 
 /**
  * @brief Expand ModelComponent into mesh/material child entities.
@@ -33,18 +29,11 @@ struct ModelInstantiationSystem : public ISystem
     void instantiatePendingModels(Scene* scene);
     void instantiateModel(Scene* scene, Entity* entity, ModelComponent& modelComp);
     void buildSharedMaterials(Model* model, ModelComponent& modelComp);
-    void configureMeshMaterial(PhongMaterialComponent& matComp,
-                               Model*                  model,
-                               uint32_t                meshIndex,
-                               ModelComponent&         modelComp);
     Node* createMeshNode(Scene*          scene,
                          Entity*         parentEntity,
                          Model*          model,
                          uint32_t        meshIndex,
                          ModelComponent& modelComp);
-    void initMaterialFromEmbedded(PhongMaterialComponent& matComp,
-                                  const MaterialData*     matData,
-                                  const std::string&      modelDirectory);
     void cleanupChildEntities(Scene* scene, ModelComponent& modelComp);
 };
 

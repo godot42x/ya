@@ -1,7 +1,6 @@
 #include "ModelComponent.h"
 
 #include "Render/Material/MaterialFactory.h"
-#include "Render/Material/PhongMaterial.h"
 
 namespace ya
 {

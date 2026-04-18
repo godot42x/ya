@@ -6,10 +6,49 @@
 #include "ECS/Component/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 
 
 namespace ya
 {
+
+namespace
+{
+
+constexpr double SCENE_JSON_FLOAT_EPSILON = 1e-6;
+constexpr double SCENE_JSON_FLOAT_SCALE   = 1000000.0;
+
+double normalizeSceneFloat(double value)
+{
+    const double rounded = std::round(value * SCENE_JSON_FLOAT_SCALE) / SCENE_JSON_FLOAT_SCALE;
+    return std::abs(rounded) < SCENE_JSON_FLOAT_EPSILON ? 0.0 : rounded;
+}
+
+void normalizeSceneJsonNumbers(nlohmann::json& json)
+{
+    if (json.is_number_float()) {
+        json = normalizeSceneFloat(json.get<double>());
+        return;
+    }
+
+    if (json.is_array()) {
+        for (auto& item : json) {
+            normalizeSceneJsonNumbers(item);
+        }
+        return;
+    }
+
+    if (json.is_object()) {
+        for (auto& [_, value] : json.items()) {
+            normalizeSceneJsonNumbers(value);
+        }
+    }
+}
+
+} // namespace
 
 
 // std::unordered_map<std::string, ComponentSerializer>   SceneSerializer::_componentSerializers;
@@ -24,6 +63,7 @@ bool SceneSerializer::saveToFile(const std::string& filepath)
     YA_PROFILE_FUNCTION_LOG();
     try {
         nlohmann::json j = serialize();
+        normalizeSceneJsonNumbers(j);
         VirtualFileSystem::get()->saveToFile(filepath, j.dump(4));
         YA_CORE_INFO("Scene saved to: {}", filepath);
         return true;
@@ -76,7 +116,9 @@ nlohmann::json SceneSerializer::serialize()
         sceneRootHandle = _scene->_rootNode->getEntity()->getHandle();
     }
 
-    registry.view<entt::entity>(entt::exclude<ManagedChildComponent>).each([&](auto entityID) {
+    std::vector<Entity*> entities;
+    registry.view<entt::entity>(entt::exclude<ManagedChildComponent>).each([&](auto entityID)
+                                                                           {
         Entity* entity = _scene->getEntityByEnttID(entityID);
         if (entity) {
             // ★ 跳过 scene_root Entity（使用句柄比较代替字符串比较，性能更好）
@@ -89,9 +131,23 @@ nlohmann::json SceneSerializer::serialize()
             //     return;
             // }
 
-            j["entities"].push_back(serializeEntity(entity));
+            entities.push_back(entity);
+        } });
+
+    std::sort(entities.begin(), entities.end(), [](const Entity* lhs, const Entity* rhs)
+              {
+        const auto* lhsIdComponent = lhs->getComponent<IDComponent>();
+        const auto* rhsIdComponent = rhs->getComponent<IDComponent>();
+        const uint64_t lhsId       = lhsIdComponent ? lhsIdComponent->_id.value : 0;
+        const uint64_t rhsId       = rhsIdComponent ? rhsIdComponent->_id.value : 0;
+        if (lhsId != rhsId) {
+            return lhsId < rhsId;
         }
-    });
+        return lhs->name < rhs->name; });
+
+    for (Entity* entity : entities) {
+        j["entities"].push_back(serializeEntity(entity));
+    }
 
     // ★ Step 2: 树状序列化 NodeTree（只存引用）
     Node* rootNode = _scene->getRootNode();
@@ -211,8 +267,7 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             return entity;
         }
 
-        auto& registry = _scene->getRegistry();
-        auto& reg      = ECSRegistry::get();
+        auto& reg = ECSRegistry::get();
 
         for (auto& [typeName, componentJ] : components.items()) {
             if (ignoredComponents.contains(FName(typeName))) {

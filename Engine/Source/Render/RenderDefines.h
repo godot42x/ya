@@ -332,6 +332,12 @@ enum T
     ENUM_MAX,
 };
 
+struct CompressedBlockExtent
+{
+    uint32_t width  = 4;
+    uint32_t height = 4;
+};
+
 inline static bool isSRGB(T format)
 {
     static const auto sRGBFormats = std::unordered_set<T>{
@@ -368,6 +374,122 @@ inline static bool isDepthStencilFormat(T format)
 inline static bool isDepthOnlyFormat(T format)
 {
     return isDepthFormat(format) && !isDepthStencilFormat(format);
+}
+
+inline constexpr size_t getPixelSize(T format)
+{
+    switch (format) {
+    case R8_UNORM:
+        return 1;
+    case R8G8_UNORM:
+        return 2;
+    case R32_SFLOAT:
+        return 4;
+    case R16G16B16A16_SFLOAT:
+        return 8;
+    case R8G8B8A8_UNORM:
+    case R8G8B8A8_SRGB:
+    case B8G8R8A8_UNORM:
+    case B8G8R8A8_SNORM:
+    case B8G8R8A8_SRGB:
+    case D32_SFLOAT:
+    case D24_UNORM_S8_UINT:
+        return 4;
+    case D32_SFLOAT_S8_UINT:
+        return 5;
+    case BC1_RGB_UNORM_BLOCK:
+    case BC1_RGBA_UNORM_BLOCK:
+    case BC1_RGB_SRGB_BLOCK:
+    case BC1_RGBA_SRGB_BLOCK:
+    case BC4_UNORM_BLOCK:
+    case BC4_SNORM_BLOCK:
+        return 8;
+    case BC3_UNORM_BLOCK:
+    case BC3_SRGB_BLOCK:
+    case BC5_UNORM_BLOCK:
+    case BC5_SNORM_BLOCK:
+    case BC7_UNORM_BLOCK:
+    case BC7_SRGB_BLOCK:
+    case ASTC_4x4_UNORM_BLOCK:
+    case ASTC_4x4_SRGB_BLOCK:
+    case ASTC_5x5_UNORM_BLOCK:
+    case ASTC_5x5_SRGB_BLOCK:
+    case ASTC_6x6_UNORM_BLOCK:
+    case ASTC_6x6_SRGB_BLOCK:
+    case ASTC_8x8_UNORM_BLOCK:
+    case ASTC_8x8_SRGB_BLOCK:
+    case ASTC_10x10_UNORM_BLOCK:
+    case ASTC_10x10_SRGB_BLOCK:
+    case ETC2_R8G8B8A8_UNORM_BLOCK:
+    case ETC2_R8G8B8A8_SRGB_BLOCK:
+        return 16;
+    case ETC2_R8G8B8_UNORM_BLOCK:
+    case ETC2_R8G8B8_SRGB_BLOCK:
+    case ETC2_R8G8B8A1_UNORM_BLOCK:
+    case ETC2_R8G8B8A1_SRGB_BLOCK:
+        return 8;
+    case Undefined:
+    case ENUM_MAX:
+        break;
+    }
+    return 4;
+}
+
+inline constexpr bool isBlockCompressed(T format)
+{
+    switch (format) {
+    case BC1_RGB_UNORM_BLOCK:
+    case BC1_RGBA_UNORM_BLOCK:
+    case BC1_RGB_SRGB_BLOCK:
+    case BC1_RGBA_SRGB_BLOCK:
+    case BC3_UNORM_BLOCK:
+    case BC3_SRGB_BLOCK:
+    case BC4_UNORM_BLOCK:
+    case BC4_SNORM_BLOCK:
+    case BC5_UNORM_BLOCK:
+    case BC5_SNORM_BLOCK:
+    case BC7_UNORM_BLOCK:
+    case BC7_SRGB_BLOCK:
+    case ASTC_4x4_UNORM_BLOCK:
+    case ASTC_4x4_SRGB_BLOCK:
+    case ASTC_5x5_UNORM_BLOCK:
+    case ASTC_5x5_SRGB_BLOCK:
+    case ASTC_6x6_UNORM_BLOCK:
+    case ASTC_6x6_SRGB_BLOCK:
+    case ASTC_8x8_UNORM_BLOCK:
+    case ASTC_8x8_SRGB_BLOCK:
+    case ASTC_10x10_UNORM_BLOCK:
+    case ASTC_10x10_SRGB_BLOCK:
+    case ETC2_R8G8B8_UNORM_BLOCK:
+    case ETC2_R8G8B8_SRGB_BLOCK:
+    case ETC2_R8G8B8A1_UNORM_BLOCK:
+    case ETC2_R8G8B8A1_SRGB_BLOCK:
+    case ETC2_R8G8B8A8_UNORM_BLOCK:
+    case ETC2_R8G8B8A8_SRGB_BLOCK:
+        return true;
+    default:
+        return false;
+    }
+}
+
+inline constexpr CompressedBlockExtent getCompressedBlockExtent(T format)
+{
+    switch (format) {
+    case ASTC_5x5_UNORM_BLOCK:
+    case ASTC_5x5_SRGB_BLOCK:
+        return {.width = 5, .height = 5};
+    case ASTC_6x6_UNORM_BLOCK:
+    case ASTC_6x6_SRGB_BLOCK:
+        return {.width = 6, .height = 6};
+    case ASTC_8x8_UNORM_BLOCK:
+    case ASTC_8x8_SRGB_BLOCK:
+        return {.width = 8, .height = 8};
+    case ASTC_10x10_UNORM_BLOCK:
+    case ASTC_10x10_SRGB_BLOCK:
+        return {.width = 10, .height = 10};
+    default:
+        return {};
+    }
 }
 
 }; // namespace EFormat
