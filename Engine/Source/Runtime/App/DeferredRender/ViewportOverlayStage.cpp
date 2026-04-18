@@ -7,15 +7,49 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/IRenderTarget.h"
+
 #include "Resource/PrimitiveMeshCache.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
+
 #include "Scene/SceneManager.h"
+
 
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
 {
+
+void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
+{
+    if (!viewportRT) {
+        return;
+    }
+
+    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
+    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
+    if (colorDescs.empty()) {
+        return;
+    }
+
+    const auto colorFormat = colorDescs.front().format;
+    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+
+    if (_skyboxPipeline) {
+        auto ci                                         = _skyboxPipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _skyboxPipeline->updateDesc(std::move(ci));
+    }
+
+    if (_overlayPipeline) {
+        auto ci                                         = _overlayPipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _overlayPipeline->updateDesc(std::move(ci));
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // Init
@@ -32,17 +66,17 @@ void ViewportOverlayStage::initSkybox()
 {
     // DSLs
     auto dsls          = IDescriptorSetLayout::create(_render, {
-                                                                   DescriptorSetLayoutDesc{
+                                                          DescriptorSetLayoutDesc{
                                                                        .label    = "SkyboxOverlay_PerFrame_DSL",
                                                                        .set      = 0,
                                                                        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-                                                                   },
-                                                                   DescriptorSetLayoutDesc{
+                                                          },
+                                                          DescriptorSetLayoutDesc{
                                                                        .label    = "SkyboxOverlay_Resource_DSL",
                                                                        .set      = 1,
                                                                        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                   },
-                                                               });
+                                                          },
+                                                      });
     _skyboxFrameDSL    = dsls[0];
     _skyboxResourceDSL = dsls[1];
 
@@ -58,9 +92,9 @@ void ViewportOverlayStage::initSkybox()
         },
         .pipelineLayout = _skyboxPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Skybox.glsl",
-            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-            .vertexAttributes  = {
+                .shaderName        = "Skybox.glsl",
+                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
+                .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
                 {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
                 {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
@@ -114,9 +148,9 @@ void ViewportOverlayStage::initOverlay()
         },
         .pipelineLayout = _overlayPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Test/SimpleMaterial.glsl",
-            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-            .vertexAttributes  = {
+                .shaderName        = "Test/SimpleMaterial.glsl",
+                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
+                .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
                 {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
                 {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
@@ -315,9 +349,14 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
 
 void ViewportOverlayStage::renderGUI()
 {
+    if (!ImGui::TreeNode("Viewport Overlay Stage")) {
+        return;
+    }
     // Future: skybox toggle, overlay color type combo, etc.
     _skyboxPipeline->renderGUI();
     _overlayPipeline->renderGUI();
+
+    ImGui::TreePop();
 }
 
 } // namespace ya

@@ -291,6 +291,7 @@ enum T
     B8G8R8A8_SRGB,
     R32_SFLOAT,
     R16G16B16A16_SFLOAT,
+    D16_UNORM,
     D32_SFLOAT,
     D32_SFLOAT_S8_UINT,
     D24_UNORM_S8_UINT,
@@ -362,7 +363,7 @@ inline static bool isSRGB(T format)
 
 inline static bool isDepthFormat(T format)
 {
-    return format == D32_SFLOAT ||
+    return format == D16_UNORM || format == D32_SFLOAT ||
            format == D24_UNORM_S8_UINT || format == D32_SFLOAT_S8_UINT;
 }
 
@@ -381,6 +382,8 @@ inline constexpr size_t getPixelSize(T format)
     switch (format) {
     case R8_UNORM:
         return 1;
+    case D16_UNORM:
+        return 2;
     case R8G8_UNORM:
         return 2;
     case R32_SFLOAT:

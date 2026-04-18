@@ -162,13 +162,16 @@ void App::init(AppDesc ci)
 
     _sceneManager = new SceneManager();
     _sceneManager->setAppState(_appState);
-    _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene) { this->onSceneInit(scene); });
-    _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene) { this->onSceneActivated(scene); });
-    _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene) { this->onSceneDestroy(scene); });
-    _deleter.push("SceneManager", [this](void*) {
+    _sceneManager->onSceneInit.addLambda(this, [this](Scene* scene)
+                                         { this->onSceneInit(scene); });
+    _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene)
+                                              { this->onSceneActivated(scene); });
+    _sceneManager->onSceneDestroy.addLambda(this, [this](Scene* scene)
+                                            { this->onSceneDestroy(scene); });
+    _deleter.push("SceneManager", [this](void*)
+                  {
         delete _sceneManager;
-        _sceneManager = nullptr;
-    });
+        _sceneManager = nullptr; });
 
 
     FPSControl::get()->bEnable = true;
@@ -187,13 +190,13 @@ void App::init(AppDesc ci)
     auto sys4 = ya::makeShared<ComponentLinkageSystem>();
     sys4->init();
     _systems.push_back(sys4);
-    _deleter.push("Systems", [this](void*) {
+    _deleter.push("Systems", [this](void*)
+                  {
         for (auto& sys : _systems) {
             sys->shutdown();
         }
         _systems.clear();
-        _resourceResolveSystem = nullptr;
-    });
+        _resourceResolveSystem = nullptr; });
 
 
     _editorLayer = new EditorLayer(this);
@@ -202,11 +205,11 @@ void App::init(AppDesc ci)
     // _editorLayer->onViewportResized.set([this](Rect2D rect) {
     //     onSceneViewportResized(rect);
     // });
-    _deleter.push("Editor", [this](void*) {
+    _deleter.push("Editor", [this](void*)
+                  {
         _editorLayer->onDetach();
         delete _editorLayer;
-        _editorLayer = nullptr;
-    });
+        _editorLayer = nullptr; });
 
     // see TypeRenderer.h
     ya::registerBuiltinTypeRenderers();
@@ -218,11 +221,11 @@ void App::init(AppDesc ci)
     // });
     _luaScriptingSystem = new LuaScriptingSystem();
     _luaScriptingSystem->init();
-    _deleter.push("LuaScriptingSystem", [this](void*) {
+    _deleter.push("LuaScriptingSystem", [this](void*)
+                  {
         _luaScriptingSystem->shutdown();
         delete _luaScriptingSystem;
-        _luaScriptingSystem = nullptr;
-    });
+        _luaScriptingSystem = nullptr; });
 
 
     {
@@ -236,7 +239,7 @@ void App::init(AppDesc ci)
     }
 
 
-    auto p= _ci.defaultScenePath.value_or("");
+    auto p = _ci.defaultScenePath.value_or("");
     loadScene(p);
 
     camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
@@ -446,7 +449,8 @@ int ya::App::processEvent(SDL_Event& event)
 {
     processSDLEvent(
         event,
-        [this](const auto& e) { this->dispatchEvent(e); });
+        [this](const auto& e)
+        { this->dispatchEvent(e); });
     return 0;
 };
 
@@ -621,13 +625,13 @@ void App::tickRender(float dt)
     auto* scene = _sceneManager ? _sceneManager->getActiveScene() : nullptr;
     RenderFrameExtractor::extract(
         RenderFrameExtractor::ExtractInput{
-            .scene         = scene,
-            .view          = _renderFrameState.view,
-            .projection    = _renderFrameState.projection,
-            .cameraPos     = _renderFrameState.cameraPos,
+            .scene          = scene,
+            .view           = _renderFrameState.view,
+            .projection     = _renderFrameState.projection,
+            .cameraPos      = _renderFrameState.cameraPos,
             .viewportExtent = renderRuntime->getViewportExtent(),
-            .frameIndex    = _frameIndex,
-            .deltaTime     = dt,
+            .frameIndex     = _frameIndex,
+            .deltaTime      = dt,
         },
         _renderFrameData);
 
@@ -652,77 +656,37 @@ void App::onRenderGUI(float dt)
     YA_PROFILE_FUNCTION()
     auto& io = ImGui::GetIO();
     (void)io;
-    if (!ImGui::Begin("App Info"))
+
+    auto renderContextPanel = [&]()
     {
-        ImGui::End();
-        return;
-    }
+        using namespace ImGui;
 
-    if (ImGui::CollapsingHeader("Render 2D", 0)) {
-        // temp code here to adopt to new Render2D
-        Render2D::onImGui();
-    }
+        static constexpr int ringBufSize = 120;
+        static float         fpsRingBuf[ringBufSize]{};
+        static int           fpsRingHead = 0;
+        static int           fpsRingFill = 0;
+        static float         fpsSum      = 0.0f;
+        const float          currentFps  = dt > 0.0f ? 1.0f / dt : 0.0f;
 
-    // if (ImGui::CollapsingHeader("Render Target Pool", 0)) {
-    //     // RenderTargetPool::get().onRenderGUI();
-    // }
-
-    if (_renderRuntime) {
-        _renderRuntime->renderGUI(dt);
-    }
-
-    if (ImGui::CollapsingHeader("Context", ImGuiTreeNodeFlags_DefaultOpen)) {
-
-        {
-            static constexpr int ringBufSize = 120;                          // 环形缓冲区大小，保持原有定义
-            static float         fpsRingBuf[ringBufSize]{};                  // 存储每帧的FPS值
-            static int           fpsRingHead = 0;                            // 缓冲区头指针（下一个要写入的位置）
-            static int           fpsRingFill = 0;                            // 缓冲区已填充的元素数量
-            static float         fpsSum      = 0.0f;                         // 新增：维护缓冲区所有元素的累加和，避免每次遍历求和
-            float                currentFps  = dt > 0.0f ? 1.0f / dt : 0.0f; // 计算当前帧的FPS（dt为帧间隔时间，单位：秒）
-
-            // 1. 处理旧值：缓冲区满时，先减去即将被覆盖的旧值
-            if (fpsRingFill >= ringBufSize) {
-                fpsSum -= fpsRingBuf[fpsRingHead]; // head指向的就是即将被覆盖的最旧元素
-            }
-            // 2. 写入新值并更新累加和
-            fpsRingBuf[fpsRingHead] = currentFps;
-            fpsSum += currentFps;
-
-            // 3. 更新环形缓冲区指针和填充数
-            fpsRingHead = (fpsRingHead + 1) % ringBufSize;
-            fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
-
-            // 4. 计算平均FPS（O(1)时间复杂度）
-            float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
-
-            // 输出FPS信息（简化当前帧FPS的获取，避免重复计算索引）
-            ImGui::Text("%s",
-                        std::format("Frame: {}, DeltaTime: {:.2f} ms,\t FPS: {:.1f} (avg {}f: {:.1f})",
-                                    _frameIndex,
-                                    dt * 1000.0f,
-                                    currentFps,
-                                    fpsRingFill,
-                                    avgFps)
-                            .data());
+        if (fpsRingFill >= ringBufSize) {
+            fpsSum -= fpsRingBuf[fpsRingHead];
         }
+        fpsRingBuf[fpsRingHead] = currentFps;
+        fpsSum += currentFps;
 
+        fpsRingHead = (fpsRingHead + 1) % ringBufSize;
+        fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
 
-        static int count = 0;
-        if (ImGui::Button(std::format("Click Me ({})", count).c_str())) {
-            count++;
-            YA_CORE_INFO("=====================================");
-        }
-
-        if (ImGui::TreeNode("ImGUI")) {
-            ImGuiManager::get().onRenderGUI();
-            ImGui::TreePop();
-        }
+        const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
+        Text("Frame: %d, DeltaTime: %.2f", _frameIndex, dt * 1000.f);
+        Text("FPS: %.1f (%.1f of avg %d)", currentFps, avgFps, fpsRingFill);
 
         auto* render = getRender();
         YA_CORE_ASSERT(render, "Render is null");
         auto* swapchain = render->getSwapchain();
-        bool  bVsync    = swapchain->getVsync();
+
+        ImGui::SeparatorText("Presentation");
+        bool bVsync = swapchain->getVsync();
         if (ImGui::Checkbox("VSync", &bVsync)) {
             swapchain->setVsync(bVsync);
         }
@@ -730,9 +694,8 @@ void App::onRenderGUI(float dt)
         EPresentMode::T presentMode  = swapchain->getPresentMode();
         const char*     presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
         if (ImGui::Combo("Present Mode", reinterpret_cast<int*>(&presentMode), presentModes)) {
-            taskManager.registerFrameTask([swapchain, presentMode]() {
-                swapchain->setPresentMode(presentMode);
-            });
+            taskManager.registerFrameTask([swapchain, presentMode]()
+                                          { swapchain->setPresentMode(presentMode); });
         }
 
         AppMode mode = _appMode;
@@ -740,6 +703,7 @@ void App::onRenderGUI(float dt)
             _appMode = mode;
         }
 
+        ImGui::SeparatorText("Interaction");
         std::string clickedPoints;
         for (const auto& p : clicked) {
             clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
@@ -753,22 +717,43 @@ void App::onRenderGUI(float dt)
             sceneManager->serializeToFile("Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
                                           getSceneManager()->getActiveScene());
         }
-    }
 
-    imcEditorCamera(camera);
-    imcClearValues();
-    imcFpsControl(*FPSControl::get());
+        ImGui::SeparatorText("Editor");
+        imcEditorCamera(camera);
+        imcClearValues();
+        imcFpsControl(*FPSControl::get());
 
-    static bool bDarkMode = true;
-    if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
-        if (bDarkMode) {
-            ImGui::StyleColorsDark();
+        static bool bDarkMode = true;
+        if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
+            if (bDarkMode) {
+                ImGui::StyleColorsDark();
+            }
+            else {
+                ImGui::StyleColorsLight();
+            }
         }
-        else {
-            ImGui::StyleColorsLight();
+
+        if (ImGui::TreeNode("ImGUI")) {
+            ImGuiManager::get().onRenderGUI();
+            ImGui::TreePop();
+        }
+    };
+
+    if (ImGui::Begin("Render Panel")) {
+        if (ImGui::TreeNode("Render 2D")) {
+            Render2D::onImGui();
+            ImGui::TreePop();
+        }
+
+        if (_renderRuntime) {
+            _renderRuntime->renderGUI(dt);
         }
     }
+    ImGui::End();
 
+    if (ImGui::Begin("Context Panel")) {
+        renderContextPanel();
+    }
     ImGui::End();
 }
 
@@ -1027,9 +1012,8 @@ bool App::isPostprocessingEnabled() const
 
 void App::renderGUI(float dt)
 {
-    _editorLayer->onImGuiRender([this, dt]() {
-        this->onRenderGUI(dt);
-    });
+    _editorLayer->onImGuiRender([this, dt]()
+                                { this->onRenderGUI(dt); });
 }
 
 

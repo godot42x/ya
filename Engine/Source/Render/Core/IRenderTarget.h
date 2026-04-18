@@ -167,6 +167,19 @@ struct IRenderTarget
         return true;
     }
 
+    bool setColorAttachmentFormat(uint32_t attachmentIndex, EFormat::T format)
+    {
+        if (attachmentIndex >= _colorAttachmentDescs.size()) {
+            return false;
+        }
+        auto& desc = _colorAttachmentDescs[attachmentIndex];
+        if (desc.format != format) {
+            desc.format = format;
+            bDirty      = true;
+        }
+        return true;
+    }
+
     bool setDepthAttachmentSampleCount(ESampleCount::T sampleCount)
     {
         if (!_depthAttachmentDesc.has_value()) {
@@ -175,6 +188,18 @@ struct IRenderTarget
         if (_depthAttachmentDesc->samples != sampleCount) {
             _depthAttachmentDesc->samples = sampleCount;
             bDirty                        = true;
+        }
+        return true;
+    }
+
+    bool setDepthAttachmentFormat(EFormat::T format)
+    {
+        if (!_depthAttachmentDesc.has_value()) {
+            return false;
+        }
+        if (_depthAttachmentDesc->format != format) {
+            _depthAttachmentDesc->format = format;
+            bDirty                      = true;
         }
         return true;
     }

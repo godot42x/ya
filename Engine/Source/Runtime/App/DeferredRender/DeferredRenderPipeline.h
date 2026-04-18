@@ -1,23 +1,30 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
+#include "GBufferStage.h"
+#include "LightStage.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Pipelines/PostProcessStage.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
-#include "GBufferStage.h"
-#include "LightStage.h"
+#include "Runtime/App/ForwardRender/ShadowStage.h"
 #include "ViewportOverlayStage.h"
 
+
+#include <array>
+#include <cstdint>
+#include <cstring>
 #include <memory>
+
 
 namespace ya
 {
 
 struct SceneManager;
 struct Scene;
+struct Sampler;
 
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
 namespace EShadingModelID
@@ -60,21 +67,46 @@ struct DeferredRenderPipeline
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
+    stdptr<IRenderTarget> _shadowDepthRT;
 
     static constexpr EFormat::T LINEAR_FORMAT        = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T SHADING_MODEL_FORMAT = EFormat::R8_UNORM;
     static constexpr EFormat::T DEPTH_FORMAT         = EFormat::D32_SFLOAT;
+    static constexpr EFormat::T SHADOW_DEPTH_FORMAT  = EFormat::D24_UNORM_S8_UINT;
 
     // ── Render stages ─────────────────────────────────────────────────
-    stdptr<GBufferStage>          _gBufferStage;
-    stdptr<LightStage>            _lightStage;
-    stdptr<ViewportOverlayStage>  _overlayStage;
-    PostProcessStage              _postProcessStage;
+    stdptr<ShadowStage>          _shadowStage;
+    stdptr<GBufferStage>         _gBufferStage;
+    stdptr<LightStage>           _lightStage;
+    stdptr<ViewportOverlayStage> _overlayStage;
+    PostProcessStage             _postProcessStage;
+
+    stdptr<Sampler>                                                 _shadowSampler            = nullptr;
+    stdptr<IImageView>                                              _shadowDirectionalDepthIV = nullptr;
+    std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                _shadowPointCubeIVs{};
+    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _shadowPointFaceIVs{};
 
     Texture* viewportTexture    = nullptr;
     bool     _bViewportPassOpen = false;
     bool     _bReverseViewportY = true;
+    bool     _bEnablePerfStats  = true;
+
+    float _lastTickCpuMs      = 0.0f;
+    float _lastShadowCpuMs    = 0.0f;
+    float _lastGBufferCpuMs   = 0.0f;
+    float _lastDepthCopyCpuMs = 0.0f;
+    float _lastLightCpuMs     = 0.0f;
+    float _lastOverlayCpuMs   = 0.0f;
+
+    uint32_t   _lastPointLightCount = 0;
+    uint32_t   _lastDrawCount       = 0;
+    EFormat::T _shadowDepthFormat   = SHADOW_DEPTH_FORMAT;
+
+    int  _rtEditorSelectedTargetIndex     = 0;
+    int  _rtEditorSelectedAttachmentIndex = 0;
+    char _rtEditorTargetSearch[64]        = {};
+    char _rtEditorFormatSearch[64]        = {};
 
     // ── Debug views ───────────────────────────────────────────────────
     stdptr<IImageView> _debugAlbedoRGBView;
@@ -105,9 +137,21 @@ struct DeferredRenderPipeline
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
+    IRenderTarget* getShadowDepthRT() const { return _shadowDepthRT.get(); }
+    IImageView*    getShadowDirectionalDepthIV() const { return _shadowDirectionalDepthIV.get(); }
+    IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+    {
+        if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) {
+            return nullptr;
+        }
+        return _shadowPointFaceIVs[pointLightIndex][faceIndex].get();
+    }
 
   private:
+    void rebuildShadowViews();
+    void renderRenderTargetEditor();
     void initRenderTargets(Extent2D extent);
+    void initShadowResources();
     void copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
     void beginViewportRendering(const TickDesc& desc);
 };

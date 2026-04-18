@@ -1,16 +1,21 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "DeferredRender.Unified_LightPass.slang.h"
 
+#include <array>
+
 namespace ya
 {
 
 struct GBufferStage;
+struct Sampler;
+struct IImageView;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
 ///
@@ -35,10 +40,26 @@ struct LightStage : public IRenderStage
     GraphicsPipelineCreateInfo   _pipelineCI{};
     bool                         _bEnablePBRDiffuseIBL  = true;
     bool                         _bEnablePBRSpecularIBL = true;
+    bool                         _bEnableShadowMapping  = true;
+    bool                         _bEnablePointLightShadow = true;
+    uint32_t                     _maxPointLightShadowCount = 1;
 
     // GBuffer texture DS + pool (updated each frame from GBuffer RT)
     stdptr<IDescriptorPool> _dsp;
     DescriptorSetHandle     _gBufferTextureDS = nullptr;
+    stdptr<IDescriptorSetLayout> _shadowDSL;
+    DescriptorSetHandle          _shadowDS = nullptr;
+
+    IImageView* _shadowDirectionalDepthIV = nullptr;
+    std::array<IImageView*, MAX_POINT_LIGHTS> _shadowPointCubeIVs{};
+    Sampler* _shadowSampler = nullptr;
+    IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
+    bool _bGBufferDescriptorsInitialized = false;
+    bool _bShadowDescriptorsInitialized = false;
+    float _lastPrepareCpuMs = 0.0f;
+    float _lastExecuteCpuMs = 0.0f;
+    uint32_t _lastGBufferDescriptorWriteCount = 0;
+    uint32_t _lastShadowDescriptorWriteCount = 0;
 
     // Vertex attributes (for fullscreen quad)
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -53,6 +74,13 @@ struct LightStage : public IRenderStage
     /// @param gBufferStage  Provides frame+light DSL and per-flight DS
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
+    void setShadowResources(IImageView* directionalDepthIV,
+                            const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
+                            Sampler* shadowSampler);
+    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    [[nodiscard]] bool isShadowMappingEnabled() const { return _bEnableShadowMapping; }
+    [[nodiscard]] bool isPointLightShadowEnabled() const { return _bEnablePointLightShadow; }
+    [[nodiscard]] uint32_t getMaxPointLightShadowCount() const { return _maxPointLightShadowCount; }
 
     void init(IRender* render) override;
     void destroy() override;

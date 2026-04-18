@@ -9,6 +9,8 @@
 namespace ya
 {
 
+struct IRenderTarget;
+
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
 ///
 /// Skybox: per-flight frame UBO (view/proj without translation) + cubemap DS from RenderRuntime.
@@ -60,6 +62,7 @@ struct ViewportOverlayStage : public IRenderStage
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
+    void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
     void initSkybox();

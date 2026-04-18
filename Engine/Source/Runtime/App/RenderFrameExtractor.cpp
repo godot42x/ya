@@ -14,6 +14,7 @@
 #include "Runtime/App/App.h"
 #include "Scene/Scene.h"
 
+#include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -104,6 +105,16 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
 
         ++out.numPointLights;
     }
+
+    std::sort(out.pointLights.begin(), out.pointLights.begin() + out.numPointLights,
+              [&out](const FrameContext::PointLightData& lhs, const FrameContext::PointLightData& rhs)
+              {
+                  const glm::vec3 lhsDelta = lhs.position - out.cameraPos;
+                  const glm::vec3 rhsDelta = rhs.position - out.cameraPos;
+                  const float lhsDist2 = glm::dot(lhsDelta, lhsDelta);
+                  const float rhsDist2 = glm::dot(rhsDelta, rhsDelta);
+                  return lhsDist2 < rhsDist2;
+              });
 }
 
 void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)

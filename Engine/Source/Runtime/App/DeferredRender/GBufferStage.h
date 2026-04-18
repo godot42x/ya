@@ -6,15 +6,18 @@
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Material/UnlitMaterial.h"
-#include "Render/Mesh.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "DeferredRender.Unified_GBufferPass_PBR.slang.h"
 #include "DeferredRender.Unified_GBufferPass_Phong.slang.h"
 #include "DeferredRender.Unified_GBufferPass_Unlit.slang.h"
 
+#include <algorithm>
+
 namespace ya
 {
+
+struct IRenderTarget;
 
 /// GBuffer stage for the Deferred pipeline.
 ///
@@ -26,9 +29,9 @@ namespace ya
 struct GBufferStage : public IRenderStage
 {
     // ── Slang-generated type aliases ─────────────────────────────
-    using PBRPushConstant   = slang_types::DeferredRender::Unified_GBufferPass_PBR::PushConstants;
-    using PBRFrameData      = slang_types::DeferredRender::Unified_GBufferPass_PBR::FrameData;
-    using PBRParamUBO       = slang_types::DeferredRender::Unified_GBufferPass_PBR::PBRParamsData;
+    using PBRPushConstant = slang_types::DeferredRender::Unified_GBufferPass_PBR::PushConstants;
+    using PBRFrameData    = slang_types::DeferredRender::Unified_GBufferPass_PBR::FrameData;
+    using PBRParamUBO     = slang_types::DeferredRender::Unified_GBufferPass_PBR::PBRParamsData;
 
     using PhongPushConstant = slang_types::DeferredRender::Unified_GBufferPass_Phong::PushConstants;
     using PhongFrameData    = slang_types::DeferredRender::Unified_GBufferPass_Phong::FrameData;
@@ -54,6 +57,8 @@ struct GBufferStage : public IRenderStage
     std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _lightUBO{};
 
     PBRFrameData _frameData{};
+    uint32_t     _maxShadowedPointLights  = 1;
+    uint32_t     _lastShadowedPointLights = 0;
 
     // ── Per-shading-model pipeline + material pool ───────────────
     struct ShadingPipeline
@@ -95,6 +100,10 @@ struct GBufferStage : public IRenderStage
         return _frameAndLightDS[flightIndex];
     }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
+    void                                       setMaxShadowedPointLights(uint32_t count) { _maxShadowedPointLights = std::min(count, static_cast<uint32_t>(MAX_POINT_LIGHTS)); }
+    [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _maxShadowedPointLights; }
+    [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
+    void                                       refreshPipelineFormats(const IRenderTarget* gBufferRT);
 
   private:
     void initSharedResources();

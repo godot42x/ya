@@ -47,12 +47,14 @@ struct FrameData{
 struct DirectionalLight{
     vec3 dir;
     vec3 color;
+    float4x4 shadowMatrix;
 };
 
 struct PointLight{
     vec3 pos;
     vec3 color;
     float intensity;
+    float farPlane;
 };
 
 struct LightData{
@@ -71,8 +73,15 @@ struct LightData{
     #define YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR 0
 #endif
 
-static const float PBR_PREFILTER_MAX_REFLECTION_LOD = 4.0;
+#ifndef YA_DEFERRED_ENABLE_SHADOW_MAPPING
+    #define YA_DEFERRED_ENABLE_SHADOW_MAPPING 0
+#endif
 
+#ifndef YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW
+#define YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW 0
+#endif
+
+static const float PBR_PREFILTER_MAX_REFLECTION_LOD = 4.0;
 
 // ── PBR BRDF functions ──
 
@@ -116,6 +125,56 @@ vec3 F_fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 
 // ── Shading functions ──
 
+float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
+{
+#if !YA_DEFERRED_ENABLE_SHADOW_MAPPING
+    return 0.0;
+#else
+    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrix, float4(worldPos, 1.0));
+    float w = fragLightSpacePos.w;
+    if (abs(w) < 1e-6) {
+        return 0.0;
+    }
+
+    float3 projCoords = fragLightSpacePos.xyz / w;
+    float2 uv = projCoords.xy * 0.5 + 0.5;
+    float curDepth = projCoords.z;
+
+    if (curDepth < 0.0 || curDepth > 1.0) {
+        float curDepth01 = curDepth * 0.5 + 0.5;
+        if (curDepth01 >= 0.0 && curDepth01 <= 1.0) {
+            curDepth = curDepth01;
+        }
+    }
+
+    if (curDepth <= 0.0 || curDepth >= 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        return 0.0;
+    }
+
+    float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
+    float closestDepth = uDirectionalLightShadowMap.Sample(uv).r;
+    return (curDepth - bias) > closestDepth ? 1.0 : 0.0;
+#endif
+}
+
+float calculatePointShadow(uint pointLightIndex, vec3 worldPos)
+{
+#if !YA_DEFERRED_ENABLE_SHADOW_MAPPING || !YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW
+    return 0.0;
+#else
+    vec3 sampleDir = worldPos - uLight.pointLights[pointLightIndex].pos;
+    float currentDepth = length(sampleDir);
+    if (currentDepth <= 0.0001 || uLight.pointLights[pointLightIndex].farPlane <= 0.0) {
+        return 0.0;
+    }
+
+    float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
+    closestDepth *= uLight.pointLights[pointLightIndex].farPlane;
+    float bias = 0.05;
+    return (currentDepth - bias) > closestDepth ? 1.0 : 0.0;
+#endif
+}
+
 // MARK: PBR
 vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metallic, float roughness, float ao)
 {
@@ -129,6 +188,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         vec3 L = normalize(-uLight.dirLight.dir);
         vec3 H = normalize(V + L);
         vec3 radiance = uLight.dirLight.color; // raw light
+        float shadow = calculateDirectionalShadow(worldPos, N, L);
 
         // Cook-Torrance BRDF
         float NDF = D_normalDistribution_GGX(N, H, roughness);
@@ -138,7 +198,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
         vec3 specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
 
-        Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+        Lo += (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
     }
 
     // Point lights
@@ -151,6 +211,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         // raw light
         vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity 
                         / (dist * dist);
+        float shadow = calculatePointShadow(i, worldPos);
 
         // Cook-Torrance BRDF
         float NDF = D_normalDistribution_GGX(N, H, roughness);
@@ -165,7 +226,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         float denominator = 4.0 * max(dot(N,V), 0.0) * max(dot(N,L), 0.0) + 0.000001;
         vec3 specular = numerator / denominator;
 
-        Lo += (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
+        Lo += (1.0 - shadow) * (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
     }
 
     // ambient lighting(IBL)
@@ -215,11 +276,12 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float diff      = max(dot(lightDir, N), 0.0);
         vec3 halfwayDir = normalize(lightDir + V);
         float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
+        float shadow    = calculateDirectionalShadow(worldPos, N, lightDir);
 
         vec3 ambient  = albedo * uLight.ambient;
         vec3 diffuse  = diff * albedo * uLight.dirLight.color;
         vec3 specular = specIntensity * spec * uLight.dirLight.color;
-        light += ambient + diffuse + specular;
+        light += ambient + (1.0 - shadow) * (diffuse + specular);
     }
 
     for(uint i = 0; i< uLight.numPointLight; ++i)
@@ -228,6 +290,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float diff      = max(dot(lightDir, N), 0.0);
         vec3  halfwayDir = normalize(lightDir + V);
         float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
+        float shadow    = calculatePointShadow(i, worldPos);
 
         float dist = length(uLight.pointLights[i].pos - worldPos);
         vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
@@ -235,7 +298,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         vec3 ambient  = albedo * uLight.ambient;
         vec3 diffuse  = diff * albedo * radiance;
         vec3 specular = specIntensity * spec * radiance;
-        light += ambient + diffuse + specular;
+        light += ambient + (1.0 - shadow) * (diffuse + specular);
     }
 
 
@@ -257,6 +320,9 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(1,2)]] SamplerCube uTexPBRIrradianceCubemap; 
 [[vk::binding(2,2)]] SamplerCube uTexPBRPrefilterMap;  
 [[vk::binding(3,2)]] Sampler2D   uTexPBRBrdfLUT;  
+
+[[vk::binding(0,3)]] Sampler2D   uDirectionalLightShadowMap;
+[[vk::binding(1,3)]] SamplerCube uPointLightCubeArray[MAX_POINT_LIGHTS];
 
 
 

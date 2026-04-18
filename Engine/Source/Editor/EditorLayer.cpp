@@ -1223,9 +1223,55 @@ void EditorLayer::debugWindow()
 
     const ImVec2 panelSize = ImGui::GetContentRegionAvail();
     const auto&  categories = _viewportCtx.debugSpec.categories;
+
+    auto renderCategoryContent = [&](int categoryIndex) {
+        int groupCount = 0;
+        int standaloneSlotCount = 0;
+
+        std::vector<bool> groupedSlotMask(_viewportCtx.debugSpec.slots.size(), false);
+        for (const auto& group : _viewportCtx.debugSpec.groups) {
+            if (categoryIndex >= 0 && static_cast<int>(group.categoryIndex) != categoryIndex) {
+                continue;
+            }
+            ++groupCount;
+            const uint32_t slotEnd = std::min<uint32_t>(group.beginIndex + group.slotCount, static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()));
+            for (uint32_t slotIndex = group.beginIndex; slotIndex < slotEnd; ++slotIndex) {
+                groupedSlotMask[slotIndex] = true;
+            }
+        }
+
+        for (int slotIndex = 0; slotIndex < static_cast<int>(_viewportCtx.debugSpec.slots.size()); ++slotIndex) {
+            if (groupedSlotMask[slotIndex]) {
+                continue;
+            }
+            if (categoryIndex >= 0 && static_cast<int>(_viewportCtx.debugSpec.slots[slotIndex].categoryIndex) != categoryIndex) {
+                continue;
+            }
+            ++standaloneSlotCount;
+        }
+
+        ImGui::Text("Groups: %d", groupCount);
+        ImGui::SameLine();
+        ImGui::Text("Standalone: %d", standaloneSlotCount);
+        ImGui::Separator();
+
+        if (groupCount > 0) {
+            ImGui::SeparatorText("Grouped Views");
+            renderDebugImageGroupsGrid(panelSize, categoryIndex, 280.0f);
+        }
+
+        if (standaloneSlotCount > 0) {
+            ImGui::SeparatorText("Standalone Views");
+            renderDebugImageSlots(panelSize, categoryIndex);
+        }
+
+        if (groupCount == 0 && standaloneSlotCount == 0) {
+            ImGui::TextDisabled("No debug images available for this category.");
+        }
+    };
+
     if (categories.empty()) {
-            renderDebugImageGroupsGrid(panelSize, -1, 0.0f);
-        renderDebugImageSlots(panelSize, -1);
+        renderCategoryContent(-1);
         ImGui::End();
         return;
     }
@@ -1237,8 +1283,7 @@ void EditorLayer::debugWindow()
                 continue;
             }
 
-            renderDebugImageGroupsGrid(panelSize, categoryIndex, 0.0f);
-            renderDebugImageSlots(panelSize, categoryIndex);
+            renderCategoryContent(categoryIndex);
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();

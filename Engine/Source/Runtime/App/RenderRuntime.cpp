@@ -37,6 +37,58 @@
 namespace ya
 {
 
+namespace
+{
+
+template <typename TGetter>
+void appendShadowDebugSlots(EditorViewportContext& ctx,
+                            IImageView*            directionalDepth,
+                            Texture*               shadowDepthTexture,
+                            TGetter&&              pointFaceGetter,
+                            uint32_t               categoryIndex)
+{
+    if (directionalDepth) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "ShadowDirectionalDepth",
+            .defaultView   = directionalDepth,
+            .ownedView     = nullptr,
+            .image         = shadowDepthTexture ? shadowDepthTexture->getImageShared() : nullptr,
+            .categoryIndex = categoryIndex,
+            .aspectFlags   = EImageAspect::Depth,
+        });
+    }
+
+    EditorViewportContext::DebugSpec::Group pointShadowGroup{
+        .label         = "Point Shadow Cubemap",
+        .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+        .categoryIndex = categoryIndex,
+        .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+        .groupSize     = 6,
+    };
+
+    for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+            if (auto* faceIV = pointFaceGetter(pointLightIndex, faceIndex)) {
+                ctx.debugSpec.slots.push_back({
+                    .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
+                    .defaultView   = faceIV,
+                    .ownedView     = nullptr,
+                    .image         = shadowDepthTexture ? shadowDepthTexture->getImageShared() : nullptr,
+                    .categoryIndex = categoryIndex,
+                    .aspectFlags   = EImageAspect::Depth,
+                });
+            }
+        }
+    }
+
+    pointShadowGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - pointShadowGroup.beginIndex;
+    if (pointShadowGroup.slotCount >= pointShadowGroup.groupSize) {
+        ctx.debugSpec.groups.push_back(std::move(pointShadowGroup));
+    }
+}
+
+} // namespace
+
 Texture* RenderRuntime::findSceneSkyboxTexture(Scene* scene) const
 {
     if (!scene || !_app || !_app->getResourceResolveSystem()) {
@@ -44,6 +96,33 @@ Texture* RenderRuntime::findSceneSkyboxTexture(Scene* scene) const
     }
 
     return _app->getResourceResolveSystem()->findSceneSkyboxTexture(scene);
+}
+
+Texture* RenderRuntime::findSceneEnvironmentCubemapTexture(Scene* scene) const
+{
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
+        return nullptr;
+    }
+
+    return _app->getResourceResolveSystem()->findSceneEnvironmentCubemapTexture(scene);
+}
+
+Texture* RenderRuntime::findSceneEnvironmentIrradianceTexture(Scene* scene) const
+{
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
+        return nullptr;
+    }
+
+    return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
+}
+
+Texture* RenderRuntime::findSceneEnvironmentPrefilterTexture(Scene* scene) const
+{
+    if (!scene || !_app || !_app->getResourceResolveSystem()) {
+        return nullptr;
+    }
+
+    return _app->getResourceResolveSystem()->findSceneEnvironmentPrefilterTexture(scene);
 }
 
 void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture)
@@ -155,33 +234,6 @@ DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
     return _skybox.sceneDS;
 }
 
-Texture* RenderRuntime::findSceneEnvironmentCubemapTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentCubemapTexture(scene);
-}
-
-Texture* RenderRuntime::findSceneEnvironmentIrradianceTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
-}
-
-Texture* RenderRuntime::findSceneEnvironmentPrefilterTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentPrefilterTexture(scene);
-}
-
 DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
 {
     if (!_environmentLighting.sceneDS) {
@@ -214,10 +266,10 @@ DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scen
         irradianceTexture != _environmentLighting.boundIrradianceTexture ||
         prefilterTexture != _environmentLighting.boundPrefilterTexture) {
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
-                                              cubemapTexture,
-                                              irradianceTexture,
-                                              prefilterTexture,
-                                              brdfLutTexture);
+                                               cubemapTexture,
+                                               irradianceTexture,
+                                               prefilterTexture,
+                                               brdfLutTexture);
         _environmentLighting.boundCubemapTexture    = cubemapTexture;
         _environmentLighting.boundIrradianceTexture = irradianceTexture;
         _environmentLighting.boundPrefilterTexture  = prefilterTexture;
@@ -301,16 +353,16 @@ void RenderRuntime::init(const InitDesc& desc)
         ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
         ShaderDesc{.shaderName = "Misc/pbr_generate_brdf_lut.slang"},
     });
-    _deleter.push("ShaderStorage", [this](void*) {
-        _shaderStorage.reset();
-    });
+    _deleter.push("ShaderStorage", [this](void*)
+                  { _shaderStorage.reset(); });
 
     if (ci.bEnableRenderDoc) {
         _renderDocCapture             = ya::makeShared<RenderDocCapture>();
         _renderDocConfiguredDllPath   = ci.renderDocDllPath;
         _renderDocConfiguredOutputDir = ci.renderDocCaptureOutputDir;
         _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
-        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result) {
+        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result)
+                                                      {
             if (!result.bSuccess) {
                 return;
             }
@@ -327,14 +379,13 @@ void RenderRuntime::init(const InitDesc& desc)
                 break;
             default:
                 break;
-            }
-        });
-        _deleter.push("RenderDocCapture", [this](void*) {
+            } });
+        _deleter.push("RenderDocCapture", [this](void*)
+                      {
             if (_renderDocCapture) {
                 _renderDocCapture->shutdown();
                 _renderDocCapture.reset();
-            }
-        });
+            } });
     }
 
     RenderCreateInfo renderCI{
@@ -359,7 +410,8 @@ void RenderRuntime::init(const InitDesc& desc)
         });
         _render->getSwapchain()->onRecreate.addLambda(
             this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
+            {
                 (void)old;
                 (void)now;
                 (void)bImageRecreated;
@@ -426,7 +478,7 @@ void RenderRuntime::init(const InitDesc& desc)
         YA_CORE_ASSERT(_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView(),
                        "Failed to create PBR BRDF LUT render texture");
         if (_sharedResources.pbrLUT) {
-            auto* cmdBuf = _render->beginIsolateCommands("App_PBR_BRDF_LUT");
+            auto*      cmdBuf = _render->beginIsolateCommands("App_PBR_BRDF_LUT");
             const auto result = _pbrGenerateBrdfLUT.execute({
                 .cmdBuf = cmdBuf,
                 .output = _sharedResources.pbrLUT.get(),
@@ -494,24 +546,23 @@ void RenderRuntime::init(const InitDesc& desc)
                        "Failed to create fallback irradiance cubemap");
         _environmentLighting.fallbackPrefilterTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackPrefilter");
         YA_CORE_ASSERT(_environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView(),
-                   "Failed to create fallback prefilter cubemap");
+                       "Failed to create fallback prefilter cubemap");
 
         _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
         _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
         updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
                                                _skybox.fallbackTexture.get(),
                                                _environmentLighting.fallbackIrradianceTexture.get(),
-                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _environmentLighting.fallbackPrefilterTexture.get(),
                                                _sharedResources.pbrLUT.get());
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                                _skybox.fallbackTexture.get(),
                                                _environmentLighting.fallbackIrradianceTexture.get(),
-                               _environmentLighting.fallbackPrefilterTexture.get(),
+                                               _environmentLighting.fallbackPrefilterTexture.get(),
                                                _sharedResources.pbrLUT.get());
 
-        _deleter.push("RenderBindings", [this](void*) {
-            releaseRenderOwnedResources();
-        });
+        _deleter.push("RenderBindings", [this](void*)
+                      { releaseRenderOwnedResources(); });
     }
 
     // Wait for all shaders to finish compiling before creating pipelines
@@ -547,7 +598,8 @@ void RenderRuntime::init(const InitDesc& desc)
 
         _render->getSwapchain()->onRecreate.addLambda(
             this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated) {
+            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
+            {
                 const bool bExtentChanged      = (now.extent.width != old.extent.width ||
                                              now.extent.height != old.extent.height);
                 const bool bPresentModeChanged = (old.presentMode != now.presentMode);
@@ -564,46 +616,46 @@ void RenderRuntime::init(const InitDesc& desc)
                 }
             });
 
-        _deleter.push("ScreenRT", [this](void*) {
+        _deleter.push("ScreenRT", [this](void*)
+                      {
             if (_screenRT) {
                 _screenRT->destroy();
                 _screenRT.reset();
             }
-            _screenRenderPass.reset();
-        });
+            _screenRenderPass.reset(); });
     }
 
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
     _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
     _commandBuffers.assign(cmdBufs.begin(), cmdBufs.begin() + _render->getSwapchainImageCount());
     _offscreenCmdBuf = cmdBufs.back();
-    _deleter.push("CmdBufs", [this](void*) {
+    _deleter.push("CmdBufs", [this](void*)
+                  {
         _commandBuffers.clear();
-        _offscreenCmdBuf.reset();
-    });
+        _offscreenCmdBuf.reset(); });
 
     // Create a dedicated fence for offscreen work so we don't need waitIdle().
     {
-        auto* vkRender = static_cast<VulkanRender*>(_render);
+        auto*             vkRender = static_cast<VulkanRender*>(_render);
         VkFenceCreateInfo fenceCI{
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0, // initially unsignaled
         };
-        VkFence fence = VK_NULL_HANDLE;
-        VkResult ret = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
+        VkFence  fence = VK_NULL_HANDLE;
+        VkResult ret   = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
         YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
         vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
         _offscreenFence   = fence;
         _offscreenPending = false;
-        _deleter.push("OffscreenFence", [this](void*) {
+        _deleter.push("OffscreenFence", [this](void*)
+                      {
             if (_offscreenFence) {
                 auto* vkR = static_cast<VulkanRender*>(_render);
                 vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
                 _offscreenFence   = nullptr;
                 _offscreenPending = false;
-            }
-        });
+            } });
     }
 
     ImGuiManager::get().init(_render, nullptr);
@@ -740,8 +792,8 @@ void RenderRuntime::offScreenRender()
 
     // Wait for the previous offscreen batch to finish (fence, not waitIdle).
     if (_offscreenPending && _offscreenFence) {
-        auto* vkRender = static_cast<VulkanRender*>(_render);
-        VkFence fence = static_cast<VkFence>(_offscreenFence);
+        auto*   vkRender = static_cast<VulkanRender*>(_render);
+        VkFence fence    = static_cast<VkFence>(_offscreenFence);
         vkWaitForFences(vkRender->getDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
         vkResetFences(vkRender->getDevice(), 1, &fence);
         _offscreenPending = false;
@@ -951,7 +1003,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         ctx.viewportTexture          = (_shadingModel == EShadingModel::Forward)
                                          ? (_forwardPipeline ? _forwardPipeline->viewportTexture : nullptr)
                                          : (_deferredPipeline ? _deferredPipeline->viewportTexture : nullptr);
-        ctx.debugSpec.categories = {
+        ctx.debugSpec.categories     = {
             {.id = "shadow", .label = "Shadow"},
             {.id = "skybox", .label = "Skybox"},
             {.id = "environment", .label = "Environment"},
@@ -1115,6 +1167,16 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 .tint          = {1, 0, 0, 1}, // only red mask
 
             });
+
+            if (_deferredPipeline && _deferredPipeline->getShadowDepthRT()) {
+                Texture* shadowDepthTexture = nullptr;
+                if (auto* shadowFb = _deferredPipeline->getShadowDepthRT()->getCurFrameBuffer()) {
+                    shadowDepthTexture = shadowFb->getDepthTexture();
+                }
+                appendShadowDebugSlots(ctx, _deferredPipeline->getShadowDirectionalDepthIV(), shadowDepthTexture, [this](uint32_t pointLightIndex, uint32_t faceIndex)
+                                       { return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+                                       CATEGORY_SHADOW);
+            }
         }
 
         if (_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
@@ -1200,7 +1262,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         preview.prefilterTexture->getImageShared() && preview.prefilterTexture->getImageView()) {
                         auto prefilterImage = preview.prefilterTexture->getImageShared();
                         if (prefilterImage) {
-                            const uint32_t mipLevels = preview.prefilterMipCount;
+                            const uint32_t                          mipLevels = preview.prefilterMipCount;
                             EditorViewportContext::DebugSpec::Group prefilterGroup{
                                 .label         = "Environment Prefilter Cubemap",
                                 .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
@@ -1358,12 +1420,9 @@ Extent2D RenderRuntime::getViewportExtent() const
 
 void RenderRuntime::renderGUI(float dt)
 {
-    if (!ImGui::CollapsingHeader("Render Runtime")) {
-        return;
-    }
     (void)dt;
 
-    {
+    if (ImGui::TreeNode("World Rendering")) {
         static const char* items[] = {"Forward", "Deferred"};
         int                current = static_cast<int>(_pendingShadingModel);
         if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
@@ -1373,17 +1432,21 @@ void RenderRuntime::renderGUI(float dt)
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
         }
+        if (_forwardPipeline) {
+            _forwardPipeline->renderGUI();
+        }
+        if (_deferredPipeline) {
+            _deferredPipeline->renderGUI();
+        }
+        ImGui::TreePop();
     }
 
-    if (_forwardPipeline) {
-        _forwardPipeline->renderGUI();
-    }
-    if (_deferredPipeline) {
-        _deferredPipeline->renderGUI();
-    }
 
-    if (_screenRT) {
-        _screenRT->onRenderGUI();
+    if (ImGui::TreeNode("Final Render Target")) {
+        if (_screenRT) {
+            _screenRT->onRenderGUI();
+        }
+        ImGui::TreePop();
     }
 
     ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);

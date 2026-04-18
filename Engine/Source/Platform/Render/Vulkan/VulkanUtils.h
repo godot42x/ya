@@ -435,6 +435,8 @@ inline auto toVk(T format) -> VkFormat
         return VK_FORMAT_R32_SFLOAT;
     case R16G16B16A16_SFLOAT:
         return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case D16_UNORM:
+        return VK_FORMAT_D16_UNORM;
     case D32_SFLOAT:
         return VK_FORMAT_D32_SFLOAT;
     case D32_SFLOAT_S8_UINT: // with stencil?
@@ -534,6 +536,8 @@ inline EFormat::T fromVk(VkFormat format)
         return R32_SFLOAT;
     case VK_FORMAT_R16G16B16A16_SFLOAT:
         return R16G16B16A16_SFLOAT;
+    case VK_FORMAT_D16_UNORM:
+        return D16_UNORM;
     case VK_FORMAT_D32_SFLOAT:
         return D32_SFLOAT;
     case VK_FORMAT_D32_SFLOAT_S8_UINT:

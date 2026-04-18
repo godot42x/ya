@@ -4,6 +4,8 @@
 #include "Render/RenderFrameData.h"
 #include "imgui.h"
 
+#include <algorithm>
+
 namespace ya
 {
 
@@ -13,6 +15,24 @@ void ShadowStage::setRenderTarget(const stdptr<IRenderTarget>& rt)
     if (_shadowMapRT) {
         _shadowExtent = _shadowMapRT->getExtent();
     }
+    refreshPipelineFromRenderTarget();
+}
+
+void ShadowStage::refreshPipelineFromRenderTarget()
+{
+    if (!_shadowMapRT) {
+        return;
+    }
+
+    const auto& depthDesc = _shadowMapRT->getDepthAttachmentDesc();
+    if (!depthDesc.has_value()) {
+        return;
+    }
+
+    _pipelineCI.pipelineRenderingInfo.depthAttachmentFormat = depthDesc->format;
+    if (_pipeline) {
+        _pipeline->updateDesc(_pipelineCI);
+    }
 }
 
 void ShadowStage::init(IRender* render)
@@ -20,33 +40,35 @@ void ShadowStage::init(IRender* render)
     _render = render;
 
     // DSL
-    _frameDSL = IDescriptorSetLayout::create(_render, {
-                                                          DescriptorSetLayoutDesc{
-                                                              .label    = "ShadowStage_Frame_DSL",
-                                                              .set      = 0,
-                                                              .bindings = {{
-                                                                  .binding         = 0,
-                                                                  .descriptorType  = EPipelineDescriptorType::UniformBuffer,
-                                                                  .descriptorCount = 1,
-                                                                  .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
-                                                              }},
-                                                          },
-                                                      });
+    _frameDSL = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "ShadowStage_Frame_DSL",
+                .set      = 0,
+                .bindings = {{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                }},
+            },
+        });
 
     // Pipeline layout
     _pipelineLayout = IPipelineLayout::create(_render, "ShadowStage_PPL", {PushConstantRange{.offset = 0, .size = sizeof(ModelPushConstant), .stageFlags = EShaderStage::Vertex}}, {_frameDSL});
 
     // Pipeline (depth-only, no color output)
-    GraphicsPipelineCreateInfo ci{
+    _pipelineCI = GraphicsPipelineCreateInfo{
         .pipelineRenderingInfo = {
             .label                 = "Shadow Map Generate",
             .depthAttachmentFormat = EFormat::D32_SFLOAT,
         },
         .pipelineLayout = _pipelineLayout.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Shadow/CombinedShadowMappingGenerate.glsl",
-            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-            .vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)}},
+                .shaderName        = "Shadow/CombinedShadowMappingGenerate.glsl",
+                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
+                .vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)}},
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
@@ -55,8 +77,9 @@ void ShadowStage::init(IRender* render)
         .colorBlendState    = {.attachments = {}},
         .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
+    refreshPipelineFromRenderTarget();
     _pipeline = IGraphicsPipeline::create(_render);
-    YA_CORE_ASSERT(_pipeline && _pipeline->recreate(ci), "Failed to create ShadowStage pipeline");
+    YA_CORE_ASSERT(_pipeline && _pipeline->recreate(_pipelineCI), "Failed to create ShadowStage pipeline");
 
     // Per-flight UBO + DS
     _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
@@ -67,12 +90,14 @@ void ShadowStage::init(IRender* render)
 
     FrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
-                                                    .label       = std::format("ShadowStage_Frame_UBO_{}", i),
-                                                    .usage       = EBufferUsage::UniformBuffer,
-                                                    .size        = sizeof(FrameUBO),
-                                                    .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                });
+        _frameUBO[i] = IBuffer::create(
+            _render,
+            BufferCreateInfo{
+                .label       = std::format("ShadowStage_Frame_UBO_{}", i),
+                .usage       = EBufferUsage::UniformBuffer,
+                .size        = sizeof(FrameUBO),
+                .memoryUsage = EMemoryUsage::CpuToGpu,
+            });
         _frameUBO[i]->writeData(&initialData, sizeof(FrameUBO), 0);
 
         _frameDS[i] = _dsp->allocateDescriptorSets(_frameDSL);
@@ -104,13 +129,16 @@ void ShadowStage::prepare(const RenderStageContext& ctx)
     uint32_t    fi = ctx.flightIndex;
 
     // Build shadow frame UBO from snapshot light data
+    const uint32_t pointLightCount = _bEnablePointLightShadow ? std::min(fd.numPointLights, _maxPointLightShadowCount) : 0;
+
     FrameUBO frameData{
         .directionalLightMatrix = fd.directionalLight.viewProjection,
-        .numPointLights         = fd.numPointLights,
+        .numPointLights         = pointLightCount,
         .hasDirectionalLight    = fd.bHasDirectionalLight ? 1u : 0u,
     };
+    _lastPreparedPointLightCount = pointLightCount;
 
-    for (uint32_t i = 0; i < fd.numPointLights; ++i) {
+    for (uint32_t i = 0; i < pointLightCount; ++i) {
         const auto&      pl       = fd.pointLights[i];
         const glm::vec3& pos      = pl.position;
         const glm::mat4  faceProj = FMath::perspective(
@@ -182,8 +210,12 @@ void ShadowStage::execute(const RenderStageContext& ctx)
 
 void ShadowStage::renderGUI()
 {
-    if (!ImGui::TreeNode("ShadowStage")) return;
+    if (!ImGui::TreeNode("ShadowStage")) {
+        return;
+    }
     ImGui::Text("RT: %ux%u", _shadowExtent.width, _shadowExtent.height);
+    ImGui::Text("Prepared point lights: %u", _lastPreparedPointLightCount);
+    ImGui::Text("Point shadow budget: %u", _maxPointLightShadowCount);
     ImGui::Checkbox("Auto Viewport/Scissor", &_bAutoBindViewportScissor);
     ImGui::DragFloat("Receiver Depth Bias", &_bias, 0.0001f, 0.0f, 0.1f, "%.5f");
     ImGui::DragFloat("Receiver Normal Bias", &_normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
