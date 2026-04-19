@@ -26,14 +26,10 @@
 #include "Scene/SceneManager.h"
 
 #include "Resource/AssetManager.h"
-#include "Resource/PrimitiveMeshCache.h"
 // #include "Resource/RenderTargetPool.h"
-#include "Resource/ResourceRegistry.h"
-#include "Resource/TextureLibrary.h"
 
 
 // Render Core
-#include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 
 
@@ -72,7 +68,6 @@
 #include "Core/UI/UITextBlock.h"
 
 // Utility
-#include "utility.cc/ranges.h"
 
 // GLM
 #include <glm/glm.hpp>
@@ -678,7 +673,7 @@ void App::onRenderGUI(float dt)
         fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
 
         const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
-        Text("Frame: %d, DeltaTime: %.2f", _frameIndex, dt * 1000.f);
+        Text("Frame: %d, DeltaTime: %.2fms", _frameIndex, dt * 1000.f);
         Text("FPS: %.1f (%.1f of avg %d)", currentFps, avgFps, fpsRingFill);
 
         auto* render = getRender();

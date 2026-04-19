@@ -2,6 +2,8 @@
 
 #include "App.h"
 #include "Core/Async/TaskQueue.h"
+#include "Core/Debug/PerfKeys.h"
+#include "Core/Debug/PerfState.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "Core/UI/UIManager.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
@@ -174,6 +176,9 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     auto cmdBuf = _commandBuffers[imageIndex];
     cmdBuf->reset();
     cmdBuf->begin();
+    if (YA_PERF_IS_ENABLED()) {
+        _render->beginFrameGpuTiming(cmdBuf.get());
+    }
 
     if (_shadingModel == EShadingModel::Forward) {
         _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
@@ -646,8 +651,19 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
     TaskQueue::get().processMainThreadCallbacks();
 
+    if (YA_PERF_IS_ENABLED()) {
+        _render->endFrameGpuTiming(cmdBuf.get());
+    }
     cmdBuf->end();
     _render->end(imageIndex, {cmdBuf->getHandle()});
+
+    if (YA_PERF_IS_ENABLED()) {
+        PerfState::Get().setValue(
+            perf::sample::renderFrame(),
+            perf::metric::gpuTimeMs(),
+            _render->getLastCompletedFrameGpuTimeMs(),
+            perf::domain::gpu());
+    }
 
     if (_renderDoc.capture) {
         _renderDoc.capture->onFrameEnd();

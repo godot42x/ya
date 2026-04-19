@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -375,6 +376,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
     auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate& candidate) -> VkResult {
         m_PhysicalDevice     = candidate.device;
+        _physicalDeviceProperties = candidate.properties;
         _graphicsQueueFamily = candidate.graphicsQueue;
         _presentQueueFamily  = candidate.presentQueue;
         m_LogicalDevice      = VK_NULL_HANDLE;
@@ -662,6 +664,7 @@ void VulkanRender::initExtensionFunctions()
     ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdSetPolygonModeEXT, vkCmdSetPolygonModeEXT);
     ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdBeginDebugUtilsLabelEXT, vkCmdBeginDebugUtilsLabelEXT);
     ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdEndDebugUtilsLabelEXT, vkCmdEndDebugUtilsLabelEXT);
+    ASSIGN_VK_FUNCTION(_pfnCmdResetQueryPool, vkCmdResetQueryPool);
     ASSIGN_VK_FUNCTION(_pfnQueueBeginDebugUtilsLabelEXT, vkQueueBeginDebugUtilsLabelEXT);
     ASSIGN_VK_FUNCTION(_pfnQueueEndDebugUtilsLabelEXT, vkQueueEndDebugUtilsLabelEXT);
     // ASSIGN_VK_FUNCTION(VulkanCommandBuffer::s_vkCmdBeginRenderingKHR,  );
@@ -853,6 +856,98 @@ void VulkanRender::releaseSyncResources()
     }
 }
 
+void VulkanRender::createFrameGpuTimingResources()
+{
+    _lastCompletedFrameGpuTimeMs = 0.0f;
+    _gpuTimestampPeriodNs        = 0.0f;
+    _bFrameGpuTimingSupported    = false;
+    _frameGpuTimingValid.assign(flightFrameSize, 0);
+
+    if (getDevice() == VK_NULL_HANDLE || !_pfnCmdResetQueryPool) {
+        return;
+    }
+
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    if (_graphicsQueueFamily.queueFamilyIndex < 0
+        || static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex) >= queueFamilies.size())
+    {
+        return;
+    }
+
+    const VkQueueFamilyProperties& graphicsQueueFamily = queueFamilies[_graphicsQueueFamily.queueFamilyIndex];
+    if (graphicsQueueFamily.timestampValidBits == 0 || _physicalDeviceProperties.limits.timestampPeriod <= 0.0f) {
+        return;
+    }
+
+    VkQueryPoolCreateInfo queryPoolCI{
+        .sType              = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+        .pNext              = nullptr,
+        .flags              = 0,
+        .queryType          = VK_QUERY_TYPE_TIMESTAMP,
+        .queryCount         = flightFrameSize * 2,
+        .pipelineStatistics = 0,
+    };
+
+    VkResult ret = vkCreateQueryPool(getDevice(), &queryPoolCI, getAllocator(), &_frameGpuTimestampQueryPool);
+    if (ret != VK_SUCCESS) {
+        YA_CORE_WARN("Failed to create frame GPU timestamp query pool: {}", static_cast<int32_t>(ret));
+        return;
+    }
+
+    _gpuTimestampPeriodNs     = _physicalDeviceProperties.limits.timestampPeriod;
+    _bFrameGpuTimingSupported = true;
+}
+
+void VulkanRender::releaseFrameGpuTimingResources()
+{
+    _frameGpuTimingValid.clear();
+    _bFrameGpuTimingSupported    = false;
+    _gpuTimestampPeriodNs        = 0.0f;
+    _lastCompletedFrameGpuTimeMs = 0.0f;
+
+    if (_frameGpuTimestampQueryPool != VK_NULL_HANDLE && getDevice() != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(getDevice(), _frameGpuTimestampQueryPool, getAllocator());
+        _frameGpuTimestampQueryPool = VK_NULL_HANDLE;
+    }
+}
+
+void VulkanRender::updateCompletedFrameGpuTiming()
+{
+    if (!_bFrameGpuTimingSupported
+        || _frameGpuTimestampQueryPool == VK_NULL_HANDLE
+        || currentFrameIdx >= _frameGpuTimingValid.size()
+        || !_frameGpuTimingValid[currentFrameIdx])
+    {
+        return;
+    }
+
+    uint64_t timestamps[2] = {};
+    VkResult ret = vkGetQueryPoolResults(
+        getDevice(),
+        _frameGpuTimestampQueryPool,
+        currentFrameIdx * 2,
+        2,
+        sizeof(timestamps),
+        timestamps,
+        sizeof(uint64_t),
+        VK_QUERY_RESULT_64_BIT);
+    if (ret != VK_SUCCESS) {
+        return;
+    }
+
+    _frameGpuTimingValid[currentFrameIdx] = 0;
+    if (timestamps[1] < timestamps[0]) {
+        return;
+    }
+
+    const double deltaTimestamp = static_cast<double>(timestamps[1] - timestamps[0]);
+    _lastCompletedFrameGpuTimeMs = static_cast<float>((deltaTimestamp * static_cast<double>(_gpuTimestampPeriodNs)) / 1000000.0);
+}
+
 
 
 const VkAllocationCallbacks* VulkanRender::getAllocator()
@@ -891,6 +986,8 @@ bool VulkanRender::begin(int32_t* outImageIndex)
                             &frameFences[currentFrameIdx],
                             VK_TRUE,
                             UINT64_MAX));
+
+    updateCompletedFrameGpuTiming();
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
     VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
@@ -953,6 +1050,45 @@ bool VulkanRender::begin(int32_t* outImageIndex)
     }
     *outImageIndex = static_cast<int32_t>(imageIndex);
     return true;
+}
+
+void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)
+{
+    if (!_bFrameGpuTimingSupported || !commandBuffer || _frameGpuTimestampQueryPool == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const VkCommandBuffer vkCommandBuffer = commandBuffer->getHandleAs<VkCommandBuffer>();
+    if (vkCommandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const uint32_t queryBase = currentFrameIdx * 2;
+    _frameGpuTimingValid[currentFrameIdx] = 0;
+    _pfnCmdResetQueryPool(vkCommandBuffer, _frameGpuTimestampQueryPool, queryBase, 2);
+    vkCmdWriteTimestamp(vkCommandBuffer,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        _frameGpuTimestampQueryPool,
+                        queryBase);
+}
+
+void VulkanRender::endFrameGpuTiming(ICommandBuffer* commandBuffer)
+{
+    if (!_bFrameGpuTimingSupported || !commandBuffer || _frameGpuTimestampQueryPool == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const VkCommandBuffer vkCommandBuffer = commandBuffer->getHandleAs<VkCommandBuffer>();
+    if (vkCommandBuffer == VK_NULL_HANDLE) {
+        return;
+    }
+
+    const uint32_t queryBase = currentFrameIdx * 2;
+    vkCmdWriteTimestamp(vkCommandBuffer,
+                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                        _frameGpuTimestampQueryPool,
+                        queryBase + 1);
+    _frameGpuTimingValid[currentFrameIdx] = 1;
 }
 
 bool VulkanRender::end(int32_t imageIndex, std::vector<void*> cmdBufs)

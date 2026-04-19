@@ -171,6 +171,21 @@ struct IRender : public plat_base<IRender>
      */
     virtual uint32_t getCurrentFrameIndex() const = 0;
 
+    virtual void beginFrameGpuTiming(ICommandBuffer* commandBuffer)
+    {
+        (void)commandBuffer;
+    }
+
+    virtual void endFrameGpuTiming(ICommandBuffer* commandBuffer)
+    {
+        (void)commandBuffer;
+    }
+
+    virtual float getLastCompletedFrameGpuTimeMs() const
+    {
+        return 0.0f;
+    }
+
     /**
      * @brief Get render finished semaphore for given swapchain image index
      * @param imageIndex Swapchain image index

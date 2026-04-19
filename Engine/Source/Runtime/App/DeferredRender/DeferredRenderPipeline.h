@@ -90,7 +90,6 @@ struct DeferredRenderPipeline
     Texture* viewportTexture    = nullptr;
     bool     _bViewportPassOpen = false;
     bool     _bReverseViewportY = true;
-    bool     _bEnablePerfStats  = true;
     bool     _bEnableShadowMapping = true;
     bool     _bEnablePointLightShadow = true;
     uint32_t _maxPointLightShadowCount = 1;
@@ -98,13 +97,6 @@ struct DeferredRenderPipeline
     bool     _pendingEnableShadowMapping = true;
     bool     _pendingEnablePointLightShadow = true;
     uint32_t _pendingMaxPointLightShadowCount = 1;
-
-    float _lastTickCpuMs      = 0.0f;
-    float _lastShadowCpuMs    = 0.0f;
-    float _lastGBufferCpuMs   = 0.0f;
-    float _lastDepthCopyCpuMs = 0.0f;
-    float _lastLightCpuMs     = 0.0f;
-    float _lastOverlayCpuMs   = 0.0f;
 
     uint32_t   _lastPointLightCount = 0;
     uint32_t   _lastDrawCount       = 0;

@@ -146,7 +146,7 @@
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.expand": false,
     "explorer.fileNesting.patterns": {
-        "*.h": "$(capture).*.cpp"
+        "*.h": "$(capture)*.cpp"
     },
     "glsllint.glslangValidatorPath": "uv",
     "glsllint.glslangValidatorArgs": [

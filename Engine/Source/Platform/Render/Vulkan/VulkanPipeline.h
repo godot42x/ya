@@ -110,7 +110,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     const std::string& getName() const override
     {
         static std::string name_cache;
-        name_cache = std::string(_name._data);
+      name_cache = _name.toString();
         return name_cache;
     }
     const GraphicsPipelineCreateInfo& getDesc() const override { return _ci; }

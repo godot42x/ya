@@ -1,13 +1,13 @@
 #include "LightStage.h"
 
+#include "Core/Debug/PerfKeys.h"
+#include "Core/Debug/PerfState.h"
 #include "GBufferStage.h"
 #include "Resource/PrimitiveMeshCache.h"
 #include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 
-#include <algorithm>
-#include <chrono>
 #include <string>
 
 
@@ -208,7 +208,7 @@ void LightStage::destroy()
 
 void LightStage::prepare(const RenderStageContext& ctx)
 {
-    const auto start = std::chrono::steady_clock::now();
+    YA_PERF_SCOPE(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs(), perf::domain::render());
     (void)ctx;
     if (_pipeline) {
         _pipeline->beginFrame();
@@ -220,7 +220,6 @@ void LightStage::prepare(const RenderStageContext& ctx)
     auto  sampler = TextureLibrary::get().getDefaultSampler();
     auto* fb      = _gBufferRT->getCurFrameBuffer();
     if (!fb) {
-        _lastPrepareCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
         return;
     }
 
@@ -267,12 +266,11 @@ void LightStage::prepare(const RenderStageContext& ctx)
         _lastShadowDescriptorWriteCount = 0;
     }
 
-    _lastPrepareCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }
 
 void LightStage::execute(const RenderStageContext& ctx)
 {
-    const auto start = std::chrono::steady_clock::now();
+    YA_PERF_SCOPE(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs(), perf::domain::render());
     if (!ctx.cmdBuf || !_gBufferStage) return;
 
     auto* cmdBuf = ctx.cmdBuf;
@@ -301,7 +299,6 @@ void LightStage::execute(const RenderStageContext& ctx)
     PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad)->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
-    _lastExecuteCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 }
 
 void LightStage::renderGUI()
@@ -326,8 +323,9 @@ void LightStage::renderGUI()
 
     if (ImGui::TreeNode("Performance"))
     {
-        ImGui::Text("Light prepare CPU: %.3f ms", _lastPrepareCpuMs);
-        ImGui::Text("Light execute CPU: %.3f ms", _lastExecuteCpuMs);
+        auto& perf = PerfState::Get();
+        ImGui::Text("Light prepare CPU: %.3f ms", perf.getLastValue(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs()));
+        ImGui::Text("Light execute CPU: %.3f ms", perf.getLastValue(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs()));
         ImGui::Text("Descriptor writes: gbuffer=%u shadow=%u", _lastGBufferDescriptorWriteCount, _lastShadowDescriptorWriteCount);
         ImGui::TreePop();
     }

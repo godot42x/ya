@@ -55,8 +55,6 @@ struct LightStage : public IRenderStage
     IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
     bool _bGBufferDescriptorsInitialized = false;
     bool _bShadowDescriptorsInitialized = false;
-    float _lastPrepareCpuMs = 0.0f;
-    float _lastExecuteCpuMs = 0.0f;
     uint32_t _lastGBufferDescriptorWriteCount = 0;
     uint32_t _lastShadowDescriptorWriteCount = 0;
 

@@ -1,5 +1,7 @@
 #include "DeferredRenderPipeline.h"
 
+#include "Core/Debug/PerfKeys.h"
+#include "Core/Debug/PerfState.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Runtime/App/App.h"
@@ -411,7 +413,6 @@ void DeferredRenderPipeline::shutdown()
 
 void DeferredRenderPipeline::tick(const TickDesc& desc)
 {
-    const auto tickStart = std::chrono::steady_clock::now();
     YA_CORE_ASSERT(desc.cmdBuf, "DeferredRenderPipeline requires a command buffer");
     desc.cmdBuf->debugBeginLabel("Deferred Pipeline");
 
@@ -424,6 +425,8 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         desc.cmdBuf->debugEndLabel();
         return;
     }
+
+    YA_PERF_SCOPE(perf::sample::deferredTick(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     _lastPointLightCount = desc.frameData->numPointLights;
     _lastDrawCount       = static_cast<uint32_t>(desc.frameData->totalDrawCount());
@@ -488,29 +491,30 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     if (_shadowStage && _bEnableShadowMapping) {
         _shadowStage->setPointLightShadowEnabled(_bEnablePointLightShadow);
         _shadowStage->setMaxPointLightShadowCount(shadowedPointLightBudget);
-        const auto shadowStart = std::chrono::steady_clock::now();
-        _shadowStage->prepare(stageCtx);
+        {
+            YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
+            _shadowStage->prepare(stageCtx);
 
-        RenderingInfo shadowMapRI{
-            .label           = "Deferred Shadow Map Pass",
-            .renderArea      = Rect2D{.pos = {0, 0}, .extent = _shadowDepthRT->getExtent().toVec2()},
-            .depthClearValue = ClearValue(1.0f, 0),
-            .renderTarget    = _shadowDepthRT.get(),
-        };
-        desc.cmdBuf->beginRendering(shadowMapRI);
-        _shadowStage->execute(stageCtx);
-        desc.cmdBuf->endRendering(shadowMapRI);
-        _lastShadowCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - shadowStart).count());
+            RenderingInfo shadowMapRI{
+                .label           = "Deferred Shadow Map Pass",
+                .renderArea      = Rect2D{.pos = {0, 0}, .extent = _shadowDepthRT->getExtent().toVec2()},
+                .depthClearValue = ClearValue(1.0f, 0),
+                .renderTarget    = _shadowDepthRT.get(),
+            };
+            desc.cmdBuf->beginRendering(shadowMapRI);
+            _shadowStage->execute(stageCtx);
+            desc.cmdBuf->endRendering(shadowMapRI);
+        }
     }
     else {
-        _lastShadowCpuMs = 0.0f;
+        PerfState::Get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
     }
 
     // ── GBuffer Pass ─────────────────────────────────────────────
-    const auto gbufferStart = std::chrono::steady_clock::now();
-    _gBufferStage->prepare(stageCtx);
-
     {
+        YA_PERF_SCOPE(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _gBufferStage->prepare(stageCtx);
+
         RenderingInfo gBufferRI{
             .label            = "GBuffer Pass",
             .renderArea       = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
@@ -539,27 +543,28 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
         desc.cmdBuf->endRendering(gBufferRI);
     }
-    _lastGBufferCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gbufferStart).count());
 
-    const auto depthCopyStart = std::chrono::steady_clock::now();
-    copyGBufferDepthToViewport(desc.cmdBuf);
-    _lastDepthCopyCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - depthCopyStart).count());
+    {
+        YA_PERF_SCOPE(perf::sample::deferredDepthCopy(), perf::metric::cpuTimeMs(), perf::domain::render());
+        copyGBufferDepthToViewport(desc.cmdBuf);
+    }
 
     // ── Viewport Pass (Light + Skybox + Overlay) ─────────────────
     beginViewportRendering(desc);
 
-    const auto lightStart = std::chrono::steady_clock::now();
-    _lightStage->prepare(stageCtx);
-    _lightStage->execute(stageCtx);
-    _lastLightCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - lightStart).count());
+    {
+        YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _lightStage->prepare(stageCtx);
+        _lightStage->execute(stageCtx);
+    }
 
-    const auto overlayStart = std::chrono::steady_clock::now();
-    _overlayStage->prepare(stageCtx);
-    _overlayStage->execute(stageCtx);
-    _lastOverlayCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - overlayStart).count());
+    {
+        YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _overlayStage->prepare(stageCtx);
+        _overlayStage->execute(stageCtx);
+    }
 
     // Viewport pass left open for App-level 2D rendering
-    _lastTickCpuMs = static_cast<float>(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tickStart).count());
     desc.cmdBuf->debugEndLabel();
 }
 
@@ -701,7 +706,10 @@ void DeferredRenderPipeline::renderGUI()
     if (!ImGui::TreeNode("Deferred Pipeline")) return;
 
     ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
-    ImGui::Checkbox("Enable Perf Stats", &_bEnablePerfStats);
+    bool bEnablePerfStats = YA_PERF_IS_ENABLED();
+    if (ImGui::Checkbox("Enable Perf Stats", &bEnablePerfStats)) {
+        YA_PERF_SET_ENABLED(bEnablePerfStats);
+    }
     ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
 
     bool bEnableShadowMapping     = _bShadowSettingsChangePending ? _pendingEnableShadowMapping : _bEnableShadowMapping;
@@ -720,15 +728,17 @@ void DeferredRenderPipeline::renderGUI()
             static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS))));
     }
 
-    if (_bEnablePerfStats) {
+    if (YA_PERF_IS_ENABLED()) {
         if (ImGui::TreeNode("Perf"))
         {
-            ImGui::Text("CPU tick: %.3f ms", _lastTickCpuMs);
-            ImGui::Text("CPU shadow: %.3f ms", _lastShadowCpuMs);
-            ImGui::Text("CPU gbuffer: %.3f ms", _lastGBufferCpuMs);
-            ImGui::Text("CPU depth copy: %.3f ms", _lastDepthCopyCpuMs);
-            ImGui::Text("CPU light: %.3f ms", _lastLightCpuMs);
-            ImGui::Text("CPU overlay: %.3f ms", _lastOverlayCpuMs);
+            auto& perf = PerfState::Get();
+            ImGui::Text("CPU tick: %.3f ms", perf.getLastValue(perf::sample::deferredTick(), perf::metric::cpuTimeMs()));
+            ImGui::Text("CPU shadow: %.3f ms", perf.getLastValue(perf::sample::deferredShadow(), perf::metric::cpuTimeMs()));
+            ImGui::Text("CPU gbuffer: %.3f ms", perf.getLastValue(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs()));
+            ImGui::Text("CPU depth copy: %.3f ms", perf.getLastValue(perf::sample::deferredDepthCopy(), perf::metric::cpuTimeMs()));
+            ImGui::Text("CPU light: %.3f ms", perf.getLastValue(perf::sample::deferredLight(), perf::metric::cpuTimeMs()));
+            ImGui::Text("CPU overlay: %.3f ms", perf.getLastValue(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs()));
+            ImGui::Text("GPU frame: %.3f ms", perf.getLastValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs()));
             ImGui::Text("Draw items: %u", _lastDrawCount);
             ImGui::Text("Point lights: %u", _lastPointLightCount);
             ImGui::TreePop();

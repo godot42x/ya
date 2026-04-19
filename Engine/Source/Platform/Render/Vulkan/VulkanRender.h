@@ -94,6 +94,7 @@ struct VulkanRender : public IRender
 
 
     VkPhysicalDevice                 m_PhysicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDeviceProperties       _physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties _physicalMemoryProperties;
 
     std::vector<PhysicalDeviceCandidate> _deviceCandidates;
@@ -134,6 +135,7 @@ struct VulkanRender : public IRender
 
     PFN_vkQueueBeginDebugUtilsLabelEXT _pfnQueueBeginDebugUtilsLabelEXT = nullptr;
     PFN_vkQueueEndDebugUtilsLabelEXT   _pfnQueueEndDebugUtilsLabelEXT   = nullptr;
+    PFN_vkCmdResetQueryPool            _pfnCmdResetQueryPool            = nullptr;
 
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
@@ -147,6 +149,11 @@ struct VulkanRender : public IRender
     std::vector<VkSemaphore>  frameImageAvailableSemaphores;  // 每个飞行帧的图像可用信号量
     std::vector<VkFence>      frameFences;                    // 每个飞行帧的fence
     std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 渲染完成信号量（每张swapchain image）
+    VkQueryPool               _frameGpuTimestampQueryPool     = VK_NULL_HANDLE;
+    float                     _gpuTimestampPeriodNs           = 0.0f;
+    float                     _lastCompletedFrameGpuTimeMs    = 0.0f;
+    bool                      _bFrameGpuTimingSupported       = false;
+    std::vector<uint8_t>      _frameGpuTimingValid;
 
 
   public:
@@ -237,7 +244,11 @@ struct VulkanRender : public IRender
     void*    getCurrentImageAvailableSemaphore() override { return frameImageAvailableSemaphores[currentFrameIdx]; }
     void*    getCurrentFrameFence() override { return frameFences[currentFrameIdx]; }
     uint32_t getCurrentFrameIndex() const override { return currentFrameIdx; }
+    float    getLastCompletedFrameGpuTimeMs() const override { return _lastCompletedFrameGpuTimeMs; }
     void*    getRenderFinishedSemaphore(uint32_t imageIndex) override { return imageSubmittedSignalSemaphores[imageIndex]; }
+
+    void beginFrameGpuTiming(ICommandBuffer* commandBuffer) override;
+    void endFrameGpuTiming(ICommandBuffer* commandBuffer) override;
 
     void* createSemaphore(const char* debugName = nullptr) override;
     void  destroySemaphore(void* semaphore) override;
@@ -299,6 +310,7 @@ struct VulkanRender : public IRender
         }
         createPipelineCache();
         createSyncResources(static_cast<int32_t>(_swapChain->getImageCount()));
+        createFrameGpuTimingResources();
         return true;
     }
 
@@ -312,6 +324,7 @@ struct VulkanRender : public IRender
         }
 
         releaseSyncResources();
+    releaseFrameGpuTimingResources();
         VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
         if (_swapChain)
@@ -472,6 +485,9 @@ struct VulkanRender : public IRender
 
     void createSyncResources(int32_t swapchainImageSize);
     void releaseSyncResources();
+    void createFrameGpuTimingResources();
+    void releaseFrameGpuTimingResources();
+    void updateCompletedFrameGpuTiming();
 };
 
 

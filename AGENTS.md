@@ -112,6 +112,8 @@ Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_
 
 Member variables declared **before** methods. Prioritize data organization over method grouping.
 
+Small, stable wrapper functions should prefer header inline definitions. Keep `.cpp` implementations for heavier logic, hidden dependencies, or code that should not be duplicated across translation units.
+
 ### Memory
 
 - `stdptr<T>` = `std::shared_ptr<T>`, `makeShared<T>(...)` = `std::make_shared<T>(...)`
