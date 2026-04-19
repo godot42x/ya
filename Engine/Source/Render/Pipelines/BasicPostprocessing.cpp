@@ -1,73 +1,75 @@
 #include "BasicPostprocessing.h"
+
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Render.h"
 #include "Resource/TextureLibrary.h"
-#include "utility.cc/ranges.h"
-#include <algorithm>
-
 
 #include "imgui.h"
 
+#include <algorithm>
+
 namespace ya
-
 {
 
-void BasicPostprocessing::onInitImpl(const InitParams& initParams)
+namespace
 {
-    auto render = getRender();
 
+constexpr uint32_t POSTPROCESS_FLAG_INVERSION    = 1u << 0;
+constexpr uint32_t POSTPROCESS_FLAG_TONEMAPPING  = 1u << 1;
+constexpr uint32_t POSTPROCESS_FLAG_GAMMA        = 1u << 2;
+constexpr uint32_t POSTPROCESS_FLAG_RANDOM_GRAIN = 1u << 3;
 
+constexpr const char* kGrayscaleModeLabels[] = {
+    "None",
+    "Average",
+    "Weighted",
+};
 
-    // MARK: layout
+constexpr const char* kKernelModeLabels[] = {
+    "None",
+    "Sharpen",
+    "Blur",
+    "Edge Detection",
+};
 
-    auto DSLs        = IDescriptorSetLayout::create(render, _pipelineLayoutDesc.descriptorSetLayouts);
-    _dslInputTexture = DSLs[0];
+constexpr const char* kToneMappingCurveLabels[] = {
+    "ACES",
+    "Uncharted2",
+};
+
+} // namespace
+
+void BasicPostprocessing::init(const InitDesc& initDesc)
+{
+    _render   = initDesc.render;
+    _initDesc = initDesc;
+
+    auto dsls        = IDescriptorSetLayout::create(_render, _pipelineLayoutDesc.descriptorSetLayouts);
+    _dslInputTexture = dsls[0];
 
     _pipelineLayout = IPipelineLayout::create(
-        render,
+        _render,
         _pipelineLayoutDesc.label,
         _pipelineLayoutDesc.pushConstants,
-        DSLs);
+        dsls);
 
-    auto _pipelineDesc = GraphicsPipelineCreateInfo{
-        .renderPass            = initParams.renderPass,
-        .pipelineRenderingInfo = initParams.pipelineRenderingInfo,
+    auto pipelineDesc = GraphicsPipelineCreateInfo{
+        .renderPass            = initDesc.renderPass,
+        .pipelineRenderingInfo = initDesc.pipelineRenderingInfo,
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
-                       .shaderName        = "PostProcessing/Basic.glsl",
-                       .vertexBufferDescs = {
-                VertexBufferDescription{
-                               .slot  = 0,
-                               .pitch = sizeof(BasicPostprocessing::PostProcessingVertex),
-                },
-            },
-                       .vertexAttributes = {
-                // (location=0) in vec3 aPos,
-                VertexAttribute{
-                               .bufferSlot = 0,
-                               .location   = 0,
-                               .format     = EVertexAttributeFormat::Float3,
-                               .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, position),
-                },
-                //  texcoord
-                VertexAttribute{
-                               .bufferSlot = 0, // same buffer slot
-                               .location   = 1,
-                               .format     = EVertexAttributeFormat::Float2,
-                               .offset     = offsetof(BasicPostprocessing::PostProcessingVertex, texCoord0),
-                },
-            },
+            .shaderName = "Misc/BasicPostprocessing.slang",
         },
-        // define what state need to dynamically modified in render pass execution
-        .dynamicFeatures = {
+        .dynamicFeatures    = {
             EPipelineDynamicFeature::Viewport,
             EPipelineDynamicFeature::Scissor,
         },
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = RasterizationState{
-            .polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back,
-            .frontFace = EFrontFaceType::CounterClockWise, // GL
+            .polygonMode = EPolygonMode::Fill,
+            .cullMode    = ECullMode::None,
+            .frontFace   = EFrontFaceType::CounterClockWise,
         },
         .depthStencilState = DepthStencilState{
             .bDepthTestEnable       = false,
@@ -89,14 +91,11 @@ void BasicPostprocessing::onInitImpl(const InitParams& initParams)
             .scissors  = {Scissor::defaults()},
         },
     };
-    _pipeline = IGraphicsPipeline::create(render);
-    _pipeline->recreate(_pipelineDesc);
+    _pipeline = IGraphicsPipeline::create(_render);
+    _pipeline->recreate(pipelineDesc);
 
-    // MARK: sampler
-
-    // MARK: descriptor pool
-    DescriptorPoolCreateInfo poolCI{
-        .label     = "InversionPool",
+    _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
+        .label     = "BasicPostprocessingPool",
         .maxSets   = 1,
         .poolSizes = {
             DescriptorPoolSize{
@@ -104,37 +103,77 @@ void BasicPostprocessing::onInitImpl(const InitParams& initParams)
                 .descriptorCount = 1,
             },
         },
-    };
-    _descriptorPool = IDescriptorPool::create(render, poolCI);
+    });
 
-    // MARK: allocate descriptor set
     std::vector<DescriptorSetHandle> descriptorSets;
-
-    bool ok = _descriptorPool->allocateDescriptorSets(_dslInputTexture, 1, descriptorSets);
+    const bool ok = _descriptorPool->allocateDescriptorSets(_dslInputTexture, 1, descriptorSets);
     YA_CORE_ASSERT(ok, "Failed to allocate descriptor set");
     _descriptorSet = descriptorSets[0];
 }
 
-void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /*ctx*/)
+void BasicPostprocessing::shutdown()
 {
-    if (!_inputImageView || _renderExtent.width == 0 || _renderExtent.height == 0) {
+    _descriptorPool.reset();
+    _dslInputTexture.reset();
+    _pipeline.reset();
+    _pipelineLayout.reset();
+    _render = nullptr;
+    _currentInputImageViewHandle = nullptr;
+}
+
+void BasicPostprocessing::beginFrame()
+{
+    if (_pipeline) {
+        _pipeline->beginFrame();
+    }
+}
+
+void BasicPostprocessing::rebuildPushConstants(const PostProcessingState& state, bool bOutputIsSRGB)
+{
+    _pushConstants.flags = 0;
+    if (state.bEnableInversion) {
+        _pushConstants.flags |= POSTPROCESS_FLAG_INVERSION;
+    }
+    if (state.bEnableToneMapping) {
+        _pushConstants.flags |= POSTPROCESS_FLAG_TONEMAPPING;
+    }
+    if (state.bEnableGammaCorrection && !bOutputIsSRGB) {
+        _pushConstants.flags |= POSTPROCESS_FLAG_GAMMA;
+    }
+    if (state.bEnableRandomGrain) {
+        _pushConstants.flags |= POSTPROCESS_FLAG_RANDOM_GRAIN;
+    }
+
+    _pushConstants.grayscaleMode    = static_cast<uint32_t>(state.grayscaleMode);
+    _pushConstants.kernelMode       = static_cast<uint32_t>(state.kernelMode);
+    _pushConstants.toneMappingCurve = static_cast<uint32_t>(state.toneMappingCurve);
+    _pushConstants.params0          = glm::vec4(
+        std::max(state.gamma, 0.001f),
+        std::max(state.kernelTexelOffset, 0.000001f),
+        std::max(state.randomGrainStrength, 0.0f),
+        0.0f);
+}
+
+void BasicPostprocessing::render(const RenderDesc& desc)
+{
+    if (!desc.cmdBuf || !desc.inputImageView || !desc.state) {
+        return;
+    }
+    if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
         return;
     }
 
-    auto render = getRender();
-
-    auto imageViewHandle = _inputImageView->getHandle();
-    // Update descriptor set only if input image view changed
+    const auto imageViewHandle = desc.inputImageView->getHandle();
     if (_currentInputImageViewHandle != imageViewHandle) {
         _currentInputImageViewHandle = imageViewHandle;
 
         static auto sampler = TextureLibrary::get().getDefaultSampler();
+        DescriptorImageInfo imageInfo(
+            _currentInputImageViewHandle,
+            sampler->getHandle(),
+            EImageLayout::ShaderReadOnlyOptimal);
 
-        DescriptorImageInfo imageInfo(_currentInputImageViewHandle,
-                                      sampler->getHandle(),
-                                      EImageLayout::ShaderReadOnlyOptimal);
-
-        render->getDescriptorHelper()->updateDescriptorSets(
+        _render->getDescriptorHelper()->updateDescriptorSets(
             {
                 IDescriptorSetHelper::genImageWrite(
                     _descriptorSet,
@@ -146,54 +185,69 @@ void BasicPostprocessing::onRender(ICommandBuffer* cmdBuf, const FrameContext* /
             {});
     }
 
-    cmdBuf->bindPipeline(_pipeline.get());
-    const auto& extent = _renderExtent;
-    cmdBuf->setViewport(0, 0, (float)extent.width, (float)extent.height);
-    cmdBuf->setScissor(0, 0, extent.width, extent.height);
+    rebuildPushConstants(*desc.state, desc.bOutputIsSRGB);
 
-    // Bind descriptor set
-    cmdBuf->bindDescriptorSets(_pipelineLayout.get(),
-                               0,
-                               {_descriptorSet},
-                               {});
-
-    // Push constants - two separate ranges
-    const auto& pcs = _pipelineLayoutDesc.pushConstants;
-
-    pc.effect      = static_cast<uint32_t>(effect);
-    pc.gamma       = _bOutputIsSRGB ? 1.0f : std::max(pc.gamma, 0.001f);
-    pc.floatParams = floatParams;
-    cmdBuf->pushConstants(_pipelineLayout.get(),
-                          pcs[0].stageFlags,
-                          pcs[0].offset,
-                          pcs[0].size,
-                          &pc);
-
-    // FragPushConstant fragPC{
-    //     .floatParams = payload.floatParams,
-    // };
-    // cmdBuf->pushConstants(_pipelineLayout.get(),
-    //                       pcs[1].stageFlags,
-    //                       pcs[1].offset,
-    //                       pcs[1].size,
-    //                       &fragPC);
-
-    cmdBuf->draw(6, 1, 0, 0);
+    desc.cmdBuf->bindPipeline(_pipeline.get());
+    desc.cmdBuf->setViewport(0, 0, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
+    desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+    desc.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet}, {});
+    desc.cmdBuf->pushConstants(
+        _pipelineLayout.get(),
+        _pipelineLayoutDesc.pushConstants[0].stageFlags,
+        _pipelineLayoutDesc.pushConstants[0].offset,
+        _pipelineLayoutDesc.pushConstants[0].size,
+        &_pushConstants);
+    desc.cmdBuf->draw(3, 1, 0, 0);
 }
 
-void BasicPostprocessing::onRenderGUI()
+void BasicPostprocessing::renderGUI(PostProcessingState& state)
 {
-    Super::onRenderGUI();
-    ImGui::Combo("Effect",
-                 reinterpret_cast<int*>(&effect),
-                 "None\0Inversion\0Grayscale\0Weighted Grayscale\0"
-                 "Kernel_Sharpe\0Kernel_Blur\0Kernel_Edge-Detection\0Tone Mapping\0"
-                 "Random\0");
-    ImGui::BeginDisabled(_bOutputIsSRGB);
-    ImGui::DragFloat("Gamma", &pc.gamma, 0.01f, 0.1f, 10.0f);
+    ImGui::SeparatorText("Color Transform");
+    ImGui::Checkbox("Inversion", &state.bEnableInversion);
+
+    int grayscaleMode = static_cast<int>(state.grayscaleMode);
+    if (ImGui::Combo("Grayscale", &grayscaleMode, kGrayscaleModeLabels, IM_ARRAYSIZE(kGrayscaleModeLabels))) {
+        state.grayscaleMode = static_cast<PostProcessingState::EGrayscaleMode>(grayscaleMode);
+    }
+
+    ImGui::SeparatorText("Spatial Filter");
+    int kernelMode = static_cast<int>(state.kernelMode);
+    if (ImGui::Combo("Kernel", &kernelMode, kKernelModeLabels, IM_ARRAYSIZE(kKernelModeLabels))) {
+        state.kernelMode = static_cast<PostProcessingState::EKernelMode>(kernelMode);
+    }
+    ImGui::BeginDisabled(state.kernelMode == PostProcessingState::EKernelMode::None);
+    ImGui::DragFloat("Kernel Texel Offset", &state.kernelTexelOffset, 0.0001f, 0.0001f, 0.02f, "%.5f");
     ImGui::EndDisabled();
-    for (const auto& [i, p] : ut::enumerate(floatParams)) {
-        ImGui::DragFloat4(std::format("{}", i).c_str(), &p.x);
+
+    ImGui::SeparatorText("Tone Mapping");
+    ImGui::Checkbox("Enable ToneMapping", &state.bEnableToneMapping);
+    ImGui::BeginDisabled(!state.bEnableToneMapping);
+    int toneMappingCurve = static_cast<int>(state.toneMappingCurve);
+    if (ImGui::Combo("ToneMapping Curve", &toneMappingCurve, kToneMappingCurveLabels, IM_ARRAYSIZE(kToneMappingCurveLabels))) {
+        state.toneMappingCurve = static_cast<PostProcessingState::EToneMappingCurve>(toneMappingCurve);
+    }
+    ImGui::EndDisabled();
+
+    ImGui::SeparatorText("Output");
+    ImGui::Checkbox("Gamma Correction", &state.bEnableGammaCorrection);
+    ImGui::BeginDisabled(!state.bEnableGammaCorrection);
+    ImGui::DragFloat("Gamma", &state.gamma, 0.01f, 0.1f, 4.0f);
+    ImGui::EndDisabled();
+
+    ImGui::Checkbox("Random Grain", &state.bEnableRandomGrain);
+    ImGui::BeginDisabled(!state.bEnableRandomGrain);
+    ImGui::DragFloat("Grain Strength", &state.randomGrainStrength, 0.001f, 0.0f, 0.25f, "%.3f");
+    ImGui::EndDisabled();
+
+    if (_pipeline) {
+        _pipeline->renderGUI();
+    }
+}
+
+void BasicPostprocessing::reloadShader()
+{
+    if (_pipeline) {
+        _pipeline->markDirty();
     }
 }
 

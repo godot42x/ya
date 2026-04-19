@@ -723,15 +723,7 @@ void App::onRenderGUI(float dt)
         imcClearValues();
         imcFpsControl(*FPSControl::get());
 
-        static bool bDarkMode = true;
-        if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
-            if (bDarkMode) {
-                ImGui::StyleColorsDark();
-            }
-            else {
-                ImGui::StyleColorsLight();
-            }
-        }
+
 
         if (ImGui::TreeNode("ImGUI")) {
             ImGuiManager::get().onRenderGUI();

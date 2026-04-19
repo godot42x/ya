@@ -172,7 +172,8 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
         .PipelineInfoForViewports = {},
         .UseDynamicRendering      = useDynamicRendering,
         .Allocator                = vkRender->getAllocator(),
-        .CheckVkResultFn          = [](VkResult err) {
+        .CheckVkResultFn          = [](VkResult err)
+        {
             if (err != VK_SUCCESS) {
                 YA_CORE_ERROR("Vulkan error in ImGui: {} -> {}", static_cast<int>(err), std::to_string(err));
             }
@@ -506,7 +507,8 @@ ComponentMapping BuildRGBAChannelMaskMapping(const std::array<bool, 4>& channelE
     const bool bB = channelEnabled[2];
     const bool bA = channelEnabled[3];
 
-    auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T {
+    auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T
+    {
         if (bR) return EComponentSwizzle::R;
         if (bG) return EComponentSwizzle::G;
         if (bB) return EComponentSwizzle::B;
@@ -629,6 +631,15 @@ void ImGuiManager::onRenderGUI()
     auto& io    = ImGui::GetIO();
     auto& style = ImGui::GetStyle();
 
+    static bool bDarkMode = true;
+    if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
+        if (bDarkMode) {
+            ImGui::StyleColorsDark();
+        }
+        else {
+            ImGui::StyleColorsLight();
+        }
+    }
 
     ShowFontSelector("Fonts##Selector");
     if (DragFloat("FontSizeBase", &style.FontSizeBase, 0.20f, 5.0f, 100.0f, "%.0f"))

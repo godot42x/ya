@@ -8,6 +8,7 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
+#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
@@ -74,6 +75,55 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     initSimple(desc);
     initSkybox(desc);
     initDebug(desc);
+}
+
+void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
+{
+    if (!viewportRT) {
+        return;
+    }
+
+    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
+    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
+    if (colorDescs.empty()) {
+        return;
+    }
+
+    const auto colorFormat = colorDescs.front().format;
+    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+
+    if (_phongPipeline) {
+        _phongPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        _phongPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _phongPipeline->updateDesc(_phongPipelineCI);
+    }
+
+    if (_unlitPipeline) {
+        auto ci                                         = _unlitPipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _unlitPipeline->updateDesc(std::move(ci));
+    }
+
+    if (_simplePipeline) {
+        auto ci                                         = _simplePipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _simplePipeline->updateDesc(std::move(ci));
+    }
+
+    if (_skyboxPipeline) {
+        auto ci                                         = _skyboxPipeline->getDesc();
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _skyboxPipeline->updateDesc(std::move(ci));
+    }
+
+    if (_debugPipeline) {
+        _debugPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _debugPipeline->updateDesc(_debugPipelineCI);
+    }
 }
 
 // ── Phong ───────────────────────────────────────────────────────────

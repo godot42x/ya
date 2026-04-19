@@ -42,7 +42,6 @@ struct LightStage : public IRenderStage
     bool                         _bEnablePBRSpecularIBL = true;
     bool                         _bEnableShadowMapping  = true;
     bool                         _bEnablePointLightShadow = true;
-    uint32_t                     _maxPointLightShadowCount = 1;
 
     // GBuffer texture DS + pool (updated each frame from GBuffer RT)
     stdptr<IDescriptorPool> _dsp;
@@ -77,10 +76,8 @@ struct LightStage : public IRenderStage
     void setShadowResources(IImageView* directionalDepthIV,
                             const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
                             Sampler* shadowSampler);
+    void setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
-    [[nodiscard]] bool isShadowMappingEnabled() const { return _bEnableShadowMapping; }
-    [[nodiscard]] bool isPointLightShadowEnabled() const { return _bEnablePointLightShadow; }
-    [[nodiscard]] uint32_t getMaxPointLightShadowCount() const { return _maxPointLightShadowCount; }
 
     void init(IRender* render) override;
     void destroy() override;

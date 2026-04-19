@@ -1,131 +1,18 @@
 #include "DeferredRenderPipeline.h"
 
-#include "ImGuiHelper.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
-#include "Resource/TextureLibrary.h"
 #include "Runtime/App/App.h"
-#include "Runtime/App/ForwardRender/ShadowStage.h"
-#include "Scene/SceneManager.h"
 
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
-#include <string_view>
 
 namespace ya
 {
 
 namespace
 {
-
-struct ShadowDepthFormatOption
-{
-    EFormat::T       format;
-    std::string_view label;
-};
-
-struct RenderTargetFormatOption
-{
-    EFormat::T       format;
-    std::string_view label;
-};
-
-constexpr std::array<ShadowDepthFormatOption, 3> kShadowDepthFormats = {{
-    {EFormat::D16_UNORM, "D16_UNORM"},
-    {EFormat::D24_UNORM_S8_UINT, "D24_UNORM_S8_UINT"},
-    {EFormat::D32_SFLOAT, "D32_SFLOAT"},
-}};
-
-constexpr std::array<RenderTargetFormatOption, 5> kColorFormats = {{
-    {EFormat::R8_UNORM, "R8_UNORM"},
-    {EFormat::R8G8_UNORM, "R8G8_UNORM"},
-    {EFormat::R8G8B8A8_UNORM, "R8G8B8A8_UNORM"},
-    {EFormat::R16G16B16A16_SFLOAT, "R16G16B16A16_SFLOAT"},
-    {EFormat::R32_SFLOAT, "R32_SFLOAT"},
-}};
-
-struct RenderTargetEditorEntry
-{
-    const char*    label;
-    IRenderTarget* rt;
-};
-
-bool isDepthAttachmentSelection(const IRenderTarget* rt, int attachmentIndex)
-{
-    if (!rt) {
-        return false;
-    }
-
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    return rt->getDepthAttachmentDesc().has_value() && attachmentIndex == colorCount;
-}
-
-bool containsInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.empty()) {
-        return true;
-    }
-
-    auto toLower = [](unsigned char c)
-    {
-        return static_cast<char>(std::tolower(c));
-    };
-
-    std::string haystackLower(haystack.begin(), haystack.end());
-    std::string needleLower(needle.begin(), needle.end());
-    std::transform(haystackLower.begin(), haystackLower.end(), haystackLower.begin(), toLower);
-    std::transform(needleLower.begin(), needleLower.end(), needleLower.begin(), toLower);
-    return haystackLower.find(needleLower) != std::string::npos;
-}
-
-const char* formatLabel(EFormat::T format)
-{
-    switch (format) {
-    case EFormat::D16_UNORM:
-        return "D16_UNORM";
-    case EFormat::D24_UNORM_S8_UINT:
-        return "D24_UNORM_S8_UINT";
-    case EFormat::D32_SFLOAT:
-        return "D32_SFLOAT";
-    case EFormat::R8_UNORM:
-        return "R8_UNORM";
-    case EFormat::R8G8_UNORM:
-        return "R8G8_UNORM";
-    case EFormat::R8G8B8A8_UNORM:
-        return "R8G8B8A8_UNORM";
-    case EFormat::R16G16B16A16_SFLOAT:
-        return "R16G16B16A16_SFLOAT";
-    default:
-        return "Unknown";
-    }
-}
-
-IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
-{
-    if (!rt) {
-        return nullptr;
-    }
-
-    auto* fb = rt->getCurFrameBuffer();
-    if (!fb) {
-        return nullptr;
-    }
-
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    if (attachmentIndex >= 0 && attachmentIndex < colorCount) {
-        auto* texture = fb->getColorTexture(static_cast<uint32_t>(attachmentIndex));
-        return texture ? texture->getImageView() : nullptr;
-    }
-
-    if (attachmentIndex == colorCount) {
-        auto* texture = fb->getDepthTexture();
-        return texture ? texture->getImageView() : nullptr;
-    }
-
-    return nullptr;
-}
 
 } // namespace
 
@@ -224,6 +111,10 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
 
 void DeferredRenderPipeline::initShadowResources()
 {
+    if (!_render || _shadowDepthRT) {
+        return;
+    }
+
     _shadowDepthRT = createRenderTarget(RenderTargetCreateInfo{
         .label            = "Deferred Shadow Map RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
@@ -259,6 +150,117 @@ void DeferredRenderPipeline::initShadowResources()
         .addressModeW = ESamplerAddressMode::ClampToBorder,
         .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
     });
+}
+
+void DeferredRenderPipeline::destroyShadowResources()
+{
+    if (_shadowStage) {
+        _shadowStage->destroy();
+        _shadowStage.reset();
+    }
+
+    _shadowDepthRT.reset();
+    _shadowDirectionalDepthIV.reset();
+    for (auto& imageView : _shadowPointCubeIVs) {
+        imageView.reset();
+    }
+    for (auto& faceViews : _shadowPointFaceIVs) {
+        for (auto& imageView : faceViews) {
+            imageView.reset();
+        }
+    }
+    _shadowSampler.reset();
+}
+
+void DeferredRenderPipeline::syncShadowSettings()
+{
+    if (_lightStage) {
+        _lightStage->setShadowSettings(_bEnableShadowMapping, _bEnablePointLightShadow);
+
+        std::array<IImageView*, MAX_POINT_LIGHTS> shadowPointCubeViews{};
+        if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler) {
+            for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+                shadowPointCubeViews[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
+            }
+            _lightStage->setShadowResources(_shadowDirectionalDepthIV.get(), shadowPointCubeViews, _shadowSampler.get());
+        }
+        else {
+            _lightStage->setShadowResources(nullptr, shadowPointCubeViews, nullptr);
+        }
+    }
+
+    if (_shadowStage) {
+        _shadowStage->setPointLightShadowEnabled(_bEnablePointLightShadow);
+        _shadowStage->setMaxPointLightShadowCount(_bEnablePointLightShadow ? _maxPointLightShadowCount : 0);
+    }
+
+    if (_gBufferStage) {
+        _gBufferStage->setMaxShadowedPointLights(
+            (_bEnableShadowMapping && _bEnablePointLightShadow) ? _maxPointLightShadowCount : 0);
+    }
+}
+
+void DeferredRenderPipeline::queueShadowSettingsChange(bool     bEnableShadowMapping,
+                                                       bool     bEnablePointLightShadow,
+                                                       uint32_t maxPointLightShadowCount)
+{
+    _pendingEnableShadowMapping      = bEnableShadowMapping;
+    _pendingEnablePointLightShadow   = bEnablePointLightShadow;
+    _pendingMaxPointLightShadowCount = maxPointLightShadowCount;
+
+    if (_bShadowSettingsChangePending) {
+        return;
+    }
+
+    _bShadowSettingsChangePending = true;
+    App::get()->taskManager.registerFrameTask(
+        [this]()
+        {
+            _bShadowSettingsChangePending = false;
+
+            const bool bToggleChanged = _bEnableShadowMapping != _pendingEnableShadowMapping ||
+                                        _bEnablePointLightShadow != _pendingEnablePointLightShadow;
+
+            _maxPointLightShadowCount = _pendingMaxPointLightShadowCount;
+            if (bToggleChanged) {
+                applyShadowSettings(_pendingEnableShadowMapping, _pendingEnablePointLightShadow);
+                return;
+            }
+
+            syncShadowSettings();
+        });
+}
+
+void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow)
+{
+    const bool bShadowMappingChanged = _bEnableShadowMapping != bEnableShadowMapping;
+    const bool bPointShadowChanged   = _bEnablePointLightShadow != bEnablePointLightShadow;
+    if (!bShadowMappingChanged && !bPointShadowChanged) {
+        return;
+    }
+
+    if (_render) {
+        _render->waitIdle();
+    }
+
+    _bEnableShadowMapping    = bEnableShadowMapping;
+    _bEnablePointLightShadow = bEnablePointLightShadow;
+
+    if (_bEnableShadowMapping) {
+        if (!_shadowDepthRT) {
+            initShadowResources();
+        }
+        if (!_shadowStage && _shadowDepthRT) {
+            _shadowStage = ya::makeShared<ShadowStage>();
+            _shadowStage->setRenderTarget(_shadowDepthRT);
+            _shadowStage->init(_render);
+        }
+    }
+    else {
+        destroyShadowResources();
+    }
+
+    syncShadowSettings();
 }
 
 void DeferredRenderPipeline::rebuildShadowViews()
@@ -326,8 +328,12 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 {
     shutdown();
 
-    _render            = desc.render;
-    _bViewportPassOpen = false;
+    _render                          = desc.render;
+    _bViewportPassOpen               = false;
+    _bShadowSettingsChangePending    = false;
+    _pendingEnableShadowMapping      = _bEnableShadowMapping;
+    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
+    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
     Extent2D extent{
@@ -336,11 +342,13 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
-    initShadowResources();
+    if (_bEnableShadowMapping) {
+        initShadowResources();
 
-    _shadowStage = ya::makeShared<ShadowStage>();
-    _shadowStage->setRenderTarget(_shadowDepthRT);
-    _shadowStage->init(_render);
+        _shadowStage = ya::makeShared<ShadowStage>();
+        _shadowStage->setRenderTarget(_shadowDepthRT);
+        _shadowStage->init(_render);
+    }
 
     // GBufferStage — owns frame/light UBOs, pipelines, material pools
     _gBufferStage = ya::makeShared<GBufferStage>();
@@ -349,19 +357,15 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     // LightStage — borrows frame+light DS from GBufferStage, reads GBuffer textures
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
-    std::array<IImageView*, MAX_POINT_LIGHTS> shadowPointCubeViews{};
-    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-        shadowPointCubeViews[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
-    }
-    _lightStage->setShadowResources(_shadowDirectionalDepthIV.get(), shadowPointCubeViews, _shadowSampler.get());
     _lightStage->init(_render);
+    syncShadowSettings();
 
     // ViewportOverlayStage — skybox + forward overlay (SimpleMaterial debug)
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
     _overlayStage->init(_render);
 
     // PostProcess
-    _postProcessStage.init(PostProcessStage::InitDesc{
+    _postProcessStage.init(PostProcessingStage::InitDesc{
         .render      = _render,
         .colorFormat = LINEAR_FORMAT,
         .width       = extent.width,
@@ -385,10 +389,6 @@ void DeferredRenderPipeline::shutdown()
         _overlayStage->destroy();
         _overlayStage.reset();
     }
-    if (_shadowStage) {
-        _shadowStage->destroy();
-        _shadowStage.reset();
-    }
     if (_lightStage) {
         _lightStage->destroy();
         _lightStage.reset();
@@ -400,18 +400,9 @@ void DeferredRenderPipeline::shutdown()
 
     _viewportRT.reset();
     _gBufferRT.reset();
-    _shadowDepthRT.reset();
-    _shadowDirectionalDepthIV.reset();
-    for (auto& imageView : _shadowPointCubeIVs) {
-        imageView.reset();
-    }
-    for (auto& faceViews : _shadowPointFaceIVs) {
-        for (auto& imageView : faceViews) {
-            imageView.reset();
-        }
-    }
-    _shadowSampler.reset();
-    _render = nullptr;
+    destroyShadowResources();
+    _bShadowSettingsChangePending = false;
+    _render                       = nullptr;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -444,7 +435,9 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     _viewportRT->flushDirty();
     _gBufferRT->flushDirty();
     const bool bShadowResourcesDirty = _shadowDepthRT && _shadowDepthRT->bDirty;
-    _shadowDepthRT->flushDirty();
+    if (_shadowDepthRT) {
+        _shadowDepthRT->flushDirty();
+    }
 
     if (bGBufferDirty) {
         _cachedAlbedoSpecImageViewHandle = nullptr;
@@ -469,13 +462,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         if (_shadowStage) {
             _shadowStage->refreshPipelineFromRenderTarget();
         }
-        if (_lightStage) {
-            std::array<IImageView*, MAX_POINT_LIGHTS> shadowPointCubeViews{};
-            for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-                shadowPointCubeViews[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
-            }
-            _lightStage->setShadowResources(_shadowDirectionalDepthIV.get(), shadowPointCubeViews, _shadowSampler.get());
-        }
+        syncShadowSettings();
     }
 
     const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
@@ -491,15 +478,15 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         .viewportExtent = {.width = vpW, .height = vpH},
     };
 
-    const uint32_t shadowedPointLightBudget = (_lightStage && _lightStage->isShadowMappingEnabled() && _lightStage->isPointLightShadowEnabled())
-                                                ? _lightStage->getMaxPointLightShadowCount()
+    const uint32_t shadowedPointLightBudget = (_bEnableShadowMapping && _bEnablePointLightShadow)
+                                                ? _maxPointLightShadowCount
                                                 : 0;
     if (_gBufferStage) {
         _gBufferStage->setMaxShadowedPointLights(shadowedPointLightBudget);
     }
 
-    if (_shadowStage && _lightStage && _lightStage->isShadowMappingEnabled()) {
-        _shadowStage->setPointLightShadowEnabled(_lightStage->isPointLightShadowEnabled());
+    if (_shadowStage && _bEnableShadowMapping) {
+        _shadowStage->setPointLightShadowEnabled(_bEnablePointLightShadow);
         _shadowStage->setMaxPointLightShadowCount(shadowedPointLightBudget);
         const auto shadowStart = std::chrono::steady_clock::now();
         _shadowStage->prepare(stageCtx);
@@ -686,7 +673,7 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 
     auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
     viewportTexture    = _postProcessStage.execute(
-        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, _lastTickDesc.dt, &_lastTickCtx);
+        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
 }
 
 void DeferredRenderPipeline::onViewportResized(Rect2D rect)
@@ -717,6 +704,22 @@ void DeferredRenderPipeline::renderGUI()
     ImGui::Checkbox("Enable Perf Stats", &_bEnablePerfStats);
     ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
 
+    bool bEnableShadowMapping     = _bShadowSettingsChangePending ? _pendingEnableShadowMapping : _bEnableShadowMapping;
+    bool bEnablePointLightShadow  = _bShadowSettingsChangePending ? _pendingEnablePointLightShadow : _bEnablePointLightShadow;
+    int  maxPointLightShadowCount = static_cast<int>(_bShadowSettingsChangePending ? _pendingMaxPointLightShadowCount : _maxPointLightShadowCount);
+    bool bShadowSettingsDirty     = false;
+
+    bShadowSettingsDirty |= ImGui::Checkbox("Enable Shadow Mapping", &bEnableShadowMapping);
+    bShadowSettingsDirty |= ImGui::Checkbox("Enable Point Light Shadow", &bEnablePointLightShadow);
+    bShadowSettingsDirty |= ImGui::SliderInt("Max Point Light Shadows", &maxPointLightShadowCount, 0, MAX_POINT_LIGHTS);
+
+    if (bShadowSettingsDirty) {
+        queueShadowSettingsChange(
+            bEnableShadowMapping,
+            bEnablePointLightShadow,
+            static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS))));
+    }
+
     if (_bEnablePerfStats) {
         if (ImGui::TreeNode("Perf"))
         {
@@ -732,168 +735,11 @@ void DeferredRenderPipeline::renderGUI()
         }
     }
 
-    renderRenderTargetEditor();
-
-    if (_gBufferStage) _gBufferStage->renderGUI();
     if (_shadowStage) _shadowStage->renderGUI();
+    if (_gBufferStage) _gBufferStage->renderGUI();
     if (_lightStage) _lightStage->renderGUI();
     if (_overlayStage) _overlayStage->renderGUI();
     _postProcessStage.renderGUI();
-
-    ImGui::TreePop();
-}
-
-void DeferredRenderPipeline::renderRenderTargetEditor()
-{
-    if (!ImGui::TreeNode("RT Editor")) {
-        return;
-    }
-
-    std::array<RenderTargetEditorEntry, 3> entries = {{
-        {.label = "GBuffer", .rt = _gBufferRT.get()},
-        {.label = "Viewport", .rt = _viewportRT.get()},
-        {.label = "Shadow", .rt = _shadowDepthRT.get()},
-    }};
-
-    ImGui::SetNextItemWidth(180.0f);
-    ImGui::InputTextWithHint("##rt-editor-search", "Search RT...", _rtEditorTargetSearch, sizeof(_rtEditorTargetSearch));
-
-    std::vector<int> filteredIndices;
-    for (int index = 0; index < static_cast<int>(entries.size()); ++index) {
-        if (containsInsensitive(entries[index].label, _rtEditorTargetSearch)) {
-            filteredIndices.push_back(index);
-        }
-    }
-
-    if (filteredIndices.empty()) {
-        ImGui::TextUnformatted("No render target matches the current search.");
-        ImGui::TreePop();
-        return;
-    }
-
-    if (std::find(filteredIndices.begin(), filteredIndices.end(), _rtEditorSelectedTargetIndex) == filteredIndices.end()) {
-        _rtEditorSelectedTargetIndex     = filteredIndices.front();
-        _rtEditorSelectedAttachmentIndex = 0;
-    }
-
-    const auto& selectedEntry = entries[_rtEditorSelectedTargetIndex];
-    if (ImGui::BeginCombo("Target", selectedEntry.label)) {
-        for (int index : filteredIndices) {
-            const bool bSelected = index == _rtEditorSelectedTargetIndex;
-            if (ImGui::Selectable(entries[index].label, bSelected)) {
-                _rtEditorSelectedTargetIndex     = index;
-                _rtEditorSelectedAttachmentIndex = 0;
-            }
-            if (bSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    if (!selectedEntry.rt) {
-        ImGui::TextUnformatted("Selected RT is not initialized.");
-        ImGui::TreePop();
-        return;
-    }
-
-    const int  colorCount            = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
-    const bool bHasDepth             = selectedEntry.rt->getDepthAttachmentDesc().has_value();
-    const int  attachmentCount       = colorCount + (bHasDepth ? 1 : 0);
-    _rtEditorSelectedAttachmentIndex = std::clamp(_rtEditorSelectedAttachmentIndex, 0, std::max(attachmentCount - 1, 0));
-
-    const std::string selectedAttachmentLabel = _rtEditorSelectedAttachmentIndex < colorCount
-                                                  ? std::format("Color[{}]", _rtEditorSelectedAttachmentIndex)
-                                                  : std::string("Depth");
-    if (attachmentCount > 0 && ImGui::BeginCombo("Attachment", selectedAttachmentLabel.c_str())) {
-        for (int attachmentIndex = 0; attachmentIndex < attachmentCount; ++attachmentIndex) {
-            const bool        bSelected = attachmentIndex == _rtEditorSelectedAttachmentIndex;
-            const std::string label     = attachmentIndex < colorCount ? std::format("Color[{}]", attachmentIndex) : "Depth";
-            if (ImGui::Selectable(label.c_str(), bSelected)) {
-                _rtEditorSelectedAttachmentIndex = attachmentIndex;
-            }
-            if (bSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    ImGui::Text("Extent: %u x %u", selectedEntry.rt->getExtent().width, selectedEntry.rt->getExtent().height);
-    ImGui::Text("Frame Buffers: %u", selectedEntry.rt->getFrameBufferCount());
-
-    EFormat::T currentFormat = EFormat::Undefined;
-    if (_rtEditorSelectedAttachmentIndex < colorCount) {
-        currentFormat = selectedEntry.rt->getColorAttachmentDescs()[_rtEditorSelectedAttachmentIndex].format;
-    }
-    else if (bHasDepth) {
-        currentFormat = selectedEntry.rt->getDepthAttachmentDesc()->format;
-    }
-    ImGui::Text("Format: %s", formatLabel(currentFormat));
-
-    auto* sampler = TextureLibrary::get().getDefaultSampler().get();
-    if (auto* imageView = getAttachmentImageView(selectedEntry.rt, _rtEditorSelectedAttachmentIndex)) {
-        ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
-    }
-
-    ImGui::SeparatorText("Attachment Format");
-    ImGui::SetNextItemWidth(180.0f);
-    ImGui::InputTextWithHint("##rt-format-search", "Search format...", _rtEditorFormatSearch, sizeof(_rtEditorFormatSearch));
-
-    const bool  bEditingDepth = isDepthAttachmentSelection(selectedEntry.rt, _rtEditorSelectedAttachmentIndex);
-    const char* comboLabel    = bEditingDepth ? "Depth Format" : "Color Format";
-    const char* currentLabel  = formatLabel(currentFormat);
-    if (ImGui::BeginCombo(comboLabel, currentLabel)) {
-        if (bEditingDepth) {
-            for (const auto& option : kShadowDepthFormats) {
-                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
-                    continue;
-                }
-
-                const bool bSelected = option.format == currentFormat;
-                if (ImGui::Selectable(option.label.data(), bSelected)) {
-                    if (selectedEntry.rt == _shadowDepthRT.get()) {
-                        _shadowDepthFormat = option.format;
-                        selectedEntry.rt->setDepthAttachmentFormat(option.format);
-                    }
-                    else {
-                        if (_gBufferRT) {
-                            _gBufferRT->setDepthAttachmentFormat(option.format);
-                        }
-                        if (_viewportRT) {
-                            _viewportRT->setDepthAttachmentFormat(option.format);
-                        }
-                    }
-                }
-                if (bSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-        }
-        else {
-            for (const auto& option : kColorFormats) {
-                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
-                    continue;
-                }
-
-                const bool bSelected = option.format == currentFormat;
-                if (ImGui::Selectable(option.label.data(), bSelected)) {
-                    selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditorSelectedAttachmentIndex), option.format);
-                }
-                if (bSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    if (bEditingDepth && selectedEntry.rt != _shadowDepthRT.get()) {
-        ImGui::TextWrapped("GBuffer depth and Viewport depth are applied together so the depth copy path stays format-compatible on the next frame.");
-    }
-    else if (bEditingDepth && selectedEntry.rt == _shadowDepthRT.get()) {
-        ImGui::TextWrapped("D16_UNORM usually reduces depth bandwidth and memory versus D24/D32, but actual gain depends on the GPU and driver. Test 0/1/2 point-shadow budgets with each format.");
-    }
 
     ImGui::TreePop();
 }

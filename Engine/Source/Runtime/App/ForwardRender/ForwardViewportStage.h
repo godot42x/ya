@@ -186,6 +186,7 @@ struct ForwardViewportStage : public IRenderStage
     void renderGUI() override;
 
     void setShadowMappingEnabled(bool enabled);
+    void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
     void initPhong(const InitDesc& desc);

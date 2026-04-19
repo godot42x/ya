@@ -122,6 +122,11 @@ struct RenderRuntime
     std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr;
 
+    int  _rtEditorSelectedTargetIndex     = 0;
+    int  _rtEditorSelectedAttachmentIndex = 0;
+    char _rtEditorTargetSearch[64]        = {};
+    char _rtEditorFormatSearch[64]        = {};
+
     stdptr<RenderDocCapture> _renderDocCapture;
     int                      _renderDocOnCaptureAction = 0;
     std::string              _renderDocLastCapturePath;
@@ -176,6 +181,7 @@ struct RenderRuntime
     void                   shutdownActivePipeline();
     void                   releaseRenderOwnedResources();
     void                   applyPendingShadingModelSwitch();
+    void                   renderRenderTargetEditor();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
     void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, Texture* brdfLutTexture);
     [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;

@@ -6,10 +6,10 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Pipelines/PostProcessStage.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
-#include "Runtime/App/ForwardRender/ShadowStage.h"
+#include "Runtime/App/Common/PostProcessingStage.h"
+#include "Runtime/App/Common/ShadowStage.h"
 #include "ViewportOverlayStage.h"
 
 
@@ -80,7 +80,7 @@ struct DeferredRenderPipeline
     stdptr<GBufferStage>         _gBufferStage;
     stdptr<LightStage>           _lightStage;
     stdptr<ViewportOverlayStage> _overlayStage;
-    PostProcessStage             _postProcessStage;
+    PostProcessingStage          _postProcessStage;
 
     stdptr<Sampler>                                                 _shadowSampler            = nullptr;
     stdptr<IImageView>                                              _shadowDirectionalDepthIV = nullptr;
@@ -91,6 +91,13 @@ struct DeferredRenderPipeline
     bool     _bViewportPassOpen = false;
     bool     _bReverseViewportY = true;
     bool     _bEnablePerfStats  = true;
+    bool     _bEnableShadowMapping = true;
+    bool     _bEnablePointLightShadow = true;
+    uint32_t _maxPointLightShadowCount = 1;
+    bool     _bShadowSettingsChangePending = false;
+    bool     _pendingEnableShadowMapping = true;
+    bool     _pendingEnablePointLightShadow = true;
+    uint32_t _pendingMaxPointLightShadowCount = 1;
 
     float _lastTickCpuMs      = 0.0f;
     float _lastShadowCpuMs    = 0.0f;
@@ -102,11 +109,6 @@ struct DeferredRenderPipeline
     uint32_t   _lastPointLightCount = 0;
     uint32_t   _lastDrawCount       = 0;
     EFormat::T _shadowDepthFormat   = SHADOW_DEPTH_FORMAT;
-
-    int  _rtEditorSelectedTargetIndex     = 0;
-    int  _rtEditorSelectedAttachmentIndex = 0;
-    char _rtEditorTargetSearch[64]        = {};
-    char _rtEditorFormatSearch[64]        = {};
 
     // ── Debug views ───────────────────────────────────────────────────
     stdptr<IImageView> _debugAlbedoRGBView;
@@ -137,7 +139,9 @@ struct DeferredRenderPipeline
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
+    IRenderTarget* getViewportRT() const { return _viewportRT.get(); }
     IRenderTarget* getShadowDepthRT() const { return _shadowDepthRT.get(); }
+    bool           isShadowMappingEnabled() const { return _bEnableShadowMapping; }
     IImageView*    getShadowDirectionalDepthIV() const { return _shadowDirectionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
     {
@@ -149,9 +153,12 @@ struct DeferredRenderPipeline
 
   private:
     void rebuildShadowViews();
-    void renderRenderTargetEditor();
     void initRenderTargets(Extent2D extent);
     void initShadowResources();
+    void destroyShadowResources();
+    void syncShadowSettings();
+    void applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
+    void queueShadowSettingsChange(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount);
     void copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
     void beginViewportRendering(const TickDesc& desc);
 };

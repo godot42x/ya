@@ -11,6 +11,75 @@
 namespace ya
 {
 
+void ForwardRenderPipeline::rebuildShadowViews()
+{
+    YA_CORE_ASSERT(_render, "ForwardRenderPipeline requires render device");
+    YA_CORE_ASSERT(depthRT, "ForwardRenderPipeline requires shadow render target");
+
+    auto* frameBuffer  = depthRT->getCurFrameBuffer();
+    auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
+    YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
+
+    auto tf        = _render->getTextureFactory();
+    auto shadowImg = depthTexture->getImageShared();
+    YA_CORE_ASSERT(shadowImg, "Shadow render target image is null");
+
+    shadowDirectionalDepthIV = tf->createImageView(shadowImg, ImageViewCreateInfo{
+        .label          = "Shadow Map Directional Depth IV",
+        .viewType       = EImageViewType::View2D,
+        .aspectFlags    = EImageAspect::Depth,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    });
+
+    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        shadowPointCubeIVs[i] = tf->createImageView(shadowImg, ImageViewCreateInfo{
+            .label          = std::format("Shadow Point[{}] CubeIV", i),
+            .viewType       = EImageViewType::ViewCube,
+            .aspectFlags    = EImageAspect::Depth,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 1 + i * 6,
+            .layerCount     = 6,
+        });
+
+        for (uint32_t f = 0; f < 6; ++f) {
+            shadowPointFaceIVs[i][f] = tf->createImageView(shadowImg, ImageViewCreateInfo{
+                .label          = std::format("Shadow Point[{}] Face[{}]", i, f),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Depth,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 1 + i * 6 + f,
+                .layerCount     = 1,
+            });
+        }
+    }
+
+    std::vector<DescriptorImageInfo> pointInfos(MAX_POINT_LIGHTS);
+    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        pointInfos[i] = DescriptorImageInfo{
+            .imageView   = shadowPointCubeIVs[i] ? shadowPointCubeIVs[i]->getHandle() : ImageViewHandle{},
+            .sampler     = shadowSampler ? shadowSampler->getHandle() : SamplerHandle{},
+            .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
+        };
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(depthBufferShadowDS, 0, shadowDirectionalDepthIV.get(), shadowSampler.get()),
+        WriteDescriptorSet{
+            .dstSet           = depthBufferShadowDS,
+            .dstBinding       = 1,
+            .dstArrayElement  = 0,
+            .descriptorType   = EPipelineDescriptorType::CombinedImageSampler,
+            .descriptorCount  = MAX_POINT_LIGHTS,
+            .imageInfos       = pointInfos,
+        },
+    });
+}
+
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render = desc.render;
@@ -44,7 +113,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
 
     // ── PostProcess ──────────────────────────────────────────────
-    _postProcessStage.init(PostProcessStage::InitDesc{
+    _postProcessStage.init(PostProcessingStage::InitDesc{
         .render = _render, .colorFormat = LINEAR_FORMAT,
         .width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH),
     });
@@ -85,30 +154,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _render->as<VulkanRender>()->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, depthBufferShadowDS.ptr, "DepthBuffer_Shadow_DS");
     _deleter.push("DepthBufferDSL", [this](void*) { depthBufferDSL.reset(); });
 
-    // Shadow image views
-    auto tf        = _render->getTextureFactory();
-    auto shadowImg = depthRT->getCurFrameBuffer()->getDepthTexture()->getImageShared();
-
-    shadowDirectionalDepthIV = tf->createImageView(shadowImg, ImageViewCreateInfo{
-        .label = "Shadow Map Directional Depth IV", .viewType = EImageViewType::View2D,
-        .aspectFlags = EImageAspect::Depth, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1,
-    });
-
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
-        shadowPointCubeIVs[i] = tf->createImageView(shadowImg, ImageViewCreateInfo{
-            .label = std::format("Shadow Point[{}] CubeIV", i), .viewType = EImageViewType::ViewCube,
-            .aspectFlags = EImageAspect::Depth, .baseMipLevel = 0, .levelCount = 1,
-            .baseArrayLayer = 1 + i * 6, .layerCount = 6,
-        });
-        for (uint32_t f = 0; f < 6; ++f) {
-            shadowPointFaceIVs[i][f] = tf->createImageView(shadowImg, ImageViewCreateInfo{
-                .label = std::format("Shadow Point[{}] Face[{}]", i, f), .viewType = EImageViewType::View2D,
-                .aspectFlags = EImageAspect::Depth, .baseMipLevel = 0, .levelCount = 1,
-                .baseArrayLayer = 1 + i * 6 + f, .layerCount = 1,
-            });
-        }
-    }
-
     shadowSampler = Sampler::create(SamplerDesc{
         .label = "shadow", .minFilter = EFilter::Linear, .magFilter = EFilter::Linear,
         .mipmapMode = ESamplerMipmapMode::Linear,
@@ -119,23 +164,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _deleter.push("ShadowSampler", [this](void*) { shadowSampler.reset(); });
 
     _render->waitIdle();
-
-    // Update shadow DS with image views
-    std::vector<DescriptorImageInfo> dsImageInfos(MAX_POINT_LIGHTS);
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
-        dsImageInfos[i] = DescriptorImageInfo{
-            .imageView = shadowPointCubeIVs[i]->getHandle(), .sampler = shadowSampler->getHandle(),
-            .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
-        };
-    }
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(depthBufferShadowDS, 0, shadowDirectionalDepthIV.get(), shadowSampler.get()),
-        WriteDescriptorSet{
-            .dstSet = depthBufferShadowDS, .dstBinding = 1, .dstArrayElement = 0,
-            .descriptorType = EPipelineDescriptorType::CombinedImageSampler,
-            .descriptorCount = MAX_POINT_LIGHTS, .imageInfos = dsImageInfos,
-        },
-    });
+    rebuildShadowViews();
 
     _deleter.push("Shadow ImageViews", [this](void*) {
         shadowDirectionalDepthIV.reset();
@@ -192,7 +221,26 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     };
 
     _postProcessStage.beginFrame();
-    viewportRT->flushDirty();
+
+    const bool bViewportDirty = viewportRT && viewportRT->bDirty;
+    const bool bShadowDirty   = depthRT && depthRT->bDirty;
+
+    if (viewportRT) {
+        viewportRT->flushDirty();
+    }
+    if (depthRT) {
+        depthRT->flushDirty();
+    }
+
+    if (bViewportDirty && _viewportStage) {
+        _viewportStage->refreshPipelineFormats(viewportRT.get());
+    }
+    if (bShadowDirty) {
+        rebuildShadowViews();
+        if (_shadowStage) {
+            _shadowStage->refreshPipelineFromRenderTarget();
+        }
+    }
 
     // ── Shadow Pass ──────────────────────────────────────────────
     if (bShadowMapping && _shadowStage) {
@@ -251,7 +299,7 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     auto* inputTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
 
     viewportTexture = _postProcessStage.execute(
-        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, _lastTickDesc.dt, &_lastTickCtx);
+        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
 
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
 }
@@ -273,8 +321,6 @@ void ForwardRenderPipeline::renderGUI()
     if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping)) {
         if (_viewportStage) _viewportStage->setShadowMappingEnabled(bShadowMapping);
     }
-
-    if (viewportRT) viewportRT->onRenderGUI();
     ImGui::TreePop();
 }
 

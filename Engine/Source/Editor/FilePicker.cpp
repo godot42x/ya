@@ -116,7 +116,7 @@ void FilePicker::openMaterialPicker(const std::string &currentPath, Callback onC
 
 void FilePicker::openTexturePicker(const std::string &currentPath, Callback onConfirm)
 {
-    open("Select Texture", currentPath, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr"}, onConfirm);
+    open("Select Texture", currentPath, {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr",".ktx", ".ktx2"}, onConfirm);
 }
 
 void FilePicker::openModelPicker(const std::string &currentPath, Callback onConfirm)

@@ -31,8 +31,14 @@
 #include "utility.cc/ranges.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
+#include <string_view>
+#include <vector>
+
 
 namespace ya
 {
@@ -85,6 +91,113 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
     if (pointShadowGroup.slotCount >= pointShadowGroup.groupSize) {
         ctx.debugSpec.groups.push_back(std::move(pointShadowGroup));
     }
+}
+
+struct RenderTargetFormatOption
+{
+    std::string_view label;
+    EFormat::T       format;
+};
+
+struct RuntimeRenderTargetEditorEntry
+{
+    enum class EOwner
+    {
+        Presentation,
+        ForwardViewport,
+        ForwardShadow,
+        DeferredGBuffer,
+        DeferredViewport,
+        DeferredShadow,
+    };
+
+    const char*    label     = "";
+    IRenderTarget* rt        = nullptr;
+    EOwner         owner     = EOwner::Presentation;
+    bool           bEditable = true;
+};
+
+constexpr std::array<RenderTargetFormatOption, 3> kShadowDepthFormats = {{
+    {"D16_UNORM", EFormat::D16_UNORM},
+    {"D24_UNORM_S8_UINT", EFormat::D24_UNORM_S8_UINT},
+    {"D32_SFLOAT", EFormat::D32_SFLOAT},
+}};
+
+constexpr std::array<RenderTargetFormatOption, 5> kColorFormats = {{
+    {"R8G8B8A8_UNORM", EFormat::R8G8B8A8_UNORM},
+    {"R8G8B8A8_SRGB", EFormat::R8G8B8A8_SRGB},
+    {"R16G16B16A16_SFLOAT", EFormat::R16G16B16A16_SFLOAT},
+    {"R32_SFLOAT", EFormat::R32_SFLOAT},
+    {"B8G8R8A8_UNORM", EFormat::B8G8R8A8_UNORM},
+}};
+
+bool isDepthAttachmentSelection(const IRenderTarget* rt, int attachmentIndex)
+{
+    if (!rt) {
+        return false;
+    }
+
+    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
+    return attachmentIndex >= colorCount && rt->getDepthAttachmentDesc().has_value();
+}
+
+bool containsInsensitive(std::string_view haystack, std::string_view needle)
+{
+    if (needle.empty()) {
+        return true;
+    }
+
+    auto toLower = [](unsigned char value)
+    {
+        return static_cast<char>(std::tolower(value));
+    };
+
+    std::string haystackLower(haystack.begin(), haystack.end());
+    std::string needleLower(needle.begin(), needle.end());
+    std::transform(haystackLower.begin(), haystackLower.end(), haystackLower.begin(), toLower);
+    std::transform(needleLower.begin(), needleLower.end(), needleLower.begin(), toLower);
+    return haystackLower.find(needleLower) != std::string::npos;
+}
+
+const char* formatLabel(EFormat::T format)
+{
+    for (const auto& option : kColorFormats) {
+        if (option.format == format) {
+            return option.label.data();
+        }
+    }
+    for (const auto& option : kShadowDepthFormats) {
+        if (option.format == format) {
+            return option.label.data();
+        }
+    }
+
+    return "Unknown";
+}
+
+IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
+{
+    if (!rt) {
+        return nullptr;
+    }
+
+    auto* frameBuffer = rt->getCurFrameBuffer();
+    if (!frameBuffer) {
+        return nullptr;
+    }
+
+    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
+    if (attachmentIndex < colorCount) {
+        auto* colorTexture = frameBuffer->getColorTexture(static_cast<uint32_t>(attachmentIndex));
+        return colorTexture ? colorTexture->getImageView() : nullptr;
+    }
+
+    if (!rt->getDepthAttachmentDesc().has_value()) {
+        return nullptr;
+    }
+
+    auto* depthTexture = frameBuffer->getDepthTexture();
+    return depthTexture ? depthTexture->getImageView() : nullptr;
 }
 
 } // namespace
@@ -374,6 +487,12 @@ void RenderRuntime::init(const InitDesc& desc)
                     YA_CORE_WARN("RenderDoc: failed to launch replay UI");
                 }
                 break;
+                struct RenderTargetFormatOption
+                {
+                    std::string_view label;
+                    EFormat::T       format;
+                };
+
             case 2:
                 openDirectoryInOS(result.capturePath);
                 break;
@@ -1358,7 +1477,10 @@ ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
 
 bool RenderRuntime::isShadowMappingEnabled() const
 {
-    if (_forwardPipeline) return _forwardPipeline->bShadowMapping;
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->isShadowMappingEnabled();
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->isShadowMappingEnabled();
+    if (_forwardPipeline) return _forwardPipeline->isShadowMappingEnabled();
+    if (_deferredPipeline) return _deferredPipeline->isShadowMappingEnabled();
     return false;
 }
 
@@ -1374,20 +1496,37 @@ bool RenderRuntime::hasMirrorRenderResult() const
 
 IRenderTarget* RenderRuntime::getShadowDepthRT() const
 {
-    return _forwardPipeline && _forwardPipeline->depthRT ? _forwardPipeline->depthRT.get() : nullptr;
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->getShadowDepthRT();
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->getShadowDepthRT();
+    if (_forwardPipeline) return _forwardPipeline->getShadowDepthRT();
+    if (_deferredPipeline) return _deferredPipeline->getShadowDepthRT();
+    return nullptr;
 }
 
 IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
-    return _forwardPipeline && _forwardPipeline->shadowDirectionalDepthIV ? _forwardPipeline->shadowDirectionalDepthIV.get() : nullptr;
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->getShadowDirectionalDepthIV();
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->getShadowDirectionalDepthIV();
+    if (_forwardPipeline) return _forwardPipeline->getShadowDirectionalDepthIV();
+    if (_deferredPipeline) return _deferredPipeline->getShadowDirectionalDepthIV();
+    return nullptr;
 }
 
 IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
-    if (!_forwardPipeline) return nullptr;
-    if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    auto& iv = _forwardPipeline->shadowPointFaceIVs[pointLightIndex][faceIndex];
-    return iv ? iv.get() : nullptr;
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        return _forwardPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+    }
+    if (_forwardPipeline) {
+        return _forwardPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+    }
+    if (_deferredPipeline) {
+        return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+    }
+    return nullptr;
 }
 
 Texture* RenderRuntime::getPostprocessOutputTexture() const
@@ -1441,6 +1580,7 @@ void RenderRuntime::renderGUI(float dt)
         ImGui::TreePop();
     }
 
+    renderRenderTargetEditor();
 
     if (ImGui::TreeNode("Final Render Target")) {
         if (_screenRT) {
@@ -1560,6 +1700,199 @@ void RenderRuntime::applyPendingShadingModelSwitch()
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
         onViewportResized(_viewportRect);
     }
+}
+
+void RenderRuntime::renderRenderTargetEditor()
+{
+    if (!ImGui::TreeNode("RT Editor")) {
+        return;
+    }
+
+    std::vector<RuntimeRenderTargetEditorEntry> entries;
+    if (_screenRT) {
+        entries.push_back({.label = "Presentation", .rt = _screenRT.get(), .owner = RuntimeRenderTargetEditorEntry::EOwner::Presentation, .bEditable = false});
+    }
+    if (_forwardPipeline) {
+        entries.push_back({.label = "Forward Viewport", .rt = _forwardPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardViewport});
+        entries.push_back({.label = "Forward Shadow", .rt = _forwardPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow});
+    }
+    if (_deferredPipeline) {
+        entries.push_back({.label = "Deferred GBuffer", .rt = _deferredPipeline->getGBufferRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer});
+        entries.push_back({.label = "Deferred Viewport", .rt = _deferredPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport});
+        entries.push_back({.label = "Deferred Shadow", .rt = _deferredPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow});
+    }
+
+    if (entries.empty()) {
+        ImGui::TextUnformatted("No render targets are available.");
+        ImGui::TreePop();
+        return;
+    }
+
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::InputTextWithHint("##runtime-rt-editor-search", "Search RT...", _rtEditorTargetSearch, sizeof(_rtEditorTargetSearch));
+
+    std::vector<int> filteredIndices;
+    for (int index = 0; index < static_cast<int>(entries.size()); ++index) {
+        if (containsInsensitive(entries[index].label, _rtEditorTargetSearch)) {
+            filteredIndices.push_back(index);
+        }
+    }
+
+    if (filteredIndices.empty()) {
+        ImGui::TextUnformatted("No render target matches the current search.");
+        ImGui::TreePop();
+        return;
+    }
+
+    if (_rtEditorSelectedTargetIndex < 0 || _rtEditorSelectedTargetIndex >= static_cast<int>(entries.size()) || std::find(filteredIndices.begin(), filteredIndices.end(), _rtEditorSelectedTargetIndex) == filteredIndices.end()) {
+        auto preferredIndex = filteredIndices.front();
+        for (int index : filteredIndices) {
+            if (!entries[index].rt || entries[index].rt->isSwapChainTarget()) {
+                continue;
+            }
+            preferredIndex = index;
+            break;
+        }
+
+        _rtEditorSelectedTargetIndex     = preferredIndex;
+        _rtEditorSelectedAttachmentIndex = 0;
+    }
+
+    const auto& selectedEntry = entries[_rtEditorSelectedTargetIndex];
+    if (ImGui::BeginCombo("Target", selectedEntry.label)) {
+        for (int index : filteredIndices) {
+            const bool bSelected = index == _rtEditorSelectedTargetIndex;
+            if (ImGui::Selectable(entries[index].label, bSelected)) {
+                _rtEditorSelectedTargetIndex     = index;
+                _rtEditorSelectedAttachmentIndex = 0;
+            }
+            if (bSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (!selectedEntry.rt) {
+        ImGui::TextUnformatted("Selected RT is not initialized.");
+        ImGui::TreePop();
+        return;
+    }
+
+    const int  colorCount            = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
+    const bool bHasDepth             = selectedEntry.rt->getDepthAttachmentDesc().has_value();
+    const int  attachmentCount       = colorCount + (bHasDepth ? 1 : 0);
+    _rtEditorSelectedAttachmentIndex = std::clamp(_rtEditorSelectedAttachmentIndex, 0, std::max(attachmentCount - 1, 0));
+
+    const std::string selectedAttachmentLabel = _rtEditorSelectedAttachmentIndex < colorCount
+                                                  ? std::format("Color[{}]", _rtEditorSelectedAttachmentIndex)
+                                                  : std::string("Depth");
+    if (attachmentCount > 0 && ImGui::BeginCombo("Attachment", selectedAttachmentLabel.c_str())) {
+        for (int attachmentIndex = 0; attachmentIndex < attachmentCount; ++attachmentIndex) {
+            const bool        bSelected = attachmentIndex == _rtEditorSelectedAttachmentIndex;
+            const std::string label     = attachmentIndex < colorCount ? std::format("Color[{}]", attachmentIndex) : "Depth";
+            if (ImGui::Selectable(label.c_str(), bSelected)) {
+                _rtEditorSelectedAttachmentIndex = attachmentIndex;
+            }
+            if (bSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::Text("Extent: %u x %u", selectedEntry.rt->getExtent().width, selectedEntry.rt->getExtent().height);
+    ImGui::Text("Frame Buffers: %u", selectedEntry.rt->getFrameBufferCount());
+
+    EFormat::T currentFormat = EFormat::Undefined;
+    if (_rtEditorSelectedAttachmentIndex < colorCount) {
+        currentFormat = selectedEntry.rt->getColorAttachmentDescs()[_rtEditorSelectedAttachmentIndex].format;
+    }
+    else if (bHasDepth) {
+        currentFormat = selectedEntry.rt->getDepthAttachmentDesc()->format;
+    }
+    ImGui::Text("Format: %s", formatLabel(currentFormat));
+
+    auto* sampler = TextureLibrary::get().getDefaultSampler().get();
+    const bool bCanPreview = !selectedEntry.rt->isSwapChainTarget();
+    if (!bCanPreview) {
+        ImGui::TextWrapped("Preview is disabled for the presentation target because this UI is rendered into the same swapchain image during the screen pass.");
+    }
+    else if (auto* imageView = getAttachmentImageView(selectedEntry.rt, _rtEditorSelectedAttachmentIndex)) {
+        ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
+    }
+
+    const bool bEditingDepth = isDepthAttachmentSelection(selectedEntry.rt, _rtEditorSelectedAttachmentIndex);
+    if (!selectedEntry.bEditable) {
+        ImGui::SeparatorText("Attachment Format");
+        ImGui::TextWrapped("Presentation target format is owned by the swapchain and is currently read-only here.");
+        ImGui::TreePop();
+        return;
+    }
+
+    ImGui::SeparatorText("Attachment Format");
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::InputTextWithHint("##runtime-rt-format-search", "Search format...", _rtEditorFormatSearch, sizeof(_rtEditorFormatSearch));
+
+    const char* comboLabel   = bEditingDepth ? "Depth Format" : "Color Format";
+    const char* currentLabel = formatLabel(currentFormat);
+    if (ImGui::BeginCombo(comboLabel, currentLabel)) {
+        if (bEditingDepth) {
+            for (const auto& option : kShadowDepthFormats) {
+                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
+                    continue;
+                }
+
+                const bool bSelected = option.format == currentFormat;
+                if (ImGui::Selectable(option.label.data(), bSelected)) {
+                    switch (selectedEntry.owner) {
+                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer:
+                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport:
+                        if (_deferredPipeline) {
+                            if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
+                                gbufferRT->setDepthAttachmentFormat(option.format);
+                            }
+                            if (auto* viewportRT = _deferredPipeline->getViewportRT()) {
+                                viewportRT->setDepthAttachmentFormat(option.format);
+                            }
+                        }
+                        break;
+                    default:
+                        selectedEntry.rt->setDepthAttachmentFormat(option.format);
+                        break;
+                    }
+                }
+                if (bSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+        else {
+            for (const auto& option : kColorFormats) {
+                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
+                    continue;
+                }
+
+                const bool bSelected = option.format == currentFormat;
+                if (ImGui::Selectable(option.label.data(), bSelected)) {
+                    selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditorSelectedAttachmentIndex), option.format);
+                }
+                if (bSelected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport)) {
+        ImGui::TextWrapped("Deferred GBuffer depth and Deferred Viewport depth are applied together so the current depth copy path stays format-compatible on the next frame.");
+    }
+    else if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow)) {
+        ImGui::TextWrapped("D16_UNORM usually reduces depth bandwidth and memory versus D24/D32, but actual gain depends on the GPU and driver. Test with shadow budgets on the target hardware.");
+    }
+
+    ImGui::TreePop();
 }
 
 } // namespace ya

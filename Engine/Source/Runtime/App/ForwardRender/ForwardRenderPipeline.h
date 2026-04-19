@@ -2,11 +2,11 @@
 
 #include "Core/Base.h"
 #include "Render/Core/IRenderTarget.h"
-#include "Render/Pipelines/PostProcessStage.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
-#include "ShadowStage.h"
 #include "ForwardViewportStage.h"
+#include "Runtime/App/Common/PostProcessingStage.h"
+#include "Runtime/App/Common/ShadowStage.h"
 
 #include <array>
 #include <glm/glm.hpp>
@@ -67,7 +67,7 @@ struct ForwardRenderPipeline
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>           _shadowStage;
     stdptr<ForwardViewportStage>  _viewportStage;
-    PostProcessStage      _postProcessStage;
+    PostProcessingStage   _postProcessStage;
 
     bool     bMSAA = false;
     Texture* viewportTexture    = nullptr;
@@ -87,12 +87,16 @@ struct ForwardRenderPipeline
 
     void     onViewportResized(Rect2D rect);
     Extent2D getViewportExtent() const;
+    [[nodiscard]] IRenderTarget* getViewportRT() const { return viewportRT.get(); }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const { return bShadowMapping; }
     [[nodiscard]] IRenderTarget* getShadowDepthRT() const { return depthRT.get(); }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const { return shadowDirectionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+
+    private:
+        void rebuildShadowViews();
 };
 
 } // namespace ya

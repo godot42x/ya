@@ -37,9 +37,9 @@ void VulkanPipelineLayout::create(const std::vector<PushConstantRange>          
 
 
     VkPipelineLayoutCreateInfo layoutCI{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = nullptr,
+        .flags                  = 0,
         .setLayoutCount         = static_cast<uint32_t>(vkLayouts.size()),
         .pSetLayouts            = vkLayouts.data(),
         .pushConstantRangeCount = static_cast<uint32_t>(vkPSs.size()),
@@ -169,7 +169,8 @@ void VulkanPipeline::setDepthCompareOp(ECompareOp::T op)
 void VulkanPipeline::renderGUI()
 {
     auto name = _ci.shaderDesc.shaderName;
-    if (!ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    // if (!ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (!ImGui::TreeNodeEx(name.c_str())) {
         return;
     }
 
@@ -257,7 +258,7 @@ bool VulkanPipeline::createPipelineInternal()
     YA_CORE_ASSERT(!shaderCacheKey.empty(), "Shader cache key is empty");
     _name = shaderCacheKey;
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
-    auto shaderStorage = ya::App::get()->getShaderStorage();
+    auto                                                shaderStorage = ya::App::get()->getShaderStorage();
     std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
     try {
         stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc, _forceShaderReload);
@@ -274,12 +275,10 @@ bool VulkanPipeline::createPipelineInternal()
     // Create shader modules
     auto vertShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Vertex));
     auto fragShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Fragment));
-    deleter.push("", vertShaderModule, [this](void* handle) {
-        vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
-    });
-    deleter.push("", fragShaderModule, [this](void* handle) {
-        vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
-    });
+    deleter.push("", vertShaderModule, [this](void* handle)
+                 { vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator()); });
+    deleter.push("", fragShaderModule, [this](void* handle)
+                 { vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator()); });
 
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, vertShaderModule, std::format("{}_vert", _name.toString()).c_str());
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, fragShaderModule, std::format("{}_frag", _name.toString()).c_str());
@@ -309,9 +308,8 @@ bool VulkanPipeline::createPipelineInternal()
 
     if (stage2Spirv->count(EShaderStage::Geometry)) {
         auto geomShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Geometry));
-        deleter.push("", geomShaderModule, [this](void* handle) {
-            vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
-        });
+        deleter.push("", geomShaderModule, [this](void* handle)
+                     { vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator()); });
         _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, geomShaderModule, std::format("{}_geom", _name.toString()).c_str());
         shaderStages.push_back(VkPipelineShaderStageCreateInfo{
             .sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -334,7 +332,8 @@ bool VulkanPipeline::createPipelineInternal()
     const bool  reflectPipelineLayout = config.reflection.hasPipelineLayout();
     const bool  useShaderReflection   = config.reflection.any();
 
-    auto appendManualVertexLayout = [&]() {
+    auto appendManualVertexLayout = [&]()
+    {
         if (!config.vertexBufferDescs.empty()) {
             vertexBindingDescriptions.clear();
             for (const auto& bufferDesc : config.vertexBufferDescs) {
@@ -357,7 +356,8 @@ bool VulkanPipeline::createPipelineInternal()
 
                 auto it = std::find_if(vertexAttributeDescriptions.begin(),
                                        vertexAttributeDescriptions.end(),
-                                       [&](const auto& existing) {
+                                       [&](const auto& existing)
+                                       {
                                            return existing.location == attr.location;
                                        });
                 if (it != vertexAttributeDescriptions.end()) {
@@ -387,7 +387,8 @@ bool VulkanPipeline::createPipelineInternal()
         auto merged = ShaderReflection::merge(allStageResources);
 
         if (reflectVertexInput) {
-            auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat {
+            auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat
+            {
                 if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Float)) {
                     if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
                     if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
@@ -569,7 +570,8 @@ bool VulkanPipeline::createPipelineInternal()
     std::ranges::transform(
         _ci.dynamicFeatures,
         std::back_inserter(dynamicStates),
-        [](EPipelineDynamicFeature::T feature) {
+        [](EPipelineDynamicFeature::T feature)
+        {
             switch (feature) {
             case EPipelineDynamicFeature::DepthTest:
                 return VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE;
@@ -632,12 +634,14 @@ bool VulkanPipeline::createPipelineInternal()
         auto colorAttachmentRef = deleter.push(
             "",
             new std::vector<VkFormat>(),
-            [](void* handle) { if (handle) { delete static_cast<std::vector<VkFormat>*>(handle); } });
+            [](void* handle)
+            { if (handle) { delete static_cast<std::vector<VkFormat>*>(handle); } });
         // YA_CORE_ASSERT(_ci.pipelineRenderingInfo.colorAttachmentFormats.size() > 0, "Not a valid dyn rendering pipeline creation info");
         std::ranges::transform(
             _ci.pipelineRenderingInfo.colorAttachmentFormats,
             std::back_inserter(*colorAttachmentRef),
-            [](EFormat::T format) {
+            [](EFormat::T format)
+            {
                 return toVk(format);
             });
 
@@ -655,7 +659,8 @@ bool VulkanPipeline::createPipelineInternal()
         auto ref = deleter.push(
             "",
             plRI,
-            [](void* handle) { delete static_cast<VkPipelineRenderingCreateInfo*>(handle); });
+            [](void* handle)
+            { delete static_cast<VkPipelineRenderingCreateInfo*>(handle); });
 
         // 关键：将动态渲染配置挂到 gplCI 的 pNext 上
         gplCI.pNext = ref;
@@ -748,7 +753,7 @@ bool VulkanComputePipeline::createPipelineInternal()
     _name = shaderCacheKey;
     YA_CORE_INFO("Creating compute pipeline for: {}", _name);
 
-    auto shaderStorage = ya::App::get()->getShaderStorage();
+    auto                                                shaderStorage = ya::App::get()->getShaderStorage();
     std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
     try {
         stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc);
@@ -763,9 +768,8 @@ bool VulkanComputePipeline::createPipelineInternal()
     }
 
     auto computeShaderModule = VulkanPipeline::createShaderModule(_render->getDevice(), stage2Spirv->at(EShaderStage::Compute));
-    deleter.push("", computeShaderModule, [this](void* handle) {
-        vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator());
-    });
+    deleter.push("", computeShaderModule, [this](void* handle)
+                 { vkDestroyShaderModule(_render->getDevice(), reinterpret_cast<VkShaderModule>(handle), _render->getAllocator()); });
     _render->setDebugObjectName(VK_OBJECT_TYPE_SHADER_MODULE, computeShaderModule, std::format("{}_comp", _name).c_str());
 
     VkPipelineShaderStageCreateInfo shaderStage{

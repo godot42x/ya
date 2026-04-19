@@ -52,6 +52,29 @@ void LightStage::setShadowResources(IImageView*                                 
     _shadowDirectionalDepthIV = directionalDepthIV;
     _shadowPointCubeIVs       = pointCubeDepthIVs;
     _shadowSampler            = shadowSampler;
+    _bShadowDescriptorsInitialized = false;
+}
+
+void LightStage::setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow)
+{
+    const bool bChanged = _bEnableShadowMapping != bEnableShadowMapping ||
+                          _bEnablePointLightShadow != bEnablePointLightShadow;
+
+    _bEnableShadowMapping   = bEnableShadowMapping;
+    _bEnablePointLightShadow = bEnablePointLightShadow;
+
+    if (!bChanged || !_pipeline) {
+        return;
+    }
+
+    auto ci               = _pipeline->getDesc();
+    ci.shaderDesc.defines = buildLightPassShaderDefines(
+        _bEnablePBRDiffuseIBL,
+        _bEnablePBRSpecularIBL,
+        _bEnableShadowMapping,
+        _bEnablePointLightShadow);
+    _pipeline->updateDesc(std::move(ci));
+    _bShadowDescriptorsInitialized = false;
 }
 
 void LightStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
@@ -292,12 +315,6 @@ void LightStage::renderGUI()
         bool bDirty = false;
         bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &_bEnablePBRDiffuseIBL);
         bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &_bEnablePBRSpecularIBL);
-        bDirty |= ImGui::Checkbox("Enable Shadow Mapping", &_bEnableShadowMapping);
-        bDirty |= ImGui::Checkbox("Enable Point Light Shadow", &_bEnablePointLightShadow);
-        int maxPointLightShadowCount = static_cast<int>(_maxPointLightShadowCount);
-        if (ImGui::SliderInt("Max Point Light Shadows", &maxPointLightShadowCount, 0, MAX_POINT_LIGHTS)) {
-            _maxPointLightShadowCount = static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS)));
-        }
         if (bDirty) {
             auto ci               = _pipeline->getDesc();
             ci.shaderDesc.defines = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bEnableShadowMapping, _bEnablePointLightShadow);
@@ -312,7 +329,6 @@ void LightStage::renderGUI()
         ImGui::Text("Light prepare CPU: %.3f ms", _lastPrepareCpuMs);
         ImGui::Text("Light execute CPU: %.3f ms", _lastExecuteCpuMs);
         ImGui::Text("Descriptor writes: gbuffer=%u shadow=%u", _lastGBufferDescriptorWriteCount, _lastShadowDescriptorWriteCount);
-        ImGui::Text("Point shadow budget: %u", _maxPointLightShadowCount);
         ImGui::TreePop();
     }
 

@@ -13,10 +13,6 @@
 namespace ya
 {
 
-/// Shadow map generation stage — renders depth from each light's perspective.
-///
-/// Supports directional light (single 2D depth) + point lights (cubemap depth).
-/// Uses per-flight ring buffer for frame UBO.
 struct ShadowStage : public IRenderStage
 {
     using FrameUBO          = glsl_types::Shadow::CombinedShadowMappingGenerate::FrameData;
@@ -34,16 +30,13 @@ struct ShadowStage : public IRenderStage
     float    _normalBias                  = 0.01f;
     uint32_t _lastPreparedPointLightCount = 0;
 
-    // Pipeline (shared)
-    stdptr<IGraphicsPipeline>    _pipeline;
-    stdptr<IPipelineLayout>      _pipelineLayout;
-    stdptr<IDescriptorSetLayout> _frameDSL;
-    GraphicsPipelineCreateInfo   _pipelineCI{};
-
-    // Per-flight
-    stdptr<IDescriptorPool>                                _dsp;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _frameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _frameUBO{};
+    stdptr<IGraphicsPipeline>                                 _pipeline;
+    stdptr<IPipelineLayout>                                   _pipelineLayout;
+    stdptr<IDescriptorSetLayout>                              _frameDSL;
+    GraphicsPipelineCreateInfo                                _pipelineCI{};
+    stdptr<IDescriptorPool>                                   _dsp;
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _frameDS{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _frameUBO{};
 
     ShadowStage() : IRenderStage("Shadow") {}
 
@@ -58,7 +51,7 @@ struct ShadowStage : public IRenderStage
     void renderGUI() override;
     void refreshPipelineFromRenderTarget();
 
-    IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
+    [[nodiscard]] IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
 };
 
 } // namespace ya
