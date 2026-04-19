@@ -26,6 +26,24 @@ namespace ya
 namespace
 {
 
+template <typename MaterialComponentType, typename ResourceEnum>
+void applyImportedTextureVFlip(MaterialComponentType& matComp, const ModelComponent& modelComp)
+{
+    if (!modelComp._flipImportedTextureV) {
+        return;
+    }
+
+    for (uint32_t index = 0; index < static_cast<uint32_t>(ResourceEnum::Count); ++index) {
+        auto* slot = matComp.getTextureSlot(static_cast<ResourceEnum>(index));
+        if (!slot || !slot->hasPath()) {
+            continue;
+        }
+
+        slot->uvScale.y *= -1.0f;
+        slot->uvOffset.y = 1.0f - slot->uvOffset.y;
+    }
+}
+
 EModelMaterialType resolveMaterialTypeForInstantiation(const ModelComponent& modelComp, const MaterialData* matData)
 {
     if (modelComp._materialType != EModelMaterialType::Custom) {
@@ -81,10 +99,12 @@ void configurePhongMaterial(PhongMaterialComponent& matComp,
     const int32_t matIndex = model->getMaterialIndex(meshIndex);
     if (auto it = modelComp._cachedMaterials.find(matIndex); it != modelComp._cachedMaterials.end() && it->second != nullptr) {
         matComp.importFromDescriptorWithSharedMaterial(*matData, static_cast<PhongMaterial*>(it->second));
+        applyImportedTextureVFlip<PhongMaterialComponent, PhongMaterial::EResource>(matComp, modelComp);
         return;
     }
 
     matComp.importFromDescriptor(*matData);
+    applyImportedTextureVFlip<PhongMaterialComponent, PhongMaterial::EResource>(matComp, modelComp);
 }
 
 void configurePBRMaterial(PBRMaterialComponent& matComp,
@@ -106,10 +126,12 @@ void configurePBRMaterial(PBRMaterialComponent& matComp,
     const int32_t matIndex = model->getMaterialIndex(meshIndex);
     if (auto it = modelComp._cachedMaterials.find(matIndex); it != modelComp._cachedMaterials.end() && it->second != nullptr) {
         matComp.importFromDescriptorWithSharedMaterial(*matData, static_cast<PBRMaterial*>(it->second));
+        applyImportedTextureVFlip<PBRMaterialComponent, PBRMaterial::EResource>(matComp, modelComp);
         return;
     }
 
     matComp.importFromDescriptor(*matData);
+    applyImportedTextureVFlip<PBRMaterialComponent, PBRMaterial::EResource>(matComp, modelComp);
 }
 
 void configureUnlitMaterial(UnlitMaterialComponent& matComp,
@@ -144,6 +166,7 @@ void configureUnlitMaterial(UnlitMaterialComponent& matComp,
         matComp._params.baseColor0 = matData->getParam<glm::vec3>(MatParam::Ambient, glm::vec3(1.0f));
     }
 
+    applyImportedTextureVFlip<UnlitMaterialComponent, UnlitMaterial::EResource>(matComp, modelComp);
     matComp.invalidate();
 }
 

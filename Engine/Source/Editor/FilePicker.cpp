@@ -271,8 +271,7 @@ void FilePicker::renderSceneSaveContent()
     {
         if (_onSaveConfirm)
         {
-            ConfigManager::get().set("editor", "filePicker.lastSaveDirectory", saveDir.string());
-            ConfigManager::get().flushDocument("editor");
+            ConfigManager::Editor("editor").set("filePicker.lastSaveDirectory", saveDir.string());
             _onSaveConfirm(saveDir.string(), std::string(_sceneNameBuffer));
         }
         close();

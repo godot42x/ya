@@ -74,8 +74,11 @@ struct LightStage : public IRenderStage
     void setShadowResources(IImageView* directionalDepthIV,
                             const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
                             Sampler* shadowSampler);
+    void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }
+    [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return _bEnablePBRSpecularIBL; }
 
     void init(IRender* render) override;
     void destroy() override;

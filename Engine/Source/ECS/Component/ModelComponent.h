@@ -45,6 +45,7 @@ struct ModelComponent : public IComponent
     YA_REFLECT_FIELD(_materialType)
     YA_REFLECT_FIELD(_customMaterialPath)
     YA_REFLECT_FIELD(_useEmbeddedMaterials)
+    YA_REFLECT_FIELD(_flipImportedTextureV)
     YA_REFLECT_FIELD(_autoCreateChildEntities)
     YA_REFLECT_END()
 
@@ -64,6 +65,15 @@ struct ModelComponent : public IComponent
      * If false, child entities will get default materials
      */
     bool _useEmbeddedMaterials = true;
+
+    /**
+     * @brief Apply V = 1 - V to imported texture slots.
+     *
+     * This is an authoring-side import option stored on ModelComponent so the
+     * generated child material components can be recreated consistently after
+     * serialization, instead of patching managed runtime-only children.
+     */
+    bool _flipImportedTextureV = false;
 
     /**
      * @brief Whether to automatically create child entities for each mesh

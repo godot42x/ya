@@ -153,12 +153,13 @@ void FileExplorer::saveConfig() const
     }
 
     const std::string baseKey = makeConfigKey("");
-    cfg.set("editor", baseKey + "viewMode", static_cast<int>(_viewMode));
-    cfg.set("editor", baseKey + "leftPanelWidth", _leftPanelWidth);
-    cfg.set("editor", baseKey + "thumbnailSize", _thumbnailSize);
-    cfg.set("editor", baseKey + "padding", _padding);
-    cfg.set("editor", baseKey + "currentDirectory", _currentDirectory.string());
-    cfg.set("editor", baseKey + "selectedPath", _selectedPath.string());
+    ConfigManager::Editor("editor")
+        .set(baseKey + "viewMode", static_cast<int>(_viewMode))
+        .set(baseKey + "leftPanelWidth", _leftPanelWidth)
+        .set(baseKey + "thumbnailSize", _thumbnailSize)
+        .set(baseKey + "padding", _padding)
+        .set(baseKey + "currentDirectory", _currentDirectory.string())
+        .set(baseKey + "selectedPath", _selectedPath.string());
     _configDirty = true;
 }
 
@@ -173,7 +174,7 @@ void FileExplorer::flushConfig() const
         return;
     }
 
-    cfg.flushDocument("editor");
+    ConfigManager::Editor("editor").flush();
     _configDirty = false;
 }
 

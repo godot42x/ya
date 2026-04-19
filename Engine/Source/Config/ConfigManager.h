@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 namespace ya
 {
@@ -31,6 +32,78 @@ struct ConfigManager : public disable_copy
         bool           bReadOnly = false;
 
         [[nodiscard]] bool isLoaded() const { return !path.empty(); }
+    };
+
+    struct Editor : public disable_copy
+    {
+        ConfigManager* _manager         = nullptr;
+        std::string    _docName;
+        bool           _bFlushOnDestroy = true;
+        bool           _bTouched        = false;
+
+        explicit Editor(std::string docName, ConfigManager& manager = ConfigManager::get())
+            : _manager(&manager)
+            , _docName(std::move(docName))
+        {}
+
+        ~Editor()
+        {
+            if (_bFlushOnDestroy && _bTouched) {
+                flush();
+            }
+        }
+
+        template <typename T>
+        Editor& set(std::string_view key, const T& value)
+        {
+            if (_manager) {
+                _manager->set(_docName, key, value);
+                _bTouched = true;
+            }
+            return *this;
+        }
+
+        Editor& removeValue(std::string_view key)
+        {
+            if (_manager) {
+                _manager->removeValue(_docName, key);
+                _bTouched = true;
+            }
+            return *this;
+        }
+
+        Editor& pruneEmptyParents(std::string_view key)
+        {
+            if (_manager) {
+                _manager->pruneEmptyParents(_docName, key);
+                _bTouched = true;
+            }
+            return *this;
+        }
+
+        Editor& markDirty()
+        {
+            if (_manager) {
+                _manager->markDirty(_docName);
+                _bTouched = true;
+            }
+            return *this;
+        }
+
+        Editor& setFlushOnDestroy(bool bFlushOnDestroy)
+        {
+            _bFlushOnDestroy = bFlushOnDestroy;
+            return *this;
+        }
+
+        bool flush()
+        {
+            const bool bFlushed = _manager ? _manager->flushDocument(_docName) : false;
+            if (bFlushed) {
+                _bTouched = false;
+            }
+            return bFlushed;
+        }
     };
 
 

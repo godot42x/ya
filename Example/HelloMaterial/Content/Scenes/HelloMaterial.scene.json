@@ -301,6 +301,7 @@
                 "ModelComponent": {
                     "_autoCreateChildEntities": true,
                     "_customMaterialPath": "",
+                    "_flipImportedTextureV": false,
                     "_materialType": "Phong",
                     "_modelRef": {
                         "__base__": {
@@ -783,6 +784,7 @@
                 "ModelComponent": {
                     "_autoCreateChildEntities": true,
                     "_customMaterialPath": "",
+                    "_flipImportedTextureV": false,
                     "_materialType": "Phong",
                     "_modelRef": {
                         "__base__": {
@@ -7723,6 +7725,7 @@
                 "ModelComponent": {
                     "_autoCreateChildEntities": true,
                     "_customMaterialPath": "",
+                    "_flipImportedTextureV": true,
                     "_materialType": "PBR",
                     "_modelRef": {
                         "__base__": {
@@ -7759,6 +7762,7 @@
                 "ModelComponent": {
                     "_autoCreateChildEntities": true,
                     "_customMaterialPath": "",
+                    "_flipImportedTextureV": true,
                     "_materialType": "Phong",
                     "_modelRef": {
                         "__base__": {

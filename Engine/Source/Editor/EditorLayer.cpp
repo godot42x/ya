@@ -801,8 +801,7 @@ void EditorLayer::editorSettings()
 
     if (_bDefaultScenePathDirty) {
         if (ImGui::Button("Apply Default Scene Path")) {
-            ConfigManager::get().set("editor", "startup.defaultScenePath", std::string(_defaultScenePathBuffer));
-            ConfigManager::get().flushDocument("editor");
+            ConfigManager::Editor("editor").set("startup.defaultScenePath", std::string(_defaultScenePathBuffer));
             _bDefaultScenePathDirty = false;
         }
 
@@ -835,8 +834,7 @@ void EditorLayer::syncDebugSlotState(const EditorViewportContext::ImageSlot& slo
 bool EditorLayer::renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot&, ImageSlotState& state)
 {
     if (ImGuiHelper::RenderRGBAChannelMaskButtons(state.channelEnabled)) {
-        ConfigManager::get().set("editor", state.configKey, state.channelEnabled);
-        ConfigManager::get().flushDocument("editor");
+        ConfigManager::Editor("editor").set(state.configKey, state.channelEnabled);
         return true;
     }
     return false;
@@ -1057,13 +1055,12 @@ bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::
     }
 
     if (anySelectionChanged) {
-        ConfigManager::get().set("editor", buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
+        auto configEditor = ConfigManager::Editor("editor");
+        configEditor.set(buildDebugGroupSelectionConfigKey(group.label), groupState.selectedGroupIndex);
         for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
-            ConfigManager::get().set("editor",
-                                     buildDebugGroupItemConfigKey(group.label, groupItemIndex),
-                                     groupState.selectedSlots[groupItemIndex]);
+            configEditor.set(buildDebugGroupItemConfigKey(group.label, groupItemIndex),
+                             groupState.selectedSlots[groupItemIndex]);
         }
-        ConfigManager::get().flushDocument("editor");
     }
 
     PopID();

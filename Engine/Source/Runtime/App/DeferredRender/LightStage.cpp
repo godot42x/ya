@@ -1,5 +1,6 @@
 #include "LightStage.h"
 
+#include "Config/ConfigManager.h"
 #include "Core/Debug/PerfKeys.h"
 #include "Core/Debug/PerfState.h"
 #include "GBufferStage.h"
@@ -16,6 +17,10 @@ namespace ya
 
 namespace
 {
+
+constexpr const char* LIGHT_STAGE_CONFIG_DOC_NAME            = "editor";
+constexpr const char* LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL = "render.deferred.light.enablePBRDiffuseIBL";
+constexpr const char* LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL = "render.deferred.light.enablePBRSpecularIBL";
 
 std::vector<std::string> buildLightPassShaderDefines(bool bEnablePBRDiffuseIBL,
                                                      bool bEnablePBRSpecularIBL,
@@ -38,6 +43,28 @@ std::vector<std::string> buildLightPassShaderDefines(bool bEnablePBRDiffuseIBL,
 }
 
 } // namespace
+
+void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL)
+{
+    const bool bChanged = _bEnablePBRDiffuseIBL != bEnablePBRDiffuseIBL ||
+                          _bEnablePBRSpecularIBL != bEnablePBRSpecularIBL;
+
+    _bEnablePBRDiffuseIBL  = bEnablePBRDiffuseIBL;
+    _bEnablePBRSpecularIBL = bEnablePBRSpecularIBL;
+
+    if (!bChanged || !_pipeline) {
+        return;
+    }
+
+    auto ci               = _pipeline->getDesc();
+    ci.shaderDesc.defines = buildLightPassShaderDefines(
+        _bEnablePBRDiffuseIBL,
+        _bEnablePBRSpecularIBL,
+        _bEnableShadowMapping,
+        _bEnablePointLightShadow);
+    _pipeline->updateDesc(std::move(ci));
+    _bShadowDescriptorsInitialized = false;
+}
 
 void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
 {
@@ -99,6 +126,14 @@ void LightStage::init(IRender* render)
 {
     _render = render;
     YA_CORE_ASSERT(_gBufferStage, "LightStage requires GBufferStage (call setup() before init())");
+
+    auto& configManager      = ConfigManager::get();
+    _bEnablePBRDiffuseIBL    = configManager.getOr<bool>(LIGHT_STAGE_CONFIG_DOC_NAME,
+                                                      LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL,
+                                                      _bEnablePBRDiffuseIBL);
+    _bEnablePBRSpecularIBL   = configManager.getOr<bool>(LIGHT_STAGE_CONFIG_DOC_NAME,
+                                                      LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL,
+                                                      _bEnablePBRSpecularIBL);
 
     // GBuffer texture DSL (set 1)
     _gBufferTextureDSL = IDescriptorSetLayout::create(
@@ -309,14 +344,16 @@ void LightStage::renderGUI()
 
     if (ImGui::TreeNode("Settings"))
     {
-        bool bDirty = false;
-        bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &_bEnablePBRDiffuseIBL);
-        bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &_bEnablePBRSpecularIBL);
+        bool bEnablePBRDiffuseIBL  = _bEnablePBRDiffuseIBL;
+        bool bEnablePBRSpecularIBL = _bEnablePBRSpecularIBL;
+        bool bDirty                = false;
+        bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &bEnablePBRDiffuseIBL);
+        bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &bEnablePBRSpecularIBL);
         if (bDirty) {
-            auto ci               = _pipeline->getDesc();
-            ci.shaderDesc.defines = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bEnableShadowMapping, _bEnablePointLightShadow);
-            _pipeline->updateDesc(std::move(ci));
-            _bShadowDescriptorsInitialized = false;
+            setIBLSettings(bEnablePBRDiffuseIBL, bEnablePBRSpecularIBL);
+            ConfigManager::Editor(LIGHT_STAGE_CONFIG_DOC_NAME)
+                .set(LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL, _bEnablePBRDiffuseIBL)
+                .set(LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL, _bEnablePBRSpecularIBL);
         }
         ImGui::TreePop();
     }

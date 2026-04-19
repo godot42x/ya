@@ -91,6 +91,7 @@ struct DeferredRenderPipeline
     bool     _bViewportPassOpen = false;
     bool     _bReverseViewportY = true;
     bool     _bEnableShadowMapping = true;
+
     bool     _bEnablePointLightShadow = true;
     uint32_t _maxPointLightShadowCount = 1;
     bool     _bShadowSettingsChangePending = false;
@@ -144,6 +145,8 @@ struct DeferredRenderPipeline
     }
 
   private:
+        void loadPersistentSettings();
+        void saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
     void rebuildShadowViews();
     void initRenderTargets(Extent2D extent);
     void initShadowResources();

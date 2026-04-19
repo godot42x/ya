@@ -1,5 +1,6 @@
 #include "DeferredRenderPipeline.h"
 
+#include "Config/ConfigManager.h"
 #include "Core/Debug/PerfKeys.h"
 #include "Core/Debug/PerfState.h"
 #include "Render/Core/Sampler.h"
@@ -15,6 +16,11 @@ namespace ya
 
 namespace
 {
+
+constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                      = "editor";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING     = "render.deferred.shadow.enableShadowMapping";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW = "render.deferred.shadow.enablePointLightShadow";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS   = "render.deferred.shadow.maxPointLightShadowCount";
 
 } // namespace
 
@@ -206,9 +212,14 @@ void DeferredRenderPipeline::queueShadowSettingsChange(bool     bEnableShadowMap
                                                        bool     bEnablePointLightShadow,
                                                        uint32_t maxPointLightShadowCount)
 {
+    maxPointLightShadowCount         = std::min(maxPointLightShadowCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
     _pendingEnableShadowMapping      = bEnableShadowMapping;
     _pendingEnablePointLightShadow   = bEnablePointLightShadow;
     _pendingMaxPointLightShadowCount = maxPointLightShadowCount;
+    saveShadowSettingsToConfig(
+        _pendingEnableShadowMapping,
+        _pendingEnablePointLightShadow,
+        _pendingMaxPointLightShadowCount);
 
     if (_bShadowSettingsChangePending) {
         return;
@@ -263,6 +274,35 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
     }
 
     syncShadowSettings();
+}
+
+void DeferredRenderPipeline::loadPersistentSettings()
+{
+    auto& configManager            = ConfigManager::get();
+    _bEnableShadowMapping        = configManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
+                                                      _bEnableShadowMapping);
+    _bEnablePointLightShadow     = configManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
+                                                      _bEnablePointLightShadow);
+    int maxPointLightShadowCount = configManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                            DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+                                                            static_cast<int>(_maxPointLightShadowCount));
+    _maxPointLightShadowCount      = static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS)));
+    _pendingEnableShadowMapping    = _bEnableShadowMapping;
+    _pendingEnablePointLightShadow = _bEnablePointLightShadow;
+    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
+}
+
+void DeferredRenderPipeline::saveShadowSettingsToConfig(bool     bEnableShadowMapping,
+                                                        bool     bEnablePointLightShadow,
+                                                        uint32_t maxPointLightShadowCount) const
+{
+    ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING, bEnableShadowMapping)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW, bEnablePointLightShadow)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+             static_cast<int>(std::min(maxPointLightShadowCount, static_cast<uint32_t>(MAX_POINT_LIGHTS))));
 }
 
 void DeferredRenderPipeline::rebuildShadowViews()
@@ -333,9 +373,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     _render                          = desc.render;
     _bViewportPassOpen               = false;
     _bShadowSettingsChangePending    = false;
-    _pendingEnableShadowMapping      = _bEnableShadowMapping;
-    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
-    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
+    loadPersistentSettings();
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
     Extent2D extent{
