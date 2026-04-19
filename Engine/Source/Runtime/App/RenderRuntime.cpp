@@ -1,44 +1,24 @@
 #include "RenderRuntime.h"
 
 #include "App.h"
+#include "Core/Async/TaskQueue.h"
 #include "Core/Debug/RenderDocCapture.h"
+#include "Core/UI/UIManager.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Editor/EditorLayer.h"
-#include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
-
-#include "ImGuiHelper.h"
+#include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
-#include "Render/Core/Sampler.h"
-#include "Render/Core/Swapchain.h"
-
 #include "Resource/AssetManager.h"
-#include "Resource/DeferredDeletionQueue.h"
-#include "Resource/FontManager.h"
-#include "Resource/PrimitiveMeshCache.h"
-#include "Resource/ResourceRegistry.h"
-#include "Resource/TextureLibrary.h"
-
+#include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
-
-#include "Core/Async/TaskQueue.h"
-
-#include "Core/UI/UIManager.h"
-#include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
-
 #include "utility.cc/ranges.h"
 
-#include <SDL3/SDL.h>
-#include <algorithm>
-#include <array>
-#include <cctype>
-#include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
-#include <string_view>
-#include <vector>
-
 
 namespace ya
 {
@@ -70,6 +50,7 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
         .categoryIndex = categoryIndex,
         .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
         .groupSize     = 6,
+        .itemLabels    = {},
     };
 
     for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
@@ -93,322 +74,7 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
     }
 }
 
-struct RenderTargetFormatOption
-{
-    std::string_view label;
-    EFormat::T       format;
-};
-
-struct RuntimeRenderTargetEditorEntry
-{
-    enum class EOwner
-    {
-        Presentation,
-        ForwardViewport,
-        ForwardShadow,
-        DeferredGBuffer,
-        DeferredViewport,
-        DeferredShadow,
-    };
-
-    const char*    label     = "";
-    IRenderTarget* rt        = nullptr;
-    EOwner         owner     = EOwner::Presentation;
-    bool           bEditable = true;
-};
-
-constexpr std::array<RenderTargetFormatOption, 3> kShadowDepthFormats = {{
-    {"D16_UNORM", EFormat::D16_UNORM},
-    {"D24_UNORM_S8_UINT", EFormat::D24_UNORM_S8_UINT},
-    {"D32_SFLOAT", EFormat::D32_SFLOAT},
-}};
-
-constexpr std::array<RenderTargetFormatOption, 5> kColorFormats = {{
-    {"R8G8B8A8_UNORM", EFormat::R8G8B8A8_UNORM},
-    {"R8G8B8A8_SRGB", EFormat::R8G8B8A8_SRGB},
-    {"R16G16B16A16_SFLOAT", EFormat::R16G16B16A16_SFLOAT},
-    {"R32_SFLOAT", EFormat::R32_SFLOAT},
-    {"B8G8R8A8_UNORM", EFormat::B8G8R8A8_UNORM},
-}};
-
-bool isDepthAttachmentSelection(const IRenderTarget* rt, int attachmentIndex)
-{
-    if (!rt) {
-        return false;
-    }
-
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    return attachmentIndex >= colorCount && rt->getDepthAttachmentDesc().has_value();
-}
-
-bool containsInsensitive(std::string_view haystack, std::string_view needle)
-{
-    if (needle.empty()) {
-        return true;
-    }
-
-    auto toLower = [](unsigned char value)
-    {
-        return static_cast<char>(std::tolower(value));
-    };
-
-    std::string haystackLower(haystack.begin(), haystack.end());
-    std::string needleLower(needle.begin(), needle.end());
-    std::transform(haystackLower.begin(), haystackLower.end(), haystackLower.begin(), toLower);
-    std::transform(needleLower.begin(), needleLower.end(), needleLower.begin(), toLower);
-    return haystackLower.find(needleLower) != std::string::npos;
-}
-
-const char* formatLabel(EFormat::T format)
-{
-    for (const auto& option : kColorFormats) {
-        if (option.format == format) {
-            return option.label.data();
-        }
-    }
-    for (const auto& option : kShadowDepthFormats) {
-        if (option.format == format) {
-            return option.label.data();
-        }
-    }
-
-    return "Unknown";
-}
-
-IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
-{
-    if (!rt) {
-        return nullptr;
-    }
-
-    auto* frameBuffer = rt->getCurFrameBuffer();
-    if (!frameBuffer) {
-        return nullptr;
-    }
-
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    if (attachmentIndex < colorCount) {
-        auto* colorTexture = frameBuffer->getColorTexture(static_cast<uint32_t>(attachmentIndex));
-        return colorTexture ? colorTexture->getImageView() : nullptr;
-    }
-
-    if (!rt->getDepthAttachmentDesc().has_value()) {
-        return nullptr;
-    }
-
-    auto* depthTexture = frameBuffer->getDepthTexture();
-    return depthTexture ? depthTexture->getImageView() : nullptr;
-}
-
 } // namespace
-
-Texture* RenderRuntime::findSceneSkyboxTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneSkyboxTexture(scene);
-}
-
-Texture* RenderRuntime::findSceneEnvironmentCubemapTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentCubemapTexture(scene);
-}
-
-Texture* RenderRuntime::findSceneEnvironmentIrradianceTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
-}
-
-Texture* RenderRuntime::findSceneEnvironmentPrefilterTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentPrefilterTexture(scene);
-}
-
-void RenderRuntime::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture)
-{
-    if (!ds || !texture || !texture->getImageView() || !_cubemapSampler) {
-        return;
-    }
-
-    _render->getDescriptorHelper()->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genImageWrite(
-                ds,
-                0,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                {
-                    DescriptorImageInfo(
-                        texture->getImageView()->getHandle(),
-                        _cubemapSampler->getHandle(),
-                        EImageLayout::ShaderReadOnlyOptimal),
-                }),
-        },
-        {});
-}
-
-void RenderRuntime::updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds,
-                                                           Texture*            cubemapTexture,
-                                                           Texture*            irradianceTexture,
-                                                           Texture*            prefilterTexture,
-                                                           Texture*            brdfLutTexture)
-{
-    if (!ds || !cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture ||
-        !cubemapTexture->getImageView() || !irradianceTexture->getImageView() ||
-        !prefilterTexture->getImageView() || !brdfLutTexture->getImageView() || !_cubemapSampler) {
-        return;
-    }
-
-    _render->getDescriptorHelper()->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genImageWrite(
-                ds,
-                0,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                {
-                    DescriptorImageInfo(
-                        cubemapTexture->getImageView()->getHandle(),
-                        _cubemapSampler->getHandle(),
-                        EImageLayout::ShaderReadOnlyOptimal),
-                }),
-            IDescriptorSetHelper::genImageWrite(
-                ds,
-                1,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                {
-                    DescriptorImageInfo(
-                        irradianceTexture->getImageView()->getHandle(),
-                        _cubemapSampler->getHandle(),
-                        EImageLayout::ShaderReadOnlyOptimal),
-                }),
-            IDescriptorSetHelper::genImageWrite(
-                ds,
-                2,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                {
-                    DescriptorImageInfo(
-                        prefilterTexture->getImageView()->getHandle(),
-                        _cubemapSampler->getHandle(),
-                        EImageLayout::ShaderReadOnlyOptimal),
-                }),
-            IDescriptorSetHelper::genImageWrite(
-                ds,
-                3,
-                0,
-                EPipelineDescriptorType::CombinedImageSampler,
-                {
-                    DescriptorImageInfo(
-                        brdfLutTexture->getImageView()->getHandle(),
-                        _cubemapSampler->getHandle(),
-                        EImageLayout::ShaderReadOnlyOptimal),
-                }),
-        },
-        {});
-}
-
-DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
-{
-    if (!_skybox.sceneDS) {
-        return _skybox.fallbackDS;
-    }
-
-    if (!scene && _app && _app->getSceneManager()) {
-        scene = _app->getSceneManager()->getActiveScene();
-    }
-
-    auto* texture = findSceneSkyboxTexture(scene);
-    if (!texture) {
-        _skybox.boundSceneTexture = nullptr;
-        return _skybox.fallbackDS;
-    }
-
-    if (texture != _skybox.boundSceneTexture) {
-        updateSkyboxDescriptorSet(_skybox.sceneDS, texture);
-        _skybox.boundSceneTexture = texture;
-    }
-
-    return _skybox.sceneDS;
-}
-
-DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
-{
-    if (!_environmentLighting.sceneDS) {
-        return _environmentLighting.fallbackDS;
-    }
-
-    if (!scene && _app && _app->getSceneManager()) {
-        scene = _app->getSceneManager()->getActiveScene();
-    }
-
-    auto* cubemapTexture    = findSceneEnvironmentCubemapTexture(scene);
-    auto* irradianceTexture = findSceneEnvironmentIrradianceTexture(scene);
-    auto* prefilterTexture  = findSceneEnvironmentPrefilterTexture(scene);
-    auto* brdfLutTexture    = _sharedResources.pbrLUT.get();
-    if (!cubemapTexture) {
-        cubemapTexture = _skybox.fallbackTexture.get();
-    }
-    if (!irradianceTexture) {
-        irradianceTexture = _environmentLighting.fallbackIrradianceTexture.get();
-    }
-    if (!prefilterTexture) {
-        prefilterTexture = _environmentLighting.fallbackPrefilterTexture.get();
-    }
-
-    if (!cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture) {
-        return _environmentLighting.fallbackDS;
-    }
-
-    if (cubemapTexture != _environmentLighting.boundCubemapTexture ||
-        irradianceTexture != _environmentLighting.boundIrradianceTexture ||
-        prefilterTexture != _environmentLighting.boundPrefilterTexture) {
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
-                                               cubemapTexture,
-                                               irradianceTexture,
-                                               prefilterTexture,
-                                               brdfLutTexture);
-        _environmentLighting.boundCubemapTexture    = cubemapTexture;
-        _environmentLighting.boundIrradianceTexture = irradianceTexture;
-        _environmentLighting.boundPrefilterTexture  = prefilterTexture;
-    }
-
-    return _environmentLighting.sceneDS;
-}
-
-static void openDirectoryInOS(const std::string& filePath)
-{
-    if (filePath.empty()) {
-        YA_CORE_WARN("File path is empty, cannot open directory");
-        return;
-    }
-    auto dir = std::filesystem::path(filePath).parent_path();
-    if (dir.empty()) {
-        YA_CORE_WARN("Directory path is empty for file: {}", filePath);
-        return;
-    }
-    dir     = std::filesystem::absolute(dir);
-    auto p  = std::format("file:///{}", dir.string());
-    bool ok = SDL_OpenURL(p.c_str());
-    if (!ok) {
-        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
-    }
-}
 
 void RenderRuntime::onViewportResized(Rect2D rect)
 {
@@ -419,482 +85,6 @@ void RenderRuntime::onViewportResized(Rect2D rect)
     }
     if (_deferredPipeline) {
         _deferredPipeline->onViewportResized(rect);
-    }
-}
-
-
-void RenderRuntime::init(const InitDesc& desc)
-{
-    YA_PROFILE_FUNCTION_LOG();
-    YA_CORE_ASSERT(desc.app && desc.appDesc, "RenderRuntime init requires App and AppDesc");
-
-    _app              = desc.app;
-    const AppDesc& ci = *desc.appDesc;
-
-    currentRenderAPI = ERenderAPI::Vulkan;
-
-    _viewportRect = Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {static_cast<float>(ci.width), static_cast<float>(ci.height)},
-    };
-
-    auto shaderProcessor = ShaderProcessorFactory()
-                               .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
-                               .withShaderStoragePath("Engine/Shader/GLSL")
-                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-                               .FactoryNew<GLSLProcessor>();
-    _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-
-    auto slangProcessor = ShaderProcessorFactory()
-                              .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
-                              .withShaderStoragePath("Engine/Shader/Slang")
-                              .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
-                              .FactoryNew<SlangProcessor>();
-    _shaderStorage->setSlangProcessor(slangProcessor);
-
-    // Launch async shader preloading — compiles on a background thread while
-    // Vulkan context, descriptor pools, etc. are initialized on the main thread.
-    _shaderStorage->preloadAsync({
-        ShaderDesc{.shaderName = "Test/Unlit.glsl"},
-        ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"},
-        ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"},
-        ShaderDesc{.shaderName = "Sprite2D_World.glsl"},
-        ShaderDesc{.shaderName = "Test/DebugRender.glsl"},
-        ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"},
-        ShaderDesc{.shaderName = "Skybox.glsl"},
-        ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
-        ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
-        ShaderDesc{.shaderName = "Misc/pbr_generate_brdf_lut.slang"},
-    });
-    _deleter.push("ShaderStorage", [this](void*)
-                  { _shaderStorage.reset(); });
-
-    if (ci.bEnableRenderDoc) {
-        _renderDocCapture             = ya::makeShared<RenderDocCapture>();
-        _renderDocConfiguredDllPath   = ci.renderDocDllPath;
-        _renderDocConfiguredOutputDir = ci.renderDocCaptureOutputDir;
-        _renderDocCapture->init(_renderDocConfiguredDllPath, _renderDocConfiguredOutputDir);
-        _renderDocCapture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result)
-                                                      {
-            if (!result.bSuccess) {
-                return;
-            }
-            _renderDocLastCapturePath = result.capturePath;
-            switch (_renderDocOnCaptureAction) {
-            case 0:
-            case 1:
-                if (!_renderDocCapture->launchReplayUI(true, nullptr)) {
-                    YA_CORE_WARN("RenderDoc: failed to launch replay UI");
-                }
-                break;
-                struct RenderTargetFormatOption
-                {
-                    std::string_view label;
-                    EFormat::T       format;
-                };
-
-            case 2:
-                openDirectoryInOS(result.capturePath);
-                break;
-            default:
-                break;
-            } });
-        _deleter.push("RenderDocCapture", [this](void*)
-                      {
-            if (_renderDocCapture) {
-                _renderDocCapture->shutdown();
-                _renderDocCapture.reset();
-            } });
-    }
-
-    RenderCreateInfo renderCI{
-        .renderAPI   = currentRenderAPI,
-        .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = App::LINEAR_FORMAT,
-            .bVsync        = false,
-            .minImageCount = 3,
-            .width         = static_cast<uint32_t>(ci.width),
-            .height        = static_cast<uint32_t>(ci.height),
-        },
-    };
-
-    _render = IRender::create(renderCI);
-    YA_CORE_ASSERT(_render, "Failed to create IRender instance");
-    _render->init(renderCI);
-
-    if (ci.bEnableRenderDoc) {
-        _renderDocCapture->setRenderContext({
-            .device    = _render->as<VulkanRender>()->getDevice(),
-            .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-        });
-        _render->getSwapchain()->onRecreate.addLambda(
-            this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
-            {
-                (void)old;
-                (void)now;
-                (void)bImageRecreated;
-                _renderDocCapture->setRenderContext({
-                    .device    = _render->as<VulkanRender>()->getDevice(),
-                    .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-                });
-            });
-    }
-
-    {
-        TextureLibrary::get().init();
-
-        ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100);
-        ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);
-        ResourceRegistry::get().registerCache(FontManager::get(), 80);
-        ResourceRegistry::get().registerCache(AssetManager::get(), 70);
-    }
-
-    {
-        _skybox.dsl = IDescriptorSetLayout::create(
-            _render,
-            DescriptorSetLayoutDesc{
-                .label    = "App_Skybox_CubeMap_DSL",
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            });
-
-        _skybox.dsp = IDescriptorPool::create(
-            _render,
-            DescriptorPoolCreateInfo{
-                .label     = "App_Skybox_DSP",
-                .maxSets   = 4,
-                .poolSizes = {
-                    DescriptorPoolSize{
-                        .type            = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 4,
-                    },
-                },
-            });
-
-        _cubemapSampler = Sampler::create(SamplerDesc{
-            .label        = "App_SkyboxSampler",
-            .addressModeU = ESamplerAddressMode::Repeat,
-            .addressModeV = ESamplerAddressMode::Repeat,
-            .addressModeW = ESamplerAddressMode::Repeat,
-        });
-
-        _pbrGenerateBrdfLUT.init(_render);
-        _sharedResources.pbrLUT = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label     = "App_PBR_BRDF_LUT",
-            .width     = 512,
-            .height    = 512,
-            .format    = EFormat::R16G16B16A16_SFLOAT,
-            .usage     = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .mipLevels = 1,
-        });
-        YA_CORE_ASSERT(_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView(),
-                       "Failed to create PBR BRDF LUT render texture");
-        if (_sharedResources.pbrLUT) {
-            auto*      cmdBuf = _render->beginIsolateCommands("App_PBR_BRDF_LUT");
-            const auto result = _pbrGenerateBrdfLUT.execute({
-                .cmdBuf = cmdBuf,
-                .output = _sharedResources.pbrLUT.get(),
-            });
-            _render->endIsolateCommands(cmdBuf);
-            YA_CORE_ASSERT(result.bSuccess, "Failed to generate PBR BRDF LUT");
-        }
-
-        _skybox.fallbackTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
-        YA_CORE_ASSERT(_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView(),
-                       "Failed to create fallback skybox cubemap");
-
-        _skybox.fallbackDS = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
-        _skybox.sceneDS    = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
-        updateSkyboxDescriptorSet(_skybox.fallbackDS, _skybox.fallbackTexture.get());
-        updateSkyboxDescriptorSet(_skybox.sceneDS, _skybox.fallbackTexture.get());
-
-        _environmentLighting.dsl = IDescriptorSetLayout::create(
-            _render,
-            DescriptorSetLayoutDesc{
-                .label    = "App_EnvironmentLighting_DSL",
-                .bindings = {
-                    DescriptorSetLayoutBinding{
-                        .binding         = 0,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    DescriptorSetLayoutBinding{
-                        .binding         = 1,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    DescriptorSetLayoutBinding{
-                        .binding         = 2,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                    DescriptorSetLayoutBinding{
-                        .binding         = 3,
-                        .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Fragment,
-                    },
-                },
-            });
-
-        _environmentLighting.dsp = IDescriptorPool::create(
-            _render,
-            DescriptorPoolCreateInfo{
-                .label     = "App_EnvironmentLighting_DSP",
-                .maxSets   = 2,
-                .poolSizes = {
-                    DescriptorPoolSize{
-                        .type            = EPipelineDescriptorType::CombinedImageSampler,
-                        .descriptorCount = 8,
-                    },
-                },
-            });
-
-        _environmentLighting.fallbackIrradianceTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
-        YA_CORE_ASSERT(_environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView(),
-                       "Failed to create fallback irradiance cubemap");
-        _environmentLighting.fallbackPrefilterTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackPrefilter");
-        YA_CORE_ASSERT(_environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView(),
-                       "Failed to create fallback prefilter cubemap");
-
-        _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
-        _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
-                                               _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get(),
-                                               _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
-                                               _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get(),
-                                               _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
-
-        _deleter.push("RenderBindings", [this](void*)
-                      { releaseRenderOwnedResources(); });
-    }
-
-    // Wait for all shaders to finish compiling before creating pipelines
-    _shaderStorage->waitForPreload();
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-
-    initActivePipeline();
-
-    {
-        _screenRenderPass = nullptr;
-
-        _screenRT = ya::createRenderTarget(RenderTargetCreateInfo{
-            .label            = "Final RenderTarget",
-            .renderingMode    = ERenderingMode::DynamicRendering,
-            .bSwapChainTarget = true,
-            .attachments      = {
-                     .colorAttach = {
-                    AttachmentDescription{
-                             .index          = 0,
-                             .format         = _render->getSwapchain()->getFormat(),
-                             .samples        = ESampleCount::Sample_1,
-                             .loadOp         = EAttachmentLoadOp::Clear,
-                             .storeOp        = EAttachmentStoreOp::Store,
-                             .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                             .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                             .initialLayout  = EImageLayout::Undefined,
-                             .finalLayout    = EImageLayout::PresentSrcKHR,
-                             .usage          = EImageUsage::ColorAttachment,
-                    },
-                },
-            },
-        });
-
-        _render->getSwapchain()->onRecreate.addLambda(
-            this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
-            {
-                const bool bExtentChanged      = (now.extent.width != old.extent.width ||
-                                             now.extent.height != old.extent.height);
-                const bool bPresentModeChanged = (old.presentMode != now.presentMode);
-
-                if (bExtentChanged) {
-                    _screenRT->setExtent(Extent2D{
-                        .width  = now.extent.width,
-                        .height = now.extent.height,
-                    });
-                }
-
-                if (bImageRecreated || bPresentModeChanged) {
-                    _screenRT->recreate();
-                }
-            });
-
-        _deleter.push("ScreenRT", [this](void*)
-                      {
-            if (_screenRT) {
-                _screenRT->destroy();
-                _screenRT.reset();
-            }
-            _screenRenderPass.reset(); });
-    }
-
-    std::vector<stdptr<ICommandBuffer>> cmdBufs;
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
-    _commandBuffers.assign(cmdBufs.begin(), cmdBufs.begin() + _render->getSwapchainImageCount());
-    _offscreenCmdBuf = cmdBufs.back();
-    _deleter.push("CmdBufs", [this](void*)
-                  {
-        _commandBuffers.clear();
-        _offscreenCmdBuf.reset(); });
-
-    // Create a dedicated fence for offscreen work so we don't need waitIdle().
-    {
-        auto*             vkRender = static_cast<VulkanRender*>(_render);
-        VkFenceCreateInfo fenceCI{
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0, // initially unsignaled
-        };
-        VkFence  fence = VK_NULL_HANDLE;
-        VkResult ret   = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
-        _offscreenFence   = fence;
-        _offscreenPending = false;
-        _deleter.push("OffscreenFence", [this](void*)
-                      {
-            if (_offscreenFence) {
-                auto* vkR = static_cast<VulkanRender*>(_render);
-                vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
-                _offscreenFence   = nullptr;
-                _offscreenPending = false;
-            } });
-    }
-
-    ImGuiManager::get().init(_render, nullptr);
-    _render->waitIdle();
-
-    // ── Resource management subsystems ──────────────────────────────────
-    // Initialize GPU-safe deferred deletion queue.
-    // framesInFlight: resources are kept alive for this many extra frames
-    // after removal from the cache, guaranteeing the GPU has finished with them.
-    DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
-
-    // Start async IO task queue (file reading, texture decoding).
-    TaskQueue::get().start(/*numThreads=*/2);
-}
-
-void RenderRuntime::shutdown()
-{
-    if (_render) {
-        _render->waitIdle();
-    }
-
-    shutdownActivePipeline();
-
-    ImGuiManager::get().shutdown();
-
-    ResourceRegistry::get().clearAll();
-
-    TaskQueue::get().stop();
-
-    _deleter.clear();
-
-    if (_render) {
-        // GPU is idle — safe to execute ALL pending resource destructors now.
-        DeferredDeletionQueue::get().flushAll();
-
-        _render->destroy();
-        delete _render;
-        _render = nullptr;
-    }
-}
-
-void RenderRuntime::releaseRenderOwnedResources()
-{
-    _skybox.fallbackTexture.reset();
-    _skybox.boundSceneTexture = nullptr;
-    _skybox.sceneDS           = nullptr;
-    _skybox.fallbackDS        = nullptr;
-    _skybox.dsp.reset();
-    _skybox.dsl.reset();
-
-    _environmentLighting.fallbackIrradianceTexture.reset();
-    _environmentLighting.fallbackPrefilterTexture.reset();
-    _environmentLighting.boundCubemapTexture    = nullptr;
-    _environmentLighting.boundIrradianceTexture = nullptr;
-    _environmentLighting.boundPrefilterTexture  = nullptr;
-    _environmentLighting.sceneDS                = nullptr;
-    _environmentLighting.fallbackDS             = nullptr;
-    _environmentLighting.dsp.reset();
-    _environmentLighting.dsl.reset();
-    _sharedResources.pbrLUT.reset();
-    _pbrGenerateBrdfLUT.shutdown();
-
-    _cubemapSampler.reset();
-}
-
-void RenderRuntime::resetSkyboxPool()
-{
-    if (!_skybox.dsp || !_skybox.dsl) {
-        return;
-    }
-
-    // Return cached skybox descriptor sets back to the pool and rebuild them.
-    _skybox.dsp->resetPool();
-    _skybox.sceneDS           = nullptr;
-    _skybox.fallbackDS        = nullptr;
-    _skybox.boundSceneTexture = nullptr;
-
-    _skybox.fallbackDS = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
-    _skybox.sceneDS    = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
-    YA_CORE_ASSERT(_skybox.fallbackDS, "Failed to re-allocate fallback skybox descriptor set");
-    YA_CORE_ASSERT(_skybox.sceneDS, "Failed to re-allocate scene skybox descriptor set");
-
-    if (_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView()) {
-        updateSkyboxDescriptorSet(_skybox.fallbackDS, _skybox.fallbackTexture.get());
-        updateSkyboxDescriptorSet(_skybox.sceneDS, _skybox.fallbackTexture.get());
-    }
-}
-
-void RenderRuntime::resetEnvironmentLightingPool()
-{
-    if (!_environmentLighting.dsp || !_environmentLighting.dsl) {
-        return;
-    }
-
-    _environmentLighting.dsp->resetPool();
-    _environmentLighting.sceneDS                = nullptr;
-    _environmentLighting.fallbackDS             = nullptr;
-    _environmentLighting.boundCubemapTexture    = nullptr;
-    _environmentLighting.boundIrradianceTexture = nullptr;
-    _environmentLighting.boundPrefilterTexture  = nullptr;
-
-    _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
-    _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
-    YA_CORE_ASSERT(_environmentLighting.fallbackDS, "Failed to re-allocate fallback environment lighting descriptor set");
-    YA_CORE_ASSERT(_environmentLighting.sceneDS, "Failed to re-allocate scene environment lighting descriptor set");
-
-    if (_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView() &&
-        _environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView() &&
-        _environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView() &&
-        _sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.fallbackDS,
-                                               _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get(),
-                                               _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
-        updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
-                                               _skybox.fallbackTexture.get(),
-                                               _environmentLighting.fallbackIrradianceTexture.get(),
-                                               _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
     }
 }
 
@@ -909,7 +99,6 @@ void RenderRuntime::offScreenRender()
         return;
     }
 
-    // Wait for the previous offscreen batch to finish (fence, not waitIdle).
     if (_offscreenPending && _offscreenFence) {
         auto*   vkRender = static_cast<VulkanRender*>(_render);
         VkFence fence    = static_cast<VkFence>(_offscreenFence);
@@ -938,18 +127,15 @@ void RenderRuntime::offScreenRender()
         return;
     }
 
-    // Submit with fence — does not block.
     _render->submitToQueue({cmdBuf->getHandle()}, {}, {}, _offscreenFence);
     _offscreenPending = true;
 }
 
-// MARK: render
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()
 
     applyPendingShadingModelSwitch();
-
     offScreenRender();
 
     if (_viewportRect.extent.x <= 0 || _viewportRect.extent.y <= 0) {
@@ -966,10 +152,9 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     }
     _viewportFrameBufferScale = input.viewportFrameBufferScale;
 
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameBegin();
+    if (_renderDoc.capture) {
+        _renderDoc.capture->onFrameBegin();
     }
-
 
     if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
         return;
@@ -1036,18 +221,17 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             .windowWidth  = viewportExtent.width,
             .windowHeight = viewportExtent.height,
             .cam          = {
-                         .position       = input.cameraPos,
-                         .view           = input.view,
-                         .projection     = input.projection,
-                         .viewProjection = input.projection * input.view,
+                .position       = input.cameraPos,
+                .view           = input.view,
+                .projection     = input.projection,
+                .viewProjection = input.projection * input.view,
             },
         };
 
         Render2D::begin(render2dCtx);
 
         if (input.appMode == AppMode::Drawing && input.editorLayer && input.clicked) {
-            for (const auto&& [idx, p] : ut::enumerate(*input.clicked))
-            {
+            for (const auto&& [idx, p] : ut::enumerate(*input.clicked)) {
                 auto tex = idx % 2 == 0
                              ? AssetManager::get()->getTextureByName("uv1")
                              : AssetManager::get()->getTextureByName("face");
@@ -1060,14 +244,12 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
         auto scene = input.sceneManager ? input.sceneManager->getActiveScene() : nullptr;
         if (scene) {
-            // TODO: migrate billboard rendering to RenderFrameData snapshot
             const glm::vec2 screenSize(30, 30);
             const float     viewPortHeight = static_cast<float>(viewportExtent.height);
             const float     scaleFactor    = screenSize.x / viewPortHeight;
 
             for (const auto& [entity, billboard, transfCompp] :
-                 scene->getRegistry().view<BillboardComponent, TransformComponent>().each())
-            {
+                 scene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                 auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
                 const auto& pos     = transfCompp.getWorldPosition();
 
@@ -1137,7 +319,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         constexpr uint32_t CATEGORY_VIEWPORT    = 4;
         constexpr uint32_t CATEGORY_SHARED      = 5;
 
-        // TODO: cache each frame's debug, change if modified
         if (_shadingModel == EShadingModel::Forward) {
             if (isShadowMappingEnabled()) {
                 if (auto* directionalDepth = getShadowDirectionalDepthIV()) {
@@ -1156,11 +337,11 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                     .categoryIndex = CATEGORY_SHADOW,
                     .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                     .groupSize     = 6,
+                    .itemLabels    = {},
                 };
                 for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
                     for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-                        if (auto* faceIV = getShadowPointFaceDepthIV(pointLightIndex, faceIndex))
-                        {
+                        if (auto* faceIV = getShadowPointFaceDepthIV(pointLightIndex, faceIndex)) {
                             auto slot = EditorViewportContext::ImageSlot{
                                 .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
                                 .defaultView   = faceIV,
@@ -1181,7 +362,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
             if (auto* scene = _app->getSceneManager()->getActiveScene()) {
                 auto* resolver = _app->getResourceResolveSystem();
-                // Use the read-only preview API instead of accessing SkyboxRuntimeState directly.
                 if (resolver) {
                     for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
                         auto preview = resolver->getSkyboxPreview(entity);
@@ -1196,6 +376,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                             .categoryIndex = CATEGORY_SKYBOX,
                             .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                             .groupSize     = CubeFace_Count,
+                            .itemLabels    = {},
                         };
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -1217,7 +398,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         if (skyboxGroup.slotCount >= skyboxGroup.groupSize) {
                             ctx.debugSpec.groups.push_back(std::move(skyboxGroup));
                         }
-                        break; // only first skybox
+                        break;
                     }
                 }
             }
@@ -1264,7 +445,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                     .image         = fb.getDepthTexture()->getImageShared(),
                     .categoryIndex = CATEGORY_GBUFFER,
                     .aspectFlags   = EImageAspect::Depth,
-                    .tint          = {1, 0, 0, 1}, // only red mask
+                    .tint          = {1, 0, 0, 1},
                 },
             };
 
@@ -1283,8 +464,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 .image         = viewPortRT->getDepthTexture() ? viewPortRT->getDepthTexture()->getImageShared() : nullptr,
                 .categoryIndex = CATEGORY_VIEWPORT,
                 .aspectFlags   = EImageAspect::Depth,
-                .tint          = {1, 0, 0, 1}, // only red mask
-
+                .tint          = {1, 0, 0, 1},
             });
 
             if (_deferredPipeline && _deferredPipeline->getShadowDepthRT()) {
@@ -1292,9 +472,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                 if (auto* shadowFb = _deferredPipeline->getShadowDepthRT()->getCurFrameBuffer()) {
                     shadowDepthTexture = shadowFb->getDepthTexture();
                 }
-                appendShadowDebugSlots(ctx, _deferredPipeline->getShadowDirectionalDepthIV(), shadowDepthTexture, [this](uint32_t pointLightIndex, uint32_t faceIndex)
-                                       { return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
-                                       CATEGORY_SHADOW);
+                appendShadowDebugSlots(
+                    ctx,
+                    _deferredPipeline->getShadowDirectionalDepthIV(),
+                    shadowDepthTexture,
+                    [this](uint32_t pointLightIndex, uint32_t faceIndex)
+                    { return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+                    CATEGORY_SHADOW);
             }
         }
 
@@ -1323,6 +507,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                             .categoryIndex = CATEGORY_ENVIRONMENT,
                             .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                             .groupSize     = CubeFace_Count,
+                            .itemLabels    = {},
                         };
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -1354,6 +539,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                             .categoryIndex = CATEGORY_ENVIRONMENT,
                             .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                             .groupSize     = CubeFace_Count,
+                            .itemLabels    = {},
                         };
 
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -1388,6 +574,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                                 .categoryIndex = CATEGORY_ENVIRONMENT,
                                 .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                                 .groupSize     = CubeFace_Count,
+                                .itemLabels    = {},
                             };
                             prefilterGroup.itemLabels.reserve(mipLevels);
 
@@ -1418,7 +605,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
                         }
                     }
 
-                    break; // only first environment lighting preview
+                    break;
                 }
             }
         }
@@ -1457,16 +644,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         cmdBuf->endRendering(ri);
     }
 
-    // ── Per-frame resource management ───────────────────────────────────
-    // Process completed async task callbacks on the main thread
-    // (e.g. GPU texture uploads after background file IO completes).
     TaskQueue::get().processMainThreadCallbacks();
 
     cmdBuf->end();
     _render->end(imageIndex, {cmdBuf->getHandle()});
 
-    if (_renderDocCapture) {
-        _renderDocCapture->onFrameEnd();
+    if (_renderDoc.capture) {
+        _renderDoc.capture->onFrameEnd();
     }
 }
 
@@ -1557,82 +741,10 @@ Extent2D RenderRuntime::getViewportExtent() const
     return {};
 }
 
-void RenderRuntime::renderGUI(float dt)
-{
-    (void)dt;
-
-    if (ImGui::TreeNode("World Rendering")) {
-        static const char* items[] = {"Forward", "Deferred"};
-        int                current = static_cast<int>(_pendingShadingModel);
-        if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
-            _pendingShadingModel = static_cast<EShadingModel>(current);
-        }
-        if (_pendingShadingModel != _shadingModel) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
-        }
-        if (_forwardPipeline) {
-            _forwardPipeline->renderGUI();
-        }
-        if (_deferredPipeline) {
-            _deferredPipeline->renderGUI();
-        }
-        ImGui::TreePop();
-    }
-
-    renderRenderTargetEditor();
-
-    if (ImGui::TreeNode("Final Render Target")) {
-        if (_screenRT) {
-            _screenRT->onRenderGUI();
-        }
-        ImGui::TreePop();
-    }
-
-    ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
-
-    if (ImGui::TreeNode("RenderDoc")) {
-        bool bAvailable = _renderDocCapture && _renderDocCapture->isAvailable();
-        ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
-        ImGui::TextWrapped("DLL Path: %s", _renderDocConfiguredDllPath.empty() ? "<default>" : _renderDocConfiguredDllPath.c_str());
-        ImGui::TextWrapped("Output Dir: %s", _renderDocConfiguredOutputDir.empty() ? "<default>" : _renderDocConfiguredOutputDir.c_str());
-        if (bAvailable) {
-            bool bCaptureEnabled = _renderDocCapture->isCaptureEnabled();
-            if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
-                _renderDocCapture->setCaptureEnabled(bCaptureEnabled);
-            }
-
-            bool bHudVisible = _renderDocCapture->isHUDVisible();
-            if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
-                _renderDocCapture->setHUDVisible(bHudVisible);
-            }
-
-            ImGui::Text("Capturing: %s", _renderDocCapture->isCapturing() ? "Yes" : "No");
-            ImGui::Text("Delay Frames: %u", _renderDocCapture->getDelayFrames());
-            ImGui::Combo("On Capture", &_renderDocOnCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
-            ImGui::TextWrapped("Last Capture: %s", _renderDocLastCapturePath.empty() ? "<none>" : _renderDocLastCapturePath.c_str());
-
-            bool bCanCapture = _renderDocCapture->isCaptureEnabled();
-            ImGui::BeginDisabled(!bCanCapture);
-            if (ImGui::Button("Capture Next Frame (F9)")) {
-                _renderDocCapture->requestNextFrame();
-            }
-            if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
-                _renderDocCapture->requestAfterFrames(120);
-            }
-            ImGui::EndDisabled();
-
-            if (ImGui::Button("Open Last Capture Folder") && !_renderDocLastCapturePath.empty()) {
-                openDirectoryInOS(_renderDocLastCapturePath);
-            }
-        }
-        ImGui::TreePop();
-    }
-}
-
 void RenderRuntime::initActivePipeline()
 {
-    int winW = 0, winH = 0;
+    int winW = 0;
+    int winH = 0;
     _render->getWindowSize(winW, winH);
 
     if (_shadingModel == EShadingModel::Forward) {
@@ -1700,199 +812,6 @@ void RenderRuntime::applyPendingShadingModelSwitch()
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
         onViewportResized(_viewportRect);
     }
-}
-
-void RenderRuntime::renderRenderTargetEditor()
-{
-    if (!ImGui::TreeNode("RT Editor")) {
-        return;
-    }
-
-    std::vector<RuntimeRenderTargetEditorEntry> entries;
-    if (_screenRT) {
-        entries.push_back({.label = "Presentation", .rt = _screenRT.get(), .owner = RuntimeRenderTargetEditorEntry::EOwner::Presentation, .bEditable = false});
-    }
-    if (_forwardPipeline) {
-        entries.push_back({.label = "Forward Viewport", .rt = _forwardPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardViewport});
-        entries.push_back({.label = "Forward Shadow", .rt = _forwardPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow});
-    }
-    if (_deferredPipeline) {
-        entries.push_back({.label = "Deferred GBuffer", .rt = _deferredPipeline->getGBufferRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer});
-        entries.push_back({.label = "Deferred Viewport", .rt = _deferredPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport});
-        entries.push_back({.label = "Deferred Shadow", .rt = _deferredPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow});
-    }
-
-    if (entries.empty()) {
-        ImGui::TextUnformatted("No render targets are available.");
-        ImGui::TreePop();
-        return;
-    }
-
-    ImGui::SetNextItemWidth(200.0f);
-    ImGui::InputTextWithHint("##runtime-rt-editor-search", "Search RT...", _rtEditorTargetSearch, sizeof(_rtEditorTargetSearch));
-
-    std::vector<int> filteredIndices;
-    for (int index = 0; index < static_cast<int>(entries.size()); ++index) {
-        if (containsInsensitive(entries[index].label, _rtEditorTargetSearch)) {
-            filteredIndices.push_back(index);
-        }
-    }
-
-    if (filteredIndices.empty()) {
-        ImGui::TextUnformatted("No render target matches the current search.");
-        ImGui::TreePop();
-        return;
-    }
-
-    if (_rtEditorSelectedTargetIndex < 0 || _rtEditorSelectedTargetIndex >= static_cast<int>(entries.size()) || std::find(filteredIndices.begin(), filteredIndices.end(), _rtEditorSelectedTargetIndex) == filteredIndices.end()) {
-        auto preferredIndex = filteredIndices.front();
-        for (int index : filteredIndices) {
-            if (!entries[index].rt || entries[index].rt->isSwapChainTarget()) {
-                continue;
-            }
-            preferredIndex = index;
-            break;
-        }
-
-        _rtEditorSelectedTargetIndex     = preferredIndex;
-        _rtEditorSelectedAttachmentIndex = 0;
-    }
-
-    const auto& selectedEntry = entries[_rtEditorSelectedTargetIndex];
-    if (ImGui::BeginCombo("Target", selectedEntry.label)) {
-        for (int index : filteredIndices) {
-            const bool bSelected = index == _rtEditorSelectedTargetIndex;
-            if (ImGui::Selectable(entries[index].label, bSelected)) {
-                _rtEditorSelectedTargetIndex     = index;
-                _rtEditorSelectedAttachmentIndex = 0;
-            }
-            if (bSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    if (!selectedEntry.rt) {
-        ImGui::TextUnformatted("Selected RT is not initialized.");
-        ImGui::TreePop();
-        return;
-    }
-
-    const int  colorCount            = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
-    const bool bHasDepth             = selectedEntry.rt->getDepthAttachmentDesc().has_value();
-    const int  attachmentCount       = colorCount + (bHasDepth ? 1 : 0);
-    _rtEditorSelectedAttachmentIndex = std::clamp(_rtEditorSelectedAttachmentIndex, 0, std::max(attachmentCount - 1, 0));
-
-    const std::string selectedAttachmentLabel = _rtEditorSelectedAttachmentIndex < colorCount
-                                                  ? std::format("Color[{}]", _rtEditorSelectedAttachmentIndex)
-                                                  : std::string("Depth");
-    if (attachmentCount > 0 && ImGui::BeginCombo("Attachment", selectedAttachmentLabel.c_str())) {
-        for (int attachmentIndex = 0; attachmentIndex < attachmentCount; ++attachmentIndex) {
-            const bool        bSelected = attachmentIndex == _rtEditorSelectedAttachmentIndex;
-            const std::string label     = attachmentIndex < colorCount ? std::format("Color[{}]", attachmentIndex) : "Depth";
-            if (ImGui::Selectable(label.c_str(), bSelected)) {
-                _rtEditorSelectedAttachmentIndex = attachmentIndex;
-            }
-            if (bSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    ImGui::Text("Extent: %u x %u", selectedEntry.rt->getExtent().width, selectedEntry.rt->getExtent().height);
-    ImGui::Text("Frame Buffers: %u", selectedEntry.rt->getFrameBufferCount());
-
-    EFormat::T currentFormat = EFormat::Undefined;
-    if (_rtEditorSelectedAttachmentIndex < colorCount) {
-        currentFormat = selectedEntry.rt->getColorAttachmentDescs()[_rtEditorSelectedAttachmentIndex].format;
-    }
-    else if (bHasDepth) {
-        currentFormat = selectedEntry.rt->getDepthAttachmentDesc()->format;
-    }
-    ImGui::Text("Format: %s", formatLabel(currentFormat));
-
-    auto* sampler = TextureLibrary::get().getDefaultSampler().get();
-    const bool bCanPreview = !selectedEntry.rt->isSwapChainTarget();
-    if (!bCanPreview) {
-        ImGui::TextWrapped("Preview is disabled for the presentation target because this UI is rendered into the same swapchain image during the screen pass.");
-    }
-    else if (auto* imageView = getAttachmentImageView(selectedEntry.rt, _rtEditorSelectedAttachmentIndex)) {
-        ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
-    }
-
-    const bool bEditingDepth = isDepthAttachmentSelection(selectedEntry.rt, _rtEditorSelectedAttachmentIndex);
-    if (!selectedEntry.bEditable) {
-        ImGui::SeparatorText("Attachment Format");
-        ImGui::TextWrapped("Presentation target format is owned by the swapchain and is currently read-only here.");
-        ImGui::TreePop();
-        return;
-    }
-
-    ImGui::SeparatorText("Attachment Format");
-    ImGui::SetNextItemWidth(200.0f);
-    ImGui::InputTextWithHint("##runtime-rt-format-search", "Search format...", _rtEditorFormatSearch, sizeof(_rtEditorFormatSearch));
-
-    const char* comboLabel   = bEditingDepth ? "Depth Format" : "Color Format";
-    const char* currentLabel = formatLabel(currentFormat);
-    if (ImGui::BeginCombo(comboLabel, currentLabel)) {
-        if (bEditingDepth) {
-            for (const auto& option : kShadowDepthFormats) {
-                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
-                    continue;
-                }
-
-                const bool bSelected = option.format == currentFormat;
-                if (ImGui::Selectable(option.label.data(), bSelected)) {
-                    switch (selectedEntry.owner) {
-                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer:
-                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport:
-                        if (_deferredPipeline) {
-                            if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
-                                gbufferRT->setDepthAttachmentFormat(option.format);
-                            }
-                            if (auto* viewportRT = _deferredPipeline->getViewportRT()) {
-                                viewportRT->setDepthAttachmentFormat(option.format);
-                            }
-                        }
-                        break;
-                    default:
-                        selectedEntry.rt->setDepthAttachmentFormat(option.format);
-                        break;
-                    }
-                }
-                if (bSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-        }
-        else {
-            for (const auto& option : kColorFormats) {
-                if (!containsInsensitive(option.label, _rtEditorFormatSearch)) {
-                    continue;
-                }
-
-                const bool bSelected = option.format == currentFormat;
-                if (ImGui::Selectable(option.label.data(), bSelected)) {
-                    selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditorSelectedAttachmentIndex), option.format);
-                }
-                if (bSelected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport)) {
-        ImGui::TextWrapped("Deferred GBuffer depth and Deferred Viewport depth are applied together so the current depth copy path stays format-compatible on the next frame.");
-    }
-    else if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow)) {
-        ImGui::TextWrapped("D16_UNORM usually reduces depth bandwidth and memory versus D24/D32, but actual gain depends on the GPU and driver. Test with shadow budgets on the target hardware.");
-    }
-
-    ImGui::TreePop();
 }
 
 } // namespace ya

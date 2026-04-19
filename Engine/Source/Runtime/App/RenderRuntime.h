@@ -107,6 +107,23 @@ struct RenderRuntime
         stdptr<Texture> pbrLUT = nullptr;
     };
 
+    struct RenderTargetEditorState
+    {
+        int  selectedTargetIndex     = 0;
+        int  selectedAttachmentIndex = 0;
+        char targetSearch[64]        = {};
+        char formatSearch[64]        = {};
+    };
+
+    struct RenderDocState
+    {
+        stdptr<RenderDocCapture> capture;
+        int                      onCaptureAction = 0;
+        std::string              lastCapturePath;
+        std::string              configuredDllPath;
+        std::string              configuredOutputDir;
+    };
+
     SkyboxResources              _skybox{};
     EnvironmentLightingResources _environmentLighting{};
     SharedResources              _sharedResources{};
@@ -122,16 +139,8 @@ struct RenderRuntime
     std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr;
 
-    int  _rtEditorSelectedTargetIndex     = 0;
-    int  _rtEditorSelectedAttachmentIndex = 0;
-    char _rtEditorTargetSearch[64]        = {};
-    char _rtEditorFormatSearch[64]        = {};
-
-    stdptr<RenderDocCapture> _renderDocCapture;
-    int                      _renderDocOnCaptureAction = 0;
-    std::string              _renderDocLastCapturePath;
-    std::string              _renderDocConfiguredDllPath;
-    std::string              _renderDocConfiguredOutputDir;
+    RenderTargetEditorState _rtEditor{};
+    RenderDocState          _renderDoc{};
 
     void init(const InitDesc& desc);
     void shutdown();

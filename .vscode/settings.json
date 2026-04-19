@@ -143,6 +143,11 @@
         "**/Engine/ThirdParty/imguizmo/example": true,
         "**/Engine/ThirdParty/Vulkan-Samples-Assets": true
     },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        "*.h": "$(capture).*.cpp"
+    },
     "glsllint.glslangValidatorPath": "uv",
     "glsllint.glslangValidatorArgs": [
         "run",
