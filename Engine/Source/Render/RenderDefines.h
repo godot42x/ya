@@ -204,7 +204,8 @@ struct ShaderDesc
 
     [[nodiscard]] std::string cacheKey() const
     {
-        auto appendDefines = [&](std::string& key) {
+        auto appendDefines = [&](std::string& key)
+        {
             if (defines.empty()) {
                 return;
             }
@@ -998,7 +999,7 @@ struct RenderingInfo
         uint32_t viewMask = 0;
         // bool            bResolveTarget = false;
 
-        EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;   // Load operation
+        EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;  // Load operation
         EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
 
         // Layout transitions (mirroring AttachmentDescription for manual image path)
@@ -1371,10 +1372,6 @@ struct SamplerDesc
 
 
 
-
-
-
-
 /**
  * @brief Type-safe command buffer handle
  */
@@ -1402,9 +1399,8 @@ struct FrameContext
         glm::mat4 projection;
         glm::mat4 viewProjection;
         glm::vec3 direction;
-        glm::vec3 ambient;
-        glm::vec3 diffuse;
-        glm::vec3 specular;
+        glm::vec3 color;
+        float     intensity;
     } directionalLight;
     bool bHasDirectionalLight = false;
 
@@ -1413,13 +1409,16 @@ struct FrameContext
         // shadow
         glm::vec3 position;
         // visual
-        float     type      = 0;
+        float type = 0;
+
+        // phong spec
         float     constant  = 1.0f;
         float     linear    = 0.09f;
         float     quadratic = 0.032f;
-        glm::vec3 ambient;
-        glm::vec3 diffuse;
-        glm::vec3 specular;
+
+        // normal light spec
+        glm::vec3 color;
+        float     intensity;
 
         // for spot light
         glm::vec3 spotDir;

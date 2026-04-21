@@ -15,9 +15,8 @@
 struct DirectionalLight
 {
     float3 direction;
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
+    float3 color;
+    float  intensity;
     float4x4 directionalLightMatrix;
 };
 
@@ -29,10 +28,8 @@ struct PointLight
     float quadratic;
 
     float3 position;
-
-    float3 ambient;
-    float3 diffuse;
-    float3 specular;
+    float3 color;
+    float  intensity;
 
     float nearPlane;
     float farPlane;
@@ -253,13 +250,15 @@ float3 calculateDirLight(
     float3 norm, float3 viewDir,
     float3 diffuseTexColor, float3 specularTexColor)
 {
+    const float ambientFactor = 0.03;
     float3 lightDir = normalize(-dirLight.direction);
     float diff = max(dot(norm, lightDir), 0.0);
     float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
+    float3 radiance = dirLight.color * dirLight.intensity;
 
-    float3 ambient  = dirLight.ambient  * diffuseTexColor  * uParams.ambient;
-    float3 diffuse  = dirLight.diffuse  * diff  * diffuseTexColor  * uParams.diffuse;
-    float3 specular = dirLight.specular * spec  * specularTexColor * uParams.specular;
+    float3 ambient  = ambientFactor * radiance * diffuseTexColor  * uParams.ambient;
+    float3 diffuse  = radiance * diff  * diffuseTexColor  * uParams.diffuse;
+    float3 specular = radiance * spec  * specularTexColor * uParams.specular;
 
     // Shadow
     // Reuse the interpolated fragLightSpacePos from the fragment input
@@ -274,14 +273,16 @@ float3 calculatePointLight(
     float3 diffuseTexColor, float3 specularTexColor,
     int pointLightIndex)
 {
+    const float ambientFactor = 0.03;
     float3 lightDir = normalize(pointLight.position - fragPos);
 
     float diff = max(dot(norm, lightDir), 0.0);
     float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
 
-    float3 ambient  = pointLight.ambient  * diffuseTexColor  * uParams.ambient;
-    float3 diffuse  = pointLight.diffuse  * diff  * diffuseTexColor  * uParams.diffuse;
-    float3 specular = pointLight.specular * spec  * specularTexColor * uParams.specular;
+    float3 radiance = pointLight.color * pointLight.intensity;
+    float3 ambient  = ambientFactor * radiance * diffuseTexColor  * uParams.ambient;
+    float3 diffuse  = radiance * diff  * diffuseTexColor  * uParams.diffuse;
+    float3 specular = radiance * spec  * specularTexColor * uParams.specular;
 
     // Spot light
     if (pointLight.type == 1.0)
@@ -289,6 +290,7 @@ float3 calculatePointLight(
         float theta   = dot(lightDir, normalize(-pointLight.spotDir));
         float epsilon = pointLight.innerCutOff - pointLight.outerCutOff;
         float intensity = clamp((theta - pointLight.outerCutOff) / epsilon, 0.0, 1.0);
+        ambient  *= intensity;
         diffuse  *= intensity;
         specular *= intensity;
     }

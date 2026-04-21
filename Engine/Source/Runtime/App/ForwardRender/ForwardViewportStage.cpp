@@ -135,49 +135,51 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
     //   set 2: material params (UBO)
     //   set 3: skybox cubemap (1 combined image sampler) — shared with _skyboxResourceDSL
     //   set 4: shadow map (dir + point cubemaps)
-    auto dsls         = IDescriptorSetLayout::create(_render, {
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdPhong_Frame_DSL",
-                                                                      .set      = 0,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
-                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                                                                          {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdPhong_Resource_DSL",
-                                                                      .set      = 1,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                          {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                          {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdPhong_Param_DSL",
-                                                                      .set      = 2,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdPhong_Skybox_DSL",
-                                                                      .set      = 3,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdPhong_Shadow_DSL",
-                                                                      .set      = 4,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_POINT_LIGHTS, .stageFlags = EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                              });
+    auto dsls = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPhong_Frame_DSL",
+                .set      = 0,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPhong_Resource_DSL",
+                .set      = 1,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPhong_Param_DSL",
+                .set      = 2,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPhong_Skybox_DSL",
+                .set      = 3,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPhong_Shadow_DSL",
+                .set      = 4,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_POINT_LIGHTS, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+        });
     _phongFrameDSL    = dsls[0];
     _phongResourceDSL = dsls[1];
     _phongParamDSL    = dsls[2];
@@ -1058,9 +1060,8 @@ void ForwardViewportStage::fillPhongLightFromFrameData(const RenderFrameData& fd
     _phongLight.hasDirectionalLight = fd.bHasDirectionalLight;
     if (fd.bHasDirectionalLight) {
         _phongLight.dirLight.direction              = fd.directionalLight.direction;
-        _phongLight.dirLight.ambient                = fd.directionalLight.ambient;
-        _phongLight.dirLight.diffuse                = fd.directionalLight.diffuse;
-        _phongLight.dirLight.specular               = fd.directionalLight.specular;
+        _phongLight.dirLight.color                  = fd.directionalLight.color;
+        _phongLight.dirLight.intensity              = fd.directionalLight.intensity;
         _phongLight.dirLight.directionalLightMatrix = fd.directionalLight.viewProjection;
     }
 
@@ -1074,10 +1075,10 @@ void ForwardViewportStage::fillPhongLightFromFrameData(const RenderFrameData& fd
         dst.linear      = pl.linear;
         dst.quadratic   = pl.quadratic;
         dst.position    = pl.position;
+        dst.color       = pl.color;
+        dst.intensity   = pl.intensity;
+        dst.nearPlane   = pl.nearPlane;
         dst.farPlane    = pl.farPlane;
-        dst.ambient     = pl.ambient;
-        dst.diffuse     = pl.diffuse;
-        dst.specular    = pl.specular;
         dst.spotDir     = pl.spotDir;
         dst.innerCutOff = pl.innerCutOff;
         dst.outerCutOff = pl.outerCutOff;

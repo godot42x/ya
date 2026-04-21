@@ -252,15 +252,17 @@ float calculateDirectionalShadow(vec4 posInDirLightSpace, vec3 norm, vec3 lightD
 
 vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor) 
 {
+    const float ambientFactor = 0.03;
     vec3 lightDir = normalize(-dirLight.direction);
     float diff = max(dot(norm, lightDir), 0.0);
 
     // float reflectDir = reflect(-lightDir, norm);
     float spec =  calculateSpec(norm, lightDir, viewDir, uParams.shininess);
+    vec3 radiance = dirLight.color * dirLight.intensity;
 
-    vec3 ambient = dirLight.ambient *  diffuseTexColor *  uParams.ambient;
-    vec3 diffuse = dirLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
-    vec3 specular = dirLight.specular * spec * specularTexColor * uParams.specular;
+    vec3 ambient = ambientFactor * radiance *  diffuseTexColor *  uParams.ambient;
+    vec3 diffuse = radiance * diff *   diffuseTexColor * uParams.diffuse;
+    vec3 specular = radiance * spec * specularTexColor * uParams.specular;
 // #if ENABLE_SHADOW
     // enable by defaults, TODO: make it a switch to turn on/off shadow calculation
     float shadow = calculateDirectionalShadow(IN.posInDirLightSpace, norm, lightDir);
@@ -278,15 +280,17 @@ vec3 calculateDirLight(DirectionalLight dirLight, vec3 norm, vec3 viewDir ,vec3 
 
 vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  vec3 viewDir ,vec3 diffuseTexColor, vec3 specularTexColor, uint pointLightIndex)
 {
+    const float ambientFactor = 0.03;
     vec3 lightDir = normalize(pointLight.position - fragPos);
 
     float diff = max(dot(norm, lightDir), 0.0);
     // float reflectDir = reflect(-lightDir, norm);
     float spec = calculateSpec(norm, lightDir, viewDir, uParams.shininess);
+    vec3 radiance = pointLight.color * pointLight.intensity;
 
-    vec3 ambient = pointLight.ambient *  diffuseTexColor * uParams.ambient;
-    vec3 diffuse = pointLight.diffuse * diff *   diffuseTexColor * uParams.diffuse;
-    vec3 specular = pointLight.specular * spec * specularTexColor * uParams.specular;
+    vec3 ambient = ambientFactor * radiance *  diffuseTexColor * uParams.ambient;
+    vec3 diffuse = radiance * diff *   diffuseTexColor * uParams.diffuse;
+    vec3 specular = radiance * spec * specularTexColor * uParams.specular;
 
     // spot light process
     if (pointLight.type == 1){
@@ -315,6 +319,7 @@ vec3 calculatePointLight(in PointLight pointLight, vec3 fragPos,  vec3 norm,  ve
         //     continue;
         // }
 
+        ambient *= intensity;
         diffuse *= intensity;
         specular *= intensity;
     }

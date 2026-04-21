@@ -14,10 +14,6 @@ struct PointLightComponent : public IComponent
     YA_REFLECT_FIELD(_linear)
     YA_REFLECT_FIELD(_quadratic)
 
-    YA_REFLECT_FIELD(_ambient, .color())
-    YA_REFLECT_FIELD(_diffuse, .color())
-    YA_REFLECT_FIELD(_specular, .color())
-
     YA_REFLECT_FIELD(color, .color())
     YA_REFLECT_FIELD(intensity)
 
@@ -43,10 +39,6 @@ struct PointLightComponent : public IComponent
     float _constant  = 1.0f;
     float _linear    = 0.09f;
     float _quadratic = 0.032f;
-
-    glm::vec3 _ambient  = {1.0f, 1.0f, 1.0f};
-    glm::vec3 _diffuse  = {1.0f, 1.0f, 1.0f};
-    glm::vec3 _specular = {1.0f, 1.0f, 1.0f};
 
     glm::vec3 color     = glm::vec3{1.0};
     float     intensity = 1.0f;

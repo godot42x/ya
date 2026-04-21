@@ -47,6 +47,7 @@ struct FrameData{
 struct DirectionalLight{
     vec3 dir;
     vec3 color;
+    float intensity;
     float4x4 shadowMatrix;
 };
 
@@ -60,7 +61,6 @@ struct PointLight{
 struct LightData{
     DirectionalLight dirLight;
     PointLight pointLights[MAX_POINT_LIGHTS];
-    vec3 ambient;
     bool hasDirLight;
     uint numPointLight;
 };
@@ -259,6 +259,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
 // MARK: Phong
 vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity, float shininess , float reflectRatio)
 {
+    const float ambientFactor = 0.03;
     vec3 light = 0;
 
     vec3 R =  vec3(0);
@@ -278,9 +279,10 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float spec      = pow(max(dot(N, halfwayDir), 0.0),shininess);
         float shadow    = calculateDirectionalShadow(worldPos, N, lightDir);
 
-        vec3 ambient  = albedo * uLight.ambient;
-        vec3 diffuse  = diff * albedo * uLight.dirLight.color;
-        vec3 specular = specIntensity * spec * uLight.dirLight.color;
+        vec3 radiance = uLight.dirLight.color * uLight.dirLight.intensity;
+        vec3 ambient  = albedo * radiance * ambientFactor;
+        vec3 diffuse  = diff * albedo * radiance;
+        vec3 specular = specIntensity * spec * radiance;
         light += ambient + (1.0 - shadow) * (diffuse + specular);
     }
 
@@ -295,7 +297,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float dist = length(uLight.pointLights[i].pos - worldPos);
         vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
 
-        vec3 ambient  = albedo * uLight.ambient;
+        vec3 ambient  = albedo * radiance * ambientFactor;
         vec3 diffuse  = diff * albedo * radiance;
         vec3 specular = specIntensity * spec * radiance;
         light += ambient + (1.0 - shadow) * (diffuse + specular);

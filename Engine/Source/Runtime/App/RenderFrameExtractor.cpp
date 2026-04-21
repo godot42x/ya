@@ -53,14 +53,13 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
-        auto& dl         = out.directionalLight;
-        dl.direction     = glm::normalize(tc.getForward());
-        dl.ambient       = dlc._ambient;
-        dl.diffuse       = dlc._diffuse;
-        dl.specular      = dlc._specular;
-        dl.view          = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-        dl.projection    = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
-        dl.viewProjection = dl.projection * dl.view;
+        auto& dl                 = out.directionalLight;
+        dl.direction             = glm::normalize(tc.getForward());
+        dl.view                  = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+        dl.projection            = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
+        dl.viewProjection        = dl.projection * dl.view;
+        dl.color                 = dlc._color;
+        dl.intensity             = dlc.intensity;
         out.bHasDirectionalLight = true;
         break;
     }
@@ -68,14 +67,13 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
     // Fallback: directional light without transform
     if (!out.bHasDirectionalLight) {
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
-            auto& dl         = out.directionalLight;
-            dl.direction     = glm::normalize(dlc._direction);
-            dl.ambient       = dlc._ambient;
-            dl.diffuse       = dlc._diffuse;
-            dl.specular      = dlc._specular;
-            dl.view          = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-            dl.projection    = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
-            dl.viewProjection = dl.projection * dl.view;
+            auto& dl                 = out.directionalLight;
+            dl.direction             = glm::normalize(dlc._direction);
+            dl.view                  = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
+            dl.projection            = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
+            dl.viewProjection        = dl.projection * dl.view;
+            dl.color                 = dlc._color;
+            dl.intensity             = dlc.intensity;
             out.bHasDirectionalLight = true;
             break;
         }
@@ -94,27 +92,24 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
         pl.linear      = plc._linear;
         pl.quadratic   = plc._quadratic;
         pl.position    = tc._position;
-        pl.ambient     = plc._ambient;
-        pl.diffuse     = plc._diffuse;
-        pl.specular    = plc._specular;
         pl.spotDir     = tc.getForward();
         pl.innerCutOff = glm::cos(glm::radians(plc._innerConeAngle));
         pl.outerCutOff = glm::cos(glm::radians(plc._outerConeAngle));
         pl.nearPlane   = plc.nearPlane;
         pl.farPlane    = plc.farPlane;
+        pl.color       = plc.color;
+        pl.intensity   = plc.intensity;
 
         ++out.numPointLights;
     }
 
-    std::sort(out.pointLights.begin(), out.pointLights.begin() + out.numPointLights,
-              [&out](const FrameContext::PointLightData& lhs, const FrameContext::PointLightData& rhs)
+    std::sort(out.pointLights.begin(), out.pointLights.begin() + out.numPointLights, [&out](const FrameContext::PointLightData& lhs, const FrameContext::PointLightData& rhs)
               {
                   const glm::vec3 lhsDelta = lhs.position - out.cameraPos;
                   const glm::vec3 rhsDelta = rhs.position - out.cameraPos;
                   const float lhsDist2 = glm::dot(lhsDelta, lhsDelta);
                   const float rhsDist2 = glm::dot(rhsDelta, rhsDelta);
-                  return lhsDist2 < rhsDist2;
-              });
+                  return lhsDist2 < rhsDist2; });
 }
 
 void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
@@ -128,14 +123,13 @@ void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
     out.skybox.irradianceTexture = resolver->findSceneEnvironmentIrradianceTextureShared(scene);
 }
 
-void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
-                                            entt::entity    viewOwner,
+void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
+                                            entt::entity     viewOwner,
                                             RenderFrameData& out)
 {
     // PBR
     for (const auto& [e, mc, tc, pmc] :
-         reg.view<MeshComponent, TransformComponent, PBRMaterialComponent>().each())
-    {
+         reg.view<MeshComponent, TransformComponent, PBRMaterialComponent>().each()) {
         if (e == viewOwner) continue;
         if (!mc.isResolved() || !mc.getMesh()) continue;
 
@@ -153,8 +147,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
 
     // Phong
     for (const auto& [e, mc, tc, pmc] :
-         reg.view<MeshComponent, TransformComponent, PhongMaterialComponent>().each())
-    {
+         reg.view<MeshComponent, TransformComponent, PhongMaterialComponent>().each()) {
         if (e == viewOwner) continue;
         if (!mc.isResolved() || !mc.getMesh()) continue;
 
@@ -172,8 +165,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
 
     // Unlit
     for (const auto& [e, mc, tc, umc] :
-         reg.view<MeshComponent, TransformComponent, UnlitMaterialComponent>().each())
-    {
+         reg.view<MeshComponent, TransformComponent, UnlitMaterialComponent>().each()) {
         if (e == viewOwner) continue;
         if (!mc.isResolved() || !mc.getMesh()) continue;
 
@@ -191,8 +183,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
 
     // Simple
     for (const auto& [e, mc, tc, smc] :
-         reg.view<MeshComponent, TransformComponent, SimpleMaterialComponent>().each())
-    {
+         reg.view<MeshComponent, TransformComponent, SimpleMaterialComponent>().each()) {
         if (e == viewOwner) continue;
         if (!mc.isResolved() || !mc.getMesh()) continue;
 
@@ -211,14 +202,12 @@ void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
     // Fallback: MeshComponent + TransformComponent, no material
     // (entities that have a mesh but none of the material components above)
     for (const auto& [e, mc, tc] :
-         reg.view<MeshComponent, TransformComponent>().each())
-    {
+         reg.view<MeshComponent, TransformComponent>().each()) {
         if (e == viewOwner) continue;
         if (!mc.isResolved() || !mc.getMesh()) continue;
 
         // Skip if it has any material component
-        if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent,
-                        UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
+        if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
             continue;
         }
 
@@ -234,21 +223,22 @@ void RenderFrameExtractor::extractDrawItems(entt::registry& reg,
 
 void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)
 {
-    auto computeSortKey = [&cameraPos](RenderDrawItem& item) {
+    auto computeSortKey = [&cameraPos](RenderDrawItem& item)
+    {
         glm::vec3 pos = glm::vec3(item.worldMatrix[3]);
         item.sortKey  = glm::distance2(cameraPos, pos);
     };
 
-    auto sortByDistance = [](std::vector<RenderDrawItem>& items) {
-        std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b) {
-            return a.sortKey < b.sortKey;
-        });
+    auto sortByDistance = [](std::vector<RenderDrawItem>& items)
+    {
+        std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b)
+                  { return a.sortKey < b.sortKey; });
     };
 
-    for (auto& item : out.pbrDrawItems)      computeSortKey(item);
-    for (auto& item : out.phongDrawItems)    computeSortKey(item);
-    for (auto& item : out.unlitDrawItems)    computeSortKey(item);
-    for (auto& item : out.simpleDrawItems)   computeSortKey(item);
+    for (auto& item : out.pbrDrawItems) computeSortKey(item);
+    for (auto& item : out.phongDrawItems) computeSortKey(item);
+    for (auto& item : out.unlitDrawItems) computeSortKey(item);
+    for (auto& item : out.simpleDrawItems) computeSortKey(item);
     for (auto& item : out.fallbackDrawItems) computeSortKey(item);
 
     sortByDistance(out.pbrDrawItems);

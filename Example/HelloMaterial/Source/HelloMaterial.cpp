@@ -429,9 +429,8 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setRotation(glm::vec3(-45.0f, 45.0f, 0.0f));
 
         auto dlc        = entity->addComponent<ya::DirectionalLightComponent>();
-        dlc->_ambient   = glm::vec3(10.0f / 256.0f);
-        dlc->_diffuse   = glm::vec3(30.0f / 256.0f);
-        dlc->_specular  = glm::vec3(31.0f / 256.0f);
+        dlc->_color     = glm::vec3(30.0f / 256.0f);
+        dlc->intensity  = 1.0f;
         dlc->_direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
 
         auto mc = entity->addComponent<ya::MeshComponent>();
@@ -500,8 +499,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
             mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
 
             auto plc       = entity->addComponent<ya::PointLightComponent>();
-            plc->_diffuse  = pbrLights[i].color;
-            plc->_specular = pbrLights[i].color;
             plc->color     = pbrLights[i].color;
             plc->intensity = pbrLights[i].intensity;
 

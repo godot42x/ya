@@ -1,8 +1,7 @@
 struct DirectionalLight {
     vec3 direction;    // 光源方向
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
+    vec3 color;
+    float intensity;
     mat4 directionalLightMatrix;
 };
 
@@ -14,11 +13,11 @@ struct PointLight {
     float quadratic;
 
     vec3  position;      // 光源位置
-    float farPlane; // TODO: use one farPlane for each point light
+    vec3  color;
+    float intensity;
 
-    vec3  ambient;
-    vec3  diffuse;
-    vec3  specular;
+    float nearPlane;
+    float farPlane; // TODO: use one farPlane for each point light
 
     // spot light
     vec3  spotDir;
