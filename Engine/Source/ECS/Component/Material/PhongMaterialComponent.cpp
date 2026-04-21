@@ -1,7 +1,7 @@
 #include "PhongMaterialComponent.h"
 
 #include "Core/Math/Math.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 #include <string_view>
 

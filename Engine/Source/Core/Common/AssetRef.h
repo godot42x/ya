@@ -256,7 +256,7 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 // Include necessary headers for inline implementations
 // ============================================================================
 #include "Resource/AssetManager.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Core/Log.h"
 
 namespace ya
@@ -270,9 +270,10 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
         return EAssetResolveResult::Failed;
     }
 
+    const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
+
     // Ready: check version to detect reloaded resources
     if (_resolveState == EAssetResolveState::Ready && _cachedPtr) {
-        const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
         if (_resolvedVersion == currentVersion) {
             return EAssetResolveResult::Ready;  // Up-to-date, fast path
         }
@@ -282,8 +283,11 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
         YA_CORE_TRACE("TAssetRef<Texture>: version changed for '{}', re-resolving", _path);
     }
 
+    if (_resolveState == EAssetResolveState::Failed && _resolvedVersion == currentVersion) {
+        return EAssetResolveResult::Failed;
+    }
+
     // Loading or Dirty: try to get the real texture from cache
-    const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
     auto future = AssetManager::get()->loadTexture(AssetManager::TextureLoadRequest{
         .filepath = _path,
     });
@@ -292,6 +296,16 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
         _resolveState     = EAssetResolveState::Ready;
         _resolvedVersion  = currentVersion;
         return EAssetResolveResult::Ready;
+    }
+
+    if (AssetManager::get()->isTextureLoadFailed(_path)) {
+        _resolveState    = EAssetResolveState::Failed;
+        _resolvedVersion = currentVersion;
+        auto placeholder = TextureLibrary::get().getCheckerboardTexture();
+        if (placeholder) {
+            _cachedPtr = placeholder;
+        }
+        return EAssetResolveResult::Failed;
     }
 
     // Not ready yet — use placeholder, stay in Loading state

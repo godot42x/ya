@@ -55,8 +55,8 @@ class TextureLibrary : public IResourceCache
     ya::Ptr<Texture> getMultiPixelTexture();
 
     /**
-     * @brief Get an 8x8 checkerboard texture (gray/white alternating)
-     * Used as default fallback for meshes without materials
+     * @brief Get an 8x8 checkerboard texture (purple/black alternating)
+     * Used as default fallback for missing or failed textures
      */
     ya::Ptr<Texture> getCheckerboardTexture();
 

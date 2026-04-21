@@ -6,7 +6,7 @@
 #include <atomic>
 #include <unordered_map>
 
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 namespace ya
 {
 

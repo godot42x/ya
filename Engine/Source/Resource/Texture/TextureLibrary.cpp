@@ -98,14 +98,14 @@ void TextureLibrary::createTextures()
                                                        white,
                                                    }, "multi-pixel");
 
-    // Create 8x8 checkerboard texture (gray/white alternating)
+    // Create 8x8 checkerboard texture (purple/black alternating)
     {
         constexpr uint32_t size = 8;
-        color_t gray{.r = 180, .g = 180, .b = 180, .a = 255};
+        color_t purple{.r = 255, .g = 0, .b = 255, .a = 255};
         std::vector<color_t> pixels(size * size);
         for (uint32_t y = 0; y < size; ++y) {
             for (uint32_t x = 0; x < size; ++x) {
-                pixels[y * size + x] = ((x + y) % 2 == 0) ? white : gray;
+                pixels[y * size + x] = ((x + y) % 2 == 0) ? purple : black;
             }
         }
         _checkerboardTexture = Texture::fromData(size, size, pixels, "checkerboard");

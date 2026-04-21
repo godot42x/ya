@@ -2,8 +2,8 @@
 
 #include "EditorLayer.h"
 #include "Resource/AssetManager.h"
-#include "Resource/AssetMeta.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Meta/AssetMeta.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 
 #include <algorithm>

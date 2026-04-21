@@ -1,7 +1,6 @@
 #include "PBRMaterialComponent.h"
 
-#include "Core/Math/Math.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 #include <string_view>
 
@@ -241,7 +240,10 @@ void PBRMaterialComponent::importFromDescriptor(const MaterialData& matData)
     _roughnessSlot.textureRef.setPathWithoutNotify("");
     _aoSlot.textureRef.setPathWithoutNotify("");
 
-    if (matData.hasTexture(MatTexture::Diffuse)) {
+    if (matData.hasTexture(MatTexture::Albedo)) {
+        _albedoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Albedo));
+    }
+    else if (matData.hasTexture(MatTexture::Diffuse)) {
         _albedoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::Diffuse));
     }
     if (matData.hasTexture(MatTexture::Normal)) {
@@ -255,6 +257,14 @@ void PBRMaterialComponent::importFromDescriptor(const MaterialData& matData)
     }
     if (matData.hasTexture(MatTexture::AO)) {
         _aoSlot.textureRef.setPathWithoutNotify(matData.resolveTexturePath(MatTexture::AO));
+    }
+
+    if (matData.hasTexture(MatTexture::MetallicRoughness) &&
+        !matData.hasTexture(MatTexture::Metallic) &&
+        !matData.hasTexture(MatTexture::Roughness)) {
+        YA_CORE_WARN("PBRMaterialComponent: '{}' has packed metallicRoughness texture '{}', but current PBR path only consumes separate metallic/roughness slots",
+                     matData.name,
+                     matData.resolveTexturePath(MatTexture::MetallicRoughness));
     }
 
     invalidate();

@@ -3,7 +3,7 @@
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Resource/PrimitiveMeshCache.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
 #include <algorithm>
 #include <format>

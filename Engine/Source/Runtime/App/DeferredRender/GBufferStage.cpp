@@ -3,7 +3,7 @@
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/RenderFrameData.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 
 #include "imgui.h"

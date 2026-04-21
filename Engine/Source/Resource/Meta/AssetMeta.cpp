@@ -122,7 +122,7 @@ void AssetMeta::saveToFile(const std::string& metaPath) const
         return;
     }
 
-    file << toJson().dump(4); // Pretty-print with 4-space indent
+    file << toJson().dump(4, ' ', false); // Pretty-print with 4-space indent
     YA_CORE_INFO("AssetMeta: saved '{}'", metaPath);
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Resource/AssetMeta.h"
+#include "Resource/Meta/AssetMeta.h"
 #include "Render/Core/Texture.h"
 
 #include <array>

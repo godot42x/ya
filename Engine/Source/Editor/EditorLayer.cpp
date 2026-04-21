@@ -13,7 +13,7 @@
 #include "ImGuiHelper.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Resource/AssetManager.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Node.h"
