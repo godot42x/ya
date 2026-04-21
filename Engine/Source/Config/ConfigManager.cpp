@@ -6,6 +6,29 @@
 namespace ya
 {
 
+namespace
+{
+bool saveJsonDocument(const ConfigManager::Document& doc, const char* context)
+{
+    auto* vfs = VirtualFileSystem::get();
+    if (!vfs) {
+        return false;
+    }
+
+    try {
+        vfs->saveToFile(doc.path, doc.root.dump(4, ' ', false));
+        return true;
+    }
+    catch (const nlohmann::json::exception& e) {
+        YA_CORE_ERROR("{} - Failed to serialize '{}': {}", context, doc.path, e.what());
+    }
+    catch (const std::exception& e) {
+        YA_CORE_ERROR("{} - Failed to save '{}': {}", context, doc.path, e.what());
+    }
+    return false;
+}
+} // namespace
+
 ConfigManager& ConfigManager::get()
 {
     static ConfigManager instance;
@@ -35,8 +58,7 @@ void ConfigManager::flushAll()
             continue;
         }
 
-        if (auto* vfs = VirtualFileSystem::get()) {
-            vfs->saveToFile(doc.path, doc.root.dump(4));
+        if (saveJsonDocument(doc, "ConfigManager::flushAll")) {
             doc.dirty = false;
         }
     }
@@ -97,9 +119,10 @@ bool ConfigManager::closeDocument(const std::string& name, bool bFlush)
     }
 
     if (bFlush && it->second.dirty && !it->second.path.empty()) {
-        if (auto* vfs = VirtualFileSystem::get()) {
-            vfs->saveToFile(it->second.path, it->second.root.dump(4));
+        if (!saveJsonDocument(it->second, "ConfigManager::closeDocument")) {
+            return false;
         }
+        it->second.dirty = false;
     }
 
     _documents.erase(it);
@@ -246,13 +269,12 @@ bool ConfigManager::flushDocument(const std::string& docName)
         return false;
     }
 
-    if (auto* vfs = VirtualFileSystem::get()) {
-        vfs->saveToFile(doc->path, doc->root.dump(4));
-        doc->dirty = false;
-        return true;
+    if (!saveJsonDocument(*doc, "ConfigManager::flushDocument")) {
+        return false;
     }
 
-    return false;
+    doc->dirty = false;
+    return true;
 }
 
 const nlohmann::json* ConfigManager::findNode(const std::string& docName, std::string_view key) const

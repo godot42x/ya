@@ -64,7 +64,7 @@ bool SceneSerializer::saveToFile(const std::string& filepath)
     try {
         nlohmann::json j = serialize();
         normalizeSceneJsonNumbers(j);
-        VirtualFileSystem::get()->saveToFile(filepath, j.dump(4));
+        VirtualFileSystem::get()->saveToFile(filepath, j.dump(4, ' ', false));
         YA_CORE_INFO("Scene saved to: {}", filepath);
         return true;
     }
