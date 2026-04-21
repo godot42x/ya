@@ -58,10 +58,10 @@ inline constexpr CoordinateSystem ENGINE_COORDINATE_SYSTEM = CoordinateSystem::R
 
 struct Vertex
 {
-    glm::vec3 position;
-    glm::vec2 texCoord0;
-    glm::vec3 normal;
-    glm::vec3 tangent;
+    glm::vec3 position{};
+    glm::vec2 texCoord0{};
+    glm::vec3 normal{};
+    glm::vec3 tangent{};
 };
 
 

@@ -30,12 +30,12 @@ AssetManager::ETextureColorSpace AssetManager::inferTextureColorSpace(const FNam
 const AssetManager::TextureFormatTraits* AssetManager::getFormatTraits(EFormat::T format)
 {
     static const std::unordered_map<EFormat::T, TextureFormatTraits> kTraits = {
-        {EFormat::R8_UNORM, {ETexturePayloadType::U8, ETextureDecodePrecision::U8, 1}},
-        {EFormat::R8G8_UNORM, {ETexturePayloadType::U8, ETextureDecodePrecision::U8, 2}},
-        {EFormat::R8G8B8A8_UNORM, {ETexturePayloadType::U8, ETextureDecodePrecision::U8, 4}},
-        {EFormat::R8G8B8A8_SRGB, {ETexturePayloadType::U8, ETextureDecodePrecision::U8, 4}},
-        {EFormat::R16G16B16A16_SFLOAT, {ETexturePayloadType::F16, ETextureDecodePrecision::F16, 4}},
-        {EFormat::R32_SFLOAT, {ETexturePayloadType::F32, ETextureDecodePrecision::F32, 1}},
+        {EFormat::R8_UNORM, {.payloadType = ETexturePayloadType::U8, .decodePrecision = ETextureDecodePrecision::U8, .channels = 1}},
+        {EFormat::R8G8_UNORM, {.payloadType = ETexturePayloadType::U8, .decodePrecision = ETextureDecodePrecision::U8, .channels = 2}},
+        {EFormat::R8G8B8A8_UNORM, {.payloadType = ETexturePayloadType::U8, .decodePrecision = ETextureDecodePrecision::U8, .channels = 4}},
+        {EFormat::R8G8B8A8_SRGB, {.payloadType = ETexturePayloadType::U8, .decodePrecision = ETextureDecodePrecision::U8, .channels = 4}},
+        {EFormat::R16G16B16A16_SFLOAT, {.payloadType = ETexturePayloadType::F16, .decodePrecision = ETextureDecodePrecision::F16, .channels = 4}},
+        {EFormat::R32_SFLOAT, {.payloadType = ETexturePayloadType::F32, .decodePrecision = ETextureDecodePrecision::F32, .channels = 1}},
     };
 
     const auto it = kTraits.find(format);

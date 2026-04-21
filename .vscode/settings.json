@@ -3,6 +3,7 @@
         "AABB",
         "Assimp",
         "batchcmds",
+        "bitangent",
         "blendfactor",
         "BLENDOP",
         "Blinn",

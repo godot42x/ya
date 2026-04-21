@@ -6,8 +6,24 @@
 namespace ya
 {
 
+namespace
+{
+
+glm::vec3 buildFallbackTangent(const glm::vec3& normal)
+{
+    const glm::vec3 axis = std::abs(normal.y) < 0.999f ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                                      : glm::vec3(1.0f, 0.0f, 0.0f);
+    return glm::normalize(glm::cross(axis, normal));
+}
+
+} // namespace
+
 auto generateTangentSpace(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
+    for (auto& vertex : vertices) {
+        vertex.tangent = glm::vec3(0.0f);
+    }
+
     // Iterate over triangles
     for (size_t i = 0; i < indices.size(); i += 3) {
         uint32_t i0 = indices[i];
@@ -24,13 +40,23 @@ auto generateTangentSpace(std::vector<Vertex>& vertices, const std::vector<uint3
         glm::vec2 deltaUV1 = v1.texCoord0 - v0.texCoord0;
         glm::vec2 deltaUV2 = v2.texCoord0 - v0.texCoord0;
 
-        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        const float determinant = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+        if (std::abs(determinant) <= 1e-8f) {
+            continue;
+        }
+
+        const float f = 1.0f / determinant;
 
         glm::vec3 tangent;
         tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
         tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
         tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
-        tangent   = glm::normalize(tangent);
+
+        if (glm::length2(tangent) <= 1e-12f) {
+            continue;
+        }
+
+        tangent = glm::normalize(tangent);
 
         vertices[i0].tangent += tangent;
         vertices[i1].tangent += tangent;
@@ -39,7 +65,21 @@ auto generateTangentSpace(std::vector<Vertex>& vertices, const std::vector<uint3
 
     // Normalize tangents
     for (auto& vertex : vertices) {
-        vertex.tangent = glm::normalize(vertex.tangent);
+        const glm::vec3 normal = glm::length2(vertex.normal) > 1e-12f ? glm::normalize(vertex.normal)
+                                                                       : glm::vec3(0.0f, 1.0f, 0.0f);
+
+        if (glm::length2(vertex.tangent) <= 1e-12f) {
+            vertex.tangent = buildFallbackTangent(normal);
+            continue;
+        }
+
+        glm::vec3 tangent = vertex.tangent - normal * glm::dot(normal, vertex.tangent);
+        if (glm::length2(tangent) <= 1e-12f) {
+            vertex.tangent = buildFallbackTangent(normal);
+            continue;
+        }
+
+        vertex.tangent = glm::normalize(tangent);
     }
 }
 

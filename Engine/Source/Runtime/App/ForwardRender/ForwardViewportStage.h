@@ -3,11 +3,13 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
+#include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Material/UnlitMaterial.h"
 #include "Render/Material/SimpleMaterial.h"
 #include "Render/Stage/IRenderStage.h"
 
+#include "PBRForward.slang.h"
 #include "PhongLit.Types.glsl.h"
 #include "Test.Unlit.glsl.h"
 
@@ -17,7 +19,7 @@
 namespace ya
 {
 
-/// Forward viewport stage — renders Phong / Unlit / Simple / Skybox / Debug into the viewport.
+/// Forward viewport stage — renders PBR / Phong / Unlit / Simple / Skybox / Debug into the viewport.
 ///
 /// Internalizes all the logic that was previously spread across
 /// PhongMaterialSystem, UnlitMaterialSystem, SimpleMaterialSystem,
@@ -34,6 +36,12 @@ struct ForwardViewportStage : public IRenderStage
         DescriptorSetHandle  depthBufferShadowDS   = nullptr;
         bool                 bShadowMapping        = true;
     };
+
+    // ── PBR UBO type aliases (from shader-generated headers) ──
+    using PBRPushConstant = slang_types::PBRForward::PushConstants;
+    using PBRFrameUBO     = slang_types::PBRForward::FrameData;
+    using PBRLightUBO     = slang_types::PBRForward::LightData;
+    using PBRParamUBO     = slang_types::PBRForward::PBRParamsData;
 
     // ── Phong UBO type aliases (from shader-generated headers) ──
     using PhongFrameUBO      = glsl_types::PhongLit::Types::FrameData;
@@ -103,6 +111,28 @@ struct ForwardViewportStage : public IRenderStage
 
     IRender* _render = nullptr;
     bool     bReverseViewportY = true;
+
+    // ── PBR pipeline ────────────────────────────────────────────
+    stdptr<IDescriptorSetLayout> _pbrFrameDSL;
+    stdptr<IDescriptorSetLayout> _pbrResourceDSL;
+    stdptr<IDescriptorSetLayout> _pbrParamDSL;
+    stdptr<IPipelineLayout>      _pbrPPL;
+    stdptr<IGraphicsPipeline>    _pbrPipeline;
+    GraphicsPipelineCreateInfo   _pbrPipelineCI;
+
+    stdptr<IDescriptorPool>      _pbrFrameDSP;
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _pbrFrameDS{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrFrameUBO{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrLightUBO{};
+
+    MaterialDescPool<PBRMaterial, PBRParamUBO> _pbrMatPool;
+    bool _pbrPoolRecreated = false;
+
+    PBRLightUBO _pbrLight{};
+    bool        _bEnablePBRDiffuseIBL   = true;
+    bool        _bEnablePBRSpecularIBL  = true;
+    bool        _bEnablePointLightShadow = false;
+    uint32_t    _maxShadowedPointLights = 1;
 
     // ── Phong pipeline ──────────────────────────────────────────
     stdptr<IDescriptorSetLayout> _phongFrameDSL;       // set 0: frame+light+debug
@@ -189,16 +219,19 @@ struct ForwardViewportStage : public IRenderStage
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
+        void initPBR(const InitDesc& desc);
     void initPhong(const InitDesc& desc);
     void initUnlit(const InitDesc& desc);
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);
     void initDebug(const InitDesc& desc);
 
+        void preparePBR(const RenderStageContext& ctx);
     void preparePhong(const RenderStageContext& ctx);
     void prepareUnlit(const RenderStageContext& ctx);
 
     void drawSkybox(const RenderStageContext& ctx);
+        void drawPBR(const RenderStageContext& ctx);
     void drawPhong(const RenderStageContext& ctx);
     void drawUnlit(const RenderStageContext& ctx);
     void drawSimple(const RenderStageContext& ctx);
@@ -206,6 +239,7 @@ struct ForwardViewportStage : public IRenderStage
 
     // Helpers
     void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h);
+        void fillPBRLightFromFrameData(const RenderFrameData& fd);
     void fillPhongLightFromFrameData(const RenderFrameData& fd);
     DescriptorImageInfo getDescriptorImageInfo(const TextureBinding& tb);
 };

@@ -12,14 +12,17 @@ struct VertexInput{
     [[vk::location(1)]] float2 uv       : TEXCOORD0;
     [[vk::location(2)]] float3 normal   : NORMAL;
     [[vk::location(3)]] float3 tangent  : TANGENT;
+    // [[vk::location(4)]] int32_t4 boneIDs: BONE_IDS;
+    // [[vk::location(5)]] vec4 weights    : WEIGHTS;
 };
 
 struct VertexOutput{
     float4 sv_position: SV_Position;
-    float3 pos :Position;
-    float2 uv   :UV;
-    float3 normal :Normal;
-    float3x3 TBN;
+    [[vk::location(0)]] float3 pos :Position;
+    [[vk::location(1)]] float2 uv   :UV;
+    [[vk::location(2)]] float3 normal :Normal;
+    [[vk::location(3)]] float3 tangent :Tangent;
+    [[vk::location(4)]] float3 bitangent :Bitangent;
 };
 
 struct PushConstants
@@ -95,9 +98,15 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     OUT.pos = worldPos.xyz;
     OUT.uv = IN.uv;
 
-    // TODO: support normal map texture, by calculate TBN then pass to fragments
     float3x3 normalMat = transpose(inverse3x3(float3x3(pc.modelMat)));
-    OUT.normal =  mul(normalMat, IN.normal);
+    float3 N = normalize(mul(normalMat, IN.normal));
+    float3 T = normalize(mul(normalMat, IN.tangent));
+    T = normalize(T - dot(T, N) * N);
+    float3 B = normalize(cross(N, T));
+
+    OUT.normal = N;
+    OUT.tangent = T;
+    OUT.bitangent = B;
 }
 
 
@@ -150,10 +159,19 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     float metallic  = uParams.metallic * sample2DTextureConditionally(uTexMetallic, ETextureSlot::Metallic, IN.uv).r;
     float roughness = uParams.roughness * sample2DTextureConditionally(uTexRoughness, ETextureSlot::Roughness, IN.uv).r;
     float ao        = uParams.ao * sample2DTextureConditionally(uTexAO, ETextureSlot::AO, IN.uv).r;
+    vec3  N         = normalize(IN.normal);
+
+    if (uParams.textures[(int)ETextureSlot::Normal].bEnable) {
+        vec3 normalMap = sample2DTextureConditionally(uTexNormal, ETextureSlot::Normal, IN.uv).xyz;
+        normalMap = normalize(normalMap * 2.0 - 1.0);
+        vec3 T = normalize(IN.tangent);
+        vec3 B = normalize(IN.bitangent);
+        N = normalize(T * normalMap.x + B * normalMap.y + N * normalMap.z);
+    }
 
     // Pack into GBuffer — no extra RT, roughness/ao ride the unused alpha channels
     OUT.posRoughness   = vec4(IN.pos, roughness);
-    OUT.normalAO       = vec4(normalize(IN.normal), ao);
+    OUT.normalAO       = vec4(N, ao);
     OUT.albedoMetallic = vec4(albedo, metallic);
     OUT.shadingModelID = 1.0 / 255.0; // EShadingModelID::PBR = 1
 }

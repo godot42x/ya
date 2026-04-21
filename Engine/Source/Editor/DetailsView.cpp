@@ -602,7 +602,11 @@ void DetailsView::drawComponents(Entity& entity)
         mc->invalidate();
     });
     drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
+
     drawReflectedComponent<DirectionalLightComponent>("Directional Light", entity, [](DirectionalLightComponent* dlc) {});
+    drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent* plc) {
+        // TODO: implement point light component details
+    });
 
     // 其他组件保持原有的自定义渲染逻辑
     drawComponent<SimpleMaterialComponent>("Simple Material", entity, [](SimpleMaterialComponent* smc) {
@@ -653,9 +657,6 @@ void DetailsView::drawComponents(Entity& entity)
         }
     });
 
-    drawReflectedComponent<PointLightComponent>("Point Light", entity, [](PointLightComponent* plc) {
-        // TODO: implement point light component details
-    });
 
     drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent* lsc) {
         // Add new script button

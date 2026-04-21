@@ -1,5 +1,6 @@
 #include "ForwardViewportStage.h"
 
+#include "Config/ConfigManager.h"
 #include "Core/Math/Math.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionComponent.h"
@@ -54,6 +55,35 @@ static std::vector<std::string> buildPhongShaderDefines(bool bEnableDirectionalS
     return defines;
 }
 
+namespace
+{
+
+constexpr const char* FORWARD_PBR_CONFIG_DOC_NAME         = "editor";
+constexpr const char* FORWARD_PBR_CONFIG_KEY_IBL_DIFFUSE  = "render.deferred.light.enablePBRDiffuseIBL";
+constexpr const char* FORWARD_PBR_CONFIG_KEY_IBL_SPECULAR = "render.deferred.light.enablePBRSpecularIBL";
+
+std::vector<std::string> buildPBRShaderDefines(bool bEnablePBRDiffuseIBL,
+                                               bool bEnablePBRSpecularIBL,
+                                               bool bEnableShadowMapping,
+                                               bool bEnablePointLightShadow)
+{
+    std::vector<std::string> defines = {
+        std::string("YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE=") + (bEnablePBRDiffuseIBL ? "1" : "0"),
+        std::string("YA_DEFERRED_PBR_ENABLE_IBL_SPECULAR=") + (bEnablePBRSpecularIBL ? "1" : "0"),
+    };
+
+    if (bEnableShadowMapping) {
+        defines.push_back("YA_DEFERRED_ENABLE_SHADOW_MAPPING=1");
+    }
+    if (bEnablePointLightShadow) {
+        defines.push_back("YA_DEFERRED_ENABLE_POINT_LIGHT_SHADOW=1");
+    }
+
+    return defines;
+}
+
+} // namespace
+
 // ═══════════════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════════════
@@ -70,6 +100,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     _depthBufferShadowDS = desc.depthBufferShadowDS;
     _bShadowMapping      = desc.bShadowMapping;
 
+    initPBR(desc);
     initPhong(desc);
     initUnlit(desc);
     initSimple(desc);
@@ -91,6 +122,12 @@ void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportR
 
     const auto colorFormat = colorDescs.front().format;
     const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+
+    if (_pbrPipeline) {
+        _pbrPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
+        _pbrPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _pbrPipeline->updateDesc(_pbrPipelineCI);
+    }
 
     if (_phongPipeline) {
         _phongPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
@@ -124,6 +161,140 @@ void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportR
         _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
         _debugPipeline->updateDesc(_debugPipelineCI);
     }
+}
+
+// ── PBR ─────────────────────────────────────────────────────────────
+void ForwardViewportStage::initPBR(const InitDesc& desc)
+{
+    auto& configManager        = ConfigManager::get();
+    _bEnablePBRDiffuseIBL      = configManager.getOr<bool>(FORWARD_PBR_CONFIG_DOC_NAME, FORWARD_PBR_CONFIG_KEY_IBL_DIFFUSE, _bEnablePBRDiffuseIBL);
+    _bEnablePBRSpecularIBL     = configManager.getOr<bool>(FORWARD_PBR_CONFIG_DOC_NAME, FORWARD_PBR_CONFIG_KEY_IBL_SPECULAR, _bEnablePBRSpecularIBL);
+
+    auto dsls = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPBR_Frame_DSL",
+                .set      = 0,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPBR_Resource_DSL",
+                .set      = 1,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPBR_Param_DSL",
+                .set      = 2,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPBR_Environment_DSL",
+                .set      = 3,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "FwdPBR_Shadow_DSL",
+                .set      = 4,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_POINT_LIGHTS, .stageFlags = EShaderStage::Fragment},
+                },
+            },
+        });
+    _pbrFrameDSL    = dsls[0];
+    _pbrResourceDSL = dsls[1];
+    _pbrParamDSL    = dsls[2];
+
+    _pbrPPL = IPipelineLayout::create(
+        _render,
+        "FwdPBR_PPL",
+        {PushConstantRange{.offset = 0, .size = sizeof(PBRPushConstant), .stageFlags = EShaderStage::Vertex}},
+        dsls);
+
+    _pbrPipelineCI = GraphicsPipelineCreateInfo{
+        .renderPass            = desc.renderPass,
+        .pipelineRenderingInfo = desc.pipelineRenderingInfo,
+        .pipelineLayout        = _pbrPPL.get(),
+        .shaderDesc            = ShaderDesc{
+            .shaderName        = "PBRForward.slang",
+            .vertexBufferDescs = {kVBDesc},
+            .vertexAttributes  = kVertexAttributes4,
+            .defines           = buildPBRShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bShadowMapping, _bEnablePointLightShadow),
+        },
+        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, EPipelineDynamicFeature::Viewport},
+        .primitiveType      = EPrimitiveType::TriangleList,
+        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
+        .multisampleState   = {.sampleCount = ESampleCount::Sample_1},
+        .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
+        .colorBlendState    = {.attachments = {{
+                                   .index               = 0,
+                                   .bBlendEnable        = true,
+                                   .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .colorBlendOp        = EBlendOp::Add,
+                                   .srcAlphaBlendFactor = EBlendFactor::SrcAlpha,
+                                   .dstAlphaBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                                   .alphaBlendOp        = EBlendOp::Add,
+                                   .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
+                               }}},
+        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+    };
+    _pbrPipeline = IGraphicsPipeline::create(_render);
+    _pbrPipeline->recreate(_pbrPipelineCI);
+
+    _pbrFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
+                                                        .label     = "FwdPBR_Frame_DSP",
+                                                        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+                                                        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2}},
+                                                    });
+
+    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
+        _pbrFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+                                                     .label       = std::format("FwdPBR_Frame_UBO_{}", i),
+                                                     .usage       = EBufferUsage::UniformBuffer,
+                                                     .size        = sizeof(PBRFrameUBO),
+                                                     .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                 });
+        _pbrLightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+                                                     .label       = std::format("FwdPBR_Light_UBO_{}", i),
+                                                     .usage       = EBufferUsage::UniformBuffer,
+                                                     .size        = sizeof(PBRLightUBO),
+                                                     .memoryUsage = EMemoryUsage::CpuToGpu,
+                                                 });
+
+        _pbrFrameDS[i] = _pbrFrameDSP->allocateDescriptorSets(_pbrFrameDSL);
+        _render->getDescriptorHelper()->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneUniformBuffer(_pbrFrameDS[i], 0, _pbrFrameUBO[i].get()),
+            IDescriptorSetHelper::writeOneUniformBuffer(_pbrFrameDS[i], 1, _pbrLightUBO[i].get()),
+        });
+    }
+
+    constexpr uint32_t pbrTextureCount = 5;
+    _pbrMatPool.init(
+        _render, _pbrParamDSL, _pbrResourceDSL, [pbrTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
+        { return {
+              {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
+              {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * pbrTextureCount},
+          }; },
+        16);
+    _pbrPoolRecreated = true;
 }
 
 // ── Phong ───────────────────────────────────────────────────────────
@@ -524,6 +695,17 @@ void ForwardViewportStage::initDebug(const InitDesc& desc)
 
 void ForwardViewportStage::destroy()
 {
+    // PBR
+    _pbrMatPool = {};
+    _pbrPipeline.reset();
+    _pbrPPL.reset();
+    _pbrFrameDSL.reset();
+    _pbrResourceDSL.reset();
+    _pbrParamDSL.reset();
+    _pbrFrameDSP.reset();
+    for (auto& u : _pbrFrameUBO) u.reset();
+    for (auto& u : _pbrLightUBO) u.reset();
+
     // Phong
     _phongMatPool = {};
     _phongPipeline.reset();
@@ -574,6 +756,9 @@ void ForwardViewportStage::destroy()
 
 void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 {
+    if (_pbrPipeline) {
+        _pbrPipeline->beginFrame();
+    }
     if (_phongPipeline) {
         _phongPipeline->beginFrame();
     }
@@ -592,6 +777,7 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 
     if (!ctx.frameData) return;
 
+    preparePBR(ctx);
     preparePhong(ctx);
     prepareUnlit(ctx);
 
@@ -601,6 +787,26 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
         .view       = FMath::dropTranslation(ctx.frameData->view),
     };
     _skyboxFrameUBO[ctx.flightIndex]->writeData(&skyboxUBO, sizeof(SkyboxFrameUBO), 0);
+}
+
+void ForwardViewportStage::preparePBR(const RenderStageContext& ctx)
+{
+    const auto& fd = *ctx.frameData;
+    uint32_t    fi = ctx.flightIndex;
+
+    uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
+    if (_pbrMatPool.ensureCapacity(materialCount)) {
+        _pbrPoolRecreated = true;
+    }
+
+    PBRFrameUBO frameUBO{};
+    frameUBO.projMat   = fd.projection;
+    frameUBO.viewMat   = fd.view;
+    frameUBO.cameraPos = fd.cameraPos;
+    _pbrFrameUBO[fi]->writeData(&frameUBO, sizeof(PBRFrameUBO), 0);
+
+    fillPBRLightFromFrameData(fd);
+    _pbrLightUBO[fi]->writeData(&_pbrLight, sizeof(PBRLightUBO), 0);
 }
 
 void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
@@ -668,6 +874,7 @@ void ForwardViewportStage::execute(const RenderStageContext& ctx)
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
     drawSkybox(ctx);
+    drawPBR(ctx);
     drawPhong(ctx);
     drawUnlit(ctx);
     drawSimple(ctx);
@@ -713,6 +920,84 @@ void ForwardViewportStage::drawSkybox(const RenderStageContext& ctx)
     cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], skyboxDS});
     cubeMesh->draw(cmdBuf);
 
+    cmdBuf->debugEndLabel();
+}
+
+// ── PBR draw ────────────────────────────────────────────────────────
+
+void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
+{
+    const auto& fd     = *ctx.frameData;
+    auto*       cmdBuf = ctx.cmdBuf;
+    uint32_t    fi     = ctx.flightIndex;
+
+    if (fd.pbrDrawItems.empty()) return;
+
+    auto*               runtime = App::get()->getRenderRuntime();
+    auto*               scene   = App::get()->getSceneManager()->getActiveScene();
+    DescriptorSetHandle environmentDS = (runtime && scene) ? runtime->getSceneEnvironmentLightingDescriptorSet(scene) : DescriptorSetHandle{};
+
+    cmdBuf->debugBeginLabel("ForwardPBR");
+    cmdBuf->bindPipeline(_pbrPipeline.get());
+    setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+
+    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
+    std::vector<int> updatedMaterial(materialCount, 0);
+
+    for (const auto& item : fd.pbrDrawItems) {
+        if (!item.mesh || !item.material) continue;
+        auto* material = static_cast<PBRMaterial*>(item.material);
+        if (material->getIndex() < 0) continue;
+
+        uint32_t            matIdx     = material->getIndex();
+        DescriptorSetHandle resourceDS = _pbrMatPool.resourceDS(matIdx);
+        DescriptorSetHandle paramDS    = _pbrMatPool.paramDS(matIdx);
+
+        if (!updatedMaterial[matIdx]) {
+            _pbrMatPool.flushDirty(
+                material, _pbrPoolRecreated, [](IBuffer* ubo, PBRMaterial* mat)
+                {
+                    const auto& src = mat->getParams();
+                    PBRParamUBO  dst{};
+                    dst.albedo    = src.albedo;
+                    dst.metallic  = src.metallic;
+                    dst.roughness = src.roughness;
+                    dst.ao        = src.ao;
+                    for (int i = 0; i < PBRMaterial::EResource::Count; ++i) {
+                        dst.textures[i].bEnable        = src.textures[i].bEnable;
+                        dst.textures[i].rotationRadius = src.textures[i].rotationRadius;
+                        dst.textures[i].translation    = src.textures[i].translation;
+                        dst.textures[i].scale          = src.textures[i].scale;
+                    }
+                    ubo->writeData(&dst, sizeof(PBRParamUBO), 0); },
+                [&](DescriptorSetHandle ds, PBRMaterial* mat)
+                {
+                    _render->getDescriptorHelper()->updateDescriptorSets({
+                                                                             IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
+                                                                             IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
+                                                                             IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
+                                                                             IDescriptorSetHelper::writeOneImage(ds, 3, mat->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
+                                                                             IDescriptorSetHelper::writeOneImage(ds, 4, mat->getTextureBinding(PBRMaterial::EResource::AOTexture)),
+                                                                         },
+                                                                         {});
+                });
+            updatedMaterial[matIdx] = 1;
+        }
+
+        cmdBuf->bindDescriptorSets(_pbrPPL.get(), 0, {
+                                                     _pbrFrameDS[fi],
+                                                     resourceDS,
+                                                     paramDS,
+                                                     environmentDS,
+                                                     _depthBufferShadowDS,
+                                                 });
+
+        PBRPushConstant pc{.modelMat = item.worldMatrix};
+        cmdBuf->pushConstants(_pbrPPL.get(), EShaderStage::Vertex, 0, sizeof(PBRPushConstant), &pc);
+        item.mesh->draw(cmdBuf);
+    }
+
+    _pbrPoolRecreated = false;
     cmdBuf->debugEndLabel();
 }
 
@@ -1024,6 +1309,7 @@ void ForwardViewportStage::renderGUI()
 
     ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");
 
+    _pbrPipeline->renderGUI();
     ImGui::TreePop();
 }
 
@@ -1053,6 +1339,33 @@ void ForwardViewportStage::setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_
     }
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(w), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, w, h);
+}
+
+void ForwardViewportStage::fillPBRLightFromFrameData(const RenderFrameData& fd)
+{
+    _pbrLight = {};
+    _pbrLight.hasDirLight = false;
+    if (fd.bHasDirectionalLight) {
+        _pbrLight.dirLight.dir          = fd.directionalLight.direction;
+        _pbrLight.dirLight.color        = fd.directionalLight.color;
+        _pbrLight.dirLight.intensity    = fd.directionalLight.intensity;
+        _pbrLight.dirLight.shadowMatrix = fd.directionalLight.viewProjection;
+        _pbrLight.hasDirLight           = true;
+    }
+
+    _pbrLight.numPointLight = fd.numPointLights;
+    const uint32_t shadowedPointLightBudget = _bEnablePointLightShadow
+                                                  ? std::min(_maxShadowedPointLights, fd.numPointLights)
+                                                  : 0u;
+    for (uint32_t i = 0; i < fd.numPointLights; ++i) {
+        const auto& src = fd.pointLights[i];
+        auto&       dst = _pbrLight.pointLights[i];
+        dst             = {};
+        dst.pos         = src.position;
+        dst.color       = src.color;
+        dst.intensity   = src.intensity;
+        dst.farPlane    = i < shadowedPointLightBudget ? src.farPlane : 0.0f;
+    }
 }
 
 void ForwardViewportStage::fillPhongLightFromFrameData(const RenderFrameData& fd)

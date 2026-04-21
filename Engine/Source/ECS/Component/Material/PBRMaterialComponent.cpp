@@ -107,7 +107,10 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
 
     if (slot->isReady()) {
         getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
-        getMaterial()->setTextureParam(resourceEnum, *slot);
+
+        TextureSlot effectiveSlot = *slot;
+        effectiveSlot.bEnable     = slot->isEnabledEffective();
+        getMaterial()->setTextureParam(resourceEnum, effectiveSlot);
     }
     else if (slot->hasPath() && slot->textureRef.isLoading()) {
         // Texture is being reloaded — old GPU resources may be destroyed.
@@ -115,8 +118,11 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         auto sampler     = TextureLibrary::get().getDefaultSampler();
         if (placeholder && sampler) {
-            getMaterial()->getParamsMut().textures[resourceEnum].bEnable = slot->bEnable;
             getMaterial()->setTextureBinding(resourceEnum, TextureBinding{.texture = placeholder, .sampler = sampler});
+
+            TextureSlot effectiveSlot = *slot;
+            effectiveSlot.bEnable     = slot->isEnabledEffective();
+            getMaterial()->setTextureParam(resourceEnum, effectiveSlot);
         }
         else {
             getMaterial()->disableTextureParams(resourceEnum);
