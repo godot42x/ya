@@ -793,50 +793,48 @@ void FQuadRender::drawText(const std::string& text, const glm::vec3& position, c
     float cursorX = position.x;
     float cursorY = position.y;
 
-    // Debug: draw baseline (optional, comment out later)
-    // drawTexture(glm::vec3(position.x, position.y, 0.01f), glm::vec2(500, 2), nullptr, glm::vec4(0, 1, 0, 1));
     YA_CORE_ASSERT(font != nullptr, "TODO: font is null in Render2D::drawText, should make a default font");
+    FontManager::get()->ensureGlyphs(*font, text);
 
-    for (size_t i = 0; i < text.size(); ++i) {
-        char             ch        = text[i];
-        const Character& character = font->getCharacter(ch);
+    const auto codePoints = utf8::decode(text);
+    for (uint32_t codePoint : codePoints) {
+        if (codePoint == '\r') {
+            continue;
+        }
+        if (codePoint == '\n') {
+            cursorX = position.x;
+            cursorY += font->lineHeight;
+            continue;
+        }
 
-        // Skip rendering for space (but still advance cursor)
-        if (ch == ' ') {
+        const Character& character = font->getCharacter(codePoint);
+        if (codePoint == ' ') {
             cursorX += character.advance.x;
             continue;
         }
-        float xpos = cursorX;
-        float ypos = cursorY;
-
-        // Calculate glyph position
-        // bearing.x: offset from cursor to left edge of glyph
-        // bearing.y: offset from baseline to top of glyph (positive = above baseline)
-        // position.y is the TOP of the text box, so we calculate:
-        //   baseline = position.y + ascent
-        //   glyph top = baseline - bearing.y
-        //   result: position.y + ascent - bearing.y
-
-        xpos += (float)(character.bearing.x);
-        ypos += (float)(font->ascent - character.bearing.y);
-
-
-        glm::vec3 pos = glm::vec3(xpos, ypos, position.z);
-
-        ya::Ptr<Texture> texture = font->atlasTexture;
-        if (!character.bInAtlas) {
-            UNIMPLEMENTED();
+        if (codePoint == '\t') {
+            cursorX += font->getCharacter(' ').advance.x * 4.0f;
+            continue;
         }
 
-        glm::vec4 uvRect = character.uvRect;
-        drawSubTexture(
-            pos,
-            glm::vec2(character.size),
-            font->atlasTexture,
-            color,
-            uvRect);
+        float xpos = cursorX + static_cast<float>(character.bearing.x);
+        float ypos = cursorY + static_cast<float>(font->ascent - character.bearing.y);
+        glm::vec3 pos  = glm::vec3(xpos, ypos, position.z);
 
-        // Advance cursor for next glyph (advance is in 1/64 pixels)
+        if (!character.bInAtlas) {
+            if (character.standaloneTexture) {
+                drawTexture(pos, glm::vec2(character.size), character.standaloneTexture, color);
+            }
+        }
+        else {
+            drawSubTexture(
+                pos,
+                glm::vec2(character.size),
+                font->atlasTexture,
+                color,
+                character.uvRect);
+        }
+
         cursorX += character.advance.x;
     }
 }

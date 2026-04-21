@@ -1,6 +1,7 @@
 #include "FilePicker.h"
 #include "Config/ConfigManager.h"
 #include "Core/Log.h"
+#include "Core/System/PathUtils.h"
 #include "ImGuiHelper.h"
 #include <format>
 #include <imgui.h>
@@ -172,7 +173,7 @@ void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallbac
 
     const std::string lastSaveDirectory = ConfigManager::get().getOr<std::string>("editor", "filePicker.lastSaveDirectory", "");
     if (!lastSaveDirectory.empty()) {
-        _fileExplorer.setSelectedPath(lastSaveDirectory);
+        _fileExplorer.setSelectedPath(path_utils::pathFromUtf8String(lastSaveDirectory));
     }
 }
 
@@ -186,7 +187,7 @@ void FilePicker::renderFileSelectContent()
         // Double-click callback
         if (_onConfirm)
         {
-            _onConfirm(path.string());
+            _onConfirm(path_utils::pathToUtf8String(path));
         }
         close();
     },
@@ -200,7 +201,7 @@ void FilePicker::renderFileSelectContent()
         auto selectedPath = _fileExplorer.getSelectedPath();
         if (_onConfirm && !selectedPath.empty())
         {
-            _onConfirm(selectedPath.string());
+            _onConfirm(path_utils::pathToUtf8String(selectedPath));
         }
         close();
     }
@@ -218,7 +219,8 @@ void FilePicker::renderFileSelectContent()
     auto selectedPath = _fileExplorer.getSelectedPath();
     if (!selectedPath.empty())
     {
-        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "%s", selectedPath.filename().string().c_str());
+        const std::string selectedName = path_utils::pathToUtf8String(selectedPath.filename());
+        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "%s", selectedName.c_str());
     }
 }
 
@@ -271,8 +273,8 @@ void FilePicker::renderSceneSaveContent()
     {
         if (_onSaveConfirm)
         {
-            ConfigManager::Editor("editor").set("filePicker.lastSaveDirectory", saveDir.string());
-            _onSaveConfirm(saveDir.string(), std::string(_sceneNameBuffer));
+            ConfigManager::Editor("editor").set("filePicker.lastSaveDirectory", path_utils::pathToUtf8String(saveDir));
+            _onSaveConfirm(path_utils::pathToUtf8String(saveDir), std::string(_sceneNameBuffer));
         }
         close();
     }

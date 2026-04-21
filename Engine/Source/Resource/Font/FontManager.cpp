@@ -5,8 +5,70 @@
 
 #include "Resource/AssetManager.h"
 
+#include <array>
+
 namespace ya
 {
+
+namespace
+{
+constexpr std::array<uint32_t, 95> BASE_GLYPH_CODEPOINTS = [] {
+    std::array<uint32_t, 95> codePoints{};
+    for (size_t index = 0; index < codePoints.size(); ++index) {
+        codePoints[index] = static_cast<uint32_t>(32 + index);
+    }
+    return codePoints;
+}();
+
+Character makeGlyphCharacter(FT_GlyphSlot glyph)
+{
+    Character character{
+        .size    = glm::ivec2(glyph->bitmap.width, glyph->bitmap.rows),
+        .bearing = glm::ivec2(glyph->bitmap_left, glyph->bitmap_top),
+        .advance = glm::vec2(static_cast<float>(glyph->advance.x) / 64.0f,
+                             static_cast<float>(glyph->advance.y) / 64.0f),
+    };
+    return character;
+}
+
+bool appendStandaloneGlyph(Font& font, FT_Face face, uint32_t codePoint)
+{
+    if (font.characters.contains(codePoint)) {
+        return true;
+    }
+    if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
+        YA_CORE_WARN("Failed to load glyph U+{:04X} from '{}'", codePoint, font.fontPath);
+        return false;
+    }
+
+    FT_GlyphSlot glyph = face->glyph;
+    Character    character = makeGlyphCharacter(glyph);
+    character.bInAtlas = false;
+
+    if (glyph->bitmap.width > 0 && glyph->bitmap.rows > 0) {
+        std::vector<ColorU8_t> glyphPixels(static_cast<size_t>(glyph->bitmap.width) * glyph->bitmap.rows,
+                                           ColorU8_t{.r = 0, .g = 0, .b = 0, .a = 0});
+        for (uint32_t row = 0; row < glyph->bitmap.rows; ++row) {
+            for (uint32_t col = 0; col < glyph->bitmap.width; ++col) {
+                const size_t srcIdx = static_cast<size_t>(row) * glyph->bitmap.width + col;
+                const size_t dstIdx = static_cast<size_t>(row) * glyph->bitmap.width + col;
+                const uint8_t gray = glyph->bitmap.buffer[srcIdx];
+                glyphPixels[dstIdx] = ColorRGBA<uint8_t>{.r = 255, .g = 255, .b = 255, .a = gray};
+            }
+        }
+
+        character.standaloneTexture = Texture::fromData(glyph->bitmap.width,
+                                                        glyph->bitmap.rows,
+                                                        glyphPixels.data(),
+                                                        glyphPixels.size(),
+                                                        EFormat::R8_UNORM,
+                                                        std::format("FontGlyph_{:X}_{}", codePoint, font.fontSize));
+    }
+
+    font.characters[codePoint] = std::move(character);
+    return true;
+}
+} // namespace
 
 FontManager *FontManager::get()
 {
@@ -73,12 +135,12 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     font->ascent     = (float)(face->size->metrics.ascender >> 6);  // Distance from baseline to top
     font->descent    = (float)(face->size->metrics.descender >> 6); // Distance from baseline to bottom (negative)
 
-    // First pass: calculate max glyph dimensions
+    // First pass: calculate max glyph dimensions for the seed atlas.
     uint32_t maxGlyphWidth  = 0;
     uint32_t maxGlyphHeight = 0;
 
-    for (unsigned char c = 32; c < 128; c++) {
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
+    for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
+        if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
             continue;
         }
         FT_GlyphSlot &glyph = face->glyph;
@@ -86,16 +148,12 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         maxGlyphHeight      = std::max(maxGlyphHeight, glyph->bitmap.rows);
     }
 
-
-    // Choose atlas width - aim for ~16 glyphs per row
-    // For 96 printable ASCII chars (32-127), this gives us ~6 rows
     constexpr uint32_t glyphsPerRow = 16;
-    uint32_t           atlasWidth   = glyphsPerRow * (maxGlyphWidth + 2); // +2 for padding per glyph
+    uint32_t           atlasWidth   = glyphsPerRow * (maxGlyphWidth + 2);
 
-    // Calculate required height
-    constexpr uint32_t totalGlyphs = 96;                                              // ASCII 32-127
-    uint32_t           numRows     = (totalGlyphs + glyphsPerRow - 1) / glyphsPerRow; // Ceiling division
-    uint32_t           atlasHeight = numRows * (maxGlyphHeight + 2);                  // +2 for padding
+    const uint32_t totalGlyphs  = static_cast<uint32_t>(BASE_GLYPH_CODEPOINTS.size());
+    uint32_t       numRows      = (totalGlyphs + glyphsPerRow - 1) / glyphsPerRow;
+    uint32_t       atlasHeight  = numRows * (maxGlyphHeight + 2);
 
     // 将尺寸向上取整到2的幂次方，以提高GPU兼容性和性能
     // 例如：300 -> 512, 100 -> 128
@@ -130,9 +188,9 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     uint32_t penY      = 1;
     uint32_t rowHeight = 0;
 
-    for (unsigned char c = 32; c < 128; c++) {
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-            YA_CORE_WARN("Failed to load glyph '{}'", c);
+    for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
+        if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
+            YA_CORE_WARN("Failed to load glyph U+{:04X}", codePoint);
             continue;
         }
 
@@ -167,18 +225,13 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
         float uScale  = static_cast<float>(bitmap.width) / static_cast<float>(atlasWidth);
         float vScale  = static_cast<float>(bitmap.rows) / static_cast<float>(atlasHeight);
 
-        Character character{
-            .uvRect  = glm::vec4(uOffset, vOffset, uScale, vScale),
-            .size    = glm::ivec2(bitmap.width, bitmap.rows),
-            .bearing = glm::ivec2(glyph->bitmap_left, glyph->bitmap_top),
-            .advance = glm::vec2(static_cast<float>(glyph->advance.x) / 64.0f,
-                                 static_cast<float>(glyph->advance.y) / 64.0f),
-        };
+        Character character = makeGlyphCharacter(glyph);
+        character.uvRect = glm::vec4(uOffset, vOffset, uScale, vScale);
 
         // 'e' bitmap_left=3, bitmap_top=27
         // 'H' bitmap_left=4, bitmap_top=35, bitmap.size=21x35
 
-        font->characters[static_cast<char>(c)] = character;
+        font->characters[codePoint] = character;
 
         // Update row tracking
         rowHeight = std::max(rowHeight, bitmap.rows);
@@ -205,6 +258,47 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     YA_CORE_INFO("Memory used for font atlas: {:.2f} KB", ((float)atlasWidth * atlasHeight * sizeof(ColorU8_t)) / 1024.0f);
 
     return font;
+}
+
+void FontManager::ensureGlyphs(Font& font, std::string_view text)
+{
+    std::vector<uint32_t> missing;
+    for (uint32_t codePoint : utf8::decode(text)) {
+        if (codePoint == '\r' || codePoint == '\n' || codePoint == '\t') {
+            continue;
+        }
+        if (font.characters.contains(codePoint)) {
+            continue;
+        }
+        if (std::find(missing.begin(), missing.end(), codePoint) == missing.end()) {
+            missing.push_back(codePoint);
+        }
+    }
+
+    if (missing.empty()) {
+        return;
+    }
+
+    FT_Library ft{};
+    if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
+        YA_CORE_ERROR("Failed to initialize FreeType library for glyph fallback");
+        return;
+    }
+
+    FT_Face face{};
+    if (FT_New_Face(ft, font.fontPath.c_str(), 0, &face)) {
+        YA_CORE_ERROR("Failed to load font face for glyph fallback: {}", font.fontPath);
+        FT_Done_FreeType(ft);
+        return;
+    }
+
+    FT_Set_Pixel_Sizes(face, 0, static_cast<uint32_t>(font.fontSize));
+    for (uint32_t codePoint : missing) {
+        appendStandaloneGlyph(font, face, codePoint);
+    }
+
+    FT_Done_Face(face);
+    FT_Done_FreeType(ft);
 }
 
 std::shared_ptr<Font> FontManager::getAdaptiveFont(const std::string &fontPath,

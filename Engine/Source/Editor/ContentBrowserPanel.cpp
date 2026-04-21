@@ -1,9 +1,10 @@
 #include "ContentBrowserPanel.h"
+#include "Core/System/PathUtils.h"
 #include "Core/Debug/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ImGuiHelper.h"
 #include "Resource/AssetManager.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include <imgui.h>
 
@@ -46,9 +47,9 @@ void ContentBrowserPanel::init()
 
     // Set item action callback for opening scene files
     _fileExplorer.setItemActionCallback([this](const std::filesystem::path& path) {
-        if (path.string().ends_with(".scene.json"))
+        const std::string scenePath = path_utils::pathToUtf8String(path);
+        if (scenePath.ends_with(".scene.json"))
         {
-            const std::string scenePath = path.string();
             if (_pendingSceneOpenPath == scenePath) {
                 return;
             }

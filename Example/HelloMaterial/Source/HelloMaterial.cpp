@@ -3,7 +3,7 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
-#include "Resource/FontManager.h"
+#include "Resource/Font/FontManager.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
@@ -28,7 +28,7 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Scene/Scene.h"
 #include <format>
 

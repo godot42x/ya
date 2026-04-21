@@ -70,6 +70,9 @@
 // Utility
 
 // GLM
+#include <array>
+#include <filesystem>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -84,6 +87,28 @@
 
 namespace ya
 {
+
+namespace
+{
+std::string findRuntimeDefaultFontPath()
+{
+    static constexpr std::array<const char*, 6> fontCandidates = {
+        "Engine/Content/Fonts/NotoSansSC-Regular.otf",
+        "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/msyh.ttf",
+        "C:/Windows/Fonts/simhei.ttf",
+        "Engine/Content/Fonts/JetBrainsMono-Medium.ttf",
+    };
+
+    for (const char* candidate : fontCandidates) {
+        if (std::filesystem::exists(candidate)) {
+            return candidate;
+        }
+    }
+    return {};
+}
+} // namespace
 
 // Define the static member variable
 App*     App::_instance        = nullptr;
@@ -255,7 +280,9 @@ int App::dispatchEvent(const T& event)
 void App::onInit(const AppDesc& ci)
 {
     // auto &bus = *MessageBus::get();
-    FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 48);
+    if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
+        FontManager::get()->loadFont(runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
+    }
 
     // auto panel     = UIFactory::create<UIPanel>();
     // panel->_color  = FUIColor(0.2f, 0.2f, 0.2f, 0.8f);
@@ -674,7 +701,7 @@ void App::onRenderGUI(float dt)
 
         const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
         Text("Frame: %d, DeltaTime: %.2fms", _frameIndex, dt * 1000.f);
-        Text("FPS: %.1f (%.1f of avg %d)", currentFps, avgFps, fpsRingFill);
+        Text("FPS: %.1f \t(%.1f of avg %d)", currentFps, avgFps, fpsRingFill);
 
         auto* render = getRender();
         YA_CORE_ASSERT(render, "Render is null");

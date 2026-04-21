@@ -1,6 +1,9 @@
 #include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
 
+#include <array>
+#include <filesystem>
+#include <span>
 #include <unordered_map>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -24,6 +27,41 @@ namespace
 {
 constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE       = 512;
 constexpr uint64_t IMGUI_DESCRIPTOR_GC_DELAY_FRAMES = 8;
+
+ImFont* addMergedFont(ImGuiIO*                     io,
+                      std::span<const char* const> candidatePaths,
+                      float                        fontSize,
+                      const ImWchar*               ranges,
+                      bool                         bLoadColor,
+                      const char*                  label)
+{
+    for (const char* path : candidatePaths) {
+        if (!std::filesystem::exists(path)) {
+            continue;
+        }
+
+        ImFontConfig cfg;
+        cfg.MergeMode   = true;
+        cfg.PixelSnapH  = true;
+        cfg.OversampleH = 2;
+        cfg.OversampleV = 2;
+        if (bLoadColor) {
+            cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
+        }
+
+        if (ImFont* font = io->Fonts->AddFontFromFileTTF(
+                path,
+                fontSize,
+                &cfg,
+                ranges)) {
+            YA_CORE_INFO("ImGui: loaded {} font '{}'", label, path);
+            return font;
+        }
+    }
+
+    YA_CORE_WARN("ImGui: no {} font candidate could be loaded", label);
+    return nullptr;
+}
 } // namespace
 
 void ImGuiManager::initImGuiCore()
@@ -48,18 +86,35 @@ void ImGuiManager::initImGuiCore()
             16.0f,
             &fontConfig);
     }
-    if (!mainFont)
-    {
+    if (!mainFont) {
         YA_CORE_ERROR("Failed to load main font");
         mainFont = io->Fonts->AddFontDefault();
     }
 
-    static ImFontConfig cfg;
-    static ImWchar      ranges[] = {0x1, 0x1FFFF, 0};
+    static constexpr std::array<const char*, 6> cjkFontCandidates = {
+        "Engine/Content/Fonts/NotoSansSC-Regular.otf",
+        "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/msyh.ttf",
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/simsun.ttc",
+    };
+    addMergedFont(io,
+                  cjkFontCandidates,
+                  16.0f,
+                  io->Fonts->GetGlyphRangesChineseFull(),
+                  false,
+                  "CJK");
 
-    cfg.MergeMode = true;
-    cfg.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor;
-    io->Fonts->AddFontFromFileTTF("Engine/Content/Fonts/seguiemj.ttf", 16.0f, &cfg /*, ranges*/);
+    static constexpr std::array<const char*, 1> emojiFontCandidates = {
+        "Engine/Content/Fonts/seguiemj.ttf",
+    };
+    addMergedFont(io,
+                  emojiFontCandidates,
+                  16.0f,
+                  io->Fonts->GetGlyphRangesDefault(),
+                  true,
+                  "emoji");
 
 
 
@@ -163,11 +218,11 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
         .ImageCount         = vkRender->getSwapchainImageCount(),
         .PipelineCache      = nullptr,
         .PipelineInfoMain   = ImGui_ImplVulkan_PipelineInfo{
-              .RenderPass                  = useDynamicRendering ? VK_NULL_HANDLE : renderPass->getHandleAs<VkRenderPass>(),
-              .Subpass                     = 0,
-              .MSAASamples                 = VK_SAMPLE_COUNT_1_BIT,
-              .PipelineRenderingCreateInfo = pipelineRenderingCI,
-              .SwapChainImageUsage         = 0,
+            .RenderPass                  = useDynamicRendering ? VK_NULL_HANDLE : renderPass->getHandleAs<VkRenderPass>(),
+            .Subpass                     = 0,
+            .MSAASamples                 = VK_SAMPLE_COUNT_1_BIT,
+            .PipelineRenderingCreateInfo = pipelineRenderingCI,
+            .SwapChainImageUsage         = 0,
         },
         .PipelineInfoForViewports = {},
         .UseDynamicRendering      = useDynamicRendering,
@@ -292,12 +347,10 @@ EventProcessState ImGuiManager::processEvents(const SDL_Event& event)
             return EventProcessState::Handled;
         }
     }
-    if (io->WantCaptureKeyboard)
-    {
+    if (io->WantCaptureKeyboard) {
         if (event.type == SDL_EVENT_KEY_DOWN ||
             event.type == SDL_EVENT_KEY_UP ||
-            event.type == SDL_EVENT_TEXT_INPUT)
-        {
+            event.type == SDL_EVENT_TEXT_INPUT) {
             if (ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny()) {
             }
             else {
@@ -315,12 +368,10 @@ EventProcessState ImGuiManager::processEvent(const Event& event)
         return EventProcessState::Continue;
     }
     auto io = &ImGui::GetIO();
-    if (event.isInCategory(EEventCategory::Mouse) && io->WantCaptureMouse)
-    {
+    if (event.isInCategory(EEventCategory::Mouse) && io->WantCaptureMouse) {
         return EventProcessState::Handled;
     }
-    if (event.isInCategory(EEventCategory::Keyboard) && io->WantCaptureKeyboard)
-    {
+    if (event.isInCategory(EEventCategory::Keyboard) && io->WantCaptureKeyboard) {
         return EventProcessState::Handled;
     }
     return EventProcessState::Continue;
@@ -617,8 +668,7 @@ using namespace ImGui;
 static void metricsHelpMarker(const char* desc)
 {
     ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
-    {
+    if (ImGui::BeginItemTooltip()) {
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(desc);
         ImGui::PopTextWrapPos();

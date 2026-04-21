@@ -26,17 +26,24 @@ struct UITextBlock : public UIElement
 
     void render(UIRenderContext &ctx, layer_idx_t layerId) override
     {
-        if (!_font) {
+        Font* font = _font;
+        if (!font) {
+            if (auto defaultFont = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE)) {
+                font = defaultFont.get();
+            }
+        }
+        if (!font) {
             Super::render(ctx, layerId);
             return;
         }
 
+        FontManager::get()->ensureGlyphs(*font, _text);
         glm::vec2 textPos = ctx.pos + _position;
 
         // Calculate text alignment offset
         if (_size.x > 0 || _size.y > 0) {
-            float textWidth  = _font->measureText(_text);
-            float textHeight = _font->ascent - _font->descent;
+            float textWidth  = font->measureText(_text);
+            float textHeight = font->ascent - font->descent;
 
             // Horizontal alignment
             if (_size.x > 0) {
@@ -70,7 +77,7 @@ struct UITextBlock : public UIElement
         }
 
         glm::vec3 pivot = glm::vec3(textPos, (float)layerId / 100.f);
-        Render2D::makeText(_text, pivot, _color, _font);
+        Render2D::makeText(_text, pivot, _color, font);
         layerId += 1;
         Super::render(ctx, layerId);
     }

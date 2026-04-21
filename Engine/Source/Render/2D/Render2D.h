@@ -12,13 +12,13 @@
 #include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 
 #include "Core/System/System.h"
 
 
-#include "Resource/FontManager.h"
+#include "Resource/Font/FontManager.h"
 
 namespace ya
 {

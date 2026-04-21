@@ -10,10 +10,10 @@
 #include "Render/Core/Swapchain.h"
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Resource/FontManager.h"
-#include "Resource/PrimitiveMeshCache.h"
+#include "Resource/Font/FontManager.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/ResourceRegistry.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 #include <SDL3/SDL.h>
 #include <filesystem>

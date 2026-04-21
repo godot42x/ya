@@ -1,5 +1,6 @@
 #include "FileExplorer.h"
 #include "Config/ConfigManager.h"
+#include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ImGuiHelper.h"
 #include <algorithm>
@@ -125,7 +126,7 @@ void FileExplorer::loadConfig()
 
     const std::string currentDirectory = cfg.getOr<std::string>("editor", baseKey + "currentDirectory", "");
     if (!currentDirectory.empty()) {
-        std::filesystem::path dirPath(currentDirectory);
+        const std::filesystem::path dirPath = path_utils::pathFromUtf8String(currentDirectory);
         if (std::filesystem::exists(dirPath) && std::filesystem::is_directory(dirPath)) {
             setSelectedPath(dirPath);
             _selectedPath.clear();
@@ -134,7 +135,7 @@ void FileExplorer::loadConfig()
 
     const std::string selectedPath = cfg.getOr<std::string>("editor", baseKey + "selectedPath", "");
     if (!selectedPath.empty()) {
-        std::filesystem::path path(selectedPath);
+        const std::filesystem::path path = path_utils::pathFromUtf8String(selectedPath);
         if (std::filesystem::exists(path)) {
             setSelectedPath(path);
         }
@@ -158,8 +159,8 @@ void FileExplorer::saveConfig() const
         .set(baseKey + "leftPanelWidth", _leftPanelWidth)
         .set(baseKey + "thumbnailSize", _thumbnailSize)
         .set(baseKey + "padding", _padding)
-        .set(baseKey + "currentDirectory", _currentDirectory.string())
-        .set(baseKey + "selectedPath", _selectedPath.string());
+        .set(baseKey + "currentDirectory", path_utils::pathToUtf8String(_currentDirectory))
+        .set(baseKey + "selectedPath", path_utils::pathToUtf8String(_selectedPath));
     _configDirty = true;
 }
 
@@ -246,7 +247,7 @@ bool FileExplorer::matchesExtension(const std::filesystem::path& path) const
 
     for (const auto& allowedExt : _extensions)
     {
-        if (std::string_view(path.string()).ends_with(allowedExt)) {
+        if (std::string_view(path_utils::pathToUtf8String(path)).ends_with(allowedExt)) {
             return true;
         }
         // std::string lowerAllowed = allowedExt;
@@ -327,7 +328,7 @@ void FileExplorer::render(SelectionCallback onSelect, float height)
     if (_activeMountPoint)
     {
         auto        relativePath = std::filesystem::relative(_currentDirectory, _activeMountPoint->path);
-        std::string pathStr      = relativePath.empty() || relativePath == "." ? "." : relativePath.string();
+        std::string pathStr      = relativePath.empty() || relativePath == "." ? "." : path_utils::pathToGenericUtf8String(relativePath);
         ImGui::Text("%s: %s", _activeMountPoint->name.c_str(), pathStr.c_str());
     }
     else
@@ -439,7 +440,7 @@ void FileExplorer::renderDirectoryContents(SelectionCallback onSelect)
         for (const auto& entry : std::filesystem::directory_iterator(_currentDirectory))
         {
             const auto& path     = entry.path();
-            std::string filename = path.filename().string();
+            std::string filename = path_utils::pathToUtf8String(path.filename());
 
             // Skip hidden files
             if (!filename.empty() && filename[0] == '.') continue;
@@ -497,7 +498,7 @@ void FileExplorer::renderListView(SelectionCallback                             
     for (const auto& entry : directories)
     {
         const auto& path        = entry.path();
-        std::string filename    = path.filename().string();
+        std::string filename    = path_utils::pathToUtf8String(path.filename());
         std::string displayName = "📁 " + filename;
 
         bool isSelected = (_selectedPath == path);
@@ -538,7 +539,7 @@ void FileExplorer::renderListView(SelectionCallback                             
     for (const auto& entry : files)
     {
         const auto& path        = entry.path();
-        std::string filename    = path.filename().string();
+        std::string filename    = path_utils::pathToUtf8String(path.filename());
         std::string displayName = "📄 " + filename;
 
         bool isSelected = (_selectedPath == path);
@@ -596,7 +597,7 @@ void FileExplorer::renderIconView(SelectionCallback                             
     for (const auto& entry : directories)
     {
         const auto& path     = entry.path();
-        std::string filename = path.filename().string();
+        std::string filename = path_utils::pathToUtf8String(path.filename());
 
         ImGui::PushID(filename.c_str());
 
@@ -665,7 +666,7 @@ void FileExplorer::renderIconView(SelectionCallback                             
     for (const auto& entry : files)
     {
         const auto& path     = entry.path();
-        std::string filename = path.filename().string();
+        std::string filename = path_utils::pathToUtf8String(path.filename());
 
         ImGui::PushID(filename.c_str());
 
