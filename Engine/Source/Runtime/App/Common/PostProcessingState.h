@@ -31,7 +31,7 @@ struct PostProcessingState
     bool              bEnableInversion       = false;
     EGrayscaleMode    grayscaleMode          = EGrayscaleMode::None;
     EKernelMode       kernelMode             = EKernelMode::None;
-    bool              bEnableToneMapping     = false;
+    bool              bEnableToneMapping     = true;
     EToneMappingCurve toneMappingCurve       = EToneMappingCurve::ACES;
     bool              bEnableGammaCorrection = true;
     float             gamma                  = 2.2f;

@@ -3,7 +3,7 @@
 #include "Core/Debug/RenderDocCapture.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "ImGuiHelper.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
 #include <SDL3/SDL.h>
@@ -139,7 +139,7 @@ void openCaptureDirectoryFromGUI(const std::string& filePath)
         return;
     }
 
-    dir = std::filesystem::absolute(dir);
+    dir            = std::filesystem::absolute(dir);
     const auto url = std::format("file:///{}", dir.string());
     if (!SDL_OpenURL(url.c_str())) {
         YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
@@ -163,10 +163,10 @@ void RenderRuntime::renderGUI(float dt)
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
         }
         if (_forwardPipeline) {
-            _forwardPipeline->renderGUI();
+            _forwardPipeline->renderGUI(false);
         }
         if (_deferredPipeline) {
-            _deferredPipeline->renderGUI();
+            _deferredPipeline->renderGUI(false);
         }
         ImGui::TreePop();
     }
@@ -298,9 +298,9 @@ void RenderRuntime::renderRenderTargetEditor()
         return;
     }
 
-    const int  colorCount            = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
-    const bool bHasDepth             = selectedEntry.rt->getDepthAttachmentDesc().has_value();
-    const int  attachmentCount       = colorCount + (bHasDepth ? 1 : 0);
+    const int  colorCount             = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
+    const bool bHasDepth              = selectedEntry.rt->getDepthAttachmentDesc().has_value();
+    const int  attachmentCount        = colorCount + (bHasDepth ? 1 : 0);
     _rtEditor.selectedAttachmentIndex = std::clamp(_rtEditor.selectedAttachmentIndex, 0, std::max(attachmentCount - 1, 0));
 
     const std::string selectedAttachmentLabel = _rtEditor.selectedAttachmentIndex < colorCount
@@ -332,7 +332,7 @@ void RenderRuntime::renderRenderTargetEditor()
     }
     ImGui::Text("Format: %s", formatLabel(currentFormat));
 
-    auto* sampler = TextureLibrary::get().getDefaultSampler().get();
+    auto*      sampler     = TextureLibrary::get().getDefaultSampler().get();
     const bool bCanPreview = !selectedEntry.rt->isSwapChainTarget();
     if (!bCanPreview) {
         ImGui::TextWrapped("Preview is disabled for the presentation target because this UI is rendered into the same swapchain image during the screen pass.");
@@ -362,7 +362,7 @@ void RenderRuntime::renderRenderTargetEditor()
                     continue;
                 }
 
-                const bool bSelected = option.format == currentFormat;
+                const bool bSelected   = option.format == currentFormat;
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
                     switch (selectedEntry.owner) {
@@ -393,7 +393,7 @@ void RenderRuntime::renderRenderTargetEditor()
                     continue;
                 }
 
-                const bool bSelected = option.format == currentFormat;
+                const bool bSelected   = option.format == currentFormat;
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
                     selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex), option.format);

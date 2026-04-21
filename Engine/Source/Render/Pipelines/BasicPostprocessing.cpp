@@ -1,9 +1,10 @@
 #include "BasicPostprocessing.h"
 
+#include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Render.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 #include "imgui.h"
 
@@ -61,7 +62,7 @@ void BasicPostprocessing::init(const InitDesc& initDesc)
         .shaderDesc            = ShaderDesc{
             .shaderName = "Misc/BasicPostprocessing.slang",
         },
-        .dynamicFeatures    = {
+        .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
             EPipelineDynamicFeature::Scissor,
         },
@@ -95,18 +96,18 @@ void BasicPostprocessing::init(const InitDesc& initDesc)
     _pipeline->recreate(pipelineDesc);
 
     _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "BasicPostprocessingPool",
-        .maxSets   = 1,
-        .poolSizes = {
-            DescriptorPoolSize{
-                .type            = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = 1,
-            },
-        },
-    });
+                                                           .label     = "BasicPostprocessingPool",
+                                                           .maxSets   = 1,
+                                                           .poolSizes = {
+                                                               DescriptorPoolSize{
+                                                                   .type            = EPipelineDescriptorType::CombinedImageSampler,
+                                                                   .descriptorCount = 1,
+                                                               },
+                                                           },
+                                                       });
 
     std::vector<DescriptorSetHandle> descriptorSets;
-    const bool ok = _descriptorPool->allocateDescriptorSets(_dslInputTexture, 1, descriptorSets);
+    const bool                       ok = _descriptorPool->allocateDescriptorSets(_dslInputTexture, 1, descriptorSets);
     YA_CORE_ASSERT(ok, "Failed to allocate descriptor set");
     _descriptorSet = descriptorSets[0];
 }
@@ -117,7 +118,7 @@ void BasicPostprocessing::shutdown()
     _dslInputTexture.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
-    _render = nullptr;
+    _render                      = nullptr;
     _currentInputImageViewHandle = nullptr;
 }
 
@@ -167,7 +168,7 @@ void BasicPostprocessing::render(const RenderDesc& desc)
     if (_currentInputImageViewHandle != imageViewHandle) {
         _currentInputImageViewHandle = imageViewHandle;
 
-        static auto sampler = TextureLibrary::get().getDefaultSampler();
+        static auto         sampler = TextureLibrary::get().getDefaultSampler();
         DescriptorImageInfo imageInfo(
             _currentInputImageViewHandle,
             sampler->getHandle(),

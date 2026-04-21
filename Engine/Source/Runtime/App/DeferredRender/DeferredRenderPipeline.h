@@ -69,11 +69,13 @@ struct DeferredRenderPipeline
     stdptr<IRenderTarget> _viewportRT;
     stdptr<IRenderTarget> _shadowDepthRT;
 
-    static constexpr EFormat::T LINEAR_FORMAT        = EFormat::R8G8B8A8_UNORM;
-    static constexpr EFormat::T SIGNED_LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
-    static constexpr EFormat::T SHADING_MODEL_FORMAT = EFormat::R8_UNORM;
-    static constexpr EFormat::T DEPTH_FORMAT         = EFormat::D32_SFLOAT;
-    static constexpr EFormat::T SHADOW_DEPTH_FORMAT  = EFormat::D24_UNORM_S8_UINT;
+    static constexpr EFormat::T LINEAR_FORMAT             = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T SIGNED_LINEAR_FORMAT      = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr EFormat::T VIEWPORT_COLOR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr EFormat::T POSTPROCESS_COLOR_FORMAT  = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T SHADING_MODEL_FORMAT      = EFormat::R8_UNORM;
+    static constexpr EFormat::T DEPTH_FORMAT              = EFormat::D32_SFLOAT;
+    static constexpr EFormat::T SHADOW_DEPTH_FORMAT       = EFormat::D24_UNORM_S8_UINT;
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
@@ -87,16 +89,16 @@ struct DeferredRenderPipeline
     std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                _shadowPointCubeIVs{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _shadowPointFaceIVs{};
 
-    Texture* viewportTexture    = nullptr;
-    bool     _bViewportPassOpen = false;
-    bool     _bReverseViewportY = true;
+    Texture* viewportTexture       = nullptr;
+    bool     _bViewportPassOpen    = false;
+    bool     _bReverseViewportY    = true;
     bool     _bEnableShadowMapping = true;
 
-    bool     _bEnablePointLightShadow = true;
-    uint32_t _maxPointLightShadowCount = 1;
-    bool     _bShadowSettingsChangePending = false;
-    bool     _pendingEnableShadowMapping = true;
-    bool     _pendingEnablePointLightShadow = true;
+    bool     _bEnablePointLightShadow         = true;
+    uint32_t _maxPointLightShadowCount        = 1;
+    bool     _bShadowSettingsChangePending    = false;
+    bool     _pendingEnableShadowMapping      = true;
+    bool     _pendingEnablePointLightShadow   = true;
     uint32_t _pendingMaxPointLightShadowCount = 1;
 
     uint32_t   _lastPointLightCount = 0;
@@ -120,7 +122,7 @@ struct DeferredRenderPipeline
     void init(const InitDesc& desc);
     void tick(const TickDesc& desc);
     void shutdown();
-    void renderGUI();
+    void renderGUI(bool bRenderTreeNode = true);
     void endViewportPass(ICommandBuffer* cmdBuf);
     bool hasOpenViewportPass() const { return _bViewportPassOpen; }
     void onViewportResized(Rect2D rect);
@@ -145,8 +147,8 @@ struct DeferredRenderPipeline
     }
 
   private:
-        void loadPersistentSettings();
-        void saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
+    void loadPersistentSettings();
+    void saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
     void rebuildShadowViews();
     void initRenderTargets(Extent2D extent);
     void initShadowResources();

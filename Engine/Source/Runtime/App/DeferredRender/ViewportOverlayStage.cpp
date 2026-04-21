@@ -9,7 +9,7 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/IRenderTarget.h"
 
-#include "Resource/PrimitiveMeshCache.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 

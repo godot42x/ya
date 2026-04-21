@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "ForwardViewportStage.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
-#include "ForwardViewportStage.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/ShadowStage.h"
+
 
 #include <array>
 #include <glm/glm.hpp>
@@ -21,9 +22,10 @@ struct Sampler;
 
 struct ForwardRenderPipeline
 {
-    static constexpr auto LINEAR_FORMAT                       = EFormat::R8G8B8A8_UNORM;
-    static constexpr auto DEPTH_FORMAT                        = EFormat::D32_SFLOAT_S8_UINT;
-    static constexpr auto SHADOW_MAPPING_DEPTH_BUFFER_FORMAT  = EFormat::D32_SFLOAT;
+    static constexpr auto VIEWPORT_COLOR_FORMAT              = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr auto POSTPROCESS_COLOR_FORMAT           = EFormat::R8G8B8A8_UNORM;
+    static constexpr auto DEPTH_FORMAT                       = EFormat::D32_SFLOAT_S8_UINT;
+    static constexpr auto SHADOW_MAPPING_DEPTH_BUFFER_FORMAT = EFormat::D32_SFLOAT;
 
     struct InitDesc
     {
@@ -59,17 +61,19 @@ struct ForwardRenderPipeline
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
     stdptr<Sampler>              shadowSampler       = nullptr;
     bool                         bShadowMapping      = true;
-    stdptr<IRenderTarget>        depthRT             = nullptr;
-    stdptr<IImageView>           shadowDirectionalDepthIV = nullptr;
+
+    stdptr<IRenderTarget> depthRT                  = nullptr;
+    stdptr<IImageView>    shadowDirectionalDepthIV = nullptr;
+
     std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                shadowPointCubeIVs{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> shadowPointFaceIVs{};
 
     // ── Render stages ─────────────────────────────────────────────
-    stdptr<ShadowStage>           _shadowStage;
-    stdptr<ForwardViewportStage>  _viewportStage;
-    PostProcessingStage   _postProcessStage;
+    stdptr<ShadowStage>          _shadowStage;
+    stdptr<ForwardViewportStage> _viewportStage;
+    PostProcessingStage          _postProcessStage;
 
-    bool     bMSAA = false;
+    bool     bMSAA              = false;
     Texture* viewportTexture    = nullptr;
     bool     _bViewportPassOpen = false;
 
@@ -80,13 +84,13 @@ struct ForwardRenderPipeline
     void init(const InitDesc& desc);
     void tick(const TickDesc& desc);
     void shutdown();
-    void renderGUI();
+    void renderGUI(bool bRenderTreeNode);
 
     void endViewportPass(ICommandBuffer* cmdBuf);
     bool hasOpenViewportPass() const { return _bViewportPassOpen; }
 
-    void     onViewportResized(Rect2D rect);
-    Extent2D getViewportExtent() const;
+    void                         onViewportResized(Rect2D rect);
+    Extent2D                     getViewportExtent() const;
     [[nodiscard]] IRenderTarget* getViewportRT() const { return viewportRT.get(); }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
@@ -95,8 +99,8 @@ struct ForwardRenderPipeline
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const { return shadowDirectionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
 
-    private:
-        void rebuildShadowViews();
+  private:
+    void rebuildShadowViews();
 };
 
 } // namespace ya

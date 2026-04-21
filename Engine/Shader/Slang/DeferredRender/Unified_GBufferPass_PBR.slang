@@ -113,10 +113,7 @@ struct FragmentOutput{
 
 vec2 getUV(ETextureSlot slot, vec2 uv)
 {
-    TextureParams params = uParams.textures[(int)slot];
-    if (!params.bEnable){
-        return uv;
-    }
+    TextureParams  params = uParams.textures[(int)slot];
     uv +=   params.translation;
     float c = cos(params.rotationRadius);
     float s = sin(params.rotationRadius);
@@ -128,15 +125,31 @@ vec2 getUV(ETextureSlot slot, vec2 uv)
     return uv;
 }
 
+vec4 sample2DTextureConditionally(in Sampler2D tex, ETextureSlot slot, vec2 uv)
+{
+    if(!uParams.textures[(int)slot].bEnable){
+        return vec4(1.0); // default value when texture is disabled
+    }
+
+    return  tex.Sample(getUV(slot, uv));
+    
+
+}
+
 
 [shader("fragment")]
 void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
     // Albedo from texture modulated by UBO albedo color
-    vec3  albedo    = uParams.albedo * uTexAlbedo.Sample(getUV(ETextureSlot::Albedo, IN.uv)).rgb;
-    float metallic  = uParams.metallic  * uTexMetallic.Sample(getUV(ETextureSlot::Metallic, IN.uv)).r;
-    float roughness = uParams.roughness * uTexRoughness.Sample(getUV(ETextureSlot::Roughness, IN.uv)).r;
-    float ao        = uParams.ao        * uTexAO.Sample(getUV(ETextureSlot::AO, IN.uv)).r;
+    // vec3  albedo    = uParams.albedo * uTexAlbedo.Sample(getUV(ETextureSlot::Albedo, IN.uv)).rgb;
+    // float metallic  = uParams.metallic  * uTexMetallic.Sample(getUV(ETextureSlot::Metallic, IN.uv)).r;
+    // float roughness = uParams.roughness * uTexRoughness.Sample(getUV(ETextureSlot::Roughness, IN.uv)).r;
+    // float ao        = uParams.ao        * uTexAO.Sample(getUV(ETextureSlot::AO, IN.uv)).r;
+
+    vec3  albedo    = uParams.albedo * sample2DTextureConditionally(uTexAlbedo, ETextureSlot::Albedo, IN.uv).rgb;
+    float metallic  = uParams.metallic * sample2DTextureConditionally(uTexMetallic, ETextureSlot::Metallic, IN.uv).r;
+    float roughness = uParams.roughness * sample2DTextureConditionally(uTexRoughness, ETextureSlot::Roughness, IN.uv).r;
+    float ao        = uParams.ao * sample2DTextureConditionally(uTexAO, ETextureSlot::AO, IN.uv).r;
 
     // Pack into GBuffer — no extra RT, roughness/ao ride the unused alpha channels
     OUT.posRoughness   = vec4(IN.pos, roughness);

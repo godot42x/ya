@@ -31,7 +31,7 @@ struct ViewportOverlayStage : public IRenderStage
         int       colorType;
     };
 
-    static constexpr EFormat::T LINEAR_FORMAT = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;
 
     IRender* _render = nullptr;

@@ -50,6 +50,26 @@ struct RenderTargetCreateInfo
     RenderPassSpec subpass     = {};
 };
 
+enum class ERenderTargetDirtyReason : uint32_t
+{
+    None             = 0,
+    Resize           = 1 << 0,
+    FrameBufferCount = 1 << 1,
+    Attachments      = 1 << 2,
+    All              = 0xFFFFFFFFu,
+};
+
+inline ERenderTargetDirtyReason operator|(ERenderTargetDirtyReason lhs, ERenderTargetDirtyReason rhs)
+{
+    return static_cast<ERenderTargetDirtyReason>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+}
+
+inline ERenderTargetDirtyReason& operator|=(ERenderTargetDirtyReason& lhs, ERenderTargetDirtyReason rhs)
+{
+    lhs = lhs | rhs;
+    return lhs;
+}
+
 struct IRenderTarget
 {
     std::string       label          = "None";
@@ -66,7 +86,8 @@ struct IRenderTarget
     uint32_t                          _layerCount        = 1; // for array textures or cubemaps
 
 
-    bool bDirty = false;
+    bool                     bDirty        = false;
+    ERenderTargetDirtyReason _dirtyReason  = ERenderTargetDirtyReason::None;
 
     // opt
     bool         bSwapChainTarget              = false;
@@ -91,6 +112,7 @@ struct IRenderTarget
     {
         label                         = ci.label;
         bDirty                        = true;
+        _dirtyReason                  = ERenderTargetDirtyReason::All;
         bSwapChainTarget              = ci.bSwapChainTarget;
         swapChianColorAttachmentIndex = ci.swapChianColorAttachmentIndex;
         _renderingMode                = ci.renderingMode;
@@ -105,7 +127,8 @@ struct IRenderTarget
         setExtent(ci.extent);
         bool ok = onInit(ci);
         if (ok) {
-            bDirty = false;
+            bDirty       = false;
+            _dirtyReason = ERenderTargetDirtyReason::None;
             if (_renderingMode == ERenderingMode::RenderPass) {
                 for (auto fb : _frameBuffers)
                 {
@@ -129,7 +152,7 @@ struct IRenderTarget
         if (_extent.width != extent.width || _extent.height != extent.height)
         {
             _extent = extent;
-            bDirty  = true;
+            markDirty(ERenderTargetDirtyReason::Resize);
         }
     }
 
@@ -139,7 +162,8 @@ struct IRenderTarget
     {
         if (bDirty) {
             recreate();
-            bDirty = false;
+            bDirty       = false;
+            _dirtyReason = ERenderTargetDirtyReason::None;
         }
     }
 
@@ -150,7 +174,7 @@ struct IRenderTarget
         }
         if (_frameBufferCount != frameBufferCount) {
             _frameBufferCount = frameBufferCount;
-            bDirty            = true;
+            markDirty(ERenderTargetDirtyReason::FrameBufferCount);
         }
     }
 
@@ -162,7 +186,7 @@ struct IRenderTarget
         auto& desc = _colorAttachmentDescs[attachmentIndex];
         if (desc.samples != sampleCount) {
             desc.samples = sampleCount;
-            bDirty       = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
         return true;
     }
@@ -175,7 +199,7 @@ struct IRenderTarget
         auto& desc = _colorAttachmentDescs[attachmentIndex];
         if (desc.format != format) {
             desc.format = format;
-            bDirty      = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
         return true;
     }
@@ -187,7 +211,7 @@ struct IRenderTarget
         }
         if (_depthAttachmentDesc->samples != sampleCount) {
             _depthAttachmentDesc->samples = sampleCount;
-            bDirty                        = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
         return true;
     }
@@ -199,7 +223,7 @@ struct IRenderTarget
         }
         if (_depthAttachmentDesc->format != format) {
             _depthAttachmentDesc->format = format;
-            bDirty                      = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
         return true;
     }
@@ -211,7 +235,7 @@ struct IRenderTarget
         }
         if (_resolveAttachmentDesc->samples != sampleCount) {
             _resolveAttachmentDesc->samples = sampleCount;
-            bDirty                          = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
         return true;
     }
@@ -220,7 +244,7 @@ struct IRenderTarget
     void setResolveAttachment(const AttachmentDescription& desc)
     {
         _resolveAttachmentDesc = desc;
-        bDirty                 = true;
+        markDirty(ERenderTargetDirtyReason::Attachments);
     }
 
     /// Remove the resolve attachment entirely. Marks dirty only if one existed.
@@ -228,8 +252,20 @@ struct IRenderTarget
     {
         if (_resolveAttachmentDesc.has_value()) {
             _resolveAttachmentDesc.reset();
-            bDirty = true;
+            markDirty(ERenderTargetDirtyReason::Attachments);
         }
+    }
+
+    void markDirty(ERenderTargetDirtyReason reason)
+    {
+        bDirty = true;
+        _dirtyReason |= reason;
+    }
+
+    [[nodiscard]] ERenderTargetDirtyReason getDirtyReason() const { return _dirtyReason; }
+    [[nodiscard]] bool hasDirtyReason(ERenderTargetDirtyReason reason) const
+    {
+        return (static_cast<uint32_t>(_dirtyReason) & static_cast<uint32_t>(reason)) != 0;
     }
 
     const Extent2D& getExtent() const { return _extent; }

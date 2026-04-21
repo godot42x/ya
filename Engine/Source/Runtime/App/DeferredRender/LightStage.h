@@ -26,7 +26,7 @@ struct LightStage : public IRenderStage
     using PushConstant = slang_types::DeferredRender::Unified_LightPass::PushConstants;
     using LightData    = slang_types::DeferredRender::Unified_LightPass::LightData;
 
-    static constexpr EFormat::T LINEAR_FORMAT = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;
 
     IRender*       _render       = nullptr;
@@ -77,6 +77,7 @@ struct LightStage : public IRenderStage
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void invalidateGBufferDescriptors();
     [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }
     [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return _bEnablePBRSpecularIBL; }
 

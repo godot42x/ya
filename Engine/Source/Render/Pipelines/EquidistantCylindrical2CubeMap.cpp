@@ -189,7 +189,7 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
 
     auto* textureFactory = _render->getTextureFactory();
 
-    // iamgeView from output image
+    // imageView from output image
     // why: make sure the image view is a View2DArray for color attachment not a cubeMap by input created
     result.transientOutputArrayView = textureFactory->createImageView(
         ctx.output->getImageShared(),

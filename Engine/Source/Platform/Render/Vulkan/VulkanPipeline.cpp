@@ -14,6 +14,169 @@
 
 namespace ya
 {
+namespace
+{
+
+template <typename T, typename Compare>
+bool isSameVector(const std::vector<T>& lhs, const std::vector<T>& rhs, Compare&& compare)
+{
+    if (lhs.size() != rhs.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (!compare(lhs[i], rhs[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isSame(const VertexBufferDescription& lhs, const VertexBufferDescription& rhs)
+{
+    return lhs.slot == rhs.slot && lhs.pitch == rhs.pitch;
+}
+
+bool isSame(const VertexAttribute& lhs, const VertexAttribute& rhs)
+{
+    return lhs.bufferSlot == rhs.bufferSlot && lhs.location == rhs.location && lhs.format == rhs.format && lhs.offset == rhs.offset;
+}
+
+bool isSame(const ShaderReflectionConfig& lhs, const ShaderReflectionConfig& rhs)
+{
+    return lhs.vertexInput == rhs.vertexInput && lhs.descriptorLayouts == rhs.descriptorLayouts && lhs.pushConstants == rhs.pushConstants;
+}
+
+bool isSame(const ShaderDesc::StageFile& lhs, const ShaderDesc::StageFile& rhs)
+{
+    return lhs.stage == rhs.stage && lhs.file == rhs.file;
+}
+
+bool isSame(const ShaderDesc& lhs, const ShaderDesc& rhs)
+{
+    return lhs.sourceMode == rhs.sourceMode
+        && lhs.shaderName == rhs.shaderName
+        && isSameVector(lhs.stageFiles, rhs.stageFiles, [](const auto& a, const auto& b) { return isSame(a, b); })
+        && isSame(lhs.reflection, rhs.reflection)
+        && isSameVector(lhs.vertexBufferDescs, rhs.vertexBufferDescs, [](const auto& a, const auto& b) { return isSame(a, b); })
+        && isSameVector(lhs.vertexAttributes, rhs.vertexAttributes, [](const auto& a, const auto& b) { return isSame(a, b); })
+        && lhs.defines == rhs.defines;
+}
+
+bool isSame(const RasterizationState& lhs, const RasterizationState& rhs)
+{
+    return lhs.bDepthClampEnable == rhs.bDepthClampEnable
+        && lhs.bRasterizerDiscardEnable == rhs.bRasterizerDiscardEnable
+        && lhs.polygonMode == rhs.polygonMode
+        && lhs.cullMode == rhs.cullMode
+        && lhs.frontFace == rhs.frontFace
+        && lhs.bDepthBiasEnable == rhs.bDepthBiasEnable
+        && lhs.depthBiasConstantFactor == rhs.depthBiasConstantFactor
+        && lhs.depthBiasClamp == rhs.depthBiasClamp
+        && lhs.depthBiasSlopeFactor == rhs.depthBiasSlopeFactor
+        && lhs.lineWidth == rhs.lineWidth;
+}
+
+bool isSame(const ColorBlendAttachmentState& lhs, const ColorBlendAttachmentState& rhs)
+{
+    return lhs.index == rhs.index
+        && lhs.bBlendEnable == rhs.bBlendEnable
+        && lhs.srcColorBlendFactor == rhs.srcColorBlendFactor
+        && lhs.dstColorBlendFactor == rhs.dstColorBlendFactor
+        && lhs.colorBlendOp == rhs.colorBlendOp
+        && lhs.srcAlphaBlendFactor == rhs.srcAlphaBlendFactor
+        && lhs.dstAlphaBlendFactor == rhs.dstAlphaBlendFactor
+        && lhs.alphaBlendOp == rhs.alphaBlendOp
+        && lhs.colorWriteMask == rhs.colorWriteMask;
+}
+
+bool isSame(const ColorBlendState& lhs, const ColorBlendState& rhs)
+{
+    return lhs.bLogicOpEnable == rhs.bLogicOpEnable
+        && lhs.logicOp == rhs.logicOp
+        && isSameVector(lhs.attachments, rhs.attachments, [](const auto& a, const auto& b) { return isSame(a, b); })
+        && std::equal(std::begin(lhs.blendConstants), std::end(lhs.blendConstants), std::begin(rhs.blendConstants), std::end(rhs.blendConstants));
+}
+
+bool isSame(const StencilOpState& lhs, const StencilOpState& rhs)
+{
+    return lhs.failOp == rhs.failOp
+        && lhs.passOp == rhs.passOp
+        && lhs.depthFailOp == rhs.depthFailOp
+        && lhs.compareOp == rhs.compareOp
+        && lhs.compareMask == rhs.compareMask
+        && lhs.writeMask == rhs.writeMask
+        && lhs.reference == rhs.reference;
+}
+
+bool isSame(const DepthStencilState& lhs, const DepthStencilState& rhs)
+{
+    return lhs.bDepthTestEnable == rhs.bDepthTestEnable
+        && lhs.bDepthWriteEnable == rhs.bDepthWriteEnable
+        && lhs.depthCompareOp == rhs.depthCompareOp
+        && lhs.bDepthBoundsTestEnable == rhs.bDepthBoundsTestEnable
+        && lhs.bStencilTestEnable == rhs.bStencilTestEnable
+        && lhs.minDepthBounds == rhs.minDepthBounds
+        && lhs.maxDepthBounds == rhs.maxDepthBounds
+        && isSame(lhs.front, rhs.front)
+        && isSame(lhs.back, rhs.back);
+}
+
+bool isSame(const MultisampleState& lhs, const MultisampleState& rhs)
+{
+    return lhs.sampleCount == rhs.sampleCount
+        && lhs.bSampleShadingEnable == rhs.bSampleShadingEnable
+        && lhs.minSampleShading == rhs.minSampleShading
+        && lhs.bAlphaToCoverageEnable == rhs.bAlphaToCoverageEnable
+        && lhs.bAlphaToOneEnable == rhs.bAlphaToOneEnable;
+}
+
+bool isSame(const Viewport& lhs, const Viewport& rhs)
+{
+    return lhs.x == rhs.x
+        && lhs.y == rhs.y
+        && lhs.width == rhs.width
+        && lhs.height == rhs.height
+        && lhs.minDepth == rhs.minDepth
+        && lhs.maxDepth == rhs.maxDepth;
+}
+
+bool isSame(const Scissor& lhs, const Scissor& rhs)
+{
+    return lhs.offsetX == rhs.offsetX && lhs.offsetY == rhs.offsetY && lhs.width == rhs.width && lhs.height == rhs.height;
+}
+
+bool isSame(const ViewportState& lhs, const ViewportState& rhs)
+{
+    return isSameVector(lhs.viewports, rhs.viewports, [](const auto& a, const auto& b) { return isSame(a, b); })
+        && isSameVector(lhs.scissors, rhs.scissors, [](const auto& a, const auto& b) { return isSame(a, b); });
+}
+
+bool isSame(const PipelineRenderingInfo& lhs, const PipelineRenderingInfo& rhs)
+{
+    return lhs.label == rhs.label
+        && lhs.viewMask == rhs.viewMask
+        && lhs.colorAttachmentFormats == rhs.colorAttachmentFormats
+        && lhs.depthAttachmentFormat == rhs.depthAttachmentFormat
+        && lhs.stencilAttachmentFormat == rhs.stencilAttachmentFormat;
+}
+
+bool isSame(const GraphicsPipelineCreateInfo& lhs, const GraphicsPipelineCreateInfo& rhs)
+{
+    return lhs.subPassRef == rhs.subPassRef
+        && lhs.renderPass == rhs.renderPass
+        && isSame(lhs.pipelineRenderingInfo, rhs.pipelineRenderingInfo)
+        && lhs.pipelineLayout == rhs.pipelineLayout
+        && isSame(lhs.shaderDesc, rhs.shaderDesc)
+        && lhs.dynamicFeatures == rhs.dynamicFeatures
+        && lhs.primitiveType == rhs.primitiveType
+        && isSame(lhs.rasterizationState, rhs.rasterizationState)
+        && isSame(lhs.multisampleState, rhs.multisampleState)
+        && isSame(lhs.depthStencilState, rhs.depthStencilState)
+        && isSame(lhs.colorBlendState, rhs.colorBlendState)
+        && isSame(lhs.viewportState, rhs.viewportState);
+}
+
+} // namespace
 
 void VulkanPipelineLayout::create(const std::vector<PushConstantRange>             pushConstants,
                                   const std::vector<stdptr<IDescriptorSetLayout>>& layouts)
@@ -95,7 +258,10 @@ bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 
 void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
 {
-    _ci = ci;
+    if (isSame(_ci, ci)) {
+        return;
+    }
+    _ci = std::move(ci);
     markDirty();
 }
 
@@ -174,11 +340,12 @@ void VulkanPipeline::renderGUI()
         return;
     }
 
-    bool bDirty = false;
+    bool bDirty         = false;
+    bool bReloadShaders = false;
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
     if (ImGui::Button("Reload Shaders")) {
         _forceShaderReload = true;
-        bDirty             = true;
+        bReloadShaders     = true;
     }
     ImGui::PopStyleColor();
     int cull = static_cast<int>(_ci.rasterizationState.cullMode);
@@ -243,6 +410,9 @@ void VulkanPipeline::renderGUI()
 
     if (bDirty) {
         updateDesc(_ci);
+    }
+    if (bReloadShaders) {
+        markDirty();
     }
     ImGui::TreePop();
 }

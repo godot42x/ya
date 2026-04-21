@@ -781,10 +781,10 @@ void RenderRuntime::initActivePipeline()
     }
 
     if (_shadingModel == EShadingModel::Forward) {
-        Render2D::init(_render, ForwardRenderPipeline::LINEAR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
+        Render2D::init(_render, ForwardRenderPipeline::VIEWPORT_COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
     }
     else {
-        Render2D::init(_render, _deferredPipeline->LINEAR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
+        Render2D::init(_render, _deferredPipeline->VIEWPORT_COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
     }
 }
 

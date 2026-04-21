@@ -4,8 +4,8 @@
 #include "Core/Debug/PerfKeys.h"
 #include "Core/Debug/PerfState.h"
 #include "GBufferStage.h"
-#include "Resource/PrimitiveMeshCache.h"
-#include "Resource/TextureLibrary.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 
@@ -68,8 +68,19 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
 
 void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
 {
+    if (_gBufferRT) {
+        _gBufferRT->onFramebufferRecreated.removeAll(this);
+    }
+
     _gBufferStage = gBufferStage;
     _gBufferRT    = gBufferRT;
+    invalidateGBufferDescriptors();
+
+    if (_gBufferRT) {
+        _gBufferRT->onFramebufferRecreated.addLambda(this, [this]() {
+            invalidateGBufferDescriptors();
+        });
+    }
 }
 
 void LightStage::setShadowResources(IImageView*                                      directionalDepthIV,
@@ -120,6 +131,13 @@ void LightStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
     ci.pipelineRenderingInfo.colorAttachmentFormats = {colorDescs.front().format};
     ci.pipelineRenderingInfo.depthAttachmentFormat  = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
     _pipeline->updateDesc(std::move(ci));
+}
+
+void LightStage::invalidateGBufferDescriptors()
+{
+    _lastGBufferFrameBuffer          = nullptr;
+    _bGBufferDescriptorsInitialized  = false;
+    _lastGBufferDescriptorWriteCount = 0;
 }
 
 void LightStage::init(IRender* render)
@@ -223,6 +241,10 @@ void LightStage::init(IRender* render)
 
 void LightStage::destroy()
 {
+    if (_gBufferRT) {
+        _gBufferRT->onFramebufferRecreated.removeAll(this);
+    }
+
     _pipeline.reset();
     _pipelineLayout.reset();
     _gBufferTextureDSL.reset();

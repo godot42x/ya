@@ -45,12 +45,15 @@ EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)
     }
 }
 
-EFormat::T chooseEnvironmentIrradianceFormat(EFormat::T sourceFormat)
+// Always use R16G16B16A16_SFLOAT for irradiance maps regardless of source format,
+// because irradiance convolution accumulates many low-intensity samples and needs
+// the extra precision to avoid banding artifacts.
+EFormat::T chooseEnvironmentIrradianceFormat(EFormat::T /*sourceFormat*/)
 {
-    (void)sourceFormat;
     return EFormat::R16G16B16A16_SFLOAT;
 }
 
+// Equirectangular maps have 2:1 aspect ratio; each cube face covers 1/4 width × 1/2 height.
 uint32_t computeSkyboxFaceSize(const Texture* sourceTexture)
 {
     if (!sourceTexture) {

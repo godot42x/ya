@@ -38,46 +38,46 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .extent           = extent,
         .frameBufferCount = 1,
         .attachments      = {
-                 .colorAttach = {
+            .colorAttach = {
                 AttachmentDescription{
-                         .index         = 0,
-                         .format        = SIGNED_LINEAR_FORMAT,
-                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .index         = 0,
+                    .format        = SIGNED_LINEAR_FORMAT,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                         .index         = 1,
-                         .format        = SIGNED_LINEAR_FORMAT,
-                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .index         = 1,
+                    .format        = SIGNED_LINEAR_FORMAT,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                         .index         = 2,
-                         .format        = LINEAR_FORMAT,
-                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .index         = 2,
+                    .format        = LINEAR_FORMAT,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                         .index         = 3,
-                         .format        = SHADING_MODEL_FORMAT,
-                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .index         = 3,
+                    .format        = SHADING_MODEL_FORMAT,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-                 .depthAttach = AttachmentDescription{
-                     .index          = 4,
-                     .format         = DEPTH_FORMAT,
-                     .loadOp         = EAttachmentLoadOp::Clear,
-                     .storeOp        = EAttachmentStoreOp::Store,
-                     .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                     .stencilStoreOp = EAttachmentStoreOp::Store,
-                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                     .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+            .depthAttach = AttachmentDescription{
+                .index          = 4,
+                .format         = DEPTH_FORMAT,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                .stencilStoreOp = EAttachmentStoreOp::Store,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
             },
         },
     });
@@ -87,31 +87,31 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .bSwapChainTarget = false,
         .extent           = extent,
         .attachments      = {
-                 .colorAttach = {
+            .colorAttach = {
                 AttachmentDescription{
-                         .index          = 0,
-                         .format         = LINEAR_FORMAT,
-                         .samples        = ESampleCount::Sample_1,
-                         .loadOp         = EAttachmentLoadOp::Clear,
-                         .storeOp        = EAttachmentStoreOp::Store,
-                         .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                         .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                         .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .index          = 0,
+                    .format         = VIEWPORT_COLOR_FORMAT,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-                 .depthAttach = AttachmentDescription{
-                     .index          = 1,
-                     .format         = DEPTH_FORMAT,
-                     .samples        = ESampleCount::Sample_1,
-                     .loadOp         = EAttachmentLoadOp::Load,
-                     .storeOp        = EAttachmentStoreOp::Store,
-                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                     .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
+            .depthAttach = AttachmentDescription{
+                .index          = 1,
+                .format         = DEPTH_FORMAT,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Load,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
             },
         },
     });
@@ -131,16 +131,16 @@ void DeferredRenderPipeline::initShadowResources()
         .frameBufferCount = 1,
         .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
         .attachments      = {
-                 .depthAttach = AttachmentDescription{
-                     .index            = 0,
-                     .format           = _shadowDepthFormat,
-                     .samples          = ESampleCount::Sample_1,
-                     .loadOp           = EAttachmentLoadOp::Clear,
-                     .storeOp          = EAttachmentStoreOp::Store,
-                     .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                     .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                     .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                     .imageCreateFlags = EImageCreateFlag::CubeCompatible,
+            .depthAttach = AttachmentDescription{
+                .index            = 0,
+                .format           = _shadowDepthFormat,
+                .samples          = ESampleCount::Sample_1,
+                .loadOp           = EAttachmentLoadOp::Clear,
+                .storeOp          = EAttachmentStoreOp::Store,
+                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
+                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
             },
         },
     });
@@ -278,19 +278,20 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
 
 void DeferredRenderPipeline::loadPersistentSettings()
 {
-    auto& configManager            = ConfigManager::get();
-    _bEnableShadowMapping        = configManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
-                                                      _bEnableShadowMapping);
-    _bEnablePointLightShadow     = configManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
-                                                      _bEnablePointLightShadow);
-    int maxPointLightShadowCount = configManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                            DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-                                                            static_cast<int>(_maxPointLightShadowCount));
-    _maxPointLightShadowCount      = static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS)));
-    _pendingEnableShadowMapping    = _bEnableShadowMapping;
-    _pendingEnablePointLightShadow = _bEnablePointLightShadow;
+    auto& cfgManager = ConfigManager::get();
+
+    _bEnableShadowMapping            = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                              DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
+                                                              _bEnableShadowMapping);
+    _bEnablePointLightShadow         = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                              DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
+                                                              _bEnablePointLightShadow);
+    int maxPointLightShadowCount     = cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                             DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+                                                             static_cast<int>(_maxPointLightShadowCount));
+    _maxPointLightShadowCount        = static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS)));
+    _pendingEnableShadowMapping      = _bEnableShadowMapping;
+    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
     _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
 }
 
@@ -370,9 +371,9 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 {
     shutdown();
 
-    _render                          = desc.render;
-    _bViewportPassOpen               = false;
-    _bShadowSettingsChangePending    = false;
+    _render                       = desc.render;
+    _bViewportPassOpen            = false;
+    _bShadowSettingsChangePending = false;
     loadPersistentSettings();
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
@@ -407,7 +408,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     // PostProcess
     _postProcessStage.init(PostProcessingStage::InitDesc{
         .render      = _render,
-        .colorFormat = LINEAR_FORMAT,
+        .colorFormat = POSTPROCESS_COLOR_FORMAT,
         .width       = extent.width,
         .height      = extent.height,
     });
@@ -445,6 +446,7 @@ void DeferredRenderPipeline::shutdown()
     _render                       = nullptr;
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════
 // Tick
 // ═══════════════════════════════════════════════════════════════════════
@@ -471,11 +473,13 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     // Begin frame
     _postProcessStage.beginFrame();
-    const bool bViewportDirty = _viewportRT && _viewportRT->bDirty;
-    const bool bGBufferDirty  = _gBufferRT && _gBufferRT->bDirty;
+    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    const bool bGBufferDirty          = _gBufferRT && _gBufferRT->bDirty;
+    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
     _viewportRT->flushDirty();
     _gBufferRT->flushDirty();
     const bool bShadowResourcesDirty = _shadowDepthRT && _shadowDepthRT->bDirty;
+    const bool bShadowPipelineDirty  = _shadowDepthRT && _shadowDepthRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
     if (_shadowDepthRT) {
         _shadowDepthRT->flushDirty();
     }
@@ -484,12 +488,15 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         _cachedAlbedoSpecImageViewHandle = nullptr;
         _debugAlbedoRGBView.reset();
         _debugSpecularAlphaView.reset();
-        if (_gBufferStage) {
+        if (_lightStage) {
+            _lightStage->invalidateGBufferDescriptors();
+        }
+        if (bGBufferPipelineDirty && _gBufferStage) {
             _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
         }
     }
 
-    if (bViewportDirty) {
+    if (bViewportPipelineDirty) {
         if (_lightStage) {
             _lightStage->refreshPipelineFormats(_viewportRT.get());
         }
@@ -500,7 +507,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
 
     if (bShadowResourcesDirty) {
         rebuildShadowViews();
-        if (_shadowStage) {
+        if (bShadowPipelineDirty && _shadowStage) {
             _shadowStage->refreshPipelineFromRenderTarget();
         }
         syncShadowSettings();
@@ -739,9 +746,10 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 // GUI
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::renderGUI()
+void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
 {
-    if (!ImGui::TreeNode("Deferred Pipeline")) return;
+
+    if (bRenderTreeNode && !ImGui::TreeNode("Deferred Pipeline")) return;
 
     ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
     bool bEnablePerfStats = YA_PERF_IS_ENABLED();
@@ -767,8 +775,7 @@ void DeferredRenderPipeline::renderGUI()
     }
 
     if (YA_PERF_IS_ENABLED()) {
-        if (ImGui::TreeNode("Perf"))
-        {
+        if (ImGui::TreeNode("Perf")) {
             auto& perf = PerfState::Get();
             ImGui::Text("CPU tick: %.3f ms", perf.getLastValue(perf::sample::deferredTick(), perf::metric::cpuTimeMs()));
             ImGui::Text("CPU shadow: %.3f ms", perf.getLastValue(perf::sample::deferredShadow(), perf::metric::cpuTimeMs()));
@@ -789,7 +796,7 @@ void DeferredRenderPipeline::renderGUI()
     if (_overlayStage) _overlayStage->renderGUI();
     _postProcessStage.renderGUI();
 
-    ImGui::TreePop();
+    if (bRenderTreeNode) { ImGui::TreePop(); }
 }
 
 } // namespace ya
