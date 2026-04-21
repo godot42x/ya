@@ -257,7 +257,9 @@ struct VulkanRender : public IRender
     void  queueEndLabel() override;
 
     // IRender interface: get texture factory
-    ITextureFactory* getTextureFactory() override { return _textureFactory.get(); }
+    ITextureFactory*         getTextureFactory() override { return _textureFactory.get(); }
+    TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const override;
+    bool                     isTextureFormatSupported(EFormat::T format, EImageUsage::T usage) const override;
 
   private:
     void terminate()

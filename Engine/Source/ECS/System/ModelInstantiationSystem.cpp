@@ -60,6 +60,17 @@ EModelMaterialType resolveMaterialTypeForInstantiation(const ModelComponent& mod
     if (matData->type == "unlit") {
         return EModelMaterialType::Unlit;
     }
+
+    if (matData->type.empty() &&
+        (matData->hasParam(MatParam::Metallic) ||
+         matData->hasParam(MatParam::Roughness) ||
+         matData->hasTexture(MatTexture::Metallic) ||
+         matData->hasTexture(MatTexture::Roughness) ||
+         matData->hasTexture(MatTexture::MetallicRoughness) ||
+         matData->hasTexture(MatTexture::AO))) {
+        return EModelMaterialType::PBR;
+    }
+
     return EModelMaterialType::Phong;
 }
 
@@ -215,8 +226,6 @@ void ModelInstantiationSystem::instantiatePendingModels(Scene* scene)
 
 void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, ModelComponent& modelComp)
 {
-    cleanupChildEntities(scene, modelComp);
-
     if (!modelComp._modelRef.isLoaded()) {
         const auto result = modelComp._modelRef.resolve();
         if (result == EAssetResolveResult::Pending) {
@@ -229,6 +238,8 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
             return;
         }
     }
+
+    cleanupChildEntities(scene, modelComp);
 
     Model* model = modelComp.getModel();
     if (!model || model->getMeshCount() == 0) {

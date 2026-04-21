@@ -28,6 +28,84 @@
 namespace ya
 {
 
+namespace
+{
+struct FormatSupportSummary
+{
+    VkFormat format             = VK_FORMAT_UNDEFINED;
+    bool     optimalSampled     = false;
+    bool     optimalTransferDst = false;
+    bool     linearSampled      = false;
+};
+
+FormatSupportSummary queryFormatSupport(VkPhysicalDevice device, VkFormat format)
+{
+    FormatSupportSummary summary{.format = format};
+
+    auto query = [&](VkImageTiling tiling, VkImageUsageFlags usage) {
+        VkPhysicalDeviceImageFormatInfo2 formatInfo{};
+        formatInfo.sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+        formatInfo.format = format;
+        formatInfo.type   = VK_IMAGE_TYPE_2D;
+        formatInfo.tiling = tiling;
+        formatInfo.usage  = usage;
+
+        VkImageFormatProperties2 formatProps{};
+        formatProps.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+        return vkGetPhysicalDeviceImageFormatProperties2(device, &formatInfo, &formatProps) == VK_SUCCESS;
+    };
+
+    summary.optimalSampled     = query(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT);
+    summary.optimalTransferDst = query(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    summary.linearSampled      = query(VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_SAMPLED_BIT);
+    return summary;
+}
+
+void logAstcSupport(VkPhysicalDevice device, const VkPhysicalDeviceProperties& props)
+{
+    VkPhysicalDeviceFeatures deviceFeatures{};
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    const auto astc4x4 = queryFormatSupport(device, VK_FORMAT_ASTC_4x4_SRGB_BLOCK);
+    const auto astc8x8 = queryFormatSupport(device, VK_FORMAT_ASTC_8x8_SRGB_BLOCK);
+
+    YA_CORE_INFO("ASTC support for {}:", props.deviceName);
+    YA_CORE_INFO("  feature.textureCompressionASTC_LDR = {}", deviceFeatures.textureCompressionASTC_LDR == VK_TRUE ? "true" : "false");
+    YA_CORE_INFO("  {}: optimal(sampled)={}, optimal(sampled+transferDst)={}, linear(sampled)={}",
+                 std::to_string(astc4x4.format),
+                 astc4x4.optimalSampled,
+                 astc4x4.optimalTransferDst,
+                 astc4x4.linearSampled);
+    YA_CORE_INFO("  {}: optimal(sampled)={}, optimal(sampled+transferDst)={}, linear(sampled)={}",
+                 std::to_string(astc8x8.format),
+                 astc8x8.optimalSampled,
+                 astc8x8.optimalTransferDst,
+                 astc8x8.linearSampled);
+}
+} // namespace
+
+TextureFormatSupportInfo VulkanRender::queryTextureFormatSupport(EFormat::T format) const
+{
+    const auto summary = queryFormatSupport(m_PhysicalDevice, toVk(format));
+    return TextureFormatSupportInfo{
+        .sampled            = summary.optimalSampled,
+        .sampledTransferDst = summary.optimalTransferDst,
+        .linearSampled      = summary.linearSampled,
+    };
+}
+
+bool VulkanRender::isTextureFormatSupported(EFormat::T format, EImageUsage::T usage) const
+{
+    const auto support = queryTextureFormatSupport(format);
+    if ((usage & static_cast<EImageUsage::T>(EImageUsage::TransferDst)) != 0) {
+        return support.sampledTransferDst;
+    }
+    if ((usage & static_cast<EImageUsage::T>(EImageUsage::Sampled)) != 0) {
+        return support.sampled;
+    }
+    return false;
+}
+
 VkObjectType toVk(ERenderObject type)
 {
     switch (type) {
@@ -235,6 +313,7 @@ void VulkanRender::findPhysicalDevice()
                      VK_VERSION_MAJOR(candidate.properties.apiVersion),
                      VK_VERSION_MINOR(candidate.properties.apiVersion),
                      VK_VERSION_PATCH(candidate.properties.apiVersion));
+        logAstcSupport(device, candidate.properties);
 
         bool bSkip = false;
         for (const auto& disabledCard : desc.disabledGraphicsCards) {

@@ -66,6 +66,7 @@ inline const FName Shininess    = "shininess";
 inline const FName Metallic     = "metallic";
 inline const FName Roughness    = "roughness";
 inline const FName Opacity      = "opacity";
+inline const FName AlphaMode    = "alphaMode";
 inline const FName AlphaCutoff  = "alphaCutoff";
 inline const FName RefractIndex = "refractIndex";
 inline const FName Reflection   = "reflection";
@@ -86,6 +87,7 @@ inline const FName Normal    = "normal";
 inline const FName Emissive  = "emissive";
 inline const FName Metallic  = "metallic";
 inline const FName Roughness = "roughness";
+inline const FName MetallicRoughness = "metallicRoughness";
 inline const FName AO        = "ao";
 } // namespace MatTexture
 
@@ -171,6 +173,11 @@ struct MaterialData
         }
         // If already absolute, use as-is
         if (texPath.find(':') != std::string::npos || texPath[0] == '/') {
+            return texPath;
+        }
+        // TinyGLTF path resolution may already return a workspace-relative path
+        // rooted at the model directory. Avoid prefixing the same directory twice.
+        if (!directory.empty() && texPath.rfind(directory, 0) == 0) {
             return texPath;
         }
         // Make relative to model directory

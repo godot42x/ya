@@ -10,6 +10,7 @@ add_requires(
     , "libsdl3_image"
     , "glm"
     , "stb"
+    , "tinygltf v2.9.6"
     , "cxxopts"
     , "lua v5.4.8"
     , "freetype"
@@ -119,6 +120,7 @@ do
 
 
     add_packages("stb")
+    add_packages("tinygltf")
     -- add_packages("spdlog")
     add_packages("libsdl3", { public = true })
     add_packages("libsdl3_image")

@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-#include "Resource/TextureLibrary.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "stb/stb_image.h"
 
@@ -71,6 +71,21 @@ struct OwnedCubeMapFace
         return !bytes.empty() && width > 0 && height > 0;
     }
 };
+
+std::vector<ColorRGBA<uint8_t>> buildMissingTexturePixels()
+{
+    constexpr uint32_t size = 8;
+    const ColorRGBA<uint8_t> purple{.r = 255, .g = 0, .b = 255, .a = 255};
+    const ColorRGBA<uint8_t> black{.r = 0, .g = 0, .b = 0, .a = 255};
+
+    std::vector<ColorRGBA<uint8_t>> pixels(size * size);
+    for (uint32_t y = 0; y < size; ++y) {
+        for (uint32_t x = 0; x < size; ++x) {
+            pixels[y * size + x] = ((x + y) % 2 == 0) ? purple : black;
+        }
+    }
+    return pixels;
+}
 
 static bool copyFaceToStaging(uint8_t* dst, const TextureMemoryView& face, bool flipVertical)
 {
@@ -444,7 +459,12 @@ void Texture::initFromData(const void* pixels,
                       static_cast<int>(format),
                       texWidth,
                       texHeight);
-        throw std::runtime_error("Failed to create image for texture: " + _label);
+        const auto fallbackPixels = buildMissingTexturePixels();
+        initFallbackTexture(fallbackPixels.data(),
+                            fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
+                            8,
+                            8);
+        return;
     }
 
     ImageViewCreateInfo viewCI{
@@ -453,12 +473,20 @@ void Texture::initFromData(const void* pixels,
         .levelCount  = mipLevels,
     };
     imageView = textureFactory->createImageView(image, viewCI);
-    YA_CORE_ASSERT(imageView,
-                   "Failed to create image view for texture: {} (format: {}, {}x{})",
-                   _filepath.empty() ? _label : _filepath,
-                   static_cast<int>(format),
-                   texWidth,
-                   texHeight);
+    if (!imageView || !imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create image view for texture: {} (format: {}, {}x{})",
+                      _filepath.empty() ? _label : _filepath,
+                      static_cast<int>(format),
+                      texWidth,
+                      texHeight);
+        image.reset();
+        const auto fallbackPixels = buildMissingTexturePixels();
+        initFallbackTexture(fallbackPixels.data(),
+                            fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
+                            8,
+                            8);
+        return;
+    }
 
     std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
         render,

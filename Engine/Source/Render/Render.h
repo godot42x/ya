@@ -21,6 +21,13 @@ enum class ERenderObject : uint32_t
     // Add more as needed
 };
 
+struct TextureFormatSupportInfo
+{
+    bool sampled            = false;
+    bool sampledTransferDst = false;
+    bool linearSampled      = false;
+};
+
 struct IRender : public plat_base<IRender>
 {
     RenderCreateInfo _ci;
@@ -134,6 +141,24 @@ struct IRender : public plat_base<IRender>
      * @return Pointer to texture factory interface
      */
     virtual ITextureFactory* getTextureFactory() = 0;
+
+    virtual TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const
+    {
+        (void)format;
+        return {};
+    }
+
+    virtual bool isTextureFormatSupported(EFormat::T format, EImageUsage::T usage) const
+    {
+        const auto support = queryTextureFormatSupport(format);
+        if ((usage & static_cast<EImageUsage::T>(EImageUsage::TransferDst)) != 0) {
+            return support.sampledTransferDst;
+        }
+        if ((usage & static_cast<EImageUsage::T>(EImageUsage::Sampled)) != 0) {
+            return support.sampled;
+        }
+        return false;
+    }
 
     /**
      * @brief Submit command buffers to graphics queue with synchronization
