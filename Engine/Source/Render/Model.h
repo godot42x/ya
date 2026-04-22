@@ -4,6 +4,7 @@
 #include "Core/FName.h"
 #include "Core/Math/AABB.h"
 #include "Render/Mesh.h"
+#include <array>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -12,8 +13,11 @@
 #include <vector>
 
 
+
 namespace ya
 {
+
+#define MAX_BONE_WEIGHTS 4
 
 /**
  * @brief Vertex format for imported 3D models
@@ -21,18 +25,32 @@ namespace ya
  */
 struct ModelVertex
 {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec2 texCoord;
+    glm::vec3 position{};
+    glm::vec3 normal{};
+    glm::vec2 texCoord{};
     glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec3 tangent;
+    glm::vec3 tangent{};
+
+    std::array<int, MAX_BONE_WEIGHTS> boneIDs;
 };
 
 
-struct ModalTexture
+struct ModelBoneInfo
 {
-    std::string type;
-    std::string path;
+    int       id;
+    glm::mat4 mat;
+    glm::mat4 inverseMat;
+};
+
+struct ModelAnimationChanel
+{
+    std::string name;
+};
+
+struct ModelAnimation
+{
+    double duration;
+    double ticksPerSecond;
 };
 
 // ========================================
@@ -79,16 +97,16 @@ inline const FName DoubleSided  = "doubleSided";
  */
 namespace MatTexture
 {
-using T = FName;
-inline const FName Diffuse   = "diffuse";
-inline const FName Albedo    = "albedo"; // PBR alias for diffuse
-inline const FName Specular  = "specular";
-inline const FName Normal    = "normal";
-inline const FName Emissive  = "emissive";
-inline const FName Metallic  = "metallic";
-inline const FName Roughness = "roughness";
+using T                              = FName;
+inline const FName Diffuse           = "diffuse";
+inline const FName Albedo            = "albedo"; // PBR alias for diffuse
+inline const FName Specular          = "specular";
+inline const FName Normal            = "normal";
+inline const FName Emissive          = "emissive";
+inline const FName Metallic          = "metallic";
+inline const FName Roughness         = "roughness";
 inline const FName MetallicRoughness = "metallicRoughness";
-inline const FName AO        = "ao";
+inline const FName AO                = "ao";
 } // namespace MatTexture
 
 /**
@@ -213,7 +231,7 @@ struct MeshData
     stdptr<Mesh> createMesh(const std::string& meshName, CoordinateSystem sourceCoordSystem)
     {
         auto engineVertices = toEngineVertices();
-        auto newMesh = makeShared<Mesh>(engineVertices, indices, meshName, sourceCoordSystem);
+        auto newMesh        = makeShared<Mesh>(engineVertices, indices, meshName, sourceCoordSystem);
         return newMesh;
     }
 };
@@ -239,6 +257,7 @@ struct Model
     std::string filepath;
     std::string directory;
 
+
     std::vector<stdptr<Mesh>> meshes;      // GPU geometry resources
     AABB                      boundingBox; // Overall bounding box
 
@@ -260,6 +279,10 @@ struct Model
      * -1 means no material assigned
      */
     std::vector<int32_t> meshMaterialIndices;
+
+    // bones
+    std::unordered_map<FName, ModelBoneInfo> _nameToBoneInfos;
+    uint32_t                                 boneCount = 0;
 
   public:
     Model()  = default;
@@ -333,12 +356,20 @@ struct DecodedModelData
     std::string filepath;
     std::string directory;
 
+    struct DecodedMesh;
     /// Per-mesh decoded data (vertices + indices, CPU only)
     struct DecodedMesh
     {
         std::string      name;
         MeshData         data;
-        CoordinateSystem coordSystem = CoordinateSystem::RightHanded;
+        CoordinateSystem coordSystem   = CoordinateSystem::RightHanded;
+        int32_t          materialIndex = -1;
+    };
+
+    struct DecodedNode
+    {
+        std::string name;
+        MeshData    meshData;
     };
 
     std::vector<DecodedMesh>  meshes;

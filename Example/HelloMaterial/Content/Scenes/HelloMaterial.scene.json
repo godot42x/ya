@@ -818,6 +818,43 @@
         },
         {
             "components": {
+                "ModelComponent": {
+                    "_autoCreateChildEntities": true,
+                    "_customMaterialPath": "",
+                    "_flipImportedTextureV": true,
+                    "_materialType": "Phong",
+                    "_modelRef": {
+                        "__base__": {
+                            "AssetRefBase": {
+                                "_path": "Engine\\ThirdParty\\LearnOpenGL\\resources\\objects\\vampire\\dancing_vampire.dae"
+                            }
+                        }
+                    },
+                    "_useEmbeddedMaterials": true
+                },
+                "TransformComponent": {
+                    "_position": [
+                        -18.668901,
+                        0.0,
+                        14.500498
+                    ],
+                    "_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        0.07,
+                        0.07,
+                        0.07
+                    ]
+                }
+            },
+            "id": 1325285700919779996,
+            "name": "New Node"
+        },
+        {
+            "components": {
                 "MeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
@@ -5121,26 +5158,11 @@
                     "_sourceModelPath": ""
                 },
                 "PointLightComponent": {
-                    "_ambient": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_constant": 1.0,
-                    "_diffuse": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_innerConeAngle": 30.0,
                     "_linear": 0.09,
                     "_outerConeAngle": 45.0,
                     "_quadratic": 0.032,
-                    "_specular": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_type": 0,
                     "color": [
                         300.0,
@@ -5412,26 +5434,11 @@
                     "_sourceModelPath": ""
                 },
                 "PointLightComponent": {
-                    "_ambient": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_constant": 1.0,
-                    "_diffuse": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_innerConeAngle": 30.0,
                     "_linear": 0.09,
                     "_outerConeAngle": 45.0,
                     "_quadratic": 0.032,
-                    "_specular": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_type": 0,
                     "color": [
                         300.0,
@@ -6489,26 +6496,11 @@
                     "_sourceModelPath": ""
                 },
                 "PointLightComponent": {
-                    "_ambient": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_constant": 1.0,
-                    "_diffuse": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_innerConeAngle": 30.0,
                     "_linear": 0.09,
                     "_outerConeAngle": 45.0,
                     "_quadratic": 0.032,
-                    "_specular": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_type": 0,
                     "color": [
                         300.0,
@@ -9678,26 +9670,11 @@
                     "_sourceModelPath": ""
                 },
                 "PointLightComponent": {
-                    "_ambient": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_constant": 1.0,
-                    "_diffuse": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_innerConeAngle": 30.0,
                     "_linear": 0.09,
                     "_outerConeAngle": 45.0,
                     "_quadratic": 0.032,
-                    "_specular": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_type": 0,
                     "color": [
                         1.0,
@@ -10467,20 +10444,10 @@
         {
             "components": {
                 "DirectionalLightComponent": {
-                    "_ambient": [
-                        0.039063,
-                        0.039063,
-                        0.039063
-                    ],
                     "_color": [
                         0.113924,
                         0.113924,
                         0.113924
-                    ],
-                    "_diffuse": [
-                        0.117188,
-                        0.117188,
-                        0.117188
                     ],
                     "_direction": [
                         -0.431934,
@@ -10492,11 +10459,6 @@
                     "_nearPlane": 0.1,
                     "_orthoHalfHeight": 20.0,
                     "_orthoHalfWidth": 20.0,
-                    "_specular": [
-                        0.121094,
-                        0.121094,
-                        0.121094
-                    ],
                     "bEnable": true,
                     "intensity": 1.0
                 },
@@ -11143,26 +11105,11 @@
                     "_sourceModelPath": ""
                 },
                 "PointLightComponent": {
-                    "_ambient": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
                     "_constant": 1.0,
-                    "_diffuse": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_innerConeAngle": 30.0,
                     "_linear": 0.09,
                     "_outerConeAngle": 45.0,
                     "_quadratic": 0.032,
-                    "_specular": [
-                        300.0,
-                        300.0,
-                        300.0
-                    ],
                     "_type": 0,
                     "color": [
                         300.0,
@@ -13852,6 +13799,11 @@
                 "children": [],
                 "entityRef": 11258221024073225263,
                 "name": "Sponza"
+            },
+            {
+                "children": [],
+                "entityRef": 1325285700919779996,
+                "name": "Vampire"
             }
         ],
         "name": "scene_root"

@@ -54,7 +54,7 @@ std::shared_ptr<Model> AssetManager::getModel(const std::string& filepath) const
 ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& request)
 {
     if (request.filepath.empty()) {
-        return ModelFuture();
+        return {};
     }
 
     if (isModelLoaded(request.filepath)) {
@@ -63,9 +63,8 @@ ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& r
         }
         if (request.onReady) {
             const auto model = modelCache[request.filepath];
-            AssetManager::dispatchToGameThread([onReady = request.onReady, model]() mutable {
-                onReady(model);
-            });
+            AssetManager::dispatchToGameThread([onReady = request.onReady, model]() mutable
+                                               { onReady(model); });
         }
         return ModelFuture(modelCache[request.filepath]);
     }
@@ -82,7 +81,7 @@ ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& r
         registerModelCallback(request.filepath, request.onReady);
     }
 
-    return ModelFuture();
+    return {};
 }
 
 std::shared_ptr<Model> AssetModelManager::loadModelSync(const std::string& filepath)
@@ -112,12 +111,14 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
     YA_CORE_INFO("submitModelLoad: async decode '{}'", filepath);
 
     auto handle = TaskQueue::get().submitWithCallback(
-        [filepath]() -> DecodedModelData {
+        [filepath]() -> DecodedModelData
+        {
             return DecodedModelData::decode(filepath);
         },
-        [this, filepath, name](DecodedModelData decoded) {
+        [this, filepath, name](DecodedModelData decoded)
+        {
             std::vector<AssetManager::ModelReadyCallback> callbacks;
-            std::shared_ptr<Model>          readyModel;
+            std::shared_ptr<Model>                        readyModel;
 
             {
                 std::lock_guard lock(_mutex);
@@ -226,8 +227,8 @@ std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filep
 
 size_t AssetModelManager::collectUnused(uint64_t frame)
 {
-    size_t released = 0;
-    auto& ddq = DeferredDeletionQueue::get();
+    size_t          released = 0;
+    auto&           ddq      = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
     for (auto it = modelCache.begin(); it != modelCache.end();) {
         if (it->second && it->second.use_count() == 1) {
@@ -245,7 +246,7 @@ size_t AssetModelManager::collectUnused(uint64_t frame)
 bool AssetModelManager::unload(const std::string& cacheKey, uint64_t frame)
 {
     std::lock_guard lock(_mutex);
-    auto it = modelCache.find(cacheKey);
+    auto            it = modelCache.find(cacheKey);
     if (it == modelCache.end()) {
         return false;
     }
@@ -263,7 +264,7 @@ void AssetModelManager::invalidate(const std::string& filepath, uint64_t frame)
 void AssetModelManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
 {
     std::lock_guard lock(_mutex);
-    auto it = modelCache.find(assetPath);
+    auto            it = modelCache.find(assetPath);
     if (it != modelCache.end()) {
         DeferredDeletionQueue::get().enqueueResource(frame, std::move(it->second));
         modelCache.erase(it);
@@ -285,7 +286,7 @@ void AssetModelManager::registerModelCallback(const std::string& filepath, Asset
     std::shared_ptr<Model> readyModel;
     {
         std::lock_guard lock(_mutex);
-        auto loadedIt = modelCache.find(filepath);
+        auto            loadedIt = modelCache.find(filepath);
         if (loadedIt != modelCache.end()) {
             readyModel = loadedIt->second;
         }
@@ -295,9 +296,8 @@ void AssetModelManager::registerModelCallback(const std::string& filepath, Asset
         }
     }
 
-    AssetManager::dispatchToGameThread([onReady = std::move(onReady), readyModel]() mutable {
-        onReady(readyModel);
-    });
+    AssetManager::dispatchToGameThread([onReady = std::move(onReady), readyModel]() mutable
+                                       { onReady(readyModel); });
 }
 
 std::vector<AssetManager::ModelReadyCallback> AssetModelManager::takeModelCallbacks(const std::string& filepath)
@@ -320,9 +320,8 @@ void AssetModelManager::dispatchModelCallbacks(const std::vector<AssetManager::M
             continue;
         }
 
-        AssetManager::dispatchToGameThread([callback, model]() {
-            callback(model);
-        });
+        AssetManager::dispatchToGameThread([callback, model]()
+                                           { callback(model); });
     }
 }
 

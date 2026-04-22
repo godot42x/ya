@@ -212,6 +212,7 @@ struct IShaderProcessor
 
   protected:
     // ShaderScriptProcessor() {}
+  public:
     virtual ~IShaderProcessor() = default;
 
   public:

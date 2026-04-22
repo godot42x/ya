@@ -401,7 +401,7 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
 
             dispatchTextureCallbacks(callbacks, texture);
 
-            YA_CORE_INFO("Async texture ready: '{}' ({}x{})", filepath, texture->getWidth(), texture->getHeight());
+            YA_CORE_TRACE("Async texture ready: '{}' ({}x{})", filepath, texture->getWidth(), texture->getHeight());
         });
 
     std::lock_guard lock(_mutex);
