@@ -4,12 +4,12 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
+#include "Core/MessageBus.h"
 #include "Core/System/System.h"
 
 #include "Editor/EditorLayer.h"
 
 #include "Runtime/App/AppState.h"
-#include "Runtime/App/FPSCtrl.h"
 #include "Runtime/App/RenderRuntime.h"
 
 #include "Render/RenderFrameData.h"
@@ -24,7 +24,7 @@
 
 
 
-#include "ClLIParams.h"
+#include "Runtime/App/Utility/ClLIParams.h"
 
 // Forward declarations
 namespace ya
@@ -42,11 +42,10 @@ struct RenderDocCapture;
 struct ForwardRenderPipeline;
 struct DeferredRenderPipeline;
 class ResourceResolveSystem;
-
-
-void imcFpsControl(FPSControl& fpsCtrl);
-bool imcEditorCamera(FreeCamera& camera);
-void imcClearValues();
+class AppLifecycle;
+class AppFrameLoop;
+class AppGuiController;
+class AppEventRouter;
 
 enum AppMode : int
 {
@@ -144,6 +143,11 @@ struct TaskManager
 
 struct App
 {
+    friend class AppLifecycle;
+    friend class AppFrameLoop;
+    friend class AppGuiController;
+    friend class AppEventRouter;
+
     struct RenderFrameState
     {
         Rect2D    viewportRect             = {};
@@ -227,7 +231,13 @@ struct App
     int  processEvent(SDL_Event& event);
 
     template <typename T>
-    int  dispatchEvent(const T& event);
+    int dispatchEvent(const T& event)
+    {
+        if (0 == onEvent(event)) {
+            MessageBus::get()->publish(event);
+        }
+        return 0;
+    }
     void renderGUI(float dt);
 
     void requestQuit()
@@ -337,14 +347,6 @@ struct App
 
     bool saveScene([[maybe_unused]] const std::string& path) { return false; } // TODO: implement
 
-    bool onWindowResized(const WindowResizeEvent& event);
-    bool onKeyReleased(const KeyReleasedEvent& event);
-    bool onMouseMoved(const MouseMoveEvent& event);
-    bool onMouseButtonReleased(const MouseButtonReleasedEvent& event);
-    bool onMouseScrolled(const MouseScrolledEvent& event);
-
-
-    void handleSystemSignals();
 };
 
 
