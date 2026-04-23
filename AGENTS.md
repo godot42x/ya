@@ -135,11 +135,12 @@ Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
 | `material-flow` | ECS → material → render pipeline data flow, TextureSlot resolve |
 | `render-arch` | Render pipeline, backend boundaries, pipeline/material architecture |
 | `cpp-style` | C++ conventions, ownership rules, refactoring patterns |
+| `code-reorganize` | Split files and reorganize directories without changing behavior |
 | `debug-review` | Crash investigation, log analysis, pre-commit review |
 | `vscode` | VS Code tasks, launch configs, clangd setup |
 | `ya-build` | Build errors, target selection, compiler issues |
 
-Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > DEBUG_REVIEW`
+Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > CODE_REORGANIZE > DEBUG_REVIEW`
 
 ## Self improvement
 
