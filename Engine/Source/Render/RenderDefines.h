@@ -799,6 +799,22 @@ struct RasterizationState
     float             depthBiasClamp           = 0.0f;
     float             depthBiasSlopeFactor     = 0.0f;
     float             lineWidth                = 1.0f;
+
+    static RasterizationState defaultCullBackWithFrontCCW()
+    {
+        return RasterizationState{
+            .bDepthClampEnable        = false,
+            .bRasterizerDiscardEnable = false,
+            .polygonMode              = EPolygonMode::Fill,
+            .cullMode                 = ECullMode::Back,
+            .frontFace                = EFrontFaceType::CounterClockWise,
+            .bDepthBiasEnable         = false,
+            .depthBiasConstantFactor  = 0.0f,
+            .depthBiasClamp           = 0.0f,
+            .depthBiasSlopeFactor     = 0.0f,
+            .lineWidth                = 1.0f,
+        };
+    }
 };
 
 struct ColorBlendAttachmentState
@@ -835,6 +851,16 @@ struct ColorBlendState
     ELogicOp::T                            logicOp        = ELogicOp::Copy;
     std::vector<ColorBlendAttachmentState> attachments;
     float                                  blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    static ColorBlendState defaultDisableBlend()
+    {
+        return ColorBlendState{
+            .bLogicOpEnable = false,
+            .logicOp        = ELogicOp::Copy,
+            .attachments    = {},
+            .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f},
+        };
+    }
 };
 
 struct StencilOpState
@@ -860,6 +886,21 @@ struct DepthStencilState
 
     StencilOpState front;
     StencilOpState back;
+
+    static DepthStencilState defaultDrawing()
+    {
+        return {
+            .bDepthTestEnable       = true,
+            .bDepthWriteEnable      = true,
+            .depthCompareOp         = ECompareOp::Less,
+            .bDepthBoundsTestEnable = false,
+            .bStencilTestEnable     = false,
+            .minDepthBounds         = 0.0f,
+            .maxDepthBounds         = 1.0f,
+            .front                  = {},
+            .back                   = {},
+        };
+    }
 };
 
 struct MultisampleState
@@ -1443,9 +1484,9 @@ struct FrameContext
         float type = 0;
 
         // phong spec
-        float     constant  = 1.0f;
-        float     linear    = 0.09f;
-        float     quadratic = 0.032f;
+        float constant  = 1.0f;
+        float linear    = 0.09f;
+        float quadratic = 0.032f;
 
         // normal light spec
         glm::vec3 color;

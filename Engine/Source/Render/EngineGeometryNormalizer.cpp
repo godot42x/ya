@@ -40,18 +40,18 @@ glm::vec3 normalizeDirectionIfNeeded(const glm::vec3& value)
     return glm::normalize(value);
 }
 
-std::vector<ya::Vertex> buildEngineVertices(const ImportedMeshData& meshData, bool isNormalizeCoordSystem)
+std::vector<ya::Vertex> buildEngineVertices(const ImportedMeshData& meshData, bool needNormalizeCoordSystem)
 {
     std::vector<ya::Vertex> engineVertices;
     engineVertices.reserve(meshData.vertices.size());
 
     for (const ModelVertex& v : meshData.vertices) {
         ya::Vertex vertex;
-        vertex.position  = isNormalizeCoordSystem ? flipHandedness(v.position) : v.position;
-        vertex.normal    = isNormalizeCoordSystem ? normalizeDirectionIfNeeded(flipHandedness(v.normal)) : v.normal;
+        vertex.position  = needNormalizeCoordSystem ? flipHandedness(v.position) : v.position;
+        vertex.normal    = needNormalizeCoordSystem ? normalizeDirectionIfNeeded(flipHandedness(v.normal)) : v.normal;
         vertex.texCoord0 = v.texCoord;
-        vertex.tangent   = isNormalizeCoordSystem ? normalizeDirectionIfNeeded(flipHandedness(v.tangent)) : v.tangent;
-        engineVertices.push_back(vertex);
+        vertex.tangent   = needNormalizeCoordSystem ? normalizeDirectionIfNeeded(flipHandedness(v.tangent)) : v.tangent;
+        engineVertices.push_back(std::move(vertex));
     }
 
     return engineVertices;

@@ -140,7 +140,7 @@ Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
 | `vscode` | VS Code tasks, launch configs, clangd setup |
 | `ya-build` | Build errors, target selection, compiler issues |
 
-Priority when task spans multiple: `BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > CODE_REORGANIZE > DEBUG_REVIEW`
+Priority when task spans multiple: `YA_BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > CODE_REORGANIZE > DEBUG_REVIEW`
 
 ## Self improvement
 

@@ -2,6 +2,7 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Pipelines/DebugSkinning.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include <glm/glm.hpp>
@@ -53,6 +54,7 @@ struct ViewportOverlayStage : public IRenderStage
     stdptr<IPipelineLayout>   _overlayPPL;
     int                       _defaultColorType = 0;
     OverlayPushConstant       _overlayPC{};
+    DebugSkinning             _debugSkinning;
 
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}

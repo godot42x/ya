@@ -401,7 +401,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     _lightStage->init(_render);
     syncShadowSettings();
 
-    // ViewportOverlayStage — skybox + forward overlay (SimpleMaterial debug)
+    // ViewportOverlayStage — skybox + forward overlay (SimpleMaterial debug + DebugSkinning ...)
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
     _overlayStage->init(_render);
 

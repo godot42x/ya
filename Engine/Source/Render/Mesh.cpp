@@ -7,7 +7,7 @@ namespace ya
 
 stdptr<Mesh> Mesh::create(const EngineMeshData& meshData)
 {
-    return stdptr<Mesh>(new Mesh(meshData));
+    return makeShared<Mesh>(Mesh(meshData));
 }
 
 Mesh::Mesh(const EngineMeshData& meshData)

@@ -117,8 +117,9 @@ void AppGuiController::onRenderGUI(App& app, float dt)
         fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
 
         const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
-        Text("Frame: %d, DeltaTime: %.2fms", App::_frameIndex, dt * 1000.f);
-        Text("FPS: %.1f \t(%.1f of avg %d)", currentFps, avgFps, fpsRingFill);
+        ImGui::Text("Frame: %d, DeltaTime: %3.2fms", App::_frameIndex, dt * 1000.f);
+        ImGui::Text("FPS: %4.1f   (avg %4.1f over %3d)", currentFps, avgFps, fpsRingFill);
+        renderFpsControl(*FPSControl::get());
 
         auto* render = app.getRender();
         YA_CORE_ASSERT(render, "Render is null");
@@ -159,7 +160,6 @@ void AppGuiController::onRenderGUI(App& app, float dt)
         ImGui::SeparatorText("Editor");
         renderEditorCamera(app, app.camera);
         renderClearValues();
-        renderFpsControl(*FPSControl::get());
 
         if (ImGui::TreeNode("ImGUI")) {
             ImGuiManager::get().onRenderGUI();

@@ -40,6 +40,7 @@ struct Mesh
 
     [[nodiscard]] uint32_t getIndexCount() const { return _indexCount; }
     [[nodiscard]] uint32_t getVertexCount() const { return _vertexCount; }
+    [[nodiscard]] bool     hasSkinningVertexBuffer() const { return !_optVertexBuffers.empty(); }
 
 
     [[nodiscard]] const IBuffer* getVertexBuffer() const { return _vertexBuffer.get(); }

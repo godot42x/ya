@@ -52,11 +52,11 @@ std::optional<CoordinateSystem> inferCoordSystemFromAssimpMetadata(const aiScene
         return std::nullopt;
     }
 
-    int upAxis = 0;
-    int upAxisSign = 1;
-    int frontAxis = 0;
+    int upAxis        = 0;
+    int upAxisSign    = 1;
+    int frontAxis     = 0;
     int frontAxisSign = 1;
-    int coordAxis = 0;
+    int coordAxis     = 0;
     int coordAxisSign = 1;
 
     if (!scene->mMetaData->Get("UpAxis", upAxis) ||
@@ -379,10 +379,11 @@ ImportedModelData decodeWithAssimp(const std::string& filepath)
 
     auto processBone = [&result](aiBone* bone, uint32_t meshIndex)
     {
-        result.boneNames.push_back(bone->mName.C_Str());
+        result.boneNames.emplace_back(bone->mName.C_Str());
         for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
-            const aiVertexWeight& weight         = bone->mWeights[weightIndex];
-            uint32_t              globalVertexID = result.meshBaseVertexIndex[meshIndex] + weight.mVertexId;
+            const aiVertexWeight& weight = bone->mWeights[weightIndex];
+
+            uint32_t globalVertexID = result.meshBaseVertexIndex[meshIndex] + weight.mVertexId;
             YA_CORE_ASSERT(globalVertexID < result.vertex2BoneData.size(), "Global vertex ID is out of bounds");
 
             result.vertex2BoneData[globalVertexID].boneIDs.push_back(result.boneNames.size() - 1);

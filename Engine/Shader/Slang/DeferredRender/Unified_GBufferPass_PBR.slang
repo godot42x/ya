@@ -1,4 +1,5 @@
 #include "Common/Helper.slang"
+#include "DeferredRender/Types.slang"
 
 // Unified GBuffer Pass — PBR variant
 // GBuffer layout:
@@ -7,13 +8,20 @@
 //   RT2: (albedo.rgb,   metallic)     R8G8B8A8_UNORM
 //   D+S: depth + stencil (ref=1 for PBR)
 
+#ifndef ENABLE_SKINNING
+    #define ENABLE_SKINNING 0
+#endif
+
+
 struct VertexInput{
     [[vk::location(0)]] float3 pos      : POSITION;
     [[vk::location(1)]] float2 uv       : TEXCOORD0;
     [[vk::location(2)]] float3 normal   : NORMAL;
     [[vk::location(3)]] float3 tangent  : TANGENT;
-    // [[vk::location(4)]] int32_t4 boneIDs: BONE_IDS;
-    // [[vk::location(5)]] vec4 weights    : WEIGHTS;
+#if ENABLE_SKINNING
+    [[vk::location(4)]] vector<int32_t, MAX_BONE_WEIGHT_PER_VERTEX> boneIDs: BONE_IDS;
+    [[vk::location(5)]] vector<float,MAX_BONE_WEIGHT_PER_VERTEX>  weights    : WEIGHTS;
+#endif
 };
 
 struct VertexOutput{
@@ -48,6 +56,11 @@ struct DirectionalLight{
 
 struct LightData{
     DirectionalLight dirLight;
+};
+
+
+struct AnimationData{
+    vector<vec4, MAX_BONE_COUNT> boneOffsets;
 };
 
 [[vk::binding(0,0)]] ConstantBuffer<FrameData,Std140DataLayout> uFrame;
@@ -141,26 +154,19 @@ vec4 sample2DTextureConditionally(in Sampler2D tex, ETextureSlot slot, vec2 uv)
     }
 
     return  tex.Sample(getUV(slot, uv));
-    
-
 }
 
 
 [shader("fragment")]
 void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
-    // Albedo from texture modulated by UBO albedo color
-    // vec3  albedo    = uParams.albedo * uTexAlbedo.Sample(getUV(ETextureSlot::Albedo, IN.uv)).rgb;
-    // float metallic  = uParams.metallic  * uTexMetallic.Sample(getUV(ETextureSlot::Metallic, IN.uv)).r;
-    // float roughness = uParams.roughness * uTexRoughness.Sample(getUV(ETextureSlot::Roughness, IN.uv)).r;
-    // float ao        = uParams.ao        * uTexAO.Sample(getUV(ETextureSlot::AO, IN.uv)).r;
-
     vec3  albedo    = uParams.albedo * sample2DTextureConditionally(uTexAlbedo, ETextureSlot::Albedo, IN.uv).rgb;
     float metallic  = uParams.metallic * sample2DTextureConditionally(uTexMetallic, ETextureSlot::Metallic, IN.uv).r;
     float roughness = uParams.roughness * sample2DTextureConditionally(uTexRoughness, ETextureSlot::Roughness, IN.uv).r;
     float ao        = uParams.ao * sample2DTextureConditionally(uTexAO, ETextureSlot::AO, IN.uv).r;
     vec3  N         = normalize(IN.normal);
 
+    // normal map
     if (uParams.textures[(int)ETextureSlot::Normal].bEnable) {
         vec3 normalMap = sample2DTextureConditionally(uTexNormal, ETextureSlot::Normal, IN.uv).xyz;
         normalMap = normalize(normalMap * 2.0 - 1.0);

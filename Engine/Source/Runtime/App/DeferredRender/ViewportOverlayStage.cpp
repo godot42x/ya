@@ -16,10 +16,41 @@
 #include "Scene/SceneManager.h"
 
 
+#include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
 {
+
+namespace
+{
+
+bool hasDebugSkinningDrawItem(const std::vector<RenderDrawItem>& items)
+{
+    return std::ranges::any_of(items, [](const RenderDrawItem& item)
+                               { return item.mesh && item.mesh->hasSkinningVertexBuffer(); });
+}
+
+void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
+                            ICommandBuffer*                    cmdBuf,
+                            const std::vector<RenderDrawItem>& items,
+                            uint32_t                           vpW,
+                            uint32_t                           vpH,
+                            const RenderFrameData&             fd)
+{
+    for (const auto& item : items) {
+        if (!item.mesh || !item.mesh->hasSkinningVertexBuffer()) continue;
+        debugSkinning.draw(cmdBuf,
+                           item.mesh,
+                           vpW,
+                           vpH,
+                           fd.projection,
+                           fd.view,
+                           item.worldMatrix);
+    }
+}
+
+} // namespace
 
 void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
 {
@@ -49,6 +80,8 @@ void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportR
         ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
         _overlayPipeline->updateDesc(std::move(ci));
     }
+
+    _debugSkinning.refreshPipelineFormats(viewportRT);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -60,23 +93,25 @@ void ViewportOverlayStage::init(IRender* render)
     _render = render;
     initSkybox();
     initOverlay();
+    _debugSkinning.init(_render);
+    _debugSkinning.bReverseViewportY = bReverseViewportY;
 }
 
 void ViewportOverlayStage::initSkybox()
 {
     // DSLs
     auto dsls          = IDescriptorSetLayout::create(_render, {
-                                                          DescriptorSetLayoutDesc{
+                                                                   DescriptorSetLayoutDesc{
                                                                        .label    = "SkyboxOverlay_PerFrame_DSL",
                                                                        .set      = 0,
                                                                        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-                                                          },
-                                                          DescriptorSetLayoutDesc{
+                                                                   },
+                                                                   DescriptorSetLayoutDesc{
                                                                        .label    = "SkyboxOverlay_Resource_DSL",
                                                                        .set      = 1,
                                                                        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                          },
-                                                      });
+                                                                   },
+                                                               });
     _skyboxFrameDSL    = dsls[0];
     _skyboxResourceDSL = dsls[1];
 
@@ -92,9 +127,9 @@ void ViewportOverlayStage::initSkybox()
         },
         .pipelineLayout = _skyboxPPL.get(),
         .shaderDesc     = ShaderDesc{
-                .shaderName        = "Skybox.glsl",
-                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-                .vertexAttributes  = {
+            .shaderName        = "Skybox.glsl",
+            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
+            .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
                 {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
                 {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
@@ -148,9 +183,9 @@ void ViewportOverlayStage::initOverlay()
         },
         .pipelineLayout = _overlayPPL.get(),
         .shaderDesc     = ShaderDesc{
-                .shaderName        = "Test/SimpleMaterial.glsl",
-                .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
-                .vertexAttributes  = {
+            .shaderName        = "Test/SimpleMaterial.glsl",
+            .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
+            .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
                 {.bufferSlot = 0, .location = 1, .format = EVertexAttributeFormat::Float2, .offset = offsetof(ya::Vertex, texCoord0)},
                 {.bufferSlot = 0, .location = 2, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, normal)},
@@ -178,6 +213,7 @@ void ViewportOverlayStage::destroy()
 
     _overlayPipeline.reset();
     _overlayPPL.reset();
+    _debugSkinning.destroy();
     _render = nullptr;
 }
 
@@ -193,6 +229,7 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
     if (_overlayPipeline) {
         _overlayPipeline->beginFrame();
     }
+    _debugSkinning.beginFrame();
 
     if (!ctx.frameData) return;
 
@@ -275,16 +312,21 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     auto* scene = App::get()->getSceneManager()->getActiveScene();
     if (!scene) return;
 
-    const auto& fd = *ctx.frameData;
+    const auto& fd                   = *ctx.frameData;
+    _debugSkinning.bReverseViewportY = bReverseViewportY;
 
     // Simple material entities (from snapshot)
     bool hasSimple = !fd.simpleDrawItems.empty();
+
+    bool hasDebugSkinning = _debugSkinning.bEnabled &&
+                            (hasDebugSkinningDrawItem(fd.phongDrawItems) ||
+                             hasDebugSkinningDrawItem(fd.simpleDrawItems));
 
     // Direction components (still from registry — editor visualization, TODO: migrate to snapshot)
     const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
     bool        hasDirection = dirView.begin() != dirView.end();
 
-    if (!hasSimple && !hasDirection) return;
+    if (!hasSimple && !hasDirection && !hasDebugSkinning) return;
 
     cmdBuf->debugBeginLabel("ForwardOverlay");
 
@@ -310,6 +352,13 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
         _overlayPC.colorType = mat->colorType;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
         item.mesh->draw(cmdBuf);
+    }
+
+    if (_debugSkinning.bEnabled) {
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.phongDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.simpleDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.fallbackDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.pbrDrawItems, vpW, vpH, fd);
     }
 
     // Draw direction cones/cylinders (from registry — editor debug vis)
@@ -355,6 +404,7 @@ void ViewportOverlayStage::renderGUI()
     // Future: skybox toggle, overlay color type combo, etc.
     _skyboxPipeline->renderGUI();
     _overlayPipeline->renderGUI();
+    _debugSkinning.renderGUI();
 
     ImGui::TreePop();
 }
