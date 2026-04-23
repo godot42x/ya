@@ -119,24 +119,26 @@ void GBufferStage::initSharedResources()
 
 void GBufferStage::initPBR()
 {
-    auto dsls                = IDescriptorSetLayout::create(_render, {
-                                                                         DescriptorSetLayoutDesc{
-                                                                             .label    = "Deferred_PBR_MatRes_DSL",
-                                                                             .set      = 1,
-                                                                             .bindings = {
-                                                                                 {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                 {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                 {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                 {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                 {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                             },
-                                                                         },
-                                                                         DescriptorSetLayoutDesc{
-                                                                             .label    = "Deferred_PBR_Params_DSL",
-                                                                             .set      = 2,
-                                                                             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                         },
-                                                                     });
+    auto dsls = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_PBR_MatRes_DSL",
+                .set      = 1,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_PBR_Params_DSL",
+                .set      = 2,
+                .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+            },
+        });
     _pbr.materialResourceDSL = dsls[0];
     _pbr.materialParamsDSL   = dsls[1];
 
@@ -157,13 +159,15 @@ void GBufferStage::initPBR()
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
-        .colorBlendState    = ColorBlendState{.attachments = {
-                                                  {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                              }},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+        .colorBlendState    = ColorBlendState{
+            .attachments = {
+                {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+            },
+        },
+        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _pbr.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_pbr.pipeline && _pbr.pipeline->recreate(ci), "Failed to create PBR GBuffer pipeline");
@@ -179,23 +183,25 @@ void GBufferStage::initPBR()
 
 void GBufferStage::initPhong()
 {
-    auto dsls                  = IDescriptorSetLayout::create(_render, {
-                                                                           DescriptorSetLayoutDesc{
-                                                                               .label    = "Deferred_Phong_MatRes_DSL",
-                                                                               .set      = 1,
-                                                                               .bindings = {
-                                                                                   {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                   {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                   {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                   {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                               },
-                                                                           },
-                                                                           DescriptorSetLayoutDesc{
-                                                                               .label    = "Deferred_Phong_Params_DSL",
-                                                                               .set      = 2,
-                                                                               .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                           },
-                                                                       });
+    auto dsls = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_Phong_MatRes_DSL",
+                .set      = 1,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_Phong_Params_DSL",
+                .set      = 2,
+                .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+            },
+        });
     _phong.materialResourceDSL = dsls[0];
     _phong.materialParamsDSL   = dsls[1];
 
@@ -215,13 +221,15 @@ void GBufferStage::initPhong()
         .primitiveType      = EPrimitiveType::TriangleList,
         .rasterizationState = {.cullMode = ECullMode::Back, .frontFace = EFrontFaceType::CounterClockWise},
         .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
-        .colorBlendState    = ColorBlendState{.attachments = {
-                                                  {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                                  {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
-                                              }},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+        .colorBlendState    = ColorBlendState{
+            .attachments = {
+                {.index = 0, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 1, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 2, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+                {.index = 3, .bBlendEnable = false, .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A},
+            },
+        },
+        .viewportState = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     };
     _phong.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_phong.pipeline && _phong.pipeline->recreate(ci), "Failed to create Phong GBuffer pipeline");
@@ -237,21 +245,23 @@ void GBufferStage::initPhong()
 
 void GBufferStage::initUnlit()
 {
-    auto dsls                  = IDescriptorSetLayout::create(_render, {
-                                                                           DescriptorSetLayoutDesc{
-                                                                               .label    = "Deferred_Unlit_MatRes_DSL",
-                                                                               .set      = 1,
-                                                                               .bindings = {
-                                                                                   {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                                   {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                                                                               },
-                                                                           },
-                                                                           DescriptorSetLayoutDesc{
-                                                                               .label    = "Deferred_Unlit_Params_DSL",
-                                                                               .set      = 2,
-                                                                               .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                           },
-                                                                       });
+    auto dsls = IDescriptorSetLayout::create(
+        _render,
+        {
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_Unlit_MatRes_DSL",
+                .set      = 1,
+                .bindings = {
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                    {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::All},
+                },
+            },
+            DescriptorSetLayoutDesc{
+                .label    = "Deferred_Unlit_Params_DSL",
+                .set      = 2,
+                .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+            },
+        });
     _unlit.materialResourceDSL = dsls[0];
     _unlit.materialParamsDSL   = dsls[1];
 

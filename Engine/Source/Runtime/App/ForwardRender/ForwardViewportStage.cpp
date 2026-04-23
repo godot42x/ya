@@ -1045,13 +1045,14 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
                     auto reflection = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture));
                     auto normal     = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture));
 
-                    _render->getDescriptorHelper()->updateDescriptorSets({
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
-                                                                         },
-                                                                         {});
+                    _render->getDescriptorHelper()->updateDescriptorSets(
+                        {
+                            IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
+                            IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
+                            IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
+                            IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
+                        },
+                        {});
                 });
             updatedMaterial[matIdx] = 1;
         }
