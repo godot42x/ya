@@ -75,6 +75,7 @@ struct StageIOData
     uint32_t     size;
     uint32_t     vecsize  = 0;  // from SPIRType
     uint32_t     basetype = 0;  // from SPIRType
+    uint32_t     bitwidth = 0;  // from SPIRType
 };
 
 struct UniformBufferMember
@@ -318,9 +319,6 @@ struct ShaderStorage
             if (ci.sourceMode == ShaderDesc::ESourceMode::SingleShader &&
                 !ci.shaderName.empty())
             {
-                auto name = ci.shaderName;
-                if (!name.ends_with(".slang"))
-                    name += ".slang";
                 if (ci.shaderName.ends_with(".slang"))
                     return _slangProcessor;
             }

@@ -13,13 +13,9 @@ uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType& type)
     switch (type.basetype)
     {
     case spirv_cross::SPIRType::Float:
-        size = sizeof(float) * type.vecsize * type.columns;
-        break;
     case spirv_cross::SPIRType::Int:
-        size = sizeof(int32_t) * type.vecsize * type.columns;
-        break;
     case spirv_cross::SPIRType::UInt:
-        size = sizeof(uint32_t) * type.vecsize * type.columns;
+        size = (type.width / 8u) * type.vecsize * type.columns;
         break;
     case spirv_cross::SPIRType::Boolean:
         size = sizeof(uint32_t) * type.vecsize * type.columns;
@@ -33,9 +29,8 @@ uint32_t SPIRVHelper::getSpirvTypeSize(const spirv_cross::SPIRType& type)
 
 uint32_t SPIRVHelper::getVertexAlignedOffset(uint32_t currentOffset, const spirv_cross::SPIRType& type)
 {
-    (void)type;
-    constexpr uint32_t alignment = 4;
-    return (currentOffset + alignment) % alignment == 0 ? currentOffset : currentOffset + alignment;
+    uint32_t alignment = type.basetype == spirv_cross::SPIRType::Boolean ? sizeof(uint32_t) : std::max(type.width / 8u, 1u);
+    return (currentOffset + alignment - 1u) & ~(alignment - 1u);
 }
 
 namespace ShaderReflection
@@ -161,6 +156,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
         inputData.size     = typeSize;
         inputData.vecsize  = type.vecsize;
         inputData.basetype = static_cast<uint32_t>(type.basetype);
+        inputData.bitwidth = type.width;
         resources.inputs.push_back(inputData);
 
         YA_CORE_TRACE("\t(name: {0}, location: {1}, shader offset: {2}, aligned offset: {3}, size: {4}, type: {5}, {6}",
@@ -187,6 +183,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
         outputData.size     = SPIRVHelper::getSpirvTypeSize(type);
         outputData.vecsize  = type.vecsize;
         outputData.basetype = static_cast<uint32_t>(type.basetype);
+        outputData.bitwidth = type.width;
         resources.outputs.push_back(outputData);
 
         YA_CORE_TRACE("\t(name: {0}, location: {1}, offset: {2}, type: {3})", output.name, location, offset, DataType2Strings[outputData.type]);

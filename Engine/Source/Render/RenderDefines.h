@@ -108,11 +108,42 @@ namespace EVertexAttributeFormat
 {
 enum T
 {
-    Uint = 0,
-    Float,
-    Float2,
-    Float3,
-    Float4,
+    Uint32 = 0,
+    Uint32x2,
+    Uint32x3,
+    Uint32x4,
+    Uint  = Uint32,
+    Uint2 = Uint32x2,
+    Uint3 = Uint32x3,
+    Uint4 = Uint32x4,
+
+    Int32,
+    Int32x2,
+    Int32x3,
+    Int32x4,
+    Int  = Int32,
+    Int2 = Int32x2,
+    Int3 = Int32x3,
+    Int4 = Int32x4,
+
+    Float16,
+    Float16x2,
+    Float16x3,
+    Float16x4,
+    Half  = Float16,
+    Half2 = Float16x2,
+    Half3 = Float16x3,
+    Half4 = Float16x4,
+
+    Float32,
+    Float32x2,
+    Float32x3,
+    Float32x4,
+    Float  = Float32,
+    Float2 = Float32x2,
+    Float3 = Float32x3,
+    Float4 = Float32x4,
+
     ENUM_MAX,
 };
 GENERATED_ENUM_MISC(T);

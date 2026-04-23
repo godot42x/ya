@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <optional>
 
 #include "Core/Log.h"
 #include "ImGui.h"
@@ -53,91 +54,99 @@ bool isSame(const ShaderDesc::StageFile& lhs, const ShaderDesc::StageFile& rhs)
 
 bool isSame(const ShaderDesc& lhs, const ShaderDesc& rhs)
 {
-    return lhs.sourceMode == rhs.sourceMode
-        && lhs.shaderName == rhs.shaderName
-        && isSameVector(lhs.stageFiles, rhs.stageFiles, [](const auto& a, const auto& b) { return isSame(a, b); })
-        && isSame(lhs.reflection, rhs.reflection)
-        && isSameVector(lhs.vertexBufferDescs, rhs.vertexBufferDescs, [](const auto& a, const auto& b) { return isSame(a, b); })
-        && isSameVector(lhs.vertexAttributes, rhs.vertexAttributes, [](const auto& a, const auto& b) { return isSame(a, b); })
-        && lhs.defines == rhs.defines;
+    return lhs.sourceMode == rhs.sourceMode && lhs.shaderName == rhs.shaderName && isSameVector(lhs.stageFiles, rhs.stageFiles, [](const auto& a, const auto& b)
+                                                                                                { return isSame(a, b); }) &&
+           isSame(lhs.reflection, rhs.reflection) && isSameVector(lhs.vertexBufferDescs, rhs.vertexBufferDescs, [](const auto& a, const auto& b)
+                                                                  { return isSame(a, b); }) &&
+           isSameVector(lhs.vertexAttributes, rhs.vertexAttributes, [](const auto& a, const auto& b)
+                        { return isSame(a, b); }) &&
+           lhs.defines == rhs.defines;
+}
+
+std::optional<EVertexAttributeFormat::T> reflectVertexAttributeFormat(const ShaderReflection::StageIOData& input)
+{
+    if (input.type == ShaderReflection::DataType::Mat3 || input.type == ShaderReflection::DataType::Mat4) {
+        return std::nullopt;
+    }
+
+    switch (static_cast<spirv_cross::SPIRType::BaseType>(input.basetype)) {
+    case spirv_cross::SPIRType::UInt:
+        switch (input.vecsize) {
+        case 1: return EVertexAttributeFormat::Uint32;
+        case 2: return EVertexAttributeFormat::Uint32x2;
+        case 3: return EVertexAttributeFormat::Uint32x3;
+        case 4: return EVertexAttributeFormat::Uint32x4;
+        default: return std::nullopt;
+        }
+    case spirv_cross::SPIRType::Int:
+        switch (input.vecsize) {
+        case 1: return EVertexAttributeFormat::Int32;
+        case 2: return EVertexAttributeFormat::Int32x2;
+        case 3: return EVertexAttributeFormat::Int32x3;
+        case 4: return EVertexAttributeFormat::Int32x4;
+        default: return std::nullopt;
+        }
+    case spirv_cross::SPIRType::Float:
+        switch (input.bitwidth) {
+        case 16:
+            switch (input.vecsize) {
+            case 1: return EVertexAttributeFormat::Float16;
+            case 2: return EVertexAttributeFormat::Float16x2;
+            case 3: return EVertexAttributeFormat::Float16x3;
+            case 4: return EVertexAttributeFormat::Float16x4;
+            default: return std::nullopt;
+            }
+        case 32:
+            switch (input.vecsize) {
+            case 1: return EVertexAttributeFormat::Float32;
+            case 2: return EVertexAttributeFormat::Float32x2;
+            case 3: return EVertexAttributeFormat::Float32x3;
+            case 4: return EVertexAttributeFormat::Float32x4;
+            default: return std::nullopt;
+            }
+        default:
+            return std::nullopt;
+        }
+    default:
+        return std::nullopt;
+    }
 }
 
 bool isSame(const RasterizationState& lhs, const RasterizationState& rhs)
 {
-    return lhs.bDepthClampEnable == rhs.bDepthClampEnable
-        && lhs.bRasterizerDiscardEnable == rhs.bRasterizerDiscardEnable
-        && lhs.polygonMode == rhs.polygonMode
-        && lhs.cullMode == rhs.cullMode
-        && lhs.frontFace == rhs.frontFace
-        && lhs.bDepthBiasEnable == rhs.bDepthBiasEnable
-        && lhs.depthBiasConstantFactor == rhs.depthBiasConstantFactor
-        && lhs.depthBiasClamp == rhs.depthBiasClamp
-        && lhs.depthBiasSlopeFactor == rhs.depthBiasSlopeFactor
-        && lhs.lineWidth == rhs.lineWidth;
+    return lhs.bDepthClampEnable == rhs.bDepthClampEnable && lhs.bRasterizerDiscardEnable == rhs.bRasterizerDiscardEnable && lhs.polygonMode == rhs.polygonMode && lhs.cullMode == rhs.cullMode && lhs.frontFace == rhs.frontFace && lhs.bDepthBiasEnable == rhs.bDepthBiasEnable && lhs.depthBiasConstantFactor == rhs.depthBiasConstantFactor && lhs.depthBiasClamp == rhs.depthBiasClamp && lhs.depthBiasSlopeFactor == rhs.depthBiasSlopeFactor && lhs.lineWidth == rhs.lineWidth;
 }
 
 bool isSame(const ColorBlendAttachmentState& lhs, const ColorBlendAttachmentState& rhs)
 {
-    return lhs.index == rhs.index
-        && lhs.bBlendEnable == rhs.bBlendEnable
-        && lhs.srcColorBlendFactor == rhs.srcColorBlendFactor
-        && lhs.dstColorBlendFactor == rhs.dstColorBlendFactor
-        && lhs.colorBlendOp == rhs.colorBlendOp
-        && lhs.srcAlphaBlendFactor == rhs.srcAlphaBlendFactor
-        && lhs.dstAlphaBlendFactor == rhs.dstAlphaBlendFactor
-        && lhs.alphaBlendOp == rhs.alphaBlendOp
-        && lhs.colorWriteMask == rhs.colorWriteMask;
+    return lhs.index == rhs.index && lhs.bBlendEnable == rhs.bBlendEnable && lhs.srcColorBlendFactor == rhs.srcColorBlendFactor && lhs.dstColorBlendFactor == rhs.dstColorBlendFactor && lhs.colorBlendOp == rhs.colorBlendOp && lhs.srcAlphaBlendFactor == rhs.srcAlphaBlendFactor && lhs.dstAlphaBlendFactor == rhs.dstAlphaBlendFactor && lhs.alphaBlendOp == rhs.alphaBlendOp && lhs.colorWriteMask == rhs.colorWriteMask;
 }
 
 bool isSame(const ColorBlendState& lhs, const ColorBlendState& rhs)
 {
-    return lhs.bLogicOpEnable == rhs.bLogicOpEnable
-        && lhs.logicOp == rhs.logicOp
-        && isSameVector(lhs.attachments, rhs.attachments, [](const auto& a, const auto& b) { return isSame(a, b); })
-        && std::equal(std::begin(lhs.blendConstants), std::end(lhs.blendConstants), std::begin(rhs.blendConstants), std::end(rhs.blendConstants));
+    return lhs.bLogicOpEnable == rhs.bLogicOpEnable && lhs.logicOp == rhs.logicOp && isSameVector(lhs.attachments, rhs.attachments, [](const auto& a, const auto& b)
+                                                                                                  { return isSame(a, b); }) &&
+           std::equal(std::begin(lhs.blendConstants), std::end(lhs.blendConstants), std::begin(rhs.blendConstants), std::end(rhs.blendConstants));
 }
 
 bool isSame(const StencilOpState& lhs, const StencilOpState& rhs)
 {
-    return lhs.failOp == rhs.failOp
-        && lhs.passOp == rhs.passOp
-        && lhs.depthFailOp == rhs.depthFailOp
-        && lhs.compareOp == rhs.compareOp
-        && lhs.compareMask == rhs.compareMask
-        && lhs.writeMask == rhs.writeMask
-        && lhs.reference == rhs.reference;
+    return lhs.failOp == rhs.failOp && lhs.passOp == rhs.passOp && lhs.depthFailOp == rhs.depthFailOp && lhs.compareOp == rhs.compareOp && lhs.compareMask == rhs.compareMask && lhs.writeMask == rhs.writeMask && lhs.reference == rhs.reference;
 }
 
 bool isSame(const DepthStencilState& lhs, const DepthStencilState& rhs)
 {
-    return lhs.bDepthTestEnable == rhs.bDepthTestEnable
-        && lhs.bDepthWriteEnable == rhs.bDepthWriteEnable
-        && lhs.depthCompareOp == rhs.depthCompareOp
-        && lhs.bDepthBoundsTestEnable == rhs.bDepthBoundsTestEnable
-        && lhs.bStencilTestEnable == rhs.bStencilTestEnable
-        && lhs.minDepthBounds == rhs.minDepthBounds
-        && lhs.maxDepthBounds == rhs.maxDepthBounds
-        && isSame(lhs.front, rhs.front)
-        && isSame(lhs.back, rhs.back);
+    return lhs.bDepthTestEnable == rhs.bDepthTestEnable && lhs.bDepthWriteEnable == rhs.bDepthWriteEnable && lhs.depthCompareOp == rhs.depthCompareOp && lhs.bDepthBoundsTestEnable == rhs.bDepthBoundsTestEnable && lhs.bStencilTestEnable == rhs.bStencilTestEnable && lhs.minDepthBounds == rhs.minDepthBounds && lhs.maxDepthBounds == rhs.maxDepthBounds && isSame(lhs.front, rhs.front) && isSame(lhs.back, rhs.back);
 }
 
 bool isSame(const MultisampleState& lhs, const MultisampleState& rhs)
 {
-    return lhs.sampleCount == rhs.sampleCount
-        && lhs.bSampleShadingEnable == rhs.bSampleShadingEnable
-        && lhs.minSampleShading == rhs.minSampleShading
-        && lhs.bAlphaToCoverageEnable == rhs.bAlphaToCoverageEnable
-        && lhs.bAlphaToOneEnable == rhs.bAlphaToOneEnable;
+    return lhs.sampleCount == rhs.sampleCount && lhs.bSampleShadingEnable == rhs.bSampleShadingEnable && lhs.minSampleShading == rhs.minSampleShading && lhs.bAlphaToCoverageEnable == rhs.bAlphaToCoverageEnable && lhs.bAlphaToOneEnable == rhs.bAlphaToOneEnable;
 }
 
 bool isSame(const Viewport& lhs, const Viewport& rhs)
 {
-    return lhs.x == rhs.x
-        && lhs.y == rhs.y
-        && lhs.width == rhs.width
-        && lhs.height == rhs.height
-        && lhs.minDepth == rhs.minDepth
-        && lhs.maxDepth == rhs.maxDepth;
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height && lhs.minDepth == rhs.minDepth && lhs.maxDepth == rhs.maxDepth;
 }
 
 bool isSame(const Scissor& lhs, const Scissor& rhs)
@@ -147,33 +156,20 @@ bool isSame(const Scissor& lhs, const Scissor& rhs)
 
 bool isSame(const ViewportState& lhs, const ViewportState& rhs)
 {
-    return isSameVector(lhs.viewports, rhs.viewports, [](const auto& a, const auto& b) { return isSame(a, b); })
-        && isSameVector(lhs.scissors, rhs.scissors, [](const auto& a, const auto& b) { return isSame(a, b); });
+    return isSameVector(lhs.viewports, rhs.viewports, [](const auto& a, const auto& b)
+                        { return isSame(a, b); }) &&
+           isSameVector(lhs.scissors, rhs.scissors, [](const auto& a, const auto& b)
+                        { return isSame(a, b); });
 }
 
 bool isSame(const PipelineRenderingInfo& lhs, const PipelineRenderingInfo& rhs)
 {
-    return lhs.label == rhs.label
-        && lhs.viewMask == rhs.viewMask
-        && lhs.colorAttachmentFormats == rhs.colorAttachmentFormats
-        && lhs.depthAttachmentFormat == rhs.depthAttachmentFormat
-        && lhs.stencilAttachmentFormat == rhs.stencilAttachmentFormat;
+    return lhs.label == rhs.label && lhs.viewMask == rhs.viewMask && lhs.colorAttachmentFormats == rhs.colorAttachmentFormats && lhs.depthAttachmentFormat == rhs.depthAttachmentFormat && lhs.stencilAttachmentFormat == rhs.stencilAttachmentFormat;
 }
 
 bool isSame(const GraphicsPipelineCreateInfo& lhs, const GraphicsPipelineCreateInfo& rhs)
 {
-    return lhs.subPassRef == rhs.subPassRef
-        && lhs.renderPass == rhs.renderPass
-        && isSame(lhs.pipelineRenderingInfo, rhs.pipelineRenderingInfo)
-        && lhs.pipelineLayout == rhs.pipelineLayout
-        && isSame(lhs.shaderDesc, rhs.shaderDesc)
-        && lhs.dynamicFeatures == rhs.dynamicFeatures
-        && lhs.primitiveType == rhs.primitiveType
-        && isSame(lhs.rasterizationState, rhs.rasterizationState)
-        && isSame(lhs.multisampleState, rhs.multisampleState)
-        && isSame(lhs.depthStencilState, rhs.depthStencilState)
-        && isSame(lhs.colorBlendState, rhs.colorBlendState)
-        && isSame(lhs.viewportState, rhs.viewportState);
+    return lhs.subPassRef == rhs.subPassRef && lhs.renderPass == rhs.renderPass && isSame(lhs.pipelineRenderingInfo, rhs.pipelineRenderingInfo) && lhs.pipelineLayout == rhs.pipelineLayout && isSame(lhs.shaderDesc, rhs.shaderDesc) && lhs.dynamicFeatures == rhs.dynamicFeatures && lhs.primitiveType == rhs.primitiveType && isSame(lhs.rasterizationState, rhs.rasterizationState) && isSame(lhs.multisampleState, rhs.multisampleState) && isSame(lhs.depthStencilState, rhs.depthStencilState) && isSame(lhs.colorBlendState, rhs.colorBlendState) && isSame(lhs.viewportState, rhs.viewportState);
 }
 
 } // namespace
@@ -510,7 +506,7 @@ bool VulkanPipeline::createPipelineInternal()
                 vertexBindingDescriptions.push_back({
                     .binding   = bufferDesc.slot,
                     .stride    = static_cast<uint32_t>(bufferDesc.pitch),
-                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX, // TODO: instance drawing refactor?
                 });
             }
         }
@@ -524,12 +520,12 @@ bool VulkanPipeline::createPipelineInternal()
                     .offset   = static_cast<uint32_t>(attr.offset),
                 };
 
-                auto it = std::find_if(vertexAttributeDescriptions.begin(),
-                                       vertexAttributeDescriptions.end(),
-                                       [&](const auto& existing)
-                                       {
-                                           return existing.location == attr.location;
-                                       });
+                auto it = std::ranges::find_if(
+                    vertexAttributeDescriptions,
+                    [&](const auto& existing)
+                    {
+                        return existing.location == attr.location;
+                    });
                 if (it != vertexAttributeDescriptions.end()) {
                     *it = vkAttr;
                 }
@@ -557,35 +553,20 @@ bool VulkanPipeline::createPipelineInternal()
         auto merged = ShaderReflection::merge(allStageResources);
 
         if (reflectVertexInput) {
-            auto spirvType2VulkanFormat = [](const auto& type) -> VkFormat
-            {
-                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Float)) {
-                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SFLOAT;
-                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SFLOAT;
-                    if (type.vecsize == 2) return VK_FORMAT_R32G32_SFLOAT;
-                    if (type.vecsize == 1) return VK_FORMAT_R32_SFLOAT;
-                }
-                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::Int)) {
-                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_SINT;
-                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_SINT;
-                    if (type.vecsize == 2) return VK_FORMAT_R32G32_SINT;
-                    if (type.vecsize == 1) return VK_FORMAT_R32_SINT;
-                }
-                if (type.basetype == static_cast<uint32_t>(spirv_cross::SPIRType::UInt)) {
-                    if (type.vecsize == 4) return VK_FORMAT_R32G32B32A32_UINT;
-                    if (type.vecsize == 3) return VK_FORMAT_R32G32B32_UINT;
-                    if (type.vecsize == 2) return VK_FORMAT_R32G32_UINT;
-                    if (type.vecsize == 1) return VK_FORMAT_R32_UINT;
-                }
-                return VK_FORMAT_R32G32B32_SFLOAT;
-            };
-
             uint32_t maxStride = 0;
             for (const auto& input : merged.vertexInputs) {
+                const auto format = reflectVertexAttributeFormat(input);
+                YA_CORE_ASSERT(format.has_value(),
+                               "Unsupported reflected vertex input '{}': type={}, basetype={}, bitwidth={}, vecsize={}",
+                               input.name,
+                               ShaderReflection::DataType2Strings[input.type],
+                               input.basetype,
+                               input.bitwidth,
+                               input.vecsize);
                 vertexAttributeDescriptions.push_back({
                     .location = input.location,
                     .binding  = 0,
-                    .format   = spirvType2VulkanFormat(input),
+                    .format   = toVk(*format),
                     .offset   = input.offset,
                 });
                 maxStride = std::max(maxStride, input.offset + input.size);
@@ -792,14 +773,12 @@ bool VulkanPipeline::createPipelineInternal()
         .basePipelineHandle  = VK_NULL_HANDLE,
     };
 
-    if (_ci.renderPass != nullptr)
-    {
+    if (_ci.renderPass != nullptr) {
         // 传统流程需设置 renderPass 和 subpass，动态渲染模式下这两个参数设为 VK_NULL_HANDLE 与 0
         gplCI.renderPass = _ci.renderPass->getHandleAs<VkRenderPass>();
         gplCI.subpass    = _ci.subPassRef;
     }
-    else
-    {
+    else {
         // WHY DELETER? RAII will destruct outside this case, extend this life cycle until created pipeline done
         auto colorAttachmentRef = deleter.push(
             "",
@@ -991,11 +970,11 @@ bool VulkanComputePipeline::createPipelineInternal()
 
     VkPipeline newPipeline = VK_NULL_HANDLE;
     VkResult   result      = vkCreateComputePipelines(_render->getDevice(),
-                                               _render->getPipelineCache(),
-                                               1,
-                                               &computeCI,
-                                               _render->getAllocator(),
-                                               &newPipeline);
+                                                      _render->getPipelineCache(),
+                                                      1,
+                                                      &computeCI,
+                                                      _render->getAllocator(),
+                                                      &newPipeline);
     if (result != VK_SUCCESS || newPipeline == VK_NULL_HANDLE) {
         YA_CORE_ERROR("Failed to create compute pipeline '{}' (vk result: {})",
                       shaderCacheKey,

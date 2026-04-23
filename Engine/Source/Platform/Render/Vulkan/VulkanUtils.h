@@ -76,15 +76,37 @@ namespace EVertexAttributeFormat
 inline auto toVk(T format) -> VkFormat
 {
     switch (format) {
-    case Uint:
+    case Uint32:
         return VK_FORMAT_R32_UINT;
-    case Float:
+    case Uint32x2:
+        return VK_FORMAT_R32G32_UINT;
+    case Uint32x3:
+        return VK_FORMAT_R32G32B32_UINT;
+    case Uint32x4:
+        return VK_FORMAT_R32G32B32A32_UINT;
+    case Int32:
+        return VK_FORMAT_R32_SINT;
+    case Int32x2:
+        return VK_FORMAT_R32G32_SINT;
+    case Int32x3:
+        return VK_FORMAT_R32G32B32_SINT;
+    case Int32x4:
+        return VK_FORMAT_R32G32B32A32_SINT;
+    case Float16:
+        return VK_FORMAT_R16_SFLOAT;
+    case Float16x2:
+        return VK_FORMAT_R16G16_SFLOAT;
+    case Float16x3:
+        return VK_FORMAT_R16G16B16_SFLOAT;
+    case Float16x4:
+        return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case Float32:
         return VK_FORMAT_R32_SFLOAT;
-    case Float2:
+    case Float32x2:
         return VK_FORMAT_R32G32_SFLOAT;
-    case Float3:
+    case Float32x3:
         return VK_FORMAT_R32G32B32_SFLOAT;
-    case Float4:
+    case Float32x4:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
     default:
         UNIMPLEMENTED();
