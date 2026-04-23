@@ -16,6 +16,13 @@ glm::vec3 buildFallbackTangent(const glm::vec3& normal)
     return glm::normalize(glm::cross(axis, normal));
 }
 
+void flipTriangleWinding(std::vector<uint32_t>& indices)
+{
+    for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+        std::swap(indices[i], indices[i + 2]);
+    }
+}
+
 } // namespace
 
 auto generateTangentSpace(std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
@@ -97,7 +104,7 @@ void PrimitiveGeometry::createCube(const glm::vec3& size, std::vector<Vertex>& o
 
     // Right-Handed coordinate system (OpenGL/Vulkan/Blender convention):
     // X+ right, Y+ up, Z+ toward viewer (out of screen)
-    // Counter-clockwise winding when viewed from outside
+    // Clockwise winding when viewed from outside
     //
     // 24 vertices (4 per face) - needed for proper normals and UVs
     outVertices = {
@@ -149,6 +156,7 @@ void PrimitiveGeometry::createCube(const glm::vec3& size, std::vector<Vertex>& o
     };
     // clang-format on
 
+    flipTriangleWinding(outIndices);
     generateTangentSpace(outVertices, outIndices);
 }
 
@@ -196,6 +204,7 @@ void PrimitiveGeometry::createSphere(float radius, uint32_t slices, uint32_t sta
             outIndices.push_back(first + 1);
         }
     }
+    flipTriangleWinding(outIndices);
     generateTangentSpace(outVertices, outIndices);
 }
 
@@ -212,6 +221,7 @@ void PrimitiveGeometry::createPlane(float width, float depth, float uRepeat, flo
         {.position = {-hw, 0.0f, hd}, .texCoord0 = {0.0f, vRepeat}, .normal = {0.0f, 1.0f, 0.0f}}};
 
     outIndices = {0, 1, 2, 2, 3, 0};
+    flipTriangleWinding(outIndices);
     generateTangentSpace(outVertices, outIndices);
 }
 
@@ -300,6 +310,7 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
         outIndices.push_back(capStartIdx + i * 2 + 1);
         outIndices.push_back(capStartIdx + (i + 1) * 2 + 1);
     }
+    flipTriangleWinding(outIndices);
     generateTangentSpace(outVertices, outIndices);
 }
 
@@ -352,6 +363,7 @@ void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments
         outIndices.push_back(next);
         outIndices.push_back(current);
     }
+    flipTriangleWinding(outIndices);
     generateTangentSpace(outVertices, outIndices);
 }
 

@@ -64,6 +64,36 @@ struct Vertex
     glm::vec3 tangent{};
 };
 
+struct SkeletonMeshVertex
+{
+    glm::ivec4 boneIDs;
+    glm::vec4  weights;
+
+    auto fromVector(std::vector<int32_t> inBoneIDs, std::vector<float> inWeights)
+    {
+        uint32_t size = inBoneIDs.size();
+        if (size == 1) {
+            boneIDs = {inBoneIDs[0], 0, 0, 0};
+            weights = {inWeights[0], 0, 0, 0};
+            return;
+        }
+        if (size == 2) {
+            boneIDs = {inBoneIDs[0], inBoneIDs[1], 0, 0};
+            weights = {inWeights[0], inWeights[1], 0, 0};
+            return;
+        }
+        if (size == 3) {
+            boneIDs = {inBoneIDs[0], inBoneIDs[1], inBoneIDs[2], 0};
+            weights = {inWeights[0], inWeights[1], inWeights[2], 0};
+            return;
+        }
+        if (size >= 4) {
+            boneIDs = {inBoneIDs[0], inBoneIDs[1], inBoneIDs[2], inBoneIDs[3]};
+            weights = {inWeights[0], inWeights[1], inWeights[2], inWeights[3]};
+        }
+    }
+};
+
 
 /**
  * @brief 快速几何体生成器 - 预定义常用形状
