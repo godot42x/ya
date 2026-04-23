@@ -53,6 +53,8 @@ struct ModelAnimation
     double ticksPerSecond;
 };
 
+struct ImportedModelData;
+
 // ========================================
 // MaterialData - Dynamic material descriptor
 // ========================================
@@ -206,35 +208,15 @@ struct MaterialData
 // Type alias for backward compatibility (deprecation notice)
 using EmbeddedMaterial = MaterialData;
 
-struct MeshData
+struct ImportedMeshData
 {
     std::vector<ModelVertex> vertices;
     std::vector<uint32_t>    indices;
-
-    /// Convert ModelVertex → engine Vertex format (CPU only, no GPU).
-    std::vector<ya::Vertex> toEngineVertices() const
-    {
-        std::vector<ya::Vertex> engineVertices;
-        engineVertices.reserve(vertices.size());
-        for (const ModelVertex& v : vertices) {
-            ya::Vertex vertex;
-            vertex.position  = v.position;
-            vertex.normal    = v.normal;
-            vertex.texCoord0 = v.texCoord;
-            vertex.tangent   = v.tangent;
-            engineVertices.push_back(vertex);
-        }
-        return engineVertices;
-    }
-
-    /// Create GPU Mesh resource (MUST be called on main/render thread).
-    stdptr<Mesh> createMesh(const std::string& meshName, CoordinateSystem sourceCoordSystem)
-    {
-        auto engineVertices = toEngineVertices();
-        auto newMesh        = makeShared<Mesh>(engineVertices, indices, meshName, sourceCoordSystem);
-        return newMesh;
-    }
+    CoordinateSystem         sourceCoordSystem = CoordinateSystem::RightHanded;
+    int32_t                  materialIndex     = -1;
+    std::string              name;
 };
+
 /**
  * @brief Model resource - file-level asset container
  * Represents a loaded 3D model file (.obj, .fbx, .gltf, etc.)
@@ -343,46 +325,40 @@ struct Model
 };
 
 /**
- * @brief Intermediate CPU-only model data decoded from file.
+ * @brief Intermediate CPU-only imported model data.
  *
- * Worker thread:  Assimp ReadFile → process nodes/meshes/materials → DecodedModelData
- * Main thread:    DecodedModelData::createModel() → Model with GPU Mesh resources
+ * Worker thread:  importer reads source assets -> ImportedModelData
+ * Main thread:    ImportedModelData::createModel() -> Model with GPU Mesh resources
  *
- * All MeshData holds raw vertices/indices (no GPU buffers yet).
+ * ImportedMeshData holds source-space vertices/indices plus importer metadata.
  * MaterialData holds texture paths (no loaded textures yet).
  */
-struct DecodedModelData
+struct ImportedModelData
 {
+    struct VertexBoneData
+    {
+        std::vector<uint32_t> boneIDs;
+        std::vector<float>    weights;
+    };
+
     std::string filepath;
     std::string directory;
 
-    struct DecodedMesh;
-    /// Per-mesh decoded data (vertices + indices, CPU only)
-    struct DecodedMesh
-    {
-        std::string      name;
-        MeshData         data;
-        CoordinateSystem coordSystem   = CoordinateSystem::RightHanded;
-        int32_t          materialIndex = -1;
-    };
+    std::vector<ImportedMeshData> meshes;
+    std::vector<MaterialData>     materials;
+    std::vector<int32_t>          meshMaterialIndices;
 
-    struct DecodedNode
-    {
-        std::string name;
-        MeshData    meshData;
-    };
-
-    std::vector<DecodedMesh>  meshes;
-    std::vector<MaterialData> materials;
-    std::vector<int32_t>      meshMaterialIndices;
+    std::vector<std::string>    boneNames;
+    std::vector<uint32_t>        meshBaseVertexIndex;
+    std::vector<VertexBoneData>  vertex2BoneData;
 
     [[nodiscard]] bool isValid() const { return !meshes.empty(); }
 
     /**
-     * @brief Decode a model file using Assimp (CPU only, no GPU).
+     * @brief Decode a model file using importer backends (CPU only, no GPU).
      *        Thread-safe: uses no GPU resources.
      */
-    static DecodedModelData decode(const std::string& filepath);
+    static ImportedModelData decode(const std::string& filepath);
 
     /**
      * @brief Create the final Model with GPU Mesh resources.

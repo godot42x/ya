@@ -1,70 +1,60 @@
 #include "Mesh.h"
-#include "Runtime/App/App.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Runtime/App/App.h"
 
 namespace ya
 {
 
-
-Mesh::Mesh(const std::vector<ya::Vertex> &vertices,
-           const std::vector<uint32_t>   &indices,
-           const std::string             &name,
-           CoordinateSystem               sourceCoordSystem)
+stdptr<Mesh> Mesh::create(const EngineMeshData& meshData)
 {
-    _name       = name;
+    return stdptr<Mesh>(new Mesh(meshData));
+}
+
+Mesh::Mesh(const EngineMeshData& meshData)
+{
+    _name = meshData.name;
+
     auto render = App::get()->getRender<VulkanRender>();
 
-    std::ranges::for_each(vertices, [&](const ya::Vertex &v) {
-        boundingBox.expand(v.position);
-    });
+    std::ranges::for_each(meshData.vertices, [&](const ya::Vertex& v)
+                          { boundingBox.expand(v.position); });
 
-    _vertexCount = static_cast<uint32_t>(vertices.size());
-    _indexCount  = static_cast<uint32_t>(indices.size());
-
-    // Convert coordinate system if source differs from engine target
-    std::vector<uint32_t> processedIndices = indices;
-
-    if (sourceCoordSystem != ENGINE_COORDINATE_SYSTEM) {
-        // Flip winding order when converting between coordinate systems:
-        // - RightHanded→LeftHanded: CCW becomes CW (flip needed)
-        // - LeftHanded→RightHanded: CW becomes CCW (flip needed)
-        for (size_t i = 0; i < processedIndices.size(); i += 3) {
-            std::swap(processedIndices[i], processedIndices[i + 2]);
-        }
-        YA_CORE_TRACE("Mesh '{}': Converted from {} to {} coordinate system",
-                      name,
-                      sourceCoordSystem == CoordinateSystem::RightHanded ? "RightHanded" : "LeftHanded",
-                      ENGINE_COORDINATE_SYSTEM == CoordinateSystem::RightHanded ? "RightHanded" : "LeftHanded");
-    }
+    _vertexCount = static_cast<uint32_t>(meshData.vertices.size());
+    _indexCount  = static_cast<uint32_t>(meshData.indices.size());
 
     _vertexBuffer = IBuffer::create(
         render,
         {
-            .label         = name.empty() ? name : std::format("{}_VertexBuffer", name),
-            .usage         = EBufferUsage::VertexBuffer,
-            .data          = (void *)vertices.data(),
-            .size          = static_cast<uint32_t>(sizeof(vertices[0]) * vertices.size()),
+            .label       = _name.empty() ? _name : std::format("{}_VertexBuffer", _name),
+            .usage       = EBufferUsage::VertexBuffer,
+            .data        = (void*)meshData.vertices.data(),
+            .size        = static_cast<uint32_t>(sizeof(meshData.vertices[0]) * meshData.vertices.size()),
             .memoryUsage = EMemoryUsage::GpuOnly,
         });
 
     _indexBuffer = IBuffer::create(
         render,
         {
-            .label         = name.empty() ? name : std::format("{}_IndexBuffer", name),
-            .usage         = EBufferUsage::IndexBuffer,
-            .data          = (void *)processedIndices.data(),
-            .size          = static_cast<uint32_t>(sizeof(processedIndices[0]) * processedIndices.size()),
+            .label       = _name.empty() ? _name : std::format("{}_IndexBuffer", _name),
+            .usage       = EBufferUsage::IndexBuffer,
+            .data        = (void*)meshData.indices.data(),
+            .size        = static_cast<uint32_t>(sizeof(meshData.indices[0]) * meshData.indices.size()),
             .memoryUsage = EMemoryUsage::GpuOnly,
         });
-}
 
-void Mesh::draw(ICommandBuffer *cmdBuf) const
-{
-    // Use generic command buffer interface
-    cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
-    cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false); // false = use 32-bit indices
-    cmdBuf->drawIndexed(_indexCount, 1, 0, 0, 0);
+    if (!meshData.skeletonVertices.empty()) {
+        _optVertexBuffers.push_back(IBuffer::create(
+            render,
+            {
+                .label       = _name.empty() ? _name : std::format("{}_VertexBuffer_Skeleton", _name),
+                .usage       = EBufferUsage::VertexBuffer,
+                .data        = (void*)meshData.skeletonVertices.data(),
+                .size        = static_cast<uint32_t>(sizeof(meshData.skeletonVertices[0]) * meshData.skeletonVertices.size()),
+                .memoryUsage = EMemoryUsage::GpuOnly,
+            }));
+        _optVertexBufferOffsets.resize(_optVertexBuffers.size(), 0);
+        YA_CORE_ASSERT(_optVertexBufferOffsets.size() == _optVertexBuffers.size(), "Vertex buffer offsets size does not match vertex buffers size");
+    }
 }
-
 
 } // namespace ya

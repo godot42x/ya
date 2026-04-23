@@ -16,7 +16,7 @@ class AssetModelManager
 
     std::unordered_map<std::string, std::shared_ptr<Model>> modelCache;
     std::unordered_map<std::string, std::string>            _modalName2Path;
-    std::unordered_map<std::string, TaskHandle<DecodedModelData>> _pendingModelLoads;
+    std::unordered_map<std::string, TaskHandle<ImportedModelData>> _pendingModelLoads;
     std::unordered_map<std::string, std::vector<AssetManager::ModelReadyCallback>> _pendingModelCallbacks;
     mutable std::mutex _mutex;
 

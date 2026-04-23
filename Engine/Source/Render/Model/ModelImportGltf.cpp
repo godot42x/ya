@@ -296,7 +296,7 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
                          const tinygltf::Primitive& primitive,
                          const CoordinateSystem     coordSystem,
                          const std::string&         fallbackName,
-                         DecodedModelData&          result)
+                         ImportedModelData&         result)
 {
     if (primitive.mode != TINYGLTF_MODE_TRIANGLES) {
         YA_CORE_WARN("Skipping glTF primitive '{}': only triangle lists are supported", fallbackName);
@@ -326,11 +326,11 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
         return false;
     }
 
-    const size_t                  vertexCount = static_cast<size_t>(positionAccessor.count);
-    DecodedModelData::DecodedMesh decodedMesh;
-    decodedMesh.name        = fallbackName;
-    decodedMesh.coordSystem = coordSystem;
-    decodedMesh.data.vertices.resize(vertexCount);
+    const size_t     vertexCount = static_cast<size_t>(positionAccessor.count);
+    ImportedMeshData importedMesh;
+    importedMesh.name              = fallbackName;
+    importedMesh.sourceCoordSystem = coordSystem;
+    importedMesh.vertices.resize(vertexCount);
 
     auto readAttribute = [&](const char* semantic, int expectedType) -> std::optional<std::vector<double>>
     {
@@ -355,7 +355,7 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
     const auto colors    = readAttribute("COLOR_0", TINYGLTF_TYPE_VEC4);
 
     for (size_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-        ModelVertex& vertex = decodedMesh.data.vertices[vertexIndex];
+        ModelVertex& vertex = importedMesh.vertices[vertexIndex];
         vertex.position     = {
             static_cast<float>((*positions)[vertexIndex * 3 + 0]),
             static_cast<float>((*positions)[vertexIndex * 3 + 1]),
@@ -393,29 +393,30 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
             return false;
         }
 
-        decodedMesh.data.indices = readIndexAccessor(gltfModel, gltfModel.accessors[primitive.indices]);
-        if (decodedMesh.data.indices.empty()) {
+        importedMesh.indices = readIndexAccessor(gltfModel, gltfModel.accessors[primitive.indices]);
+        if (importedMesh.indices.empty()) {
             YA_CORE_WARN("Skipping glTF primitive '{}': failed to decode index buffer", fallbackName);
             return false;
         }
     }
     else {
-        decodedMesh.data.indices.resize(vertexCount);
+        importedMesh.indices.resize(vertexCount);
         for (size_t index = 0; index < vertexCount; ++index) {
-            decodedMesh.data.indices[index] = static_cast<uint32_t>(index);
+            importedMesh.indices[index] = static_cast<uint32_t>(index);
         }
     }
 
-    result.meshes.push_back(std::move(decodedMesh));
+    importedMesh.materialIndex = primitive.material >= 0 ? primitive.material : -1;
+    result.meshes.push_back(std::move(importedMesh));
     result.meshMaterialIndices.push_back(primitive.material >= 0 ? primitive.material : -1);
     return true;
 }
 
 } // namespace
 
-DecodedModelData decodeWithTinyGltf(const std::string& filepath)
+ImportedModelData decodeWithTinyGltf(const std::string& filepath)
 {
-    DecodedModelData result;
+    ImportedModelData result;
     result.filepath  = filepath;
     result.directory = path_utils::pathToGenericUtf8String(std::filesystem::path(filepath).parent_path());
     if (!result.directory.empty() && result.directory.back() != '/') {
@@ -440,7 +441,7 @@ DecodedModelData decodeWithTinyGltf(const std::string& filepath)
         YA_CORE_WARN("TinyGLTF detail for '{}': {}", filepath, err);
     }
     if (!loaded) {
-        YA_CORE_ERROR("DecodedModelData::decode: TinyGLTF failed for '{}'", filepath);
+        YA_CORE_ERROR("ImportedModelData::decode: TinyGLTF failed for '{}'", filepath);
         return result;
     }
 
@@ -459,7 +460,7 @@ DecodedModelData decodeWithTinyGltf(const std::string& filepath)
         result.materials.push_back(std::move(defaultMaterial));
     }
 
-    const CoordinateSystem coordSystem = inferCoordSystem(filepath);
+    constexpr CoordinateSystem coordSystem = CoordinateSystem::RightHanded;
     for (size_t meshIndex = 0; meshIndex < model.meshes.size(); ++meshIndex) {
         const tinygltf::Mesh& mesh = model.meshes[meshIndex];
         for (size_t primitiveIndex = 0; primitiveIndex < mesh.primitives.size(); ++primitiveIndex) {
@@ -470,7 +471,7 @@ DecodedModelData decodeWithTinyGltf(const std::string& filepath)
         }
     }
 
-    YA_CORE_INFO("DecodedModelData::decode: '{}' via TinyGLTF -> {} meshes, {} materials",
+    YA_CORE_INFO("ImportedModelData::decode: '{}' via TinyGLTF -> {} meshes, {} materials",
                  filepath,
                  result.meshes.size(),
                  result.materials.size());

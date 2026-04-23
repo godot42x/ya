@@ -8,13 +8,92 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
+#include <array>
 #include <cstring>
 #include <functional>
+#include <optional>
 
 namespace ya::model_decode
 {
 namespace
 {
+
+const char* coordSystemToString(CoordinateSystem coordSystem)
+{
+    switch (coordSystem) {
+    case CoordinateSystem::LeftHanded:
+        return "LeftHanded";
+    case CoordinateSystem::RightHanded:
+        return "RightHanded";
+    default:
+        return "Unknown";
+    }
+}
+
+std::array<int, 3> axisVector(int axis, int sign)
+{
+    std::array<int, 3> axisVector{0, 0, 0};
+    if (axis >= 0 && axis < static_cast<int>(axisVector.size())) {
+        axisVector[axis] = sign;
+    }
+    return axisVector;
+}
+
+int determinant(const std::array<int, 3>& a, const std::array<int, 3>& b, const std::array<int, 3>& c)
+{
+    return a[0] * (b[1] * c[2] - b[2] * c[1]) -
+           a[1] * (b[0] * c[2] - b[2] * c[0]) +
+           a[2] * (b[0] * c[1] - b[1] * c[0]);
+}
+
+std::optional<CoordinateSystem> inferCoordSystemFromAssimpMetadata(const aiScene* scene)
+{
+    if (!scene || !scene->mMetaData) {
+        return std::nullopt;
+    }
+
+    int upAxis = 0;
+    int upAxisSign = 1;
+    int frontAxis = 0;
+    int frontAxisSign = 1;
+    int coordAxis = 0;
+    int coordAxisSign = 1;
+
+    if (!scene->mMetaData->Get("UpAxis", upAxis) ||
+        !scene->mMetaData->Get("UpAxisSign", upAxisSign) ||
+        !scene->mMetaData->Get("FrontAxis", frontAxis) ||
+        !scene->mMetaData->Get("FrontAxisSign", frontAxisSign) ||
+        !scene->mMetaData->Get("CoordAxis", coordAxis) ||
+        !scene->mMetaData->Get("CoordAxisSign", coordAxisSign)) {
+        return std::nullopt;
+    }
+
+    const auto right   = axisVector(coordAxis, coordAxisSign);
+    const auto up      = axisVector(upAxis, upAxisSign);
+    const auto forward = axisVector(frontAxis, frontAxisSign);
+    const int  det     = determinant(right, up, forward);
+    if (det == 0) {
+        return std::nullopt;
+    }
+
+    return det > 0 ? CoordinateSystem::RightHanded : CoordinateSystem::LeftHanded;
+}
+
+CoordinateSystem inferAssimpCoordSystem(const aiScene* scene, const std::string& filepath)
+{
+    if (const auto coordSystem = inferCoordSystemFromAssimpMetadata(scene); coordSystem.has_value()) {
+        YA_CORE_INFO("Assimp metadata inferred '{}' coordinate system for '{}'",
+                     coordSystemToString(*coordSystem),
+                     filepath);
+        return *coordSystem;
+    }
+
+    const auto heuristic = inferCoordSystemFromExtensionHeuristic(filepath);
+    YA_CORE_WARN("Assimp metadata missing handedness for '{}', fallback to {} heuristic",
+                 filepath,
+                 coordSystemToString(heuristic));
+    return heuristic;
+}
 
 bool tryReadFloatProperty(const aiMaterialProperty* prop, float& value)
 {
@@ -241,9 +320,9 @@ void importRawMaterialHints(const aiMaterial* mat, MaterialData& matData)
 
 } // namespace
 
-DecodedModelData decodeWithAssimp(const std::string& filepath)
+ImportedModelData decodeWithAssimp(const std::string& filepath)
 {
-    DecodedModelData result;
+    ImportedModelData result;
     result.filepath  = filepath;
     result.directory = std::filesystem::path(filepath).parent_path().generic_string();
     if (!result.directory.empty() && result.directory.back() != '/') {
@@ -251,11 +330,9 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
     }
 
     if (!VirtualFileSystem::get()->isFileExists(filepath)) {
-        YA_CORE_ERROR("DecodedModelData::decode: file not found: {}", filepath);
+        YA_CORE_ERROR("ImportedModelData::decode: file not found: {}", filepath);
         return result;
     }
-
-    const CoordinateSystem coordSystem = inferCoordSystem(filepath);
 
     constexpr unsigned int assimpFlags =
         aiProcess_Triangulate |
@@ -272,9 +349,11 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
     const aiScene*   scene = importer.ReadFile(filepath, assimpFlags);
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-        YA_CORE_ERROR("DecodedModelData::decode: Assimp error for '{}': {}", filepath, importer.GetErrorString());
+        YA_CORE_ERROR("ImportedModelData::decode: Assimp error for '{}': {}", filepath, importer.GetErrorString());
         return result;
     }
+
+    const CoordinateSystem coordSystem = inferAssimpCoordSystem(scene, filepath);
 
     // materials
     for (uint32_t i = 0; i < scene->mNumMaterials; ++i) {
@@ -297,35 +376,17 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
     }
 
 
-    struct BoneInfo
+
+    auto processBone = [&result](aiBone* bone, uint32_t meshIndex)
     {
-        std::string name;
-    };
+        result.boneNames.push_back(bone->mName.C_Str());
+        for (uint32_t weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
+            const aiVertexWeight& weight         = bone->mWeights[weightIndex];
+            uint32_t              globalVertexID = result.meshBaseVertexIndex[meshIndex] + weight.mVertexId;
+            YA_CORE_ASSERT(globalVertexID < result.vertex2BoneData.size(), "Global vertex ID is out of bounds");
 
-    struct VertexBoneData
-    {
-        std::vector<uint32_t> boneIDs;
-        std::vector<float>    weights;
-    };
-    std::vector<BoneInfo>           bones;
-    std::vector<uint32_t>           meshBaseVertex; // pos is the mesh index of a scene, value is the vertex index start
-    std::vector<VertexBoneData>     vertex2BoneData;
-    std::map<std::string, uint32_t> boneName2Index;
-
-
-    auto processBone = [&vertex2BoneData, &bones, &meshBaseVertex](aiBone* bone, uint32_t meshIndex)
-    {
-        bones.push_back(BoneInfo{
-            .name = bone->mName.C_Str(),
-        });
-        for (uint32_t i = 0; i < bone->mNumWeights; ++i) {
-
-            auto     weight         = bone->mWeights[i];
-            uint32_t globalVertexID = meshBaseVertex[meshIndex];
-            YA_CORE_ASSERT(globalVertexID < vertex2BoneData.size(), "Global vertex ID is out of bounds");
-
-            vertex2BoneData[globalVertexID].boneIDs.push_back(bones.size() - 1);
-            vertex2BoneData[globalVertexID].weights.push_back(weight.mWeight);
+            result.vertex2BoneData[globalVertexID].boneIDs.push_back(result.boneNames.size() - 1);
+            result.vertex2BoneData[globalVertexID].weights.push_back(weight.mWeight);
         }
     };
 
@@ -347,12 +408,12 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
             return;
         }
 
-        DecodedModelData::DecodedMesh decodedMesh;
-        decodedMesh.name        = meshName;
-        decodedMesh.coordSystem = coordSystem;
+        ImportedMeshData importedMesh;
+        importedMesh.name              = meshName;
+        importedMesh.sourceCoordSystem = coordSystem;
 
         // vertices
-        decodedMesh.data.vertices.reserve(mesh->mNumVertices);
+        importedMesh.vertices.reserve(mesh->mNumVertices);
         for (uint32_t vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
             ModelVertex vertex;
             vertex.position = {mesh->mVertices[vertexIndex].x, mesh->mVertices[vertexIndex].y, mesh->mVertices[vertexIndex].z};
@@ -368,20 +429,20 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
             if (mesh->HasTangentsAndBitangents()) {
                 vertex.tangent = {mesh->mTangents[vertexIndex].x, mesh->mTangents[vertexIndex].y, mesh->mTangents[vertexIndex].z};
             }
-            decodedMesh.data.vertices.push_back(vertex);
+            importedMesh.vertices.push_back(vertex);
         }
 
         // faces -> triangle indices (if triangulate)
         for (uint32_t faceIndex = 0; faceIndex < mesh->mNumFaces; ++faceIndex) {
             const aiFace& face = mesh->mFaces[faceIndex];
             for (uint32_t index = 0; index < face.mNumIndices; ++index) {
-                decodedMesh.data.indices.push_back(face.mIndices[index]);
+                importedMesh.indices.push_back(face.mIndices[index]);
             }
         }
 
         // material linkage
-        decodedMesh.materialIndex = static_cast<int32_t>(mesh->mMaterialIndex);
-        result.meshes.push_back(std::move(decodedMesh));
+        importedMesh.materialIndex = static_cast<int32_t>(mesh->mMaterialIndex);
+        result.meshes.push_back(std::move(importedMesh));
         if (mesh->mMaterialIndex < scene->mNumMaterials) {
             result.meshMaterialIndices.push_back(static_cast<int32_t>(mesh->mMaterialIndex));
         }
@@ -399,14 +460,14 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
     };
 
     // mesh and bone entry
-    meshBaseVertex.resize(scene->mNumMeshes);
+    result.meshBaseVertexIndex.resize(scene->mNumMeshes);
     uint32_t totalVertices = 0;
     for (uint32_t i = 0; i < scene->mNumMeshes; ++i) {
         const auto* mesh = scene->mMeshes[i];
 
-        meshBaseVertex[i] = totalVertices;
+        result.meshBaseVertexIndex[i] = totalVertices;
         totalVertices += mesh->mNumVertices;
-        vertex2BoneData.resize(totalVertices); //
+        result.vertex2BoneData.resize(totalVertices); //
 
         processMesh(mesh, i);
     }
@@ -430,7 +491,7 @@ DecodedModelData decodeWithAssimp(const std::string& filepath)
     processNode(scene->mRootNode);
 
 
-    YA_CORE_INFO("DecodedModelData::decode: '{}' -> {} meshes, {} materials",
+    YA_CORE_INFO("ImportedModelData::decode: '{}' -> {} meshes, {} materials",
                  filepath,
                  result.meshes.size(),
                  result.materials.size());

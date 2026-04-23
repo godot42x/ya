@@ -12,8 +12,8 @@
 namespace ya::model_decode
 {
 
-DecodedModelData decodeWithTinyGltf(const std::string& filepath);
-DecodedModelData decodeWithAssimp(const std::string& filepath);
+ImportedModelData decodeWithTinyGltf(const std::string& filepath);
+ImportedModelData decodeWithAssimp(const std::string& filepath);
 
 inline bool containsInsensitive(std::string_view text, std::string_view token)
 {
@@ -23,30 +23,33 @@ inline bool containsInsensitive(std::string_view text, std::string_view token)
                         static_cast<char>(std::tolower(static_cast<unsigned char>(rhs))); }) != text.end();
 }
 
-inline bool isGltfPath(const std::string& filepath)
+inline std::string getNormalizedModelExtension(const std::string& filepath)
 {
     std::string extension = std::filesystem::path(filepath).extension().string();
     std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
     });
+    return extension;
+}
+
+inline bool isGltfPath(const std::string& filepath)
+{
+    const std::string extension = getNormalizedModelExtension(filepath);
     return extension == ".gltf" || extension == ".glb";
 }
 
-inline CoordinateSystem inferCoordSystem(const std::string& filepath)
+inline CoordinateSystem inferCoordSystemFromExtensionHeuristic(const std::string& filepath)
 {
-    std::string extension = std::filesystem::path(filepath).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+    const std::string extension = getNormalizedModelExtension(filepath);
 
-    if (extension == ".obj" || extension == ".fbx" || extension == ".gltf" || extension == ".glb" ||
-        extension == ".dae" || extension == ".collada" || extension == ".blend" || extension == ".3ds" ||
-        extension == ".max" || extension == ".stl") {
+    if (extension == ".gltf" || extension == ".glb" ||
+        extension == ".obj" || extension == ".dae" || extension == ".collada" ||
+        extension == ".blend" || extension == ".3ds" || extension == ".max" || extension == ".stl") {
         return CoordinateSystem::RightHanded;
     }
 
-    YA_CORE_WARN("Unknown model format '{}', assuming RightHanded", extension);
-    return CoordinateSystem::RightHanded;
+    YA_CORE_WARN("Unknown handedness for model format '{}', assuming engine coordinate system", extension);
+    return ENGINE_COORDINATE_SYSTEM;
 }
 
 inline void setTextureAlias(MaterialData& matData, const FName& primary, const FName& alias, const std::string& path)

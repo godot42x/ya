@@ -1,5 +1,6 @@
 #include "Model.h"
 
+#include "Render/EngineGeometryNormalizer.h"
 #include "Render/Model/ModelDecodeInternal.h"
 
 #include "Core/Log.h"
@@ -7,7 +8,7 @@
 namespace ya
 {
 
-DecodedModelData DecodedModelData::decode(const std::string& filepath)
+ImportedModelData ImportedModelData::decode(const std::string& filepath)
 {
     if (model_decode::isGltfPath(filepath)) {
         return model_decode::decodeWithTinyGltf(filepath);
@@ -16,23 +17,22 @@ DecodedModelData DecodedModelData::decode(const std::string& filepath)
     return model_decode::decodeWithAssimp(filepath);
 }
 
-std::shared_ptr<Model> DecodedModelData::createModel() const
+std::shared_ptr<Model> ImportedModelData::createModel() const
 {
     auto model      = makeShared<Model>();
     model->filepath = filepath;
     model->setDirectory(directory);
 
-    for (const auto& decodedMesh : meshes) {
-        MeshData meshDataCopy = decodedMesh.data;
-        auto     gpuMesh      = meshDataCopy.createMesh(decodedMesh.name, decodedMesh.coordSystem);
-        model->meshes.push_back(std::move(gpuMesh));
+    for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex) {
+        auto engineMeshData = buildEngineMeshData(*this, meshIndex);
+        model->meshes.push_back(Mesh::create(engineMeshData));
     }
 
     model->embeddedMaterials   = materials;
     model->meshMaterialIndices = meshMaterialIndices;
     model->setIsLoaded(true);
 
-    YA_CORE_INFO("DecodedModelData::createModel: '{}' -> {} GPU meshes",
+    YA_CORE_INFO("ImportedModelData::createModel: '{}' -> {} GPU meshes",
                  filepath,
                  model->meshes.size());
 

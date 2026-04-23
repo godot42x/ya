@@ -111,11 +111,11 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
     YA_CORE_INFO("submitModelLoad: async decode '{}'", filepath);
 
     auto handle = TaskQueue::get().submitWithCallback(
-        [filepath]() -> DecodedModelData
+        [filepath]() -> ImportedModelData
         {
-            return DecodedModelData::decode(filepath);
+            return ImportedModelData::decode(filepath);
         },
-        [this, filepath, name](DecodedModelData decoded)
+        [this, filepath, name](ImportedModelData decoded)
         {
             std::vector<AssetManager::ModelReadyCallback> callbacks;
             std::shared_ptr<Model>                        readyModel;
@@ -209,7 +209,7 @@ std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filep
         return modelCache[filepath];
     }
 
-    auto decoded = DecodedModelData::decode(filepath);
+    auto decoded = ImportedModelData::decode(filepath);
     if (!decoded.isValid()) {
         YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", filepath);
         return nullptr;
