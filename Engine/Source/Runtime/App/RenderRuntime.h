@@ -31,6 +31,7 @@ struct RenderDocCapture;
 struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
+struct DebugRenderSystem;
 
 struct RenderRuntime
 {
@@ -171,6 +172,7 @@ struct RenderRuntime
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
     /**
      * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.

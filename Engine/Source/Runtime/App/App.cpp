@@ -1,5 +1,7 @@
 #include "Runtime/App/App.h"
 
+#include "Runtime/App/DebugRenderSystem.h"
+
 namespace ya
 {
 
@@ -24,6 +26,12 @@ std::shared_ptr<ShaderStorage> App::getShaderStorage() const
 ForwardRenderPipeline* App::getForwardPipeline() const
 {
     return _renderRuntime ? _renderRuntime->getForwardPipeline() : nullptr;
+}
+
+DebugRenderSystem& App::getDebugRenderSystem() const
+{
+    YA_CORE_ASSERT(_renderRuntime, "RenderRuntime is not available");
+    return _renderRuntime->getDebugRenderSystem();
 }
 
 bool App::isShadowMappingEnabled() const

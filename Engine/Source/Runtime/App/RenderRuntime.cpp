@@ -1,6 +1,7 @@
 #include "RenderRuntime.h"
 
 #include "App.h"
+#include "DebugRenderSystem.h"
 #include "Core/Async/TaskQueue.h"
 #include "Core/Debug/PerfKeys.h"
 #include "Core/Debug/PerfState.h"
@@ -755,6 +756,11 @@ Extent2D RenderRuntime::getViewportExtent() const
         return Extent2D::fromVec2(_viewportRect.extent);
     }
     return {};
+}
+
+DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
+{
+    return DebugRenderSystem::get();
 }
 
 void RenderRuntime::initActivePipeline()

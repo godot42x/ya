@@ -1,6 +1,7 @@
 #include "RenderRuntime.h"
 
 #include "App.h"
+#include "DebugRenderSystem.h"
 #include "Core/Async/TaskQueue.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -270,6 +271,8 @@ void RenderRuntime::init(const InitDesc& desc)
         ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"},
         ShaderDesc{.shaderName = "Sprite2D_World.glsl"},
         ShaderDesc{.shaderName = "Test/DebugRender.glsl"},
+        ShaderDesc{.shaderName = "Test/DebugPrimitiveLine.glsl"},
+        ShaderDesc{.shaderName = "Test/DebugPrimitiveShape.glsl"},
         ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"},
         ShaderDesc{.shaderName = "Skybox.glsl"},
         ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
@@ -566,6 +569,7 @@ void RenderRuntime::shutdown()
     }
 
     shutdownActivePipeline();
+    getDebugRenderSystem().destroy();
 
     ImGuiManager::get().shutdown();
 

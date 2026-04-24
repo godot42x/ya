@@ -41,6 +41,7 @@ struct Sampler;
 struct RenderDocCapture;
 struct ForwardRenderPipeline;
 struct DeferredRenderPipeline;
+struct DebugRenderSystem;
 class ResourceResolveSystem;
 class AppLifecycle;
 class AppFrameLoop;
@@ -278,6 +279,7 @@ struct App
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
 
     [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
+    [[nodiscard]] DebugRenderSystem&     getDebugRenderSystem() const;
     [[nodiscard]] bool                   isShadowMappingEnabled() const;
     [[nodiscard]] bool                   isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                   hasMirrorRenderResult() const;

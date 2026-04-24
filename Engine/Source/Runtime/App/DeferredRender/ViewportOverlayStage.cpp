@@ -81,6 +81,9 @@ void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportR
         _overlayPipeline->updateDesc(std::move(ci));
     }
 
+    if (auto* runtime = App::get()->getRenderRuntime()) {
+        runtime->getDebugRenderSystem().refreshPipelineFormats(viewportRT);
+    }
     _debugSkinning.refreshPipelineFormats(viewportRT);
 }
 
@@ -93,6 +96,9 @@ void ViewportOverlayStage::init(IRender* render)
     _render = render;
     initSkybox();
     initOverlay();
+    auto& debugSystem = App::get()->getDebugRenderSystem();
+    debugSystem.init(_render);
+    debugSystem.primitives().bReverseViewportY = bReverseViewportY;
     _debugSkinning.init(_render);
     _debugSkinning.bReverseViewportY = bReverseViewportY;
 }
@@ -229,6 +235,7 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
     if (_overlayPipeline) {
         _overlayPipeline->beginFrame();
     }
+    App::get()->getDebugRenderSystem().beginFrame();
     _debugSkinning.beginFrame();
 
     if (!ctx.frameData) return;
@@ -312,8 +319,10 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     auto* scene = App::get()->getSceneManager()->getActiveScene();
     if (!scene) return;
 
-    const auto& fd                   = *ctx.frameData;
-    _debugSkinning.bReverseViewportY = bReverseViewportY;
+    const auto& fd                     = *ctx.frameData;
+    auto&       debugSystem            = App::get()->getDebugRenderSystem();
+    debugSystem.primitives().bReverseViewportY = bReverseViewportY;
+    _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
     // Simple material entities (from snapshot)
     bool hasSimple = !fd.simpleDrawItems.empty();
@@ -387,7 +396,15 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
         _overlayPC.model = worldTransform * cylinderLocalTransf;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
         cylinder->draw(cmdBuf);
+
+        debugSystem.addConeImmediate(glm::translate(glm::mat4(1.0f), -tc.getForward()) * coneLocalTransf * worldTransform,
+                                     glm::vec4(0.9f, 0.6f, 0.1f, 1.0f));
+        debugSystem.addCylinderImmediate(worldTransform * cylinderLocalTransf,
+                                         glm::vec4(0.1f, 0.9f, 0.9f, 1.0f));
+        debugSystem.addLineImmediate(tc.getWorldPosition(), tc.getWorldPosition() + tc.getForward(), glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
     }
+
+    debugSystem.draw(cmdBuf, vpW, vpH, fd.projection, fd.view);
 
     cmdBuf->debugEndLabel();
 }
@@ -404,6 +421,7 @@ void ViewportOverlayStage::renderGUI()
     // Future: skybox toggle, overlay color type combo, etc.
     _skyboxPipeline->renderGUI();
     _overlayPipeline->renderGUI();
+    App::get()->getDebugRenderSystem().renderGUI();
     _debugSkinning.renderGUI();
 
     ImGui::TreePop();
