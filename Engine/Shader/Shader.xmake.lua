@@ -31,17 +31,6 @@ do
             os.execv(python, pythonArgs)
         end
 
-        -- Step 0: generate Common/Limits.glsl from Engine.json (shader.defines)
-        do
-            local script = "Engine/Shader/shader_config.py"
-            local args = {
-                "--config", "Engine/Config/Engine.jsonc",
-                "--glsl-output", "Engine/Shader/GLSL/Common/Limits.glsl",
-                "--slang-output", "Engine/Shader/Slang/Common/Limits.slang",
-            }
-            run_python(script, args)
-        end
-
         -- Step 1: slang -> C++ header (single Python process for all files)
         do
             local script    = "Engine/Shader/slang_gen_header.py"
@@ -64,7 +53,6 @@ do
             local args      = {
                 "--output-dir", outputDir,
                 "--namespace", "ya::glsl_types",
-                "--config", "Engine/Config/Engine.jsonc",
                 "--include-dir", "Engine/Shader/GLSL",
             }
             for _, f in ipairs(os.files("Engine/Shader/GLSL/**.glsl")) do

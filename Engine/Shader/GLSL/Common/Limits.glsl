@@ -1,5 +1,5 @@
-// Auto-generated from Engine/Config/Engine.jsonc - DO NOT EDIT.
-// Modify Engine.jsonc shader.defines instead.
+// Shared GLSL shader limits.
+// Edit this file directly.
 
 #undef MAX_POINT_LIGHTS
 #define MAX_POINT_LIGHTS 6
