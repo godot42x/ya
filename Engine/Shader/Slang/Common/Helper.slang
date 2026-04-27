@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Common/Limits.slang"
+
 static const float PI = 3.14159265358979323846;
 
 typealias mat3 = float3x3;
@@ -23,6 +25,11 @@ inline float3x3 inverse3x3(float3x3  m)
         float3(t0.y, t1.y, t2.y) * invDet,
         float3(t0.z, t1.z, t2.z) * invDet
     );
+}
+
+inline float3x3 inverse(float3x3 m)
+{
+    return inverse3x3(m);
 }
 
 

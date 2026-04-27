@@ -1,4 +1,5 @@
-#include "Render/Model/ModelDecodeInternal.h"
+#include "Render/Model/GltfImporter.h"
+#include "Render/Model/ModelImporterCommon.h"
 
 #include "Resource/Model/TinyGLTFSupport.h"
 
@@ -10,7 +11,7 @@
 #include <limits>
 #include <optional>
 
-namespace ya::model_decode
+namespace ya::model_importer
 {
 namespace
 {
@@ -264,7 +265,7 @@ void importGltfMaterial(const tinygltf::Model& gltfModel, const tinygltf::Materi
 
     if (const std::string baseColorPath = resolveGltfTexturePath(gltfModel, matData, gltfMaterial.pbrMetallicRoughness.baseColorTexture.index);
         !baseColorPath.empty()) {
-        setTextureAlias(matData, MatTexture::Diffuse, MatTexture::Albedo, baseColorPath);
+        detail::setTextureAlias(matData, MatTexture::Diffuse, MatTexture::Albedo, baseColorPath);
     }
 
     if (const std::string metallicRoughnessPath = resolveGltfTexturePath(gltfModel, matData, gltfMaterial.pbrMetallicRoughness.metallicRoughnessTexture.index);
@@ -355,8 +356,8 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
     const auto colors    = readAttribute("COLOR_0", TINYGLTF_TYPE_VEC4);
 
     for (size_t vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-        ModelVertex& vertex = importedMesh.vertices[vertexIndex];
-        vertex.position     = {
+        ImportedModelVertex& vertex = importedMesh.vertices[vertexIndex];
+        vertex.position             = {
             static_cast<float>((*positions)[vertexIndex * 3 + 0]),
             static_cast<float>((*positions)[vertexIndex * 3 + 1]),
             static_cast<float>((*positions)[vertexIndex * 3 + 2])};
@@ -409,12 +410,13 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
     importedMesh.materialIndex = primitive.material >= 0 ? primitive.material : -1;
     result.meshes.push_back(std::move(importedMesh));
     result.meshMaterialIndices.push_back(primitive.material >= 0 ? primitive.material : -1);
+    result.meshSkeletonIndices.push_back(-1);
     return true;
 }
 
 } // namespace
 
-ImportedModelData decodeWithTinyGltf(const std::string& filepath)
+ImportedModelData GltfImporter::import(const std::string& filepath) const
 {
     ImportedModelData result;
     result.filepath  = filepath;
@@ -430,7 +432,7 @@ ImportedModelData decodeWithTinyGltf(const std::string& filepath)
 
     loader.SetImageLoader(ignoreTinyGltfImageData, nullptr);
 
-    const bool loaded = containsInsensitive(path_utils::pathToUtf8String(std::filesystem::path(filepath).extension()), ".glb")
+    const bool loaded = detail::containsInsensitive(path_utils::pathToUtf8String(std::filesystem::path(filepath).extension()), ".glb")
                           ? loader.LoadBinaryFromFile(&model, &err, &warn, filepath)
                           : loader.LoadASCIIFromFile(&model, &err, &warn, filepath);
 
@@ -471,7 +473,7 @@ ImportedModelData decodeWithTinyGltf(const std::string& filepath)
         }
     }
 
-    YA_CORE_INFO("ImportedModelData::decode: '{}' via TinyGLTF -> {} meshes, {} materials",
+    YA_CORE_INFO("ImportedModelData::decode: '{}'via TinyGLTF -> {} meshes, {} materials",
                  filepath,
                  result.meshes.size(),
                  result.materials.size());
@@ -479,4 +481,22 @@ ImportedModelData decodeWithTinyGltf(const std::string& filepath)
     return result;
 }
 
-} // namespace ya::model_decode
+std::string_view GltfImporter::getName() const
+{
+    return "GltfImporter";
+}
+
+bool GltfImporter::supports(std::string_view filepath) const
+{
+    return detail::isGltfPath(std::string(filepath));
+}
+
+const IModelImporter& getGltfImporter()
+{
+    static const GltfImporter importer;
+    return importer;
+}
+
+} // namespace ya::model_importer
+
+

@@ -1,19 +1,15 @@
 #pragma once
 
-#include "Render/Model.h"
-
 #include "Core/Log.h"
+#include "Render/Model/ImportedModelData.h"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <string_view>
 
-namespace ya::model_decode
+namespace ya::model_importer::detail
 {
-
-ImportedModelData decodeWithTinyGltf(const std::string& filepath);
-ImportedModelData decodeWithAssimp(const std::string& filepath);
 
 inline bool containsInsensitive(std::string_view text, std::string_view token)
 {
@@ -26,9 +22,10 @@ inline bool containsInsensitive(std::string_view text, std::string_view token)
 inline std::string getNormalizedModelExtension(const std::string& filepath)
 {
     std::string extension = std::filesystem::path(filepath).extension().string();
-    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+    std::ranges::transform(extension,
+                           extension.begin(),
+                           [](unsigned char ch)
+                           { return static_cast<char>(std::tolower(ch)); });
     return extension;
 }
 
@@ -62,4 +59,4 @@ inline void setTextureAlias(MaterialData& matData, const FName& primary, const F
     matData.setTexturePath(alias, path);
 }
 
-} // namespace ya::model_decode
+} // namespace ya::model_importer::detail

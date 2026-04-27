@@ -5,7 +5,6 @@
 #include "Platform/Render/Vulkan/VulkanPipeline.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderPass.h"
-#include "Render/RenderManager.h"
 #include <vector>
 #include <vulkan/vulkan.h>
 

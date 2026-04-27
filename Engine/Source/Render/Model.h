@@ -1,68 +1,20 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/FName.h"
 #include "Core/Math/AABB.h"
 #include "Render/Mesh.h"
-#include <array>
-#include <glm/glm.hpp>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <variant>
-#include <vector>
-
-
+#include "Render/Skeleton.h"
 
 namespace ya
 {
 
-#define MAX_BONE_WEIGHTS 4
+// #define MAX_BONE_WEIGHTS 4
 
 /**
  * @brief Vertex format for imported 3D models
  * Used during model loading, converted to engine's internal Vertex format
  */
-struct ModelVertex
-{
-    glm::vec3 position{};
-    glm::vec3 normal{};
-    glm::vec2 texCoord{};
-    glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec3 tangent{};
 
-    std::array<int, MAX_BONE_WEIGHTS> boneIDs;
-};
-
-
-struct ModelBoneInfo
-{
-    int       id;
-    glm::mat4 mat;
-    glm::mat4 inverseMat;
-};
-
-struct ModelAnimationChanel
-{
-    std::string name;
-};
-
-struct ModelAnimation
-{
-    double duration;
-    double ticksPerSecond;
-};
-
-struct ImportedModelData;
-
-// ========================================
-// MaterialData - Dynamic material descriptor
-// ========================================
-
-/**
- * @brief Variant type for material parameter values
- * Supports common material data types
- */
 using MaterialValue = std::variant<
     bool,
     int,
@@ -72,10 +24,6 @@ using MaterialValue = std::variant<
     glm::vec4,
     std::string>;
 
-/**
- * @brief Standard parameter keys (conventions)
- * Using FName for efficient comparison and hashing
- */
 namespace MatParam
 {
 inline const FName BaseColor    = "baseColor";
@@ -93,15 +41,11 @@ inline const FName Reflection   = "reflection";
 inline const FName DoubleSided  = "doubleSided";
 } // namespace MatParam
 
-/**
- * @brief Standard texture slot keys
- * Using FName for efficient comparison and hashing
- */
 namespace MatTexture
 {
 using T                              = FName;
 inline const FName Diffuse           = "diffuse";
-inline const FName Albedo            = "albedo"; // PBR alias for diffuse
+inline const FName Albedo            = "albedo";
 inline const FName Specular          = "specular";
 inline const FName Normal            = "normal";
 inline const FName Emissive          = "emissive";
@@ -111,34 +55,14 @@ inline const FName MetallicRoughness = "metallicRoughness";
 inline const FName AO                = "ao";
 } // namespace MatTexture
 
-/**
- * @brief Generic material data extracted from model files
- *
- * Designed to be material-type agnostic (Phong, PBR, Toon, etc.)
- * Each material component knows how to import from this descriptor.
- *
- * Replaces the old EmbeddedMaterial with a more flexible design:
- * - Dynamic parameters via std::variant
- * - Dynamic texture paths via map
- * - Easy to extend without modifying struct definition
- */
 struct MaterialData
 {
     std::string name;
-    std::string type;      // "phong", "pbr", "unlit", etc. (hint for components)
-    std::string directory; // Base directory for resolving relative texture paths
+    std::string type;
+    std::string directory;
 
-    // Dynamic parameters (colors, floats, bools, etc.)
-    // Key: FName for efficient lookup
     std::unordered_map<FName, MaterialValue> params;
-
-    // Texture paths (relative to model directory)
-    // Key: FName for efficient lookup
-    std::unordered_map<FName, std::string> texturePaths;
-
-    // ========================================
-    // Helper accessors with type safety
-    // ========================================
+    std::unordered_map<FName, std::string>   texturePaths;
 
     template <typename T>
     T getParam(const FName& key, const T& defaultValue = T{}) const
@@ -182,95 +106,45 @@ struct MaterialData
         return it != texturePaths.end() && !it->second.empty();
     }
 
-    /**
-     * @brief Resolve a relative texture path to absolute
-     */
     std::string resolveTexturePath(const FName& key) const
     {
         std::string texPath = getTexturePath(key);
         if (texPath.empty()) {
             return "";
         }
-        // If already absolute, use as-is
         if (texPath.find(':') != std::string::npos || texPath[0] == '/') {
             return texPath;
         }
-        // TinyGLTF path resolution may already return a workspace-relative path
-        // rooted at the model directory. Avoid prefixing the same directory twice.
         if (!directory.empty() && texPath.rfind(directory, 0) == 0) {
             return texPath;
         }
-        // Make relative to model directory
         return directory + texPath;
     }
 };
 
-// Type alias for backward compatibility (deprecation notice)
 using EmbeddedMaterial = MaterialData;
 
-struct ImportedMeshData
-{
-    std::vector<ModelVertex> vertices;
-    std::vector<uint32_t>    indices;
-    CoordinateSystem         sourceCoordSystem = CoordinateSystem::RightHanded;
-    int32_t                  materialIndex     = -1;
-    std::string              name;
-};
-
-/**
- * @brief Model resource - file-level asset container
- * Represents a loaded 3D model file (.obj, .fbx, .gltf, etc.)
- * One model can contain multiple meshes (e.g., character = head + body + weapon)
- *
- * Responsibility:
- * - Asset management (loading, caching)
- * - Mesh collection
- * - Embedded material storage
- * - Metadata (filepath, bounds)
- *
- * NOT responsible for:
- * - Runtime material instances (managed by MaterialComponent)
- * - Transforms (managed by TransformComponent)
- * - Rendering (handled by render systems)
- */
 struct Model
 {
     std::string name;
     std::string filepath;
     std::string directory;
 
-
-    std::vector<stdptr<Mesh>> meshes;      // GPU geometry resources
-    AABB                      boundingBox; // Overall bounding box
+    std::vector<stdptr<Mesh>> meshes;
+    AABB                      boundingBox;
 
     bool isLoaded = false;
 
-    // ========================================
-    // Material Data (imported from model file)
-    // ========================================
-
-    /**
-     * @brief Materials extracted from the model file
-     * Index corresponds to material index in the original file
-     */
     std::vector<MaterialData> embeddedMaterials;
+    std::vector<int32_t>      meshMaterialIndices;
 
-    /**
-     * @brief Mesh to material mapping
-     * meshMaterialIndices[meshIndex] = materialIndex
-     * -1 means no material assigned
-     */
-    std::vector<int32_t> meshMaterialIndices;
-
-    // bones
-    std::unordered_map<FName, ModelBoneInfo> _nameToBoneInfos;
-    uint32_t                                 boneCount = 0;
+    std::vector<std::shared_ptr<Skeleton>> skeletons;
+    std::vector<int32_t>                   meshSkeletonIndices;
 
   public:
     Model()  = default;
     ~Model() = default;
 
-    // Accessors
     const std::vector<stdptr<Mesh>>& getMeshes() const { return meshes; }
     std::vector<stdptr<Mesh>>&       getMeshesMut() { return meshes; }
 
@@ -283,20 +157,33 @@ struct Model
 
     void setDirectory(const std::string& dir) { directory = dir; }
     void setFilepath(const std::string& path) { filepath = path; }
-    void setName(const std::string& n) { name = n; }
+    void setName(const std::string& modelName) { name = modelName; }
 
     bool getIsLoaded() const { return isLoaded; }
     void setIsLoaded(bool loaded) { isLoaded = loaded; }
 
-    // ========================================
-    // Material Data Accessors
-    // ========================================
+    bool            hasSkeleton() const { return !skeletons.empty(); }
+    size_t          getSkeletonCount() const { return skeletons.size(); }
+    const Skeleton* getSkeleton(size_t index = 0) const
+    {
+        return index < skeletons.size() ? skeletons[index].get() : nullptr;
+    }
+    std::shared_ptr<Skeleton> getSkeletonShared(size_t index = 0) const
+    {
+        return index < skeletons.size() ? skeletons[index] : nullptr;
+    }
+    const Skeleton* getSkeletonForMesh(size_t meshIndex) const
+    {
+        if (meshIndex >= meshSkeletonIndices.size()) {
+            return nullptr;
+        }
+        const int32_t skeletonIndex = meshSkeletonIndices[meshIndex];
+        if (skeletonIndex < 0 || skeletonIndex >= static_cast<int32_t>(skeletons.size())) {
+            return nullptr;
+        }
+        return skeletons[static_cast<size_t>(skeletonIndex)].get();
+    }
 
-    /**
-     * @brief Get the material data for a specific mesh
-     * @param meshIndex Index of the mesh
-     * @return Pointer to material data, or nullptr if not assigned
-     */
     const MaterialData* getMaterialForMesh(size_t meshIndex) const
     {
         if (meshIndex >= meshMaterialIndices.size()) {
@@ -309,62 +196,18 @@ struct Model
         return &embeddedMaterials[matIndex];
     }
 
-    /**
-     * @brief Get all material data
-     */
     const std::vector<MaterialData>& getEmbeddedMaterials() const { return embeddedMaterials; }
 
-    /**
-     * @brief Get the material index for a specific mesh
-     * @return Material index, or -1 if not assigned
-     */
     int32_t getMaterialIndex(size_t meshIndex) const
     {
         return meshIndex < meshMaterialIndices.size() ? meshMaterialIndices[meshIndex] : -1;
     }
-};
 
-/**
- * @brief Intermediate CPU-only imported model data.
- *
- * Worker thread:  importer reads source assets -> ImportedModelData
- * Main thread:    ImportedModelData::createModel() -> Model with GPU Mesh resources
- *
- * ImportedMeshData holds source-space vertices/indices plus importer metadata.
- * MaterialData holds texture paths (no loaded textures yet).
- */
-struct ImportedModelData
-{
-    struct VertexBoneData
+    int32_t getMeshSkeletonIndex(size_t meshIndex) const
     {
-        std::vector<uint32_t> boneIDs;
-        std::vector<float>    weights;
-    };
-
-    std::string filepath;
-    std::string directory;
-
-    std::vector<ImportedMeshData> meshes;
-    std::vector<MaterialData>     materials;
-    std::vector<int32_t>          meshMaterialIndices;
-
-    std::vector<std::string>    boneNames;
-    std::vector<uint32_t>        meshBaseVertexIndex;
-    std::vector<VertexBoneData>  vertex2BoneData;
-
-    [[nodiscard]] bool isValid() const { return !meshes.empty(); }
-
-    /**
-     * @brief Decode a model file using importer backends (CPU only, no GPU).
-     *        Thread-safe: uses no GPU resources.
-     */
-    static ImportedModelData decode(const std::string& filepath);
-
-    /**
-     * @brief Create the final Model with GPU Mesh resources.
-     *        MUST be called on the main/render thread.
-     */
-    std::shared_ptr<Model> createModel() const;
+        return meshIndex < meshSkeletonIndices.size() ? meshSkeletonIndices[meshIndex] : -1;
+    }
 };
+
 
 } // namespace ya

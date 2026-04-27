@@ -1,10 +1,14 @@
 #include "Render/EngineGeometryNormalizer.h"
 
 #include "Render/Model.h"
+#include "Render/Model/ImportedModelData.h"
 
 #include "Core/Log.h"
 
 #include <algorithm>
+
+#include "Common.Limits.slang.h"
+using ya::slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;
 
 namespace ya
 {
@@ -45,7 +49,7 @@ std::vector<ya::Vertex> buildEngineVertices(const ImportedMeshData& meshData, bo
     std::vector<ya::Vertex> engineVertices;
     engineVertices.reserve(meshData.vertices.size());
 
-    for (const ModelVertex& v : meshData.vertices) {
+    for (const ImportedModelVertex& v : meshData.vertices) {
         ya::Vertex vertex;
         vertex.position  = needNormalizeCoordSystem ? flipHandedness(v.position) : v.position;
         vertex.normal    = needNormalizeCoordSystem ? normalizeDirectionIfNeeded(flipHandedness(v.normal)) : v.normal;
@@ -75,49 +79,36 @@ std::vector<uint32_t> buildEngineIndices(const std::vector<uint32_t>& indices, b
     return engineIndices;
 }
 
-bool hasSkinningDataForMesh(const ImportedModelData& importedModelData, size_t meshIndex, size_t vertexCount)
-{
-    if (meshIndex >= importedModelData.meshBaseVertexIndex.size()) {
-        return false;
-    }
-
-    const size_t baseVertexIndex = importedModelData.meshBaseVertexIndex[meshIndex];
-    if (baseVertexIndex >= importedModelData.vertex2BoneData.size()) {
-        return false;
-    }
-
-    const size_t lastVertexIndex = std::min(baseVertexIndex + vertexCount, importedModelData.vertex2BoneData.size());
-    for (size_t globalVertexIndex = baseVertexIndex; globalVertexIndex < lastVertexIndex; ++globalVertexIndex) {
-        if (!importedModelData.vertex2BoneData[globalVertexIndex].boneIDs.empty()) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 std::vector<ya::SkeletonMeshVertex> buildSkeletonVertices(const ImportedModelData& importedModelData, size_t meshIndex, size_t vertexCount)
 {
-    if (!hasSkinningDataForMesh(importedModelData, meshIndex, vertexCount)) {
+    if (!importedModelData.hasSkinningDataForMesh(meshIndex, vertexCount)) {
         return {};
     }
 
-    const size_t                        baseVertexIndex = importedModelData.meshBaseVertexIndex[meshIndex];
+    const size_t baseVertexIndex = importedModelData.meshBaseVertexIndex[meshIndex];
+
     std::vector<ya::SkeletonMeshVertex> skeletonVertices(vertexCount);
 
     for (size_t localVertexIndex = 0; localVertexIndex < vertexCount; ++localVertexIndex) {
         const size_t globalVertexIndex = baseVertexIndex + localVertexIndex;
-        if (globalVertexIndex >= importedModelData.vertex2BoneData.size()) {
+        if (globalVertexIndex >= importedModelData.vertexBoneData.size()) {
             break;
         }
 
-        const auto& sourceBoneData = importedModelData.vertex2BoneData[globalVertexIndex];
+        const auto& sourceBoneData = importedModelData.vertexBoneData[globalVertexIndex];
         auto&       skeletonVertex = skeletonVertices[localVertexIndex];
 
-        const size_t influenceCount = std::min<size_t>(MAX_BONE_WEIGHTS, std::min(sourceBoneData.boneIDs.size(), sourceBoneData.weights.size()));
-        for (size_t influenceIndex = 0; influenceIndex < influenceCount; ++influenceIndex) {
-            skeletonVertex.boneIDs[static_cast<int>(influenceIndex)] = static_cast<int>(sourceBoneData.boneIDs[influenceIndex]);
+        YA_CORE_ASSERT(sourceBoneData.weights.size() == sourceBoneData.boneIDs.size(), "Bone IDs and weights size mismatch");
+
+        size_t weightCount = std::min<uint32_t>(sourceBoneData.boneIDs.size(), MAX_BONE_WEIGHT_PER_VERTEX);
+        for (size_t influenceIndex = 0; influenceIndex < weightCount; ++influenceIndex) {
+            skeletonVertex.boneIDs[static_cast<int>(influenceIndex)] = static_cast<int32_t>(sourceBoneData.boneIDs[influenceIndex]);
             skeletonVertex.weights[static_cast<int>(influenceIndex)] = sourceBoneData.weights[influenceIndex];
+        }
+        for (size_t weightIdx = weightCount; weightIdx < weightCount; ++weightIdx) {
+            skeletonVertex.boneIDs[static_cast<int>(weightIdx)] = -1;
+            skeletonVertex.weights[static_cast<int>(weightIdx)] = 0.0f;
         }
     }
 

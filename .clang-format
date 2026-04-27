@@ -3,7 +3,6 @@
 Language: Cpp
 BasedOnStyle: LLVM
 IndentWidth: 4
-BreakBeforeBraces: Custom
 TabWidth: 4
 
 BreakTemplateDeclarations: MultiLine
@@ -32,6 +31,7 @@ IndentPPDirectives: BeforeHash
 
 # 大括号换行，只有当 BreakBeforeBraces 设置为Custom时才有效
 # clang-format 22 中 AfterControlStatement 只有 Never / MultiLine / Always，没有 Leave
+BreakBeforeBraces: Custom
 BraceWrapping:
   AfterCaseLabel: true
   AfterClass: true

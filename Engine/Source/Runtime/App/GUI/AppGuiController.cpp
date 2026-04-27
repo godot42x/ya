@@ -117,8 +117,8 @@ void AppGuiController::onRenderGUI(App& app, float dt)
         fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
 
         const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
-        ImGui::Text("Frame: %d, DeltaTime: %3.2fms", App::_frameIndex, dt * 1000.f);
-        ImGui::Text("FPS: %4.1f   (avg %4.1f over %3d)", currentFps, avgFps, fpsRingFill);
+        ImGui::Text("Frame: %d, DeltaTime: %6.2fms", App::_frameIndex, dt * 1000.f);
+        ImGui::Text("FPS: %6.1f   (avg %6.1f over %3d)", currentFps, avgFps, fpsRingFill);
         renderFpsControl(*FPSControl::get());
 
         auto* render = app.getRender();

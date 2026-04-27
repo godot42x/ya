@@ -1,6 +1,8 @@
 #include "Resource/Manager/AssetModelManager.h"
 
+
 #include "Core/Log.h"
+#include "Render/Model/ImportedModelData.h"
 
 #include "Resource/DeferredDeletionQueue.h"
 
@@ -170,10 +172,11 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
 
             dispatchModelCallbacks(callbacks, model);
 
-            YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials)",
+            YA_CORE_INFO("Async model ready: '{}' ({} meshes, {} materials, {} bones)",
                          filepath,
                          model->meshes.size(),
-                         model->embeddedMaterials.size());
+                         model->embeddedMaterials.size(),
+                         model->getSkeleton() ? model->getSkeleton()->bones.size() : 0);
         });
 
     std::lock_guard lock(_mutex);
