@@ -69,7 +69,7 @@ TEST_F(FNameTest, CopyAssignment)
     name2 = name1;
 
     EXPECT_EQ(name1._index, name2._index);
-    EXPECT_STREQ(name1._data.data(), name2._data.data());
+    EXPECT_STREQ(name1.c_str(), name2.c_str());
 }
 
 // 测试 5: 移动赋值
