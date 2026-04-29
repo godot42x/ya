@@ -23,7 +23,7 @@
 
 #include "MaterialComponent.h"
 #include "Render/Material/PhongMaterial.h"
-#include "Render/Model.h" // For MaterialData
+#include "Render/Model/MaterialData.h"
 
 #include <array>
 #include <vector>

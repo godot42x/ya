@@ -24,7 +24,7 @@
 
 #include "MaterialComponent.h"
 #include "Render/Material/PBRMaterial.h"
-#include "Render/Model.h" // For MaterialData
+#include "Render/Model/MaterialData.h"
 
 #include <array>
 #include <vector>
