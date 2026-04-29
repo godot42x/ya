@@ -44,10 +44,11 @@ void SkeletonAnimationSystem::onUpdate(float deltaTime)
             return;
         }
 
-        skeletonComp._pose = SkeletonAnimationSampler::samplePose(*skeletonComp.getSkeleton(),
-                                                                  *clip,
-                                                                  skeletonComp._time,
-                                                                  skeletonComp._loop);
+        SkeletonAnimationSampler::samplePose(*skeletonComp.getSkeleton(),
+                                             *clip,
+                                             skeletonComp._time,
+                                             skeletonComp._loop,
+                                             skeletonComp._pose);
         skeletonComp.markPoseClean();
     });
 }

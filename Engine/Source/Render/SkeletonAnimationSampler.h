@@ -17,9 +17,12 @@ struct SkeletonChannelSample
 
 struct SkeletonPose
 {
+    const Skeleton* sourceSkeleton = nullptr;
+
     std::vector<glm::mat4> localTransforms;
     std::vector<glm::mat4> globalTransforms;
     std::vector<glm::mat4> boneMatrices;
+    std::vector<uint32_t>  animatedNodeIndices;
 };
 
 struct SkeletonAnimationSampler
@@ -36,6 +39,12 @@ struct SkeletonAnimationSampler
     static SkeletonChannelSample sampleChannel(const SkeletonAnimationChannel& channel,
                                                double                          time,
                                                const SkeletonNodeInfo*         bindNode = nullptr);
+
+    static void samplePose(const Skeleton&              skeleton,
+                           const SkeletonAnimationClip& clip,
+                           double                       time,
+                           bool                         loop,
+                           SkeletonPose&                outPose);
 
     static SkeletonPose samplePose(const Skeleton&              skeleton,
                                    const SkeletonAnimationClip& clip,

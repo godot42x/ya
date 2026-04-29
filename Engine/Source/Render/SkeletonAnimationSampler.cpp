@@ -144,48 +144,76 @@ SkeletonChannelSample SkeletonAnimationSampler::sampleChannel(const SkeletonAnim
     return sample;
 }
 
+void SkeletonAnimationSampler::samplePose(const Skeleton&              skeleton,
+                                          const SkeletonAnimationClip& clip,
+                                          double                       time,
+                                          bool                         loop,
+                                          SkeletonPose&                outPose)
+{
+    const bool needsRebuild = outPose.sourceSkeleton != &skeleton ||
+                              outPose.localTransforms.size() != skeleton.nodes.size() ||
+                              outPose.globalTransforms.size() != skeleton.nodes.size() ||
+                              outPose.boneMatrices.size() != skeleton.bones.size();
+
+    if (needsRebuild) {
+        outPose.sourceSkeleton = &skeleton;
+        outPose.localTransforms.resize(skeleton.nodes.size());
+        outPose.globalTransforms.resize(skeleton.nodes.size());
+        outPose.boneMatrices.resize(skeleton.bones.size());
+        outPose.animatedNodeIndices.clear();
+
+        for (size_t nodeIndex = 0; nodeIndex < skeleton.nodes.size(); ++nodeIndex) {
+            outPose.localTransforms[nodeIndex] = skeleton.nodes[nodeIndex].localTransform;
+        }
+    }
+    else {
+        for (uint32_t nodeIndex : outPose.animatedNodeIndices) {
+            if (nodeIndex < skeleton.nodes.size()) {
+                outPose.localTransforms[nodeIndex] = skeleton.nodes[nodeIndex].localTransform;
+            }
+        }
+        outPose.animatedNodeIndices.clear();
+    }
+
+    const double animationTime = sampleTimeForClip(time, clip.duration, loop);
+    outPose.animatedNodeIndices.reserve(clip.channels.size());
+    for (const SkeletonAnimationChannel& channel : clip.channels) {
+        if (channel.nodeIndex >= skeleton.nodes.size()) {
+            continue;
+        }
+
+        const SkeletonChannelSample sample         = sampleChannel(channel, animationTime, &skeleton.nodes[channel.nodeIndex]);
+        outPose.localTransforms[channel.nodeIndex] = composeTransform(sample);
+        outPose.animatedNodeIndices.push_back(channel.nodeIndex);
+    }
+
+    for (size_t nodeIndex = 0; nodeIndex < skeleton.nodes.size(); ++nodeIndex) {
+        const uint32_t parentIndex = skeleton.nodes[nodeIndex].parentIndex;
+        if (parentIndex == INVALID_SKELETON_NODE_INDEX || parentIndex >= outPose.globalTransforms.size()) {
+            outPose.globalTransforms[nodeIndex] = outPose.localTransforms[nodeIndex];
+        }
+        else {
+            outPose.globalTransforms[nodeIndex] = outPose.globalTransforms[parentIndex] * outPose.localTransforms[nodeIndex];
+        }
+    }
+
+    for (size_t boneIndex = 0; boneIndex < skeleton.bones.size(); ++boneIndex) {
+        const SkeletonBoneInfo& bone = skeleton.bones[boneIndex];
+        if (bone.nodeIndex >= outPose.globalTransforms.size()) {
+            outPose.boneMatrices[boneIndex] = identityTransform();
+            continue;
+        }
+        outPose.boneMatrices[boneIndex] = outPose.globalTransforms[bone.nodeIndex] * bone.offsetMatrix;
+    }
+}
+
 SkeletonPose SkeletonAnimationSampler::samplePose(const Skeleton&              skeleton,
                                                   const SkeletonAnimationClip& clip,
                                                   double                       time,
                                                   bool                         loop)
 {
     SkeletonPose pose;
-    pose.localTransforms.reserve(skeleton.nodes.size());
-    pose.globalTransforms.resize(skeleton.nodes.size(), identityTransform());
-    pose.boneMatrices.resize(skeleton.bones.size(), identityTransform());
-
-    for (const SkeletonNodeInfo& node : skeleton.nodes) {
-        pose.localTransforms.push_back(node.localTransform);
-    }
-
-    const double animationTime = sampleTimeForClip(time, clip.duration, loop);
-    for (const SkeletonAnimationChannel& channel : clip.channels) {
-        if (channel.nodeIndex >= skeleton.nodes.size()) {
-            continue;
-        }
-
-        const SkeletonChannelSample sample      = sampleChannel(channel, animationTime, &skeleton.nodes[channel.nodeIndex]);
-        pose.localTransforms[channel.nodeIndex] = composeTransform(sample);
-    }
-
-    for (size_t nodeIndex = 0; nodeIndex < skeleton.nodes.size(); ++nodeIndex) {
-        const uint32_t parentIndex = skeleton.nodes[nodeIndex].parentIndex;
-        if (parentIndex == INVALID_SKELETON_NODE_INDEX || parentIndex >= pose.globalTransforms.size()) {
-            pose.globalTransforms[nodeIndex] = pose.localTransforms[nodeIndex];
-        }
-        else {
-            pose.globalTransforms[nodeIndex] = pose.globalTransforms[parentIndex] * pose.localTransforms[nodeIndex];
-        }
-    }
-
-    for (size_t boneIndex = 0; boneIndex < skeleton.bones.size(); ++boneIndex) {
-        const SkeletonBoneInfo& bone = skeleton.bones[boneIndex];
-        if (bone.nodeIndex >= pose.globalTransforms.size()) {
-            continue;
-        }
-        pose.boneMatrices[boneIndex] = pose.globalTransforms[bone.nodeIndex] * bone.offsetMatrix;
-    }
-
+    samplePose(skeleton, clip, time, loop, pose);
     return pose;
 }
 
