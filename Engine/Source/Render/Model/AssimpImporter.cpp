@@ -473,12 +473,41 @@ void appendAnimationClip(const aiAnimation* rawAnimation, ImportedSkeletonData& 
             continue;
         }
 
-        clip.channels.push_back(ImportedSkeletonAnimationChannel{
-            .targetName = FName(channel->mNodeName.C_Str()),
-        });
+        ImportedSkeletonAnimationChannel importedChannel;
+        importedChannel.targetName = FName(channel->mNodeName.C_Str());
+
+        importedChannel.positionKeys.reserve(channel->mNumPositionKeys);
+        for (uint32_t keyIndex = 0; keyIndex < channel->mNumPositionKeys; ++keyIndex) {
+            const aiVectorKey& key = channel->mPositionKeys[keyIndex];
+            importedChannel.positionKeys.push_back(ImportedSkeletonVectorKeyframe{
+                .time  = key.mTime,
+                .value = glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z),
+            });
+        }
+
+        importedChannel.rotationKeys.reserve(channel->mNumRotationKeys);
+        for (uint32_t keyIndex = 0; keyIndex < channel->mNumRotationKeys; ++keyIndex) {
+            const aiQuatKey& key = channel->mRotationKeys[keyIndex];
+            importedChannel.rotationKeys.push_back(ImportedSkeletonQuatKeyframe{
+                .time  = key.mTime,
+                .value = glm::quat(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z),
+            });
+        }
+
+        importedChannel.scaleKeys.reserve(channel->mNumScalingKeys);
+        for (uint32_t keyIndex = 0; keyIndex < channel->mNumScalingKeys; ++keyIndex) {
+            const aiVectorKey& key = channel->mScalingKeys[keyIndex];
+            importedChannel.scaleKeys.push_back(ImportedSkeletonVectorKeyframe{
+                .time  = key.mTime,
+                .value = glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z),
+            });
+        }
+
+        clip.channels.push_back(std::move(importedChannel));
     }
 
     skeleton.animations.push_back(std::move(clip));
+    // TODO: vertex animation
     (void)rawAnimation->mMeshChannels;
 }
 
@@ -501,7 +530,7 @@ void appendMaterial(const aiMaterial* material, const std::string& directory, Ma
 uint32_t findParentBoneIndex(const ImportedSkeletonData& skeleton, uint32_t boneIndex)
 {
     if (boneIndex >= skeleton.bones.size()) {
-        return INVALID_SKELETON_BONE_INDEX;
+        return INVALID_SKELETON_NODE_INDEX;
     }
 
     uint32_t nodeIndex = skeleton.bones[boneIndex].nodeIndex;

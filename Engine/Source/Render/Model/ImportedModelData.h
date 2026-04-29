@@ -2,8 +2,11 @@
 
 #include "Core/Base.h"
 #include "Core/Math/Geometry.h"
-#include "Render/Model.h"
+#include "Render/Model/MaterialData.h"
 
+#include <glm/gtc/quaternion.hpp>
+
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -12,6 +15,8 @@
 
 namespace ya
 {
+
+struct Model;
 
 struct ImportedModelVertex
 {
@@ -39,9 +44,25 @@ struct ImportedSkeletonBoneInfo
     uint32_t  nodeIndex = INT_MAX;
 };
 
+struct ImportedSkeletonVectorKeyframe
+{
+    double    time = 0.0;
+    glm::vec3 value{0.0f};
+};
+
+struct ImportedSkeletonQuatKeyframe
+{
+    double    time = 0.0;
+    glm::quat value{1.0f, 0.0f, 0.0f, 0.0f};
+};
+
 struct ImportedSkeletonAnimationChannel
 {
     FName targetName;
+
+    std::vector<ImportedSkeletonVectorKeyframe> positionKeys;
+    std::vector<ImportedSkeletonQuatKeyframe>   rotationKeys;
+    std::vector<ImportedSkeletonVectorKeyframe> scaleKeys;
 };
 
 struct ImportedSkeletonAnimationClip
@@ -66,7 +87,7 @@ struct ImportedSkeletonData
     std::string                         name;
     std::unordered_map<FName, uint32_t> nameToNodeIndex;
     std::vector<ImportedSkeletonNode>   nodes;
-    uint32_t                            rootNodeIndex = INVALID_SKELETON_NODE_INDEX;
+    uint32_t                            rootNodeIndex = std::numeric_limits<uint32_t>::max();
 
     std::vector<ImportedSkeletonBoneInfo>      bones;
     std::unordered_map<FName, uint32_t>        boneNameToIndex;
@@ -130,7 +151,5 @@ struct ImportedModelData
         return false;
     }
 };
-
-std::shared_ptr<Skeleton> createSkeleton(const ImportedSkeletonData& importedSkeletonData);
 
 } // namespace ya
