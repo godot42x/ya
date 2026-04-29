@@ -25,6 +25,8 @@
 
 #include "Render/Material/MaterialFactory.h"
 
+#include "Runtime/App/Render/AnimationSystem.h"
+
 #include "Scene/SceneManager.h"
 
 #include <array>
@@ -206,9 +208,12 @@ void AppLifecycle::init(App& app, AppDesc ci)
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->init();
     app._systems.push_back(sys3);
-    auto sys4 = ya::makeShared<ComponentLinkageSystem>();
+    auto sys4 = ya::makeShared<SkeletonAnimationSystem>();
     sys4->init();
     app._systems.push_back(sys4);
+    auto sys5 = ya::makeShared<ComponentLinkageSystem>();
+    sys5->init();
+    app._systems.push_back(sys5);
     app._deleter.push("Systems", [&app](void*)
                       {
         for (auto& sys : app._systems) {
