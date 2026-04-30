@@ -3,17 +3,17 @@
  * @brief Mesh Component - Pure geometry data reference
  *
  * Design:
- * - MeshComponent holds a single Mesh reference (not a Model!)
- * - Can be sourced from: primitive geometry OR Model's mesh by index
+ * - MeshComponent owns a MeshRef describing which Mesh this entity points to
+ * - Two sources: primitive geometry OR Model's mesh by index
  * - For Model loading, use ModelComponent which creates child entities with MeshComponent
  * - This component is data-only, resolved by ResourceResolveSystem
  */
 #pragma once
 
 #include "Core/Base.h"
-#include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
+#include "ECS/Component/Mesh/MeshSource.h"
 #include "Render/Mesh.h"
 
 namespace ya
@@ -22,15 +22,13 @@ namespace ya
 /**
  * @brief MeshComponent - Single mesh geometry reference
  *
- * Two usage modes:
- * 1. Primitive geometry (built-in shapes)
- * 2. Mesh from Model (set by ResourceResolveSystem when processing ModelComponent)
- *
  * Serialization format:
  * @code
  * {
  *   "MeshComponent": {
- *     "_primitiveGeometry": "Cube"  // Built-in primitive
+ *     "_mesh": {
+ *       "_primitiveGeometry": "Cube"
+ *     }
  *   }
  * }
  * @endcode
@@ -39,8 +37,10 @@ namespace ya
  * @code
  * {
  *   "MeshComponent": {
- *     "_sourceModelPath": "Content/Models/character.fbx",
- *     "_meshIndex": 0
+ *     "_mesh": {
+ *       "_sourceModelPath": "Content/Models/character.fbx",
+ *       "_meshIndex": 0
+ *     }
  *   }
  * }
  * @endcode
@@ -48,114 +48,39 @@ namespace ya
 struct MeshComponent : public IComponent
 {
     YA_REFLECT_BEGIN(MeshComponent)
-    YA_REFLECT_FIELD(_primitiveGeometry)
-    YA_REFLECT_FIELD(_sourceModelPath)
-    YA_REFLECT_FIELD(_meshIndex)
+    YA_REFLECT_FIELD(_mesh)
     YA_REFLECT_END()
 
     // ========================================
-    // Serializable Data - Primitive Geometry Mode
+    // Serializable / Runtime Data
     // ========================================
 
-    EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::None; ///< Built-in geometry type
+    MeshSource _mesh;
 
     // ========================================
-    // Serializable Data - Model Mesh Mode
+    // Resource Resolution (delegated to MeshRef)
     // ========================================
 
-    /**
-     * @brief Path to the source Model (for serialization)
-     * When this Entity is created from ModelComponent, this stores the Model path
-     * so the mesh can be re-resolved after deserialization
-     */
-    std::string _sourceModelPath;
-    /**
-     * @brief Index of the mesh within the Model
-     * Used together with _sourceModelPath to identify which mesh this component represents
-     */
-    uint32_t _meshIndex = 0;
-
-    // TODO: make 3 state, can be only in one state at a time
-    // 1. Primitive geometry
-    // 2. Model mesh (from ModelComponent)
-    // 3. Static mesh
-    // std::string _staticMeshPath;
-
-    // ========================================
-    // Runtime State (Not Serialized)
-    // ========================================
-
-    Mesh *_cachedMesh = nullptr; ///< Resolved mesh pointer
-    bool  _bResolved  = false;
-
-    // ========================================
-    // Resource Resolution
-    // ========================================
-
-    /**
-     * @brief Resolve the mesh resource
-     * Called by ResourceResolveSystem
-     * @return true if successfully resolved
-     */
-    bool resolve();
-
-    /**
-     * @brief Force re-resolve
-     */
-    void invalidate()
-    {
-        _bResolved  = false;
-        _cachedMesh = nullptr;
-    }
-
-    /**
-     * @brief Check if resolved
-     */
-    bool isResolved() const { return _bResolved; }
+    bool resolve() { return _mesh.resolve(); }
+    void invalidate() { _mesh.invalidate(); }
+    bool isResolved() const { return _mesh.isResolved(); }
 
     // ========================================
     // Mesh Access
     // ========================================
 
-    /**
-     * @brief Get the resolved mesh
-     */
-    Mesh *getMesh() const { return _cachedMesh; }
-
-    /**
-     * @brief Check if this component has a valid mesh source
-     */
-    bool hasMeshSource() const
-    {
-        return _primitiveGeometry != EPrimitiveGeometry::None || !_sourceModelPath.empty();
-    }
+    Mesh *getMesh() const { return _mesh.getMesh(); }
+    bool  hasMeshSource() const { return _mesh.hasSource(); }
 
     // ========================================
     // Setup Interface
     // ========================================
 
-    /**
-     * @brief Set to built-in primitive geometry
-     */
-    void setPrimitiveGeometry(EPrimitiveGeometry type)
-    {
-        _primitiveGeometry = type;
-        _sourceModelPath.clear();
-        _meshIndex = 0;
-        invalidate();
-    }
+    void setPrimitiveGeometry(EPrimitiveGeometry type) { _mesh.setPrimitiveGeometry(type); }
 
-    /**
-     * @brief Set to mesh from Model
-     * Called by ResourceResolveSystem when creating child entities from ModelComponent
-     */
     void setFromModel(const std::string &modelPath, uint32_t meshIndex, Mesh *mesh)
     {
-        _primitiveGeometry = EPrimitiveGeometry::None;
-        _sourceModelPath   = modelPath;
-        _meshIndex         = meshIndex;
-        _cachedMesh        = mesh;
-        _bResolved         = (mesh != nullptr);
+        _mesh.setFromModel(modelPath, meshIndex, mesh);
     }
 };
 

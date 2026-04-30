@@ -1,15 +1,13 @@
-#include "MeshComponent.h"
+#include "MeshSource.h"
 
-#include "ECS/Entity.h"
+#include "Render/Model.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
-
-
 
 namespace ya
 {
 
-bool MeshComponent::resolve()
+bool MeshSource::resolve()
 {
     if (_bResolved) {
         return true;
@@ -25,16 +23,14 @@ bool MeshComponent::resolve()
             _bResolved  = true;
             return true;
         }
-        else {
-            YA_CORE_ERROR("MeshComponent: Failed to get primitive mesh from cache");
-            return false;
-        }
+        YA_CORE_ERROR("MeshSource: Failed to get primitive mesh from cache");
+        return false;
     }
 
     // Priority 2: Mesh from Model by path and index
     if (!_sourceModelPath.empty()) {
         Model* model = nullptr;
-        auto ft = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
+        auto   ft    = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
             .filepath = _sourceModelPath,
         });
         if (ft.isReady()) {
@@ -46,15 +42,13 @@ bool MeshComponent::resolve()
             _bResolved  = true;
             return true;
         }
-        else {
-            YA_CORE_WARN("MeshComponent: Failed to get mesh[{}] from model '{}'",
-                         _meshIndex,
-                         _sourceModelPath);
-            return false;
-        }
+        YA_CORE_WARN("MeshSource: Failed to get mesh[{}] from model '{}'",
+                     _meshIndex,
+                     _sourceModelPath);
+        return false;
     }
 
-    YA_CORE_WARN("MeshComponent: No geometry source specified");
+    YA_CORE_WARN("MeshSource: No geometry source specified");
     return false;
 }
 
