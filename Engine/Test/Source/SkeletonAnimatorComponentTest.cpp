@@ -1,16 +1,16 @@
-#include "ECS/Component/SkeletonComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
 
 #include <gtest/gtest.h>
 
 namespace ya
 {
 
-TEST(SkeletonComponentTest, SetFromModelStoresRuntimeSkeletonReference)
+TEST(SkeletonAnimatorComponentTest, SetFromModelStoresRuntimeSkeletonReference)
 {
     auto skeleton = std::make_shared<Skeleton>();
     skeleton->name = "TestSkeleton";
 
-    SkeletonComponent component;
+    SkeletonAnimatorComponent component;
     component.setFromModel("Content/Models/Character.fbx", 2, 1, skeleton);
 
     EXPECT_EQ(component._sourceModelPath, "Content/Models/Character.fbx");
@@ -21,9 +21,9 @@ TEST(SkeletonComponentTest, SetFromModelStoresRuntimeSkeletonReference)
     EXPECT_TRUE(component.isPoseDirty());
 }
 
-TEST(SkeletonComponentTest, ValidClipRequiresSkeletonAndClipIndex)
+TEST(SkeletonAnimatorComponentTest, ValidClipRequiresSkeletonAndClipIndex)
 {
-    SkeletonComponent component;
+    SkeletonAnimatorComponent component;
     EXPECT_FALSE(component.hasValidClip());
     EXPECT_EQ(component.getClip(), nullptr);
 
@@ -41,9 +41,9 @@ TEST(SkeletonComponentTest, ValidClipRequiresSkeletonAndClipIndex)
     EXPECT_EQ(component.getClip(), nullptr);
 }
 
-TEST(SkeletonComponentTest, PoseDirtyFlagCanBeClearedAndInvalidated)
+TEST(SkeletonAnimatorComponentTest, PoseDirtyFlagCanBeClearedAndInvalidated)
 {
-    SkeletonComponent component;
+    SkeletonAnimatorComponent component;
     EXPECT_TRUE(component.isPoseDirty());
 
     component.markPoseClean();

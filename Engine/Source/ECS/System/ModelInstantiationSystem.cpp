@@ -11,7 +11,7 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/SkeletonComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Entity.h"
 
 #include "Render/Material/MaterialFactory.h"
@@ -315,7 +315,7 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
     if (skeletonIndex >= 0) {
         auto skeleton = model->getSkeletonShared(static_cast<size_t>(skeletonIndex));
         if (skeleton) {
-            auto* skeletonComp = childEntity->addComponent<SkeletonComponent>();
+            auto* skeletonComp = childEntity->addComponent<SkeletonAnimatorComponent>();
             skeletonComp->setFromModel(model->getFilepath(), meshIndex, static_cast<uint32_t>(skeletonIndex), std::move(skeleton));
         }
     }

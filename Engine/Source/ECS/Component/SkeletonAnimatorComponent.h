@@ -13,9 +13,13 @@
 namespace ya
 {
 
-struct SkeletonComponent : public IComponent
+// Animator that owns the runtime Skeleton + playback state for a skinned mesh hierarchy.
+// Stage 3: pure rename of the former SkeletonComponent. Stage 4 will move this
+// from the mesh entity up to the model-root entity and let SkinnedMeshComponent
+// reference it by handle.
+struct SkeletonAnimatorComponent : public IComponent
 {
-    YA_REFLECT_BEGIN(SkeletonComponent)
+    YA_REFLECT_BEGIN(SkeletonAnimatorComponent)
     YA_REFLECT_FIELD(_sourceModelPath)
     YA_REFLECT_FIELD(_meshIndex)
     YA_REFLECT_FIELD(_skeletonIndex)

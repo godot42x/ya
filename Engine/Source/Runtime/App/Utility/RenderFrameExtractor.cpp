@@ -6,7 +6,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
-#include "ECS/Component/SkeletonComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -137,7 +137,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
-    auto* skeletonComp = ctx.registry->try_get<SkeletonComponent>(entity);
+    auto* skeletonComp = ctx.registry->try_get<SkeletonAnimatorComponent>(entity);
     if (!skeletonComp || !skeletonComp->hasSkeleton()) {
         return -1;
     }

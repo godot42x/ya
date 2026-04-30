@@ -1,6 +1,6 @@
 #include "Runtime/App/Render/AnimationSystem.h"
 
-#include "ECS/Component/SkeletonComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "Render/SkeletonAnimationSampler.h"
 #include "Runtime/App/App.h"
 #include "Scene/Scene.h"
@@ -28,8 +28,8 @@ void SkeletonAnimationSystem::onUpdate(float deltaTime)
         return;
     }
 
-    auto view = scene->getRegistry().view<SkeletonComponent>();
-    view.each([deltaTime](SkeletonComponent& skeletonComp) {
+    auto view = scene->getRegistry().view<SkeletonAnimatorComponent>();
+    view.each([deltaTime](SkeletonAnimatorComponent& skeletonComp) {
         const SkeletonAnimationClip* clip = skeletonComp.getClip();
         if (!skeletonComp.hasSkeleton() || !clip) {
             return;
