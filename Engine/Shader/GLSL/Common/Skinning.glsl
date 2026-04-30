@@ -23,6 +23,10 @@ void applySkinning(in int paletteIndex,
                    inout vec3 localNormal,
                    inout vec3 localTangent)
 {
+    if (paletteIndex < 0) {
+        return;
+    }
+
     mat4 blendedSkinMat = mat4(0.0);
     mat3 blendedNormalSkinMat = mat3(0.0);
     bool hasWeights = false;

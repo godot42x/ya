@@ -18,6 +18,12 @@ struct ShadowStage : public IRenderStage
     using FrameUBO          = glsl_types::Shadow::CombinedShadowMappingGenerate::FrameData;
     using ModelPushConstant = glsl_types::Shadow::CombinedShadowMappingGenerate::PushConstant;
 
+    struct ShadowPipelineVariant
+    {
+        stdptr<IGraphicsPipeline> pipeline;
+        stdptr<IPipelineLayout>   pipelineLayout;
+    };
+
     IRender* _render = nullptr;
 
     stdptr<IRenderTarget> _shadowMapRT;
@@ -30,13 +36,17 @@ struct ShadowStage : public IRenderStage
     float    _normalBias                  = 0.01f;
     uint32_t _lastPreparedPointLightCount = 0;
 
-    stdptr<IGraphicsPipeline>                                 _pipeline;
-    stdptr<IPipelineLayout>                                   _pipelineLayout;
+    ShadowPipelineVariant                                     _staticVariant;
+    ShadowPipelineVariant                                     _skinnedVariant;
     stdptr<IDescriptorSetLayout>                              _frameDSL;
+    stdptr<IDescriptorSetLayout>                              _skinningDSL;
     GraphicsPipelineCreateInfo                                _pipelineCI{};
     stdptr<IDescriptorPool>                                   _dsp;
     std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _frameDS{};
     std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _frameUBO{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _skinningSSBO{};
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _skinningDS{};
+    uint32_t                                                  _skinningCapacity = 0;
 
     ShadowStage() : IRenderStage("Shadow") {}
 
@@ -50,6 +60,8 @@ struct ShadowStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
     void refreshPipelineFromRenderTarget();
+    void ensureSkinningCapacity(uint32_t paletteCount);
+    void recreatePipelines();
 
     [[nodiscard]] IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
 };

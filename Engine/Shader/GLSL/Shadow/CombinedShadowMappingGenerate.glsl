@@ -1,16 +1,28 @@
 #type vertex
 #version 450
+#include "Common/Skinning.glsl"
 
 layout (location = 0) in vec3 aPos;
+#if ENABLE_SKINNING
+layout (location = 4) in ivec4 aBoneIDs;
+layout (location = 5) in vec4 aWeights;
+#endif
 
 layout (push_constant, std140) uniform PushConstant
 {
     mat4 model;
+    int skinningPaletteIndex;
 } pc;
 
 void main()
 {
-    gl_Position =   pc.model * vec4(aPos, 1.0);
+    vec4 localPos = vec4(aPos, 1.0);
+    vec3 localNormal = vec3(0.0, 0.0, 1.0);
+    vec3 localTangent = vec3(1.0, 0.0, 0.0);
+#if ENABLE_SKINNING
+    applySkinning(pc.skinningPaletteIndex, aBoneIDs, aWeights, localPos, localNormal, localTangent);
+#endif
+    gl_Position = pc.model * localPos;
 
 }
 

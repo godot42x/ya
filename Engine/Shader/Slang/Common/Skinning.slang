@@ -20,7 +20,7 @@
 
 struct SkinningPalette
 {
-    vector<mat4, MAX_BONE_COUNT> boneMatrices;
+    mat4 boneMatrices[MAX_BONE_COUNT];
 };
 
 #if ENABLE_SKINNING
@@ -46,13 +46,17 @@ inline SkinningResult makeDefaultSkinningResult(float3 pos, float3 normal, float
 inline SkinningResult applySkinning(float3 pos,
                                     float3 normal,
                                     float3 tangent,
-                                    uint paletteIndex,
+                                    int paletteIndex,
                                     vector<int32_t, MAX_BONE_WEIGHT_PER_VERTEX> boneIDs,
                                     vector<float, MAX_BONE_WEIGHT_PER_VERTEX> weights)
 {
     SkinningResult result = makeDefaultSkinningResult(pos, normal, tangent);
 
 #if ENABLE_SKINNING
+    if (paletteIndex < 0) {
+        return result;
+    }
+
     mat4 blendedSkinMat = mat4(0.0);
     mat3 blendedNormalSkinMat = mat3(0.0);
     bool hasWeights = false;
