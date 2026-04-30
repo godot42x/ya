@@ -1,9 +1,16 @@
 #type vertex
 #version 450
 
+#include "Common/Limits.glsl"
+#include "Common/Skinning.glsl"
+
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec2 aTexcoord;
 layout(location = 2) in vec3 aNormal;
+#if ENABLE_SKINNING
+layout(location = 4) in ivec4 aBoneIDs;
+layout(location = 5) in vec4 aWeights;
+#endif
 
 //every frame update once
 layout(set =0, binding =0, std140) uniform FrameUBO {
@@ -19,13 +26,21 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 layout(push_constant) uniform PushConstants {
     mat4 modelMat;
     mat3 normalMat;
+    int skinningPaletteIndex;
 } pc;
 
 
 layout(location = 1) out vec2 vTexcoord;
 
 void main (){
-    gl_Position = uFrame.projMat * uFrame.viewMat * pc.modelMat * vec4(aPos, 1.0);
+    vec4 localPos = vec4(aPos, 1.0);
+    vec3 localNormal = aNormal;
+    vec3 localTangent = vec3(0.0);
+#if ENABLE_SKINNING
+    applySkinning(pc.skinningPaletteIndex, aBoneIDs, aWeights, localPos, localNormal, localTangent);
+#endif
+
+    gl_Position = uFrame.projMat * uFrame.viewMat * pc.modelMat * localPos;
     vTexcoord = aTexcoord;
 }
 

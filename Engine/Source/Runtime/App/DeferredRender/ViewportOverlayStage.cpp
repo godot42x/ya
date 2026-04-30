@@ -325,11 +325,15 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
     // Simple material entities (from snapshot)
-    bool hasSimple = !fd.simpleDrawItems.empty();
+    const auto& staticBuckets  = fd.drawBuckets.staticMeshes;
+    const auto& skinnedBuckets = fd.drawBuckets.skinnedMeshes;
+    bool hasSimple = !staticBuckets.simpleDrawItems.empty() || !skinnedBuckets.simpleDrawItems.empty();
 
     bool hasDebugSkinning = _debugSkinning.bEnabled &&
-                            (hasDebugSkinningDrawItem(fd.phongDrawItems) ||
-                             hasDebugSkinningDrawItem(fd.simpleDrawItems));
+                            (hasDebugSkinningDrawItem(skinnedBuckets.phongDrawItems) ||
+                             hasDebugSkinningDrawItem(skinnedBuckets.simpleDrawItems) ||
+                             hasDebugSkinningDrawItem(skinnedBuckets.fallbackDrawItems) ||
+                             hasDebugSkinningDrawItem(skinnedBuckets.pbrDrawItems));
 
     // Direction components (still from registry — editor visualization, TODO: migrate to snapshot)
     const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
@@ -354,20 +358,30 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     _overlayPC.projection = fd.projection;
 
     // Draw simple material entities from snapshot
-    for (const auto& item : fd.simpleDrawItems) {
-        if (!item.mesh || !item.material) continue;
-        auto* mat            = static_cast<SimpleMaterial*>(item.material);
-        _overlayPC.model     = item.worldMatrix;
-        _overlayPC.colorType = mat->colorType;
-        cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
-        item.mesh->draw(cmdBuf);
-    }
+    auto drawSimpleBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    {
+        for (const auto& item : items) {
+            if (!item.mesh || !item.material) continue;
+            auto* mat            = static_cast<SimpleMaterial*>(item.material);
+            _overlayPC.model     = item.worldMatrix;
+            _overlayPC.colorType = mat->colorType;
+            cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
+            if (bSkinned) {
+                item.mesh->drawSkinned(cmdBuf);
+            }
+            else {
+                item.mesh->drawStatic(cmdBuf);
+            }
+        }
+    };
+    drawSimpleBucket(staticBuckets.simpleDrawItems, false);
+    drawSimpleBucket(skinnedBuckets.simpleDrawItems, true);
 
     if (_debugSkinning.bEnabled) {
-        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.phongDrawItems, vpW, vpH, fd);
-        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.simpleDrawItems, vpW, vpH, fd);
-        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.fallbackDrawItems, vpW, vpH, fd);
-        drawDebugSkinningItems(_debugSkinning, cmdBuf, fd.pbrDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, skinnedBuckets.phongDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, skinnedBuckets.simpleDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, skinnedBuckets.fallbackDrawItems, vpW, vpH, fd);
+        drawDebugSkinningItems(_debugSkinning, cmdBuf, skinnedBuckets.pbrDrawItems, vpW, vpH, fd);
     }
 
     // Draw direction cones/cylinders (from registry — editor debug vis)

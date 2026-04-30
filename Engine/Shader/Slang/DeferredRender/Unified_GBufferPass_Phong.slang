@@ -1,18 +1,12 @@
 #include "Common/Helper.slang"
-
-#ifndef HAS_BONE_ANIMATION 
-    #define HAS_BONE_ANIMATION 0
-#endif
+#include "Common/Skinning.slang"
 
 struct VertexInput{
     [[vk::location(0)]] float3 pos      : POSITION;
     [[vk::location(1)]] float2 uv       : TEXCOORD0;
     [[vk::location(2)]] float3 normal   : NORMAL;
     [[vk::location(3)]] float3 tangent  : TANGENT;
-#if HAS_BONE_ANIMATION
-    [[vk::location(4)]] vector<int32_t, MAX_BONE_WEIGHT_PER_VERTEX> boneIDs: BONE_IDS;
-    [[vk::location(5)]] vector<float,MAX_BONE_WEIGHT_PER_VERTEX>  weights    : WEIGHTS;
-#endif
+    YA_SKINNING_VERTEX_FIELDS
 };
 
 struct VertexOutput{
@@ -55,13 +49,6 @@ struct LightData{
 [[vk::binding(1,0)]] ConstantBuffer<LightData,Std140DataLayout> uLight;
 
 
-struct BoneData{
-    vector<mat4, MAX_BONE_COUNT> boneMatrix;
-};
-#if HAS_BONE_ANIMATION
-[[vk::binding(0,3)]] StructuredBuffer<BoneData> uBonePalette;
-#endif
-
 // Set 1: Phong material textures
 [[vk::binding(0, 1)]]  Sampler2D  uTexDiffuse;
 [[vk::binding(1, 1)]]  Sampler2D  uTexSpecular;
@@ -102,24 +89,11 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     vec3 N = IN.normal;
     vec3 T = IN.tangent;
 
-#if HAS_BONE_ANIMATION
-    uint paletteIndex = uint(pc.skinningPaletteIndex);
-    mat4  boneMat = mat4(0.0);
-    mat3  normalBoneMat = mat3(0.0);
-    for(int i =0 ; i < MAX_BONE_WEIGHT_PER_VERTEX; ++i){
-        int boneID = IN.boneIDs[i];
-        float weight = IN.weights[i];
-        if(boneID < 0 || weight <= 0.001){
-            continue;
-        }
-
-        boneMat += uBonePalette[paletteIndex].boneMatrix[boneID] * weight;
-        normalBoneMat  +=   transpose(inverse3x3(mat3(uBonePalette[paletteIndex].boneMatrix[boneID]))) * weight;
-    }
-
-    worldPos = mul(boneMat, worldPos);
-    N = normalize( mul(normalBoneMat, N));
-    T = normalize( mul(normalBoneMat, T));
+#if ENABLE_SKINNING
+    SkinningResult skinned = applySkinning(IN.pos, IN.normal, IN.tangent, uint(pc.skinningPaletteIndex), IN.boneIDs, IN.weights);
+    worldPos = skinned.localPos;
+    N = skinned.localNormal;
+    T = skinned.localTangent;
 #endif
     worldPos = mul(pc.modelMat ,  worldPos);
 

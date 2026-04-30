@@ -53,6 +53,7 @@ struct ForwardViewportStage : public IRenderStage
     struct PhongModelPC
     {
         glm::mat4 modelMat;
+        int32_t   skinningPaletteIndex = -1;
     };
 
     // ── Unlit UBO type aliases ──
@@ -62,6 +63,14 @@ struct ForwardViewportStage : public IRenderStage
     {
         alignas(16) glm::mat4 modelMatrix{1.0f};
         alignas(16) glm::mat3 normalMatrix{1.0f};
+        alignas(4) int32_t    skinningPaletteIndex = -1;
+    };
+
+    struct ShadingPipelineVariant
+    {
+        stdptr<IPipelineLayout>    pipelineLayout;
+        stdptr<IGraphicsPipeline>  pipeline;
+        GraphicsPipelineCreateInfo pipelineCI{};
     };
 
     // ── Simple (push constant only) ──
@@ -116,9 +125,8 @@ struct ForwardViewportStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
     stdptr<IDescriptorSetLayout> _pbrResourceDSL;
     stdptr<IDescriptorSetLayout> _pbrParamDSL;
-    stdptr<IPipelineLayout>      _pbrPPL;
-    stdptr<IGraphicsPipeline>    _pbrPipeline;
-    GraphicsPipelineCreateInfo   _pbrPipelineCI;
+    ShadingPipelineVariant       _pbrStatic;
+    ShadingPipelineVariant       _pbrSkinned;
 
     stdptr<IDescriptorPool>      _pbrFrameDSP;
     std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _pbrFrameDS{};
@@ -140,9 +148,8 @@ struct ForwardViewportStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _phongParamDSL;       // set 2: params
     // set 3: skybox cubemap (reuse _skyboxResourceDSL)
     // set 4: shadow map DS  (external, from ForwardRenderPipeline)
-    stdptr<IPipelineLayout>      _phongPPL;
-    stdptr<IGraphicsPipeline>    _phongPipeline;
-    GraphicsPipelineCreateInfo   _phongPipelineCI;
+    ShadingPipelineVariant       _phongStatic;
+    ShadingPipelineVariant       _phongSkinned;
 
     stdptr<IDescriptorPool>      _phongFrameDSP;
     std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _phongFrameDS{};
@@ -163,8 +170,14 @@ struct ForwardViewportStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitParamDSL;
     stdptr<IDescriptorSetLayout> _unlitResourceDSL;
-    stdptr<IPipelineLayout>      _unlitPPL;
-    stdptr<IGraphicsPipeline>    _unlitPipeline;
+    ShadingPipelineVariant       _unlitStatic;
+    ShadingPipelineVariant       _unlitSkinned;
+
+    stdptr<IDescriptorSetLayout> _skinningDSL;
+    stdptr<IDescriptorPool>      _skinningDSP;
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skinningDS{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skinningSSBO{};
+    uint32_t                                           _skinningCapacity = 0;
 
     static constexpr uint32_t UNLIT_FRAME_SLOTS = 8;
     uint32_t                  _unlitFrameSlot = 0;
@@ -225,10 +238,13 @@ struct ForwardViewportStage : public IRenderStage
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);
     void initDebug(const InitDesc& desc);
+    void initSkinningResources();
+    void ensureSkinningCapacity(uint32_t paletteCount);
 
         void preparePBR(const RenderStageContext& ctx);
     void preparePhong(const RenderStageContext& ctx);
     void prepareUnlit(const RenderStageContext& ctx);
+    void updateSkinningBuffer(const RenderStageContext& ctx);
 
     void drawSkybox(const RenderStageContext& ctx);
         void drawPBR(const RenderStageContext& ctx);

@@ -10,6 +10,7 @@
 
 #include "Common/Limits.slang"
 #include "Common/Helper.slang"
+#include "Common/Skinning.slang"
 
 
 struct DirectionalLight
@@ -112,6 +113,7 @@ struct ParamUBO
 struct PushConstants
 {
     float4x4 modelMat;
+    int      skinningPaletteIndex;
 };
 
 [[vk::push_constant]] PushConstants pc;
@@ -140,12 +142,25 @@ struct VSInput
     [[vk::location(0)]] float3 aPos      : POSITION;
     [[vk::location(1)]] float2 aTexcoord : TEXCOORD0;
     [[vk::location(2)]] float3 aNormal   : NORMAL;
+    [[vk::location(3)]] float3 aTangent  : TANGENT;
+    YA_SKINNING_VERTEX_FIELDS
 };
 
 [shader("vertex")]
 VSOutput vertMain(VSInput input) 
 {
-    float4 pos = mul(pc.modelMat, float4(input.aPos, 1.0));
+    float4 localPos = float4(input.aPos, 1.0);
+    float3 localNormal = input.aNormal;
+    float3 localTangent = input.aTangent;
+
+#if ENABLE_SKINNING
+    SkinningResult skinned = applySkinning(input.aPos, input.aNormal, input.aTangent, uint(pc.skinningPaletteIndex), input.boneIDs, input.weights);
+    localPos = skinned.localPos;
+    localNormal = skinned.localNormal;
+    localTangent = skinned.localTangent;
+#endif
+
+    float4 pos = mul(pc.modelMat, localPos);
 
     VSOutput output;
     output.worldPos  = pos.xyz;
@@ -161,7 +176,7 @@ VSOutput vertMain(VSInput input)
         pc.modelMat[2].xyz
     );
     float3x3 normalMatrix = transpose(inverse3x3(modelMat3));
-    output.normal = mul(normalMatrix, input.aNormal);
+    output.normal = mul(normalMatrix, localNormal);
 
     // Directional light space transform
     if (uLit.hasDirectionalLight == 1)

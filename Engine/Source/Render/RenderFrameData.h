@@ -36,6 +36,48 @@ struct RenderDrawItem
     int32_t   skinningPaletteIndex = -1; // -1 means static draw, otherwise index into RenderFrameData::skinningPalettes
 };
 
+struct RenderShadingDrawBuckets
+{
+    std::vector<RenderDrawItem> pbrDrawItems;
+    std::vector<RenderDrawItem> phongDrawItems;
+    std::vector<RenderDrawItem> unlitDrawItems;
+    std::vector<RenderDrawItem> simpleDrawItems;
+    std::vector<RenderDrawItem> fallbackDrawItems;
+
+    void clear()
+    {
+        pbrDrawItems.clear();
+        phongDrawItems.clear();
+        unlitDrawItems.clear();
+        simpleDrawItems.clear();
+        fallbackDrawItems.clear();
+    }
+
+    [[nodiscard]] size_t totalDrawCount() const
+    {
+        return pbrDrawItems.size() + phongDrawItems.size() +
+               unlitDrawItems.size() + simpleDrawItems.size() +
+               fallbackDrawItems.size();
+    }
+};
+
+struct RenderMeshClassDrawBuckets
+{
+    RenderShadingDrawBuckets staticMeshes;
+    RenderShadingDrawBuckets skinnedMeshes;
+
+    void clear()
+    {
+        staticMeshes.clear();
+        skinnedMeshes.clear();
+    }
+
+    [[nodiscard]] size_t totalDrawCount() const
+    {
+        return staticMeshes.totalDrawCount() + skinnedMeshes.totalDrawCount();
+    }
+};
+
 /// Skybox / Environment snapshot — textures only, no descriptor sets.
 struct RenderSkyboxData
 {
@@ -70,13 +112,9 @@ struct RenderFrameData
     RenderSkyboxData skybox;
 
     // ═══════════════════════════════════════════════════════════════
-    // Draw lists (bucketed by shading model)
+    // Draw lists (bucketed by mesh class, then shading model)
     // ═══════════════════════════════════════════════════════════════
-    std::vector<RenderDrawItem> pbrDrawItems;
-    std::vector<RenderDrawItem> phongDrawItems;
-    std::vector<RenderDrawItem> unlitDrawItems;
-    std::vector<RenderDrawItem> simpleDrawItems;
-    std::vector<RenderDrawItem> fallbackDrawItems; // meshes without a material
+    RenderMeshClassDrawBuckets drawBuckets;
 
     // Animation / Skinning snapshot data.
     std::vector<RenderSkinningPalette> skinningPalettes;
@@ -92,11 +130,7 @@ struct RenderFrameData
     // ═══════════════════════════════════════════════════════════════
     void clear()
     {
-        pbrDrawItems.clear();
-        phongDrawItems.clear();
-        unlitDrawItems.clear();
-        simpleDrawItems.clear();
-        fallbackDrawItems.clear();
+        drawBuckets.clear();
         skinningPalettes.clear();
         skybox = {};
     }
@@ -119,9 +153,7 @@ struct RenderFrameData
 
     [[nodiscard]] size_t totalDrawCount() const
     {
-        return pbrDrawItems.size() + phongDrawItems.size() +
-               unlitDrawItems.size() + simpleDrawItems.size() +
-               fallbackDrawItems.size();
+        return drawBuckets.totalDrawCount();
     }
 };
 

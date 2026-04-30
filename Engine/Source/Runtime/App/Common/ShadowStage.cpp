@@ -209,16 +209,43 @@ void ShadowStage::execute(const RenderStageContext& ctx)
             }
             ModelPushConstant pc{.model = item.worldMatrix};
             cmdBuf->pushConstants(_pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
-            item.mesh->draw(cmdBuf);
+            item.mesh->drawStatic(cmdBuf);
+        }
+    };
+
+    auto drawSkinnedItems = [&](const std::vector<RenderDrawItem>& items)
+    {
+        for (const auto& item : items) {
+            if (!item.mesh) {
+                continue;
+            }
+            ModelPushConstant pc{.model = item.worldMatrix};
+            cmdBuf->pushConstants(_pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
+            item.mesh->drawSkinned(cmdBuf);
         }
     };
 
     const auto& fd = *ctx.frameData;
-    drawItems(fd.pbrDrawItems);
-    drawItems(fd.phongDrawItems);
-    drawItems(fd.unlitDrawItems);
-    drawItems(fd.simpleDrawItems);
-    drawItems(fd.fallbackDrawItems);
+    auto drawBucketSet = [&](const RenderShadingDrawBuckets& buckets, bool bSkinned)
+    {
+        if (bSkinned) {
+            drawSkinnedItems(buckets.pbrDrawItems);
+            drawSkinnedItems(buckets.phongDrawItems);
+            drawSkinnedItems(buckets.unlitDrawItems);
+            drawSkinnedItems(buckets.simpleDrawItems);
+            drawSkinnedItems(buckets.fallbackDrawItems);
+            return;
+        }
+
+        drawItems(buckets.pbrDrawItems);
+        drawItems(buckets.phongDrawItems);
+        drawItems(buckets.unlitDrawItems);
+        drawItems(buckets.simpleDrawItems);
+        drawItems(buckets.fallbackDrawItems);
+    };
+
+    drawBucketSet(fd.drawBuckets.staticMeshes, false);
+    drawBucketSet(fd.drawBuckets.skinnedMeshes, true);
 
     cmdBuf->debugEndLabel();
 }

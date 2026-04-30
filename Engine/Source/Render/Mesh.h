@@ -48,17 +48,29 @@ struct Mesh
     [[nodiscard]] const IBuffer* getIndexBuffer() const { return _indexBuffer.get(); }
     [[nodiscard]] IBuffer*       getIndexBufferMut() const { return _indexBuffer.get(); }
 
-    void draw(ICommandBuffer* cmdBuf /*, bool bHasOptVertexBuffer = false*/) const
+    void drawStatic(ICommandBuffer* cmdBuf) const
     {
-        // Use generic command buffer interface
         cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), _vertexBufferOffset);
-        // if (bHasOptVertexBuffer) {
-        for (int i = 0; i < _optVertexBuffers.size(); ++i) {
-            cmdBuf->bindVertexBuffer(i + 1, _optVertexBuffers[i].get(), _optVertexBufferOffsets[i]);
-        }
-        // }
         cmdBuf->bindIndexBuffer(_indexBuffer.get(), _indexBufferOffset, false); // false = use 32-bit indices
         cmdBuf->drawIndexed(_indexCount, 1, 0, 0, 0);
+    }
+
+    void drawSkinned(ICommandBuffer* cmdBuf) const
+    {
+        YA_CORE_ASSERT(!_optVertexBuffers.empty(), "drawSkinned requires a skinning vertex buffer");
+        cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), _vertexBufferOffset);
+        cmdBuf->bindVertexBuffer(1, _optVertexBuffers[0].get(), _optVertexBufferOffsets[0]);
+        cmdBuf->bindIndexBuffer(_indexBuffer.get(), _indexBufferOffset, false); // false = use 32-bit indices
+        cmdBuf->drawIndexed(_indexCount, 1, 0, 0, 0);
+    }
+
+    void draw(ICommandBuffer* cmdBuf) const
+    {
+        if (hasSkinningVertexBuffer()) {
+            drawSkinned(cmdBuf);
+            return;
+        }
+        drawStatic(cmdBuf);
     }
 
     const std::string& getName() const { return _name; }

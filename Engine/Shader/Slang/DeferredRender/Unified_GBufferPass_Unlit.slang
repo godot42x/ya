@@ -1,4 +1,5 @@
 #include "Common/Helper.slang"
+#include "Common/Skinning.slang"
 
 // Unified GBuffer Pass — Unlit variant
 // GBuffer layout (shared with PBR/Phong):
@@ -14,6 +15,7 @@ struct VertexInput{
     [[vk::location(1)]] float2 uv       : TEXCOORD0;
     [[vk::location(2)]] float3 normal   : NORMAL;
     [[vk::location(3)]] float3 tangent  : TANGENT;
+    YA_SKINNING_VERTEX_FIELDS
 };
 
 struct VertexOutput{
@@ -26,6 +28,7 @@ struct VertexOutput{
 struct PushConstants
 {
     float4x4 modelMat;
+    int skinningPaletteIndex;
 };
 
 [[vk::push_constant]] PushConstants pc;
@@ -73,7 +76,16 @@ struct ParamsData{
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
 {
-    float4 worldPos = pc.modelMat * float4(IN.pos, 1.0);
+    float4 localPos = float4(IN.pos, 1.0);
+    float3 localNormal = IN.normal;
+
+#if ENABLE_SKINNING
+    SkinningResult skinned = applySkinning(IN.pos, IN.normal, float3(0.0, 0.0, 0.0), uint(pc.skinningPaletteIndex), IN.boneIDs, IN.weights);
+    localPos = skinned.localPos;
+    localNormal = skinned.localNormal;
+#endif
+
+    float4 worldPos = pc.modelMat * localPos;
     float4 clipPos = uFrame.projMatrix * uFrame.viewMatrix * worldPos;
 
     OUT.sv_position = clipPos;
@@ -81,7 +93,7 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
     OUT.uv = IN.uv;
 
     float3x3 normalMat = transpose(inverse3x3(float3x3(pc.modelMat)));
-    OUT.normal = mul(normalMat, IN.normal);
+    OUT.normal = mul(normalMat, localNormal);
 }
 
 

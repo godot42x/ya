@@ -6,11 +6,11 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/SkeletonAnimatorComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Runtime/App/App.h"
@@ -131,8 +131,8 @@ void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
 }
 
 int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext& ctx,
-                                                      entt::entity                entity,
-                                                      Mesh*                       mesh)
+                                                      entt::entity               entity,
+                                                      Mesh*                      mesh)
 {
     if (!ctx.registry || !ctx.frameData || !mesh || !mesh->hasSkinningVertexBuffer()) {
         return -1;
@@ -155,7 +155,9 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
     }
 
     auto& palette = ctx.frameData->skinningPalettes.emplace_back();
-    const uint32_t boneCount = static_cast<uint32_t>(std::min<size_t>(pose.boneMatrices.size(), palette.boneMatrices.size()));
+    YA_CORE_ASSERT(pose.boneMatrices.size() <= palette.boneMatrices.size(), "Exceed max bone size");
+    const uint32_t boneCount = pose.boneMatrices.size();
+
     for (uint32_t boneIndex = 0; boneIndex < boneCount; ++boneIndex) {
         palette.boneMatrices[boneIndex] = pose.boneMatrices[boneIndex];
     }
@@ -165,15 +167,17 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
 
 void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 {
-    auto& reg         = *ctx.registry;
-    auto& out         = *ctx.frameData;
-    const auto viewOwner = ctx.viewOwner;
+    auto&      reg            = *ctx.registry;
+    auto&      out            = *ctx.frameData;
+    const auto viewOwner      = ctx.viewOwner;
+    auto&      staticBuckets  = out.drawBuckets.staticMeshes;
+    auto&      skinnedBuckets = out.drawBuckets.skinnedMeshes;
 
     // Emit a RenderDrawItem for every (MeshComp, TransformComponent, MaterialComp)
     // triple. Runs once per mesh component type (Static/Skinned) so both authoring
     // and model-instantiated entities feed into the same draw-item buckets.
-    auto emitTyped = [&]<typename MeshComp, typename MatComp>(
-        std::vector<RenderDrawItem>& bucket) {
+    auto emitTyped = [&]<typename MeshComp, typename MatComp>(std::vector<RenderDrawItem>& bucket)
+    {
         for (const auto& [e, mc, tc, matComp] :
              reg.view<MeshComp, TransformComponent, MatComp>().each()) {
             if (e == viewOwner) continue;
@@ -193,19 +197,20 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
         }
     };
 
-    auto emitForAllMeshTypes = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket) {
-        emitTyped.template operator()<StaticMeshComponent, MatComp>(bucket);
-        emitTyped.template operator()<SkinnedMeshComponent, MatComp>(bucket);
-    };
+    emitTyped.template operator()<StaticMeshComponent, PBRMaterialComponent>(staticBuckets.pbrDrawItems);
+    emitTyped.template operator()<StaticMeshComponent, PhongMaterialComponent>(staticBuckets.phongDrawItems);
+    emitTyped.template operator()<StaticMeshComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
+    emitTyped.template operator()<StaticMeshComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
 
-    emitForAllMeshTypes.template operator()<PBRMaterialComponent>(out.pbrDrawItems);
-    emitForAllMeshTypes.template operator()<PhongMaterialComponent>(out.phongDrawItems);
-    emitForAllMeshTypes.template operator()<UnlitMaterialComponent>(out.unlitDrawItems);
-    emitForAllMeshTypes.template operator()<SimpleMaterialComponent>(out.simpleDrawItems);
+    emitTyped.template operator()<SkinnedMeshComponent, PBRMaterialComponent>(skinnedBuckets.pbrDrawItems);
+    emitTyped.template operator()<SkinnedMeshComponent, PhongMaterialComponent>(skinnedBuckets.phongDrawItems);
+    emitTyped.template operator()<SkinnedMeshComponent, UnlitMaterialComponent>(skinnedBuckets.unlitDrawItems);
+    emitTyped.template operator()<SkinnedMeshComponent, SimpleMaterialComponent>(skinnedBuckets.simpleDrawItems);
 
     // Fallback: mesh + transform, no material component. Run per mesh type and skip
     // entities that already carry any material component.
-    auto emitFallback = [&]<typename MeshComp>() {
+    auto emitFallback = [&]<typename MeshComp>(std::vector<RenderDrawItem>& bucket)
+    {
         for (const auto& [e, mc, tc] :
              reg.view<MeshComp, TransformComponent>().each()) {
             if (e == viewOwner) continue;
@@ -215,7 +220,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 continue;
             }
 
-            out.fallbackDrawItems.push_back(RenderDrawItem{
+            bucket.push_back(RenderDrawItem{
                 .worldMatrix          = tc.getTransform(),
                 .mesh                 = mc.getMesh(),
                 .material             = nullptr,
@@ -226,8 +231,8 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
         }
     };
 
-    emitFallback.template operator()<StaticMeshComponent>();
-    emitFallback.template operator()<SkinnedMeshComponent>();
+    emitFallback.template operator()<StaticMeshComponent>(staticBuckets.fallbackDrawItems);
+    emitFallback.template operator()<SkinnedMeshComponent>(skinnedBuckets.fallbackDrawItems);
 }
 
 void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)
@@ -244,17 +249,23 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
                   { return a.sortKey < b.sortKey; });
     };
 
-    for (auto& item : out.pbrDrawItems) computeSortKey(item);
-    for (auto& item : out.phongDrawItems) computeSortKey(item);
-    for (auto& item : out.unlitDrawItems) computeSortKey(item);
-    for (auto& item : out.simpleDrawItems) computeSortKey(item);
-    for (auto& item : out.fallbackDrawItems) computeSortKey(item);
+    auto sortBuckets = [&](RenderShadingDrawBuckets& buckets)
+    {
+        for (auto& item : buckets.pbrDrawItems) computeSortKey(item);
+        for (auto& item : buckets.phongDrawItems) computeSortKey(item);
+        for (auto& item : buckets.unlitDrawItems) computeSortKey(item);
+        for (auto& item : buckets.simpleDrawItems) computeSortKey(item);
+        for (auto& item : buckets.fallbackDrawItems) computeSortKey(item);
 
-    sortByDistance(out.pbrDrawItems);
-    sortByDistance(out.phongDrawItems);
-    sortByDistance(out.unlitDrawItems);
-    sortByDistance(out.simpleDrawItems);
-    sortByDistance(out.fallbackDrawItems);
+        sortByDistance(buckets.pbrDrawItems);
+        sortByDistance(buckets.phongDrawItems);
+        sortByDistance(buckets.unlitDrawItems);
+        sortByDistance(buckets.simpleDrawItems);
+        sortByDistance(buckets.fallbackDrawItems);
+    };
+
+    sortBuckets(out.drawBuckets.staticMeshes);
+    sortBuckets(out.drawBuckets.skinnedMeshes);
 }
 
 } // namespace ya

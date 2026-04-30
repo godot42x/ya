@@ -1,5 +1,6 @@
 #include "Common/Limits.slang"
 #include "Common/Helper.slang"
+#include "Common/Skinning.slang"
 
 struct VertexInput
 {
@@ -7,6 +8,7 @@ struct VertexInput
     [[vk::location(1)]] float2 uv      : TEXCOORD0;
     [[vk::location(2)]] float3 normal  : NORMAL;
     [[vk::location(3)]] float3 tangent : TANGENT;
+    YA_SKINNING_VERTEX_FIELDS
 };
 
 struct VertexOutput
@@ -22,6 +24,7 @@ struct VertexOutput
 struct PushConstants
 {
     float4x4 modelMat;
+    int      skinningPaletteIndex;
 };
 
 [[vk::push_constant]] PushConstants pc;
@@ -298,14 +301,25 @@ vec3 shadePBR(in vec3 worldPos, in vec3 N, in vec3 V, in vec3 albedo, float meta
 [shader("vertex")]
 void vertMain(in VertexInput IN, out VertexOutput OUT)
 {
-    float4 worldPos = mul(pc.modelMat, float4(IN.pos, 1.0));
+    float4 localPos = float4(IN.pos, 1.0);
+    float3 localNormal = IN.normal;
+    float3 localTangent = IN.tangent;
+
+#if ENABLE_SKINNING
+    SkinningResult skinned = applySkinning(IN.pos, IN.normal, IN.tangent, uint(pc.skinningPaletteIndex), IN.boneIDs, IN.weights);
+    localPos = skinned.localPos;
+    localNormal = skinned.localNormal;
+    localTangent = skinned.localTangent;
+#endif
+
+    float4 worldPos = mul(pc.modelMat, localPos);
     OUT.sv_position = mul(uFrame.projMat, mul(uFrame.viewMat, worldPos));
     OUT.worldPos = worldPos.xyz;
     OUT.uv = IN.uv;
 
     float3x3 normalMat = transpose(inverse3x3(float3x3(pc.modelMat)));
-    float3 N = normalize(mul(normalMat, IN.normal));
-    float3 T = normalize(mul(normalMat, IN.tangent));
+    float3 N = normalize(mul(normalMat, localNormal));
+    float3 T = normalize(mul(normalMat, localTangent));
     T = normalize(T - dot(T, N) * N);
     float3 B = normalize(cross(N, T));
 
