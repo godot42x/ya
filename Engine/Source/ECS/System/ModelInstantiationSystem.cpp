@@ -9,6 +9,8 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
@@ -240,7 +242,7 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
         }
     }
 
-    cleanupChildEntities(scene, modelComp);
+    cleanupChildEntities(scene, entity, modelComp);
 
     Model* model = modelComp.getModel();
     if (!model || model->getMeshCount() == 0) {
@@ -260,8 +262,10 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
 
     buildSharedMaterials(model, modelComp);
 
+    SkeletonAnimatorComponent* rootAnimator = attachRootSkeletonAnimator(entity, model);
+
     for (uint32_t i = 0; i < model->getMeshCount(); ++i) {
-        Node* childNode = createMeshNode(scene, entity, model, i, modelComp);
+        Node* childNode = createMeshNode(scene, entity, model, i, modelComp, rootAnimator);
         if (!childNode) {
             continue;
         }
@@ -278,11 +282,12 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
     modelComp._bResolved = true;
 }
 
-Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
-                                               Entity*         parentEntity,
-                                               Model*          model,
-                                               uint32_t        meshIndex,
-                                               ModelComponent& modelComp)
+Node* ModelInstantiationSystem::createMeshNode(Scene*                      scene,
+                                               Entity*                     parentEntity,
+                                               Model*                      model,
+                                               uint32_t                    meshIndex,
+                                               ModelComponent&             modelComp,
+                                               SkeletonAnimatorComponent*  rootAnimator)
 {
     std::string meshName = model->getMesh(meshIndex)->getName();
     if (meshName.empty()) {
@@ -308,16 +313,23 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
     // Mark as managed child — serializer will skip this entity (recreated at runtime)
     childEntity->addComponent<ManagedChildComponent>();
 
+    // Legacy MeshComponent is still attached for systems not yet migrated to the
+    // Static/Skinned split. It will be removed in a later stage once all consumers
+    // read from StaticMeshComponent / SkinnedMeshComponent.
     auto* meshComp = childEntity->addComponent<MeshComponent>();
     meshComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());
 
     const int32_t skeletonIndex = model->getMeshSkeletonIndex(meshIndex);
-    if (skeletonIndex >= 0) {
-        auto skeleton = model->getSkeletonShared(static_cast<size_t>(skeletonIndex));
-        if (skeleton) {
-            auto* skeletonComp = childEntity->addComponent<SkeletonAnimatorComponent>();
-            skeletonComp->setFromModel(model->getFilepath(), meshIndex, static_cast<uint32_t>(skeletonIndex), std::move(skeleton));
-        }
+    const bool    isSkinnedMesh = skeletonIndex >= 0 && rootAnimator != nullptr;
+
+    if (isSkinnedMesh) {
+        auto* skinnedComp = childEntity->addComponent<SkinnedMeshComponent>();
+        skinnedComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());
+        skinnedComp->_animator = rootAnimator;
+    }
+    else {
+        auto* staticComp = childEntity->addComponent<StaticMeshComponent>();
+        staticComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());
     }
 
     const auto*        matData      = model->getMaterialForMesh(meshIndex);
@@ -349,6 +361,28 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*          scene,
     }
 
     return childNode;
+}
+
+SkeletonAnimatorComponent* ModelInstantiationSystem::attachRootSkeletonAnimator(Entity* parentEntity, Model* model)
+{
+    if (!parentEntity || !model || !model->hasSkeleton()) {
+        return nullptr;
+    }
+
+    if (model->getSkeletonCount() > 1) {
+        YA_CORE_WARN("ModelInstantiationSystem: Model '{}' has {} skeletons; only the first is attached. Multi-skeleton support is not implemented yet.",
+                     model->getFilepath(),
+                     model->getSkeletonCount());
+    }
+
+    auto skeleton = model->getSkeletonShared(0);
+    if (!skeleton) {
+        return nullptr;
+    }
+
+    auto* animator = parentEntity->addComponent<SkeletonAnimatorComponent>();
+    animator->setFromModel(model->getFilepath(), /*meshIndex*/ 0, /*skeletonIndex*/ 0, std::move(skeleton));
+    return animator;
 }
 
 void ModelInstantiationSystem::buildSharedMaterials(Model* model, ModelComponent& modelComp)
@@ -384,7 +418,7 @@ void ModelInstantiationSystem::buildSharedMaterials(Model* model, ModelComponent
     }
 }
 
-void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, ModelComponent& modelComp)
+void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, Entity* parentEntity, ModelComponent& modelComp)
 {
     for (auto& [matIndex, material] : modelComp._cachedMaterials) {
         (void)matIndex;
@@ -400,6 +434,13 @@ void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, ModelComponent
         }
     }
     modelComp._childNodes.clear();
+
+    // Remove the root-level animator attached by a previous instantiation, if any.
+    // Skinned meshes held only a raw pointer to it, which becomes dangling after
+    // their child entities are destroyed above.
+    if (parentEntity && parentEntity->hasComponent<SkeletonAnimatorComponent>()) {
+        parentEntity->removeComponent<SkeletonAnimatorComponent>();
+    }
 }
 
 } // namespace ya

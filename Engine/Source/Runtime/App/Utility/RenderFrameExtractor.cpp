@@ -6,6 +6,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -137,7 +138,16 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
-    auto* skeletonComp = ctx.registry->try_get<SkeletonAnimatorComponent>(entity);
+    // Stage 4: prefer the animator pointer cached on SkinnedMeshComponent, which
+    // points at the animator living on the model-root entity. This replaces the
+    // old per-child-entity SkeletonAnimatorComponent lookup.
+    SkeletonAnimatorComponent* skeletonComp = nullptr;
+    if (auto* skinned = ctx.registry->try_get<SkinnedMeshComponent>(entity); skinned && skinned->_animator) {
+        skeletonComp = skinned->_animator;
+    }
+    else {
+        skeletonComp = ctx.registry->try_get<SkeletonAnimatorComponent>(entity);
+    }
     if (!skeletonComp || !skeletonComp->hasSkeleton()) {
         return -1;
     }

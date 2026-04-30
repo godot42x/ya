@@ -18,6 +18,9 @@
 namespace ya
 {
 
+struct SkeletonAnimatorComponent;
+
+
 /**
  * @brief Entity component pointing at a single mesh intended to be skinned.
  *
@@ -48,6 +51,16 @@ struct SkinnedMeshComponent : public IComponent
     // ========================================
 
     MeshSource _mesh;
+
+    // ========================================
+    // Runtime-only (not serialized)
+    // ========================================
+
+    // Pointer to the SkeletonAnimatorComponent on the model-root entity that drives
+    // this mesh's skinning. Populated by ModelInstantiationSystem when the entity
+    // is instantiated. Do NOT rely on this across scene reloads; authoring systems
+    // must re-resolve it.
+    SkeletonAnimatorComponent *_animator = nullptr;
 
     // ========================================
     // Resource Resolution (delegated to MeshSource)

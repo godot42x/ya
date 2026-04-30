@@ -13,6 +13,7 @@ struct Scene;
 struct Entity;
 struct Model;
 struct Node;
+struct SkeletonAnimatorComponent;
 
 /**
  * @brief Expand ModelComponent into mesh/material child entities.
@@ -29,12 +30,14 @@ struct ModelInstantiationSystem : public ISystem
     void instantiatePendingModels(Scene* scene);
     void instantiateModel(Scene* scene, Entity* entity, ModelComponent& modelComp);
     void buildSharedMaterials(Model* model, ModelComponent& modelComp);
-    Node* createMeshNode(Scene*          scene,
-                         Entity*         parentEntity,
-                         Model*          model,
-                         uint32_t        meshIndex,
-                         ModelComponent& modelComp);
-    void cleanupChildEntities(Scene* scene, ModelComponent& modelComp);
+    SkeletonAnimatorComponent* attachRootSkeletonAnimator(Entity* parentEntity, Model* model);
+    Node* createMeshNode(Scene*                      scene,
+                         Entity*                     parentEntity,
+                         Model*                      model,
+                         uint32_t                    meshIndex,
+                         ModelComponent&             modelComp,
+                         SkeletonAnimatorComponent*  rootAnimator);
+    void cleanupChildEntities(Scene* scene, Entity* parentEntity, ModelComponent& modelComp);
 };
 
 } // namespace ya
