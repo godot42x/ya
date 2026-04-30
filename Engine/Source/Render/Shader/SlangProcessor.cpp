@@ -136,7 +136,16 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
             macroStorage.push_back({def.substr(0, eq), def.substr(eq + 1)});
         }
         else {
-            macroStorage.push_back({def, "1"});
+            auto ws = def.find_first_of(" \t");
+            if (ws != std::string::npos) {
+                auto name = ut::str::trim(std::string_view(def).substr(0, ws));
+                auto val  = ut::str::trim(std::string_view(def).substr(ws + 1));
+                macroStorage.push_back({std::string(name), std::string(val.empty() ? "1" : val)});
+            }
+            else {
+                auto name = ut::str::trim(std::string_view(def));
+                macroStorage.push_back({std::string(name), "1"});
+            }
         }
 
         macros.push_back({

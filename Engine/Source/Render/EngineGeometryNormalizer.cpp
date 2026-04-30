@@ -98,6 +98,8 @@ std::vector<ya::SkeletonMeshVertex> buildSkeletonVertices(const ImportedModelDat
 
         const auto& sourceBoneData = importedModelData.vertexBoneData[globalVertexIndex];
         auto&       skeletonVertex = skeletonVertices[localVertexIndex];
+        skeletonVertex.boneIDs     = glm::ivec4(-1);
+        skeletonVertex.weights     = glm::vec4(0.0f);
 
         YA_CORE_ASSERT(sourceBoneData.weights.size() == sourceBoneData.boneIDs.size(), "Bone IDs and weights size mismatch");
 
@@ -106,7 +108,7 @@ std::vector<ya::SkeletonMeshVertex> buildSkeletonVertices(const ImportedModelDat
             skeletonVertex.boneIDs[static_cast<int>(influenceIndex)] = static_cast<int32_t>(sourceBoneData.boneIDs[influenceIndex]);
             skeletonVertex.weights[static_cast<int>(influenceIndex)] = sourceBoneData.weights[influenceIndex];
         }
-        for (size_t weightIdx = weightCount; weightIdx < weightCount; ++weightIdx) {
+        for (size_t weightIdx = weightCount; weightIdx < MAX_BONE_WEIGHT_PER_VERTEX; ++weightIdx) {
             skeletonVertex.boneIDs[static_cast<int>(weightIdx)] = -1;
             skeletonVertex.weights[static_cast<int>(weightIdx)] = 0.0f;
         }

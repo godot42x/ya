@@ -373,6 +373,10 @@ SkeletonAnimatorComponent* ModelInstantiationSystem::attachRootSkeletonAnimator(
         return nullptr;
     }
 
+    if (skeleton->animations.empty()) {
+        return nullptr;
+    }
+
     auto* animator = parentEntity->addComponent<SkeletonAnimatorComponent>();
     animator->setFromModel(model->getFilepath(), /*meshIndex*/ 0, /*skeletonIndex*/ 0, std::move(skeleton));
     return animator;
