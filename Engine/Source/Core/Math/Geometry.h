@@ -17,13 +17,13 @@ namespace ya
  */
 enum class EPrimitiveGeometry : uint8_t
 {
-    None = 0, // No primitive (use _modelRef instead)
-    Cube,     // Unit cube
-    Sphere,   // UV sphere
-    Plane,    // XZ plane
-    Cylinder, // Cylinder
-    Cone,     // Cone
-    Quad,     // Fullscreen quad
+    Cube,       // Unit cube
+    Sphere,     // UV sphere
+    Plane,      // XZ plane
+    Cylinder,   // Cylinder
+    Cone,       // Cone
+    Quad,       // Fullscreen quad
+    None = 255, // No primitive (use _modelRef instead)
 };
 
 } // namespace ya

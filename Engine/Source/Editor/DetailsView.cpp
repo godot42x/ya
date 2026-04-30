@@ -13,6 +13,7 @@
 
 
 #include "ECS/Component.h"
+#include "Core/Reflection/ECSRegistry.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -36,6 +37,8 @@
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
+#include <unordered_set>
+#include <vector>
 
 
 
@@ -568,28 +571,8 @@ void DetailsView::drawComponents(Entity& entity)
         }
         ImGui::PopID();
     }
-    std::set<ya::type_index_t> hasDraw;
 
     // TODO: support function reflection
-    // for (const auto& [name, ti] : ECSRegistry::get().getTypeIndexCache()) {
-    //     if (hasDraw.contains(ti)) {
-    //         continue;
-    //     }
-    //     auto component = ECSRegistry::get().getComponent(ti, scene->getRegistry(), entity);
-    //     if (!component) {
-    //         continue;
-    //     }
-
-    //     ya::RenderContext ctx;
-    //     ctx.beginInstance(component);
-    //     ya::renderReflectedType(name, ti, component, ctx, 0);
-    //     bool bComponentDirty = ctx.hasModifications();
-    //     if constexpr (std::is_invocable_v<decltype(onComponentDirty), T*>) {
-    //         if (bComponentDirty) {
-    //             onComponentDirty(component);
-    //         }
-    //     }
-    // }
 
     drawReflectedComponent<TransformComponent>("Transform", entity, [](TransformComponent* tc) {
         // Mark both local and world as dirty, then propagate to children
@@ -634,32 +617,9 @@ void DetailsView::drawComponents(Entity& entity)
     drawSkyboxComponent(entity);
     drawEnvironmentLightingComponent(entity);
 
-    drawReflectedComponent<UnlitMaterialComponent>("Unlit Material", entity, [](UnlitMaterialComponent* umc, const ya::RenderContext& ctx) {
-        if (ctx.hasModifications()) {
-            umc->onEditorPropertiesChanged(ctx.getModificationPaths());
-        }
-        if (ImGui::Button("Invalidate")) {
-            umc->invalidate();
-        }
-    });
-
-    drawReflectedComponent<PhongMaterialComponent>("Phong Material", entity, [](PhongMaterialComponent* pmc, const ya::RenderContext& ctx) {
-        if (ctx.hasModifications()) {
-            pmc->onEditorPropertiesChanged(ctx.getModificationPaths());
-        }
-        if (ImGui::Button("Invalidate")) {
-            pmc->invalidate();
-        }
-    });
-
-    drawReflectedComponent<PBRMaterialComponent>("PBR Material", entity, [](PBRMaterialComponent* pmc, const ya::RenderContext& ctx) {
-        if (ctx.hasModifications()) {
-            pmc->onEditorPropertiesChanged(ctx.getModificationPaths());
-        }
-        if (ImGui::Button("Invalidate##PBR")) {
-            pmc->invalidate();
-        }
-    });
+    drawMaterialComponent<UnlitMaterialComponent>("Unlit Material", entity);
+    drawMaterialComponent<PhongMaterialComponent>("Phong Material", entity);
+    drawMaterialComponent<PBRMaterialComponent>("PBR Material", entity, "Invalidate##PBR");
 
 
     drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent* lsc) {
@@ -789,6 +749,102 @@ void DetailsView::drawComponents(Entity& entity)
             lsc->scripts.erase(eraseIt);
         }
     });
+
+    // Reflection-based fallback: surface any other registered component the
+    // entity carries that did not match one of the explicit drawXxx calls above.
+    // At minimum the user sees "what's attached"; if the component type has
+    // reflected fields, they become editable automatically.
+    drawReflectedFallbackComponents(entity);
+}
+
+void DetailsView::drawReflectedFallbackComponents(Entity& entity)
+{
+    Scene* scene = entity.getScene();
+    if (!scene) {
+        return;
+    }
+    auto& registry = scene->getRegistry();
+
+    // Types with hand-written UI above. Adding/removing a drawReflectedComponent<T>
+    // or drawComponent<T> call must be mirrored here — otherwise either a component
+    // gets double-rendered (type stays in list after handwritten UI removed) or the
+    // fallback surfaces one already rendered (type missing here).
+    //
+    // This is built once at first call; type_index_v<T> is an inline static
+    // initialised during startup, so we can stash the resolved ids in a static set.
+    static const std::unordered_set<type_index_t> kHandwrittenTypes = [] {
+        return std::unordered_set<type_index_t>{
+            type_index_v<TransformComponent>,
+            type_index_v<ModelComponent>,
+            type_index_v<StaticMeshComponent>,
+            type_index_v<SkinnedMeshComponent>,
+            type_index_v<UIComponent>,
+            type_index_v<DirectionalLightComponent>,
+            type_index_v<PointLightComponent>,
+            type_index_v<SimpleMaterialComponent>,
+            type_index_v<RenderComponent>,
+            type_index_v<BillboardComponent>,
+            type_index_v<SkyboxComponent>,
+            type_index_v<EnvironmentLightingComponent>,
+            type_index_v<UnlitMaterialComponent>,
+            type_index_v<PhongMaterialComponent>,
+            type_index_v<PBRMaterialComponent>,
+            type_index_v<LuaScriptComponent>,
+        };
+    }();
+
+    // Snapshot then iterate: we do not mutate ECSRegistry during rendering, but
+    // the component edit path (e.g. onEdit) could. Snapshotting also gives us a
+    // stable display order frame-to-frame (by registered name).
+    const auto& typeIndexCache = ECSRegistry::get().getTypeIndexCache();
+    std::vector<std::pair<std::string, type_index_t>> entries;
+    entries.reserve(typeIndexCache.size());
+    for (const auto& [name, ti] : typeIndexCache) {
+        if (kHandwrittenTypes.contains(ti)) {
+            continue;
+        }
+        entries.emplace_back(name.toString(), ti);
+    }
+    std::sort(entries.begin(), entries.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    for (const auto& [name, ti] : entries) {
+        void* component = ECSRegistry::get().getComponent(ti, registry, entity.getHandle());
+        if (!component) {
+            continue;
+        }
+        drawReflectedFallbackOne(name, ti, component, entity);
+    }
+}
+
+void DetailsView::drawReflectedFallbackOne(const std::string& name,
+                                           type_index_t       typeIndex,
+                                           void*              component,
+                                           Entity&            entity)
+{
+    // "(auto)" suffix signals this header is reflection fallback — helps spot
+    // components that don't yet have a hand-written editor.
+    const std::string label = name + "  (auto)";
+
+    componentSectionShell(
+        label,
+        reinterpret_cast<const void*>(static_cast<uintptr_t>(typeIndex)),
+        [&] {
+            const auto* cls = ClassRegistry::instance().getClass(typeIndex);
+            if (cls) {
+                ya::RenderContext ctx;
+                ctx.beginInstance(component);
+                ya::renderReflectedType(name, typeIndex, component, ctx, 0);
+            }
+            else {
+                ImGui::TextDisabled("No reflection info; fields not editable.");
+            }
+        },
+        [&] {
+            if (Scene* scene = entity.getScene()) {
+                ECSRegistry::get().removeComponent(typeIndex, *scene, entity.getHandle());
+            }
+        });
 }
 
 void DetailsView::drawAddComponentButton(Entity& entity)

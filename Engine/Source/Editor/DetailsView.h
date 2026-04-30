@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/TypeIndex.h"
 #include "ECS/Entity.h"
 #include "FilePicker.h"
 #include "TypeRenderer.h"
@@ -56,27 +57,32 @@ struct DetailsView
     void tryLoadScriptForEditor(void *scriptPtr);
     void testNewRenderInterface(Entity &entity);
 
-    template <typename T, typename Fn>
-    void componentWrapper(const std::string &name, Entity &entity, Fn impl)
+    // 兜底：用纯反射 UI 绘制一个已知类型和实例指针的组件，避免重复渲染手写过的类型。
+    // 被 drawReflectedFallbackComponents 调用，遍历 ECSRegistry 中所有已注册组件类型。
+    void drawReflectedFallbackComponents(Entity &entity);
+    void drawReflectedFallbackOne(const std::string &name, type_index_t typeIndex, void *component, Entity &entity);
+
+    // 画一个通用的「组件分节」标题：Separator + TreeNode + 右上角 "+" 弹出 Remove 菜单。
+    // body 在 TreeNode 展开时执行；onRemove 在用户点了 Remove Component 时执行。
+    // componentWrapper<T> 与 drawReflectedFallbackOne 共用这里，保证 header 一致。
+    template <typename BodyFn, typename RemoveFn>
+    void componentSectionShell(const std::string &label, const void *id, BodyFn body, RemoveFn onRemove)
     {
-        if (!entity.hasComponent<T>()) {
-            return;
-        }
         const auto treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen |
                                    ImGuiTreeNodeFlags_AllowOverlap |
                                    ImGuiTreeNodeFlags_SpanAvailWidth |
                                    ImGuiTreeNodeFlags_FramePadding |
                                    ImGuiTreeNodeFlags_Framed;
 
-        auto  *component              = entity.getComponent<T>();
         ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
-        // gap between component section
         ImGui::Separator();
         ImGui::PopStyleVar(1);
 
-        bool  bOpen      = ImGui::TreeNodeEx(name.c_str(), treeNodeFlags, "%s", name.c_str());
+        ImGui::PushID(id);
+
+        bool  bOpen      = ImGui::TreeNodeEx(label.c_str(), treeNodeFlags, "%s", label.c_str());
         float lineHeight = ImGui::GetFont()->LegacySize + ImGui::GetStyle().FramePadding.y * 2.f;
         ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
 
@@ -85,7 +91,6 @@ struct DetailsView
         }
 
         bool bRemoveComponent = false;
-
         if (ImGui::BeginPopup("ComponentSettings")) {
             if (ImGui::MenuItem("Remove Component")) {
                 bRemoveComponent = true;
@@ -94,13 +99,29 @@ struct DetailsView
         }
 
         if (bOpen) {
-            impl(component);
+            body();
             ImGui::TreePop();
         }
 
         if (bRemoveComponent) {
-            entity.removeComponent<T>();
+            onRemove();
         }
+
+        ImGui::PopID();
+    }
+
+    template <typename T, typename Fn>
+    void componentWrapper(const std::string &name, Entity &entity, Fn impl)
+    {
+        if (!entity.hasComponent<T>()) {
+            return;
+        }
+        auto *component = entity.getComponent<T>();
+        componentSectionShell(
+            name,
+            static_cast<const void *>(name.c_str()),
+            [&] { impl(component); },
+            [&] { entity.removeComponent<T>(); });
     }
 
     template <typename T>
@@ -109,7 +130,7 @@ struct DetailsView
         // YA_PROFILE_SCOPE(std::format("DetailsView::drawReflectedComponent<{}>", name).c_str());
         componentWrapper<T>(name, entity, [this, &onComponentDirty, &name](T *component) {
             auto typeIndex = ya::type_index_v<T>;
-            auto cls       = ClassRegistry::instance().getClass(ya::type_index_v<T>);
+            auto cls       = ClassRegistry::instance().getClass(typeIndex);
             if (!cls) {
                 return;
             }
@@ -134,6 +155,23 @@ struct DetailsView
     {
         componentWrapper<T>(name, entity, [this, &uiFunc](T *component) {
             uiFunc(component);
+        });
+    }
+
+    // All material components share the same dirty-handling pattern: forward
+    // modified property paths to onEditorPropertiesChanged and expose an
+    // "Invalidate" button. `invalidateButtonId` disambiguates the button label
+    // when ImGui IDs would otherwise collide across multiple material sections.
+    template <typename T>
+    void drawMaterialComponent(const std::string &name, Entity &entity, const char *invalidateButtonId = "Invalidate")
+    {
+        drawReflectedComponent<T>(name, entity, [invalidateButtonId](T *mat, const ya::RenderContext &ctx) {
+            if (ctx.hasModifications()) {
+                mat->onEditorPropertiesChanged(ctx.getModificationPaths());
+            }
+            if (ImGui::Button(invalidateButtonId)) {
+                mat->invalidate();
+            }
         });
     }
 };

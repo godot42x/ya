@@ -39,7 +39,7 @@ struct MeshSource
     // Serializable Data
     // ========================================
 
-    EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::None;
+    EPrimitiveGeometry _primitiveGeometry = EPrimitiveGeometry::Cube;
     std::string        _sourceModelPath;
     uint32_t           _meshIndex = 0;
 
@@ -47,7 +47,7 @@ struct MeshSource
     // Runtime State (not serialized)
     // ========================================
 
-    Mesh *_cachedMesh = nullptr;
+    Mesh* _cachedMesh = nullptr;
     bool  _bResolved  = false;
 
     // ========================================
@@ -68,7 +68,7 @@ struct MeshSource
     // Access
     // ========================================
 
-    Mesh *getMesh() const { return _cachedMesh; }
+    Mesh* getMesh() const { return _cachedMesh; }
 
     bool hasSource() const
     {
@@ -87,7 +87,7 @@ struct MeshSource
         invalidate();
     }
 
-    void setFromModel(const std::string &modelPath, uint32_t meshIndex, Mesh *mesh)
+    void setFromModel(const std::string& modelPath, uint32_t meshIndex, Mesh* mesh)
     {
         _primitiveGeometry = EPrimitiveGeometry::None;
         _sourceModelPath   = modelPath;

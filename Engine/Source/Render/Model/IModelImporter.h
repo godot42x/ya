@@ -4,6 +4,12 @@
 
 #include <string_view>
 
+
+namespace ya
+{
+inline constexpr uint32_t INVALID_SKELETON_NODE_INDEX = std::numeric_limits<uint32_t>::max();
+inline constexpr uint32_t INVALID_SKELETON_BONE_INDEX = std::numeric_limits<uint32_t>::max();
+} // namespace ya
 namespace ya::model_importer
 {
 

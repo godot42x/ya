@@ -15,19 +15,7 @@ bool MeshSource::resolve()
 
     _cachedMesh = nullptr;
 
-    // Priority 1: Built-in primitive geometry
-    if (_primitiveGeometry != EPrimitiveGeometry::None) {
-        auto mesh = PrimitiveMeshCache::get().getMesh(_primitiveGeometry);
-        if (mesh) {
-            _cachedMesh = mesh;
-            _bResolved  = true;
-            return true;
-        }
-        YA_CORE_ERROR("MeshSource: Failed to get primitive mesh from cache");
-        return false;
-    }
-
-    // Priority 2: Mesh from Model by path and index
+    // Priority 1: Mesh from Model by path and index
     if (!_sourceModelPath.empty()) {
         Model* model = nullptr;
         auto   ft    = AssetManager::get()->loadModel(AssetManager::ModelLoadRequest{
@@ -47,6 +35,19 @@ bool MeshSource::resolve()
                      _sourceModelPath);
         return false;
     }
+
+    // Priority 2: Built-in primitive geometry
+    if (_primitiveGeometry != EPrimitiveGeometry::None) {
+        auto mesh = PrimitiveMeshCache::get().getMesh(_primitiveGeometry);
+        if (mesh) {
+            _cachedMesh = mesh;
+            _bResolved  = true;
+            return true;
+        }
+        YA_CORE_ERROR("MeshSource: Failed to get primitive mesh from cache");
+        return false;
+    }
+
 
     YA_CORE_WARN("MeshSource: No geometry source specified");
     return false;

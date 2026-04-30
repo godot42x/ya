@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/FName.h"
+#include "Model/IModelImporter.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -16,8 +17,6 @@ namespace ya
 
 struct ImportedSkeletonData;
 
-inline constexpr uint32_t INVALID_SKELETON_NODE_INDEX = std::numeric_limits<uint32_t>::max();
-inline constexpr uint32_t INVALID_SKELETON_BONE_INDEX = std::numeric_limits<uint32_t>::max();
 
 struct SkeletonNodeInfo
 {
