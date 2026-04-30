@@ -5,12 +5,15 @@
 #include "Render/RenderFrameData.h"
 #include "Resource/Texture/TextureLibrary.h"
 
+#include "Core/Math/Geometry.h"
+
 
 #include "imgui.h"
 
 #include "DeferredRender.Unified_LightPass.slang.h"
 
 #include <algorithm>
+#include <vector>
 
 namespace ya
 {
@@ -62,6 +65,7 @@ void GBufferStage::refreshPipelineFormats(const IRenderTarget* gBufferRT)
 {
     refreshShadingPipelineFormats(_pbr.pipeline.get(), gBufferRT);
     refreshShadingPipelineFormats(_phong.pipeline.get(), gBufferRT);
+    refreshShadingPipelineFormats(_phongSkinned.pipeline.get(), gBufferRT);
     refreshShadingPipelineFormats(_unlit.pipeline.get(), gBufferRT);
 }
 
@@ -88,6 +92,14 @@ void GBufferStage::initSharedResources()
             .poolSizes = {
                 {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2},
             },
+        });
+
+    _phongSkinningDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_Phong_Skinning_DSL",
+            .set      = 3,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
 
     // Create per-flight UBOs and descriptor sets
@@ -234,6 +246,27 @@ void GBufferStage::initPhong()
     _phong.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_phong.pipeline && _phong.pipeline->recreate(ci), "Failed to create Phong GBuffer pipeline");
 
+    auto skinnedCI                          = ci;
+    skinnedCI.shaderDesc.vertexBufferDescs = {
+        VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)},
+        VertexBufferDescription{.slot = 1, .pitch = sizeof(ya::SkeletonMeshVertex)},
+    };
+    skinnedCI.shaderDesc.vertexAttributes = _commonVertexAttributes;
+    skinnedCI.shaderDesc.vertexAttributes.push_back({.bufferSlot = 1, .location = 4, .format = EVertexAttributeFormat::Int32x4, .offset = offsetof(ya::SkeletonMeshVertex, boneIDs)});
+    skinnedCI.shaderDesc.vertexAttributes.push_back({.bufferSlot = 1, .location = 5, .format = EVertexAttributeFormat::Float4, .offset = offsetof(ya::SkeletonMeshVertex, weights)});
+    skinnedCI.shaderDesc.defines = {"HAS_BONE_ANIMATION 1"};
+
+    _phongSkinned.materialResourceDSL = _phong.materialResourceDSL;
+    _phongSkinned.materialParamsDSL   = _phong.materialParamsDSL;
+    _phongSkinned.pipelineLayout = IPipelineLayout::create(
+        _render,
+        "Deferred_Phong_GBuffer_Skinned_PPL",
+        {PushConstantRange{.offset = 0, .size = sizeof(PhongPushConstant), .stageFlags = EShaderStage::Vertex}},
+        {_frameAndLightDSL, _phong.materialResourceDSL, _phong.materialParamsDSL, _phongSkinningDSL});
+    skinnedCI.pipelineLayout = _phongSkinned.pipelineLayout.get();
+    _phongSkinned.pipeline   = IGraphicsPipeline::create(_render);
+    YA_CORE_ASSERT(_phongSkinned.pipeline && _phongSkinned.pipeline->recreate(skinnedCI), "Failed to create skinned Phong GBuffer pipeline");
+
     const uint32_t texCount = static_cast<uint32_t>(_phong.materialResourceDSL->getLayoutInfo().bindings.size());
     _phongMatPool.init(_render, _phong.materialParamsDSL, _phong.materialResourceDSL, [texCount](uint32_t n)
                        { return std::vector<DescriptorPoolSize>{
@@ -321,6 +354,65 @@ void GBufferStage::initFallbackMaterial()
     _fallbackMaterial->setResourceDirty();
 }
 
+void GBufferStage::ensurePhongSkinningCapacity(uint32_t paletteCount)
+{
+    const uint32_t requiredCount = std::max(1u, paletteCount);
+    if (_phongSkinningDSP && requiredCount <= _phongSkinningCapacity) {
+        return;
+    }
+
+    _phongSkinningDSP.reset();
+    for (auto& ds : _phongSkinningDS) {
+        ds = {};
+    }
+
+    _phongSkinningCapacity = std::max(requiredCount, _phongSkinningCapacity == 0 ? 16u : _phongSkinningCapacity);
+    while (_phongSkinningCapacity < requiredCount) {
+        _phongSkinningCapacity *= 2;
+    }
+
+    _phongSkinningDSP = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "GBufferStage_PhongSkinning_DSP",
+            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+            .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
+        });
+
+    const uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(_phongSkinningCapacity) * sizeof(RenderSkinningPalette));
+    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
+        _phongSkinningSSBO[i] = IBuffer::create(
+            _render,
+            BufferCreateInfo{
+                .label       = std::format("GBuffer_PhongSkinning_SSBO_{}", i),
+                .usage       = EBufferUsage::StorageBuffer,
+                .size        = bufferSize,
+                .memoryUsage = EMemoryUsage::CpuToGpu,
+            });
+        _phongSkinningDS[i] = _phongSkinningDSP->allocateDescriptorSets(_phongSkinningDSL);
+        _render->getDescriptorHelper()->updateDescriptorSets(
+            {IDescriptorSetHelper::genSingleBufferWrite(_phongSkinningDS[i], 0, EPipelineDescriptorType::StorageBuffer, _phongSkinningSSBO[i].get())},
+            {});
+    }
+}
+
+void GBufferStage::updatePhongSkinningBuffer(const RenderStageContext& ctx)
+{
+    if (!ctx.frameData) {
+        return;
+    }
+
+    const auto& palettes = ctx.frameData->skinningPalettes;
+    ensurePhongSkinningCapacity(static_cast<uint32_t>(palettes.size()));
+    if (palettes.empty()) {
+        return;
+    }
+
+    auto& buffer = _phongSkinningSSBO[ctx.flightIndex];
+    buffer->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
+    buffer->flush();
+}
+
 void GBufferStage::destroy()
 {
     _pbrMatPool   = {};
@@ -329,10 +421,15 @@ void GBufferStage::destroy()
 
     _pbr   = {};
     _phong = {};
+    _phongSkinned = {};
     _unlit = {};
 
     for (auto& ubo : _frameUBO) ubo.reset();
     for (auto& ubo : _lightUBO) ubo.reset();
+    for (auto& ssbo : _phongSkinningSSBO) ssbo.reset();
+    _phongSkinningDSP.reset();
+    _phongSkinningDSL.reset();
+    _phongSkinningCapacity = 0;
     _frameAndLightDSP.reset();
     _frameAndLightDSL.reset();
     _render = nullptr;
@@ -350,12 +447,16 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
     if (_phong.pipeline) {
         _phong.pipeline->beginFrame();
     }
+    if (_phongSkinned.pipeline) {
+        _phongSkinned.pipeline->beginFrame();
+    }
     if (_unlit.pipeline) {
         _unlit.pipeline->beginFrame();
     }
 
     if (!ctx.frameData) return;
     updateFrameUBOs(ctx);
+    updatePhongSkinningBuffer(ctx);
     preparePBR(*ctx.frameData);
     preparePhong(*ctx.frameData);
     prepareUnlit(*ctx.frameData);
@@ -481,14 +582,24 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
         uint32_t idx = static_cast<uint32_t>(mat->getIndex());
         if (prepared[idx]) return;
 
-        _unlitMatPool.flushDirty(mat, force, [](IBuffer* ubo, UnlitMaterial* m)
-                                 { ubo->writeData(&m->getParams(), sizeof(UnlitParamUBO), 0); },
-                                 [this](DescriptorSetHandle ds, UnlitMaterial* m)
-                                 { _render->getDescriptorHelper()->updateDescriptorSets({
-                                                                                            IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(UnlitMaterial::EResource::BaseColor0)),
-                                                                                            IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(UnlitMaterial::EResource::BaseColor1)),
-                                                                                        },
-                                                                                        {}); });
+        _unlitMatPool.flushDirty(
+            mat,
+            force,
+            [](IBuffer* ubo, UnlitMaterial* m)
+            {
+                ubo->writeData(&m->getParams(), sizeof(UnlitParamUBO), 0);
+            },
+            [this](DescriptorSetHandle ds, UnlitMaterial* m)
+            {
+                _render
+                    ->getDescriptorHelper()
+                    ->updateDescriptorSets(
+                        {
+                            IDescriptorSetHelper::writeOneImage(ds, 0, m->getTextureBinding(UnlitMaterial::EResource::BaseColor0)),
+                            IDescriptorSetHelper::writeOneImage(ds, 1, m->getTextureBinding(UnlitMaterial::EResource::BaseColor1)),
+                        },
+                        {});
+            });
         prepared[idx] = 1;
     };
 
@@ -538,13 +649,22 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
 
     auto* cmdBuf = ctx.cmdBuf;
     auto  ds0    = _frameAndLightDS[ctx.flightIndex];
-
-    cmdBuf->bindPipeline(_phong.pipeline.get());
     for (const auto& item : items) {
         if (!item.mesh || !item.material) continue;
-        cmdBuf->bindDescriptorSets(_phong.pipelineLayout.get(), 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
-        PhongPushConstant pc{.modelMat = item.worldMatrix};
-        cmdBuf->pushConstants(_phong.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(pc), &pc);
+
+        const bool bSkinned = item.skinningPaletteIndex >= 0;
+        auto* pipeline      = bSkinned ? _phongSkinned.pipeline.get() : _phong.pipeline.get();
+        auto* layout        = bSkinned ? _phongSkinned.pipelineLayout.get() : _phong.pipelineLayout.get();
+        cmdBuf->bindPipeline(pipeline);
+        if (bSkinned) {
+            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex), _phongSkinningDS[ctx.flightIndex]});
+        }
+        else {
+            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
+        }
+
+        PhongPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
+        cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(pc), &pc);
         item.mesh->draw(cmdBuf);
     }
 }

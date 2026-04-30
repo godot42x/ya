@@ -36,6 +36,7 @@ struct ForwardRenderPipeline
 
     struct TickDesc
     {
+        uint32_t                flightIndex              = 0;
         ICommandBuffer*         cmdBuf                   = nullptr;
         float                   dt                       = 0.0f;
         glm::mat4               view                     = glm::mat4(1.0f);

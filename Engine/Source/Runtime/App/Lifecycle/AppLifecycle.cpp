@@ -339,7 +339,9 @@ void AppLifecycle::quit(App& app)
         app.onQuit();
     }
 
-    app._renderFrameData.clear();
+    for (auto& frameData : app._renderFrameDataPerFlight) {
+        frameData.clear();
+    }
     unloadScene(app);
 
     app._deleter.clear();
@@ -398,7 +400,9 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 {
     (void)scene;
 
-    app._renderFrameData.clear();
+    for (auto& frameData : app._renderFrameDataPerFlight) {
+        frameData.clear();
+    }
 
     if (app._renderRuntime) {
         app._renderRuntime->resetSkyboxPool();

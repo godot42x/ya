@@ -44,6 +44,7 @@ struct DeferredRenderInitDesc
 
 struct DeferredRenderTickDesc
 {
+    uint32_t                flightIndex              = 0;
     ICommandBuffer*         cmdBuf                   = nullptr;
     SceneManager*           sceneManager             = nullptr;
     float                   dt                       = 0.0f;

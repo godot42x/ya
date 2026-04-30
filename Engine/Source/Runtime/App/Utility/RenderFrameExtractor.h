@@ -10,6 +10,13 @@ struct RenderRuntime;
 
 struct RenderFrameExtractor
 {
+    struct DrawItemExtractionContext
+    {
+        entt::registry*   registry = nullptr;
+        RenderFrameData*  frameData = nullptr;
+        entt::entity      viewOwner = entt::null;
+    };
+
     struct ExtractInput
     {
         Scene*         scene      = nullptr;
@@ -29,7 +36,8 @@ struct RenderFrameExtractor
     static void extractCamera(const ExtractInput& input, RenderFrameData& out);
     static void extractLights(entt::registry& reg, RenderFrameData& out);
     static void extractSkybox(Scene* scene, RenderFrameData& out);
-    static void extractDrawItems(entt::registry& reg, entt::entity viewOwner, RenderFrameData& out);
+    static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
+    static void extractDrawItems(DrawItemExtractionContext& ctx);
     static void sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out);
 };
 

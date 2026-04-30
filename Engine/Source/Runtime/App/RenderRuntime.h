@@ -49,6 +49,7 @@ struct RenderRuntime
 
     struct FrameInput
     {
+        uint32_t                flightIndex              = 0;
         float                   dt                       = 0.0f;
         SceneManager*           sceneManager             = nullptr;
         EditorLayer*            editorLayer              = nullptr;

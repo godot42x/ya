@@ -4,12 +4,26 @@
 #include "Render/Material/Material.h"
 #include "Render/Mesh.h"
 #include "Render/RenderDefines.h"
+#include "Common.Limits.slang.h"
 
 #include <glm/glm.hpp>
+#include <array>
 #include <vector>
 
 namespace ya
 {
+
+using slang_types::Common::Limits::MAX_BONE_COUNT;
+
+struct RenderSkinningPalette
+{
+    std::array<glm::mat4, MAX_BONE_COUNT> boneMatrices{};
+
+    RenderSkinningPalette()
+    {
+        boneMatrices.fill(glm::mat4(1.0f));
+    }
+};
 
 /// A single renderable instance snapshot — everything the draw call needs.
 struct RenderDrawItem
@@ -19,6 +33,7 @@ struct RenderDrawItem
     Material* material;        // raw pointer: Material lifetime is managed by MaterialFactory
     uint32_t  materialIndex;   // material->getIndex(), used for descriptor set lookup
     float     sortKey;         // distance to camera (or other sort criterion)
+    int32_t   skinningPaletteIndex = -1; // -1 means static draw, otherwise index into RenderFrameData::skinningPalettes
 };
 
 /// Skybox / Environment snapshot — textures only, no descriptor sets.
@@ -63,6 +78,9 @@ struct RenderFrameData
     std::vector<RenderDrawItem> simpleDrawItems;
     std::vector<RenderDrawItem> fallbackDrawItems; // meshes without a material
 
+    // Animation / Skinning snapshot data.
+    std::vector<RenderSkinningPalette> skinningPalettes;
+
     // ═══════════════════════════════════════════════════════════════
     // Frame constants
     // ═══════════════════════════════════════════════════════════════
@@ -79,6 +97,7 @@ struct RenderFrameData
         unlitDrawItems.clear();
         simpleDrawItems.clear();
         fallbackDrawItems.clear();
+        skinningPalettes.clear();
         skybox = {};
     }
 

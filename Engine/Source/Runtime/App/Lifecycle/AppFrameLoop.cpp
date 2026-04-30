@@ -276,12 +276,24 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
     app._renderFrameState.cameraPos  = app.camera.getPosition();
 }
 
+uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
+{
+    auto* render = app.getRender();
+    if (!render) {
+        return 0;
+    }
+
+    return render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
+}
+
 void AppFrameLoop::tickRender(App& app, float dt)
 {
     auto* renderRuntime = app.getRenderRuntime();
     if (!renderRuntime) {
         return;
     }
+
+    const uint32_t flightIndex = resolveFlightIndex(app);
 
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     RenderFrameExtractor::extract(
@@ -294,9 +306,10 @@ void AppFrameLoop::tickRender(App& app, float dt)
             .frameIndex     = App::_frameIndex,
             .deltaTime      = dt,
         },
-        app._renderFrameData);
+        app._renderFrameDataPerFlight[flightIndex]);
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
+        .flightIndex              = flightIndex,
         .dt                       = dt,
         .sceneManager             = app._sceneManager,
         .editorLayer              = app._editorLayer,
@@ -307,7 +320,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .view                     = app._renderFrameState.view,
         .projection               = app._renderFrameState.projection,
         .cameraPos                = app._renderFrameState.cameraPos,
-        .frameData                = &app._renderFrameData,
+        .frameData                = &app._renderFrameDataPerFlight[flightIndex],
     });
 }
 

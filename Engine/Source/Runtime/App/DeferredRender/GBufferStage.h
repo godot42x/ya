@@ -71,11 +71,18 @@ struct GBufferStage : public IRenderStage
 
     ShadingPipeline                                _pbr;
     ShadingPipeline                                _phong;
+    ShadingPipeline                                _phongSkinned;
     ShadingPipeline                                _unlit;
     MaterialDescPool<PBRMaterial, PBRParamUBO>     _pbrMatPool;
     MaterialDescPool<PhongMaterial, PhongParamUBO> _phongMatPool;
     MaterialDescPool<UnlitMaterial, UnlitParamUBO> _unlitMatPool;
     UnlitMaterial*                                 _fallbackMaterial = nullptr;
+
+    stdptr<IDescriptorSetLayout>                              _phongSkinningDSL;
+    stdptr<IDescriptorPool>                                   _phongSkinningDSP;
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _phongSkinningDS{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _phongSkinningSSBO{};
+    uint32_t                                                  _phongSkinningCapacity = 0;
 
     // ── Common vertex attributes ─────────────────────────────────
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -111,6 +118,8 @@ struct GBufferStage : public IRenderStage
     void initPhong();
     void initUnlit();
     void initFallbackMaterial();
+    void ensurePhongSkinningCapacity(uint32_t paletteCount);
+    void updatePhongSkinningBuffer(const RenderStageContext& ctx);
 
     void preparePBR(const RenderFrameData& frameData);
     void preparePhong(const RenderFrameData& frameData);

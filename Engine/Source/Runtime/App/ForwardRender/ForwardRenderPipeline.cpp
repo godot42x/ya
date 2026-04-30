@@ -247,7 +247,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     RenderStageContext stageCtx{
         .cmdBuf         = desc.cmdBuf,
         .frameData      = desc.frameData,
-        .flightIndex    = 0,
+        .flightIndex    = desc.flightIndex,
         .deltaTime      = desc.dt,
         .viewportExtent = {.width = vpW, .height = vpH},
     };

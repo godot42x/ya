@@ -6,6 +6,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/SkeletonComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -33,7 +34,12 @@ void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& o
     extractCamera(input, outFrame);
     extractLights(reg, outFrame);
     extractSkybox(input.scene, outFrame);
-    extractDrawItems(reg, outFrame.viewOwner, outFrame);
+    auto drawCtx = DrawItemExtractionContext{
+        .registry  = &reg,
+        .frameData = &outFrame,
+        .viewOwner = outFrame.viewOwner,
+    };
+    extractDrawItems(drawCtx);
     sortDrawItems(outFrame.cameraPos, outFrame);
 }
 
@@ -123,10 +129,39 @@ void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
     out.skybox.irradianceTexture = resolver->findSceneEnvironmentIrradianceTextureShared(scene);
 }
 
-void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
-                                            entt::entity     viewOwner,
-                                            RenderFrameData& out)
+int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext& ctx,
+                                                      entt::entity                entity,
+                                                      Mesh*                       mesh)
 {
+    if (!ctx.registry || !ctx.frameData || !mesh || !mesh->hasSkinningVertexBuffer()) {
+        return -1;
+    }
+
+    auto* skeletonComp = ctx.registry->try_get<SkeletonComponent>(entity);
+    if (!skeletonComp || !skeletonComp->hasSkeleton()) {
+        return -1;
+    }
+
+    const auto& pose = skeletonComp->getPose();
+    if (pose.boneMatrices.empty()) {
+        return -1;
+    }
+
+    auto& palette = ctx.frameData->skinningPalettes.emplace_back();
+    const uint32_t boneCount = static_cast<uint32_t>(std::min<size_t>(pose.boneMatrices.size(), palette.boneMatrices.size()));
+    for (uint32_t boneIndex = 0; boneIndex < boneCount; ++boneIndex) {
+        palette.boneMatrices[boneIndex] = pose.boneMatrices[boneIndex];
+    }
+
+    return static_cast<int32_t>(ctx.frameData->skinningPalettes.size() - 1);
+}
+
+void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
+{
+    auto& reg         = *ctx.registry;
+    auto& out         = *ctx.frameData;
+    const auto viewOwner = ctx.viewOwner;
+
     // PBR
     for (const auto& [e, mc, tc, pmc] :
          reg.view<MeshComponent, TransformComponent, PBRMaterialComponent>().each()) {
@@ -142,6 +177,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
             .material      = mat,
             .materialIndex = static_cast<uint32_t>(mat->getIndex()),
             .sortKey       = 0.0f,
+            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
         });
     }
 
@@ -160,6 +196,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
             .material      = mat,
             .materialIndex = static_cast<uint32_t>(mat->getIndex()),
             .sortKey       = 0.0f,
+            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
         });
     }
 
@@ -178,6 +215,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
             .material      = mat,
             .materialIndex = static_cast<uint32_t>(mat->getIndex()),
             .sortKey       = 0.0f,
+            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
         });
     }
 
@@ -196,6 +234,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
             .material      = mat,
             .materialIndex = static_cast<uint32_t>(mat->getIndex()),
             .sortKey       = 0.0f,
+            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
         });
     }
 
@@ -217,6 +256,7 @@ void RenderFrameExtractor::extractDrawItems(entt::registry&  reg,
             .material      = nullptr,
             .materialIndex = 0,
             .sortKey       = 0.0f,
+            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
         });
     }
 }

@@ -23,6 +23,7 @@ class AppFrameLoop
     static Entity*  getPrimaryCamera(const App& app);
     static void     prepareRenderFrameState(App& app, float dt);
     static void     tickRender(App& app, float dt);
+    static uint32_t resolveFlightIndex(const App& app);
 };
 
 } // namespace ya

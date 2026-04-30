@@ -183,6 +183,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
     if (_shadingModel == EShadingModel::Forward) {
         _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
+            .flightIndex              = input.flightIndex,
             .cmdBuf                   = cmdBuf.get(),
             .dt                       = input.dt,
             .view                     = input.view,
@@ -197,6 +198,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     }
     else {
         _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
+            .flightIndex              = input.flightIndex,
             .cmdBuf                   = cmdBuf.get(),
             .sceneManager             = input.sceneManager,
             .dt                       = input.dt,

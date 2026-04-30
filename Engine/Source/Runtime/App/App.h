@@ -13,6 +13,7 @@
 #include "Runtime/App/RenderRuntime.h"
 
 #include "Render/RenderFrameData.h"
+#include "Render/Stage/IRenderStage.h"
 
 
 #include "Render/Render.h"
@@ -208,8 +209,8 @@ struct App
 
     bool bRenderMirror = false;
 
-    RenderFrameState _renderFrameState;
-    RenderFrameData  _renderFrameData;
+    RenderFrameState                                 _renderFrameState;
+    std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> _renderFrameDataPerFlight{};
 
 
     EditorLayer* _editorLayer;
