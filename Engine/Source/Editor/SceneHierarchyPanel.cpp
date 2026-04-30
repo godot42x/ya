@@ -11,7 +11,7 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Node.h"
@@ -125,7 +125,7 @@ void SceneHierarchyPanel::sceneTree()
                         Node* newNode = _context->createNode3D("Cube", parentNode);
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelection(newEntity);
@@ -136,7 +136,7 @@ void SceneHierarchyPanel::sceneTree()
                         Node* newNode = _context->createNode3D("Sphere", parentNode);
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelection(newEntity);
@@ -147,7 +147,7 @@ void SceneHierarchyPanel::sceneTree()
                         Node* newNode = _context->createNode3D("Plane", parentNode);
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelection(newEntity);

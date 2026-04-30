@@ -10,7 +10,6 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -139,17 +138,14 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
-    // Stage 4: prefer the animator pointer cached on SkinnedMeshComponent, which
-    // points at the animator living on the model-root entity. This replaces the
-    // old per-child-entity SkeletonAnimatorComponent lookup.
-    SkeletonAnimatorComponent* skeletonComp = nullptr;
-    if (auto* skinned = ctx.registry->try_get<SkinnedMeshComponent>(entity); skinned && skinned->_animator) {
-        skeletonComp = skinned->_animator;
+    // SkinnedMeshComponent carries a pointer to the animator on the model-root
+    // entity. Anything else cannot be skinned.
+    auto* skinned = ctx.registry->try_get<SkinnedMeshComponent>(entity);
+    if (!skinned || !skinned->_animator) {
+        return -1;
     }
-    else {
-        skeletonComp = ctx.registry->try_get<SkeletonAnimatorComponent>(entity);
-    }
-    if (!skeletonComp || !skeletonComp->hasSkeleton()) {
+    SkeletonAnimatorComponent* skeletonComp = skinned->_animator;
+    if (!skeletonComp->hasSkeleton()) {
         return -1;
     }
 
@@ -174,9 +170,8 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     const auto viewOwner = ctx.viewOwner;
 
     // Emit a RenderDrawItem for every (MeshComp, TransformComponent, MaterialComp)
-    // triple. Runs once per mesh component type (legacy MeshComponent + the new
-    // Static/Skinned split) so authoring-created and model-instantiated entities
-    // feed into the same draw-item buckets.
+    // triple. Runs once per mesh component type (Static/Skinned) so both authoring
+    // and model-instantiated entities feed into the same draw-item buckets.
     auto emitTyped = [&]<typename MeshComp, typename MatComp>(
         std::vector<RenderDrawItem>& bucket) {
         for (const auto& [e, mc, tc, matComp] :
@@ -199,7 +194,6 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     };
 
     auto emitForAllMeshTypes = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket) {
-        emitTyped.template operator()<MeshComponent, MatComp>(bucket);
         emitTyped.template operator()<StaticMeshComponent, MatComp>(bucket);
         emitTyped.template operator()<SkinnedMeshComponent, MatComp>(bucket);
     };
@@ -232,7 +226,6 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
         }
     };
 
-    emitFallback.template operator()<MeshComponent>();
     emitFallback.template operator()<StaticMeshComponent>();
     emitFallback.template operator()<SkinnedMeshComponent>();
 }

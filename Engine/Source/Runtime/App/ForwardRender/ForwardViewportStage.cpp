@@ -4,7 +4,7 @@
 #include "Core/Math/Math.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -904,7 +904,7 @@ void ForwardViewportStage::drawSkybox(const RenderStageContext& ctx)
 
     // Get cube mesh from scene's skybox entity, or use primitive cache
     Mesh* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-    for (const auto& [entity, sc, mc] : scene->getRegistry().view<SkyboxComponent, MeshComponent>().each()) {
+    for (const auto& [entity, sc, mc] : scene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
         if (mc.isResolved() && mc.getMesh()) {
             cubeMesh = mc.getMesh();
         }

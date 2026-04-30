@@ -4,7 +4,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
@@ -667,7 +667,7 @@ void EditorLayer::viewportWindow()
                         Node* newNode = scene->createNode3D("Cube");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelectedEntity(newEntity);
@@ -681,7 +681,7 @@ void EditorLayer::viewportWindow()
                         Node* newNode = scene->createNode3D("Sphere");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelectedEntity(newEntity);
@@ -695,7 +695,7 @@ void EditorLayer::viewportWindow()
                         Node* newNode = scene->createNode3D("Plane");
                         if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                             Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<MeshComponent>();
+                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelectedEntity(newEntity);

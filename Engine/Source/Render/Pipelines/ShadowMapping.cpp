@@ -1,7 +1,6 @@
 #include "ShadowMapping.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
@@ -231,7 +230,6 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
         }
     };
 
-    drawMeshView.template operator()<MeshComponent>();
     drawMeshView.template operator()<StaticMeshComponent>();
     drawMeshView.template operator()<SkinnedMeshComponent>();
 

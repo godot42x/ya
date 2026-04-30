@@ -5,7 +5,7 @@
  * Design:
  * - ModelComponent is the "source" component that references a Model asset
  * - When resolved, it triggers creation of child entities for each mesh
- * - Each child entity gets: MeshComponent + PhongMaterialComponent
+ * - Each child entity gets: StaticMeshComponent or SkinnedMeshComponent (+ material)
  * - This separates concerns: Model loading vs Mesh/Material rendering
  *
  * Data Flow:

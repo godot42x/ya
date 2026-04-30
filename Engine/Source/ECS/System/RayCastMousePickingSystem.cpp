@@ -2,7 +2,6 @@
 #include "Core/Camera/Camera.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Render/Model.h"
@@ -54,10 +53,6 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
     //      经过材质处理，mesh的实际大小位置可能发生变化
     // Check all entities with any mesh component type
     auto& registry = scene->getRegistry();
-    registry.view<MeshComponent, TransformComponent>().each(
-        [&](entt::entity handle, MeshComponent &mc, TransformComponent &tc) {
-            testMeshComponent(handle, tc, mc);
-        });
     registry.view<StaticMeshComponent, TransformComponent>().each(
         [&](entt::entity handle, StaticMeshComponent &mc, TransformComponent &tc) {
             testMeshComponent(handle, tc, mc);

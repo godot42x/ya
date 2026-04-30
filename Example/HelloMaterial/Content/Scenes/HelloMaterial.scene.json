@@ -2,7 +2,7 @@
     "entities": [
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -150,7 +150,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -455,7 +455,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -618,7 +618,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -855,7 +855,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -1018,7 +1018,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -1166,7 +1166,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -1314,7 +1314,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -1477,7 +1477,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -1523,7 +1523,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -1686,7 +1686,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -1834,7 +1834,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -1982,7 +1982,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -2130,7 +2130,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -2293,7 +2293,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Quad",
                     "_sourceModelPath": ""
@@ -2441,7 +2441,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -2604,7 +2604,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -2767,7 +2767,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -2930,7 +2930,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -3093,7 +3093,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -3256,7 +3256,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -3419,7 +3419,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -3582,7 +3582,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -3730,7 +3730,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -3878,7 +3878,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -4041,7 +4041,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -4189,7 +4189,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -4352,7 +4352,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -4515,7 +4515,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -4678,7 +4678,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -4841,7 +4841,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -5004,7 +5004,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -5152,7 +5152,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -5265,7 +5265,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -5428,7 +5428,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -5541,7 +5541,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -5689,7 +5689,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -5852,7 +5852,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -6015,7 +6015,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -6178,7 +6178,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Quad",
                     "_sourceModelPath": ""
@@ -6327,7 +6327,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -6490,7 +6490,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -6603,7 +6603,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -6766,7 +6766,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -6914,7 +6914,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -7062,7 +7062,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -7225,7 +7225,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -7388,7 +7388,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -7551,7 +7551,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -7788,7 +7788,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -7936,7 +7936,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -8099,7 +8099,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -8262,7 +8262,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -8410,7 +8410,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -8558,7 +8558,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -8721,7 +8721,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -8884,7 +8884,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -9032,7 +9032,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -9180,7 +9180,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -9343,7 +9343,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -9491,7 +9491,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -9664,7 +9664,7 @@
                         ]
                     }
                 },
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -9777,7 +9777,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -9940,7 +9940,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -10132,7 +10132,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -10295,7 +10295,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -10462,7 +10462,7 @@
                     "bEnable": true,
                     "intensity": 1.0
                 },
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -10610,7 +10610,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -10773,7 +10773,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -10936,7 +10936,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -11099,7 +11099,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -11212,7 +11212,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -11375,7 +11375,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -11538,7 +11538,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -11686,7 +11686,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -11849,7 +11849,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -12012,7 +12012,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -12175,7 +12175,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -12338,7 +12338,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -12486,7 +12486,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -12634,7 +12634,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -12797,7 +12797,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -12960,7 +12960,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""
@@ -13123,7 +13123,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Cube",
                     "_sourceModelPath": ""
@@ -13271,7 +13271,7 @@
         },
         {
             "components": {
-                "MeshComponent": {
+                "StaticMeshComponent": {
                     "_meshIndex": 0,
                     "_primitiveGeometry": "Sphere",
                     "_sourceModelPath": ""

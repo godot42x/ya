@@ -4,7 +4,7 @@
  * Design:
  * - Component holds serializable material data (params + texture slots)
  * - Runtime material instance is created by System / MaterialFactory
- * - Mesh data is handled separately by MeshComponent
+ * - Mesh data is handled separately by StaticMeshComponent/SkinnedMeshComponent
  *
  * Serialization format:
  * @code

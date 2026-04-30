@@ -12,7 +12,7 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -99,7 +99,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         ya::Entity* entity = skyBox->getEntity();
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component
@@ -135,7 +135,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setPosition(glm::vec3(0.f, -10.f, 0.f));
 
         // Mesh and Material are now separate components
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         auto lmc                    = entity->addComponent<ya::PhongMaterialComponent>();
@@ -177,7 +177,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
                     tc->setScale(glm::vec3(scale));
 
                     // Add mesh component (shared primitive)
-                    auto mc = entity->addComponent<ya::MeshComponent>();
+                    auto mc = entity->addComponent<ya::StaticMeshComponent>();
                     mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
                     // random material
@@ -212,7 +212,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         _litTestEntity = entity;
 
         // Mesh component (separate from material)
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component with serializable texture slots
@@ -246,7 +246,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         _litTestEntity = entity;
 
         // Mesh component (separate from material)
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Quad);
         tc->setRotation(glm::vec3(-0.0f, 0.f, 0.0f));
 
@@ -268,7 +268,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setScale(glm::vec3(2.0f));
 
         // Mesh component with external model
-        // auto mc = entity->addComponent<ya::MeshComponent>();
+        // auto mc = entity->addComponent<ya::StaticMeshComponent>();
         auto mc = entity->addComponent<ya::ModelComponent>();
         mc->setModelPath("Engine/Content/Misc/Monkey.obj");
 
@@ -330,7 +330,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setRotation(glm::vec3(180.f, 0, 0));
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Quad);
 
         // Material component
@@ -348,7 +348,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         _pointLightEntity = entity;
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component
@@ -377,7 +377,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         _pointLightEntity = entity;
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component
@@ -407,7 +407,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setRotation({0, -90, 0});
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Material component
@@ -433,7 +433,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         dlc->intensity  = 1.0f;
         dlc->_direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
 
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
 
         auto pmc = entity->addComponent<ya::PhongMaterialComponent>();
@@ -460,7 +460,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
                                                  row * spacing,
                                                  0.0f));
 
-                auto mc = entity->addComponent<ya::MeshComponent>();
+                auto mc = entity->addComponent<ya::StaticMeshComponent>();
                 mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
 
                 auto pbrMat            = entity->addComponent<ya::PBRMaterialComponent>();
@@ -495,7 +495,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
             tc->setPosition(pbrLights[i].pos);
             tc->setScale(glm::vec3(0.3f));
 
-            auto mc = entity->addComponent<ya::MeshComponent>();
+            auto mc = entity->addComponent<ya::StaticMeshComponent>();
             mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Sphere);
 
             auto plc       = entity->addComponent<ya::PointLightComponent>();
@@ -519,7 +519,7 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         tc->setPosition(glm::vec3(x, 0.0f, z));
 
         // Mesh component
-        auto mc = entity->addComponent<ya::MeshComponent>();
+        auto mc = entity->addComponent<ya::StaticMeshComponent>();
         mc->setPrimitiveGeometry(ya::EPrimitiveGeometry::Cube);
 
         // Get pre-created material params from factory (loaded from JSON)

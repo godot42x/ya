@@ -16,7 +16,6 @@ namespace ya
 {
 
 // Forward declarations
-struct MeshComponent;
 struct PhongMaterialComponent;
 struct PBRMaterialComponent;
 struct Scene;

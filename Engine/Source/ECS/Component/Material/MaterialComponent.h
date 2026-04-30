@@ -30,7 +30,7 @@ enum class EMaterialResolveResult : uint8_t
  * @brief Template material component base
  *
  * Provides type-safe material access and common functionality.
- * Does NOT handle mesh data - use MeshComponent for that.
+ * Does NOT handle mesh data - use StaticMeshComponent/SkinnedMeshComponent for that.
  *
  * @tparam TMaterial The concrete material type (e.g., PhongMaterial)
  */

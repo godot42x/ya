@@ -5,7 +5,8 @@
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
-#include "ECS/Component/MeshComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "TypeRenderer.h"
 
@@ -598,7 +599,10 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<ModelComponent>("Model", entity, [](ModelComponent* mc) {
         mc->invalidate();
     });
-    drawReflectedComponent<MeshComponent>("Mesh", entity, [](MeshComponent* mc) {
+    drawReflectedComponent<StaticMeshComponent>("Static Mesh", entity, [](StaticMeshComponent* mc) {
+        mc->invalidate();
+    });
+    drawReflectedComponent<SkinnedMeshComponent>("Skinned Mesh", entity, [](SkinnedMeshComponent* mc) {
         mc->invalidate();
     });
     drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
