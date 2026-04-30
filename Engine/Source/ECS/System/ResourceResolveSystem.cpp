@@ -5,6 +5,8 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "Runtime/App/App.h"
 #include "Scene/SceneManager.h"
@@ -90,11 +92,26 @@ void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
+    auto resolveOne = [](auto& meshComp) {
+        if (!meshComp.isResolved() && meshComp.hasMeshSource()) {
+            meshComp.resolve();
+        }
+    };
+
+    // Legacy MeshComponent (still used by editor/example authoring paths).
     registry.view<MeshComponent>().each([&](auto entity, MeshComponent& meshComponent) {
         (void)entity;
-        if (!meshComponent.isResolved() && meshComponent.hasMeshSource()) {
-            meshComponent.resolve();
-        }
+        resolveOne(meshComponent);
+    });
+
+    // New Static/Skinned split (used by ModelInstantiationSystem from stage 4 onward).
+    registry.view<StaticMeshComponent>().each([&](auto entity, StaticMeshComponent& comp) {
+        (void)entity;
+        resolveOne(comp);
+    });
+    registry.view<SkinnedMeshComponent>().each([&](auto entity, SkinnedMeshComponent& comp) {
+        (void)entity;
+        resolveOne(comp);
     });
 }
 

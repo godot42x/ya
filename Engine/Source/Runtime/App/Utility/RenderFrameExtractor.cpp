@@ -7,6 +7,7 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/MeshComponent.h"
@@ -172,103 +173,68 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     auto& out         = *ctx.frameData;
     const auto viewOwner = ctx.viewOwner;
 
-    // PBR
-    for (const auto& [e, mc, tc, pmc] :
-         reg.view<MeshComponent, TransformComponent, PBRMaterialComponent>().each()) {
-        if (e == viewOwner) continue;
-        if (!mc.isResolved() || !mc.getMesh()) continue;
+    // Emit a RenderDrawItem for every (MeshComp, TransformComponent, MaterialComp)
+    // triple. Runs once per mesh component type (legacy MeshComponent + the new
+    // Static/Skinned split) so authoring-created and model-instantiated entities
+    // feed into the same draw-item buckets.
+    auto emitTyped = [&]<typename MeshComp, typename MatComp>(
+        std::vector<RenderDrawItem>& bucket) {
+        for (const auto& [e, mc, tc, matComp] :
+             reg.view<MeshComp, TransformComponent, MatComp>().each()) {
+            if (e == viewOwner) continue;
+            if (!mc.isResolved() || !mc.getMesh()) continue;
 
-        auto* mat = pmc.getMaterial();
-        if (!mat || mat->getIndex() < 0) continue;
+            auto* mat = matComp.getMaterial();
+            if (!mat || mat->getIndex() < 0) continue;
 
-        out.pbrDrawItems.push_back(RenderDrawItem{
-            .worldMatrix   = tc.getTransform(),
-            .mesh          = mc.getMesh(),
-            .material      = mat,
-            .materialIndex = static_cast<uint32_t>(mat->getIndex()),
-            .sortKey       = 0.0f,
-            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
-        });
-    }
-
-    // Phong
-    for (const auto& [e, mc, tc, pmc] :
-         reg.view<MeshComponent, TransformComponent, PhongMaterialComponent>().each()) {
-        if (e == viewOwner) continue;
-        if (!mc.isResolved() || !mc.getMesh()) continue;
-
-        auto* mat = pmc.getMaterial();
-        if (!mat || mat->getIndex() < 0) continue;
-
-        out.phongDrawItems.push_back(RenderDrawItem{
-            .worldMatrix   = tc.getTransform(),
-            .mesh          = mc.getMesh(),
-            .material      = mat,
-            .materialIndex = static_cast<uint32_t>(mat->getIndex()),
-            .sortKey       = 0.0f,
-            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
-        });
-    }
-
-    // Unlit
-    for (const auto& [e, mc, tc, umc] :
-         reg.view<MeshComponent, TransformComponent, UnlitMaterialComponent>().each()) {
-        if (e == viewOwner) continue;
-        if (!mc.isResolved() || !mc.getMesh()) continue;
-
-        auto* mat = umc.getMaterial();
-        if (!mat || mat->getIndex() < 0) continue;
-
-        out.unlitDrawItems.push_back(RenderDrawItem{
-            .worldMatrix   = tc.getTransform(),
-            .mesh          = mc.getMesh(),
-            .material      = mat,
-            .materialIndex = static_cast<uint32_t>(mat->getIndex()),
-            .sortKey       = 0.0f,
-            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
-        });
-    }
-
-    // Simple
-    for (const auto& [e, mc, tc, smc] :
-         reg.view<MeshComponent, TransformComponent, SimpleMaterialComponent>().each()) {
-        if (e == viewOwner) continue;
-        if (!mc.isResolved() || !mc.getMesh()) continue;
-
-        auto* mat = smc.getMaterial();
-        if (!mat || mat->getIndex() < 0) continue;
-
-        out.simpleDrawItems.push_back(RenderDrawItem{
-            .worldMatrix   = tc.getTransform(),
-            .mesh          = mc.getMesh(),
-            .material      = mat,
-            .materialIndex = static_cast<uint32_t>(mat->getIndex()),
-            .sortKey       = 0.0f,
-            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
-        });
-    }
-
-    // Fallback: MeshComponent + TransformComponent, no material
-    // (entities that have a mesh but none of the material components above)
-    for (const auto& [e, mc, tc] :
-         reg.view<MeshComponent, TransformComponent>().each()) {
-        if (e == viewOwner) continue;
-        if (!mc.isResolved() || !mc.getMesh()) continue;
-
-        // Skip if it has any material component
-        if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
-            continue;
+            bucket.push_back(RenderDrawItem{
+                .worldMatrix          = tc.getTransform(),
+                .mesh                 = mc.getMesh(),
+                .material             = mat,
+                .materialIndex        = static_cast<uint32_t>(mat->getIndex()),
+                .sortKey              = 0.0f,
+                .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
+            });
         }
+    };
 
-        out.fallbackDrawItems.push_back(RenderDrawItem{
-            .worldMatrix   = tc.getTransform(),
-            .mesh          = mc.getMesh(),
-            .material      = nullptr,
-            .materialIndex = 0,
-            .sortKey       = 0.0f,
-            .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
-        });
-    }
+    auto emitForAllMeshTypes = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket) {
+        emitTyped.template operator()<MeshComponent, MatComp>(bucket);
+        emitTyped.template operator()<StaticMeshComponent, MatComp>(bucket);
+        emitTyped.template operator()<SkinnedMeshComponent, MatComp>(bucket);
+    };
+
+    emitForAllMeshTypes.template operator()<PBRMaterialComponent>(out.pbrDrawItems);
+    emitForAllMeshTypes.template operator()<PhongMaterialComponent>(out.phongDrawItems);
+    emitForAllMeshTypes.template operator()<UnlitMaterialComponent>(out.unlitDrawItems);
+    emitForAllMeshTypes.template operator()<SimpleMaterialComponent>(out.simpleDrawItems);
+
+    // Fallback: mesh + transform, no material component. Run per mesh type and skip
+    // entities that already carry any material component.
+    auto emitFallback = [&]<typename MeshComp>() {
+        for (const auto& [e, mc, tc] :
+             reg.view<MeshComp, TransformComponent>().each()) {
+            if (e == viewOwner) continue;
+            if (!mc.isResolved() || !mc.getMesh()) continue;
+
+            if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
+                continue;
+            }
+
+            out.fallbackDrawItems.push_back(RenderDrawItem{
+                .worldMatrix          = tc.getTransform(),
+                .mesh                 = mc.getMesh(),
+                .material             = nullptr,
+                .materialIndex        = 0,
+                .sortKey              = 0.0f,
+                .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
+            });
+        }
+    };
+
+    emitFallback.template operator()<MeshComponent>();
+    emitFallback.template operator()<StaticMeshComponent>();
+    emitFallback.template operator()<SkinnedMeshComponent>();
 }
 
 void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)

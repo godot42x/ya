@@ -11,7 +11,6 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Entity.h"
@@ -312,12 +311,6 @@ Node* ModelInstantiationSystem::createMeshNode(Scene*                      scene
 
     // Mark as managed child — serializer will skip this entity (recreated at runtime)
     childEntity->addComponent<ManagedChildComponent>();
-
-    // Legacy MeshComponent is still attached for systems not yet migrated to the
-    // Static/Skinned split. It will be removed in a later stage once all consumers
-    // read from StaticMeshComponent / SkinnedMeshComponent.
-    auto* meshComp = childEntity->addComponent<MeshComponent>();
-    meshComp->setFromModel(model->getFilepath(), meshIndex, model->getMesh(meshIndex).get());
 
     const int32_t skeletonIndex = model->getMeshSkeletonIndex(meshIndex);
     const bool    isSkinnedMesh = skeletonIndex >= 0 && rootAnimator != nullptr;

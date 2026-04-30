@@ -1,5 +1,7 @@
 #include "RayCastMousePickingSystem.h"
 #include "Core/Camera/Camera.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
@@ -19,8 +21,8 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
     std::optional<RaycastHit> closestHit;
     float                     closestDistance = std::numeric_limits<float>::max();
 
-    // Helper lambda to test mesh component
-    auto testMeshComponent = [&](entt::entity entityHandle, TransformComponent &tc, MeshComponent &meshComp) {
+    // Helper lambda to test mesh component (works for MeshComponent, StaticMeshComponent, SkinnedMeshComponent)
+    auto testMeshComponent = [&](entt::entity entityHandle, TransformComponent &tc, auto &meshComp) {
         Mesh* mesh = meshComp.getMesh();
         if (!mesh) {
             return;
@@ -50,9 +52,18 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const
 
     // TODO: how to apply material's logic transform to the mesh in the world?
     //      经过材质处理，mesh的实际大小位置可能发生变化
-    // Check all entities with MeshComponent
-    scene->getRegistry().view<MeshComponent, TransformComponent>().each(
+    // Check all entities with any mesh component type
+    auto& registry = scene->getRegistry();
+    registry.view<MeshComponent, TransformComponent>().each(
         [&](entt::entity handle, MeshComponent &mc, TransformComponent &tc) {
+            testMeshComponent(handle, tc, mc);
+        });
+    registry.view<StaticMeshComponent, TransformComponent>().each(
+        [&](entt::entity handle, StaticMeshComponent &mc, TransformComponent &tc) {
+            testMeshComponent(handle, tc, mc);
+        });
+    registry.view<SkinnedMeshComponent, TransformComponent>().each(
+        [&](entt::entity handle, SkinnedMeshComponent &mc, TransformComponent &tc) {
             testMeshComponent(handle, tc, mc);
         });
 

@@ -1,4 +1,6 @@
 #include "ShadowMapping.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/MeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Swapchain.h"
@@ -208,24 +210,30 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
                                    _dsPerFrame[_index],
                                });
 
-    auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
-    for (const auto& [entity, mc, tc] : view.each()) {
-        auto* mesh = mc.getMesh();
-        if (!mesh) {
-            continue;
+    auto drawMeshView = [&]<typename MeshComp>() {
+        auto view = scene->getRegistry().view<MeshComp, TransformComponent>();
+        for (const auto& [entity, mc, tc] : view.each()) {
+            auto* mesh = mc.getMesh();
+            if (!mesh) {
+                continue;
+            }
+
+            ModelPushConstant pushConst{
+                .model = tc.getTransform(),
+            };
+            cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  _pipelineLayoutDesc.pushConstants[0].stageFlags,
+                                  0,
+                                  sizeof(ModelPushConstant),
+                                  &pushConst);
+
+            mesh->draw(cmdBuf);
         }
+    };
 
-        ModelPushConstant pushConst{
-            .model = tc.getTransform(),
-        };
-        cmdBuf->pushConstants(_pipelineLayout.get(),
-                              _pipelineLayoutDesc.pushConstants[0].stageFlags,
-                              0,
-                              sizeof(ModelPushConstant),
-                              &pushConst);
-
-        mesh->draw(cmdBuf);
-    }
+    drawMeshView.template operator()<MeshComponent>();
+    drawMeshView.template operator()<StaticMeshComponent>();
+    drawMeshView.template operator()<SkinnedMeshComponent>();
 
     advance();
 }
