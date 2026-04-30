@@ -2,19 +2,24 @@
 
 #include "Render/RenderFrameData.h"
 
+#include <unordered_map>
+
 namespace ya
 {
 
 struct Scene;
 struct RenderRuntime;
+struct SkeletonAnimatorComponent;
 
 struct RenderFrameExtractor
 {
     struct DrawItemExtractionContext
     {
-        entt::registry*   registry = nullptr;
-        RenderFrameData*  frameData = nullptr;
-        entt::entity      viewOwner = entt::null;
+        entt::registry* registry  = nullptr;
+        RenderFrameData* frameData = nullptr;
+        entt::entity    viewOwner = entt::null;
+
+        std::unordered_map<const SkeletonAnimatorComponent*, int32_t> skinningPaletteCache;
     };
 
     struct ExtractInput

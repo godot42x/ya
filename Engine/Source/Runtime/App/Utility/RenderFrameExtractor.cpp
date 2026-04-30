@@ -149,6 +149,10 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
+    if (auto it = ctx.skinningPaletteCache.find(skeletonComp); it != ctx.skinningPaletteCache.end()) {
+        return it->second;
+    }
+
     const auto& pose = skeletonComp->getPose();
     if (pose.boneMatrices.empty()) {
         return -1;
@@ -162,7 +166,9 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         palette.boneMatrices[boneIndex] = pose.boneMatrices[boneIndex];
     }
 
-    return static_cast<int32_t>(ctx.frameData->skinningPalettes.size() - 1);
+    const int32_t paletteIndex = static_cast<int32_t>(ctx.frameData->skinningPalettes.size() - 1);
+    ctx.skinningPaletteCache.emplace(skeletonComp, paletteIndex);
+    return paletteIndex;
 }
 
 void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
@@ -243,10 +249,29 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
         item.sortKey  = glm::distance2(cameraPos, pos);
     };
 
-    auto sortByDistance = [](std::vector<RenderDrawItem>& items)
+    auto sortOpaqueBucket = [](std::vector<RenderDrawItem>& items)
     {
         std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b)
-                  { return a.sortKey < b.sortKey; });
+                  {
+                      if (a.materialIndex != b.materialIndex) {
+                          return a.materialIndex < b.materialIndex;
+                      }
+                      if (a.mesh != b.mesh) {
+                          return a.mesh < b.mesh;
+                      }
+                      return a.sortKey < b.sortKey;
+                  });
+    };
+
+    auto sortFallbackBucket = [](std::vector<RenderDrawItem>& items)
+    {
+        std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b)
+                  {
+                      if (a.mesh != b.mesh) {
+                          return a.mesh < b.mesh;
+                      }
+                      return a.sortKey < b.sortKey;
+                  });
     };
 
     auto sortBuckets = [&](RenderShadingDrawBuckets& buckets)
@@ -257,11 +282,11 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
         for (auto& item : buckets.simpleDrawItems) computeSortKey(item);
         for (auto& item : buckets.fallbackDrawItems) computeSortKey(item);
 
-        sortByDistance(buckets.pbrDrawItems);
-        sortByDistance(buckets.phongDrawItems);
-        sortByDistance(buckets.unlitDrawItems);
-        sortByDistance(buckets.simpleDrawItems);
-        sortByDistance(buckets.fallbackDrawItems);
+        sortOpaqueBucket(buckets.pbrDrawItems);
+        sortOpaqueBucket(buckets.phongDrawItems);
+        sortOpaqueBucket(buckets.unlitDrawItems);
+        sortOpaqueBucket(buckets.simpleDrawItems);
+        sortFallbackBucket(buckets.fallbackDrawItems);
     };
 
     sortBuckets(out.drawBuckets.staticMeshes);
