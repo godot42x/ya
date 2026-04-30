@@ -2,11 +2,6 @@
     "entities": [
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -127,6 +122,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         2.0,
@@ -150,11 +152,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -274,6 +271,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -432,6 +436,16 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "SkeletonAnimatorComponent": {
+                    "_clipIndex": 0,
+                    "_loop": true,
+                    "_meshIndex": 0,
+                    "_playing": true,
+                    "_skeletonIndex": 0,
+                    "_sourceModelPath": "Engine/Content/Misc/Monkey.obj",
+                    "_speed": 1.0,
+                    "_time": 0.0
+                },
                 "TransformComponent": {
                     "_position": [
                         5.0,
@@ -455,11 +469,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -595,6 +604,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -618,11 +634,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -758,6 +769,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -794,6 +812,16 @@
                         }
                     },
                     "_useEmbeddedMaterials": true
+                },
+                "SkeletonAnimatorComponent": {
+                    "_clipIndex": 0,
+                    "_loop": true,
+                    "_meshIndex": 0,
+                    "_playing": true,
+                    "_skeletonIndex": 0,
+                    "_sourceModelPath": "Engine/Content/Assets/backpack/backpack.obj",
+                    "_speed": 1.0,
+                    "_time": 0.0
                 },
                 "TransformComponent": {
                     "_position": [
@@ -832,6 +860,16 @@
                     },
                     "_useEmbeddedMaterials": true
                 },
+                "SkeletonAnimatorComponent": {
+                    "_clipIndex": 0,
+                    "_loop": true,
+                    "_meshIndex": 0,
+                    "_playing": true,
+                    "_skeletonIndex": 0,
+                    "_sourceModelPath": "Engine\\ThirdParty\\LearnOpenGL\\resources\\objects\\vampire\\dancing_vampire.dae",
+                    "_speed": 1.0,
+                    "_time": 131305.992885
+                },
                 "TransformComponent": {
                     "_position": [
                         -18.668901,
@@ -855,11 +893,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -995,6 +1028,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -1018,11 +1058,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -1143,6 +1178,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -4.0,
@@ -1166,11 +1208,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -1291,6 +1328,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -4.0,
@@ -1314,11 +1358,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -1454,6 +1493,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -1477,11 +1523,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "SkyboxComponent": {
                     "cubemapSource": {
                         "files": [
@@ -1499,6 +1540,13 @@
                         "flipVertical": true
                     },
                     "sourceType": "CubeFaces"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -1523,11 +1571,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -1663,6 +1706,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -1686,11 +1736,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -1811,6 +1856,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -1.0,
@@ -1834,11 +1886,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -1959,6 +2006,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -7.0,
@@ -1982,11 +2036,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -2107,6 +2156,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -7.0,
@@ -2130,11 +2186,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -2270,6 +2321,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -2293,11 +2351,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Quad",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -2418,6 +2471,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         5.0,
@@ -2441,11 +2501,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -2581,6 +2636,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -2604,11 +2666,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -2744,6 +2801,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -2767,11 +2831,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -2907,6 +2966,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -2930,11 +2996,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -3070,6 +3131,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -3093,11 +3161,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -3233,6 +3296,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -3256,11 +3326,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -3396,6 +3461,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -3419,11 +3491,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -3559,6 +3626,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -3582,11 +3656,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -3707,6 +3776,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -3730,11 +3806,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -3855,6 +3926,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -3878,11 +3956,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4018,6 +4091,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -4041,11 +4121,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -4166,6 +4241,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         0.0,
@@ -4189,11 +4271,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4329,6 +4406,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -4352,11 +4436,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4492,6 +4571,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -4515,11 +4601,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4655,6 +4736,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -4678,11 +4766,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4818,6 +4901,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Sphere",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -4841,11 +4931,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -4981,6 +5066,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -5004,11 +5096,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -5129,6 +5216,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -7.0,
@@ -5152,11 +5246,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -5175,6 +5264,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -5265,11 +5361,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -5405,6 +5496,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -5428,11 +5526,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -5451,6 +5544,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -5541,11 +5641,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -5666,6 +5761,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         2.0,
@@ -5689,11 +5791,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -5829,6 +5926,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -5852,11 +5956,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -5992,6 +6091,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -6015,11 +6121,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -6155,6 +6256,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -6178,11 +6286,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Quad",
-                    "_sourceModelPath": ""
-                },
                 "MirrorComponent": null,
                 "PhongMaterialComponent": {
                     "__base__": {
@@ -6304,6 +6407,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -5.0,
@@ -6327,11 +6437,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -6467,6 +6572,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -6490,11 +6602,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -6513,6 +6620,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -6603,11 +6717,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -6743,6 +6852,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -6766,11 +6882,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -6891,6 +7002,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -1.0,
@@ -6914,11 +7032,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -7039,6 +7152,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         2.0,
@@ -7062,11 +7182,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -7202,6 +7317,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -7225,11 +7347,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -7365,6 +7482,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -7388,11 +7512,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -7528,6 +7647,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -7551,11 +7677,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -7691,6 +7812,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -7765,6 +7893,16 @@
                     },
                     "_useEmbeddedMaterials": true
                 },
+                "SkeletonAnimatorComponent": {
+                    "_clipIndex": 0,
+                    "_loop": true,
+                    "_meshIndex": 0,
+                    "_playing": true,
+                    "_skeletonIndex": 0,
+                    "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/nanosuit/nanosuit.obj",
+                    "_speed": 1.0,
+                    "_time": 0.0
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -7788,11 +7926,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -7913,6 +8046,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -1.0,
@@ -7936,11 +8076,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -8076,6 +8211,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Sphere",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -8099,11 +8241,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -8239,6 +8376,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -8262,11 +8406,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -8387,6 +8526,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         0.0,
@@ -8410,11 +8556,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -8535,6 +8676,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -8558,11 +8706,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -8698,6 +8841,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -8721,11 +8871,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -8861,6 +9006,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -8884,11 +9036,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -9009,6 +9156,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         10.0,
@@ -9032,11 +9186,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -9157,6 +9306,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -1.0,
@@ -9180,11 +9336,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -9320,6 +9471,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -9343,11 +9501,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -9468,6 +9621,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -9491,11 +9651,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -9616,6 +9771,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -10.0,
@@ -9664,11 +9826,6 @@
                         ]
                     }
                 },
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -9687,6 +9844,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -9777,11 +9941,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -9917,6 +10076,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         35.0,
@@ -9940,11 +10106,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -10065,6 +10226,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -4.0,
@@ -10132,11 +10300,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -10272,6 +10435,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -10295,11 +10465,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -10420,6 +10585,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -4.0,
@@ -10461,11 +10633,6 @@
                     "_orthoHalfWidth": 20.0,
                     "bEnable": true,
                     "intensity": 1.0
-                },
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
                 },
                 "PhongMaterialComponent": {
                     "__base__": {
@@ -10587,6 +10754,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         0.0,
@@ -10610,11 +10784,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -10750,6 +10919,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -10773,11 +10949,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -10913,6 +11084,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         20.0,
@@ -10936,11 +11114,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -11076,6 +11249,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -11099,11 +11279,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -11122,6 +11297,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [
@@ -11212,11 +11394,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -11352,6 +11529,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -11375,11 +11559,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -11515,6 +11694,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -11538,11 +11724,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -11663,6 +11844,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -1.0,
@@ -11686,11 +11874,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -11826,6 +12009,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -11849,11 +12039,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -11989,6 +12174,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         32.5,
@@ -12012,11 +12204,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -12152,6 +12339,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         22.5,
@@ -12175,11 +12369,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -12315,6 +12504,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -12338,11 +12534,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -12463,6 +12654,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -7.0,
@@ -12486,11 +12684,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -12611,6 +12804,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -4.0,
@@ -12634,11 +12834,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -12774,6 +12969,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         30.0,
@@ -12797,11 +12999,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -12937,6 +13134,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         27.5,
@@ -12960,11 +13164,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -13100,6 +13299,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         25.0,
@@ -13123,11 +13329,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Cube",
-                    "_sourceModelPath": ""
-                },
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -13248,6 +13449,13 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
+                },
                 "TransformComponent": {
                     "_position": [
                         -7.0,
@@ -13271,11 +13479,6 @@
         },
         {
             "components": {
-                "StaticMeshComponent": {
-                    "_meshIndex": 0,
-                    "_primitiveGeometry": "Sphere",
-                    "_sourceModelPath": ""
-                },
                 "PBRMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
@@ -13410,6 +13613,13 @@
                 },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Cube",
+                        "_sourceModelPath": ""
+                    }
                 },
                 "TransformComponent": {
                     "_position": [

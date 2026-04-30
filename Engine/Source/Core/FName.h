@@ -65,9 +65,20 @@ class NameRegistry
         std::string       toString(index_t index) const { return std::string(view(index)); }
 };
 
+// Sentinel string for FName(index=0) / default-constructed FName. Points at a
+// stable static literal so debuggers can always deref _debugStr safely.
+inline constexpr const char* FNAME_DEBUG_EMPTY = "";
+
 struct FName
 {
     index_t _index = 0;
+    // Debugger-visible pointer to the interned string. NameRegistry stores
+    // strings in a std::deque, whose elements have stable addresses, so this
+    // pointer stays valid for the program lifetime. Not used for any runtime
+    // logic — equality / hashing still go through _index. Keeps watch windows
+    // and crash dumps useful without forcing the debugger to call registry
+    // functions across a shared_mutex.
+    const char* _debugStr = FNAME_DEBUG_EMPTY;
 
     FName() = default;
     FName(const std::string& name)
@@ -84,7 +95,8 @@ struct FName
             return;
         }
 
-        _index = NameRegistry::get().indexing(name);
+        _index    = NameRegistry::get().indexing(name);
+        _debugStr = NameRegistry::get().c_str(_index);
     }
     ~FName() {}
 
