@@ -42,7 +42,10 @@ vec4 fragMain(VertexOutput IN) : SV_Target
     up = normalize(cross(N, right));
 
     vec3 ret = vec3(0);
-    float sampleDelta = 0.025;
+#ifndef SAMPLE_DELTA
+    #define SAMPLE_DELTA 0.1
+#endif
+    float sampleDelta = SAMPLE_DELTA;
     float sampleCount = 0;
     // sample each direction on hemisphere surface
     for (float phi = 0; phi < 2.0 * PI; phi += sampleDelta)

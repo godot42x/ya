@@ -108,6 +108,7 @@ void CubeMap2PBRPrefilteredEnv::shutdown()
     _pipeline.reset();
     _pipelineLayout.reset();
     _inputSampler.reset();
+    _transientFaceViews.clear();
     _descriptorPool.reset();
     _descriptorSetLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
@@ -136,6 +137,7 @@ bool CubeMap2PBRPrefilteredEnv::ensurePipeline(EFormat::T colorFormat)
             .pipelineLayout = _pipelineLayout.get(),
             .shaderDesc     = ShaderDesc{
                 .shaderName        = "Misc/CubeMap2PBRPrefilterEnv.slang",
+                .defines           = {"SAMPLE_COUNT 64"},
                 .vertexBufferDescs = {
                     VertexBufferDescription{
                         .slot  = 0,
@@ -212,6 +214,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         return result;
     }
 
+    _transientFaceViews.clear();
     auto* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
     YA_CORE_ASSERT(cubeMesh, "CubeMap2PBRPrefilterEnv requires a cube primitive mesh");
     if (!cubeMesh) {
@@ -270,6 +273,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
             const auto faceTexture  = Texture::wrap(ctx.output->getImageShared(),
                                                     faceView,
                                                     std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face));
+            _transientFaceViews.push_back(faceView);
             const auto pushConstant = buildPushConstant(face, roughness);
 
             RenderingInfo renderInfo{
@@ -302,8 +306,6 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
                                       &pushConstant);
             cubeMesh->draw(ctx.cmdBuf);
             ctx.cmdBuf->endRendering(renderInfo);
-
-            DeferredDeletionQueue::get().retireResource(faceView);
         }
 
         if (!bAllFacesSuccess) {

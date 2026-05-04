@@ -60,6 +60,7 @@ struct CubeMap2PBRIrradianceMap
     stdptr<IGraphicsPipeline>    _pipeline            = nullptr;
     DescriptorSetHandle          _descriptorSet       = nullptr;
     EFormat::T                   _pipelineColorFormat = EFormat::Undefined;
+    std::vector<stdptr<IImageView>> _transientFaceViews;
 
     struct ExecuteResult
     {

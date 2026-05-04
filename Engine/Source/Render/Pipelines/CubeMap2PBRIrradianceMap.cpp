@@ -89,6 +89,7 @@ void CubeMap2PBRIrradianceMap::shutdown()
     _pipeline.reset();
     _pipelineLayout.reset();
     _inputSampler.reset();
+    _transientFaceViews.clear();
     _descriptorPool.reset();
     _descriptorSetLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
@@ -194,6 +195,7 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
         return result;
     }
 
+    _transientFaceViews.clear();
     auto* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
     YA_CORE_ASSERT(cubeMesh, "CubeMap2PBRIrradianceMap requires a cube primitive mesh");
     if (!cubeMesh) {
@@ -250,6 +252,7 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
             ctx.output->getImageShared(),
             faceView,
             std::format("{}_Face_{}", ctx.output->getLabel(), face));
+        _transientFaceViews.push_back(faceView);
         const auto pushConstant = buildPushConstant(face);
 
         RenderingInfo renderInfo{
@@ -287,8 +290,6 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
                                   &pushConstant);
         cubeMesh->draw(ctx.cmdBuf);
         ctx.cmdBuf->endRendering(renderInfo);
-
-        DeferredDeletionQueue::get().retireResource(faceView);
     }
 
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ShaderReadOnlyOptimal, &cubeRange);

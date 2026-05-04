@@ -60,7 +60,7 @@ def build_slang_limits_content(config_path: str | Path) -> str:
         "",
     ]
     for name, value in defines.items():
-        header_lines.append(f"#undef {name}")
+        header_lines.append(f"// #undef {name}")
         header_lines.append(f"#define {name} {_to_define_literal(value)}")
     header_lines.append("")
     return "\n".join(header_lines)

@@ -34,7 +34,7 @@ std::shared_ptr<OffscreenJobState> createEnvironmentPrefilterJob(ResourceResolve
 
 uint32_t computeEnvironmentPrefilterFaceSize(const Texture* sourceCubemap)
 {
-    static constexpr uint32_t MAX_PREFILTER_FACE_SIZE = 256;
+    static constexpr uint32_t MAX_PREFILTER_FACE_SIZE = 64;
 
     if (!sourceCubemap) {
         return 0;

@@ -29,6 +29,7 @@ struct EquidistantCylindrical2CubeMap
     stdptr<IGraphicsPipeline>    _pipeline            = nullptr;
     DescriptorSetHandle          _descriptorSet       = nullptr;
     EFormat::T                   _pipelineColorFormat = EFormat::Undefined;
+    std::vector<stdptr<IImageView>> _transientFaceViews;
 
 
   public:

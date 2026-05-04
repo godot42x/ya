@@ -28,7 +28,7 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
 [[vk::binding(0,0)]] SamplerCube environmentMap;
 
 #ifndef SAMPLE_COUNT
-    #define SAMPLE_COUNT 1024u
+    #define SAMPLE_COUNT 64u
 #endif
 
 [shader("fragment")]

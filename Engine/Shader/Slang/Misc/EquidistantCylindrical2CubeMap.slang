@@ -14,14 +14,6 @@ struct VertexOutput{
     vec4 sv_position : SV_Position;
 };
 
-struct GeometryOutput {
-    vec2 uv : TEXCOORD0;
-    vec4 sv_position : SV_Position;
-    uint layer : SV_RenderTargetArrayIndex;
-};
-
-
-
 [[vk::binding(0,0)]] Sampler2D uTexEquidistantRectangular;
 
 [shader("vertex")]
@@ -40,20 +32,6 @@ void vertMain(uint vertexId : SV_VertexID, out VertexOutput OUT)
 
     OUT.uv          = pos * 0.5 + 0.5;
     OUT.sv_position = float4(pos, 0.0, 1.0);
-}
-
-[shader("geometry")]
-[maxvertexcount(3)]
-void geomMain(triangle VertexOutput IN[3], inout TriangleStream<GeometryOutput> outStream)
-{
-    for (int i = 0; i < 3; ++i) {
-        GeometryOutput OUT;
-        OUT.uv          = IN[i].uv;
-        OUT.sv_position = IN[i].sv_position;
-        OUT.layer       = pc.faceIndex;
-        outStream.Append(OUT);
-    }
-    outStream.RestartStrip();
 }
 
 
@@ -89,7 +67,7 @@ vec2 sampleSphericalMap(vec3 viewDir)
 }
 
 [shader("fragment")]
-void fragMain(in GeometryOutput IN, out FragmentOutput OUT)
+void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 {
     // 直接由屏幕 uv 解析出当前 cubemap face 的方向，再映射到等距圆柱图上取样。
     vec2 uv = sampleSphericalMap(cubemapFaceDirection(pc.faceIndex, IN.uv));

@@ -15,7 +15,7 @@ PipelineLayoutDesc makePipelineLayoutDesc()
             PushConstantRange{
                 .offset     = 0,
                 .size       = sizeof(EquidistantCylindrical2CubeMap::PushConstant),
-                .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment,
             },
         },
         .descriptorSetLayouts = {
@@ -96,6 +96,7 @@ void EquidistantCylindrical2CubeMap::shutdown()
     _pipeline.reset();
     _pipelineLayout.reset();
     _inputSampler.reset();
+    _transientFaceViews.clear();
     _descriptorPool.reset();
     _descriptorSetLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
@@ -187,28 +188,8 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
         return result;
     }
 
+    _transientFaceViews.clear();
     auto* textureFactory = _render->getTextureFactory();
-
-    // imageView from output image
-    // why: make sure the image view is a View2DArray for color attachment not a cubeMap by input created
-    result.transientOutputArrayView = textureFactory->createImageView(
-        ctx.output->getImageShared(),
-        ImageViewCreateInfo{
-            .label          = std::format("{}_RenderArray", ctx.output->getLabel()),
-            .viewType       = EImageViewType::View2DArray,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = CubeFace_Count,
-        });
-    YA_CORE_ASSERT(result.transientOutputArrayView,
-                   "Failed to create EquidistantCylindrical2CubeMap output array view");
-
-    auto outputRenderTexture = Texture::wrap(
-        ctx.output->getImageShared(),
-        result.transientOutputArrayView,
-        std::format("{}_RenderArray", ctx.output->getLabel()));
 
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
@@ -235,6 +216,28 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
 
     const auto extent = ctx.output->getExtent();
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
+        auto faceView = textureFactory->createImageView(
+            ctx.output->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = face,
+                .layerCount     = 1,
+            });
+        YA_CORE_ASSERT(faceView, "Failed to create EquidistantCylindrical2CubeMap output face view");
+        if (!faceView) {
+            return result;
+        }
+
+        auto faceTexture = Texture::wrap(
+            ctx.output->getImageShared(),
+            faceView,
+            std::format("{}_Face_{}", ctx.output->getLabel(), face));
+        _transientFaceViews.push_back(faceView);
+
         const auto pushConstant = buildPushConstant(face, ctx.bFlipVertical);
         RenderingInfo renderInfo{
             .label      = std::format("EquidistantCylindrical2CubeMap_Face_{}", face),
@@ -242,13 +245,13 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
                 .pos    = {0.0f, 0.0f},
                 .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
             },
-            .layerCount       = CubeFace_Count,
+            .layerCount       = 1,
             .colorClearValues = {ctx.clearColor},
             .depthClearValue  = ClearValue(1.0f, 0),
             .colorAttachments = {
                 RenderingInfo::ImageSpec{
-                    .texture = outputRenderTexture.get(),
-                    .loadOp  = (face == 0) ? EAttachmentLoadOp::Clear : EAttachmentLoadOp::Load,
+                    .texture = faceTexture.get(),
+                    .loadOp  = EAttachmentLoadOp::Clear,
                     .storeOp = EAttachmentStoreOp::Store,
                 },
             },
@@ -265,7 +268,7 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
         ctx.cmdBuf->setScissor(0, 0, extent.width, extent.height);
         ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet});
         ctx.cmdBuf->pushConstants(_pipelineLayout.get(),
-                                  EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                                  EShaderStage::Vertex | EShaderStage::Fragment,
                                   0,
                                   sizeof(PushConstant),
                                   &pushConstant);
