@@ -1,6 +1,10 @@
 add_rules("mode.debug", "mode.release")
 set_languages("c++20")
 
+-- NOTE (macOS Vulkan SDK): the repo-local SDK at
+-- Engine/ThirdParty/VulkanSDK/<version>/macOS is auto-discovered by
+-- Xmake/package/vulkan/xmake.lua. No setup-env.sh sync step is required.
+
 if is_plat("windows") then
     set_exceptions("cxx")
     set_runtimes("MD") -- use dynamic CRT to match VulkanSDK prebuilt libs (shaderc_combined etc.)

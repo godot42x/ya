@@ -54,8 +54,6 @@ add_requires("vulkansdk", {
             "spirv-cross-util",
             "spirv-cross-reflect",
             "spirv-cross-glsl",
-
-
         }
     }
 })
@@ -91,8 +89,18 @@ do
         add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
-    add_files("./Source/**.cpp")
+    -- Exclude Implementaion/*.cpp from the broad glob; they're added
+    -- separately below with unity_ignored to keep their single-header
+    -- _IMPLEMENTATION defines intact (a sibling TU in the same unity batch
+    -- can include the underlying header first, which then blocks the later
+    -- implementation expansion via include guard and causes unresolved
+    -- symbols at link time).
+    add_files("./Source/**.cpp|Implementaion/*.cpp")
     remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
+
+    add_files("./Source/Implementaion/VulkanMemoryAllocator.cpp", { unity_ignored = true })
+    add_files("./Source/Implementaion/STB.cpp", { unity_ignored = true })
+    add_files("./Source/Implementaion/TinyGLTF.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source//FWD.h")
@@ -131,7 +139,7 @@ do
 
 
     add_packages("vulkansdk", { public = true })
-    add_packages("vulkan-memory-allocator")
+    add_packages("vulkan-memory-allocator", { public = true })
     add_packages("glad")
     add_packages("cxxopts", { public = true })
     add_packages("entt", { public = true })

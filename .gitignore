@@ -38,3 +38,8 @@ claude-history
 Saved
 # not sure the asset type implementation for now
 *ya-meta.json
+
+# macOS: repo-local Vulkan SDK + generated env scripts
+Engine/ThirdParty/VulkanSDK/
+setup-env.sh
+setup-env.fish
