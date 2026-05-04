@@ -854,7 +854,7 @@
                     "_modelRef": {
                         "__base__": {
                             "AssetRefBase": {
-                                "_path": "Engine\\ThirdParty\\LearnOpenGL\\resources\\objects\\vampire\\dancing_vampire.dae"
+                                "_path": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae"
                             }
                         }
                     },
@@ -7850,7 +7850,7 @@
                     "_modelRef": {
                         "__base__": {
                             "AssetRefBase": {
-                                "_path": "Engine\\ThirdParty\\Vulkan-Samples-Assets\\scenes\\sponza\\Sponza01.gltf"
+                                "_path": "Engine/ThirdParty/Vulkan-Samples-Assets/scenes/sponza/Sponza01.gltf"
                             }
                         }
                     },

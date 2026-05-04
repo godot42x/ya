@@ -4,6 +4,7 @@
 
 #include "Core/Delegate.h"
 #include "Core/Log.h"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -138,14 +139,17 @@ struct VirtualFileSystem
 
     stdpath translatePath(std::string_view virtualPath) const
     {
-        auto index = virtualPath.find_first_of(":");
-        if (index == std::string_view::npos) {
+        std::string normalizedPath(virtualPath);
+        std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
 
-            return projectRoot / virtualPath;
+        auto index = normalizedPath.find_first_of(":");
+        if (index == std::string::npos) {
+
+            return projectRoot / normalizedPath;
         }
 
-        auto mountName    = virtualPath.substr(0, index);
-        auto physicalPath = virtualPath.substr(index + 1);
+        auto mountName    = std::string_view(normalizedPath).substr(0, index);
+        auto physicalPath = std::string_view(normalizedPath).substr(index + 1);
 
         auto it = mountPoints.find(std::string(mountName));
         if (it == mountPoints.end()) {

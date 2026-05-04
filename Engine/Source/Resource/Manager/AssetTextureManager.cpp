@@ -65,50 +65,52 @@ TextureFuture AssetTextureManager::loadTexture(const AssetManager::TextureLoadRe
         return TextureFuture();
     }
 
-    if (request.textureSemantic.has_value()) {
-        AssetManager::TextureLoadRequest normalized = request;
-        normalized.colorSpace                       = AssetManager::inferTextureColorSpace(*request.textureSemantic);
+    AssetManager::TextureLoadRequest normalized = request;
+    normalized.filepath = AssetManager::normalizeAssetPath(normalized.filepath);
+
+    if (normalized.textureSemantic.has_value()) {
+        normalized.colorSpace = AssetManager::inferTextureColorSpace(*normalized.textureSemantic);
         normalized.textureSemantic.reset();
         return loadTexture(normalized);
     }
 
-    const auto settings = _owner.resolveTextureImportSettings(request.filepath, request.colorSpace);
-    const auto cacheKey = _owner.buildTextureCacheKey(request.filepath, settings);
+    const auto settings = _owner.resolveTextureImportSettings(normalized.filepath, normalized.colorSpace);
+    const auto cacheKey = _owner.buildTextureCacheKey(normalized.filepath, settings);
 
     {
         std::lock_guard lock(_mutex);
         const auto      it = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             if (!request.name.empty()) {
-                _textureName2Path[request.name] = cacheKey;
+                _textureName2Path[normalized.name] = cacheKey;
             }
-            if (request.onReady) {
-                AssetManager::dispatchToGameThread([onReady = request.onReady, texture = it->second]() mutable
+            if (normalized.onReady) {
+                AssetManager::dispatchToGameThread([onReady = normalized.onReady, texture = it->second]() mutable
                                                    { onReady(texture); });
             }
             return TextureFuture(it->second);
         }
     }
 
-    if (isTextureLoadFailed(request.filepath)) {
-        if (request.onReady) {
-            AssetManager::dispatchToGameThread([onReady = request.onReady]() mutable
+    if (isTextureLoadFailed(normalized.filepath)) {
+        if (normalized.onReady) {
+            AssetManager::dispatchToGameThread([onReady = normalized.onReady]() mutable
                                                { onReady(nullptr); });
         }
         return TextureFuture();
     }
 
     if (!isTextureLoadPending(cacheKey)) {
-        submitTextureLoad(request.filepath, cacheKey, settings, request.name);
+        submitTextureLoad(normalized.filepath, cacheKey, settings, normalized.name);
     }
 
-    if (!request.name.empty()) {
+    if (!normalized.name.empty()) {
         std::lock_guard lock(_mutex);
-        _textureName2Path[request.name] = cacheKey;
+        _textureName2Path[normalized.name] = cacheKey;
     }
 
-    if (request.onReady) {
-        registerTextureCallback(cacheKey, request.onReady);
+    if (normalized.onReady) {
+        registerTextureCallback(cacheKey, normalized.onReady);
     }
 
     return TextureFuture();
@@ -116,7 +118,10 @@ TextureFuture AssetTextureManager::loadTexture(const AssetManager::TextureLoadRe
 
 void AssetTextureManager::loadTextureBatch(const AssetManager::TextureBatchLoadRequest& request)
 {
-    const auto& filepaths  = request.filepaths;
+    auto        filepaths  = request.filepaths;
+    for (auto& filepath : filepaths) {
+        filepath = AssetManager::normalizeAssetPath(filepath);
+    }
     auto        onDone     = request.onDone;
     const auto  colorSpace = request.colorSpace;
 
@@ -168,7 +173,10 @@ void AssetTextureManager::loadTextureBatch(const AssetManager::TextureBatchLoadR
 AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchIntoMemory(
     const AssetManager::TextureBatchMemoryLoadRequest& request)
 {
-    const auto&                                              filepaths  = request.filepaths;
+    auto                                                    filepaths  = request.filepaths;
+    for (auto& filepath : filepaths) {
+        filepath = AssetManager::normalizeAssetPath(filepath);
+    }
     const auto                                               colorSpace = request.colorSpace;
     std::vector<AssetManager::ResolvedTextureImportSettings> settingsList;
     settingsList.reserve(filepaths.size());
@@ -236,8 +244,9 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
                                                               const std::string&               filepath,
                                                               AssetManager::ETextureColorSpace colorSpace)
 {
-    const auto settings = _owner.resolveTextureImportSettings(filepath, colorSpace);
-    const auto cacheKey = _owner.buildTextureCacheKey(filepath, settings);
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    const auto settings = _owner.resolveTextureImportSettings(normalizedFilepath, colorSpace);
+    const auto cacheKey = _owner.buildTextureCacheKey(normalizedFilepath, settings);
 
     {
         std::lock_guard lock(_mutex);
@@ -250,17 +259,17 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         }
     }
 
-    if (isTextureLoadFailed(filepath)) {
-        YA_CORE_WARN("loadTextureSync: Skipping known failed texture: {}", filepath);
+    if (isTextureLoadFailed(normalizedFilepath)) {
+        YA_CORE_WARN("loadTextureSync: Skipping known failed texture: {}", normalizedFilepath);
         return nullptr;
     }
 
     auto decoded = decodeTextureToMemory(settings);
     if (!decoded.isValid()) {
         if (decoded.hardFailure) {
-            rememberTextureLoadFailure(filepath, decoded.error.empty() ? "decode failed" : decoded.error);
+            rememberTextureLoadFailure(normalizedFilepath, decoded.error.empty() ? "decode failed" : decoded.error);
         }
-        YA_CORE_WARN("loadTextureSync: Failed to decode texture: {}", filepath);
+        YA_CORE_WARN("loadTextureSync: Failed to decode texture: {}", normalizedFilepath);
         return nullptr;
     }
 
@@ -281,19 +290,19 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         });
     }
     catch (const std::exception& e) {
-        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with exception: {}", filepath, e.what());
+        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with exception: {}", normalizedFilepath, e.what());
         return nullptr;
     }
     catch (...) {
-        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with unknown exception", filepath);
+        YA_CORE_WARN("loadTextureSync: GPU upload failed for '{}' with unknown exception", normalizedFilepath);
         return nullptr;
     }
     if (!texture) {
-        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", filepath);
+        YA_CORE_WARN("loadTextureSync: Failed to create texture: {}", normalizedFilepath);
         return nullptr;
     }
 
-    clearTextureLoadFailure(filepath);
+    clearTextureLoadFailure(normalizedFilepath);
 
     {
         std::lock_guard lock(_mutex);
@@ -410,11 +419,12 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
 
 std::shared_ptr<Texture> AssetTextureManager::getTextureByPath(const std::string& filepath) const
 {
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
 
-    auto metaIt = _owner._metaCache.find(filepath);
+    auto metaIt = _owner._metaCache.find(normalizedFilepath);
     if (metaIt != _owner._metaCache.end()) {
-        const std::string cacheKey = AssetManager::makeCacheKey(filepath, metaIt->second);
+        const std::string cacheKey = AssetManager::makeCacheKey(normalizedFilepath, metaIt->second);
         auto              it       = _textureViews.find(cacheKey);
         if (it != _textureViews.end()) {
             return it->second;
@@ -422,7 +432,7 @@ std::shared_ptr<Texture> AssetTextureManager::getTextureByPath(const std::string
     }
 
     for (const auto& [key, texture] : _textureViews) {
-        if (key.starts_with(filepath + "|")) {
+        if (key.starts_with(normalizedFilepath + "|")) {
             return texture;
         }
     }
@@ -472,8 +482,9 @@ bool AssetTextureManager::isTextureLoadPending(const std::string& cacheKey) cons
 
 bool AssetTextureManager::isTextureLoadFailed(const std::string& filepath) const
 {
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    return _failedTextureLoads.contains(filepath);
+    return _failedTextureLoads.contains(normalizedFilepath);
 }
 
 size_t AssetTextureManager::collectUnused(uint64_t frame)
@@ -496,8 +507,9 @@ size_t AssetTextureManager::collectUnused(uint64_t frame)
 
 bool AssetTextureManager::unload(const std::string& cacheKey, uint64_t frame)
 {
+    const auto normalizedCacheKey = AssetManager::normalizeAssetPath(cacheKey);
     std::lock_guard lock(_mutex);
-    auto            it = _textureViews.find(cacheKey);
+    auto            it = _textureViews.find(normalizedCacheKey);
     if (it == _textureViews.end()) {
         return false;
     }
@@ -514,10 +526,11 @@ void AssetTextureManager::invalidate(const std::string& filepath, uint64_t frame
 
 void AssetTextureManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
 {
+    const auto normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
     auto&           ddq = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
     for (auto it = _textureViews.begin(); it != _textureViews.end();) {
-        if (it->first == assetPath || it->first.starts_with(assetPath + "|")) {
+        if (it->first == normalizedAssetPath || it->first.starts_with(normalizedAssetPath + "|")) {
             ddq.enqueueResource(frame, std::move(it->second));
             it = _textureViews.erase(it);
         }
@@ -590,14 +603,16 @@ void AssetTextureManager::dispatchTextureCallbacks(const std::vector<AssetManage
 
 void AssetTextureManager::rememberTextureLoadFailure(const std::string& filepath, std::string reason)
 {
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    _failedTextureLoads[filepath] = std::move(reason);
+    _failedTextureLoads[normalizedFilepath] = std::move(reason);
 }
 
 void AssetTextureManager::clearTextureLoadFailure(const std::string& filepath)
 {
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    _failedTextureLoads.erase(filepath);
+    _failedTextureLoads.erase(normalizedFilepath);
 }
 
 } // namespace ya

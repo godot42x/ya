@@ -65,6 +65,7 @@ class AssetManager : public IResourceCache
 
     /// Returns the traits for a supported texture upload format, or nullptr if unknown.
     static const TextureFormatTraits* getFormatTraits(EFormat::T format);
+    static std::string normalizeAssetPath(std::string path);
 
   private:
     friend class AssetTextureManager;

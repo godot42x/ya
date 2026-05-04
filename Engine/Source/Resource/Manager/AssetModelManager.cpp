@@ -21,6 +21,7 @@ void AssetModelManager::clear()
     _modalName2Path.clear();
     _pendingModelLoads.clear();
     _pendingModelCallbacks.clear();
+    _failedModelLoads.clear();
 }
 
 ModelFuture AssetManager::loadModel(const ModelLoadRequest& request)
@@ -59,28 +60,42 @@ ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& r
         return {};
     }
 
-    if (isModelLoaded(request.filepath)) {
-        if (!request.name.empty()) {
-            _modalName2Path[request.name] = request.filepath;
+    AssetManager::ModelLoadRequest normalized = request;
+    normalized.filepath = AssetManager::normalizeAssetPath(normalized.filepath);
+
+    if (isModelLoaded(normalized.filepath)) {
+        if (!normalized.name.empty()) {
+            _modalName2Path[normalized.name] = normalized.filepath;
         }
-        if (request.onReady) {
-            const auto model = modelCache[request.filepath];
-            AssetManager::dispatchToGameThread([onReady = request.onReady, model]() mutable
+        if (normalized.onReady) {
+            const auto model = modelCache[normalized.filepath];
+            AssetManager::dispatchToGameThread([onReady = normalized.onReady, model]() mutable
                                                { onReady(model); });
         }
-        return ModelFuture(modelCache[request.filepath]);
+        return ModelFuture(modelCache[normalized.filepath]);
     }
 
-    if (!isModelLoadPending(request.filepath)) {
-        submitModelLoad(request.filepath, request.name);
+    {
+        std::lock_guard lock(_mutex);
+        if (_failedModelLoads.contains(normalized.filepath)) {
+            if (normalized.onReady) {
+                AssetManager::dispatchToGameThread([onReady = normalized.onReady]() mutable
+                                                   { onReady(nullptr); });
+            }
+            return {};
+        }
     }
 
-    if (!request.name.empty()) {
-        _modalName2Path[request.name] = request.filepath;
+    if (!isModelLoadPending(normalized.filepath)) {
+        submitModelLoad(normalized.filepath, normalized.name);
     }
 
-    if (request.onReady) {
-        registerModelCallback(request.filepath, request.onReady);
+    if (!normalized.name.empty()) {
+        _modalName2Path[normalized.name] = normalized.filepath;
+    }
+
+    if (normalized.onReady) {
+        registerModelCallback(normalized.filepath, normalized.onReady);
     }
 
     return {};
@@ -88,22 +103,24 @@ ModelFuture AssetModelManager::loadModel(const AssetManager::ModelLoadRequest& r
 
 std::shared_ptr<Model> AssetModelManager::loadModelSync(const std::string& filepath)
 {
-    if (isModelLoaded(filepath)) {
-        return modelCache[filepath];
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    if (isModelLoaded(normalizedFilepath)) {
+        return modelCache[normalizedFilepath];
     }
 
-    return loadModelImpl(filepath, "");
+    return loadModelImpl(normalizedFilepath, "");
 }
 
 std::shared_ptr<Model> AssetModelManager::loadModelSync(const std::string& name, const std::string& filepath)
 {
-    if (isModelLoaded(filepath)) {
-        return modelCache[filepath];
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    if (isModelLoaded(normalizedFilepath)) {
+        return modelCache[normalizedFilepath];
     }
 
-    auto model = loadModelImpl(filepath, name);
+    auto model = loadModelImpl(normalizedFilepath, name);
     if (model) {
-        _modalName2Path[name] = filepath;
+        _modalName2Path[name] = normalizedFilepath;
     }
     return model;
 }
@@ -142,6 +159,7 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
                 {
                     std::lock_guard lock(_mutex);
                     _pendingModelLoads.erase(filepath);
+                    _failedModelLoads.insert(filepath);
                     callbacks = takeModelCallbacks(filepath);
                 }
                 dispatchModelCallbacks(callbacks, nullptr);
@@ -154,6 +172,7 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
                 {
                     std::lock_guard lock(_mutex);
                     _pendingModelLoads.erase(filepath);
+                    _failedModelLoads.insert(filepath);
                     callbacks = takeModelCallbacks(filepath);
                 }
                 dispatchModelCallbacks(callbacks, nullptr);
@@ -166,6 +185,7 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
                 if (!name.empty()) {
                     _modalName2Path[name] = filepath;
                 }
+                _failedModelLoads.erase(filepath);
                 _pendingModelLoads.erase(filepath);
                 callbacks = takeModelCallbacks(filepath);
             }
@@ -185,21 +205,24 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
 
 bool AssetModelManager::isModelLoadPending(const std::string& filepath) const
 {
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
     std::lock_guard lock(_mutex);
-    auto            it = _pendingModelLoads.find(filepath);
+    auto            it = _pendingModelLoads.find(normalizedFilepath);
     if (it == _pendingModelLoads.end()) return false;
     return !it->second.isReady();
 }
 
 bool AssetModelManager::isModelLoaded(const std::string& filepath) const
 {
-    return modelCache.find(filepath) != modelCache.end();
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    return modelCache.find(normalizedFilepath) != modelCache.end();
 }
 
 std::shared_ptr<Model> AssetModelManager::getModel(const std::string& filepath) const
 {
-    if (isModelLoaded(filepath)) {
-        return modelCache.at(filepath);
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    if (isModelLoaded(normalizedFilepath)) {
+        return modelCache.at(normalizedFilepath);
     }
     return nullptr;
 }
@@ -208,23 +231,29 @@ std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filep
 {
     (void)identifier;
 
-    if (isModelLoaded(filepath)) {
-        return modelCache[filepath];
+    const auto normalizedFilepath = AssetManager::normalizeAssetPath(filepath);
+    if (isModelLoaded(normalizedFilepath)) {
+        return modelCache[normalizedFilepath];
     }
 
-    auto decoded = ImportedModelData::decode(filepath);
+    auto decoded = ImportedModelData::decode(normalizedFilepath);
     if (!decoded.isValid()) {
-        YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", filepath);
+        YA_CORE_ERROR("loadModelImpl: Failed to decode model: {}", normalizedFilepath);
+        std::lock_guard lock(_mutex);
+        _failedModelLoads.insert(normalizedFilepath);
         return nullptr;
     }
 
     auto model = decoded.createModel();
     if (!model) {
-        YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", filepath);
+        YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", normalizedFilepath);
+        std::lock_guard lock(_mutex);
+        _failedModelLoads.insert(normalizedFilepath);
         return nullptr;
     }
 
-    modelCache[filepath] = model;
+    modelCache[normalizedFilepath] = model;
+    _failedModelLoads.erase(normalizedFilepath);
     return model;
 }
 
@@ -248,8 +277,9 @@ size_t AssetModelManager::collectUnused(uint64_t frame)
 
 bool AssetModelManager::unload(const std::string& cacheKey, uint64_t frame)
 {
+    const auto normalizedCacheKey = AssetManager::normalizeAssetPath(cacheKey);
     std::lock_guard lock(_mutex);
-    auto            it = modelCache.find(cacheKey);
+    auto            it = modelCache.find(normalizedCacheKey);
     if (it == modelCache.end()) {
         return false;
     }
@@ -266,8 +296,9 @@ void AssetModelManager::invalidate(const std::string& filepath, uint64_t frame)
 
 void AssetModelManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
 {
+    const auto normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
     std::lock_guard lock(_mutex);
-    auto            it = modelCache.find(assetPath);
+    auto            it = modelCache.find(normalizedAssetPath);
     if (it != modelCache.end()) {
         DeferredDeletionQueue::get().enqueueResource(frame, std::move(it->second));
         modelCache.erase(it);

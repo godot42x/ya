@@ -24,7 +24,7 @@ DefaultAssetRefResolver &DefaultAssetRefResolver::instance()
 
 bool DefaultAssetRefResolver::isAssetRefType(uint32_t typeIndex) const
 {
-    // Check if typeIndex matches any registered TAssetRef<T> types
+    // Check if typeIndex matches any concrete asset ref types
     static const uint32_t textureRefTypeIndex = ya::type_index_v<TextureRef>;
     static const uint32_t modelRefTypeIndex   = ya::type_index_v<ModelRef>;
     static const uint32_t meshRefTypeIndex    = ya::type_index_v<MeshRef>;

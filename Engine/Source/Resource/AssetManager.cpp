@@ -40,6 +40,15 @@ AssetManager::~AssetManager()
     YA_CORE_INFO("AssetManager destructor");
 }
 
+std::string AssetManager::normalizeAssetPath(std::string path)
+{
+    if (path.empty()) {
+        return path;
+    }
+    std::replace(path.begin(), path.end(), '\\', '/');
+    return std::filesystem::path(path).lexically_normal().generic_string();
+}
+
 void AssetManager::clearCache()
 {
     YA_PROFILE_FUNCTION_LOG();
@@ -52,14 +61,15 @@ void AssetManager::clearCache()
 
 const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
 {
+    const std::string normalizedAssetPath = normalizeAssetPath(assetPath);
     {
-        auto it = _metaCache.find(assetPath);
+        auto it = _metaCache.find(normalizedAssetPath);
         if (it != _metaCache.end()) {
             return it->second;
         }
     }
 
-    std::string metaPath = AssetMeta::metaPathFor(assetPath);
+    std::string metaPath = AssetMeta::metaPathFor(normalizedAssetPath);
 
     AssetMeta meta;
     if (std::filesystem::exists(metaPath)) {
@@ -72,7 +82,7 @@ const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
             meta = AssetMeta::loadFromFile(translatedPath);
         }
         else {
-            std::string ext = assetPath.substr(assetPath.find_last_of('.') + 1);
+            std::string ext = normalizedAssetPath.substr(normalizedAssetPath.find_last_of('.') + 1);
             std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
                 return static_cast<char>(std::tolower(ch));
             });
@@ -89,32 +99,34 @@ const AssetMeta& AssetManager::getOrLoadMeta(const std::string& assetPath)
                 meta.type = "unknown";
             }
 
-            YA_CORE_TRACE("AssetMeta: no sidecar for '{}', using default (type={})", assetPath, meta.type);
+            YA_CORE_TRACE("AssetMeta: no sidecar for '{}', using default (type={})", normalizedAssetPath, meta.type);
         }
     }
 
-    auto [it, inserted] = _metaCache.emplace(assetPath, std::move(meta));
+    auto [it, inserted] = _metaCache.emplace(normalizedAssetPath, std::move(meta));
     (void)inserted;
     return it->second;
 }
 
 const AssetMeta& AssetManager::reloadMeta(const std::string& assetPath)
 {
-    _metaCache.erase(assetPath);
-    return getOrLoadMeta(assetPath);
+    const std::string normalizedAssetPath = normalizeAssetPath(assetPath);
+    _metaCache.erase(normalizedAssetPath);
+    return getOrLoadMeta(normalizedAssetPath);
 }
 
 std::string AssetManager::makeCacheKey(const std::string& filepath, const AssetMeta& meta)
 {
-    return filepath + "|" + std::to_string(meta.propertiesHash());
+    return normalizeAssetPath(filepath) + "|" + std::to_string(meta.propertiesHash());
 }
 
 std::string AssetManager::buildTextureCacheKey(const std::string& requestPath,
                                                const ResolvedTextureImportSettings& settings)
 {
-    const auto& meta = getOrLoadMeta(requestPath);
-    return requestPath + "|" +
-           settings.sourceInfo.filepath + "|" +
+    const std::string normalizedRequestPath = normalizeAssetPath(requestPath);
+    const auto& meta = getOrLoadMeta(normalizedRequestPath);
+    return normalizedRequestPath + "|" +
+           normalizeAssetPath(settings.sourceInfo.filepath) + "|" +
            std::to_string(meta.propertiesHash()) + "|" +
            std::to_string(static_cast<int>(settings.colorSpace)) + "|" +
            std::to_string(static_cast<int>(settings.uploadStrategy)) + "|" +
@@ -159,14 +171,16 @@ void AssetManager::dispatchToGameThread(std::function<void()> task)
 
 uint64_t AssetManager::getResourceVersion(const std::string& assetPath) const
 {
-    auto it = _resourceVersion.find(assetPath);
+    const auto normalizedAssetPath = normalizeAssetPath(assetPath);
+    auto it = _resourceVersion.find(normalizedAssetPath);
     return (it != _resourceVersion.end()) ? it->second : 0;
 }
 
 void AssetManager::bumpResourceVersion(const std::string& assetPath)
 {
-    const auto newVersion = ++_resourceVersion[assetPath];
-    YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", assetPath, newVersion);
+    const auto normalizedAssetPath = normalizeAssetPath(assetPath);
+    const auto newVersion = ++_resourceVersion[normalizedAssetPath];
+    YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", normalizedAssetPath, newVersion);
 }
 
 bool AssetManager::isTextureLoadPending(const std::string& cacheKey) const
@@ -264,7 +278,7 @@ void AssetManager::onAssetFileChanged(const std::string& assetPath)
 
 std::shared_ptr<Texture> AssetManager::getTextureByPath(const std::string& filepath) const
 {
-    return textureManager().getTextureByPath(filepath);
+    return textureManager().getTextureByPath(normalizeAssetPath(filepath));
 }
 
 std::shared_ptr<Texture> AssetManager::getTextureByName(const std::string& name) const
@@ -274,7 +288,7 @@ std::shared_ptr<Texture> AssetManager::getTextureByName(const std::string& name)
 
 bool AssetManager::isTextureLoaded(const std::string& filepath) const
 {
-    return textureManager().isTextureLoaded(filepath);
+    return textureManager().isTextureLoaded(normalizeAssetPath(filepath));
 }
 
 bool AssetManager::isTextureLoadedByName(const std::string& name) const
@@ -289,9 +303,10 @@ void AssetManager::registerTexture(const std::string& name, const stdptr<Texture
 
 void AssetManager::invalidate(const std::string& filepath)
 {
-    evictCachedAsset(filepath);
-    _metaCache.erase(filepath);
-    bumpResourceVersion(filepath);
+    const auto normalizedFilepath = normalizeAssetPath(filepath);
+    evictCachedAsset(normalizedFilepath);
+    _metaCache.erase(normalizedFilepath);
+    bumpResourceVersion(normalizedFilepath);
 }
 
 void AssetManager::evictCachedAsset(const std::string& assetPath)

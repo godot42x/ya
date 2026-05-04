@@ -3,8 +3,10 @@
 #include "Core/Common/Types.h"
 #include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 
 
 
@@ -61,7 +63,7 @@ struct AssetRefBase
 
 
     AssetRefBase() = default;
-    explicit AssetRefBase(const std::string &path) : _path(path) {}
+    explicit AssetRefBase(const std::string &path) : _path(normalizePath(path)) {}
 
     virtual EAssetResolveResult resolve() = 0;
     // {
@@ -71,9 +73,15 @@ struct AssetRefBase
 
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
+    static std::string normalizePath(std::string path)
+    {
+        std::replace(path.begin(), path.end(), '\\', '/');
+        return path;
+    }
+
     void               setPath(const std::string &path)
     {
-        _path = path;
+        _path = normalizePath(path);
         invalidate();
         notifyModified();
     }
@@ -85,7 +93,7 @@ struct AssetRefBase
      */
     void setPathWithoutNotify(const std::string &path)
     {
-        _path = path;
+        _path = normalizePath(path);
         // Don't invalidate or notify - caller manages state
     }
 
@@ -101,117 +109,143 @@ struct AssetRefBase
 };
 
 
-template <typename T>
-struct TAssetRef : public AssetRefBase
+struct TextureRef : public AssetRefBase
 {
-    YA_REFLECT_BEGIN(TAssetRef<T>, AssetRefBase)
+    YA_REFLECT_BEGIN(TextureRef, AssetRefBase)
     YA_REFLECT_END()
 
-    // TODO: Add reflection support for template classes
-    ya::Ptr<T> _cachedPtr; // Runtime data: cached resource pointer (not serialized)
+    ya::Ptr<Texture> _cachedPtr;
     EAssetResolveState _resolveState    = EAssetResolveState::Empty;
-    uint64_t           _resolvedVersion = 0; // Version at which _cachedPtr was last resolved
+    uint64_t           _resolvedVersion = 0;
 
-    // Constructors
-    TAssetRef() = default;
-    explicit TAssetRef(const std::string &path) : AssetRefBase(path) {}
-    TAssetRef(const std::string &path, ya::Ptr<T> ptr)
+    TextureRef() = default;
+    explicit TextureRef(const std::string& path) : AssetRefBase(path) {}
+    TextureRef(const std::string& path, ya::Ptr<Texture> ptr)
         : AssetRefBase(path), _cachedPtr(std::move(ptr))
     {
         _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
     }
 
-    // Copy and move
-    TAssetRef(const TAssetRef &other)
-        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState)
-    {
-        // Note: onModified delegate is NOT copied intentionally
-        // because it should not be shared between references
-    }
+    TextureRef(const TextureRef& other)
+        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
+    {}
 
-    TAssetRef &operator=(const TAssetRef &other)
+    TextureRef& operator=(const TextureRef& other)
     {
         if (this != &other) {
             AssetRefBase::operator=(other);
-            _cachedPtr = other._cachedPtr;
-            _resolveState = other._resolveState;
+            _cachedPtr       = other._cachedPtr;
+            _resolveState    = other._resolveState;
+            _resolvedVersion = other._resolvedVersion;
         }
         return *this;
     }
 
-    TAssetRef(TAssetRef &&other) noexcept            = default;
-    TAssetRef &operator=(TAssetRef &&other) noexcept = default;
+    TextureRef(TextureRef&& other) noexcept            = default;
+    TextureRef& operator=(TextureRef&& other) noexcept = default;
 
-    // Access interface
-    T                 *get() const { return _cachedPtr.get(); }
-    ya::Ptr<T> getShared() const { return _cachedPtr; }
-    // T       *operator->() const { return get(); }
-    // T       &operator*() const { return *_cachedPtr; }
-    // explicit operator bool() const { return _cachedPtr != nullptr; }
-
+    Texture* get() const { return _cachedPtr.get(); }
+    ya::Ptr<Texture> getShared() const { return _cachedPtr; }
     bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
-    bool               isLoading() const { return _resolveState == EAssetResolveState::Loading; }
+    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
     EAssetResolveState getResolveState() const { return _resolveState; }
-
-    /**
-     * @brief Check if cached pointer is stale (resource was reloaded after we resolved).
-     *        Lightweight — only compares two integers. No map lookup when path is empty.
-     */
     bool isStale() const;
-
-
-    /**
-     * @brief Resolve (load) the asset from path
-     * Called by serialization system after deserialization
-     * @return true if successfully loaded, false otherwise
-     */
     EAssetResolveResult resolve() override;
+    void invalidate() override;
+    void set(const std::string& path, ya::Ptr<Texture> ptr);
+};
 
-    void invalidate() override
-    {
-        _cachedPtr.reset();
-        _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
-    }
+struct ModelRef : public AssetRefBase
+{
+    YA_REFLECT_BEGIN(ModelRef, AssetRefBase)
+    YA_REFLECT_END()
 
-    /**
-     * @brief Set resource with path (updates both path and cached pointer)
-     */
-    void set(const std::string &path, ya::Ptr<T> ptr)
+    ya::Ptr<Model> _cachedPtr;
+    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
+    uint64_t           _resolvedVersion = 0;
+
+    ModelRef() = default;
+    explicit ModelRef(const std::string& path) : AssetRefBase(path) {}
+    ModelRef(const std::string& path, ya::Ptr<Model> ptr)
+        : AssetRefBase(path), _cachedPtr(std::move(ptr))
     {
-        _path      = path;
-        _cachedPtr = std::move(ptr);
         _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
     }
 
-    /**
-     * @brief Set resource from loaded asset (extracts path from asset if possible)
-     */
-    // void setFromAsset(std::shared_ptr<T> ptr)
-    // {
-    //     _cachedPtr = std::move(ptr);
-    //     // Path should be set separately or extracted from asset metadata
-    // }
+    ModelRef(const ModelRef& other)
+        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
+    {}
 
-    /**
-     * @brief Clear the reference
-     */
-    // void clear()
-    // {
-    //     _path.clear();
-    //     _cachedPtr.reset();
-    // }
+    ModelRef& operator=(const ModelRef& other)
+    {
+        if (this != &other) {
+            AssetRefBase::operator=(other);
+            _cachedPtr       = other._cachedPtr;
+            _resolveState    = other._resolveState;
+            _resolvedVersion = other._resolvedVersion;
+        }
+        return *this;
+    }
 
-    /**
-     * @brief Check equality (by path)
-     */
-    // bool operator==(const TAssetRef &other) const { return _path == other._path; }
-    // bool operator!=(const TAssetRef &other) const { return _path != other._path; }
-}; // namespace ya
+    ModelRef(ModelRef&& other) noexcept            = default;
+    ModelRef& operator=(ModelRef&& other) noexcept = default;
 
-// Common type aliases
-using TextureRef = TAssetRef<Texture>;
-using ModelRef   = TAssetRef<Model>;
-using MeshRef    = TAssetRef<Mesh>;
+    Model* get() const { return _cachedPtr.get(); }
+    ya::Ptr<Model> getShared() const { return _cachedPtr; }
+    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
+    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
+    EAssetResolveState getResolveState() const { return _resolveState; }
+    bool isStale() const;
+    EAssetResolveResult resolve() override;
+    void invalidate() override;
+    void set(const std::string& path, ya::Ptr<Model> ptr);
+};
+
+struct MeshRef : public AssetRefBase
+{
+    YA_REFLECT_BEGIN(MeshRef, AssetRefBase)
+    YA_REFLECT_END()
+
+    ya::Ptr<Mesh> _cachedPtr;
+    EAssetResolveState _resolveState    = EAssetResolveState::Empty;
+    uint64_t           _resolvedVersion = 0;
+
+    MeshRef() = default;
+    explicit MeshRef(const std::string& path) : AssetRefBase(path) {}
+    MeshRef(const std::string& path, ya::Ptr<Mesh> ptr)
+        : AssetRefBase(path), _cachedPtr(std::move(ptr))
+    {
+        _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
+    }
+
+    MeshRef(const MeshRef& other)
+        : AssetRefBase(other), _cachedPtr(other._cachedPtr), _resolveState(other._resolveState), _resolvedVersion(other._resolvedVersion)
+    {}
+
+    MeshRef& operator=(const MeshRef& other)
+    {
+        if (this != &other) {
+            AssetRefBase::operator=(other);
+            _cachedPtr       = other._cachedPtr;
+            _resolveState    = other._resolveState;
+            _resolvedVersion = other._resolvedVersion;
+        }
+        return *this;
+    }
+
+    MeshRef(MeshRef&& other) noexcept            = default;
+    MeshRef& operator=(MeshRef&& other) noexcept = default;
+
+    Mesh* get() const { return _cachedPtr.get(); }
+    ya::Ptr<Mesh> getShared() const { return _cachedPtr; }
+    bool isLoaded() const { return _resolveState == EAssetResolveState::Ready && _cachedPtr != nullptr; }
+    bool isLoading() const { return _resolveState == EAssetResolveState::Loading; }
+    EAssetResolveState getResolveState() const { return _resolveState; }
+    bool isStale() const;
+    EAssetResolveResult resolve() override;
+    void invalidate() override;
+    void set(const std::string& path, ya::Ptr<Mesh> ptr);
+};
 
 // ============================================================================
 // Asset Reference Resolution Interface
@@ -219,7 +253,7 @@ using MeshRef    = TAssetRef<Mesh>;
 
 /**
  * @brief Interface for resolving asset references
- * Used by ReflectionSerializer to resolve TAssetRef types after deserialization
+ * Used by ReflectionSerializer to resolve asset refs after deserialization
  */
 struct IAssetRefResolver
 {
@@ -232,8 +266,8 @@ struct IAssetRefResolver
 
     /**
      * @brief Resolve an asset reference (load the asset from path)
-     * @param typeIndex Type index of the TAssetRef<T>
-     * @param assetRefPtr Pointer to the TAssetRef instance
+     * @param typeIndex Type index of the concrete asset ref
+     * @param assetRefPtr Pointer to the asset ref instance
      */
     virtual void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const = 0;
 };
@@ -252,7 +286,7 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 } // namespace ya
 
 // ============================================================================
-// TAssetRef<T>::resolve() Inline Implementations
+// Asset reference resolve implementations
 // Include necessary headers for inline implementations
 // ============================================================================
 #include "Resource/AssetManager.h"
@@ -262,9 +296,9 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 namespace ya
 {
 
-template <>
-inline EAssetResolveResult TAssetRef<Texture>::resolve()
+inline EAssetResolveResult TextureRef::resolve()
 {
+    _path = AssetManager::normalizeAssetPath(_path);
     if (getPath().empty()) {
         _resolveState = EAssetResolveState::Empty;
         return EAssetResolveResult::Failed;
@@ -280,7 +314,7 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
         // Version changed → stale pointer, force re-resolve
         _cachedPtr.reset();
         _resolveState = EAssetResolveState::Dirty;
-        YA_CORE_TRACE("TAssetRef<Texture>: version changed for '{}', re-resolving", _path);
+        YA_CORE_TRACE("TextureRef: version changed for '{}', re-resolving", _path);
     }
 
     if (_resolveState == EAssetResolveState::Failed && _resolvedVersion == currentVersion) {
@@ -319,9 +353,9 @@ inline EAssetResolveResult TAssetRef<Texture>::resolve()
     return EAssetResolveResult::Pending;
 }
 
-template <>
-inline EAssetResolveResult TAssetRef<Model>::resolve()
+inline EAssetResolveResult ModelRef::resolve()
 {
+    _path = AssetManager::normalizeAssetPath(_path);
     if (_path.empty()) {
         _resolveState = EAssetResolveState::Empty;
         return EAssetResolveResult::Failed;
@@ -334,7 +368,7 @@ inline EAssetResolveResult TAssetRef<Model>::resolve()
         }
         _cachedPtr.reset();
         _resolveState = EAssetResolveState::Dirty;
-        YA_CORE_TRACE("TAssetRef<Model>: version changed for '{}', re-resolving", _path);
+        YA_CORE_TRACE("ModelRef: version changed for '{}', re-resolving", _path);
     }
 
     const auto currentVersion = AssetManager::get()->getResourceVersion(_path);
@@ -354,21 +388,67 @@ inline EAssetResolveResult TAssetRef<Model>::resolve()
     return EAssetResolveResult::Pending;
 }
 
-template <>
-inline EAssetResolveResult TAssetRef<Mesh>::resolve()
+inline EAssetResolveResult MeshRef::resolve()
 {
+    _path = AssetManager::normalizeAssetPath(_path);
     // Mesh loading not implemented yet
     _resolveState = EAssetResolveState::Failed;
     UNIMPLEMENTED();
     return EAssetResolveResult::Failed;
 }
 
-// ============================================================================
-// TAssetRef<T>::isStale() — lightweight version check
-// ============================================================================
+inline void TextureRef::invalidate()
+{
+    _cachedPtr.reset();
+    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
+}
 
-template <typename T>
-inline bool TAssetRef<T>::isStale() const
+inline void TextureRef::set(const std::string& path, ya::Ptr<Texture> ptr)
+{
+    _path         = AssetManager::normalizeAssetPath(path);
+    _cachedPtr    = std::move(ptr);
+    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
+}
+
+inline bool TextureRef::isStale() const
+{
+    if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
+    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
+}
+
+inline void ModelRef::invalidate()
+{
+    _cachedPtr.reset();
+    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
+}
+
+inline void ModelRef::set(const std::string& path, ya::Ptr<Model> ptr)
+{
+    _path         = AssetManager::normalizeAssetPath(path);
+    _cachedPtr    = std::move(ptr);
+    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
+}
+
+inline bool ModelRef::isStale() const
+{
+    if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
+    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
+}
+
+inline void MeshRef::invalidate()
+{
+    _cachedPtr.reset();
+    _resolveState = _path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty;
+}
+
+inline void MeshRef::set(const std::string& path, ya::Ptr<Mesh> ptr)
+{
+    _path         = AssetManager::normalizeAssetPath(path);
+    _cachedPtr    = std::move(ptr);
+    _resolveState = _cachedPtr ? EAssetResolveState::Ready : (_path.empty() ? EAssetResolveState::Empty : EAssetResolveState::Dirty);
+}
+
+inline bool MeshRef::isStale() const
 {
     if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
     return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);

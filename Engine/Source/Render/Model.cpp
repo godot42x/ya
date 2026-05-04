@@ -7,12 +7,23 @@
 
 #include "Core/Log.h"
 
+#include <algorithm>
+#include <filesystem>
+
 namespace ya
 {
 
 ImportedModelData ImportedModelData::decode(const std::string& filepath)
 {
-    return model_importer::getImporterForPath(filepath).import(filepath);
+    std::string normalizedFilepath = filepath;
+    std::replace(normalizedFilepath.begin(), normalizedFilepath.end(), '\\', '/');
+    normalizedFilepath = std::filesystem::path(normalizedFilepath).lexically_normal().generic_string();
+
+    if (model_decode::isGltfPath(normalizedFilepath)) {
+        return model_decode::decodeWithTinyGltf(normalizedFilepath);
+    }
+
+    return model_decode::decodeWithAssimp(normalizedFilepath);
 }
 
 std::shared_ptr<Model> ImportedModelData::createModel() const
