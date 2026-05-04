@@ -76,7 +76,7 @@ struct DeferredRenderPipeline
     static constexpr EFormat::T POSTPROCESS_COLOR_FORMAT  = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SHADING_MODEL_FORMAT      = EFormat::R8_UNORM;
     static constexpr EFormat::T DEPTH_FORMAT              = EFormat::D32_SFLOAT;
-    static constexpr EFormat::T SHADOW_DEPTH_FORMAT       = EFormat::D24_UNORM_S8_UINT;
+    static constexpr EFormat::T SHADOW_DEPTH_FORMAT       = EFormat::D32_SFLOAT;
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;

@@ -67,18 +67,23 @@ struct VulkanRender : public IRender
     };
     const std::vector<ya::DeviceFeature> _instanceExtensions = {
         {.name = VK_KHR_SURFACE_EXTENSION_NAME, .bRequired = true}, // "VK_KHR_surface"
+#ifdef __APPLE__
+        {VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, true},
+#endif
     };
 
     const std::vector<ya::DeviceFeature> _deviceLayers = {
         // {"VK_LAYER_KHRONOS_validation", false}, // Make validation layer optional
     };
+    
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
         {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
 
-    bool bSupportDebugUtils = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
+    bool bSupportDebugUtils       = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
+    bool bSupportsGeometryShader  = false;
 
   private:
 
@@ -108,8 +113,8 @@ struct VulkanRender : public IRender
 
   private:
 
-    VkDevice m_LogicalDevice = VK_NULL_HANDLE;
-    VmaAllocator _vmaAllocator = VK_NULL_HANDLE;
+    VkDevice     m_LogicalDevice = VK_NULL_HANDLE;
+    VmaAllocator _vmaAllocator   = VK_NULL_HANDLE;
 
 
 
@@ -149,10 +154,10 @@ struct VulkanRender : public IRender
     std::vector<VkSemaphore>  frameImageAvailableSemaphores;  // 每个飞行帧的图像可用信号量
     std::vector<VkFence>      frameFences;                    // 每个飞行帧的fence
     std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 渲染完成信号量（每张swapchain image）
-    VkQueryPool               _frameGpuTimestampQueryPool     = VK_NULL_HANDLE;
-    float                     _gpuTimestampPeriodNs           = 0.0f;
-    float                     _lastCompletedFrameGpuTimeMs    = 0.0f;
-    bool                      _bFrameGpuTimingSupported       = false;
+    VkQueryPool               _frameGpuTimestampQueryPool  = VK_NULL_HANDLE;
+    float                     _gpuTimestampPeriodNs        = 0.0f;
+    float                     _lastCompletedFrameGpuTimeMs = 0.0f;
+    bool                      _bFrameGpuTimingSupported    = false;
     std::vector<uint8_t>      _frameGpuTimingValid;
 
 
@@ -231,6 +236,8 @@ struct VulkanRender : public IRender
         return _swapChain ? _swapChain->getImageCount() : 0;
     }
 
+    bool supportsGeometryShader() const override { return bSupportsGeometryShader; }
+
     void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>>& outBuffers) override;
 
     void submitToQueue(
@@ -280,13 +287,11 @@ struct VulkanRender : public IRender
 
         //  find a suitable physical device
         findPhysicalDevice();
-        if (m_PhysicalDevice == VK_NULL_HANDLE)
-        {
+        if (m_PhysicalDevice == VK_NULL_HANDLE) {
             terminate();
         }
 
-        if (m_EnableValidationLayers && bSupportDebugUtils)
-        {
+        if (m_EnableValidationLayers && bSupportDebugUtils) {
             _debugUtils = std::make_unique<VulkanDebugUtils>(this);
             _debugUtils->initInstanceLevel();
             // preferred default validation layers callback
@@ -299,8 +304,7 @@ struct VulkanRender : public IRender
 
         // Initialize VK_EXT_extended_dynamic_state3 function pointer
         initExtensionFunctions();
-        if (m_EnableValidationLayers && bSupportDebugUtils)
-        {
+        if (m_EnableValidationLayers && bSupportDebugUtils) {
             _debugUtils->initDeviceLevel();
         }
 
@@ -326,11 +330,10 @@ struct VulkanRender : public IRender
         }
 
         releaseSyncResources();
-    releaseFrameGpuTimingResources();
+        releaseFrameGpuTimingResources();
         VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
 
-        if (_swapChain)
-        {
+        if (_swapChain) {
             // Cleanup swap chain resources
             // Cast to VulkanSwapChain for Vulkan-specific cleanup
             auto* vkSwapchain = static_cast<VulkanSwapChain*>(_swapChain);
@@ -354,13 +357,11 @@ struct VulkanRender : public IRender
             _vmaAllocator = VK_NULL_HANDLE;
         }
 
-        if (m_LogicalDevice)
-        {
+        if (m_LogicalDevice) {
             vkDestroyDevice(m_LogicalDevice, nullptr);
         }
 
-        if (m_EnableValidationLayers && bSupportDebugUtils)
-        {
+        if (m_EnableValidationLayers && bSupportDebugUtils) {
             _debugUtils->destroy();
         }
         onReleaseSurface.executeIfBound(&(*_instance), &_surface);

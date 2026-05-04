@@ -260,13 +260,21 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
     _bEnablePointLightShadow = bEnablePointLightShadow;
 
     if (_bEnableShadowMapping) {
-        if (!_shadowDepthRT) {
-            initShadowResources();
+        if (!_render || !_render->supportsGeometryShader()) {
+            YA_CORE_WARN("Deferred shadow mapping request ignored because this render backend does not support geometry shaders yet");
+            _bEnableShadowMapping = false;
+            _bEnablePointLightShadow = false;
+            destroyShadowResources();
         }
-        if (!_shadowStage && _shadowDepthRT) {
-            _shadowStage = ya::makeShared<ShadowStage>();
-            _shadowStage->setRenderTarget(_shadowDepthRT);
-            _shadowStage->init(_render);
+        else {
+            if (!_shadowDepthRT) {
+                initShadowResources();
+            }
+            if (!_shadowStage && _shadowDepthRT) {
+                _shadowStage = ya::makeShared<ShadowStage>();
+                _shadowStage->setRenderTarget(_shadowDepthRT);
+                _shadowStage->init(_render);
+            }
         }
     }
     else {
@@ -383,6 +391,11 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
+    if (_bEnableShadowMapping && !_render->supportsGeometryShader()) {
+        YA_CORE_WARN("Deferred shadow mapping is disabled because this render backend does not support geometry shaders yet");
+        _bEnableShadowMapping = false;
+        _bEnablePointLightShadow = false;
+    }
     if (_bEnableShadowMapping) {
         initShadowResources();
 

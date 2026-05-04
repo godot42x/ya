@@ -160,6 +160,8 @@ struct IRender : public plat_base<IRender>
         return false;
     }
 
+    virtual bool supportsGeometryShader() const { return false; }
+
     /**
      * @brief Submit command buffers to graphics queue with synchronization
      * @param cmdBufs Command buffers to submit

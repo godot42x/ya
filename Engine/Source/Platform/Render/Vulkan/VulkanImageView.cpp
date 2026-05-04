@@ -27,10 +27,24 @@ bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, cons
         },
     };
 
-    VK_CALL_RET(vkCreateImageView(_render->getDevice(),
-                                  &viewCI,
-                                  _render->getAllocator(),
-                                  &_handle));
+    VkResult ret = vkCreateImageView(_render->getDevice(),
+                                     &viewCI,
+                                     _render->getAllocator(),
+                                     &_handle);
+    if (ret != VK_SUCCESS) {
+        YA_CORE_ERROR("vkCreateImageView failed: result={}, image={}, viewType={}, format={}, aspect={}, baseMip={}, levels={}, baseLayer={}, layers={}",
+                      static_cast<int32_t>(ret),
+                      reinterpret_cast<uintptr_t>(viewCI.image),
+                      static_cast<int32_t>(viewCI.viewType),
+                      static_cast<int32_t>(viewCI.format),
+                      viewCI.subresourceRange.aspectMask,
+                      viewCI.subresourceRange.baseMipLevel,
+                      viewCI.subresourceRange.levelCount,
+                      viewCI.subresourceRange.baseArrayLayer,
+                      viewCI.subresourceRange.layerCount);
+        return false;
+    }
+    return true;
 }
 
 VulkanImageView::~VulkanImageView()

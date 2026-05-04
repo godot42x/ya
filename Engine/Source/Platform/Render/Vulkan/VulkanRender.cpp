@@ -8,12 +8,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <vector>
 
-#include "Runtime/App/App.h"
 #include "Resource/DeferredDeletionQueue.h"
+#include "Runtime/App/App.h"
 #include "VulkanUtils.h"
 
 
@@ -42,7 +42,8 @@ FormatSupportSummary queryFormatSupport(VkPhysicalDevice device, VkFormat format
 {
     FormatSupportSummary summary{.format = format};
 
-    auto query = [&](VkImageTiling tiling, VkImageUsageFlags usage) {
+    auto query = [&](VkImageTiling tiling, VkImageUsageFlags usage)
+    {
         VkPhysicalDeviceImageFormatInfo2 formatInfo{};
         formatInfo.sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
         formatInfo.format = format;
@@ -173,8 +174,7 @@ void VulkanRender::createInstance()
     for (const auto& ext : required) {
         requestExtensions.push_back(ext);
     }
-    if (m_EnableValidationLayers)
-    {
+    if (m_EnableValidationLayers) {
         requestLayers.insert(requestLayers.end(),
                              _instanceValidationLayers.begin(),
                              _instanceValidationLayers.end());
@@ -207,8 +207,8 @@ void VulkanRender::createInstance()
 
     if (std::find_if(extensionNames.begin(),
                      extensionNames.end(),
-                     [](auto a) { return std::strcmp(a, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0; }) == extensionNames.end())
-    {
+                     [](auto a)
+                     { return std::strcmp(a, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0; }) == extensionNames.end()) {
         YA_CORE_WARN("VK_EXT_DEBUG_UTILS_EXTENSION_NAME is not supported, some features may not work!");
     }
     else {
@@ -225,6 +225,9 @@ void VulkanRender::createInstance()
         .enabledExtensionCount   = static_cast<uint32_t>(extensionNames.size()),
         .ppEnabledExtensionNames = extensionNames.data(),
     };
+#ifdef __APPLE__
+    instanceCI.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     // This lines did noting
     // if (m_EnableValidationLayers) {
     //     const VkDebugUtilsMessengerCreateInfoEXT &debug_messenger_create_info = getDebugMessengerCreateInfoExt();
@@ -253,7 +256,8 @@ void VulkanRender::findPhysicalDevice()
     VK_CALL(vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data()));
     YA_CORE_INFO("Found {} physical devices", deviceCount);
 
-    auto getDeviceTypeStr = [](VkPhysicalDeviceType type) -> std::string {
+    auto getDeviceTypeStr = [](VkPhysicalDeviceType type) -> std::string
+    {
         switch (type) {
             CASE_ENUM_TO_STR(VK_PHYSICAL_DEVICE_TYPE_OTHER);
             CASE_ENUM_TO_STR(VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
@@ -265,7 +269,8 @@ void VulkanRender::findPhysicalDevice()
         }
     };
 
-    auto getDeviceScore = [](VkPhysicalDevice device) -> int {
+    auto getDeviceScore = [](VkPhysicalDevice device) -> int
+    {
         VkPhysicalDeviceProperties deviceProperties;
         vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
@@ -413,9 +418,8 @@ void VulkanRender::findPhysicalDevice()
 
         _deviceCandidates.push_back(candidate);
     }
-    std::ranges::sort(_deviceCandidates, [](const PhysicalDeviceCandidate& a, const PhysicalDeviceCandidate& b) {
-        return a.score > b.score;
-    });
+    std::ranges::sort(_deviceCandidates, [](const PhysicalDeviceCandidate& a, const PhysicalDeviceCandidate& b)
+                      { return a.score > b.score; });
 
     if (_deviceCandidates.empty()) {
         YA_CORE_ERROR("No suitable physical devices found");
@@ -453,18 +457,18 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         return false;
     }
 
-    auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate& candidate) -> VkResult {
-        m_PhysicalDevice     = candidate.device;
+    auto tryCreateForCandidate = [&](const PhysicalDeviceCandidate& candidate) -> VkResult
+    {
+        m_PhysicalDevice          = candidate.device;
         _physicalDeviceProperties = candidate.properties;
-        _graphicsQueueFamily = candidate.graphicsQueue;
-        _presentQueueFamily  = candidate.presentQueue;
-        m_LogicalDevice      = VK_NULL_HANDLE;
+        _graphicsQueueFamily      = candidate.graphicsQueue;
+        _presentQueueFamily       = candidate.presentQueue;
+        m_LogicalDevice           = VK_NULL_HANDLE;
         _graphicsQueues.clear();
         _presentQueues.clear();
         bOnlyOnePresentQueue = false;
 
-        if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount)
-        {
+        if ((int)graphicsQueueCount > _graphicsQueueFamily.queueCount) {
             YA_CORE_ERROR("Requested graphics queue count {} exceeds available queue count {} for family index {}",
                           graphicsQueueCount,
                           _graphicsQueueFamily.queueCount,
@@ -472,8 +476,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
-        if ((int)presentQueueCount > _presentQueueFamily.queueCount)
-        {
+        if ((int)presentQueueCount > _presentQueueFamily.queueCount) {
             YA_CORE_ERROR("Requested present queue count {} exceeds available queue count {} for family index {}",
                           presentQueueCount,
                           _presentQueueFamily.queueCount,
@@ -485,8 +488,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         bool     bSameQueueFamily   = isGraphicsPresentSameQueueFamily();
         uint32_t combinedQueueCount = graphicsQueueCount + presentQueueCount;
         uint32_t queueCreateCount   = graphicsQueueCount;
-        if (bSameQueueFamily)
-        {
+        if (bSameQueueFamily) {
             if (combinedQueueCount > static_cast<uint32_t>(_graphicsQueueFamily.queueCount)) {
                 if (_graphicsQueueFamily.queueCount == 1) {
                     bOnlyOnePresentQueue = true;
@@ -540,8 +542,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             .queueCount       = queueCreateCount,
             .pQueuePriorities = graphicsQueuePriorities.data(),
         });
-        if (!bSameQueueFamily)
-        {
+        if (!bSameQueueFamily) {
             deviceQueueCIs.push_back({
                 .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .pNext            = nullptr,
@@ -560,6 +561,18 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         std::vector<VkExtensionProperties> availableExtensions(extensionCount);
         VK_CALL(vkEnumerateDeviceExtensionProperties(m_PhysicalDevice, nullptr, &extensionCount, availableExtensions.data()));
 
+#ifdef __APPLE__
+        constexpr const char* PORTABILITY_SUBSET_EXTENSION_NAME = "VK_KHR_portability_subset";
+        const bool bHasPortabilitySubset = std::any_of(
+            availableExtensions.begin(),
+            availableExtensions.end(),
+            [](const VkExtensionProperties& ext)
+            { return std::strcmp(ext.extensionName, PORTABILITY_SUBSET_EXTENSION_NAME) == 0; });
+        if (bHasPortabilitySubset) {
+            requestExtensions.push_back({PORTABILITY_SUBSET_EXTENSION_NAME, true});
+        }
+#endif
+
         uint32_t layerCount = 0;
         VK_CALL(vkEnumerateDeviceLayerProperties(m_PhysicalDevice, &layerCount, nullptr));
         std::vector<VkLayerProperties> availableLayers(layerCount);
@@ -576,49 +589,70 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             requestLayers,
             extensionNames,
             layerNames);
-        if (!bSupported)
-        {
+        if (!bSupported) {
             YA_CORE_ERROR("Vulkan device is not suitable for {}", candidate.properties.deviceName);
             return VK_ERROR_FEATURE_NOT_PRESENT;
         }
 
+        VkPhysicalDeviceFeatures supportedFeatures{};
+        vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &supportedFeatures);
+
         VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
-        physicalDeviceFeatures.samplerAnisotropy        = VK_TRUE;
-        physicalDeviceFeatures.fillModeNonSolid         = VK_TRUE;
-        physicalDeviceFeatures.geometryShader           = VK_TRUE;
-
-        {
-            VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
-            dynamicRenderingFeatures.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-            dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-
-            VkPhysicalDeviceFeatures2 features2{};
-            features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            features2.pNext = &dynamicRenderingFeatures;
-
-            vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
-            if (!dynamicRenderingFeatures.dynamicRendering)
-            {
-                YA_CORE_ERROR("Dynamic rendering is not supported on {}", candidate.properties.deviceName);
-                return VK_ERROR_FEATURE_NOT_PRESENT;
-            }
+        physicalDeviceFeatures.samplerAnisotropy        = supportedFeatures.samplerAnisotropy;
+        physicalDeviceFeatures.fillModeNonSolid         = supportedFeatures.fillModeNonSolid;
+        physicalDeviceFeatures.geometryShader           = supportedFeatures.geometryShader;
+        bSupportsGeometryShader                         = supportedFeatures.geometryShader;
+        if (!bSupportsGeometryShader) {
+            YA_CORE_WARN("geometryShader is not supported on {}; geometry shader pipelines must be disabled or use fallback shaders", candidate.properties.deviceName);
         }
+
+        const bool bHasExtendedDynamicState3 = std::find_if(extensionNames.begin(),
+                                                            extensionNames.end(),
+                                                            [](const char* name)
+                                                            { return std::strcmp(name, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME) == 0; }) != extensionNames.end();
+
+        VkPhysicalDeviceExtendedDynamicState3FeaturesEXT supportedExtendedDynamicState3Features{};
+        supportedExtendedDynamicState3Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+
+        VkPhysicalDeviceDynamicRenderingFeatures supportedDynamicRenderingFeatures{};
+        supportedDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+        supportedDynamicRenderingFeatures.pNext = bHasExtendedDynamicState3 ? &supportedExtendedDynamicState3Features : nullptr;
+
+        VkPhysicalDeviceVulkan11Features supportedVulkan11Features{};
+        supportedVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        supportedVulkan11Features.pNext = &supportedDynamicRenderingFeatures;
+
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &supportedVulkan11Features;
+        vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
+        if (!supportedDynamicRenderingFeatures.dynamicRendering) {
+            YA_CORE_ERROR("Dynamic rendering is not supported on {}", candidate.properties.deviceName);
+            return VK_ERROR_FEATURE_NOT_PRESENT;
+        }
+
+        VkPhysicalDeviceVulkan11Features vulkan11Features{
+            .sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+            .pNext                = nullptr,
+            .shaderDrawParameters = supportedVulkan11Features.shaderDrawParameters,
+        };
 
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
             .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-            .pNext            = nullptr,
+            .pNext            = &vulkan11Features,
             .dynamicRendering = VK_TRUE,
         };
 
         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
             .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
             .pNext                            = &dynamicRenderingFeatures,
-            .extendedDynamicState3PolygonMode = VK_TRUE,
+            .extendedDynamicState3PolygonMode = bHasExtendedDynamicState3 && supportedExtendedDynamicState3Features.extendedDynamicState3PolygonMode,
         };
+        void* deviceFeaturesNext = extendedDynamicState3Features.extendedDynamicState3PolygonMode ? static_cast<void*>(&extendedDynamicState3Features) : static_cast<void*>(&dynamicRenderingFeatures);
 
         VkDeviceCreateInfo deviceCreateInfo = {
             .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-            .pNext                   = &extendedDynamicState3Features,
+            .pNext                   = deviceFeaturesNext,
             .flags                   = 0,
             .queueCreateInfoCount    = static_cast<uint32_t>(deviceQueueCIs.size()),
             .pQueueCreateInfos       = deviceQueueCIs.data(),
@@ -630,14 +664,16 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
 
         };
 
-        VkResult ret = vkCreateDevice(m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
+        VkResult ret = vkCreateDevice(m_PhysicalDevice,
+                                      &deviceCreateInfo,
+                                      nullptr,
+                                      &m_LogicalDevice);
         VK_CALL(ret);
         if (ret != VK_SUCCESS) {
             return ret;
         }
 
-        for (uint32_t i = 0; i < graphicsQueueCount; i++)
-        {
+        for (uint32_t i = 0; i < graphicsQueueCount; i++) {
             VkQueue queue = VK_NULL_HANDLE;
             vkGetDeviceQueue(m_LogicalDevice, _graphicsQueueFamily.queueFamilyIndex, i, &queue);
             if (queue == VK_NULL_HANDLE) {
@@ -652,8 +688,7 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
                                queue,
                                std::format("GraphicsQueue_{}", i).c_str());
         }
-        for (uint32_t i = 0; i < presentQueueCount; i++)
-        {
+        for (uint32_t i = 0; i < presentQueueCount; i++) {
             VkQueue queue = VK_NULL_HANDLE;
             vkGetDeviceQueue(m_LogicalDevice, _presentQueueFamily.queueFamilyIndex, i, &queue);
             if (queue == VK_NULL_HANDLE) {
@@ -678,9 +713,9 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         if (ret == VK_SUCCESS) {
             // Initialize VMA after device creation
             VmaAllocatorCreateInfo vmaCI{};
-            vmaCI.instance       = _instance;
-            vmaCI.physicalDevice = m_PhysicalDevice;
-            vmaCI.device         = m_LogicalDevice;
+            vmaCI.instance         = _instance;
+            vmaCI.physicalDevice   = m_PhysicalDevice;
+            vmaCI.device           = m_LogicalDevice;
             vmaCI.vulkanApiVersion = apiVersion;
             VK_CALL(vmaCreateAllocator(&vmaCI, &_vmaAllocator));
             return true;
@@ -822,10 +857,10 @@ bool VulkanRender::isFeatureSupported(
         }
         if (!std::any_of(availableExtensions.begin(),
                          availableExtensions.end(),
-                         [&feat](const VkExtensionProperties& ext) {
+                         [&feat](const VkExtensionProperties& ext)
+                         {
                              return std::strcmp(ext.extensionName, feat.name.c_str()) == 0;
-                         }))
-        {
+                         })) {
             YA_CORE_WARN("Extension {} is not supported by the {}", feat.name, contextStr);
             if (feat.bRequired) {
                 return false; // If it's a required extension, return false
@@ -842,10 +877,10 @@ bool VulkanRender::isFeatureSupported(
         if (!std::any_of(
                 availableLayers.begin(),
                 availableLayers.end(),
-                [&feat](const VkLayerProperties& layer) {
+                [&feat](const VkLayerProperties& layer)
+                {
                     return std::string(layer.layerName) == feat.name;
-                }))
-        {
+                })) {
 
             YA_CORE_WARN("Layer {} is not supported by the {}", feat.name, contextStr);
             if (feat.bRequired) {
@@ -951,9 +986,7 @@ void VulkanRender::createFrameGpuTimingResources()
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
 
-    if (_graphicsQueueFamily.queueFamilyIndex < 0
-        || static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex) >= queueFamilies.size())
-    {
+    if (_graphicsQueueFamily.queueFamilyIndex < 0 || static_cast<uint32_t>(_graphicsQueueFamily.queueFamilyIndex) >= queueFamilies.size()) {
         return;
     }
 
@@ -996,16 +1029,12 @@ void VulkanRender::releaseFrameGpuTimingResources()
 
 void VulkanRender::updateCompletedFrameGpuTiming()
 {
-    if (!_bFrameGpuTimingSupported
-        || _frameGpuTimestampQueryPool == VK_NULL_HANDLE
-        || currentFrameIdx >= _frameGpuTimingValid.size()
-        || !_frameGpuTimingValid[currentFrameIdx])
-    {
+    if (!_bFrameGpuTimingSupported || _frameGpuTimestampQueryPool == VK_NULL_HANDLE || currentFrameIdx >= _frameGpuTimingValid.size() || !_frameGpuTimingValid[currentFrameIdx]) {
         return;
     }
 
     uint64_t timestamps[2] = {};
-    VkResult ret = vkGetQueryPoolResults(
+    VkResult ret           = vkGetQueryPoolResults(
         getDevice(),
         _frameGpuTimestampQueryPool,
         currentFrameIdx * 2,
@@ -1023,7 +1052,7 @@ void VulkanRender::updateCompletedFrameGpuTiming()
         return;
     }
 
-    const double deltaTimestamp = static_cast<double>(timestamps[1] - timestamps[0]);
+    const double deltaTimestamp  = static_cast<double>(timestamps[1] - timestamps[0]);
     _lastCompletedFrameGpuTimeMs = static_cast<float>((deltaTimestamp * static_cast<double>(_gpuTimestampPeriodNs)) / 1000000.0);
 }
 
@@ -1142,7 +1171,7 @@ void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)
         return;
     }
 
-    const uint32_t queryBase = currentFrameIdx * 2;
+    const uint32_t queryBase              = currentFrameIdx * 2;
     _frameGpuTimingValid[currentFrameIdx] = 0;
     _pfnCmdResetQueryPool(vkCommandBuffer, _frameGpuTimestampQueryPool, queryBase, 2);
     vkCmdWriteTimestamp(vkCommandBuffer,
@@ -1296,8 +1325,7 @@ void VulkanRender::destroySemaphore(void* semaphore)
 
 int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const
 {
-    if (_physicalMemoryProperties.memoryTypeCount == 0)
-    {
+    if (_physicalMemoryProperties.memoryTypeCount == 0) {
         YA_CORE_ERROR("Physical device has no memory types!");
         return -1;
     }
@@ -1327,13 +1355,12 @@ void VulkanRender::initWindow(const RenderCreateInfo& ci)
     auto sdlWindow = static_cast<SDLWindowProvider*>(_windowProvider);
     YA_CORE_ASSERT(sdlWindow, "SDLWindowProvider is not initialized correctly");
 
-    onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface) {
-        return sdlWindow->onCreateVkSurface(instance, surface);
-    });
-    onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface) {
-        sdlWindow->onDestroyVkSurface(instance, surface);
-    });
-    onGetRequiredInstanceExtensions.set([sdlWindow]() {
+    onCreateSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface)
+                        { return sdlWindow->onCreateVkSurface(instance, surface); });
+    onReleaseSurface.set([sdlWindow](VkInstance instance, VkSurfaceKHR* surface)
+                         { sdlWindow->onDestroyVkSurface(instance, surface); });
+    onGetRequiredInstanceExtensions.set([sdlWindow]()
+                                        {
         std::vector<DeviceFeature> extensions;
         for (const char* ext : sdlWindow->onGetVkInstanceExtensions()) {
             extensions.push_back({
@@ -1341,8 +1368,7 @@ void VulkanRender::initWindow(const RenderCreateInfo& ci)
                 .bRequired = true,
             });
         }
-        return extensions;
-    });
+        return extensions; });
 #endif
 }
 

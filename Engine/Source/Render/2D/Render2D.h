@@ -165,7 +165,7 @@ struct FQuadRender
     DescriptorSetHandle                       _resourceDS  = {};
     std::vector<TextureBinding>               _textureBindings;
     std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
-    static constexpr size_t                   TEXTURE_SET_SIZE     = 32;
+    static constexpr size_t                   TEXTURE_SET_SIZE     = 16;
     int                                       _lastPushTextureSlot = -1;
 
     // Note: White texture and default sampler are now provided by TextureLibrary
