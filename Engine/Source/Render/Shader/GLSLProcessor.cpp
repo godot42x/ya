@@ -26,31 +26,13 @@ namespace
 constexpr std::string_view kEolChars =
 #if _WIN32
     "\r\n";
-#elif __linux__
+#elif defined(__linux__) || defined(__APPLE__)
     "\n";
+#else
+    #error "Unsupported platform for kEolChars"
 #endif
 
 using shader_internal::ShaderStageSource;
-
-shaderc_shader_kind toShadercType(EShaderStage::T stage)
-{
-    switch (stage) {
-    case EShaderStage::Vertex:
-        return shaderc_glsl_vertex_shader;
-    case EShaderStage::Fragment:
-        return shaderc_glsl_fragment_shader;
-    case EShaderStage::Geometry:
-        return shaderc_glsl_geometry_shader;
-    case EShaderStage::Compute:
-        return shaderc_glsl_compute_shader;
-    default:
-        UNREACHABLE();
-        break;
-    }
-
-    YA_CORE_ASSERT(false, "Unknown shader type!");
-    return shaderc_shader_kind(0);
-}
 } // namespace
 
 // ============================================================
@@ -210,7 +192,7 @@ bool GLSLProcessor::compileToSpv(std::string_view filename, std::string_view con
 
     shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
         content.data(),
-        toShadercType(stage),
+        EShaderStage::toShadercType(stage),
         filename.data(),
         "main",
         options);

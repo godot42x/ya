@@ -1,8 +1,35 @@
 #pragma once
 
-#include "ImGui.h"
+#include "imgui.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Image.h"
+
+// MSVC Annex K (bounds-checked) string APIs are not portable. On macOS/Linux
+// route strncpy_s to a safe bounded copy and map _TRUNCATE to a sentinel that
+// still produces a valid result. We intentionally only implement the two
+// signatures used in this codebase (four-arg explicit size and two-arg array
+// form) so any new caller would fail to compile and prompt a review.
+#if !defined(_WIN32)
+    #include <cstring>
+    #ifndef _TRUNCATE
+        #define _TRUNCATE ((size_t)-1)
+    #endif
+    inline int strncpy_s(char *dest, size_t destSize, const char *src, size_t count)
+    {
+        if (!dest || destSize == 0) return 22; // EINVAL
+        if (!src) { dest[0] = '\0'; return 22; }
+        size_t copyCount = (count == _TRUNCATE) ? destSize - 1 : count;
+        if (copyCount >= destSize) copyCount = destSize - 1;
+        std::memcpy(dest, src, copyCount);
+        dest[copyCount] = '\0';
+        return 0;
+    }
+    template <size_t N>
+    inline int strncpy_s(char (&dest)[N], const char *src, size_t count)
+    {
+        return strncpy_s(dest, N, src, count);
+    }
+#endif
 
 namespace ya
 {

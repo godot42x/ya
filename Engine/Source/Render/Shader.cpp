@@ -6,7 +6,6 @@
  * @ Modified time: 2025-03-22 00:40:40
  * @ Description:
  */
-
 #include "Shader.h"
 
 #include "Render/Shader/ShaderInternal.h"
@@ -17,14 +16,14 @@
 #include <cstring>
 #include <fstream>
 #include <map>
-#include <sstream>
-#include <system_error>
-#include <unordered_set>
 #include <shaderc/shaderc.h>
 #include <shaderc/shaderc.hpp>
+#include <sstream>
 #include <stdio.h>
 #include <string>
+#include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <spirv_cross/spirv.h>
 #include <spirv_cross/spirv_cross.hpp>
@@ -66,8 +65,7 @@ shaderc_shader_kind toShadercType(EShaderStage::T Stage)
 
 const char* getOpenGLCacheFileExtension(EShaderStage::T stage)
 {
-    switch (stage)
-    {
+    switch (stage) {
     case EShaderStage::Vertex:
         return ".cached.opengl.vert";
     case EShaderStage::Fragment:
@@ -84,8 +82,7 @@ const char* getOpenGLCacheFileExtension(EShaderStage::T stage)
 
 const char* getVulkanCacheFileExtension(EShaderStage::T stage)
 {
-    switch (stage)
-    {
+    switch (stage) {
     case EShaderStage::Vertex:
         return ".cached.vulkan.vert";
     case EShaderStage::Fragment:
@@ -102,8 +99,7 @@ const char* getVulkanCacheFileExtension(EShaderStage::T stage)
 
 const char* getSpvOutputExtension(EShaderStage::T stage)
 {
-    switch (stage)
-    {
+    switch (stage) {
     case EShaderStage::Vertex:
         return "vert.spv";
     case EShaderStage::Fragment:
@@ -181,14 +177,14 @@ std::optional<std::string> resolveShaderIncludePath(std::string_view requestedSo
     auto srcPath = std::filesystem::path(requestingSource);
 
     auto resolvedPath = reqPath.is_absolute()
-        ? reqPath
-        : (srcPath.parent_path() / reqPath).lexically_normal();
+                          ? reqPath
+                          : (srcPath.parent_path() / reqPath).lexically_normal();
     auto resolvedName = resolvedPath.generic_string();
     if (VFS::get()->isFileExists(resolvedName)) {
         return resolvedName;
     }
 
-    auto fallback = (std::filesystem::path("Engine/Shader/GLSL") / reqPath).lexically_normal();
+    auto fallback     = (std::filesystem::path("Engine/Shader/GLSL") / reqPath).lexically_normal();
     auto fallbackName = fallback.generic_string();
     if (VFS::get()->isFileExists(fallbackName)) {
         return fallbackName;
@@ -213,7 +209,7 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
     hashAppendString(hash, content);
 
     std::istringstream input(content);
-    std::string line;
+    std::string        line;
     while (std::getline(input, line)) {
         auto trimmed = ut::str::trim(std::string_view(line));
 
@@ -230,8 +226,8 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
                 continue;
             }
 
-            const auto includeName = trimmed.substr(begin + 1, end - begin - 1);
-            auto resolvedPath      = resolveShaderIncludePath(includeName, normalizedPath);
+            const auto includeName  = trimmed.substr(begin + 1, end - begin - 1);
+            auto       resolvedPath = resolveShaderIncludePath(includeName, normalizedPath);
             if (!resolvedPath.has_value()) {
                 return false;
             }
@@ -282,12 +278,12 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
 uint64_t buildShaderSourceHash(const std::vector<ShaderStageSource>& stageSources, const std::vector<std::string>& defines)
 {
     auto sortedStages = stageSources;
-    std::sort(sortedStages.begin(), sortedStages.end(), [](const ShaderStageSource& lhs, const ShaderStageSource& rhs) {
+    std::sort(sortedStages.begin(), sortedStages.end(), [](const ShaderStageSource& lhs, const ShaderStageSource& rhs)
+              {
         if (lhs.stage != rhs.stage) {
             return lhs.stage < rhs.stage;
         }
-        return lhs.path < rhs.path;
-    });
+        return lhs.path < rhs.path; });
 
     auto hash = SHADER_HASH_OFFSET;
     for (const auto& define : defines) {
@@ -347,9 +343,8 @@ std::vector<std::pair<ya::EShaderStage::T, const std::vector<ShaderStageIr>*>> c
     for (const auto& [stage, spirv] : spvMap) {
         stages.emplace_back(stage, &spirv);
     }
-    std::sort(stages.begin(), stages.end(), [](const auto& lhs, const auto& rhs) {
-        return lhs.first < rhs.first;
-    });
+    std::sort(stages.begin(), stages.end(), [](const auto& lhs, const auto& rhs)
+              { return lhs.first < rhs.first; });
     return stages;
 }
 
@@ -481,7 +476,8 @@ bool saveShaderDiskCache(const std::filesystem::path& cachePath, uint64_t source
 void ShaderStorage::preloadAsync(std::vector<ShaderDesc> shaders)
 {
     YA_CORE_ASSERT(!_preloadThread, "preloadAsync called while preload is already in progress");
-    _preloadThread = std::make_unique<std::thread>([this, shaders = std::move(shaders)]() {
+    _preloadThread = std::make_unique<std::thread>([this, shaders = std::move(shaders)]()
+                                                   {
         YA_PROFILE_SCOPE_LOG("ShaderStorage::preloadAsync");
         for (const auto& desc : shaders) {
             try {
@@ -490,8 +486,7 @@ void ShaderStorage::preloadAsync(std::vector<ShaderDesc> shaders)
             catch (const std::exception& e) {
                 YA_CORE_ERROR("Preload failed for shader '{}': {}", desc.cacheKey(), e.what());
             }
-        }
-    });
+        } });
 }
 
 void ShaderStorage::waitForPreload()

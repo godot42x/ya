@@ -68,17 +68,17 @@ void StaticInitProfiler::printReport()
     double   totalMs = totalNs / 1000000.0;
 
     // 打印总耗时
-    YA_CORE_INFO("+----------------------------------------------------------+");
-    YA_CORE_INFO("| Static Initialization Profiler Report                   |");
-    YA_CORE_INFO("+----------------------------------------------------------+");
-    YA_CORE_INFO("| Total Time: {:.3f} ms ({} ns)", totalMs, totalNs);
+    YA_CORE_TRACE_LZ("+----------------------------------------------------------+");
+    YA_CORE_TRACE_LZ("| Static Initialization Profiler Report                   |");
+    YA_CORE_TRACE_LZ("+----------------------------------------------------------+");
+    YA_CORE_TRACE_LZ("| Total Time: {:.3f} ms ({} ns)", totalMs, totalNs);
 
     // 打印单个变量记录（如果有）
     {
         std::lock_guard<std::mutex> lock(_recordsMutex);
         if (!_records.empty()) {
-            YA_CORE_INFO("+----------------------------------------------------------+");
-            YA_CORE_INFO("| Top Slow Variables:                                      |");
+            YA_CORE_TRACE_LZ("+----------------------------------------------------------+");
+            YA_CORE_TRACE_LZ("| Top Slow Variables:                                      |");
 
             // 按耗时排序（降序）
             auto sorted = _records;
@@ -89,7 +89,7 @@ void StaticInitProfiler::printReport()
             for (size_t i = 0; i < count; ++i) {
                 const auto &record  = sorted[i];
                 double      percent = totalNs > 0 ? (record.nanoseconds * 100.0) / totalNs : 0.0;
-                YA_CORE_INFO("| {:2}. {:40} {:6.3f} ms ({:5.1f}%)",
+                YA_CORE_TRACE_LZ("| {:2}. {:40} {:6.3f} ms ({:5.1f}%)",
                              i + 1,
                              record.name.substr(0, 40), // 截断过长的名字
                              record.milliseconds,
@@ -97,12 +97,12 @@ void StaticInitProfiler::printReport()
             }
 
             if (sorted.size() > 10) {
-                YA_CORE_INFO("|     ... and {} more variables", sorted.size() - 10);
+                YA_CORE_TRACE_LZ("|     ... and {} more variables", sorted.size() - 10);
             }
         }
     }
 
-    YA_CORE_INFO("+----------------------------------------------------------+");
+    YA_CORE_TRACE_LZ("+----------------------------------------------------------+");
 }
 
 // ============================================================================

@@ -44,12 +44,19 @@ namespace
 {
 std::string findRuntimeDefaultFontPath()
 {
-    static constexpr std::array<const char*, 6> fontCandidates = {
+    static constexpr std::array<const char*, 11> fontCandidates = {
         "Engine/Content/Fonts/NotoSansSC-Regular.otf",
         "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
+        // Windows system fonts
         "C:/Windows/Fonts/msyh.ttc",
         "C:/Windows/Fonts/msyh.ttf",
         "C:/Windows/Fonts/simhei.ttf",
+        // macOS system fonts (CJK-capable)
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
         "Engine/Content/Fonts/JetBrainsMono-Medium.ttf",
     };
 

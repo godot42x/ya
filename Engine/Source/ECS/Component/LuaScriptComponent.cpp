@@ -43,7 +43,7 @@ void LuaScriptComponent::ScriptInstance::refreshProperties()
                     // 【优化】自动将 _PROPERTIES 中的默认值写入脚本表
                     // 这样 Lua 脚本中就不需要重复定义 Script.radius = 5.0
                     sol::object currentValue = self[propName];
-                    if (!currentValue.valid() || currentValue.get_type() == sol::type::nil)
+                    if (!currentValue.valid() || currentValue.get_type() == sol::type::lua_nil)
                     {
                         self[propName] = *propValue;
                     }
@@ -96,7 +96,7 @@ void LuaScriptComponent::ScriptInstance::applyPropertyOverrides(sol::state &lua)
         {
             // 直接从 std::any 转换为 sol::object
             // 根据类型分别处理
-            sol::object luaValue = sol::nil;
+            sol::object luaValue = sol::lua_nil;
 
             if (anyValue.type() == typeid(int))
             {
