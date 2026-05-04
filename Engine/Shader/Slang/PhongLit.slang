@@ -1,6 +1,6 @@
 // PhongLit.slang
 // Slang translation of Engine/Shader/GLSL/PhongLit/PhongLit.glsl
-// Contains vertex, geometry and fragment stages for Phong / Blinn-Phong lighting.
+// Contains vertex and fragment stages for Phong / Blinn-Phong lighting.
 
 // ============================================================
 // Shared type definitions (previously in Types.slang)
@@ -188,38 +188,6 @@ VSOutput vertMain(VSInput input)
 }
 
 // ============================================================
-// MARK: Geometry Shader
-// ============================================================
-
-struct GSOutput
-{
-    float3 worldPos          : WorldPos;
-    float2 texcoord          : Texcoord;
-    float3 normal            : Normal;
-    float4 fragLightSpacePos : LightSpacePos;
-    float4 sv_position       : SV_Position;
-};
-
-[shader("geometry")]
-[maxvertexcount(3)]
-[instance(1)]
-void geomMain(triangle VSOutput input[3], inout TriangleStream<GSOutput> outStream)
-{
-    // Default pass-through (explode effect is commented out in original GLSL)
-    for (int i = 0; i < 3; i++)
-    {
-        GSOutput o;
-        o.sv_position       = input[i].sv_position;
-        o.worldPos          = input[i].worldPos;
-        o.texcoord          = input[i].texcoord;
-        o.normal            = input[i].normal;
-        o.fragLightSpacePos = input[i].fragLightSpacePos;
-        outStream.Append(o);
-    }
-    outStream.RestartStrip();
-}
-
-// ============================================================
 // MARK: Fragment Shader helpers
 // ============================================================
 
@@ -337,7 +305,7 @@ float3 calculatePointLight(
 static float _fragLightSpacePos_shadow = 0.0;
 
 [shader("fragment")]
-float4 fragMain(GSOutput input) : SV_Target
+float4 fragMain(VSOutput input) : SV_Target
 {
     float3 norm    = normalize(input.normal);
     float3 viewDir = normalize(uFrame.cameraPos - input.worldPos);

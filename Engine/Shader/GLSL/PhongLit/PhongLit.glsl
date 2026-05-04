@@ -56,106 +56,6 @@ void main (){
     
 }
 // MARK: =========
-
-#type geometry
-#version 450
-
-#include "Types.glsl"
-
-layout(triangles) in;
-layout(triangle_strip, max_vertices = 3) out;
-
-layout(location = 0) in VertexOutput IN[];
-layout(location = 0 ) out GeometryOutput OUT;
-
-layout(push_constant) uniform PushConstants{
-    mat4 modelMat;
-}pc;
-
-
-vec3 getNormal()
-{
-   vec3 a = IN[1].pos - IN[0].pos;
-   vec3 b = IN[2].pos - IN[1].pos;
-   return normalize(cross(a, b));
-}
-
-vec4 explode(vec4 position, vec3 normal)
-{
-    const int explodeType = 0;
-    float magnitude = 2;
-
-    if(explodeType == 0)
-    {
-        vec3 direction = normal * ((sin(uFrame.time)  + 1.0) * 0.8) * magnitude; 
-        return position + vec4(direction, 0.0);
-    }
-    else if(explodeType == 1) // based on triangle
-    {
-        vec3 triangleCenter = (IN[0].pos + IN[1].pos + IN[2].pos) / 3.0;
-        // get model world pos by model matrix
-        // vec3 modelWorldPos =  pc.modelMat[3].xyz;
-        vec3 modelWorldPos = vec3(
-            pc.modelMat[0].w,
-            pc.modelMat[1].w,
-            pc.modelMat[2].w
-        );
-        vec3 explosionDir = normalize(triangleCenter - modelWorldPos);
-        float explosionStrength =  (sin(uFrame.time) + 1.0) * 0.8  * magnitude;
-        return position + vec4(explosionDir * explosionStrength, 0.0);
-    }
-
-    return position;
-}
-void passParam(int i){
-    OUT.uv = IN[i].uv;
-    OUT.normal = IN[i].normal;
-    OUT.posInDirLightSpace = IN[i].posInDirLightSpace;
-    OUT.TBN = IN[i].TBN;
-}
-
-void explodeEffect()
-{
-    vec3 normal = getNormal();
-    mat4 /*m*/vp = uFrame.projMat * uFrame.viewMat; //* pc.modelMat; see vertex shader already transformed by the model matrix
-    for(int i = 0; i < 3; i++){
-        vec4 pos =  vec4(IN[i].pos, 1.0);  // world-pos
-        pos =  /*m*/vp * explode( pos, normal);
-        
-        gl_Position = pos;
-        OUT.pos = pos.xyz;
-
-        passParam(i);
-        EmitVertex();
-    }
-    
-    EndPrimitive();
-
-}
-
-void defaultPass()
-{
-    for(int i = 0; i < 3; i++){
-        gl_Position = gl_in[i].gl_Position;
-        OUT.pos  = IN[i].pos;
-        passParam(i);
-        EmitVertex();
-    }
-    
-    EndPrimitive();
-
-}
-
-// MARK: Geometry Main
-void main()
-{
-    // explodeEffect();
-    defaultPass();
-}
-
-
-
-// MARK: =========
 #type fragment
 #version 450
 
@@ -166,7 +66,7 @@ void main()
 // MARK: frag i/o
 // if have geometry shader, from geometry shader's out
 
-layout(location = 0) in GeometryOutput IN;
+layout(location = 0) in VertexOutput IN;
 
 layout(location = 0) out vec4 fColor;
 

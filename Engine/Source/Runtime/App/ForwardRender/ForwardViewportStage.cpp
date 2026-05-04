@@ -417,9 +417,9 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
                 .label    = "FwdPhong_Frame_DSL",
                 .set      = 0,
                 .bindings = {
-                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
                     {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                    {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                    {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
                 },
             },
             DescriptorSetLayoutDesc{
@@ -461,7 +461,7 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
     // dsls[3] and dsls[4] are used only for pipeline layout creation
 
     _phongStatic.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdPhong_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry}}, dsls);
+        _render, "FwdPhong_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex}}, dsls);
 
     _phongStatic.pipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
@@ -497,7 +497,7 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
     auto skinnedDsls = dsls;
     skinnedDsls.push_back(_skinningDSL);
     _phongSkinned.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdPhong_Skinned_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry}}, skinnedDsls);
+        _render, "FwdPhong_Skinned_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex}}, skinnedDsls);
 
     _phongSkinned.pipelineCI                         = _phongStatic.pipelineCI;
     _phongSkinned.pipelineCI.pipelineLayout          = _phongSkinned.pipelineLayout.get();
@@ -774,7 +774,7 @@ void ForwardViewportStage::initDebug(const InitDesc& desc)
                                                  .label    = "FwdDebug_DSL",
                                                  .set      = 0,
                                                  .bindings = {
-                                                     {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment},
+                                                     {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
                                                  },
                                              });
 
@@ -1265,7 +1265,7 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
             PhongModelPC pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
             cmdBuf->pushConstants(layout,
-                                  EShaderStage::Vertex | EShaderStage::Geometry,
+                                  EShaderStage::Vertex,
                                   0,
                                   sizeof(PhongModelPC),
                                   &pc);
