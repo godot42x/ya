@@ -142,6 +142,20 @@ struct RenderCommand
         IBuffer* buffer = nullptr;
         uint64_t offset = 0;
     };
+    struct DrawIndirect
+    {
+        IBuffer* buffer = nullptr;
+        uint64_t offset = 0;
+        uint32_t drawCount = 0;
+        uint32_t stride = 0;
+    };
+    struct DrawIndexedIndirect
+    {
+        IBuffer* buffer = nullptr;
+        uint64_t offset = 0;
+        uint32_t drawCount = 0;
+        uint32_t stride = 0;
+    };
 
     using type = std::variant<
         BindPipeline,
@@ -161,7 +175,9 @@ struct RenderCommand
         TransitionImageLayout,
         BindComputePipeline,
         Dispatch,
-        DispatchIndirect>;
+        DispatchIndirect,
+        DrawIndirect,
+        DrawIndexedIndirect>;
     type data;
 };
 #endif
@@ -357,6 +373,16 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::DispatchIndirect{buffer, offset}});
     }
 
+    void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndirect{buffer, offset, drawCount, stride}});
+    }
+
+    void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndexedIndirect{buffer, offset, drawCount, stride}});
+    }
+
     void beginRendering(const RenderingInfo& info)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
@@ -415,8 +441,10 @@ struct ICommandBuffer
                                const void*      data)                                             = 0;
     virtual void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
                             uint64_t srcOffset = 0, uint64_t dstOffset = 0)                  = 0;
-    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)  = 0;
-    virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                      = 0;
+    virtual void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
+    virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                     = 0;
+    virtual void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
+    virtual void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
 
     /**
      * @brief Copy data from buffer to image

@@ -167,6 +167,8 @@ enum T
     Geometry = 0x02,
     Fragment = 0x04,
     Compute  = 0x08,
+    Task     = 0x10,
+    Mesh     = 0x20,
     Count,
     All = 0xFF,
 };
@@ -181,13 +183,17 @@ inline T fromString(std::string_view str)
         return Geometry;
     if (str == "compute")
         return Compute;
+    if (str == "task")
+        return Task;
+    if (str == "mesh")
+        return Mesh;
 
     UNREACHABLE();
     return {};
 }
 
 
-GENERATED_ENUM_MISC_WITH_RANGE(T, Compute);
+GENERATED_ENUM_MISC_WITH_RANGE(T, Mesh);
 
 
 
@@ -1111,6 +1117,17 @@ struct ComputePipelineCreateInfo
 {
     IPipelineLayout* pipelineLayout = nullptr;
     ShaderDesc       shaderDesc;
+};
+
+struct MeshPipelineCreateInfo
+{
+    IPipelineLayout*      pipelineLayout = nullptr;
+    ShaderDesc            shaderDesc;
+    PipelineRenderingInfo pipelineRenderingInfo;
+    RasterizationState    rasterizationState;
+    MultisampleState      multisampleState{};
+    DepthStencilState     depthStencilState;
+    ColorBlendState       colorBlendState;
 };
 
 struct GraphicsPipelineCreateInfo

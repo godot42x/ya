@@ -54,6 +54,10 @@ shaderc_shader_kind toShadercType(EShaderStage::T Stage)
         return shaderc_glsl_geometry_shader;
     case Compute:
         return shaderc_glsl_compute_shader;
+    case Task:
+    case Mesh:
+        YA_CORE_ASSERT(false, "Task/Mesh shader stages are not supported by shaderc GLSL path; use Slang");
+        return shaderc_shader_kind(0);
     default:
         UNREACHABLE();
         break;
@@ -89,6 +93,12 @@ const char* getVulkanCacheFileExtension(EShaderStage::T stage)
         return ".cached.vulkan.frag";
     case EShaderStage::Geometry:
         return ".cached.vulkan.geom";
+    case EShaderStage::Compute:
+        return ".cached.vulkan.comp";
+    case EShaderStage::Task:
+        return ".cached.vulkan.task";
+    case EShaderStage::Mesh:
+        return ".cached.vulkan.mesh";
     default:
         UNREACHABLE();
         break;
@@ -106,6 +116,12 @@ const char* getSpvOutputExtension(EShaderStage::T stage)
         return "frag.spv";
     case EShaderStage::Geometry:
         return "geom.spv";
+    case EShaderStage::Compute:
+        return "comp.spv";
+    case EShaderStage::Task:
+        return "task.spv";
+    case EShaderStage::Mesh:
+        return "mesh.spv";
     default:
         UNREACHABLE();
         break;

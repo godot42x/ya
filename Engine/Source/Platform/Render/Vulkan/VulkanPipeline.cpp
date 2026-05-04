@@ -864,6 +864,26 @@ void VulkanPipeline::queryPhysicalDeviceLimits()
     vkGetPhysicalDeviceProperties(_render->getPhysicalDevice(), &properties);
 }
 
+// ========== VulkanMeshPipeline ==========
+
+void VulkanMeshPipeline::cleanup()
+{
+    VK_DESTROY(Pipeline, _render->getDevice(), _pipeline);
+}
+
+bool VulkanMeshPipeline::recreate(const MeshPipelineCreateInfo& ci)
+{
+    _ci = ci;
+    _name = ci.shaderDesc.cacheKey();
+    if (!_render || !_render->supportsMeshShader()) {
+        YA_CORE_WARN("Mesh pipeline '{}' is unsupported by current render backend", _name);
+        return false;
+    }
+
+    YA_CORE_WARN("VulkanMeshPipeline API is available, but pipeline creation is not implemented yet: {}", _name);
+    return false;
+}
+
 // ========== VulkanComputePipeline ==========
 
 void VulkanComputePipeline::cleanup()

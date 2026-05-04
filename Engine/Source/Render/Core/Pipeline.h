@@ -18,6 +18,7 @@ struct ICommandBuffer;
 struct PushConstantRange;
 struct GraphicsPipelineCreateInfo;
 struct ComputePipelineCreateInfo;
+struct MeshPipelineCreateInfo;
 
 /**
  * @brief Generic pipeline layout interface
@@ -81,6 +82,28 @@ struct IComputePipeline : public IPipeline
     virtual bool               recreate(const ComputePipelineCreateInfo& ci) = 0;
     virtual void*              getHandle() const                             = 0;
     virtual const std::string& getName() const                               = 0;
+
+    template <typename T>
+    T getHandleAs() const { return static_cast<T>(getHandle()); }
+};
+
+/**
+ * @brief Generic mesh pipeline interface for task/mesh shader rendering.
+ */
+struct IMeshPipeline : public IPipeline
+{
+  public:
+    IMeshPipeline()                                = default;
+    IMeshPipeline(const IMeshPipeline&)            = delete;
+    IMeshPipeline& operator=(const IMeshPipeline&) = delete;
+    IMeshPipeline(IMeshPipeline&&)                 = default;
+    IMeshPipeline& operator=(IMeshPipeline&&)      = default;
+
+    static std::shared_ptr<IMeshPipeline> create(IRender* render);
+
+    virtual bool               recreate(const MeshPipelineCreateInfo& ci) = 0;
+    virtual void*              getHandle() const                          = 0;
+    virtual const std::string& getName() const                            = 0;
 
     template <typename T>
     T getHandleAs() const { return static_cast<T>(getHandle()); }

@@ -610,6 +610,14 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
                                                             extensionNames.end(),
                                                             [](const char* name)
                                                             { return std::strcmp(name, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME) == 0; }) != extensionNames.end();
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        const bool bHasMeshShaderExtension = std::find_if(extensionNames.begin(),
+                                                          extensionNames.end(),
+                                                          [](const char* name)
+                                                          { return std::strcmp(name, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0; }) != extensionNames.end();
+#else
+        const bool bHasMeshShaderExtension = false;
+#endif
 
         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT supportedExtendedDynamicState3Features{};
         supportedExtendedDynamicState3Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
@@ -622,9 +630,19 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         supportedVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
         supportedVulkan11Features.pNext = &supportedDynamicRenderingFeatures;
 
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        VkPhysicalDeviceMeshShaderFeaturesEXT supportedMeshShaderFeatures{};
+        supportedMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+        supportedMeshShaderFeatures.pNext = &supportedVulkan11Features;
+#endif
+
         VkPhysicalDeviceFeatures2 features2{};
         features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        features2.pNext = bHasMeshShaderExtension ? static_cast<void*>(&supportedMeshShaderFeatures) : static_cast<void*>(&supportedVulkan11Features);
+#else
         features2.pNext = &supportedVulkan11Features;
+#endif
         vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &features2);
         if (!supportedDynamicRenderingFeatures.dynamicRendering) {
             YA_CORE_ERROR("Dynamic rendering is not supported on {}", candidate.properties.deviceName);
@@ -650,6 +668,18 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         };
         void* deviceFeaturesNext = extendedDynamicState3Features.extendedDynamicState3PolygonMode ? static_cast<void*>(&extendedDynamicState3Features) : static_cast<void*>(&dynamicRenderingFeatures);
 
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{
+            .sType      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+            .pNext      = deviceFeaturesNext,
+            .taskShader = bHasMeshShaderExtension && supportedMeshShaderFeatures.taskShader,
+            .meshShader = bHasMeshShaderExtension && supportedMeshShaderFeatures.meshShader,
+        };
+        if (meshShaderFeatures.meshShader) {
+            deviceFeaturesNext = &meshShaderFeatures;
+        }
+#endif
+
         VkDeviceCreateInfo deviceCreateInfo = {
             .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .pNext                   = deviceFeaturesNext,
@@ -672,6 +702,28 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         if (ret != VK_SUCCESS) {
             return ret;
         }
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
+        const bool bHasComputeQueue = std::any_of(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& family) {
+            return family.queueCount > 0 && (family.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+        });
+
+        _capabilities.geometryShader      = bSupportsGeometryShader;
+        _capabilities.computeShader       = bHasComputeQueue;
+        _capabilities.storageBuffer       = true;
+        _capabilities.drawIndirect        = true;
+        _capabilities.drawIndexedIndirect = true;
+        _capabilities.dynamicRendering    = dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
+#ifdef __APPLE__
+        _capabilities.portabilitySubset   = bHasPortabilitySubset;
+#endif
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        _capabilities.taskShader          = meshShaderFeatures.taskShader == VK_TRUE;
+        _capabilities.meshShader          = meshShaderFeatures.meshShader == VK_TRUE;
+#endif
 
         for (uint32_t i = 0; i < graphicsQueueCount; i++) {
             VkQueue queue = VK_NULL_HANDLE;

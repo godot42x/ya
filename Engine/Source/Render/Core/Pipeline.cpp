@@ -79,4 +79,23 @@ std::shared_ptr<IComputePipeline> IComputePipeline::create(IRender* render)
     }
 }
 
+std::shared_ptr<IMeshPipeline> IMeshPipeline::create(IRender* render)
+{
+    if (!render)
+        return nullptr;
+
+    switch (render->getAPI())
+    {
+    case ERenderAPI::Vulkan:
+    {
+        auto vkRender = render->as<VulkanRender>();
+        auto ret      = makeShared<VulkanMeshPipeline>(vkRender);
+        YA_CORE_ASSERT(ret != nullptr, "Failed to create VulkanMeshPipeline");
+        return ret;
+    }
+    default:
+        return nullptr;
+    }
+}
+
 } // namespace ya

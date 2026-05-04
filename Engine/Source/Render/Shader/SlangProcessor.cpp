@@ -297,6 +297,8 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             {EShaderStage::Fragment, "fragMain"},
             {EShaderStage::Geometry, "geomMain"},
             {EShaderStage::Compute, "compMain"},
+            {EShaderStage::Task, "taskMain"},
+            {EShaderStage::Mesh, "meshMain"},
         };
 
         std::vector<shader_internal::ShaderStageSource> stageSources;
@@ -395,11 +397,13 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             bool            required;
         };
 
-        const std::array<StageEntryCandidate, 4> stageCandidates = {{
+        const std::array<StageEntryCandidate, 6> stageCandidates = {{
             {.stage = EShaderStage::Vertex, .entryName = "vertMain", .required = true},
             {.stage = EShaderStage::Fragment, .entryName = "fragMain", .required = true},
             {.stage = EShaderStage::Geometry, .entryName = "geomMain", .required = false},
             {.stage = EShaderStage::Compute, .entryName = "compMain", .required = false},
+            {.stage = EShaderStage::Task, .entryName = "taskMain", .required = false},
+            {.stage = EShaderStage::Mesh, .entryName = "meshMain", .required = false},
         }};
 
         for (const auto& candidate : stageCandidates) {

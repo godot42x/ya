@@ -778,6 +778,12 @@ inline auto toVk(T stage) -> VkShaderStageFlags
         bits |= VK_SHADER_STAGE_GEOMETRY_BIT;
     if (stage & Compute)
         bits |= VK_SHADER_STAGE_COMPUTE_BIT;
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+    if (stage & Task)
+        bits |= VK_SHADER_STAGE_TASK_BIT_EXT;
+    if (stage & Mesh)
+        bits |= VK_SHADER_STAGE_MESH_BIT_EXT;
+#endif
 
     return bits;
 }

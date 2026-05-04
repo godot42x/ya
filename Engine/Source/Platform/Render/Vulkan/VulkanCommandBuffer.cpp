@@ -224,6 +224,18 @@ void VulkanCommandBuffer::executeDrawIndexed(uint32_t indexCount, uint32_t insta
     vkCmdDrawIndexed(_commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
+void VulkanCommandBuffer::executeDrawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+{
+    if (!buffer || drawCount == 0) return;
+    vkCmdDrawIndirect(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset, drawCount, stride);
+}
+
+void VulkanCommandBuffer::executeDrawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+{
+    if (!buffer || drawCount == 0) return;
+    vkCmdDrawIndexedIndirect(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset, drawCount, stride);
+}
+
 void VulkanCommandBuffer::executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     vkCmdDispatch(_commandBuffer, groupCountX, groupCountY, groupCountZ);
@@ -532,6 +544,12 @@ void VulkanCommandBuffer::executeAll()
                 else if constexpr (std::is_same_v<T, RenderCommand::DrawIndexed>) {
                     executeDrawIndexed(arg.indexCount, arg.instanceCount, arg.firstIndex, arg.vertexOffset, arg.firstInstance);
                 }
+                else if constexpr (std::is_same_v<T, RenderCommand::DrawIndirect>) {
+                    executeDrawIndirect(arg.buffer, arg.offset, arg.drawCount, arg.stride);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::DrawIndexedIndirect>) {
+                    executeDrawIndexedIndirect(arg.buffer, arg.offset, arg.drawCount, arg.stride);
+                }
                 else if constexpr (std::is_same_v<T, RenderCommand::SetViewPort>) {
                     executeSetViewport(arg.x, arg.y, arg.width, arg.height, arg.minDepth, arg.maxDepth);
                 }
@@ -612,6 +630,16 @@ void VulkanCommandBuffer::drawIndexed(uint32_t indexCount, uint32_t instanceCoun
                                       uint32_t firstInstance)
 {
     executeDrawIndexed(indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void VulkanCommandBuffer::drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+{
+    executeDrawIndirect(buffer, offset, drawCount, stride);
+}
+
+void VulkanCommandBuffer::drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
+{
+    executeDrawIndexedIndirect(buffer, offset, drawCount, stride);
 }
 
 void VulkanCommandBuffer::setViewport(float x, float y, float width, float height,

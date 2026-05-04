@@ -28,6 +28,19 @@ struct TextureFormatSupportInfo
     bool linearSampled      = false;
 };
 
+struct RenderCapabilities
+{
+    bool geometryShader      = false;
+    bool computeShader       = false;
+    bool storageBuffer       = false;
+    bool drawIndirect        = false;
+    bool drawIndexedIndirect = false;
+    bool meshShader          = false;
+    bool taskShader          = false;
+    bool dynamicRendering    = false;
+    bool portabilitySubset   = false;
+};
+
 struct IRender : public plat_base<IRender>
 {
     RenderCreateInfo _ci;
@@ -160,7 +173,19 @@ struct IRender : public plat_base<IRender>
         return false;
     }
 
-    virtual bool supportsGeometryShader() const { return false; }
+    virtual const RenderCapabilities& getCapabilities() const
+    {
+        static const RenderCapabilities caps{};
+        return caps;
+    }
+
+    virtual bool supportsGeometryShader() const { return getCapabilities().geometryShader; }
+    virtual bool supportsMeshShader() const { return getCapabilities().meshShader; }
+    virtual bool supportsComputeIndirect() const
+    {
+        const auto& caps = getCapabilities();
+        return caps.computeShader && caps.storageBuffer && caps.drawIndirect;
+    }
 
     /**
      * @brief Submit command buffers to graphics queue with synchronization

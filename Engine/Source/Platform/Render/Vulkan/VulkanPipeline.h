@@ -162,6 +162,32 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     static VkShaderModule createShaderModule(VkDevice device, const std::vector<uint32_t>& spv_binary);
 };
 
+struct VulkanMeshPipeline : public ya::IMeshPipeline
+{
+    VkPipeline    _pipeline = VK_NULL_HANDLE;
+    VulkanRender* _render   = nullptr;
+    std::string   _name;
+
+    explicit VulkanMeshPipeline(VulkanRender* render)
+        : _render(render) {}
+
+    ~VulkanMeshPipeline() override { cleanup(); }
+
+    VulkanMeshPipeline(const VulkanMeshPipeline&)            = delete;
+    VulkanMeshPipeline& operator=(const VulkanMeshPipeline&) = delete;
+    VulkanMeshPipeline(VulkanMeshPipeline&&)                 = default;
+    VulkanMeshPipeline& operator=(VulkanMeshPipeline&&)      = default;
+
+    bool recreate(const MeshPipelineCreateInfo& ci) override;
+    void* getHandle() const override { return (void*)(uintptr_t)_pipeline; }
+    const std::string& getName() const override { return _name; }
+    VkPipeline getVkHandle() const { return _pipeline; }
+
+  private:
+    MeshPipelineCreateInfo _ci;
+    void cleanup();
+};
+
 struct VulkanComputePipeline : public ya::IComputePipeline
 {
     VkPipeline            _pipeline       = VK_NULL_HANDLE;

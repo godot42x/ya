@@ -50,6 +50,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeDrawIndexed(uint32_t indexCount, uint32_t instanceCount,
                             uint32_t firstIndex, int32_t vertexOffset,
                             uint32_t firstInstance);
+    void executeDrawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
+    void executeDrawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
     void executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
     void executeDispatchIndirect(IBuffer* buffer, uint64_t offset);
     void executeSetViewport(float x, float y, float width, float height,
@@ -130,6 +132,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
                      uint32_t firstIndex = 0, int32_t vertexOffset = 0,
                      uint32_t firstInstance = 0) override;
+    void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
+    void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
     void setViewport(float x, float y, float width, float height,
                      float minDepth = 0.0f, float maxDepth = 1.0f) override;
     void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;

@@ -79,11 +79,15 @@ struct VulkanRender : public IRender
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
         {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
+#ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
+        {.name = VK_EXT_MESH_SHADER_EXTENSION_NAME, .bRequired = false},
+#endif
     };
     const bool m_EnableValidationLayers = true; // Will be disabled automatically if OBS is detected
 
     bool bSupportDebugUtils       = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
     bool bSupportsGeometryShader  = false;
+    RenderCapabilities _capabilities{};
 
   private:
 
@@ -236,7 +240,8 @@ struct VulkanRender : public IRender
         return _swapChain ? _swapChain->getImageCount() : 0;
     }
 
-    bool supportsGeometryShader() const override { return bSupportsGeometryShader; }
+    const RenderCapabilities& getCapabilities() const override { return _capabilities; }
+    bool supportsGeometryShader() const override { return _capabilities.geometryShader; }
 
     void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>>& outBuffers) override;
 
