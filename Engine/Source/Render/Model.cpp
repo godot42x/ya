@@ -1,7 +1,10 @@
 #include "Model.h"
 
 #include "Render/EngineGeometryNormalizer.h"
+#include "Render/Model/AssimpImporter.h"
+#include "Render/Model/GltfImporter.h"
 #include "Render/Model/ImportedModelData.h"
+#include "Render/Model/ModelImporterCommon.h"
 #include "Render/Model/ModelImporterRegistry.h"
 #include "Render/Skeleton.h"
 
@@ -19,11 +22,11 @@ ImportedModelData ImportedModelData::decode(const std::string& filepath)
     std::replace(normalizedFilepath.begin(), normalizedFilepath.end(), '\\', '/');
     normalizedFilepath = std::filesystem::path(normalizedFilepath).lexically_normal().generic_string();
 
-    if (model_decode::isGltfPath(normalizedFilepath)) {
-        return model_decode::decodeWithTinyGltf(normalizedFilepath);
+    if (model_importer::detail::isGltfPath(normalizedFilepath)) {
+        return model_importer::getGltfImporter().import(normalizedFilepath);
     }
 
-    return model_decode::decodeWithAssimp(normalizedFilepath);
+    return model_importer::getAssimpImporter().import(normalizedFilepath);
 }
 
 std::shared_ptr<Model> ImportedModelData::createModel() const
