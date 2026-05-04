@@ -38,6 +38,7 @@
         },
     ],
     "configurations": [
+
         {
             "type": "cppvsdbg",
             "request": "attach",
@@ -82,6 +83,17 @@
             // "justMyCode": true,
             "preLaunchTask": "xmake build",
             "requireExactSource": false,
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "debug program LLVM with build",
+            // "program": "${workspaceFolder}/build/macosx/amd64/debug/${input:debug.target}",
+            "program": "${workspaceFolder}/build/macosx/arm64/debug/${input:debug.target}",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "xmake build"
+
         },
     ]
 }
