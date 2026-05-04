@@ -765,6 +765,38 @@ inline auto toVk(T type) -> VkDescriptorType
 
 } // namespace EPipelineDescriptorType
 
+namespace EPipelineStage
+{
+inline auto toVk(T stage) -> VkPipelineStageFlags
+{
+    VkPipelineStageFlags bits = {};
+    if (stage & ComputeShader) bits |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    if (stage & DrawIndirect) bits |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+    if (stage & VertexInput) bits |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    if (stage & VertexShader) bits |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    if (stage & FragmentShader) bits |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    if (stage & Transfer) bits |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+    if (stage & AllCommands) bits |= VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    return bits ? bits : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+}
+} // namespace EPipelineStage
+
+namespace EResourceAccess
+{
+inline auto toVk(T access) -> VkAccessFlags
+{
+    VkAccessFlags bits = {};
+    if (access & ShaderRead) bits |= VK_ACCESS_SHADER_READ_BIT;
+    if (access & ShaderWrite) bits |= VK_ACCESS_SHADER_WRITE_BIT;
+    if (access & IndirectCommandRead) bits |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    if (access & VertexAttributeRead) bits |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    if (access & IndexRead) bits |= VK_ACCESS_INDEX_READ_BIT;
+    if (access & TransferRead) bits |= VK_ACCESS_TRANSFER_READ_BIT;
+    if (access & TransferWrite) bits |= VK_ACCESS_TRANSFER_WRITE_BIT;
+    return bits;
+}
+} // namespace EResourceAccess
+
 namespace EShaderStage
 {
 inline auto toVk(T stage) -> VkShaderStageFlags

@@ -199,6 +199,36 @@ GENERATED_ENUM_MISC_WITH_RANGE(T, Mesh);
 
 }; // namespace EShaderStage
 
+namespace EPipelineStage
+{
+enum T : uint32_t
+{
+    None          = 0,
+    ComputeShader = 1 << 0,
+    DrawIndirect  = 1 << 1,
+    VertexInput   = 1 << 2,
+    VertexShader  = 1 << 3,
+    FragmentShader = 1 << 4,
+    Transfer      = 1 << 5,
+    AllCommands   = 1 << 6,
+};
+}
+
+namespace EResourceAccess
+{
+enum T : uint32_t
+{
+    None                = 0,
+    ShaderRead          = 1 << 0,
+    ShaderWrite         = 1 << 1,
+    IndirectCommandRead = 1 << 2,
+    VertexAttributeRead = 1 << 3,
+    IndexRead           = 1 << 4,
+    TransferRead        = 1 << 5,
+    TransferWrite       = 1 << 6,
+};
+}
+
 struct ShaderReflectionConfig
 {
     bool vertexInput       = false;

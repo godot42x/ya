@@ -156,6 +156,16 @@ struct RenderCommand
         uint32_t drawCount = 0;
         uint32_t stride = 0;
     };
+    struct BufferMemoryBarrier
+    {
+        IBuffer* buffer = nullptr;
+        EPipelineStage::T srcStage = EPipelineStage::None;
+        EPipelineStage::T dstStage = EPipelineStage::None;
+        EResourceAccess::T srcAccess = EResourceAccess::None;
+        EResourceAccess::T dstAccess = EResourceAccess::None;
+        uint64_t offset = 0;
+        uint64_t size = 0;
+    };
 
     using type = std::variant<
         BindPipeline,
@@ -177,7 +187,8 @@ struct RenderCommand
         Dispatch,
         DispatchIndirect,
         DrawIndirect,
-        DrawIndexedIndirect>;
+        DrawIndexedIndirect,
+        BufferMemoryBarrier>;
     type data;
 };
 #endif
@@ -383,6 +394,17 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndexedIndirect{buffer, offset, drawCount, stride}});
     }
 
+    void bufferMemoryBarrier(IBuffer* buffer,
+                             EPipelineStage::T srcStage,
+                             EPipelineStage::T dstStage,
+                             EResourceAccess::T srcAccess,
+                             EResourceAccess::T dstAccess,
+                             uint64_t offset = 0,
+                             uint64_t size = 0)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::BufferMemoryBarrier{buffer, srcStage, dstStage, srcAccess, dstAccess, offset, size}});
+    }
+
     void beginRendering(const RenderingInfo& info)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::BeginRendering{info}});
@@ -445,6 +467,13 @@ struct ICommandBuffer
     virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                     = 0;
     virtual void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
     virtual void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
+    virtual void bufferMemoryBarrier(IBuffer* buffer,
+                                     EPipelineStage::T srcStage,
+                                     EPipelineStage::T dstStage,
+                                     EResourceAccess::T srcAccess,
+                                     EResourceAccess::T dstAccess,
+                                     uint64_t offset = 0,
+                                     uint64_t size = 0) = 0;
 
     /**
      * @brief Copy data from buffer to image

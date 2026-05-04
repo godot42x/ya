@@ -247,6 +247,38 @@ void VulkanCommandBuffer::executeDispatchIndirect(IBuffer* buffer, uint64_t offs
     vkCmdDispatchIndirect(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset);
 }
 
+void VulkanCommandBuffer::executeBufferMemoryBarrier(IBuffer* buffer,
+                                                     EPipelineStage::T srcStage,
+                                                     EPipelineStage::T dstStage,
+                                                     EResourceAccess::T srcAccess,
+                                                     EResourceAccess::T dstAccess,
+                                                     uint64_t offset,
+                                                     uint64_t size)
+{
+    if (!buffer) return;
+    VkBufferMemoryBarrier barrier{
+        .sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .pNext               = nullptr,
+        .srcAccessMask       = EResourceAccess::toVk(srcAccess),
+        .dstAccessMask       = EResourceAccess::toVk(dstAccess),
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer              = buffer->getHandleAs<VkBuffer>(),
+        .offset              = offset,
+        .size                = size == 0 ? VK_WHOLE_SIZE : size,
+    };
+    vkCmdPipelineBarrier(_commandBuffer,
+                         EPipelineStage::toVk(srcStage),
+                         EPipelineStage::toVk(dstStage),
+                         0,
+                         0,
+                         nullptr,
+                         1,
+                         &barrier,
+                         0,
+                         nullptr);
+}
+
 void VulkanCommandBuffer::executeSetViewport(float x, float y, float width, float height,
                                              float minDepth, float maxDepth)
 {
@@ -589,6 +621,9 @@ void VulkanCommandBuffer::executeAll()
                 else if constexpr (std::is_same_v<T, RenderCommand::DispatchIndirect>) {
                     executeDispatchIndirect(arg.buffer, arg.offset);
                 }
+                else if constexpr (std::is_same_v<T, RenderCommand::BufferMemoryBarrier>) {
+                    executeBufferMemoryBarrier(arg.buffer, arg.srcStage, arg.dstStage, arg.srcAccess, arg.dstAccess, arg.offset, arg.size);
+                }
             },
             cmd.data);
     }
@@ -640,6 +675,17 @@ void VulkanCommandBuffer::drawIndirect(IBuffer* buffer, uint64_t offset, uint32_
 void VulkanCommandBuffer::drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
 {
     executeDrawIndexedIndirect(buffer, offset, drawCount, stride);
+}
+
+void VulkanCommandBuffer::bufferMemoryBarrier(IBuffer* buffer,
+                                              EPipelineStage::T srcStage,
+                                              EPipelineStage::T dstStage,
+                                              EResourceAccess::T srcAccess,
+                                              EResourceAccess::T dstAccess,
+                                              uint64_t offset,
+                                              uint64_t size)
+{
+    executeBufferMemoryBarrier(buffer, srcStage, dstStage, srcAccess, dstAccess, offset, size);
 }
 
 void VulkanCommandBuffer::setViewport(float x, float y, float width, float height,
