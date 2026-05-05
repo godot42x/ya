@@ -276,7 +276,7 @@ void RenderRuntime::init(const InitDesc& desc)
         ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"},
         ShaderDesc{.shaderName = "Skybox.glsl"},
         ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
-        ShaderDesc{.shaderName = "Shadow/CombinedShadowMappingGenerate.glsl"},
+        ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"},
         ShaderDesc{.shaderName = "Misc/pbr_generate_brdf_lut.slang"},
     });
     _deleter.push("ShaderStorage", [this](void*)

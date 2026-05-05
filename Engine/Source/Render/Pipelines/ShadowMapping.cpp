@@ -29,8 +29,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
         .pipelineLayout        = _pipelineLayout.get(),
         .shaderDesc            = {
 
-            .shaderName = "Shadow/CombinedShadowMappingGenerate.glsl",
-            // .shaderName        = "CombineShadowMappingGenerate.slang",
+            .shaderName = "CombineShadowMappingGenerate.slang",
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
@@ -218,7 +217,8 @@ void ShadowMapping::onRender(ICommandBuffer* cmdBuf, const FrameContext* ctx)
             }
 
             ModelPushConstant pushConst{
-                .model = tc.getTransform(),
+                .modelMat = tc.getTransform(),
+                .skinningPaletteIndex = -1,
             };
             cmdBuf->pushConstants(_pipelineLayout.get(),
                                   _pipelineLayoutDesc.pushConstants[0].stageFlags,

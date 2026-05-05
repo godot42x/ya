@@ -29,11 +29,17 @@ void ShadowStage::refreshPipelineFromRenderTarget()
         return;
     }
 
+    _shadowExtent = _shadowMapRT->getExtent();
+    if (!_render) {
+        return;
+    }
+
     const auto& depthDesc = _shadowMapRT->getDepthAttachmentDesc();
     if (!depthDesc.has_value()) {
         return;
     }
 
+    rebuildShadowLayerTextures();
     _pipelineCI.pipelineRenderingInfo.depthAttachmentFormat = depthDesc->format;
     if (_staticVariant.pipeline) {
         auto ci                = _pipelineCI;
@@ -61,6 +67,76 @@ void ShadowStage::refreshPipelineFromRenderTarget()
         };
         ci.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 1"};
         _skinnedVariant.pipeline->updateDesc(ci);
+    }
+}
+
+void ShadowStage::rebuildShadowLayerTextures()
+{
+    _directionalDepthTexture.reset();
+    _directionalDepthView.reset();
+    for (auto& faceViews : _pointFaceDepthViews) {
+        for (auto& faceView : faceViews) {
+            faceView.reset();
+        }
+    }
+    for (auto& faceTextures : _pointFaceDepthTextures) {
+        for (auto& faceTexture : faceTextures) {
+            faceTexture.reset();
+        }
+    }
+
+    if (!_render || !_shadowMapRT) {
+        return;
+    }
+
+    auto* frameBuffer  = _shadowMapRT->getCurFrameBuffer();
+    auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
+    if (!depthTexture) {
+        return;
+    }
+
+    auto shadowImage = depthTexture->getImageShared();
+    if (!shadowImage) {
+        return;
+    }
+
+    auto textureFactory = _render->getTextureFactory();
+    _directionalDepthView = textureFactory->createImageView(
+        shadowImage,
+        ImageViewCreateInfo{
+            .label          = "ShadowStage_DirectionalDepthView",
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Depth,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        });
+    if (_directionalDepthView) {
+        _directionalDepthTexture = Texture::wrap(shadowImage, _directionalDepthView, "ShadowStage_DirectionalDepthTexture");
+    }
+
+    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+            auto view = textureFactory->createImageView(
+                shadowImage,
+                ImageViewCreateInfo{
+                    .label          = std::format("ShadowStage_Point[{}]_Face[{}]_DepthView", lightIndex, faceIndex),
+                    .viewType       = EImageViewType::View2D,
+                    .aspectFlags    = EImageAspect::Depth,
+                    .baseMipLevel   = 0,
+                    .levelCount     = 1,
+                    .baseArrayLayer = 1 + lightIndex * 6 + faceIndex,
+                    .layerCount     = 1,
+                });
+            _pointFaceDepthViews[lightIndex][faceIndex] = view;
+            if (view) {
+                _pointFaceDepthTextures[lightIndex][faceIndex] = Texture::wrap(
+                    shadowImage,
+                    view,
+                    std::format("ShadowStage_Point[{}]_Face[{}]_DepthTexture", lightIndex, faceIndex));
+            }
+        }
     }
 }
 
@@ -153,7 +229,7 @@ void ShadowStage::init(IRender* render)
                     .binding         = 0,
                     .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                     .descriptorCount = 1,
-                    .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                    .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                 }},
             },
         });
@@ -177,7 +253,7 @@ void ShadowStage::init(IRender* render)
             .depthAttachmentFormat = EFormat::D32_SFLOAT,
         },
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Shadow/CombinedShadowMappingGenerate.glsl",
+            .shaderName        = "CombineShadowMappingGenerate.slang",
             .vertexBufferDescs = {},
             .vertexAttributes  = {},
         },
@@ -193,40 +269,60 @@ void ShadowStage::init(IRender* render)
 
     _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
         .label     = "ShadowStage_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT * 2,
+        .maxSets   = MAX_FLIGHTS_IN_FLIGHT * (SHADOW_LAYER_COUNT + 1),
         .poolSizes = {
-            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
+            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * SHADOW_LAYER_COUNT},
             {.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
         },
     });
 
     FrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = IBuffer::create(
-            _render,
-            BufferCreateInfo{
-                .label       = std::format("ShadowStage_Frame_UBO_{}", i),
-                .usage       = EBufferUsage::UniformBuffer,
-                .size        = sizeof(FrameUBO),
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        _frameUBO[i]->writeData(&initialData, sizeof(FrameUBO), 0);
+        for (uint32_t layerIndex = 0; layerIndex < SHADOW_LAYER_COUNT; ++layerIndex) {
+            _frameUBO[i][layerIndex] = IBuffer::create(
+                _render,
+                BufferCreateInfo{
+                    .label       = std::format("ShadowStage_Frame_UBO_{}_{}", i, layerIndex),
+                    .usage       = EBufferUsage::UniformBuffer,
+                    .size        = sizeof(FrameUBO),
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            _frameUBO[i][layerIndex]->writeData(&initialData, sizeof(FrameUBO), 0);
 
-        _frameDS[i] = _dsp->allocateDescriptorSets(_frameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_frameDS[i], 0, _frameUBO[i].get()),
-        });
+            _frameDS[i][layerIndex] = _dsp->allocateDescriptorSets(_frameDSL);
+            _render->getDescriptorHelper()->updateDescriptorSets({
+                IDescriptorSetHelper::writeOneUniformBuffer(_frameDS[i][layerIndex], 0, _frameUBO[i][layerIndex].get()),
+            });
+        }
     }
 }
 
 void ShadowStage::destroy()
 {
-    for (auto& ubo : _frameUBO) ubo.reset();
-    for (auto& ssbo : _skinningSSBO) ssbo.reset();
+    for (auto& perFlightUBOs : _frameUBO) {
+        for (auto& ubo : perFlightUBOs) {
+            ubo.reset();
+        }
+    }
+    for (auto& ssbo : _skinningSSBO) {
+        ssbo.reset();
+    }
+    _directionalDepthTexture.reset();
+    _directionalDepthView.reset();
+    for (auto& faceViews : _pointFaceDepthViews) {
+        for (auto& faceView : faceViews) {
+            faceView.reset();
+        }
+    }
+    for (auto& faceTextures : _pointFaceDepthTextures) {
+        for (auto& faceTexture : faceTextures) {
+            faceTexture.reset();
+        }
+    }
     _dsp.reset();
     _skinningDSL.reset();
     _frameDSL.reset();
-    _staticVariant = {};
+    _staticVariant  = {};
     _skinnedVariant = {};
     _shadowMapRT.reset();
     _skinningCapacity = 0;
@@ -303,7 +399,19 @@ void ShadowStage::prepare(const RenderStageContext& ctx)
         }
     }
 
-    _frameUBO[fi]->writeData(&frameData, sizeof(FrameUBO), 0);
+    _frameUBO[fi][0]->writeData(&frameData, sizeof(FrameUBO), 0);
+
+    for (uint32_t lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+            FrameUBO pointLightFrameData{
+                .numPointLights      = 1,
+                .hasDirectionalLight = 0,
+            };
+            pointLightFrameData.pointLights[0] = frameData.pointLights[lightIndex];
+            pointLightFrameData.pointLights[0].matrix[0] = frameData.pointLights[lightIndex].matrix[faceIndex];
+            _frameUBO[fi][1 + lightIndex * 6 + faceIndex]->writeData(&pointLightFrameData, sizeof(FrameUBO), 0);
+        }
+    }
 
     const auto& palettes = fd.skinningPalettes;
     ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
@@ -315,75 +423,122 @@ void ShadowStage::prepare(const RenderStageContext& ctx)
 
 void ShadowStage::execute(const RenderStageContext& ctx)
 {
-    if (!ctx.cmdBuf || !ctx.frameData) return;
+    if (!ctx.cmdBuf || !ctx.frameData) {
+        return;
+    }
 
-    auto* cmdBuf = ctx.cmdBuf;
-    const uint32_t fi = ctx.flightIndex;
+    auto* cmdBuf        = ctx.cmdBuf;
+    const uint32_t fi   = ctx.flightIndex;
+    const auto& fd      = *ctx.frameData;
+    const bool bRenderDirectional = fd.bHasDirectionalLight && static_cast<bool>(_directionalDepthTexture);
+    const uint32_t pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
 
     cmdBuf->debugBeginLabel("ShadowStage");
 
-    if (_bAutoBindViewportScissor) {
-        cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width), static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
-        cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
-    }
+    auto bindViewportScissor = [&]()
+    {
+        if (_bAutoBindViewportScissor) {
+            cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width), static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
+            cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
+        }
+    };
 
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
+    auto drawItems = [&](const std::vector<RenderDrawItem>& items, uint32_t layerIndex)
     {
         if (items.empty()) {
             return;
         }
 
         cmdBuf->bindPipeline(_staticVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_staticVariant.pipelineLayout.get(), 0, {_frameDS[fi]});
+        cmdBuf->bindDescriptorSets(_staticVariant.pipelineLayout.get(), 0, {_frameDS[fi][layerIndex]});
         for (const auto& item : items) {
             if (!item.mesh) {
                 continue;
             }
-            ModelPushConstant pc{.model = item.worldMatrix, .skinningPaletteIndex = -1};
+            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = -1};
             cmdBuf->pushConstants(_staticVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
             item.mesh->drawStatic(cmdBuf);
         }
     };
 
-    auto drawSkinnedItems = [&](const std::vector<RenderDrawItem>& items)
+    auto drawSkinnedItems = [&](const std::vector<RenderDrawItem>& items, uint32_t layerIndex)
     {
         if (items.empty()) {
             return;
         }
 
         cmdBuf->bindPipeline(_skinnedVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_skinnedVariant.pipelineLayout.get(), 0, {_frameDS[fi], _skinningDS[fi]});
+        cmdBuf->bindDescriptorSets(_skinnedVariant.pipelineLayout.get(), 0, {_frameDS[fi][layerIndex], _skinningDS[fi]});
         for (const auto& item : items) {
             if (!item.mesh) {
                 continue;
             }
-            ModelPushConstant pc{.model = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
+            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
             cmdBuf->pushConstants(_skinnedVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
             item.mesh->drawSkinned(cmdBuf);
         }
     };
 
-    const auto& fd = *ctx.frameData;
-    auto drawBucketSet = [&](const RenderShadingDrawBuckets& buckets, bool bSkinned)
+    auto drawBucketSet = [&](const RenderShadingDrawBuckets& buckets, bool bSkinned, uint32_t layerIndex)
     {
         if (bSkinned) {
-            drawSkinnedItems(buckets.pbrDrawItems);
-            drawSkinnedItems(buckets.phongDrawItems);
-            drawSkinnedItems(buckets.unlitDrawItems);
-            drawSkinnedItems(buckets.simpleDrawItems);
-            drawSkinnedItems(buckets.fallbackDrawItems);
+            drawSkinnedItems(buckets.pbrDrawItems, layerIndex);
+            drawSkinnedItems(buckets.phongDrawItems, layerIndex);
+            drawSkinnedItems(buckets.unlitDrawItems, layerIndex);
+            drawSkinnedItems(buckets.simpleDrawItems, layerIndex);
+            drawSkinnedItems(buckets.fallbackDrawItems, layerIndex);
             return;
         }
 
-        drawItems(buckets.pbrDrawItems);
-        drawItems(buckets.phongDrawItems);
-        drawItems(buckets.unlitDrawItems);
-        drawItems(buckets.simpleDrawItems);
-        drawItems(buckets.fallbackDrawItems);
+        drawItems(buckets.pbrDrawItems, layerIndex);
+        drawItems(buckets.phongDrawItems, layerIndex);
+        drawItems(buckets.unlitDrawItems, layerIndex);
+        drawItems(buckets.simpleDrawItems, layerIndex);
+        drawItems(buckets.fallbackDrawItems, layerIndex);
     };
 
-    drawBucketSet(fd.drawBuckets.staticMeshes, false);
-    drawBucketSet(fd.drawBuckets.skinnedMeshes, true);
+    auto renderLayer = [&](Texture* depthTexture, uint32_t layerIndex, const char* label)
+    {
+        if (!depthTexture) {
+            return;
+        }
+
+        RenderingInfo::ImageSpec depthSpec{
+            .texture       = depthTexture,
+            .loadOp        = EAttachmentLoadOp::Clear,
+            .storeOp       = EAttachmentStoreOp::Store,
+            .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+        };
+        RenderingInfo renderInfo{
+            .label           = label,
+            .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
+            .layerCount      = 1,
+            .depthClearValue = ClearValue(1.0f, 0),
+            .depthAttachment = &depthSpec,
+        };
+
+        cmdBuf->beginRendering(renderInfo);
+        bindViewportScissor();
+        drawBucketSet(fd.drawBuckets.staticMeshes, false, layerIndex);
+        drawBucketSet(fd.drawBuckets.skinnedMeshes, true, layerIndex);
+        cmdBuf->endRendering(renderInfo);
+    };
+
+    if (bRenderDirectional) {
+        renderLayer(_directionalDepthTexture.get(), 0, "ShadowStage_Directional");
+    }
+
+    for (uint32_t lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+            auto& depthTexture = _pointFaceDepthTextures[lightIndex][faceIndex];
+            if (!depthTexture) {
+                continue;
+            }
+            const uint32_t layerIndex = 1 + lightIndex * 6 + faceIndex;
+            renderLayer(depthTexture.get(), layerIndex, "ShadowStage_PointFace");
+        }
+    }
 
     cmdBuf->debugEndLabel();
 }

@@ -260,21 +260,13 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
     _bEnablePointLightShadow = bEnablePointLightShadow;
 
     if (_bEnableShadowMapping) {
-        if (!_render || !_render->supportsGeometryShader()) {
-            YA_CORE_WARN("Deferred shadow mapping request ignored because this render backend does not support geometry shaders yet");
-            _bEnableShadowMapping = false;
-            _bEnablePointLightShadow = false;
-            destroyShadowResources();
+        if (!_shadowDepthRT) {
+            initShadowResources();
         }
-        else {
-            if (!_shadowDepthRT) {
-                initShadowResources();
-            }
-            if (!_shadowStage && _shadowDepthRT) {
-                _shadowStage = ya::makeShared<ShadowStage>();
-                _shadowStage->setRenderTarget(_shadowDepthRT);
-                _shadowStage->init(_render);
-            }
+        if (!_shadowStage && _shadowDepthRT) {
+            _shadowStage = ya::makeShared<ShadowStage>();
+            _shadowStage->setRenderTarget(_shadowDepthRT);
+            _shadowStage->init(_render);
         }
     }
     else {
@@ -391,11 +383,6 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
-    if (_bEnableShadowMapping && !_render->supportsGeometryShader()) {
-        YA_CORE_WARN("Deferred shadow mapping is disabled because this render backend does not support geometry shaders yet");
-        _bEnableShadowMapping = false;
-        _bEnablePointLightShadow = false;
-    }
     if (_bEnableShadowMapping) {
         initShadowResources();
 
@@ -552,16 +539,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         {
             YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
             _shadowStage->prepare(stageCtx);
-
-            RenderingInfo shadowMapRI{
-                .label           = "Deferred Shadow Map Pass",
-                .renderArea      = Rect2D{.pos = {0, 0}, .extent = _shadowDepthRT->getExtent().toVec2()},
-                .depthClearValue = ClearValue(1.0f, 0),
-                .renderTarget    = _shadowDepthRT.get(),
-            };
-            desc.cmdBuf->beginRendering(shadowMapRI);
             _shadowStage->execute(stageCtx);
-            desc.cmdBuf->endRendering(shadowMapRI);
         }
     }
     else {

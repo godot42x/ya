@@ -7,7 +7,7 @@
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 
-#include "Shadow.CombinedShadowMappingGenerate.glsl.h"
+#include "CombineShadowMappingGenerate.slang.h"
 
 namespace ya
 {
@@ -26,13 +26,13 @@ struct ShadowMapping : public IRenderSystem
     //     float     pointLightFarPlane  = 0.0f;
     //     uint32_t  _pad                = 0;
     // };
-    using FrameUBO = glsl_types::Shadow::CombinedShadowMappingGenerate::FrameData;
+    using FrameUBO = slang_types::CombineShadowMappingGenerate::FrameData;
 
     // struct ModelPushConstant
     // {
     //     glm::mat4 model{1.0f};
     // };
-    using ModelPushConstant = glsl_types::Shadow::CombinedShadowMappingGenerate::PushConstant;
+    using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
 
     stdptr<IRenderTarget> _shadowMapRT  = nullptr;
@@ -62,7 +62,7 @@ struct ShadowMapping : public IRenderSystem
                         .binding         = 0,
                         .descriptorType  = EPipelineDescriptorType::UniformBuffer,
                         .descriptorCount = 1,
-                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Geometry | EShaderStage::Fragment,
+                        .stageFlags      = EShaderStage::Vertex | EShaderStage::Fragment,
                     },
                 },
             },

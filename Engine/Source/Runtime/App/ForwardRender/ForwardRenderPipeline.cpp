@@ -278,16 +278,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     // ── Shadow Pass ──────────────────────────────────────────────
     if (bShadowMapping && _shadowStage) {
         _shadowStage->prepare(stageCtx);
-
-        RenderingInfo shadowMapRI{
-            .label           = "Shadow Map Pass",
-            .renderArea      = Rect2D{.pos = {0, 0}, .extent = depthRT->getExtent().toVec2()},
-            .depthClearValue = ClearValue(1.0f, 0),
-            .renderTarget    = depthRT.get(),
-        };
-        desc.cmdBuf->beginRendering(shadowMapRI);
         _shadowStage->execute(stageCtx);
-        desc.cmdBuf->endRendering(shadowMapRI);
     }
 
     // ── Viewport Pass ────────────────────────────────────────────

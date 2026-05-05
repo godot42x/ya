@@ -4,9 +4,10 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
 
-#include "Shadow.CombinedShadowMappingGenerate.glsl.h"
+#include "CombineShadowMappingGenerate.slang.h"
 
 #include <algorithm>
 
@@ -15,8 +16,10 @@ namespace ya
 
 struct ShadowStage : public IRenderStage
 {
-    using FrameUBO          = glsl_types::Shadow::CombinedShadowMappingGenerate::FrameData;
-    using ModelPushConstant = glsl_types::Shadow::CombinedShadowMappingGenerate::PushConstant;
+    static constexpr uint32_t SHADOW_LAYER_COUNT = 1 + MAX_POINT_LIGHTS * 6;
+
+    using FrameUBO          = slang_types::CombineShadowMappingGenerate::FrameData;
+    using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
     struct ShadowPipelineVariant
     {
@@ -41,12 +44,16 @@ struct ShadowStage : public IRenderStage
     stdptr<IDescriptorSetLayout>                              _frameDSL;
     stdptr<IDescriptorSetLayout>                              _skinningDSL;
     GraphicsPipelineCreateInfo                                _pipelineCI{};
-    stdptr<IDescriptorPool>                                   _dsp;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _frameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _frameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>        _skinningSSBO{};
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>    _skinningDS{};
-    uint32_t                                                  _skinningCapacity = 0;
+    stdptr<IDescriptorPool>                                                        _dsp;
+    std::array<std::array<DescriptorSetHandle, SHADOW_LAYER_COUNT>, MAX_FLIGHTS_IN_FLIGHT> _frameDS{};
+    std::array<std::array<stdptr<IBuffer>, SHADOW_LAYER_COUNT>, MAX_FLIGHTS_IN_FLIGHT>     _frameUBO{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>                                      _skinningSSBO{};
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT>                                  _skinningDS{};
+    stdptr<IImageView>                                                                       _directionalDepthView;
+    stdptr<Texture>                                                                          _directionalDepthTexture;
+    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS>                         _pointFaceDepthViews{};
+    std::array<std::array<stdptr<Texture>, 6>, MAX_POINT_LIGHTS>                            _pointFaceDepthTextures{};
+    uint32_t                                                                                 _skinningCapacity = 0;
 
     ShadowStage() : IRenderStage("Shadow") {}
 
@@ -60,6 +67,7 @@ struct ShadowStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
     void refreshPipelineFromRenderTarget();
+    void rebuildShadowLayerTextures();
     void ensureSkinningCapacity(uint32_t paletteCount);
     void recreatePipelines();
 
