@@ -28,7 +28,7 @@ description: VS Code 工作区配置、XMake 任务、调试启动项与 Intelli
 
 ## 相关 skills
 
-- `build`：目标选择、xmake 参数、测试入口与 shader 生成要一起看
+- `ya-build`：目标选择、xmake 参数、测试入口与 shader 生成要一起看
 - `debug-review`：当问题表现为断点失效、调试配置异常时一起看
 - `cpp-style`：需要联动 clangd / IntelliSense 诊断代码风格问题时可一起看
 

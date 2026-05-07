@@ -23,7 +23,7 @@ description: YA Engine 资源加载、运行时 resolve 与 environment lighting
 
 ## 相关 skills
 
-- `build`：资源改动涉及目标、shader 生成、测试时一起看
+- `ya-build`：资源改动涉及目标、shader 生成、测试时一起看
 - `render-arch`：涉及 RenderRuntime、offscreen pipeline、layout 时一起看
 - `material-flow`：涉及 TextureSlot、runtime material、descriptor 上传时一起看
 - `cpp-style`：做状态机与 runtime state 收口时一起看

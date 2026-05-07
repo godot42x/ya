@@ -30,7 +30,7 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 
 ## 相关 skills
 
-- `build`：先确认构建、测试、shader 生成入口是否正确
+- `ya-build`：先确认构建、测试、shader 生成入口是否正确
 - `vscode`：问题只在 VS Code 调试链路复现时一起看
 - `render-arch`：Vulkan / RenderRuntime / layout 问题时一起看
 - `resource-system`：资源生命周期、descriptor、resolve 问题时一起看

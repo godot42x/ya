@@ -24,7 +24,7 @@ description: 需求不确定时的澄清与决策引导
 ## 交接规则
 
 - 澄清完成后，立即切换主技能：
-	- 构建/报错 -> `build`
+	- 构建/报错 -> `ya-build`
 	- VS Code / 调试配置 -> `vscode`
 	- 资源加载 / resolve -> `resource-system`
 	- 材质数据流 -> `material-flow`
@@ -34,7 +34,7 @@ description: 需求不确定时的澄清与决策引导
 
 ## 相关 skills
 
-- `build`：处理 XMake 构建、目标选择、测试与 shader 生成
+- `ya-build`：处理 XMake 构建、目标选择、测试与 shader 生成
 - `vscode`：处理工作区任务、调试配置、compile_commands
 - `resource-system`：处理资源加载、resolve、environment lighting
 - `material-flow`：处理材质 authoring / runtime 数据流

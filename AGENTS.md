@@ -1,192 +1,105 @@
 # AGENTS.md
 
+本文件只提供最小必要上下文。先读这里，按需进入 `./.agent/` 的具体资料，不要一次性加载全部 skills / memories。
 
 ## Project
 
-**YA Engine** (Yet Another Engine) — a C++ game engine with Vulkan (primary) and OpenGL backends. Uses EnTT ECS, ImGui editor, Lua scripting (sol2), and a custom reflection system.
+YA Engine 是 C++20 游戏引擎，主渲染后端为 Vulkan，兼容 OpenGL；使用 EnTT ECS、ImGui 编辑器、Lua（sol2）和自定义反射系统。
 
 ## Build / Run / Test
 
-Build system is **XMake** (NOT CMake). Default target is `ya`. Example targets are under `Example/`. The `make` wrapper is the normal entrypoint; use direct `xmake` only when you need finer control.
+构建系统只有 XMake，日常优先走 `make` 包装：
 
 ```bash
-# Makefile wrapper (preferred)
-make cfg                          # run Script/setup_3rd_party.py, configure debug mode, refresh compile_commands.json
-make b t=HelloMaterial            # build one target
-make r t=HelloMaterial            # build + run one target
-make f=true r t=HelloMaterial     # clean, rebuild, run
-make test                         # build + run default test target (ya-testing)
-make test t=ya r_args="Suite.Test" # run a single GoogleTest case via --gtest_filter
-make test t=ya r_args="Suite.*"    # run one GoogleTest suite
-make profile                      # open Engine/Saved/Profiling/App.speedscope.json in speedscope
-
-# Direct XMake
-xmake                             # build all configured targets
-xmake b TargetName                # build one target
-xmake run TargetName              # run one target
-xmake l targets                   # list available targets
-xmake f -m debug -y               # reconfigure debug mode
-xmake project -k compile_commands # regenerate compile_commands.json
-xmake ya-shader                   # regenerate shader-generated headers
-xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
+make cfg                           # 配置三方依赖、debug、刷新 compile_commands.json
+make b t=HelloMaterial             # 构建目标
+make r t=HelloMaterial             # 构建并运行目标
+make test                          # 运行默认测试目标
+make test t=ya r_args="Suite.Test" # 运行单个 GoogleTest case
 ```
 
-There is no dedicated lint/format target in the repo. `make cfg` / `xmake project -k compile_commands` is the command future tools should use to keep clangd and code navigation accurate.
+需要精细控制时再直接用 XMake：
 
-Requirements: xmake, C++20 compiler (MSVC preferred), Vulkan SDK.
-
-## Architecture
-
-### Directory Layout
-
-```
-Engine/Source/
-  Core/              Core systems, math, logging, reflection, scripting
-  Platform/Render/   Backend implementations (Vulkan/, OpenGL/)
-  Render/            Render abstraction (IRender, IRenderTarget, Material/)
-  ECS/               Entity-component system (EnTT), components, systems
-  Resource/          AssetManager, HandlePool, ResourceDirtyQueue
-  Editor/            ImGui editor layer, property inspector, file pickers
-  Runtime/App/       Application entry point (App.h), render runtime
-  Scene/             Scene graph, Node hierarchy
-Engine/Shader/
-  Slang/             .slang shader sources
-  Slang/Generated/   Auto-generated C++ headers (DO NOT HAND-EDIT)
-  GLSL/              Legacy GLSL shaders
-Engine/Plugins/      Internal libraries (log.cc, test.cc, reflects-core, yalua)
-Example/             Runnable targets (HelloMaterial, GreedSnake)
-Test/                Unit tests (GoogleTest)
+```bash
+xmake l targets
+xmake b TargetName
+xmake run TargetName
+xmake project -k compile_commands
+xmake ya-shader
 ```
 
-### Key Systems
+要求：`xmake`、C++20 编译器、Vulkan SDK。
 
-- **IRender** — abstract rendering interface; `VulkanRender` is the primary backend
-- **IRenderTarget** — render surface abstraction (framebuffers, attachments)
-- **ISystem** — base for all systems. Subtypes: `EngineSystem` (app lifetime), `GameInstanceSystem` (scene lifetime), `IRenderSystem`, `IMaterialSystem`
-- **AssetManager** (singleton) — loads/caches textures and models via handle pools. Textures return `TextureHandle`, models return `ModelHandle`
-- **TextureSlot** — serializable texture reference (`_path` + `_handle`), lives in materials
-- **Material system** — `MaterialComponent` → `Material` → `TextureSlot[]` → descriptor sets
-- **Reflection** — `YA_REFLECT_BEGIN`/`YA_REFLECT_FIELD`/`YA_REFLECT_END` macros; drives serialization, editor UI, and ECS registration
-- **Lua scripting** — sol2 bindings, scripts in `Engine/Content/Lua/` and `Content/Scripts/`
+## Repo Facts
 
-### Runtime Flow
+- `Engine/Source/Core/`：核心系统、数学、日志、反射、脚本
+- `Engine/Source/Render/`：渲染抽象层
+- `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
+- `Engine/Source/ECS/`：EnTT ECS、组件、系统
+- `Engine/Source/Resource/`：AssetManager、HandlePool、ResourceDirtyQueue
+- `Engine/Source/Editor/`：ImGui 编辑器层
+- `Engine/Source/Runtime/App/`：应用入口与 RenderRuntime
+- `Engine/Source/Scene/`：场景图与节点层级
+- `Engine/Shader/`：Slang / GLSL 与生成头
+- `Example/`：可运行示例
+- `Test/`：GoogleTest
 
-```text
-EntryPoint.h / example Entry.cpp
-  → App::init(AppDesc)
-    → init core services (VFS, ConfigManager, Logger, FileWatcher, MaterialFactory)
-    → create RenderRuntime
-    → create SceneManager
-    → register core systems in order:
-      ModelInstantiationSystem
-      ResourceResolveSystem
-      TransformSystem
-      ComponentLinkageSystem
-    → attach EditorLayer and LuaScriptingSystem
-    → load default scene
-  → App::run()
-    → per-frame logic/update
-    → ResourceResolveSystem::onUpdate()
-    → RenderRuntime::renderFrame()
-```
+## Working Mode
 
-`App` owns high-level lifetime and state (`SceneManager`, editor/runtime state, registered systems, current scene). `RenderRuntime` owns render backend objects, active render pipeline, screen/offscreen command buffers, skybox/environment-lighting shared resources, and shading-model switching.
+- 主入口保持克制，只拿完成当前任务所需的最小上下文。
+- 问题不明确时先读 `./.agent/skills/soul/SKILL.md`。
+- 问题明确后，只进入一个主 skill；必要时再串行切换下一个。
+- 遇到历史回归、已知坑、相似故障时，才额外读取 `./.agent/memories/*.md`。
+- `./.agent/misc/` 不是规范来源，只是辅助分析资料。
 
-### ECS, Resource, and Material Flow
+完整索引见 `./.agent/AGENTS.md`。
 
-- `ModelInstantiationSystem` expands imported model data into scene entities/components; `ResourceResolveSystem` then resolves the pending mesh/material/skybox/environment-lighting resources for those entities.
-- `ResourceResolveSystem` is the cross-cutting bridge between scene authoring data and render-ready GPU resources. It resolves pending meshes/materials/UI/billboards plus skybox + PBR environment lighting assets.
-- Material data is intentionally split into authoring components and runtime render materials: component state (for example `PhongMaterialComponent`) syncs into runtime `Material` objects, then `MaterialDescPool<TMaterial, TParamUBO>` uploads per-material UBOs and descriptor sets only when param/resource versions change.
-- `TextureSlot` carries serializable authoring references; runtime consumers resolve them into actual textures and descriptor bindings.
-- `ResourceDirtyQueue` exists to defer GPU-side refresh/recreation until a safe point in a later frame. Do not recreate render resources in the middle of frame recording.
+## Skill Routing
 
-### Editor and Examples
+默认优先级：`ya-build > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
 
-- `Editor/` is not a separate app: the editor layer is attached from `App` and lives inside the same runtime loop.
-- `Example/*` targets are the fastest way to understand expected engine usage patterns. `Example/HelloMaterial` is the main material/render reference target; `GreedSnake` is a 2D-oriented example.
+- 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
+- VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
+- 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
+- ECS -> material -> render consumer：`./.agent/skills/material-flow/SKILL.md`
+- RenderRuntime、后端边界、shader 生成链：`./.agent/skills/render-arch/SKILL.md`
+- C++ 风格、所有权、类布局：`./.agent/skills/cpp-style/SKILL.md`
+- 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`
+- 崩溃排查、review、自检：`./.agent/skills/debug-review/SKILL.md`
 
-### Shader Pipeline
+## Core Rules
 
-```text
-Engine/Config/Engine.jsonc shader.defines
-  → shader_config.py
-  → Common/Limits.glsl + Common/Limits.slang
-
-.slang source
-  → xmake ya-shader
-  → slang_gen_header.py
-  → Slang/Generated/*.slang.h
-
-.glsl source
-  → xmake ya-shader
-  → glsl_gen_header.py
-  → GLSL/Generated/*.glsl.h
-```
-
-GPU struct definitions live in generated namespaces such as `slang_types::` / `ya::glsl_types`. **Never hand-write C++ structs matching shader uniforms** — always use the generated headers with their `alignas(16)` and `static_assert` guards.
-
-## Domain Knowledge (Skills)
-
-Detailed architecture docs are in `.github/skills/<name>/SKILL.md`:
-
-| Skill | When to read |
-|-------|-------------|
-| `resource-system` | Handle/HandlePool, AssetManager, texture lifecycle, dirty queue |
-| `material-flow` | ECS → material → render pipeline data flow, TextureSlot resolve |
-| `render-arch` | Render pipeline, backend boundaries, pipeline/material architecture |
-| `cpp-style` | C++ conventions, ownership rules, refactoring patterns |
-| `code-reorganize` | Split files and reorganize directories without changing behavior |
-| `debug-review` | Crash investigation, log analysis, pre-commit review |
-| `vscode` | VS Code tasks, launch configs, clangd setup |
-| `ya-build` | Build errors, target selection, compiler issues |
-
-Priority when task spans multiple: `YA_BUILD > VSCODE > RESOURCE_SYSTEM > MATERIAL_FLOW > RENDER_ARCH > CPP_STYLE > CODE_REORGANIZE > DEBUG_REVIEW`
-
-## Self improvement
-
-在每次成功完成任务后，判断是否需要记录一下进度和经验到Memory.md中，以便后续参考。并且如果改动了架构，需要及时更新skills和文档中的落后说明与归档。
+1. 只使用 XMake，不引入 CMake。
+2. 生成文件只读；修生成链，不手改 `Generated/*`。
+3. 保持最小改动，不混入无关重构。
+4. 遵循现有抽象，不平行造新接口。
+5. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
+6. `Render2D` 使用左上角原点坐标系。
+7. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
+8. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
+9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
+10. 非明确要求时，不生成多余文档或显而易见的注释。
 
 ## Code Style
 
-### Naming
+- 类型：`PascalCase`
+- 枚举：`E<Name>::T` 或 `enum class E<Name>`
+- 私有成员：`_camelCase`
+- 公有成员：`camelCase`
+- 函数 / 局部变量：`camelCase`
+- 常量：`UPPER_SNAKE_CASE`
+- 接口前缀：`I`
+- 数据类型前缀：`F`
+- 类中成员变量声明放在方法前面
 
-- Types: `PascalCase` — `VulkanRender`, `IRenderTarget`
-- Enums: `E<Name>::T` or `enum class E<Name>`
-- Private members: `_camelCase`
-- Public members: `camelCase`
-- Functions/locals: `camelCase`
-- Constants: `UPPER_SNAKE_CASE`
-- Prefixes: `I` for interfaces, `F` for data types (`FName`, `FAssetPath`)
+## Documentation Policy
 
-### Class layout
-
-Member variables declared **before** methods. Prioritize data organization over method grouping.
-
-Small, stable wrapper functions should prefer header inline definitions. Keep `.cpp` implementations for heavier logic, hidden dependencies, or code that should not be duplicated across translation units.
-
-### Memory
-
-- `stdptr<T>` = `std::shared_ptr<T>`, `makeShared<T>(...)` = `std::make_shared<T>(...)`
-- Prefer smart pointers; never raw `new/delete` without full lifecycle understanding
-- Interfaces return `shared_ptr`
-
-### Logging
-
-Use `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT` macros only. Never `std::cout` or `printf`.
+- 稳定架构、长期工作流、可复用规则写到 `./.agent/skills/`
+- 历史故障、回归根因、项目坑点写到 `./.agent/memories/`
+- 完成任务后，如产生可复用经验，判断是否需要补充 memory 或更新相关 skill
 
 ## Git
 
-Commit format: `[module] message` — e.g. `[vulkan] fix swapchain resize`, `[rhi x material] init pipeline wiring`, `[material/phong] add specular`
+提交格式：`[module] message`
 
-## Rules
-
-1. **XMake only** — never introduce CMake
-2. **Generated files are read-only** — fix `slang_gen_header.py`, not `*.slang.h` output
-3. **No gratuitous docs/comments** — don't generate markdown or add obvious comments unless asked
-4. **Follow existing abstractions** — don't introduce parallel interfaces
-5. **Minimal changes** — no unrelated refactors in the same change
-6. **Resource timing** — avoid resource recreation during frame recording (causes `vk device lost`); defer to next frame
-7. **Render2D** — uses top-left origin coordinates
-8. **Keep files scoped** — `.cpp` / `.h` files should generally stay under about 1000 lines; when they grow past that, split by stable feature areas or helper responsibilities instead of accumulating unrelated logic in one file
-9. **Name files by class or stable responsibility** — prefer names like `AssetTextureManager.h`, `AssetModelManager.cpp`, `AssetTextureImport.cpp`; avoid `module.part.h` / `module.part.cpp` naming such as `AssetManager.TexturePipeline.cpp`
-10. **Group files by function/layer** — when a subsystem grows, place facade/owner classes, domain-specific helpers, and implementation details in stable subfolders such as `Resource/Manager/` and `Resource/Texture/` instead of keeping all files flat in one directory
+例如：`[vulkan] fix swapchain resize`、`[material/phong] add specular`

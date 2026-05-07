@@ -15,6 +15,6 @@
 
 ## Documentation Boundary
 
-- Put stable cross-task abstractions, workflows, and subsystem maps into `.github/skills/*/SKILL.md`.
+- Put stable cross-task abstractions, workflows, and subsystem maps into `./.agent/skills/*/SKILL.md`.
 - Put debugging outcomes, repo-specific pitfalls, one-off regressions, local conventions that emerged during implementation, and “this bit us before” notes into `Memory.md`.
 - If a note answers “what happened here before?” it belongs in memory; if it answers “how this subsystem is designed and should generally be worked with” it belongs in skills.
