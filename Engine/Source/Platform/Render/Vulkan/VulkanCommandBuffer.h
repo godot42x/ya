@@ -52,6 +52,10 @@ class VulkanCommandBuffer : public ICommandBuffer
                             uint32_t firstInstance);
     void executeDrawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
     void executeDrawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
+    void executeDrawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                         IBuffer* countBuffer, uint64_t countOffset,
+                                         uint32_t maxDrawCount, uint32_t stride);
+    void executeFillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value);
     void executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
     void executeDispatchIndirect(IBuffer* buffer, uint64_t offset);
     void executeBufferMemoryBarrier(IBuffer* buffer,
@@ -141,6 +145,10 @@ class VulkanCommandBuffer : public ICommandBuffer
                      uint32_t firstInstance = 0) override;
     void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
     void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
+    void drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                  IBuffer* countBuffer, uint64_t countOffset,
+                                  uint32_t maxDrawCount, uint32_t stride) override;
+    void fillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value) override;
     void bufferMemoryBarrier(IBuffer* buffer,
                              EPipelineStage::T srcStage,
                              EPipelineStage::T dstStage,

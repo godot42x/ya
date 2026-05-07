@@ -9,12 +9,16 @@
 
 // Single source of truth: MAX_POINT_LIGHTS lives in Engine/Shader/GLSL/Common/Limits.glsl.
 // The code generator emits it to ya::glsl_types::Common::Limits::MAX_POINT_LIGHTS.
-#include "Common.Limits.glsl.h"
+// #include "Common.Limits.glsl.h"
+#include "Common.Limits.slang.h"
 
 namespace ya
 {
 
-using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
+// using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
+using slang_types::Common::Limits::MAX_BONE_COUNT;
+using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;
+using slang_types::Common::Limits::MAX_POINT_LIGHTS;
 
 // enum bit flags support
 template <typename T>
@@ -203,14 +207,14 @@ namespace EPipelineStage
 {
 enum T : uint32_t
 {
-    None          = 0,
-    ComputeShader = 1 << 0,
-    DrawIndirect  = 1 << 1,
-    VertexInput   = 1 << 2,
-    VertexShader  = 1 << 3,
+    None           = 0,
+    ComputeShader  = 1 << 0,
+    DrawIndirect   = 1 << 1,
+    VertexInput    = 1 << 2,
+    VertexShader   = 1 << 3,
     FragmentShader = 1 << 4,
-    Transfer      = 1 << 5,
-    AllCommands   = 1 << 6,
+    Transfer       = 1 << 5,
+    AllCommands    = 1 << 6,
 };
 }
 

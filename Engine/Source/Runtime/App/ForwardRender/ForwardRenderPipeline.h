@@ -6,7 +6,7 @@
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
-#include "Runtime/App/Common/ShadowStage.h"
+#include "Runtime/App/Common/Shadow/ShadowStage.h"
 
 
 #include <array>

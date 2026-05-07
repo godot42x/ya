@@ -33,8 +33,9 @@ struct RenderCapabilities
     bool geometryShader      = false;
     bool computeShader       = false;
     bool storageBuffer       = false;
-    bool drawIndirect        = false;
-    bool drawIndexedIndirect = false;
+    bool drawIndirect             = false;
+    bool drawIndexedIndirect      = false;
+    bool drawIndexedIndirectCount = false;
     bool meshShader          = false;
     bool taskShader          = false;
     bool dynamicRendering    = false;

@@ -714,8 +714,9 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         _capabilities.geometryShader      = bSupportsGeometryShader;
         _capabilities.computeShader       = bHasComputeQueue;
         _capabilities.storageBuffer       = true;
-        _capabilities.drawIndirect        = true;
-        _capabilities.drawIndexedIndirect = true;
+        _capabilities.drawIndirect             = true;
+        _capabilities.drawIndexedIndirect      = true;
+        _capabilities.drawIndexedIndirectCount = true;
         _capabilities.dynamicRendering    = dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
 #ifdef __APPLE__
         _capabilities.portabilitySubset   = bHasPortabilitySubset;

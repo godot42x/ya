@@ -156,6 +156,22 @@ struct RenderCommand
         uint32_t drawCount = 0;
         uint32_t stride = 0;
     };
+    struct DrawIndexedIndirectCount
+    {
+        IBuffer* drawBuffer   = nullptr;
+        uint64_t drawOffset   = 0;
+        IBuffer* countBuffer  = nullptr;
+        uint64_t countOffset  = 0;
+        uint32_t maxDrawCount = 0;
+        uint32_t stride       = 0;
+    };
+    struct FillBuffer
+    {
+        IBuffer* buffer = nullptr;
+        uint64_t offset = 0;
+        uint64_t size   = 0;
+        uint32_t value  = 0;
+    };
     struct BufferMemoryBarrier
     {
         IBuffer* buffer = nullptr;
@@ -188,6 +204,8 @@ struct RenderCommand
         DispatchIndirect,
         DrawIndirect,
         DrawIndexedIndirect,
+        DrawIndexedIndirectCount,
+        FillBuffer,
         BufferMemoryBarrier>;
     type data;
 };
@@ -394,6 +412,18 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndexedIndirect{buffer, offset, drawCount, stride}});
     }
 
+    void drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                  IBuffer* countBuffer, uint64_t countOffset,
+                                  uint32_t maxDrawCount, uint32_t stride)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::DrawIndexedIndirectCount{drawBuffer, drawOffset, countBuffer, countOffset, maxDrawCount, stride}});
+    }
+
+    void fillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::FillBuffer{buffer, offset, size, value}});
+    }
+
     void bufferMemoryBarrier(IBuffer* buffer,
                              EPipelineStage::T srcStage,
                              EPipelineStage::T dstStage,
@@ -467,6 +497,10 @@ struct ICommandBuffer
     virtual void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0)                     = 0;
     virtual void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
     virtual void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) = 0;
+    virtual void drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                          IBuffer* countBuffer, uint64_t countOffset,
+                                          uint32_t maxDrawCount, uint32_t stride) = 0;
+    virtual void fillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value) = 0;
     virtual void bufferMemoryBarrier(IBuffer* buffer,
                                      EPipelineStage::T srcStage,
                                      EPipelineStage::T dstStage,

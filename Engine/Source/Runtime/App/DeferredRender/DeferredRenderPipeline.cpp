@@ -38,46 +38,46 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .extent           = extent,
         .frameBufferCount = 1,
         .attachments      = {
-            .colorAttach = {
+                 .colorAttach = {
                 AttachmentDescription{
-                    .index         = 0,
-                    .format        = SIGNED_LINEAR_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .index         = 0,
+                         .format        = SIGNED_LINEAR_FORMAT,
+                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                    .index         = 1,
-                    .format        = SIGNED_LINEAR_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .index         = 1,
+                         .format        = SIGNED_LINEAR_FORMAT,
+                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                    .index         = 2,
-                    .format        = LINEAR_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .index         = 2,
+                         .format        = LINEAR_FORMAT,
+                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
-                    .index         = 3,
-                    .format        = SHADING_MODEL_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .index         = 3,
+                         .format        = SHADING_MODEL_FORMAT,
+                         .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                         .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-            .depthAttach = AttachmentDescription{
-                .index          = 4,
-                .format         = DEPTH_FORMAT,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                .stencilStoreOp = EAttachmentStoreOp::Store,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+                 .depthAttach = AttachmentDescription{
+                     .index          = 4,
+                     .format         = DEPTH_FORMAT,
+                     .loadOp         = EAttachmentLoadOp::Clear,
+                     .storeOp        = EAttachmentStoreOp::Store,
+                     .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                     .stencilStoreOp = EAttachmentStoreOp::Store,
+                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                     .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
             },
         },
     });
@@ -87,31 +87,31 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
         .bSwapChainTarget = false,
         .extent           = extent,
         .attachments      = {
-            .colorAttach = {
+                 .colorAttach = {
                 AttachmentDescription{
-                    .index          = 0,
-                    .format         = VIEWPORT_COLOR_FORMAT,
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .index          = 0,
+                         .format         = VIEWPORT_COLOR_FORMAT,
+                         .samples        = ESampleCount::Sample_1,
+                         .loadOp         = EAttachmentLoadOp::Clear,
+                         .storeOp        = EAttachmentStoreOp::Store,
+                         .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                         .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                         .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                         .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
             },
-            .depthAttach = AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Load,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
+                 .depthAttach = AttachmentDescription{
+                     .index          = 1,
+                     .format         = DEPTH_FORMAT,
+                     .samples        = ESampleCount::Sample_1,
+                     .loadOp         = EAttachmentLoadOp::Load,
+                     .storeOp        = EAttachmentStoreOp::Store,
+                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                     .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
             },
         },
     });
@@ -131,16 +131,16 @@ void DeferredRenderPipeline::initShadowResources()
         .frameBufferCount = 1,
         .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
         .attachments      = {
-            .depthAttach = AttachmentDescription{
-                .index            = 0,
-                .format           = _shadowDepthFormat,
-                .samples          = ESampleCount::Sample_1,
-                .loadOp           = EAttachmentLoadOp::Clear,
-                .storeOp          = EAttachmentStoreOp::Store,
-                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
+                 .depthAttach = AttachmentDescription{
+                     .index            = 0,
+                     .format           = _shadowDepthFormat,
+                     .samples          = ESampleCount::Sample_1,
+                     .loadOp           = EAttachmentLoadOp::Clear,
+                     .storeOp          = EAttachmentStoreOp::Store,
+                     .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                     .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
+                     .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+                     .imageCreateFlags = EImageCreateFlag::CubeCompatible,
             },
         },
     });
@@ -182,11 +182,17 @@ void DeferredRenderPipeline::destroyShadowResources()
 
 void DeferredRenderPipeline::syncShadowSettings()
 {
+    // Use pipeline's own flags (loaded from config) as the source of truth for
+    // lightStage/gBufferStage. App::getShadowSettings() is the game-layer API
+    // but these local flags are what actually control resource creation/destruction.
+    const bool bShadowEnabled      = _bEnableShadowMapping;
+    const bool bPointShadowEnabled = _bEnablePointLightShadow;
+
     if (_lightStage) {
-        _lightStage->setShadowSettings(_bEnableShadowMapping, _bEnablePointLightShadow);
+        _lightStage->setShadowSettings(bShadowEnabled, bPointShadowEnabled);
 
         std::array<IImageView*, MAX_POINT_LIGHTS> shadowPointCubeViews{};
-        if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler) {
+        if (bShadowEnabled && _shadowDirectionalDepthIV && _shadowSampler) {
             for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
                 shadowPointCubeViews[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
             }
@@ -197,14 +203,9 @@ void DeferredRenderPipeline::syncShadowSettings()
         }
     }
 
-    if (_shadowStage) {
-        _shadowStage->setPointLightShadowEnabled(_bEnablePointLightShadow);
-        _shadowStage->setMaxPointLightShadowCount(_bEnablePointLightShadow ? _maxPointLightShadowCount : 0);
-    }
-
     if (_gBufferStage) {
         _gBufferStage->setMaxShadowedPointLights(
-            (_bEnableShadowMapping && _bEnablePointLightShadow) ? _maxPointLightShadowCount : 0);
+            (bShadowEnabled && bPointShadowEnabled) ? _maxPointLightShadowCount : 0);
     }
 }
 
@@ -246,9 +247,9 @@ void DeferredRenderPipeline::queueShadowSettingsChange(bool     bEnableShadowMap
 
 void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow)
 {
-    const bool bShadowMappingChanged = _bEnableShadowMapping != bEnableShadowMapping;
-    const bool bPointShadowChanged   = _bEnablePointLightShadow != bEnablePointLightShadow;
-    if (!bShadowMappingChanged && !bPointShadowChanged) {
+    const bool bChanged = _bEnableShadowMapping != bEnableShadowMapping ||
+                          _bEnablePointLightShadow != bEnablePointLightShadow;
+    if (!bChanged) {
         return;
     }
 
@@ -258,6 +259,15 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
 
     _bEnableShadowMapping    = bEnableShadowMapping;
     _bEnablePointLightShadow = bEnablePointLightShadow;
+
+    // Sync App-layer settings
+    auto& shadowSettings = App::get()->getShadowSettings();
+    if (!bEnableShadowMapping) {
+        shadowSettings.quality = EShadowQuality::Off;
+    } else if (shadowSettings.quality == EShadowQuality::Off) {
+        shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+    }
+    shadowSettings.pointLightEnabled = bEnablePointLightShadow;
 
     if (_bEnableShadowMapping) {
         if (!_shadowDepthRT) {
@@ -281,18 +291,26 @@ void DeferredRenderPipeline::loadPersistentSettings()
     auto& cfgManager = ConfigManager::get();
 
     _bEnableShadowMapping            = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                              DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
-                                                              _bEnableShadowMapping);
+                                                   DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
+                                                   _bEnableShadowMapping);
     _bEnablePointLightShadow         = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                              DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
-                                                              _bEnablePointLightShadow);
+                                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
+                                                      _bEnablePointLightShadow);
     int maxPointLightShadowCount     = cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                             DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-                                                             static_cast<int>(_maxPointLightShadowCount));
+                                                         DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+                                                         static_cast<int>(_maxPointLightShadowCount));
     _maxPointLightShadowCount        = static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS)));
     _pendingEnableShadowMapping      = _bEnableShadowMapping;
     _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
     _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
+
+    // Sync loaded config to App-layer ShadowSettings
+    auto& shadowSettings = App::get()->getShadowSettings();
+    if (!_bEnableShadowMapping) {
+        shadowSettings.quality = EShadowQuality::Off;
+    }
+    shadowSettings.pointLightEnabled    = _bEnablePointLightShadow;
+    shadowSettings.maxPointLightShadows = _maxPointLightShadowCount;
 }
 
 void DeferredRenderPipeline::saveShadowSettingsToConfig(bool     bEnableShadowMapping,
@@ -526,16 +544,17 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
         .viewportExtent = {.width = vpW, .height = vpH},
     };
 
-    const uint32_t shadowedPointLightBudget = (_bEnableShadowMapping && _bEnablePointLightShadow)
-                                                ? _maxPointLightShadowCount
-                                                : 0;
+    const auto&    shadowSettings           = App::get()->getShadowSettings();
+    const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
     if (_gBufferStage) {
         _gBufferStage->setMaxShadowedPointLights(shadowedPointLightBudget);
     }
+    if (_lightStage) {
+        _lightStage->setShadowSettings(shadowSettings.isEnabled(), shadowSettings.pointLightEnabled);
+    }
 
-    if (_shadowStage && _bEnableShadowMapping) {
-        _shadowStage->setPointLightShadowEnabled(_bEnablePointLightShadow);
-        _shadowStage->setMaxPointLightShadowCount(shadowedPointLightBudget);
+    if (_shadowStage && shadowSettings.isEnabled()) {
+        _shadowStage->applySettings(shadowSettings);
         {
             YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
             _shadowStage->prepare(stageCtx);
@@ -749,20 +768,41 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
     }
     ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
 
-    bool bEnableShadowMapping     = _bShadowSettingsChangePending ? _pendingEnableShadowMapping : _bEnableShadowMapping;
-    bool bEnablePointLightShadow  = _bShadowSettingsChangePending ? _pendingEnablePointLightShadow : _bEnablePointLightShadow;
-    int  maxPointLightShadowCount = static_cast<int>(_bShadowSettingsChangePending ? _pendingMaxPointLightShadowCount : _maxPointLightShadowCount);
-    bool bShadowSettingsDirty     = false;
+    // ── Shadow Settings ───────────────────────────────────────────
+    if (ImGui::CollapsingHeader("Shadow Settings")) {
+        auto& shadowSettings = App::get()->getShadowSettings();
 
-    bShadowSettingsDirty |= ImGui::Checkbox("Enable Shadow Mapping", &bEnableShadowMapping);
-    bShadowSettingsDirty |= ImGui::Checkbox("Enable Point Light Shadow", &bEnablePointLightShadow);
-    bShadowSettingsDirty |= ImGui::SliderInt("Max Point Light Shadows", &maxPointLightShadowCount, 0, MAX_POINT_LIGHTS);
+        // Master shadow on/off (triggers resource create/destroy via queue)
+        bool bShadowEnabled = _bEnableShadowMapping;
+        if (ImGui::Checkbox("Enable Shadow Mapping", &bShadowEnabled)) {
+            queueShadowSettingsChange(bShadowEnabled, _bEnablePointLightShadow, _maxPointLightShadowCount);
+        }
 
-    if (bShadowSettingsDirty) {
-        queueShadowSettingsChange(
-            bEnableShadowMapping,
-            bEnablePointLightShadow,
-            static_cast<uint32_t>(std::clamp(maxPointLightShadowCount, 0, static_cast<int>(MAX_POINT_LIGHTS))));
+        if (_bEnableShadowMapping && _shadowStage) {
+            // Quality preset (only Low..Ultra, no Off — use checkbox above)
+            static const char* qualityNames[] = {"Low", "Medium", "High", "Ultra"};
+            int qualityIdx = std::max(0, static_cast<int>(shadowSettings.quality) - 1); // map 1..4 → 0..3
+            if (ImGui::Combo("Quality Preset", &qualityIdx, qualityNames, IM_ARRAYSIZE(qualityNames))) {
+                auto newQuality = static_cast<EShadowQuality::T>(qualityIdx + 1);
+                shadowSettings = ShadowSettings::fromQuality(newQuality);
+            }
+
+            // Fine-tune controls (directly modify App settings, no queue needed)
+            ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled);
+            ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
+            int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
+            if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
+                shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+            }
+            ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f");
+            ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
+
+            static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
+            int currentFilter = static_cast<int>(shadowSettings.filter);
+            if (ImGui::Combo("Shadow Filter", &currentFilter, filterNames, IM_ARRAYSIZE(filterNames))) {
+                shadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
+            }
+        }
     }
 
     if (YA_PERF_IS_ENABLED()) {

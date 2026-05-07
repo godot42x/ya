@@ -245,6 +245,13 @@ struct IDescriptorSetHelper
     {
         return genSingleBufferWrite(dstSet, dstBinding, EPipelineDescriptorType::UniformBuffer, buf);
     }
+    static WriteDescriptorSet writeOneStorageBuffer(
+        DescriptorSetHandle dstSet,
+        uint32_t            dstBinding,
+        IBuffer*            buf)
+    {
+        return genSingleBufferWrite(dstSet, dstBinding, EPipelineDescriptorType::StorageBuffer, buf);
+    }
 
 
     /**

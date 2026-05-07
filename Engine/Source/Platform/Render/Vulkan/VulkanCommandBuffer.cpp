@@ -236,6 +236,23 @@ void VulkanCommandBuffer::executeDrawIndexedIndirect(IBuffer* buffer, uint64_t o
     vkCmdDrawIndexedIndirect(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset, drawCount, stride);
 }
 
+void VulkanCommandBuffer::executeDrawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                                          IBuffer* countBuffer, uint64_t countOffset,
+                                                          uint32_t maxDrawCount, uint32_t stride)
+{
+    if (!drawBuffer || !countBuffer || maxDrawCount == 0) return;
+    vkCmdDrawIndexedIndirectCount(_commandBuffer,
+                                  drawBuffer->getHandleAs<VkBuffer>(), drawOffset,
+                                  countBuffer->getHandleAs<VkBuffer>(), countOffset,
+                                  maxDrawCount, stride);
+}
+
+void VulkanCommandBuffer::executeFillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value)
+{
+    if (!buffer || size == 0) return;
+    vkCmdFillBuffer(_commandBuffer, buffer->getHandleAs<VkBuffer>(), offset, size, value);
+}
+
 void VulkanCommandBuffer::executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
 {
     vkCmdDispatch(_commandBuffer, groupCountX, groupCountY, groupCountZ);
@@ -582,6 +599,12 @@ void VulkanCommandBuffer::executeAll()
                 else if constexpr (std::is_same_v<T, RenderCommand::DrawIndexedIndirect>) {
                     executeDrawIndexedIndirect(arg.buffer, arg.offset, arg.drawCount, arg.stride);
                 }
+                else if constexpr (std::is_same_v<T, RenderCommand::DrawIndexedIndirectCount>) {
+                    executeDrawIndexedIndirectCount(arg.drawBuffer, arg.drawOffset, arg.countBuffer, arg.countOffset, arg.maxDrawCount, arg.stride);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::FillBuffer>) {
+                    executeFillBuffer(arg.buffer, arg.offset, arg.size, arg.value);
+                }
                 else if constexpr (std::is_same_v<T, RenderCommand::SetViewPort>) {
                     executeSetViewport(arg.x, arg.y, arg.width, arg.height, arg.minDepth, arg.maxDepth);
                 }
@@ -675,6 +698,18 @@ void VulkanCommandBuffer::drawIndirect(IBuffer* buffer, uint64_t offset, uint32_
 void VulkanCommandBuffer::drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride)
 {
     executeDrawIndexedIndirect(buffer, offset, drawCount, stride);
+}
+
+void VulkanCommandBuffer::drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                                    IBuffer* countBuffer, uint64_t countOffset,
+                                                    uint32_t maxDrawCount, uint32_t stride)
+{
+    executeDrawIndexedIndirectCount(drawBuffer, drawOffset, countBuffer, countOffset, maxDrawCount, stride);
+}
+
+void VulkanCommandBuffer::fillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value)
+{
+    executeFillBuffer(buffer, offset, size, value);
 }
 
 void VulkanCommandBuffer::bufferMemoryBarrier(IBuffer* buffer,

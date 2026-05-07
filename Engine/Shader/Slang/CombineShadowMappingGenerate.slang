@@ -34,8 +34,8 @@ struct VertexInput
 
 struct VertexOutput
 {
-    float4 clipPos : clipPos;
-    float4 worldPos     : FRAG_POS;
+    float4 sv_position : SV_Position;
+    float4 worldPos    : FRAG_POS;
 };
 
 [shader("vertex")]
@@ -61,10 +61,10 @@ VertexOutput vertMain(VertexInput input)
     VertexOutput output;
     output.worldPos = worldPos;
     if (uFrame.hasDirectionalLight == 1) {
-        output.clipPos = mul(uFrame.directionalLightMatrix, worldPos);
+        output.sv_position = mul(uFrame.directionalLightMatrix, worldPos);
     }
     else {
-        output.clipPos = mul(uFrame.pointLights[0].matrix[0], worldPos);
+        output.sv_position = mul(uFrame.pointLights[0].matrix[0], worldPos);
     }
     return output;
 }
@@ -72,10 +72,12 @@ VertexOutput vertMain(VertexInput input)
 [shader("fragment")]
 float fragMain(VertexOutput input) : SV_Depth
 {
+    // Directional shadow: hardware depth (SV_Position.z) is correct
     if (uFrame.hasDirectionalLight == 1) {
-        return input.clipPos.z;
+        return input.sv_position.z;
     }
 
+    // Point shadow: linear distance normalized by far plane
     float lightDistance = length(input.worldPos.xyz - uFrame.pointLights[0].pos);
     return lightDistance / uFrame.pointLights[0].farPlane;
 }

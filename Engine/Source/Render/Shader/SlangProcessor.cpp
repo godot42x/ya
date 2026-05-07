@@ -397,13 +397,22 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             bool            required;
         };
 
+        const auto isStageSuffixShader = [&](std::string_view suffix)
+        {
+            return shaderName.ends_with(std::string(suffix) + ".slang");
+        };
+
+        const bool isComputeOnlyShader = isStageSuffixShader(".comp");
+        const bool isTaskOnlyShader    = isStageSuffixShader(".task");
+        const bool isMeshOnlyShader    = isStageSuffixShader(".mesh");
+
         const std::array<StageEntryCandidate, 6> stageCandidates = {{
-            {.stage = EShaderStage::Vertex, .entryName = "vertMain", .required = true},
-            {.stage = EShaderStage::Fragment, .entryName = "fragMain", .required = true},
+            {.stage = EShaderStage::Vertex, .entryName = "vertMain", .required = !(isComputeOnlyShader || isTaskOnlyShader || isMeshOnlyShader)},
+            {.stage = EShaderStage::Fragment, .entryName = "fragMain", .required = !(isComputeOnlyShader || isTaskOnlyShader || isMeshOnlyShader)},
             {.stage = EShaderStage::Geometry, .entryName = "geomMain", .required = false},
-            {.stage = EShaderStage::Compute, .entryName = "compMain", .required = false},
-            {.stage = EShaderStage::Task, .entryName = "taskMain", .required = false},
-            {.stage = EShaderStage::Mesh, .entryName = "meshMain", .required = false},
+            {.stage = EShaderStage::Compute, .entryName = "compMain", .required = isComputeOnlyShader},
+            {.stage = EShaderStage::Task, .entryName = "taskMain", .required = isTaskOnlyShader},
+            {.stage = EShaderStage::Mesh, .entryName = "meshMain", .required = isMeshOnlyShader},
         }};
 
         for (const auto& candidate : stageCandidates) {

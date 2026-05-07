@@ -13,6 +13,7 @@
 #include "Runtime/App/RenderRuntime.h"
 
 #include "Render/RenderFrameData.h"
+#include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
 
 
@@ -167,6 +168,9 @@ struct App
     SceneManager*                  _sceneManager = nullptr;
     std::unique_ptr<RenderRuntime> _renderRuntime;
 
+    // Global render settings (authoritative source for the render pipeline)
+    ShadowSettings _shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+
     // Runtime state
     bool bRunning = true;
 
@@ -278,6 +282,10 @@ struct App
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const;
     [[nodiscard]] RenderRuntime*                 getRenderRuntime() const { return _renderRuntime.get(); }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
+
+    // Global render settings accessors (game layer writes, pipeline reads)
+    [[nodiscard]] ShadowSettings&       getShadowSettings()       { return _shadowSettings; }
+    [[nodiscard]] const ShadowSettings& getShadowSettings() const { return _shadowSettings; }
 
     [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
     [[nodiscard]] DebugRenderSystem&     getDebugRenderSystem() const;
