@@ -272,6 +272,9 @@ void RenderDocCapture::onFrameBegin()
         }
         else {
             YA_CORE_WARN("RenderDoc: StartFrameCapture rejected");
+            if (_onCaptureFinished) {
+                _onCaptureFinished(CaptureResult{});
+            }
         }
     }
 #endif

@@ -311,13 +311,29 @@ void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
     _renderDoc.capture             = ya::makeShared<RenderDocCapture>();
     _renderDoc.configuredDllPath   = appDesc.renderDocDllPath;
     _renderDoc.configuredOutputDir = appDesc.renderDocCaptureOutputDir;
-    _renderDoc.capture->init(_renderDoc.configuredDllPath, _renderDoc.configuredOutputDir);
+    if (!_renderDoc.capture->init(_renderDoc.configuredDllPath, _renderDoc.configuredOutputDir)) {
+        YA_CORE_WARN("RenderDoc unavailable: failed to initialize with dll '{}'", _renderDoc.configuredDllPath);
+    }
     _renderDoc.capture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result)
                                                   {
+        const bool bAutomationCapture = _renderDoc.bAutomationCaptureRequested;
+        if (bAutomationCapture) {
+            _renderDoc.bAutomationCaptureRequested = false;
+            _renderDoc.bAutomationCaptureFinished  = result.bSuccess;
+            _renderDoc.bAutomationCaptureFailed    = !result.bSuccess;
+        }
+
         if (!result.bSuccess) {
+            if (bAutomationCapture) {
+                YA_CORE_WARN("Automation RenderDoc capture failed");
+            }
             return;
         }
+
         _renderDoc.lastCapturePath = result.capturePath;
+        if (bAutomationCapture) {
+            YA_CORE_INFO("Automation RenderDoc capture finished: {}", result.capturePath);
+        }
         switch (_renderDoc.onCaptureAction) {
         case 0:
         case 1:
@@ -633,8 +649,8 @@ void RenderRuntime::shutdownRuntimeServices()
     }
 
     ImGuiManager::get().shutdown();
-    ResourceRegistry::get().clearAll();
     TaskQueue::get().stop();
+    ResourceRegistry::get().clearAll();
 }
 
 void RenderRuntime::destroyRenderBackend()

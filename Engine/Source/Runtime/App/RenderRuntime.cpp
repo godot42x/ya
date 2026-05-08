@@ -226,6 +226,50 @@ DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
     return DebugRenderSystem::get();
 }
 
+bool RenderRuntime::requestAutomationRenderDocCapture()
+{
+    _renderDoc.bAutomationCaptureFinished = false;
+    _renderDoc.bAutomationCaptureFailed   = false;
+
+    if (!_renderDoc.capture) {
+        YA_CORE_WARN("Automation requested RenderDoc capture but RenderDoc integration is disabled");
+        _renderDoc.bAutomationCaptureFailed = true;
+        return false;
+    }
+
+    if (!_renderDoc.capture->isAvailable()) {
+        YA_CORE_WARN("Automation requested RenderDoc capture but RenderDoc is unavailable: {}",
+                     _renderDoc.configuredDllPath.empty() ? "renderdoc.dll" : _renderDoc.configuredDllPath);
+        _renderDoc.bAutomationCaptureFailed = true;
+        return false;
+    }
+
+    if (!_renderDoc.capture->isCaptureEnabled()) {
+        YA_CORE_WARN("Automation requested RenderDoc capture but capture is disabled");
+        _renderDoc.bAutomationCaptureFailed = true;
+        return false;
+    }
+
+    if (_renderDoc.bAutomationCaptureRequested || _renderDoc.capture->isCapturing()) {
+        return true;
+    }
+
+    _renderDoc.bAutomationCaptureRequested = true;
+    _renderDoc.capture->requestNextFrame();
+    YA_CORE_INFO("Automation queued a single RenderDoc frame capture");
+    return true;
+}
+
+bool RenderRuntime::isAutomationRenderDocCapturePending() const
+{
+    return _renderDoc.bAutomationCaptureRequested || (_renderDoc.capture && _renderDoc.capture->isCapturing());
+}
+
+bool RenderRuntime::isAutomationRenderDocCaptureTerminal() const
+{
+    return _renderDoc.bAutomationCaptureFinished || _renderDoc.bAutomationCaptureFailed;
+}
+
 void RenderRuntime::initActivePipeline()
 {
     int winW = 0;

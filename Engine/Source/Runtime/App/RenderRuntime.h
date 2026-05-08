@@ -121,7 +121,10 @@ struct RenderRuntime
     struct RenderDocState
     {
         stdptr<RenderDocCapture> capture;
-        int                      onCaptureAction = 0;
+        int                      onCaptureAction             = 0;
+        bool                     bAutomationCaptureRequested = false;
+        bool                     bAutomationCaptureFinished  = false;
+        bool                     bAutomationCaptureFailed    = false;
         std::string              lastCapturePath;
         std::string              configuredDllPath;
         std::string              configuredOutputDir;
@@ -166,6 +169,7 @@ struct RenderRuntime
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreenPending; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
+    [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _skybox.dsp; }
@@ -176,6 +180,9 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
+    bool                                       requestAutomationRenderDocCapture();
+    [[nodiscard]] bool                         isAutomationRenderDocCapturePending() const;
+    [[nodiscard]] bool                         isAutomationRenderDocCaptureTerminal() const;
 
     /**
      * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
@@ -217,7 +224,6 @@ struct RenderRuntime
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
     [[nodiscard]] bool     hasOpenViewportPass() const;
     [[nodiscard]] Extent2D getActiveViewportExtent() const;
-    [[nodiscard]] Texture* getActiveViewportTexture() const;
     void                   renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   endViewportPass(ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf);

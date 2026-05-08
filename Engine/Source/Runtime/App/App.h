@@ -25,6 +25,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <optional>
+#include <sstream>
 
 
 
@@ -69,9 +70,41 @@ enum AppMode : int
 
 struct AppAutomationOptions
 {
-    uint64_t                   exitAfterFrame = 0;
+    uint64_t                   exitAfterFrame         = 0;
+    uint64_t                   screenshotWarmupFrames = 30;
+    uint64_t                   screenshotSettleFrames = 5;
+    bool                       renderDocCapture       = false;
     std::optional<std::string> scenePath;
+    std::optional<std::string> screenshotPath;
+    std::optional<glm::vec3>   editorCameraPosition;
+    std::optional<glm::vec3>   editorCameraRotation;
 };
+
+inline bool tryParseAutomationVec3(const std::string& text, glm::vec3& outValue)
+{
+    std::string normalized = text;
+    for (char& ch : normalized) {
+        if (ch == ',' || ch == ';') {
+            ch = ' ';
+        }
+    }
+
+    std::stringstream stream(normalized);
+    float             x = 0.0f;
+    float             y = 0.0f;
+    float             z = 0.0f;
+    if (!(stream >> x >> y >> z)) {
+        return false;
+    }
+
+    stream >> std::ws;
+    if (!stream.eof()) {
+        return false;
+    }
+
+    outValue = glm::vec3(x, y, z);
+    return true;
+}
 
 struct AppDesc
 {
@@ -101,6 +134,12 @@ struct AppDesc
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
             .opt<uint64_t>("", {"exit-after-frame"}, "Quit gracefully after rendering N frames", "0")
             .opt<std::string>("", {"scene"}, "Startup scene path override")
+            .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
+            .opt<uint64_t>("", {"screenshot-warmup-frames"}, "Frames to wait before checking screenshot stability", "30")
+            .opt<uint64_t>("", {"screenshot-settle-frames"}, "Consecutive stable frames required before screenshot", "5")
+            .opt<bool>("", {"renderdoc-capture"}, "Automation trigger one RenderDoc frame capture after warmup and settle", "false")
+            .opt<std::string>("", {"editor-camera-pos"}, "Editor camera position override as x,y,z")
+            .opt<std::string>("", {"editor-camera-rot"}, "Editor camera rotation override as pitch,yaw,roll")
             .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
             .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
             .parse(argc, argv);
@@ -110,11 +149,32 @@ struct AppDesc
         params.tryGet<int>("height", height);
         params.tryGet<bool>("fullscreen", fullscreen);
         params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+        params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupFrames);
+        params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleFrames);
+        params.tryGet<bool>("renderdoc-capture", automation.renderDocCapture);
         if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {
             automation.scenePath = std::move(scenePath);
         }
+        if (std::string screenshotPath; params.tryGet<std::string>("screenshot", screenshotPath)) {
+            automation.screenshotPath = std::move(screenshotPath);
+        }
+        if (std::string cameraPos; params.tryGet<std::string>("editor-camera-pos", cameraPos)) {
+            glm::vec3 parsedPosition{0.0f};
+            if (tryParseAutomationVec3(cameraPos, parsedPosition)) {
+                automation.editorCameraPosition = parsedPosition;
+            }
+        }
+        if (std::string cameraRot; params.tryGet<std::string>("editor-camera-rot", cameraRot)) {
+            glm::vec3 parsedRotation{0.0f};
+            if (tryParseAutomationVec3(cameraRot, parsedRotation)) {
+                automation.editorCameraRotation = parsedRotation;
+            }
+        }
         params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
         params.tryGet<std::string>("renderdoc-output", renderDocCaptureOutputDir);
+        if (automation.renderDocCapture) {
+            bEnableRenderDoc = true;
+        }
     }
 };
 
