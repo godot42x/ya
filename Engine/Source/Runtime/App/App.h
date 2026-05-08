@@ -10,6 +10,7 @@
 #include "Editor/EditorLayer.h"
 
 #include "Runtime/App/AppState.h"
+#include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/RenderRuntime.h"
 
 #include "Render/RenderFrameData.h"
@@ -23,6 +24,7 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <memory>
+#include <optional>
 
 
 
@@ -65,14 +67,21 @@ enum AppMode : int
 // };
 
 
+struct AppAutomationOptions
+{
+    uint64_t                   exitAfterFrame = 0;
+    std::optional<std::string> scenePath;
+};
+
 struct AppDesc
 {
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 
-    std::string title      = "Yet Another Game Engine";
-    int         width      = 1024;
-    int         height     = 768;
-    bool        fullscreen = false;
+    std::string          title      = "Yet Another Game Engine";
+    int                  width      = 1024;
+    int                  height     = 768;
+    bool                 fullscreen = false;
+    AppAutomationOptions automation;
 
     std::optional<std::string> defaultScenePath;
 
@@ -90,6 +99,8 @@ struct AppDesc
             .opt<int>("w", {"width"}, "Window width")
             .opt<int>("h", {"height"}, "Window height")
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
+            .opt<uint64_t>("", {"exit-after-frame"}, "Quit gracefully after rendering N frames", "0")
+            .opt<std::string>("", {"scene"}, "Startup scene path override")
             .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
             .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
             .parse(argc, argv);
@@ -98,6 +109,10 @@ struct AppDesc
         params.tryGet<int>("width", width);
         params.tryGet<int>("height", height);
         params.tryGet<bool>("fullscreen", fullscreen);
+        params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+        if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {
+            automation.scenePath = std::move(scenePath);
+        }
         params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
         params.tryGet<std::string>("renderdoc-output", renderDocCaptureOutputDir);
     }
@@ -248,6 +263,9 @@ struct App
 
     void requestQuit()
     {
+        if (AppAutomation::shouldDeferQuit(*this)) {
+            return;
+        }
         if (isRuntimeMode()) {
             stopRuntime();
         }

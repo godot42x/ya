@@ -1,6 +1,7 @@
 #include "Runtime/App/Lifecycle/AppFrameLoop.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
 #include "Core/Manager/Facade.h"
@@ -97,8 +98,9 @@ int AppFrameLoop::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
     SDL_Event evt;
-    SDL_PollEvent(&evt);
-    processEvent(app, evt);
+    if (SDL_PollEvent(&evt)) {
+        processEvent(app, evt);
+    }
 
     dt += FPSControl::get()->update(dt);
 
@@ -111,6 +113,8 @@ int AppFrameLoop::iterate(App& app, float dt)
     }
     tickRender(app, dt);
     ++App::_frameIndex;
+    AppAutomation::onFrameCompleted(app);
+
     return 0;
 }
 

@@ -1,10 +1,12 @@
 #include "Runtime/App/Lifecycle/AppLifecycle.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
 #include "Config/ConfigManager.h"
 
+#include "Core/Async/TaskQueue.h"
 #include "Core/Log.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/System/FileWatcher.h"
@@ -66,6 +68,14 @@ std::string findRuntimeDefaultFontPath()
         }
     }
     return {};
+}
+
+std::string resolveStartupScenePath(const AppDesc& appDesc)
+{
+    if (appDesc.automation.scenePath) {
+        return *appDesc.automation.scenePath;
+    }
+    return appDesc.defaultScenePath.value_or("");
 }
 } // namespace
 
@@ -176,6 +186,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
     if (!app._ci.defaultScenePath) {
         app._ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
     }
+    AppAutomation::applyStartupOverrides(app._ci);
 
     app._renderRuntime = std::make_unique<RenderRuntime>();
     app._renderRuntime->init(RenderRuntime::InitDesc{
@@ -257,7 +268,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app.onPostInit();
     }
 
-    loadScene(app, app._ci.defaultScenePath.value_or(""));
+    loadScene(app, resolveStartupScenePath(app._ci));
 
     app.camera.setPosition(glm::vec3(0.0f, 0.0f, 5.0f));
     app.camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -341,6 +352,7 @@ void AppLifecycle::quit(App& app)
     if (auto* render = app.getRender()) {
         render->waitIdle();
     }
+    TaskQueue::get().stop();
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Quit");
         app.onQuit();
