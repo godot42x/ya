@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <optional>
 
 #include "Core/Log.h"
@@ -230,7 +231,8 @@ void VulkanPipeline::cleanup()
 bool VulkanPipeline::recreate(const GraphicsPipelineCreateInfo& ci)
 {
     YA_PROFILE_FUNCTION_LOG();
-    _ci = ci;
+    _ci           = ci;
+    _guiNodeLabel = buildGuiNodeLabel();
     // TODO: precreate post create to avoid reentrance?
     clearDirty();
     _pipelineLayout = ci.pipelineLayout->as<VulkanPipelineLayout>();
@@ -257,7 +259,8 @@ void VulkanPipeline::updateDesc(GraphicsPipelineCreateInfo ci)
     if (isSame(_ci, ci)) {
         return;
     }
-    _ci = std::move(ci);
+    _ci           = std::move(ci);
+    _guiNodeLabel = buildGuiNodeLabel();
     markDirty();
 }
 
@@ -328,11 +331,41 @@ void VulkanPipeline::setDepthCompareOp(ECompareOp::T op)
     markDirty();
 }
 
+std::string VulkanPipeline::buildGuiNodeLabel() const
+{
+    std::string visibleLabel = _ci.shaderDesc.shaderName;
+    if (visibleLabel.empty()) {
+        visibleLabel = _name.toString();
+    }
+    if (visibleLabel.empty()) {
+        visibleLabel = _ci.pipelineRenderingInfo.label;
+    }
+    if (visibleLabel.empty()) {
+        visibleLabel = "Pipeline";
+    }
+
+    std::string hiddenId = _ci.shaderDesc.cacheKey();
+    if (!hiddenId.empty() && !_name.toString().empty()) {
+        hiddenId += "|name:" + _name.toString();
+    }
+    else if (hiddenId.empty()) {
+        hiddenId = _name.toString();
+    }
+    if (hiddenId.empty()) {
+        hiddenId = _ci.pipelineRenderingInfo.label;
+    }
+    hiddenId += "|ptr:" + std::to_string(static_cast<std::uintptr_t>(reinterpret_cast<std::uintptr_t>(this)));
+
+    return visibleLabel + "##" + hiddenId;
+}
+
 void VulkanPipeline::renderGUI()
 {
-    auto name = _ci.shaderDesc.shaderName;
-    // if (!ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-    if (!ImGui::TreeNodeEx(name.c_str())) {
+    if (_guiNodeLabel.empty()) {
+        _guiNodeLabel = buildGuiNodeLabel();
+    }
+
+    if (!ImGui::TreeNodeEx(_guiNodeLabel.c_str())) {
         return;
     }
 

@@ -73,6 +73,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
   private:
     ya::GraphicsPipelineCreateInfo _ci;
     bool                           _forceShaderReload = false;
+    std::string                    _guiNodeLabel;
 
     VulkanRender*         _render         = nullptr;
     VulkanPipelineLayout* _pipelineLayout = nullptr;
@@ -155,6 +156,7 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
   private:
     // Pipeline creation helpers
     bool createPipelineInternal();
+    [[nodiscard]] std::string buildGuiNodeLabel() const;
 
     void queryPhysicalDeviceLimits();
 

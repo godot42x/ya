@@ -432,11 +432,18 @@ void ViewportOverlayStage::renderGUI()
     if (!ImGui::TreeNode("Viewport Overlay Stage")) {
         return;
     }
-    // Future: skybox toggle, overlay color type combo, etc.
-    _skyboxPipeline->renderGUI();
-    _overlayPipeline->renderGUI();
-    App::get()->getDebugRenderSystem().renderGUI();
-    _debugSkinning.renderGUI();
+
+    if (ImGui::TreeNode("Pipelines")) {
+        _skyboxPipeline->renderGUI();
+        _overlayPipeline->renderGUI();
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Debug")) {
+        App::get()->getDebugRenderSystem().renderGUI();
+        _debugSkinning.renderGUI();
+        ImGui::TreePop();
+    }
 
     ImGui::TreePop();
 }

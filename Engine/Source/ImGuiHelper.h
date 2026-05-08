@@ -17,7 +17,7 @@
 
 #define IMGUI_ENABLE_FREETYPE
 #define IMGUI_USE_WCHAR32
-#include <ImGui.h>
+#include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlgpu3.h>
 #include <imgui_impl_vulkan.h>

@@ -153,37 +153,53 @@ void RenderRuntime::renderGUI(float dt)
     (void)dt;
 
     if (ImGui::TreeNode("World Rendering")) {
-        static const char* items[] = {"Forward", "Deferred"};
-        int                current = static_cast<int>(_pendingShadingModel);
-        if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
-            _pendingShadingModel = static_cast<EShadingModel>(current);
+        if (ImGui::TreeNode("Settings")) {
+            static const char* items[] = {"Forward", "Deferred"};
+            int                current = static_cast<int>(_pendingShadingModel);
+            if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
+                _pendingShadingModel = static_cast<EShadingModel>(current);
+            }
+            if (_pendingShadingModel != _shadingModel) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
+            }
+            ImGui::TreePop();
         }
-        if (_pendingShadingModel != _shadingModel) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
+
+        if (ImGui::TreeNode("Pipelines")) {
+            if (_forwardPipeline) {
+                _forwardPipeline->renderGUI(false);
+            }
+            if (_deferredPipeline) {
+                _deferredPipeline->renderGUI(false);
+            }
+            ImGui::TreePop();
         }
-        if (_forwardPipeline) {
-            _forwardPipeline->renderGUI(false);
-        }
-        if (_deferredPipeline) {
-            _deferredPipeline->renderGUI(false);
-        }
+
         ImGui::TreePop();
     }
 
-    renderRenderTargetEditor();
+    if (ImGui::TreeNode("Render Targets")) {
+        renderRenderTargetEditor();
 
-    if (ImGui::TreeNode("Final Render Target")) {
-        if (_screenRT) {
-            _screenRT->onRenderGUI();
+        if (ImGui::TreeNode("Final Render Target")) {
+            if (_screenRT) {
+                _screenRT->onRenderGUI();
+            }
+            ImGui::TreePop();
         }
+
         ImGui::TreePop();
     }
 
-    ImGui::DragFloat("Viewport Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+    if (ImGui::TreeNode("Viewport")) {
+        ImGui::DragFloat("Scale", &_viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+        ImGui::TreePop();
+    }
 
-    if (ImGui::TreeNode("RenderDoc")) {
-        bool bAvailable = _renderDoc.capture && _renderDoc.capture->isAvailable();
+    if (ImGui::TreeNode("Diagnostics")) {
+        if (ImGui::TreeNode("RenderDoc")) {
+            bool bAvailable = _renderDoc.capture && _renderDoc.capture->isAvailable();
         ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
         ImGui::TextWrapped("DLL Path: %s", _renderDoc.configuredDllPath.empty() ? "<default>" : _renderDoc.configuredDllPath.c_str());
         ImGui::TextWrapped("Output Dir: %s", _renderDoc.configuredOutputDir.empty() ? "<default>" : _renderDoc.configuredOutputDir.c_str());
@@ -216,6 +232,8 @@ void RenderRuntime::renderGUI(float dt)
             if (ImGui::Button("Open Last Capture Folder") && !_renderDoc.lastCapturePath.empty()) {
                 openCaptureDirectoryFromGUI(_renderDoc.lastCapturePath);
             }
+        }
+            ImGui::TreePop();
         }
         ImGui::TreePop();
     }

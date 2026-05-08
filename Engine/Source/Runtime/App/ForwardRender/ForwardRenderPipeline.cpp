@@ -90,7 +90,16 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _render            = desc.render;
     _bViewportPassOpen = false;
 
-    // ── Viewport RT ──────────────────────────────────────────────
+    initViewportResources(desc);
+    initPostProcessResources(desc);
+    initShadowResources();
+    initStageResources();
+
+    _render->waitIdle();
+}
+
+void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
+{
     viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Viewport RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
@@ -125,8 +134,10 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
         },
     });
     YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
+}
 
-    // ── PostProcess ──────────────────────────────────────────────
+void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
+{
     _postProcessStage.init(PostProcessingStage::InitDesc{
         .render      = _render,
         .colorFormat = POSTPROCESS_COLOR_FORMAT,
@@ -135,8 +146,10 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     });
     _deleter.push("PostProcessStage", [this](void*)
                   { _postProcessStage.shutdown(); });
+}
 
-    // ── Shadow Depth RT ──────────────────────────────────────────
+void ForwardRenderPipeline::initShadowResources()
+{
     depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Shadow Map RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
@@ -161,7 +174,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _deleter.push("DepthRT", [this](void*)
                   { depthRT.reset(); });
 
-    // ── Shadow DS + Sampler ──────────────────────────────────────
     _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
                                                            .label     = "ForwardPipeline Descriptor Pool",
                                                            .maxSets   = 200,
@@ -203,13 +215,14 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
         shadowDirectionalDepthIV.reset();
         for (auto& iv : shadowPointCubeIVs) iv.reset();
         for (auto& faces : shadowPointFaceIVs) for (auto& iv : faces) iv.reset(); });
+}
 
-    // ── ShadowStage ──────────────────────────────────────────────
+void ForwardRenderPipeline::initStageResources()
+{
     _shadowStage = ya::makeShared<ShadowStage>();
     _shadowStage->setRenderTarget(depthRT);
     _shadowStage->init(_render);
 
-    // ── ViewportStage ────────────────────────────────────────────
     PipelineRenderingInfo viewportPRI{
         .label                  = "Forward Viewport",
         .colorAttachmentFormats = {VIEWPORT_COLOR_FORMAT},
@@ -228,23 +241,33 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
                   {
         if (_viewportStage) { _viewportStage->destroy(); _viewportStage.reset(); }
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
-
-    _render->waitIdle();
 }
 
 void ForwardRenderPipeline::tick(const TickDesc& desc)
 {
-    YA_CORE_ASSERT(desc.cmdBuf, "ForwardRenderPipeline requires command buffer");
-
-    if (desc.viewportRect.extent.x <= 0 || desc.viewportRect.extent.y <= 0) {
+    if (shouldSkipTick(desc)) {
         return;
     }
 
+    RenderStageContext stageCtx{};
+    beginTick(desc, stageCtx);
+    refreshDirtyResources();
+    executeShadowPass(stageCtx);
+    executeViewportPass(desc, stageCtx);
+}
+
+bool ForwardRenderPipeline::shouldSkipTick(const TickDesc& desc) const
+{
+    YA_CORE_ASSERT(desc.cmdBuf, "ForwardRenderPipeline requires command buffer");
+    return desc.viewportRect.extent.x <= 0 || desc.viewportRect.extent.y <= 0;
+}
+
+void ForwardRenderPipeline::beginTick(const TickDesc& desc, RenderStageContext& stageCtx)
+{
     const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
     const uint32_t vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
 
-    // Build stage context
-    RenderStageContext stageCtx{
+    stageCtx = RenderStageContext{
         .cmdBuf         = desc.cmdBuf,
         .frameData      = desc.frameData,
         .flightIndex    = desc.flightIndex,
@@ -253,10 +276,13 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     };
 
     _postProcessStage.beginFrame();
+}
 
-    const bool bViewportPipelineDirty       = viewportRT && viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    const bool bShadowDirty                 = depthRT && depthRT->bDirty;
-    const bool bShadowPipelineDirty         = depthRT && depthRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+void ForwardRenderPipeline::refreshDirtyResources()
+{
+    const bool bViewportPipelineDirty = viewportRT && viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    const bool bShadowDirty           = depthRT && depthRT->bDirty;
+    const bool bShadowPipelineDirty   = depthRT && depthRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
 
     if (viewportRT) {
         viewportRT->flushDirty();
@@ -274,14 +300,22 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
             _shadowStage->refreshPipelineFromRenderTarget();
         }
     }
+}
 
-    // ── Shadow Pass ──────────────────────────────────────────────
-    if (bShadowMapping && _shadowStage) {
-        _shadowStage->prepare(stageCtx);
-        _shadowStage->execute(stageCtx);
+void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
+{
+    const auto& shadowSettings = App::get()->getShadowSettings();
+    if (!shadowSettings.isEnabled() || !_shadowStage) {
+        return;
     }
 
-    // ── Viewport Pass ────────────────────────────────────────────
+    _shadowStage->applySettings(shadowSettings);
+    _shadowStage->prepare(stageCtx);
+    _shadowStage->execute(stageCtx);
+}
+
+void ForwardRenderPipeline::executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx)
+{
     _viewportStage->prepare(stageCtx);
 
     auto extent = Extent2D::fromVec2(desc.viewportRect.extent / desc.viewportFrameBufferScale);
@@ -299,17 +333,15 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     desc.cmdBuf->beginRendering(ri);
     _bViewportPassOpen = true;
 
-    // Update stage context with actual viewport extent
     stageCtx.viewportExtent = viewportRT->getExtent();
     _viewportStage->execute(stageCtx);
 
-    // Viewport pass left open for App-level 2D rendering; App calls endViewportPass().
     _viewportRI         = ri;
     _lastTickCtx        = desc.frameData ? desc.frameData->toFrameContext() : FrameContext{
-                                                                                  .view       = desc.view,
-                                                                                  .projection = desc.projection,
-                                                                                  .cameraPos  = desc.cameraPos,
-                                                                              };
+                                                                              .view       = desc.view,
+                                                                              .projection = desc.projection,
+                                                                              .cameraPos  = desc.cameraPos,
+                                                                          };
     _lastTickCtx.extent = viewportRT->getExtent();
     _lastTickDesc       = desc;
 }
@@ -340,13 +372,37 @@ void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
 {
     if (bRenderTreeNode && !ImGui::TreeNode("Forward Render Pipeline")) return;
 
-    if (_shadowStage) _shadowStage->renderGUI();
-    if (_viewportStage) _viewportStage->renderGUI();
-    _postProcessStage.renderGUI();
-
-    if (ImGui::Checkbox("Shadow Mapping", &bShadowMapping)) {
-        if (_viewportStage) _viewportStage->setShadowMappingEnabled(bShadowMapping);
+    if (ImGui::TreeNode("Settings")) {
+        auto& shadowSettings = App::get()->getShadowSettings();
+        bool  bEnabled       = shadowSettings.isEnabled();
+        if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
+            if (bEnabled) {
+                if (shadowSettings.quality == EShadowQuality::Off) {
+                    shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+                }
+            }
+            else {
+                shadowSettings.quality = EShadowQuality::Off;
+            }
+            bShadowMapping = bEnabled;
+            if (_viewportStage) {
+                _viewportStage->setShadowMappingEnabled(bEnabled);
+            }
+        }
+        ImGui::TreePop();
     }
+
+    if (ImGui::TreeNode("Stages")) {
+        if (_shadowStage) {
+            _shadowStage->renderGUI();
+        }
+        if (_viewportStage) {
+            _viewportStage->renderGUI();
+        }
+        _postProcessStage.renderGUI();
+        ImGui::TreePop();
+    }
+
     if (bRenderTreeNode) { ImGui::TreePop(); }
 }
 

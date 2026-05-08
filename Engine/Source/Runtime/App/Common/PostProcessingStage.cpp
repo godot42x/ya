@@ -68,9 +68,14 @@ void PostProcessingStage::renderGUI()
         return;
     }
 
-    ImGui::Checkbox("Enabled", &bEnabled);
-    if (_postProcessor) {
+    if (ImGui::TreeNode("Settings")) {
+        ImGui::Checkbox("Enabled", &bEnabled);
+        ImGui::TreePop();
+    }
+
+    if (_postProcessor && ImGui::TreeNode("Processor")) {
         _postProcessor->renderGUI(_state);
+        ImGui::TreePop();
     }
 
     ImGui::TreePop();

@@ -50,9 +50,15 @@ void ShadowStage::execute(const RenderStageContext& ctx)
 
 void ShadowStage::renderGUI()
 {
+    if (!ImGui::TreeNode("ShadowStage")) {
+        return;
+    }
+
     if (_technique) {
         _technique->renderGUI();
     }
+
+    ImGui::TreePop();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

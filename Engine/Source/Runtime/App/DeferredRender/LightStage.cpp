@@ -389,7 +389,10 @@ void LightStage::renderGUI()
         ImGui::TreePop();
     }
 
-    _pipeline->renderGUI();
+    if (ImGui::TreeNode("Pipeline")) {
+        _pipeline->renderGUI();
+        ImGui::TreePop();
+    }
     ImGui::TreePop();
 }
 

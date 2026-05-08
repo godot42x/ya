@@ -857,14 +857,31 @@ void GBufferStage::renderGUI()
     if (!ImGui::TreeNode("GBufferState")) {
         return;
     }
-    ImGui::Text("Point shadow budget: %u", _maxShadowedPointLights);
-    ImGui::Text("Shadowed point lights: %u", _lastShadowedPointLights);
-    _pbr.pipeline->renderGUI();
-    _pbrSkinned.pipeline->renderGUI();
-    _phong.pipeline->renderGUI();
-    _phongSkinned.pipeline->renderGUI();
-    _unlit.pipeline->renderGUI();
-    _unlitSkinned.pipeline->renderGUI();
+
+    if (ImGui::TreeNode("Stats")) {
+        ImGui::Text("Point shadow budget: %u", _maxShadowedPointLights);
+        ImGui::Text("Shadowed point lights: %u", _lastShadowedPointLights);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Pipelines")) {
+        if (ImGui::TreeNode("PBR")) {
+            _pbr.pipeline->renderGUI();
+            _pbrSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Phong")) {
+            _phong.pipeline->renderGUI();
+            _phongSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Unlit")) {
+            _unlit.pipeline->renderGUI();
+            _unlitSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        ImGui::TreePop();
+    }
     // Future: material pool stats, per-pipeline toggle, etc.
 
     ImGui::TreePop();

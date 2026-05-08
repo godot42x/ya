@@ -101,6 +101,15 @@ struct ForwardRenderPipeline
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
 
   private:
+    void               initViewportResources(const InitDesc& desc);
+    void               initPostProcessResources(const InitDesc& desc);
+    void               initShadowResources();
+    void               initStageResources();
+    [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
+    void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx);
+    void               refreshDirtyResources();
+    void               executeShadowPass(RenderStageContext& stageCtx);
+    void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
     void rebuildShadowViews();
 };
 

@@ -70,13 +70,13 @@ struct DeferredRenderPipeline
     stdptr<IRenderTarget> _viewportRT;
     stdptr<IRenderTarget> _shadowDepthRT;
 
-    static constexpr EFormat::T LINEAR_FORMAT             = EFormat::R8G8B8A8_UNORM;
-    static constexpr EFormat::T SIGNED_LINEAR_FORMAT      = EFormat::R16G16B16A16_SFLOAT;
-    static constexpr EFormat::T VIEWPORT_COLOR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
-    static constexpr EFormat::T POSTPROCESS_COLOR_FORMAT  = EFormat::R8G8B8A8_UNORM;
-    static constexpr EFormat::T SHADING_MODEL_FORMAT      = EFormat::R8_UNORM;
-    static constexpr EFormat::T DEPTH_FORMAT              = EFormat::D32_SFLOAT;
-    static constexpr EFormat::T SHADOW_DEPTH_FORMAT       = EFormat::D32_SFLOAT;
+    static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr EFormat::T VIEWPORT_COLOR_FORMAT    = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr EFormat::T POSTPROCESS_COLOR_FORMAT = EFormat::R8G8B8A8_UNORM;
+    static constexpr EFormat::T SHADING_MODEL_FORMAT     = EFormat::R8_UNORM;
+    static constexpr EFormat::T DEPTH_FORMAT             = EFormat::D32_SFLOAT;
+    static constexpr EFormat::T SHADOW_DEPTH_FORMAT      = EFormat::D32_SFLOAT;
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
@@ -124,8 +124,11 @@ struct DeferredRenderPipeline
     void tick(const TickDesc& desc);
     void shutdown();
     void renderGUI(bool bRenderTreeNode = true);
+
+    void beginViewportRendering(const TickDesc& desc);
     void endViewportPass(ICommandBuffer* cmdBuf);
     bool hasOpenViewportPass() const { return _bViewportPassOpen; }
+
     void onViewportResized(Rect2D rect);
 
     Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
@@ -148,17 +151,26 @@ struct DeferredRenderPipeline
     }
 
   private:
-    void loadPersistentSettings();
-    void saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
-    void rebuildShadowViews();
-    void initRenderTargets(Extent2D extent);
-    void initShadowResources();
-    void destroyShadowResources();
-    void syncShadowSettings();
-    void applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
-    void queueShadowSettingsChange(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount);
-    void copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
-    void beginViewportRendering(const TickDesc& desc);
+    void               loadPersistentSettings();
+    void               initPipelineState(const InitDesc& desc);
+    void               initStages();
+    [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
+    void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
+    void               refreshDirtyResources();
+    void               syncFrameSettings(const TickDesc& desc);
+    void               executeShadowPass(RenderStageContext& stageCtx);
+    void               executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
+    void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
+    void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
+    void               saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
+    void               rebuildShadowViews();
+    void               initRenderTargets(Extent2D extent);
+    void               initShadowResources();
+    void               destroyShadowResources();
+    void               syncShadowSettings();
+    void               applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
+    void               queueShadowSettingsChange(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount);
+    void               copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
 };
 
 } // namespace ya

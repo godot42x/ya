@@ -2,8 +2,9 @@
 
 #include "Core/Base.h"
 
-#include "Render/Core/OffscreenJob.h"
+#include "Editor/EditorLayer.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/OffscreenJob.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
@@ -67,13 +68,13 @@ struct RenderRuntime
 
     ut::StackDeleter _deleter;
 
-    IRender*                                     _render = nullptr;
-    stdptr<ICommandBuffer>                       _offscreenCmdBuf;
-    void*                                        _offscreenFence   = nullptr;
-    bool                                         _offscreenPending = false;
+    IRender*                                        _render = nullptr;
+    stdptr<ICommandBuffer>                          _offscreenCmdBuf;
+    void*                                           _offscreenFence   = nullptr;
+    bool                                            _offscreenPending = false;
     std::vector<std::shared_ptr<OffscreenJobState>> _submittedOffscreenJobs;
-    std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
-    std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
+    std::vector<std::shared_ptr<ICommandBuffer>>    _commandBuffers;
+    std::shared_ptr<ShaderStorage>                  _shaderStorage = nullptr;
 
     ERenderAPI::T currentRenderAPI     = ERenderAPI::None;
     EShadingModel _shadingModel        = EShadingModel::Deferred;
@@ -132,8 +133,7 @@ struct RenderRuntime
     stdptr<Sampler>              _cubemapSampler = nullptr;
 
     // pipeline tool
-    PBRGenerateBrdfLUT           _pbrGenerateBrdfLUT{};
-
+    PBRGenerateBrdfLUT _pbrGenerateBrdfLUT{};
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
@@ -146,11 +146,13 @@ struct RenderRuntime
 
     void init(const InitDesc& desc);
     void shutdown();
+    void renderFrame(const FrameInput& input);
+    void renderGUI(float dt);
+
+  public:
     void onViewportResized(Rect2D rect);
     void offScreenRender();
     void finalizeCompletedOffscreenJobs();
-    void renderFrame(const FrameInput& input);
-    void renderGUI(float dt);
 
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
@@ -189,6 +191,43 @@ struct RenderRuntime
     [[nodiscard]] Extent2D      getViewportExtent() const;
 
   private:
+    void                   initRuntimeState(const InitDesc& desc);
+    void                   initShaderSystems();
+    void                   initDiagnostics(const AppDesc& appDesc);
+    void                   initRenderBackend(const AppDesc& appDesc);
+    void                   initResourceCaches();
+    void                   initSharedRenderResources();
+    void                   initSharedPipelineResources();
+    void                   initSkyboxResources();
+    void                   initEnvironmentLightingResources();
+    void                   initPresentationResources();
+    void                   initCommandResources();
+    void                   initFrameServices();
+    void                   shutdownRuntimeServices();
+    void                   destroyRenderBackend();
+    void                   runFramePrologue();
+    void                   beginFrameCapture();
+    void                   endFrameCapture();
+    bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   syncEditorFrame(const FrameInput& input);
+    void                   flushMainThreadCallbacks();
+    void                   ensureViewportRectInitialized(const FrameInput& input);
+    bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
+    [[nodiscard]] bool     hasOpenViewportPass() const;
+    [[nodiscard]] Extent2D getActiveViewportExtent() const;
+    [[nodiscard]] Texture* getActiveViewportTexture() const;
+    void                   renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   endViewportPass(ICommandBuffer* cmdBuf);
+    void                   renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
+
+    void updateEditorViewportContext(const FrameInput& input);
+    void appendForwardDebugSlots(EditorViewportContext& ctx);
+    void appendDeferredDebugSlots(EditorViewportContext& ctx);
+    void appendEnvironmentDebugSlots(EditorViewportContext& ctx);
+
     void                   initActivePipeline();
     void                   shutdownActivePipeline();
     void                   releaseRenderOwnedResources();

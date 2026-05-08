@@ -1518,51 +1518,79 @@ void ForwardViewportStage::renderGUI()
 {
     if (!ImGui::TreeNode("ForwardViewportStage")) return;
 
-    if (ImGui::TreeNode("Phong Debug")) {
-        bool bDebugNormal = (_phongDebug.bDebugNormal != 0);
-        bool bDebugDepth  = (_phongDebug.bDebugDepth != 0);
-        bool bDebugUV     = (_phongDebug.bDebugUV != 0);
-
-        if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) _phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
-        if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) _phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
-        if (ImGui::Checkbox("Debug UV", &bDebugUV)) _phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
-        ImGui::DragFloat4("Float Param", glm::value_ptr(_phongDebug.floatParam), 0.1f);
+    if (ImGui::TreeNode("Settings")) {
+        ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Debug Render")) {
-        const char* modeNames[] = {"None", "NormalColor", "NormalDir", "Depth", "UV"};
-        int         mode        = static_cast<int>(_debugMode);
-        if (ImGui::Combo("Mode", &mode, modeNames, IM_ARRAYSIZE(modeNames))) {
-            EDebugMode newMode = static_cast<EDebugMode>(mode);
-            if (newMode != _debugMode) {
-                if (newMode == DebugNormalDir) {
-                    _debugPipelineCI.shaderDesc.defines = {"DEBUG_NORMAL_DIR"};
-                    _debugPipeline->updateDesc(_debugPipelineCI);
-                }
-                else if (_debugMode == DebugNormalDir) {
-                    _debugPipelineCI.shaderDesc.defines = {};
-                    _debugPipeline->updateDesc(_debugPipelineCI);
-                }
-                _debugMode     = newMode;
-                _debugUBO.mode = static_cast<int>(_debugMode);
-            }
+    if (ImGui::TreeNode("Debug")) {
+        if (ImGui::TreeNode("Phong Debug")) {
+            bool bDebugNormal = (_phongDebug.bDebugNormal != 0);
+            bool bDebugDepth  = (_phongDebug.bDebugDepth != 0);
+            bool bDebugUV     = (_phongDebug.bDebugUV != 0);
+
+            if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) _phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
+            if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) _phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
+            if (ImGui::Checkbox("Debug UV", &bDebugUV)) _phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
+            ImGui::DragFloat4("Float Param", glm::value_ptr(_phongDebug.floatParam), 0.1f);
+            ImGui::TreePop();
         }
-        ImGui::DragFloat4("Float Param", glm::value_ptr(_debugUBO.floatParam), 0.1f);
+
+        if (ImGui::TreeNode("Debug Render")) {
+            const char* modeNames[] = {"None", "NormalColor", "NormalDir", "Depth", "UV"};
+            int         mode        = static_cast<int>(_debugMode);
+            if (ImGui::Combo("Mode", &mode, modeNames, IM_ARRAYSIZE(modeNames))) {
+                EDebugMode newMode = static_cast<EDebugMode>(mode);
+                if (newMode != _debugMode) {
+                    if (newMode == DebugNormalDir) {
+                        _debugPipelineCI.shaderDesc.defines = {"DEBUG_NORMAL_DIR"};
+                        _debugPipeline->updateDesc(_debugPipelineCI);
+                    }
+                    else if (_debugMode == DebugNormalDir) {
+                        _debugPipelineCI.shaderDesc.defines = {};
+                        _debugPipeline->updateDesc(_debugPipelineCI);
+                    }
+                    _debugMode     = newMode;
+                    _debugUBO.mode = static_cast<int>(_debugMode);
+                }
+            }
+            ImGui::DragFloat4("Float Param", glm::value_ptr(_debugUBO.floatParam), 0.1f);
+            ImGui::TreePop();
+        }
         ImGui::TreePop();
     }
-    _simplePipeline->renderGUI();
-    _unlitStatic.pipeline->renderGUI();
-    _unlitSkinned.pipeline->renderGUI();
-    _phongStatic.pipeline->renderGUI();
-    _phongSkinned.pipeline->renderGUI();
-    _debugPipeline->renderGUI();
-    _skyboxPipeline->renderGUI();
 
-    ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");
+    if (ImGui::TreeNode("Pipelines")) {
+        if (ImGui::TreeNode("Simple")) {
+            _simplePipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Unlit")) {
+            _unlitStatic.pipeline->renderGUI();
+            _unlitSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Phong")) {
+            _phongStatic.pipeline->renderGUI();
+            _phongSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("PBR")) {
+            _pbrStatic.pipeline->renderGUI();
+            _pbrSkinned.pipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Skybox")) {
+            _skyboxPipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Debug Pipeline")) {
+            _debugPipeline->renderGUI();
+            ImGui::TreePop();
+        }
+        ImGui::TreePop();
+    }
 
-    _pbrStatic.pipeline->renderGUI();
-    _pbrSkinned.pipeline->renderGUI();
     ImGui::TreePop();
 }
 

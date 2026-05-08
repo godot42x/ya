@@ -203,45 +203,49 @@ void BasicPostprocessing::render(const RenderDesc& desc)
 
 void BasicPostprocessing::renderGUI(PostProcessingState& state)
 {
-    ImGui::SeparatorText("Color Transform");
-    ImGui::Checkbox("Inversion", &state.bEnableInversion);
+    if (ImGui::TreeNode("Settings")) {
+        ImGui::SeparatorText("Color Transform");
+        ImGui::Checkbox("Inversion", &state.bEnableInversion);
 
-    int grayscaleMode = static_cast<int>(state.grayscaleMode);
-    if (ImGui::Combo("Grayscale", &grayscaleMode, kGrayscaleModeLabels, IM_ARRAYSIZE(kGrayscaleModeLabels))) {
-        state.grayscaleMode = static_cast<PostProcessingState::EGrayscaleMode>(grayscaleMode);
+        int grayscaleMode = static_cast<int>(state.grayscaleMode);
+        if (ImGui::Combo("Grayscale", &grayscaleMode, kGrayscaleModeLabels, IM_ARRAYSIZE(kGrayscaleModeLabels))) {
+            state.grayscaleMode = static_cast<PostProcessingState::EGrayscaleMode>(grayscaleMode);
+        }
+
+        ImGui::SeparatorText("Spatial Filter");
+        int kernelMode = static_cast<int>(state.kernelMode);
+        if (ImGui::Combo("Kernel", &kernelMode, kKernelModeLabels, IM_ARRAYSIZE(kKernelModeLabels))) {
+            state.kernelMode = static_cast<PostProcessingState::EKernelMode>(kernelMode);
+        }
+        ImGui::BeginDisabled(state.kernelMode == PostProcessingState::EKernelMode::None);
+        ImGui::DragFloat("Kernel Texel Offset", &state.kernelTexelOffset, 0.0001f, 0.0001f, 0.02f, "%.5f");
+        ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Tone Mapping");
+        ImGui::Checkbox("Enable ToneMapping", &state.bEnableToneMapping);
+        ImGui::BeginDisabled(!state.bEnableToneMapping);
+        int toneMappingCurve = static_cast<int>(state.toneMappingCurve);
+        if (ImGui::Combo("ToneMapping Curve", &toneMappingCurve, kToneMappingCurveLabels, IM_ARRAYSIZE(kToneMappingCurveLabels))) {
+            state.toneMappingCurve = static_cast<PostProcessingState::EToneMappingCurve>(toneMappingCurve);
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Output");
+        ImGui::Checkbox("Gamma Correction", &state.bEnableGammaCorrection);
+        ImGui::BeginDisabled(!state.bEnableGammaCorrection);
+        ImGui::DragFloat("Gamma", &state.gamma, 0.01f, 0.1f, 4.0f);
+        ImGui::EndDisabled();
+
+        ImGui::Checkbox("Random Grain", &state.bEnableRandomGrain);
+        ImGui::BeginDisabled(!state.bEnableRandomGrain);
+        ImGui::DragFloat("Grain Strength", &state.randomGrainStrength, 0.001f, 0.0f, 0.25f, "%.3f");
+        ImGui::EndDisabled();
+        ImGui::TreePop();
     }
 
-    ImGui::SeparatorText("Spatial Filter");
-    int kernelMode = static_cast<int>(state.kernelMode);
-    if (ImGui::Combo("Kernel", &kernelMode, kKernelModeLabels, IM_ARRAYSIZE(kKernelModeLabels))) {
-        state.kernelMode = static_cast<PostProcessingState::EKernelMode>(kernelMode);
-    }
-    ImGui::BeginDisabled(state.kernelMode == PostProcessingState::EKernelMode::None);
-    ImGui::DragFloat("Kernel Texel Offset", &state.kernelTexelOffset, 0.0001f, 0.0001f, 0.02f, "%.5f");
-    ImGui::EndDisabled();
-
-    ImGui::SeparatorText("Tone Mapping");
-    ImGui::Checkbox("Enable ToneMapping", &state.bEnableToneMapping);
-    ImGui::BeginDisabled(!state.bEnableToneMapping);
-    int toneMappingCurve = static_cast<int>(state.toneMappingCurve);
-    if (ImGui::Combo("ToneMapping Curve", &toneMappingCurve, kToneMappingCurveLabels, IM_ARRAYSIZE(kToneMappingCurveLabels))) {
-        state.toneMappingCurve = static_cast<PostProcessingState::EToneMappingCurve>(toneMappingCurve);
-    }
-    ImGui::EndDisabled();
-
-    ImGui::SeparatorText("Output");
-    ImGui::Checkbox("Gamma Correction", &state.bEnableGammaCorrection);
-    ImGui::BeginDisabled(!state.bEnableGammaCorrection);
-    ImGui::DragFloat("Gamma", &state.gamma, 0.01f, 0.1f, 4.0f);
-    ImGui::EndDisabled();
-
-    ImGui::Checkbox("Random Grain", &state.bEnableRandomGrain);
-    ImGui::BeginDisabled(!state.bEnableRandomGrain);
-    ImGui::DragFloat("Grain Strength", &state.randomGrainStrength, 0.001f, 0.0f, 0.25f, "%.3f");
-    ImGui::EndDisabled();
-
-    if (_pipeline) {
+    if (_pipeline && ImGui::TreeNode("Pipeline")) {
         _pipeline->renderGUI();
+        ImGui::TreePop();
     }
 }
 

@@ -241,16 +241,33 @@ void RenderRuntime::init(const InitDesc& desc)
     YA_PROFILE_FUNCTION_LOG();
     YA_CORE_ASSERT(desc.app && desc.appDesc, "RenderRuntime init requires App and AppDesc");
 
-    _app              = desc.app;
-    const AppDesc& ci = *desc.appDesc;
+    const AppDesc& appDesc = *desc.appDesc;
 
-    currentRenderAPI = ERenderAPI::Vulkan;
+    initRuntimeState(desc);
+    initShaderSystems();
+    initDiagnostics(appDesc);
+    initRenderBackend(appDesc);
+    initResourceCaches();
+    initSharedRenderResources();
+    initPresentationResources();
+    initCommandResources();
+    initFrameServices();
+}
 
-    _viewportRect = Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {static_cast<float>(ci.width), static_cast<float>(ci.height)},
+void RenderRuntime::initRuntimeState(const InitDesc& desc)
+{
+    _app = desc.app;
+
+    const AppDesc& appDesc = *desc.appDesc;
+    currentRenderAPI       = ERenderAPI::Vulkan;
+    _viewportRect          = Rect2D{
+                 .pos    = {0.0f, 0.0f},
+                 .extent = {static_cast<float>(appDesc.width), static_cast<float>(appDesc.height)},
     };
+}
 
+void RenderRuntime::initShaderSystems()
+{
     auto shaderProcessor = ShaderProcessorFactory()
                                .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
                                .withShaderStoragePath("Engine/Shader/GLSL")
@@ -283,47 +300,55 @@ void RenderRuntime::init(const InitDesc& desc)
     });
     _deleter.push("ShaderStorage", [this](void*)
                   { _shaderStorage.reset(); });
+}
 
-    if (ci.bEnableRenderDoc) {
-        _renderDoc.capture             = ya::makeShared<RenderDocCapture>();
-        _renderDoc.configuredDllPath   = ci.renderDocDllPath;
-        _renderDoc.configuredOutputDir = ci.renderDocCaptureOutputDir;
-        _renderDoc.capture->init(_renderDoc.configuredDllPath, _renderDoc.configuredOutputDir);
-        _renderDoc.capture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result)
-                                                      {
-            if (!result.bSuccess) {
-                return;
-            }
-            _renderDoc.lastCapturePath = result.capturePath;
-            switch (_renderDoc.onCaptureAction) {
-            case 0:
-            case 1:
-                if (!_renderDoc.capture->launchReplayUI(true, nullptr)) {
-                    YA_CORE_WARN("RenderDoc: failed to launch replay UI");
-                }
-                break;
-            case 2:
-                openCaptureDirectoryInOS(result.capturePath);
-                break;
-            default:
-                break;
-            } });
-        _deleter.push("RenderDocCapture", [this](void*)
-                      {
-            if (_renderDoc.capture) {
-                _renderDoc.capture->shutdown();
-                _renderDoc.capture.reset();
-            } });
+void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
+{
+    if (!appDesc.bEnableRenderDoc) {
+        return;
     }
 
+    _renderDoc.capture             = ya::makeShared<RenderDocCapture>();
+    _renderDoc.configuredDllPath   = appDesc.renderDocDllPath;
+    _renderDoc.configuredOutputDir = appDesc.renderDocCaptureOutputDir;
+    _renderDoc.capture->init(_renderDoc.configuredDllPath, _renderDoc.configuredOutputDir);
+    _renderDoc.capture->setCaptureFinishedCallback([this](const RenderDocCapture::CaptureResult& result)
+                                                  {
+        if (!result.bSuccess) {
+            return;
+        }
+        _renderDoc.lastCapturePath = result.capturePath;
+        switch (_renderDoc.onCaptureAction) {
+        case 0:
+        case 1:
+            if (!_renderDoc.capture->launchReplayUI(true, nullptr)) {
+                YA_CORE_WARN("RenderDoc: failed to launch replay UI");
+            }
+            break;
+        case 2:
+            openCaptureDirectoryInOS(result.capturePath);
+            break;
+        default:
+            break;
+        } });
+    _deleter.push("RenderDocCapture", [this](void*)
+                  {
+        if (_renderDoc.capture) {
+            _renderDoc.capture->shutdown();
+            _renderDoc.capture.reset();
+        } });
+}
+
+void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
+{
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = App::LINEAR_FORMAT,
             .bVsync        = false,
             .minImageCount = 3,
-            .width         = static_cast<uint32_t>(ci.width),
-            .height        = static_cast<uint32_t>(ci.height),
+            .width         = static_cast<uint32_t>(appDesc.width),
+            .height        = static_cast<uint32_t>(appDesc.height),
         },
     };
 
@@ -331,59 +356,55 @@ void RenderRuntime::init(const InitDesc& desc)
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
 
-    if (ci.bEnableRenderDoc) {
-        _renderDoc.capture->setRenderContext({
-            .device    = _render->as<VulkanRender>()->getDevice(),
-            .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-        });
-        _render->getSwapchain()->onRecreate.addLambda(
-            this,
-            [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
-            {
-                (void)old;
-                (void)now;
-                (void)bImageRecreated;
-                _renderDoc.capture->setRenderContext({
-                    .device    = _render->as<VulkanRender>()->getDevice(),
-                    .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
-                });
-            });
+    if (!_renderDoc.capture) {
+        return;
     }
 
+    _renderDoc.capture->setRenderContext({
+        .device    = _render->as<VulkanRender>()->getDevice(),
+        .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+    });
+    _render->getSwapchain()->onRecreate.addLambda(
+        this,
+        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
+        {
+            (void)old;
+            (void)now;
+            (void)bImageRecreated;
+            _renderDoc.capture->setRenderContext({
+                .device    = _render->as<VulkanRender>()->getDevice(),
+                .swapchain = _render->as<VulkanRender>()->getSwapchain()->getHandle(),
+            });
+        });
+}
+
+void RenderRuntime::initResourceCaches()
+{
     TextureLibrary::get().init();
 
     ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100);
     ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);
     ResourceRegistry::get().registerCache(FontManager::get(), 80);
     ResourceRegistry::get().registerCache(AssetManager::get(), 70);
+}
 
-    _skybox.dsl = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "App_Skybox_CubeMap_DSL",
-            .bindings = {
-                DescriptorSetLayoutBinding{
-                    .binding         = 0,
-                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 1,
-                    .stageFlags      = EShaderStage::Fragment,
-                },
-            },
-        });
+void RenderRuntime::initSharedRenderResources()
+{
+    initSharedPipelineResources();
+    initSkyboxResources();
+    initEnvironmentLightingResources();
 
-    _skybox.dsp = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "App_Skybox_DSP",
-            .maxSets   = 4,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 4,
-                },
-            },
-        });
+    _deleter.push("RenderBindings", [this](void*)
+                  { releaseRenderOwnedResources(); });
 
+    _shaderStorage->waitForPreload();
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
+
+    initActivePipeline();
+}
+
+void RenderRuntime::initSharedPipelineResources()
+{
     _cubemapSampler = Sampler::create(SamplerDesc{
         .label        = "App_SkyboxSampler",
         .addressModeU = ESamplerAddressMode::Repeat,
@@ -411,6 +432,36 @@ void RenderRuntime::init(const InitDesc& desc)
         _render->endIsolateCommands(cmdBuf);
         YA_CORE_ASSERT(result.bSuccess, "Failed to generate PBR BRDF LUT");
     }
+}
+
+void RenderRuntime::initSkyboxResources()
+{
+    _skybox.dsl = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "App_Skybox_CubeMap_DSL",
+            .bindings = {
+                DescriptorSetLayoutBinding{
+                    .binding         = 0,
+                    .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                    .stageFlags      = EShaderStage::Fragment,
+                },
+            },
+        });
+
+    _skybox.dsp = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "App_Skybox_DSP",
+            .maxSets   = 4,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 4,
+                },
+            },
+        });
 
     _skybox.fallbackTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
     YA_CORE_ASSERT(_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView(),
@@ -420,7 +471,10 @@ void RenderRuntime::init(const InitDesc& desc)
     _skybox.sceneDS    = _skybox.dsp->allocateDescriptorSets(_skybox.dsl);
     updateSkyboxDescriptorSet(_skybox.fallbackDS, _skybox.fallbackTexture.get());
     updateSkyboxDescriptorSet(_skybox.sceneDS, _skybox.fallbackTexture.get());
+}
 
+void RenderRuntime::initEnvironmentLightingResources()
+{
     _environmentLighting.dsl = IDescriptorSetLayout::create(
         _render,
         DescriptorSetLayoutDesc{
@@ -465,15 +519,10 @@ void RenderRuntime::init(const InitDesc& desc)
                                            _environmentLighting.fallbackIrradianceTexture.get(),
                                            _environmentLighting.fallbackPrefilterTexture.get(),
                                            _sharedResources.pbrLUT.get());
+}
 
-    _deleter.push("RenderBindings", [this](void*)
-                  { releaseRenderOwnedResources(); });
-
-    _shaderStorage->waitForPreload();
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
-
-    initActivePipeline();
-
+void RenderRuntime::initPresentationResources()
+{
     _screenRenderPass = nullptr;
     _screenRT         = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Final RenderTarget",
@@ -501,7 +550,7 @@ void RenderRuntime::init(const InitDesc& desc)
         this,
         [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
         {
-            const bool bExtentChanged      = (now.extent.width != old.extent.width ||
+            const bool bExtentChanged = (now.extent.width != old.extent.width ||
                                          now.extent.height != old.extent.height);
             const bool bPresentModeChanged = (old.presentMode != now.presentMode);
 
@@ -519,12 +568,15 @@ void RenderRuntime::init(const InitDesc& desc)
 
     _deleter.push("ScreenRT", [this](void*)
                   {
-            if (_screenRT) {
-                _screenRT->destroy();
-                _screenRT.reset();
-            }
-            _screenRenderPass.reset(); });
+        if (_screenRT) {
+            _screenRT->destroy();
+            _screenRT.reset();
+        }
+        _screenRenderPass.reset(); });
+}
 
+void RenderRuntime::initCommandResources()
+{
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
     _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
     _commandBuffers.assign(cmdBufs.begin(), cmdBufs.begin() + _render->getSwapchainImageCount());
@@ -534,29 +586,30 @@ void RenderRuntime::init(const InitDesc& desc)
         _commandBuffers.clear();
         _offscreenCmdBuf.reset(); });
 
-    {
-        auto*             vkRender = static_cast<VulkanRender*>(_render);
-        VkFenceCreateInfo fenceCI{
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-        };
-        VkFence  fence = VK_NULL_HANDLE;
-        VkResult ret   = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
-        vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
-        _offscreenFence   = fence;
-        _offscreenPending = false;
-        _deleter.push("OffscreenFence", [this](void*)
-                      {
-            if (_offscreenFence) {
-                auto* vkR = static_cast<VulkanRender*>(_render);
-                vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
-                _offscreenFence   = nullptr;
-                _offscreenPending = false;
-            } });
-    }
+    auto*             vkRender = static_cast<VulkanRender*>(_render);
+    VkFenceCreateInfo fenceCI{
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+    };
+    VkFence  fence = VK_NULL_HANDLE;
+    VkResult ret   = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
+    YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
+    vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
+    _offscreenFence   = fence;
+    _offscreenPending = false;
+    _deleter.push("OffscreenFence", [this](void*)
+                  {
+        if (_offscreenFence) {
+            auto* vkR = static_cast<VulkanRender*>(_render);
+            vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
+            _offscreenFence   = nullptr;
+            _offscreenPending = false;
+        } });
+}
 
+void RenderRuntime::initFrameServices()
+{
     ImGuiManager::get().init(_render, nullptr);
     _render->waitIdle();
 
@@ -566,28 +619,35 @@ void RenderRuntime::init(const InitDesc& desc)
 
 void RenderRuntime::shutdown()
 {
+    shutdownRuntimeServices();
+    shutdownActivePipeline();
+    getDebugRenderSystem().destroy();
+    _deleter.clear();
+    destroyRenderBackend();
+}
+
+void RenderRuntime::shutdownRuntimeServices()
+{
     if (_render) {
         _render->waitIdle();
     }
 
-    shutdownActivePipeline();
-    getDebugRenderSystem().destroy();
-
     ImGuiManager::get().shutdown();
-
     ResourceRegistry::get().clearAll();
-
     TaskQueue::get().stop();
+}
 
-    _deleter.clear();
-
-    if (_render) {
-        DeferredDeletionQueue::get().flushAll();
-
-        _render->destroy();
-        delete _render;
-        _render = nullptr;
+void RenderRuntime::destroyRenderBackend()
+{
+    if (!_render) {
+        return;
     }
+
+    DeferredDeletionQueue::get().flushAll();
+
+    _render->destroy();
+    delete _render;
+    _render = nullptr;
 }
 
 void RenderRuntime::releaseRenderOwnedResources()
