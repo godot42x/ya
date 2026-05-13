@@ -22,6 +22,25 @@ constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING     = "
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW = "render.deferred.shadow.enablePointLightShadow";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS   = "render.deferred.shadow.maxPointLightShadowCount";
 
+void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
+{
+    constexpr ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
+    if (parentValue > 0.0f) {
+        ImGui::TreeNodeEx(label, flags, "%s  %.3f ms  %.1f%%", label, value, value * 100.0f / parentValue);
+        return;
+    }
+    ImGui::TreeNodeEx(label, flags, "%s  %.3f ms", label, value);
+}
+
+template <typename Fn>
+void drawPerfNode(const char* label, float value, Fn&& drawChildren)
+{
+    if (ImGui::TreeNode(label, "%s  %.3f ms", label, value)) {
+        drawChildren();
+        ImGui::TreePop();
+    }
+}
+
 } // namespace
 
 DeferredRenderPipeline::~DeferredRenderPipeline()
@@ -99,7 +118,7 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
                          .stencilStoreOp = EAttachmentStoreOp::DontCare,
                          .initialLayout  = EImageLayout::ColorAttachmentOptimal,
                          .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
                 },
             },
                  .depthAttach = AttachmentDescription{
@@ -317,6 +336,42 @@ void DeferredRenderPipeline::loadPersistentSettings()
     }
     shadowSettings.pointLightEnabled    = _bEnablePointLightShadow;
     shadowSettings.maxPointLightShadows = _maxPointLightShadowCount;
+
+    const auto& automationShadowOverrides = App::get()->getDesc().automation.shadow;
+    if (automationShadowOverrides.quality) {
+        shadowSettings = ShadowSettings::fromQuality(*automationShadowOverrides.quality);
+    }
+    if (automationShadowOverrides.directionalEnabled) {
+        shadowSettings.directionalEnabled = *automationShadowOverrides.directionalEnabled;
+    }
+    if (automationShadowOverrides.pointLightEnabled) {
+        shadowSettings.pointLightEnabled = *automationShadowOverrides.pointLightEnabled;
+    }
+    if (automationShadowOverrides.pointLightUseIndirect) {
+        shadowSettings.pointLightUseIndirect = *automationShadowOverrides.pointLightUseIndirect;
+    }
+    if (automationShadowOverrides.maxPointLightShadows) {
+        shadowSettings.maxPointLightShadows = *automationShadowOverrides.maxPointLightShadows;
+    }
+    if (automationShadowOverrides.filter) {
+        shadowSettings.filter = *automationShadowOverrides.filter;
+    }
+    if (automationShadowOverrides.bias) {
+        shadowSettings.bias = *automationShadowOverrides.bias;
+    }
+    if (automationShadowOverrides.normalBias) {
+        shadowSettings.normalBias = *automationShadowOverrides.normalBias;
+    }
+    if (automationShadowOverrides.directionalDistance) {
+        shadowSettings.directionalDistance = *automationShadowOverrides.directionalDistance;
+    }
+
+    _bEnableShadowMapping      = shadowSettings.isEnabled();
+    _bEnablePointLightShadow   = shadowSettings.pointLightEnabled;
+    _maxPointLightShadowCount  = shadowSettings.getEffectivePointLightCount();
+    _pendingEnableShadowMapping      = _bEnableShadowMapping;
+    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
+    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
 }
 
 void DeferredRenderPipeline::saveShadowSettingsToConfig(bool     bEnableShadowMapping,
@@ -617,10 +672,30 @@ void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
             _shadowStage->prepare(stageCtx);
             _shadowStage->execute(stageCtx);
         }
+        handoffShadowDepthForSampling(stageCtx.cmdBuf);
         return;
     }
 
     PerfState::Get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
+}
+
+void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBuf)
+{
+    auto* shadowFrameBuffer  = _shadowDepthRT ? _shadowDepthRT->getCurFrameBuffer() : nullptr;
+    auto* shadowDepthTexture = shadowFrameBuffer ? shadowFrameBuffer->getDepthTexture() : nullptr;
+    auto* shadowDepthImage   = shadowDepthTexture ? shadowDepthTexture->getImage() : nullptr;
+    if (!cmdBuf || !_shadowDepthRT || !shadowDepthImage) {
+        return;
+    }
+
+    ImageSubresourceRange shadowDepthRange{
+        .aspectMask     = EImageAspect::Depth,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = _shadowDepthRT->_layerCount,
+    };
+    cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
 }
 
 void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
@@ -788,8 +863,11 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     _bViewportPassOpen = false;
 
     auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
-    viewportTexture    = _postProcessStage.execute(
-        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
+    {
+        YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
+        viewportTexture = _postProcessStage.execute(
+            cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
+    }
 }
 
 void DeferredRenderPipeline::onViewportResized(Rect2D rect)
@@ -843,6 +921,7 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
 
                 ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled);
                 ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
+                ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
                 int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
                 if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
                     shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
@@ -864,13 +943,91 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
     if (YA_PERF_IS_ENABLED()) {
         if (ImGui::TreeNode("Perf")) {
             auto& perf = PerfState::Get();
-            ImGui::Text("CPU tick: %.3f ms", perf.getLastValue(perf::sample::deferredTick(), perf::metric::cpuTimeMs()));
-            ImGui::Text("CPU shadow: %.3f ms", perf.getLastValue(perf::sample::deferredShadow(), perf::metric::cpuTimeMs()));
-            ImGui::Text("CPU gbuffer: %.3f ms", perf.getLastValue(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs()));
-            ImGui::Text("CPU depth copy: %.3f ms", perf.getLastValue(perf::sample::deferredDepthCopy(), perf::metric::cpuTimeMs()));
-            ImGui::Text("CPU light: %.3f ms", perf.getLastValue(perf::sample::deferredLight(), perf::metric::cpuTimeMs()));
-            ImGui::Text("CPU overlay: %.3f ms", perf.getLastValue(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs()));
-            ImGui::Text("GPU frame: %.3f ms", perf.getLastValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs()));
+
+            static constexpr size_t WINDOW_SIZES[]       = {1, 10, 30, 60};
+            static constexpr const char* WINDOW_LABELS[] = {"Last", "10 frames", "30 frames", "60 frames"};
+            int currentWindowIndex = 0;
+            for (int i = 0; i < IM_ARRAYSIZE(WINDOW_SIZES); ++i) {
+                if (perf.getAverageWindowSize() == WINDOW_SIZES[i]) {
+                    currentWindowIndex = i;
+                    break;
+                }
+            }
+            if (ImGui::Combo("Average", &currentWindowIndex, WINDOW_LABELS, IM_ARRAYSIZE(WINDOW_LABELS))) {
+                perf.setAverageWindowSize(WINDOW_SIZES[currentWindowIndex]);
+            }
+
+            auto metric = [&perf](FName sampleKey, FName metricKey) {
+                return perf.getDisplayValue(sampleKey, metricKey);
+            };
+            auto cpu = [&metric](FName sampleKey) {
+                return metric(sampleKey, perf::metric::cpuTimeMs());
+            };
+
+            const float frameCpuMs      = cpu(perf::sample::renderFrame());
+            const float frameGpuMs      = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+            const float logicMs         = cpu(perf::sample::frameLogic());
+            const float renderMs        = cpu(perf::sample::frameRender());
+            const float automationMs    = cpu(perf::sample::frameAutomation());
+            const float unaccountedMs   = cpu(perf::sample::frameUnaccounted());
+            const float extractMs       = cpu(perf::sample::renderExtract());
+            const float runtimeMs       = cpu(perf::sample::renderRuntime());
+            const float prepareFrameMs  = cpu(perf::sample::renderPrepareFrame());
+            const float waitIdleMs      = cpu(perf::sample::renderWaitIdle());
+            const float beginMs         = cpu(perf::sample::renderBegin());
+            const float waitFenceMs     = cpu(perf::sample::vulkanWaitFence());
+            const float acquireMs       = cpu(perf::sample::vulkanAcquire());
+            const float worldMs         = cpu(perf::sample::renderWorld());
+            const float deferredTickMs  = cpu(perf::sample::deferredTick());
+            const float shadowMs        = cpu(perf::sample::deferredShadow());
+            const float gbufferMs       = cpu(perf::sample::deferredGBuffer());
+            const float depthCopyMs     = cpu(perf::sample::deferredDepthCopy());
+            const float lightMs         = cpu(perf::sample::deferredLight());
+            const float overlayMs       = cpu(perf::sample::deferredOverlay());
+            const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
+            const float postProcessMs   = cpu(perf::sample::renderPostProcess());
+            const float presentationMs  = cpu(perf::sample::renderPresentation());
+            const float flushCallbacksMs = cpu(perf::sample::renderFlushCallbacks());
+            const float submitMs        = cpu(perf::sample::renderSubmit());
+            const float presentMs       = cpu(perf::sample::vulkanPresent());
+
+            ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
+            ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
+
+            drawPerfNode("Frame Cycle", frameCpuMs, [&]() {
+                drawPerfLeaf("Logic", logicMs, frameCpuMs);
+                drawPerfNode("Render", renderMs, [&]() {
+                    drawPerfLeaf("Extract", extractMs, renderMs);
+                    drawPerfNode("Runtime", runtimeMs, [&]() {
+                        drawPerfNode("PrepareFrame", prepareFrameMs, [&]() {
+                            drawPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
+                            drawPerfNode("Begin", beginMs, [&]() {
+                                drawPerfLeaf("WaitFence", waitFenceMs, beginMs);
+                                drawPerfLeaf("Acquire", acquireMs, beginMs);
+                            });
+                        });
+                        drawPerfNode("World", worldMs, [&]() {
+                            drawPerfNode("Deferred", deferredTickMs, [&]() {
+                                drawPerfLeaf("Shadow", shadowMs, deferredTickMs);
+                                drawPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
+                                drawPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
+                                drawPerfLeaf("Light", lightMs, deferredTickMs);
+                                drawPerfLeaf("Overlay", overlayMs, deferredTickMs);
+                            });
+                            drawPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
+                            drawPerfLeaf("PostProcess", postProcessMs, worldMs);
+                        });
+                        drawPerfLeaf("Presentation", presentationMs, runtimeMs);
+                        drawPerfLeaf("FlushCallbacks", flushCallbacksMs, runtimeMs);
+                        drawPerfNode("Submit", submitMs, [&]() {
+                            drawPerfLeaf("Present", presentMs, submitMs);
+                        });
+                    });
+                });
+                drawPerfLeaf("Automation", automationMs, frameCpuMs);
+                drawPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
+            });
+
             ImGui::Text("Draw items: %u", _lastDrawCount);
             ImGui::Text("Point lights: %u", _lastPointLightCount);
             ImGui::TreePop();

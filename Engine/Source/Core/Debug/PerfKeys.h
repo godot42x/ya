@@ -74,6 +74,132 @@ inline const FName& renderFrame()
     return key;
 }
 
+inline const FName& frameLogic()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/Logic"_name;
+    return key;
+}
+
+inline const FName& frameRender()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/Render"_name;
+    return key;
+}
+
+inline const FName& frameAutomation()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/Automation"_name;
+    return key;
+}
+
+inline const FName& frameUnaccounted()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/Unaccounted"_name;
+    return key;
+}
+
+inline const FName& renderExtract()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/Extract"_name;
+    return key;
+}
+
+inline const FName& renderRuntime()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/Runtime"_name;
+    return key;
+}
+
+inline const FName& renderPrepareFrame()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/PrepareFrame"_name;
+    return key;
+}
+
+inline const FName& renderWaitIdle()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/WaitIdle"_name;
+    return key;
+}
+
+inline const FName& renderBegin()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/Begin"_name;
+    return key;
+}
+
+inline const FName& renderWorld()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/World"_name;
+    return key;
+}
+
+inline const FName& renderViewportOverlay()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/ViewportOverlay"_name;
+    return key;
+}
+
+inline const FName& renderPostProcess()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/PostProcess"_name;
+    return key;
+}
+
+inline const FName& renderPresentation()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/Presentation"_name;
+    return key;
+}
+
+inline const FName& renderSubmit()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/Submit"_name;
+    return key;
+}
+
+inline const FName& renderFlushCallbacks()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/FlushCallbacks"_name;
+    return key;
+}
+
+inline const FName& vulkanWaitFence()
+{
+    using namespace ya::literals;
+    static const FName key = "Vulkan/WaitFence"_name;
+    return key;
+}
+
+inline const FName& vulkanAcquire()
+{
+    using namespace ya::literals;
+    static const FName key = "Vulkan/Acquire"_name;
+    return key;
+}
+
+inline const FName& vulkanPresent()
+{
+    using namespace ya::literals;
+    static const FName key = "Vulkan/Present"_name;
+    return key;
+}
+
 inline const FName& deferredTick()
 {
     using namespace ya::literals;

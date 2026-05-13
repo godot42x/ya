@@ -159,6 +159,7 @@ struct DeferredRenderPipeline
     void               refreshDirtyResources();
     void               syncFrameSettings(const TickDesc& desc);
     void               executeShadowPass(RenderStageContext& stageCtx);
+    void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);
     void               executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);

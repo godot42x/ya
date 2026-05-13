@@ -3,6 +3,8 @@
 #include "App.h"
 #include "DebugRenderSystem.h"
 #include "Core/Async/TaskQueue.h"
+#include "Core/Debug/PerfKeys.h"
+#include "Core/Debug/PerfState.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -70,6 +72,7 @@ void RenderRuntime::offScreenRender()
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_FUNCTION()
+    YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     runFramePrologue();
     beginFrameCapture();
@@ -81,11 +84,23 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         return;
     }
 
-    renderWorldFrame(input, cmdBuf.get());
+    {
+        YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
+        renderWorldFrame(input, cmdBuf.get());
+    }
     syncEditorFrame(input);
-    renderPresentationPass(input, cmdBuf.get());
-    flushMainThreadCallbacks();
-    submitFrame(imageIndex, cmdBuf.get());
+    {
+        YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
+        renderPresentationPass(input, cmdBuf.get());
+    }
+    {
+        YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
+        flushMainThreadCallbacks();
+    }
+    {
+        YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
+        submitFrame(imageIndex, cmdBuf.get());
+    }
 
     endFrameCapture();
 }

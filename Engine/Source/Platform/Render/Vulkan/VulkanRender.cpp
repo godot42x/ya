@@ -3,6 +3,8 @@
 #include "VulkanDescriptorSet.h"
 
 #include <Core/Base.h>
+#include <Core/Debug/PerfKeys.h>
+#include <Core/Debug/PerfState.h>
 #include <Core/Log.h>
 
 #include <algorithm>
@@ -598,9 +600,11 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         vkGetPhysicalDeviceFeatures(m_PhysicalDevice, &supportedFeatures);
 
         VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
-        physicalDeviceFeatures.samplerAnisotropy        = supportedFeatures.samplerAnisotropy;
-        physicalDeviceFeatures.fillModeNonSolid         = supportedFeatures.fillModeNonSolid;
-        physicalDeviceFeatures.geometryShader           = supportedFeatures.geometryShader;
+        physicalDeviceFeatures.samplerAnisotropy         = supportedFeatures.samplerAnisotropy;
+        physicalDeviceFeatures.fillModeNonSolid          = supportedFeatures.fillModeNonSolid;
+        physicalDeviceFeatures.geometryShader            = supportedFeatures.geometryShader;
+        physicalDeviceFeatures.multiDrawIndirect         = supportedFeatures.multiDrawIndirect;
+        physicalDeviceFeatures.drawIndirectFirstInstance = supportedFeatures.drawIndirectFirstInstance;
         bSupportsGeometryShader                         = supportedFeatures.geometryShader;
         if (!bSupportsGeometryShader) {
             YA_CORE_WARN("geometryShader is not supported on {}; geometry shader pipelines must be disabled or use fallback shaders", candidate.properties.deviceName);
@@ -626,9 +630,13 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         supportedDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
         supportedDynamicRenderingFeatures.pNext = bHasExtendedDynamicState3 ? &supportedExtendedDynamicState3Features : nullptr;
 
+        VkPhysicalDeviceVulkan12Features supportedVulkan12Features{};
+        supportedVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        supportedVulkan12Features.pNext = &supportedDynamicRenderingFeatures;
+
         VkPhysicalDeviceVulkan11Features supportedVulkan11Features{};
         supportedVulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        supportedVulkan11Features.pNext = &supportedDynamicRenderingFeatures;
+        supportedVulkan11Features.pNext = &supportedVulkan12Features;
 
 #ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
         VkPhysicalDeviceMeshShaderFeaturesEXT supportedMeshShaderFeatures{};
@@ -655,9 +663,15 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             .shaderDrawParameters = supportedVulkan11Features.shaderDrawParameters,
         };
 
+        VkPhysicalDeviceVulkan12Features vulkan12Features{
+            .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            .pNext             = &vulkan11Features,
+            .drawIndirectCount = supportedVulkan12Features.drawIndirectCount,
+        };
+
         VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
             .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-            .pNext            = &vulkan11Features,
+            .pNext            = &vulkan12Features,
             .dynamicRendering = VK_TRUE,
         };
 
@@ -711,13 +725,15 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             return family.queueCount > 0 && (family.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
         });
 
-        _capabilities.geometryShader      = bSupportsGeometryShader;
-        _capabilities.computeShader       = bHasComputeQueue;
-        _capabilities.storageBuffer       = true;
+        _capabilities.geometryShader           = bSupportsGeometryShader;
+        _capabilities.computeShader            = bHasComputeQueue;
+        _capabilities.storageBuffer            = true;
         _capabilities.drawIndirect             = true;
         _capabilities.drawIndexedIndirect      = true;
-        _capabilities.drawIndexedIndirectCount = true;
-        _capabilities.dynamicRendering    = dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
+        _capabilities.drawIndexedIndirectCount = supportedVulkan12Features.drawIndirectCount &&
+                                                 supportedFeatures.multiDrawIndirect &&
+                                                 supportedFeatures.drawIndirectFirstInstance;
+        _capabilities.dynamicRendering         = dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
 #ifdef __APPLE__
         _capabilities.portabilitySubset   = bHasPortabilitySubset;
 #endif
@@ -1142,11 +1158,14 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
     // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
-    VK_CALL(vkWaitForFences(this->getDevice(),
-                            1,
-                            &frameFences[currentFrameIdx],
-                            VK_TRUE,
-                            UINT64_MAX));
+    {
+        YA_PERF_SCOPE(perf::sample::vulkanWaitFence(), perf::metric::cpuTimeMs(), perf::domain::render());
+        VK_CALL(vkWaitForFences(this->getDevice(),
+                                1,
+                                &frameFences[currentFrameIdx],
+                                VK_TRUE,
+                                UINT64_MAX));
+    }
 
     updateCompletedFrameGpuTiming();
 
@@ -1172,10 +1191,14 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
 
     uint32_t imageIndex = 0;
-    VkResult ret        = vkSwapChain->acquireNextImage(
-        frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-        frameFences[currentFrameIdx],                   // 等待上一present完成
-        imageIndex);
+    VkResult ret        = VK_SUCCESS;
+    {
+        YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
+        ret = vkSwapChain->acquireNextImage(
+            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
+            frameFences[currentFrameIdx],                   // 等待上一present完成
+            imageIndex);
+    }
 
     // Do a sync recreation here, Can it be async?(just return and register a frame task)
     if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -1196,9 +1219,12 @@ bool VulkanRender::begin(int32_t* outImageIndex)
             return true;
         }
 
-        ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
-                                            frameFences[currentFrameIdx],
-                                            imageIndex);
+        {
+            YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
+            ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
+                                                frameFences[currentFrameIdx],
+                                                imageIndex);
+        }
 
         if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
             YA_CORE_ERROR("Failed to acquire next image: {}", ret);
@@ -1266,7 +1292,11 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void*> cmdBufs)
     // Otherwise, App has already submitted with custom sync
 
     // Present the image
-    int result = presentImage(imageIndex, {imageSubmittedSignalSemaphores[imageIndex]});
+    int result = VK_SUCCESS;
+    {
+        YA_PERF_SCOPE(perf::sample::vulkanPresent(), perf::metric::cpuTimeMs(), perf::domain::render());
+        result = presentImage(imageIndex, {imageSubmittedSignalSemaphores[imageIndex]});
+    }
 
     if (result == VK_SUBOPTIMAL_KHR) {
         YA_CORE_INFO("Swapchain suboptimal, recreating...");

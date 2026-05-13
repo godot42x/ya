@@ -4,6 +4,8 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
+#include "Core/Debug/PerfKeys.h"
+#include "Core/Debug/PerfState.h"
 #include "Core/Manager/Facade.h"
 #include "Core/System/FileWatcher.h"
 
@@ -97,6 +99,16 @@ int AppFrameLoop::run(App& app)
 int AppFrameLoop::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
+
+    YA_PERF_FRAME_SCOPE(
+        perf::sample::renderFrame(),
+        perf::metric::cpuTimeMs(),
+        perf::domain::render(),
+        perf::sample::frameUnaccounted(),
+        perf::sample::frameLogic(),
+        perf::sample::frameRender(),
+        perf::sample::frameAutomation());
+
     SDL_Event evt;
     if (SDL_PollEvent(&evt)) {
         processEvent(app, evt);
@@ -109,11 +121,18 @@ int AppFrameLoop::iterate(App& app, float dt)
         return 0;
     }
     if (!app._bPause) {
+        YA_PERF_SCOPE(perf::sample::frameLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
         tickLogic(app, dt);
     }
-    tickRender(app, dt);
+    {
+        YA_PERF_SCOPE(perf::sample::frameRender(), perf::metric::cpuTimeMs(), perf::domain::render());
+        tickRender(app, dt);
+    }
     ++App::_frameIndex;
-    AppAutomation::onFrameCompleted(app);
+    {
+        YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
+        AppAutomation::onFrameCompleted(app);
+    }
 
     return 0;
 }
@@ -300,17 +319,20 @@ void AppFrameLoop::tickRender(App& app, float dt)
     const uint32_t flightIndex = resolveFlightIndex(app);
 
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    RenderFrameExtractor::extract(
-        RenderFrameExtractor::ExtractInput{
-            .scene          = scene,
-            .view           = app._renderFrameState.view,
-            .projection     = app._renderFrameState.projection,
-            .cameraPos      = app._renderFrameState.cameraPos,
-            .viewportExtent = renderRuntime->getViewportExtent(),
-            .frameIndex     = App::_frameIndex,
-            .deltaTime      = dt,
-        },
-        app._renderFrameDataPerFlight[flightIndex]);
+    {
+        YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
+        RenderFrameExtractor::extract(
+            RenderFrameExtractor::ExtractInput{
+                .scene          = scene,
+                .view           = app._renderFrameState.view,
+                .projection     = app._renderFrameState.projection,
+                .cameraPos      = app._renderFrameState.cameraPos,
+                .viewportExtent = renderRuntime->getViewportExtent(),
+                .frameIndex     = App::_frameIndex,
+                .deltaTime      = dt,
+            },
+            app._renderFrameDataPerFlight[flightIndex]);
+    }
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .flightIndex              = flightIndex,

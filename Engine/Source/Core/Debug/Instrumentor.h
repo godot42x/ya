@@ -779,17 +779,10 @@ struct InstrumentationSession
 //=============================================================================
 // Profile Mode Configuration
 //
-// Define ONE of the following before including this header (or in project settings):
-//   YA_PROFILE_DISABLED    - No profiling code compiled (zero overhead)
-//   YA_PROFILE_CONDITIONAL - Profiling controlled by runtime boolean
-//   YA_PROFILE_ENABLED     - Profiling always active (default if none specified)
-//
-// Example:
-//   #define YA_PROFILE_DISABLED
-//   #include "Instrumentor.h"
+// XMake selects the profile mode: profile builds define YA_PROFILE_CONDITIONAL,
+// other builds define YA_PROFILE_DISABLED.
 //=============================================================================
 
-// Default to ENABLED if no mode is specified
 #if !defined(YA_PROFILE_DISABLED) && !defined(YA_PROFILE_CONDITIONAL) && !defined(YA_PROFILE_ENABLED)
     #define YA_PROFILE_DISABLED
 #endif
@@ -799,11 +792,11 @@ struct InstrumentationSession
 //-----------------------------------------------------------------------------
 #if defined(YA_PROFILE_DISABLED)
 
-    #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)
-    #define YA_PROFILE_END_SESSION_IMPL()
-    #define YA_PROFILE_SCOPE_IMPL(name)
+    #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath) do { (void)0; } while (0);
+    #define YA_PROFILE_END_SESSION_IMPL() do { (void)0; } while (0);
+    #define YA_PROFILE_SCOPE_IMPL(name) do { (void)0; } while (0);
 
-    #define YA_PROFILE_SET_ENABLED(enabled)
+    #define YA_PROFILE_SET_ENABLED(enabled) do { (void)sizeof(enabled); } while (0)
     #define YA_PROFILE_IS_ENABLED() (false)
 
 //-----------------------------------------------------------------------------
@@ -820,21 +813,21 @@ inline bool g_ProfileEnabled = false;
     #define YA_PROFILE_SET_ENABLED(enabled) (::ya::g_ProfileEnabled = (enabled))
     #define YA_PROFILE_IS_ENABLED() (::ya::g_ProfileEnabled)
 
-    #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)                                       \
-        do {                                                                                            \
+    #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)                                        \
+        do {                                                                                             \
             if (::ya::g_ProfileEnabled) ::ya::Instrumentor::Get().BeginSession(session_name, filepath); \
         } while (0)
 
-    #define YA_PROFILE_END_SESSION_IMPL()                                       \
-        do {                                                                    \
-            if (::ya::g_ProfileEnabled) ::ya::Instrumentor::Get().EndSession(); \
+    #define YA_PROFILE_END_SESSION_IMPL()                                        \
+        do {                                                                     \
+            if (::ya::g_ProfileEnabled) ::ya::Instrumentor::Get().EndSession();  \
         } while (0)
 
     #define YA_PROFILE_SCOPE_IMPL(name) \
-        ::ya::InstrumentationTimerConditional YA_CONCAT(ya_timer_, __LINE__)(::ya::g_ProfileEnabled, name)
+        ::ya::InstrumentationTimerConditional YA_CONCAT(ya_timer_, __LINE__)(::ya::g_ProfileEnabled, name);
 
 //-----------------------------------------------------------------------------
-// Mode 3: YA_PROFILE_ENABLED - Always active (default)
+// Mode 3: YA_PROFILE_ENABLED - Always active
 //-----------------------------------------------------------------------------
 #elif defined(YA_PROFILE_ENABLED)
 
@@ -842,10 +835,10 @@ inline bool g_ProfileEnabled = false;
     #define YA_PROFILE_IS_ENABLED() (true)
 
     #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath) \
-        ::ya::Instrumentor::Get().BeginSession(session_name, filepath);
+        ::ya::Instrumentor::Get().BeginSession(session_name, filepath)
 
     #define YA_PROFILE_END_SESSION_IMPL() \
-        ::ya::Instrumentor::Get().EndSession();
+        ::ya::Instrumentor::Get().EndSession()
 
     #define YA_PROFILE_SCOPE_IMPL(name) \
         ::ya::InstrumentationTimer YA_CONCAT(ya_timer_, __LINE__)(name);
@@ -856,14 +849,14 @@ inline bool g_ProfileEnabled = false;
 // Console-only logging macro (always available, independent of profile mode)
 //=============================================================================
 #define YA_PROFILE_SCOPE_LOG_IMPL(name) \
-    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name);
   // YA_CALL_MACRO_N(__YA_PROFILE_SCOPE_LOG_IMPL_, __VA_ARGS__)
 
 #define __YA_PROFILE_SCOPE_LOG_IMPL_1(name) \
-    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name);
 
 #define __YA_PROFILE_SCOPE_LOG_IMPL_2(name, bEnable) \
-    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name)
+    ::ya::InstrumentationTimerConsoleOnly YA_CONCAT(ya_timer_log_, __LINE__)(name);
 
 //=============================================================================
 // Public API Macros (unified interface, only modify here)
@@ -875,3 +868,23 @@ inline bool g_ProfileEnabled = false;
 #define YA_PROFILE_FUNCTION() YA_PROFILE_SCOPE_IMPL(YA_PRETTY_FUNCTION)
 #define YA_PROFILE_SCOPE_LOG(name) YA_PROFILE_SCOPE_LOG_IMPL(name)
 #define YA_PROFILE_FUNCTION_LOG() YA_PROFILE_SCOPE_LOG_IMPL(YA_PRETTY_FUNCTION)
+
+namespace ya::profile
+{
+using CpuTrace = ::ya::Instrumentor;
+
+inline CpuTrace& cpuTrace()
+{
+    return CpuTrace::Get();
+}
+
+inline bool isCpuTraceEnabled()
+{
+    return YA_PROFILE_IS_ENABLED();
+}
+
+inline void setCpuTraceEnabled(bool enabled)
+{
+    YA_PROFILE_SET_ENABLED(enabled);
+}
+} // namespace ya::profile

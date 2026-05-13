@@ -41,15 +41,23 @@ void RenderRuntime::ensureViewportRectInitialized(const FrameInput& input)
 
 bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
+    YA_PERF_SCOPE(perf::sample::renderPrepareFrame(), perf::metric::cpuTimeMs(), perf::domain::render());
+
     if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
         return false;
     }
 
-    _render->waitIdle();
+    {
+        YA_PERF_SCOPE(perf::sample::renderWaitIdle(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _render->waitIdle();
+    }
 
     imageIndex = -1;
-    if (!_render->begin(&imageIndex)) {
-        return false;
+    {
+        YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
+        if (!_render->begin(&imageIndex)) {
+            return false;
+        }
     }
     if (imageIndex < 0) {
         YA_CORE_WARN("Invalid image index ({}), skipping frame render", imageIndex);
@@ -132,6 +140,7 @@ void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommand
     }
 
     YA_PROFILE_SCOPE("Render2D")
+    YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     const Extent2D viewportExtent = getActiveViewportExtent();
     FRender2dContext render2dCtx{
