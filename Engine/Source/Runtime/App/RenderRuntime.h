@@ -121,11 +121,13 @@ struct RenderRuntime
     struct RenderDocState
     {
         stdptr<RenderDocCapture> capture;
-        int                      onCaptureAction             = 0;
-        bool                     bAutomationCaptureRequested = false;
-        bool                     bAutomationCaptureFinished  = false;
-        bool                     bAutomationCaptureFailed    = false;
+        int                      onCaptureAction                = 0;
+        bool                     bAutomationCaptureRequested    = false;
+        bool                     bAutomationCaptureFinished     = false;
+        bool                     bAutomationCaptureFailed       = false;
+        bool                     bAutomationPostProcessPending  = false;
         std::string              lastCapturePath;
+        std::string              automationPassSummaryPath;
         std::string              configuredDllPath;
         std::string              configuredOutputDir;
     };
@@ -157,6 +159,10 @@ struct RenderRuntime
     void offScreenRender();
     void finalizeCompletedOffscreenJobs();
 
+    void resetSkyboxPool();
+    void resetEnvironmentLightingPool();
+    bool requestAutomationRenderDocCapture();
+
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] ForwardRenderPipeline*         getForwardPipeline() const;
@@ -170,6 +176,7 @@ struct RenderRuntime
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
     [[nodiscard]] Texture* getActiveViewportTexture() const;
+    [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _skybox.dsp; }
@@ -180,19 +187,12 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
-    bool                                       requestAutomationRenderDocCapture();
     [[nodiscard]] bool                         isAutomationRenderDocCapturePending() const;
     [[nodiscard]] bool                         isAutomationRenderDocCaptureTerminal() const;
+    [[nodiscard]] const std::string&           getAutomationRenderDocCapturePath() const { return _renderDoc.lastCapturePath; }
+    [[nodiscard]] const std::string&           getAutomationRenderDocPassSummaryPath() const { return _renderDoc.automationPassSummaryPath; }
 
-    /**
-     * @brief Reset the skybox descriptor pool and re-allocate the fallback DS.
-     *
-     * Must be called when a scene is about to be destroyed so that any
-     * SkyboxComponent descriptor sets allocated from this pool are returned.
-     * Without this, each scene load leaks one DS until the pool overflows.
-     */
-    void                        resetSkyboxPool();
-    void                        resetEnvironmentLightingPool();
+
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;

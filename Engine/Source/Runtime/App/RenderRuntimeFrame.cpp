@@ -258,6 +258,9 @@ void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuff
     }
 
     cmdBuf->endRendering(ri);
+    if (_app) {
+        AppAutomation::recordPresentationCapture(*_app, cmdBuf);
+    }
 }
 
 void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)

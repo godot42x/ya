@@ -215,6 +215,16 @@ Texture* RenderRuntime::getPostprocessOutputTexture() const
     return nullptr;
 }
 
+Texture* RenderRuntime::getPresentationTexture() const
+{
+    if (!_screenRT) {
+        return nullptr;
+    }
+
+    auto* frameBuffer = const_cast<IRenderTarget*>(_screenRT.get())->getCurFrameBuffer();
+    return frameBuffer ? frameBuffer->getColorTexture(0) : nullptr;
+}
+
 bool RenderRuntime::isPostprocessingEnabled() const
 {
     if (_forwardPipeline) return _forwardPipeline->_postProcessStage.isEnabled();
@@ -243,8 +253,11 @@ DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 
 bool RenderRuntime::requestAutomationRenderDocCapture()
 {
-    _renderDoc.bAutomationCaptureFinished = false;
-    _renderDoc.bAutomationCaptureFailed   = false;
+    _renderDoc.bAutomationCaptureFinished    = false;
+    _renderDoc.bAutomationCaptureFailed      = false;
+    _renderDoc.bAutomationPostProcessPending = false;
+    _renderDoc.lastCapturePath.clear();
+    _renderDoc.automationPassSummaryPath.clear();
 
     if (!_renderDoc.capture) {
         YA_CORE_WARN("Automation requested RenderDoc capture but RenderDoc integration is disabled");
@@ -277,7 +290,9 @@ bool RenderRuntime::requestAutomationRenderDocCapture()
 
 bool RenderRuntime::isAutomationRenderDocCapturePending() const
 {
-    return _renderDoc.bAutomationCaptureRequested || (_renderDoc.capture && _renderDoc.capture->isCapturing());
+    return _renderDoc.bAutomationCaptureRequested ||
+           (_renderDoc.capture && _renderDoc.capture->isCapturing()) ||
+           _renderDoc.bAutomationPostProcessPending;
 }
 
 bool RenderRuntime::isAutomationRenderDocCaptureTerminal() const

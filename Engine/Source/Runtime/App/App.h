@@ -21,7 +21,9 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Scene/SceneManager.h"
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <glm/glm.hpp>
 #include <memory>
 #include <optional>
@@ -68,17 +70,66 @@ enum AppMode : int
 // };
 
 
+enum class EAutomationScreenshotTarget : uint8_t
+{
+    Viewport = 0,
+    Editor,
+};
+
+struct AppAutomationShadowOverrides
+{
+    std::optional<EShadowQuality::T> quality;
+    std::optional<bool>              directionalEnabled;
+    std::optional<bool>              pointLightEnabled;
+    std::optional<bool>              pointLightUseIndirect;
+    std::optional<uint32_t>          maxPointLightShadows;
+    std::optional<EShadowFilter::T>  filter;
+    std::optional<float>             bias;
+    std::optional<float>             normalBias;
+    std::optional<float>             directionalDistance;
+};
+
 struct AppAutomationOptions
 {
-    uint64_t                   exitAfterFrame         = 0;
-    uint64_t                   screenshotWarmupFrames = 30;
-    uint64_t                   screenshotSettleFrames = 5;
-    bool                       renderDocCapture       = false;
-    std::optional<std::string> scenePath;
-    std::optional<std::string> screenshotPath;
-    std::optional<glm::vec3>   editorCameraPosition;
-    std::optional<glm::vec3>   editorCameraRotation;
+    uint64_t                     exitAfterFrame                  = 0;
+    uint64_t                     screenshotWarmupFrames          = 30;
+    uint64_t                     screenshotSettleFrames          = 5;
+    bool                         renderDocCapture                = false;
+    bool                         bRenderDocCaptureOverridden     = false;
+    bool                         bScreenshotTargetOverridden     = false;
+    bool                         bProfileEnabled                 = true;
+    bool                         bProfileEnabledOverridden       = false;
+    bool                         bCpuProfileEnabled              = false;
+    bool                         bCpuProfileOverridden           = false;
+    bool                         bCpuProfileOutputOverridden     = false;
+    bool                         bProfileSessionNameOverridden   = false;
+    EAutomationScreenshotTarget  screenshotTarget                = EAutomationScreenshotTarget::Viewport;
+    std::string                  profileSessionName              = "App";
+    std::optional<std::string>   configPath;
+    std::optional<std::string>   scenePath;
+    std::optional<std::string>   screenshotPath;
+    std::optional<std::string>   cpuProfileOutputPath;
+    std::optional<glm::vec3>     editorCameraPosition;
+    std::optional<glm::vec3>     editorCameraRotation;
+    AppAutomationShadowOverrides shadow;
 };
+
+inline bool tryParseAutomationScreenshotTarget(const std::string& text, EAutomationScreenshotTarget& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "viewport") {
+        outValue = EAutomationScreenshotTarget::Viewport;
+        return true;
+    }
+    if (normalized == "editor") {
+        outValue = EAutomationScreenshotTarget::Editor;
+        return true;
+    }
+    return false;
+}
 
 inline bool tryParseAutomationVec3(const std::string& text, glm::vec3& outValue)
 {
@@ -118,9 +169,10 @@ struct AppDesc
 
     std::optional<std::string> defaultScenePath;
 
-    bool                     bEnableRenderDoc          = false;
-    std::string              renderDocDllPath          = "C:/Program Files/RenderDoc/renderdoc.dll";
-    std::string              renderDocCaptureOutputDir = "Engine/Saved/RenderDoc";
+    bool                     bEnableRenderDoc            = false;
+    bool                     bRenderDocOutputOverridden  = false;
+    std::string              renderDocDllPath            = "C:/Program Files/RenderDoc/renderdoc.dll";
+    std::string              renderDocCaptureOutputDir   = "Engine/Saved/RenderDoc";
     std::vector<std::string> disabledGraphicsCards; // e.g. ["NVIDIA GeForce RTX 3060"]
 
 
@@ -133,8 +185,13 @@ struct AppDesc
             .opt<int>("h", {"height"}, "Window height")
             .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
             .opt<uint64_t>("", {"exit-after-frame"}, "Quit gracefully after rendering N frames", "0")
+            .opt<std::string>("", {"automation-config"}, "Automation override settings file path")
             .opt<std::string>("", {"scene"}, "Startup scene path override")
             .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
+            .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or editor")
+            .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling", "false")
+            .opt<std::string>("", {"cpu-profile-output"}, "Runtime CPU trace output path")
+            .opt<std::string>("", {"profile-session"}, "Runtime profile session name")
             .opt<uint64_t>("", {"screenshot-warmup-frames"}, "Frames to wait before checking screenshot stability", "30")
             .opt<uint64_t>("", {"screenshot-settle-frames"}, "Consecutive stable frames required before screenshot", "5")
             .opt<bool>("", {"renderdoc-capture"}, "Automation trigger one RenderDoc frame capture after warmup and settle", "false")
@@ -149,14 +206,44 @@ struct AppDesc
         params.tryGet<int>("height", height);
         params.tryGet<bool>("fullscreen", fullscreen);
         params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+        if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
+            automation.configPath = std::move(automationConfigPath);
+        }
         params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupFrames);
         params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleFrames);
-        params.tryGet<bool>("renderdoc-capture", automation.renderDocCapture);
+        if (bool bRenderDocCapture = false; params.tryGet<bool>("renderdoc-capture", bRenderDocCapture)) {
+            automation.renderDocCapture            = bRenderDocCapture;
+            automation.bRenderDocCaptureOverridden = true;
+        }
+        if (bool bCpuProfileEnabled = false; params.tryGet<bool>("cpu-profile", bCpuProfileEnabled)) {
+            automation.bCpuProfileEnabled    = bCpuProfileEnabled;
+            automation.bCpuProfileOverridden = true;
+        }
+        if (std::string cpuProfileOutputPath; params.tryGet<std::string>("cpu-profile-output", cpuProfileOutputPath)) {
+            automation.cpuProfileOutputPath        = std::move(cpuProfileOutputPath);
+            automation.bCpuProfileOutputOverridden = true;
+        }
+        if (std::string profileSessionName; params.tryGet<std::string>("profile-session", profileSessionName)) {
+            if (!profileSessionName.empty()) {
+                automation.profileSessionName            = std::move(profileSessionName);
+                automation.bProfileSessionNameOverridden = true;
+            }
+        }
         if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {
             automation.scenePath = std::move(scenePath);
         }
         if (std::string screenshotPath; params.tryGet<std::string>("screenshot", screenshotPath)) {
             automation.screenshotPath = std::move(screenshotPath);
+        }
+        if (std::string screenshotTargetText; params.tryGet<std::string>("screenshot-target", screenshotTargetText)) {
+            EAutomationScreenshotTarget screenshotTarget = EAutomationScreenshotTarget::Viewport;
+            if (tryParseAutomationScreenshotTarget(screenshotTargetText, screenshotTarget)) {
+                automation.screenshotTarget            = screenshotTarget;
+                automation.bScreenshotTargetOverridden = true;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid automation screenshot target: {}", screenshotTargetText);
+            }
         }
         if (std::string cameraPos; params.tryGet<std::string>("editor-camera-pos", cameraPos)) {
             glm::vec3 parsedPosition{0.0f};
@@ -171,7 +258,10 @@ struct AppDesc
             }
         }
         params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
-        params.tryGet<std::string>("renderdoc-output", renderDocCaptureOutputDir);
+        if (std::string renderDocOutputPath; params.tryGet<std::string>("renderdoc-output", renderDocOutputPath)) {
+            renderDocCaptureOutputDir      = std::move(renderDocOutputPath);
+            bRenderDocOutputOverridden     = true;
+        }
         if (automation.renderDocCapture) {
             bEnableRenderDoc = true;
         }

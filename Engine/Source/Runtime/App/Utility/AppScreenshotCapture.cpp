@@ -28,7 +28,7 @@ namespace
 constexpr uint32_t PNG_CHANNELS         = 4;
 constexpr uint32_t BYTES_PER_PIXEL_RGBA = 4;
 
-Texture* resolveScreenshotSourceTexture(App& app)
+Texture* resolveViewportScreenshotSourceTexture(App& app)
 {
     if (Texture* texture = app.getPostprocessOutputTexture()) {
         return texture;
@@ -36,6 +36,12 @@ Texture* resolveScreenshotSourceTexture(App& app)
 
     auto* renderRuntime = app.getRenderRuntime();
     return renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr;
+}
+
+Texture* resolvePresentationScreenshotSourceTexture(App& app)
+{
+    auto* renderRuntime = app.getRenderRuntime();
+    return renderRuntime ? renderRuntime->getPresentationTexture() : nullptr;
 }
 
 bool isSupportedScreenshotFormat(EFormat::T format)
@@ -133,6 +139,22 @@ void copyRgba16fToRgba8(std::vector<unsigned char>& output, const std::byte* inp
     }
 }
 
+std::shared_ptr<IBuffer> createReadbackBuffer(IRender* render, uint32_t width, uint32_t height, EFormat::T format)
+{
+    if (!render || width == 0 || height == 0) {
+        return nullptr;
+    }
+
+    const uint32_t bytesPerPixel = format == EFormat::R16G16B16A16_SFLOAT ? 8u : 4u;
+    const uint32_t bufferSize    = width * height * bytesPerPixel;
+    return IBuffer::create(render, BufferCreateInfo{
+        .label       = "AutomationScreenshotReadback",
+        .usage       = EBufferUsage::TransferDst,
+        .size        = bufferSize,
+        .memoryUsage = EMemoryUsage::GpuToCpu,
+    });
+}
+
 bool writePngFromReadback(const AppScreenshotCaptureState& state)
 {
     if (!state.readbackBuffer || state.width == 0 || state.height == 0) {
@@ -194,28 +216,27 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 }
 } // namespace
 
-bool AppScreenshotCapture::request(App& app, AppScreenshotCaptureState& state, const std::string& outputPath)
+bool AppScreenshotCapture::request(App&                           app,
+                                   AppScreenshotCaptureState&     state,
+                                   const std::string&             outputPath,
+                                   EAutomationScreenshotTarget    target)
 {
-    auto* renderRuntime = app.getRenderRuntime();
-    auto* render        = app.getRender();
-    if (!renderRuntime || !render || outputPath.empty()) {
+    auto* render = app.getRender();
+    if (!render || outputPath.empty()) {
         return false;
     }
     if (render->getAPI() != ERenderAPI::Vulkan) {
         YA_CORE_WARN("Screenshot automation currently supports Vulkan only");
         return false;
     }
-    if (state.pendingJob || state.bCompleted) {
+    if (state.pendingJob || state.bCompleted || state.bPendingPresentationCapture || state.bPresentationCopyRecorded) {
         return false;
     }
 
-    Texture* sourceTexture = resolveScreenshotSourceTexture(app);
+    Texture* sourceTexture = target == EAutomationScreenshotTarget::Editor
+                               ? resolvePresentationScreenshotSourceTexture(app)
+                               : resolveViewportScreenshotSourceTexture(app);
     if (!sourceTexture || !sourceTexture->getImage()) {
-        return false;
-    }
-
-    const std::shared_ptr<IImage> sourceImage = sourceTexture->getImageShared();
-    if (!sourceImage) {
         return false;
     }
 
@@ -229,16 +250,32 @@ bool AppScreenshotCapture::request(App& app, AppScreenshotCaptureState& state, c
         return false;
     }
 
-    const uint32_t bytesPerPixel = sourceTexture->getFormat() == EFormat::R16G16B16A16_SFLOAT ? 8u : 4u;
-    const uint32_t bufferSize    = extent.width * extent.height * bytesPerPixel;
-    auto readbackBuffer          = IBuffer::create(render, BufferCreateInfo{
-        .label       = "AutomationScreenshotReadback",
-        .usage       = EBufferUsage::TransferDst,
-        .size        = bufferSize,
-        .memoryUsage = EMemoryUsage::GpuToCpu,
-    });
+    auto readbackBuffer = createReadbackBuffer(render, extent.width, extent.height, sourceTexture->getFormat());
     if (!readbackBuffer) {
         YA_CORE_ERROR("Failed to create screenshot readback buffer");
+        state.bFailed = true;
+        return false;
+    }
+
+    state.outputPath                   = outputPath;
+    state.readbackBuffer               = std::move(readbackBuffer);
+    state.width                        = extent.width;
+    state.height                       = extent.height;
+    state.sourceFormat                 = sourceTexture->getFormat();
+    state.target                       = target;
+    state.recordedFrameIndex           = 0;
+    state.bCompleted                   = false;
+    state.bFailed                      = false;
+    state.bPendingPresentationCapture  = false;
+    state.bPresentationCopyRecorded    = false;
+
+    if (target == EAutomationScreenshotTarget::Editor) {
+        state.bPendingPresentationCapture = true;
+        return true;
+    }
+
+    const std::shared_ptr<IImage> sourceImage = sourceTexture->getImageShared();
+    if (!sourceImage) {
         state.bFailed = true;
         return false;
     }
@@ -257,7 +294,7 @@ bool AppScreenshotCapture::request(App& app, AppScreenshotCaptureState& state, c
             .isDepth = false,
         });
     };
-    job->executeFn = [sourceImage, readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
+    job->executeFn = [sourceImage, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
     {
         if (!cmdBuf || !sourceImage || !readbackBuffer) {
             return false;
@@ -291,21 +328,93 @@ bool AppScreenshotCapture::request(App& app, AppScreenshotCaptureState& state, c
         return true;
     };
 
-    state.outputPath     = outputPath;
-    state.readbackBuffer = std::move(readbackBuffer);
-    state.pendingJob     = job;
-    state.width          = extent.width;
-    state.height         = extent.height;
-    state.sourceFormat   = sourceTexture->getFormat();
-    state.bCompleted     = false;
-    state.bFailed        = false;
-
+    state.pendingJob = job;
     queueOffscreenJob(&app, render, state.pendingJob);
     return true;
 }
 
-bool AppScreenshotCapture::tryFinalize(AppScreenshotCaptureState& state)
+bool AppScreenshotCapture::recordPresentationCapture(App& app, AppScreenshotCaptureState& state, ICommandBuffer* cmdBuf)
 {
+    if (!cmdBuf || !state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Editor || !state.readbackBuffer) {
+        return false;
+    }
+
+    Texture* sourceTexture = resolvePresentationScreenshotSourceTexture(app);
+    if (!sourceTexture || !sourceTexture->getImage()) {
+        state.bFailed                     = true;
+        state.bPendingPresentationCapture = false;
+        return false;
+    }
+
+    const std::shared_ptr<IImage> sourceImage = sourceTexture->getImageShared();
+    if (!sourceImage) {
+        state.bFailed                     = true;
+        state.bPendingPresentationCapture = false;
+        return false;
+    }
+
+    const Extent2D extent = sourceTexture->getExtent();
+    if (extent.width != state.width || extent.height != state.height || sourceTexture->getFormat() != state.sourceFormat) {
+        YA_CORE_ERROR("Presentation screenshot source changed before capture recording");
+        state.bFailed                     = true;
+        state.bPendingPresentationCapture = false;
+        return false;
+    }
+
+    VkBufferImageCopy region{};
+    region.bufferOffset                    = 0;
+    region.bufferRowLength                 = 0;
+    region.bufferImageHeight               = 0;
+    region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel       = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount     = 1;
+    region.imageOffset                     = {0, 0, 0};
+    region.imageExtent                     = {extent.width, extent.height, 1};
+
+    cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::TransferSrc);
+    vkCmdCopyImageToBuffer(cmdBuf->getHandleAs<VkCommandBuffer>(),
+                           sourceImage->getHandle().as<VkImage>(),
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           state.readbackBuffer->getHandleAs<VkBuffer>(),
+                           1,
+                           &region);
+    cmdBuf->bufferMemoryBarrier(state.readbackBuffer.get(),
+                                EPipelineStage::Transfer,
+                                EPipelineStage::AllCommands,
+                                EResourceAccess::TransferWrite,
+                                EResourceAccess::TransferRead,
+                                0,
+                                state.readbackBuffer->getSize());
+    cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::PresentSrcKHR);
+
+    state.width                       = extent.width;
+    state.height                      = extent.height;
+    state.sourceFormat                = sourceTexture->getFormat();
+    state.recordedFrameIndex          = app.getFrameIndex() + 1;
+    state.bPendingPresentationCapture = false;
+    state.bPresentationCopyRecorded   = true;
+    return true;
+}
+
+bool AppScreenshotCapture::tryFinalize(App& app, AppScreenshotCaptureState& state)
+{
+    if (state.bPresentationCopyRecorded) {
+        if (app.getFrameIndex() <= state.recordedFrameIndex) {
+            return false;
+        }
+
+        if (auto* vkBuffer = state.readbackBuffer ? dynamic_cast<VulkanBuffer*>(state.readbackBuffer.get()) : nullptr) {
+            vmaInvalidateAllocation(vkBuffer->_render->getVmaAllocator(), vkBuffer->_allocation, 0, VK_WHOLE_SIZE);
+        }
+
+        state.bCompleted = writePngFromReadback(state);
+        state.bFailed    = !state.bCompleted;
+        state.readbackBuffer.reset();
+        state.bPresentationCopyRecorded = false;
+        return true;
+    }
+
     if (!state.pendingJob) {
         return false;
     }
