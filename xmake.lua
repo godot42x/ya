@@ -1,4 +1,4 @@
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.releasedbg", "mode.release", "mode.profile")
 set_languages("c++20")
 
 -- NOTE (macOS Vulkan SDK): the repo-local SDK at
@@ -31,10 +31,16 @@ if is_plat("windows") then
 
 end
 
-if is_mode("debug") then
+if is_mode("debug") or is_mode("releasedbg") then
     add_defines("BUILD_DEBUG")
 else
     add_defines("BUILD_NO_DEBUG")
+end
+
+if is_mode("profile") then
+    add_defines("YA_PROFILE_CONDITIONAL")
+else
+    add_defines("YA_PROFILE_DISABLED")
 end
 
 

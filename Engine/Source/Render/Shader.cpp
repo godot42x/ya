@@ -43,29 +43,7 @@ namespace ya
 namespace EShaderStage
 {
 
-shaderc_shader_kind toShadercType(EShaderStage::T Stage)
-{
-    switch (Stage) {
-    case Vertex:
-        return shaderc_glsl_vertex_shader;
-    case Fragment:
-        return shaderc_glsl_fragment_shader;
-    case Geometry:
-        return shaderc_glsl_geometry_shader;
-    case Compute:
-        return shaderc_glsl_compute_shader;
-    case Task:
-    case Mesh:
-        YA_CORE_ASSERT(false, "Task/Mesh shader stages are not supported by shaderc GLSL path; use Slang");
-        return shaderc_shader_kind(0);
-    default:
-        UNREACHABLE();
-        break;
-    }
 
-    YA_CORE_ASSERT(false, "Unknown shader type!");
-    return shaderc_shader_kind(0);
-}
 
 const char* getOpenGLCacheFileExtension(EShaderStage::T stage)
 {

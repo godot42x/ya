@@ -2,7 +2,8 @@ t:=ya
 cfg:=
 b_args:=
 r_args:=
-f:=false
+force:=false
+m:=debug
 
 .PHONY: test vulkan-sdk-macos basic
 
@@ -17,7 +18,7 @@ r: clean_if_needed cfg_if_needed
 
 cfg: basic
 	xmake f -c -y
-	xmake f -m debug -y
+	xmake f -m $(m) -y
 	xmake project -k compile_commands
 
 profile:
@@ -25,7 +26,7 @@ profile:
 	speedscope "./Engine/Saved/Profiling/App.speedscope.json"
 
 clean_if_needed:
-	$(if $(filter true,$(f)), xmake c )
+	$(if $(filter true,$(force)), xmake c )
 
 cfg_if_needed:
 	$(if $(cfg), xmake f $(cfg))
@@ -33,6 +34,7 @@ cfg_if_needed:
 basic:
 	# make imgui and imguizmo readonly
 	python3 "./Script/setup_3rd_party.py"
+	# MacOs vulkan-sdk check and init
 ifeq ($(UNAME_S),Darwin)
 	# Idempotent: returns quickly if the SDK is already present.
 	python3 "./Script/setup_vulkan_sdk_macos.py"
