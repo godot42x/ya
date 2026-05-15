@@ -653,8 +653,7 @@ void DetailsView::drawComponents(Entity& entity)
 
                 // Script path input
                 char buffer[DETAILS_SCRIPT_INPUT_BUFFER_SIZE];
-                memset(buffer, 0, sizeof(buffer));
-                strncpy(buffer, script.scriptPath.c_str(), sizeof(buffer) - 1);
+                strncpy_s(buffer, script.scriptPath.c_str(), _TRUNCATE);
 
                 ImGui::SetNextItemWidth(-80); // 留出按钮空间
                 if (ImGui::InputText("##ScriptPath", buffer, sizeof(buffer))) {
@@ -967,8 +966,7 @@ void DetailsView::renderScriptProperty(void* propPtr, void* scriptInstancePtr)
     {
         std::string value = prop.value.as<std::string>();
         char        buffer[DETAILS_SCRIPT_INPUT_BUFFER_SIZE];
-        memset(buffer, 0, sizeof(buffer));
-        strncpy(buffer, value.c_str(), sizeof(buffer) - 1);
+        strncpy_s(buffer, value.c_str(), _TRUNCATE);
         if (InputText(prop.name.c_str(), buffer, sizeof(buffer)))
         {
             std::string newValue   = buffer;

@@ -161,8 +161,7 @@ void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallbac
     _fileExplorer.setConfigScope(_configScope);
 
     // Set default scene name
-    strncpy(_sceneNameBuffer, defaultName.c_str(), sizeof(_sceneNameBuffer) - 1);
-    _sceneNameBuffer[sizeof(_sceneNameBuffer) - 1] = '\0';
+    strncpy_s(_sceneNameBuffer, defaultName.c_str(), _TRUNCATE);
 
     // Initialize file explorer for Scenes directory
     _fileExplorer.initFromVFS();

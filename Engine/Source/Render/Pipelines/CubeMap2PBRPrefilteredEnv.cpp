@@ -137,7 +137,6 @@ bool CubeMap2PBRPrefilteredEnv::ensurePipeline(EFormat::T colorFormat)
             .pipelineLayout = _pipelineLayout.get(),
             .shaderDesc     = ShaderDesc{
                 .shaderName        = "Misc/CubeMap2PBRPrefilterEnv.slang",
-                .defines           = {"SAMPLE_COUNT 64"},
                 .vertexBufferDescs = {
                     VertexBufferDescription{
                         .slot  = 0,
@@ -152,6 +151,7 @@ bool CubeMap2PBRPrefilteredEnv::ensurePipeline(EFormat::T colorFormat)
                         .offset     = offsetof(ya::Vertex, position),
                     },
                 },
+                .defines = {"SAMPLE_COUNT 64"},
             },
             .dynamicFeatures = {
                 EPipelineDynamicFeature::Viewport,
@@ -270,9 +270,9 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
                 break;
             }
 
-            const auto faceTexture  = Texture::wrap(ctx.output->getImageShared(),
-                                                    faceView,
-                                                    std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face));
+            const auto faceTexture = Texture::wrap(ctx.output->getImageShared(),
+                                                   faceView,
+                                                   std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face));
             _transientFaceViews.push_back(faceView);
             const auto pushConstant = buildPushConstant(face, roughness);
 

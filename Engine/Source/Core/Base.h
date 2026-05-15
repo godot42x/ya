@@ -65,3 +65,29 @@ inline static DefaultAllocator defaultAllocator;
 #define CASE_ENUM_TO_STR(x) \
     case x:                 \
         return #x;
+
+
+// Portable strncpy_s (MSVC Annex K).
+// On Windows the CRT provides it; on other platforms we provide an inline implementation.
+// _TRUNCATE means "copy at most destSize-1 bytes and always null-terminate".
+#include <cstring>
+#if !defined(_WIN32)
+    #ifndef _TRUNCATE
+        #define _TRUNCATE ((size_t)-1)
+    #endif
+    inline int strncpy_s(char *dest, size_t destSize, const char *src, size_t count)
+    {
+        if (!dest || destSize == 0) return 22; // EINVAL
+        if (!src) { dest[0] = '\0'; return 22; }
+        size_t copyCount = (count == _TRUNCATE) ? destSize - 1 : count;
+        if (copyCount >= destSize) copyCount = destSize - 1;
+        std::memcpy(dest, src, copyCount);
+        dest[copyCount] = '\0';
+        return 0;
+    }
+    template <size_t N>
+    inline int strncpy_s(char (&dest)[N], const char *src, size_t count)
+    {
+        return strncpy_s(dest, N, src, count);
+    }
+#endif

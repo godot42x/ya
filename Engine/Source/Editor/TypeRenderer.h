@@ -548,8 +548,7 @@ bool renderPathPicker(std::string path, const std::string& typeName, auto intern
     ImGui::SetNextItemWidth(-80); // Leave space for button
 
     char buffer[256];
-    strncpy(buffer, displayPath.c_str(), sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
+    strncpy_s(buffer, displayPath.c_str(), _TRUNCATE);
 
     if (ImGui::InputText(("##" + typeName).c_str(), buffer, sizeof(buffer))) {
         path     = buffer;
