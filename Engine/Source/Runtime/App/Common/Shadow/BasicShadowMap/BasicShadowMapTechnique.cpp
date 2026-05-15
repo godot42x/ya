@@ -26,6 +26,7 @@ void BasicShadowMapTechnique::init(IRender* render, const ShadowSettings& settin
 
     _directionalPass.init(render, _shadowExtent);
     _pointPass.init(render, _shadowExtent);
+    _pointPass.setUseIndirectDraw(settings.pointLightUseIndirect);
 }
 
 void BasicShadowMapTechnique::destroy()
@@ -39,6 +40,7 @@ void BasicShadowMapTechnique::destroy()
 void BasicShadowMapTechnique::applySettings(const ShadowSettings& settings)
 {
     _settings = settings;
+    _pointPass.setUseIndirectDraw(settings.pointLightUseIndirect);
     // TODO: if resolution changed, rebuild render target and textures
 }
 
@@ -50,40 +52,32 @@ void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameDat
 {
     if (!_settings.isEnabled()) return;
 
-    const uint32_t pointLightCount = std::min(
-        frameData.numPointLights,
-        _settings.getEffectivePointLightCount());
-    _lastPreparedPointLightCount = pointLightCount;
+    const auto payload = buildFramePayload(flightIndex, frameData);
+    _lastPreparedPointLightCount = payload.pointLightCount;
 
-    // Build full FrameUBO with all point light matrices
-    FrameUBO shadowFrameUBO{
-        .directionalLightMatrix = frameData.directionalLight.viewProjection,
-        .numPointLights         = pointLightCount,
-        .hasDirectionalLight    = frameData.bHasDirectionalLight ? 1u : 0u,
-    };
-    populatePointShadowMatrices(frameData, shadowFrameUBO, pointLightCount);
-
-    // Prepare sub-passes
-    if (frameData.bHasDirectionalLight && _settings.directionalEnabled) {
-        _directionalPass.prepare(flightIndex, frameData, frameData.directionalLight.viewProjection);
+    if (payload.directionalEnabled) {
+        _directionalPass.prepare(payload);
     }
-    _pointPass.prepare(flightIndex, frameData, shadowFrameUBO, pointLightCount);
+    if (payload.pointEnabled) {
+        _pointPass.prepare(payload);
+    }
 }
 
 void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData)
 {
     if (!_settings.isEnabled()) return;
 
-    const uint32_t pointLightCount = std::min(
-        _lastPreparedPointLightCount,
-        static_cast<uint32_t>(MAX_POINT_LIGHTS));
+    auto payload = buildFramePayload(flightIndex, frameData);
+    payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
 
     cmdBuf->debugBeginLabel("BasicShadowMap");
 
-    if (frameData.bHasDirectionalLight && _settings.directionalEnabled) {
-        _directionalPass.execute(cmdBuf, flightIndex, frameData);
+    if (payload.directionalEnabled) {
+        _directionalPass.execute(cmdBuf, payload);
     }
-    _pointPass.execute(cmdBuf, flightIndex, frameData, pointLightCount);
+    if (payload.pointEnabled) {
+        _pointPass.execute(cmdBuf, payload);
+    }
 
     cmdBuf->debugEndLabel();
 }
@@ -196,8 +190,33 @@ void BasicShadowMapTechnique::renderGUI()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Point shadow matrix calculation
+// Payload / Point shadow matrix calculation
 // ═══════════════════════════════════════════════════════════════════════════
+
+BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const
+{
+    const uint32_t pointLightCount = std::min(
+        frameData.numPointLights,
+        _settings.getEffectivePointLightCount());
+
+    BasicShadowFramePayload payload{
+        .flightIndex = flightIndex,
+        .frameData   = &frameData,
+        .settings    = &_settings,
+        .frameUBO    = FrameUBO{
+            .directionalLightMatrix = frameData.directionalLight.viewProjection,
+            .numPointLights         = pointLightCount,
+            .hasDirectionalLight    = frameData.bHasDirectionalLight ? 1u : 0u,
+        },
+        .pointLightCount             = pointLightCount,
+        .directionalEnabled          = frameData.bHasDirectionalLight && _settings.directionalEnabled,
+        .pointEnabled                = _settings.pointLightEnabled && pointLightCount > 0,
+        .pointIndirectRequested      = _settings.pointLightUseIndirect,
+        .pointIndirectCullEnabled    = _settings.pointLightIndirectCullEnabled,
+    };
+    populatePointShadowMatrices(frameData, payload.frameUBO, pointLightCount);
+    return payload;
+}
 
 void BasicShadowMapTechnique::populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& frameDataUBO, uint32_t pointLightCount) const
 {

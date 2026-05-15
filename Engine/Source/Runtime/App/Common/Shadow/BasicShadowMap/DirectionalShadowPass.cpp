@@ -150,22 +150,22 @@ void DirectionalShadowPass::destroy()
 // Prepare
 // ═══════════════════════════════════════════════════════════════════════════
 
-void DirectionalShadowPass::prepare(uint32_t               flightIndex,
-                                     const RenderFrameData& frameData,
-                                     const glm::mat4&       directionalLightMatrix)
+void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 {
-    auto& flight = _perFlight[flightIndex];
+    if (!payload.frameData) return;
+
+    auto& flight = _perFlight[payload.flightIndex];
 
     // Write frame UBO with directional light matrix
     FrameUBO uboData{
-        .directionalLightMatrix = directionalLightMatrix,
+        .directionalLightMatrix = payload.frameUBO.directionalLightMatrix,
         .numPointLights         = 0,
         .hasDirectionalLight    = 1u,
     };
     flight.frameUBO->writeData(&uboData, sizeof(FrameUBO), 0);
 
     // Skinning
-    const auto& palettes = frameData.skinningPalettes;
+    const auto& palettes = payload.frameData->skinningPalettes;
     ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
     if (!palettes.empty()) {
         flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
@@ -181,11 +181,9 @@ void DirectionalShadowPass::prepare(uint32_t               flightIndex,
 // Execute
 // ═══════════════════════════════════════════════════════════════════════════
 
-void DirectionalShadowPass::execute(ICommandBuffer*        cmdBuf,
-                                     uint32_t               flightIndex,
-                                     const RenderFrameData& frameData)
+void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
-    if (!_depthTexture) return;
+    if (!_depthTexture || !payload.frameData) return;
 
     RenderingInfo::ImageSpec depthSpec{
         .texture       = _depthTexture.get(),
@@ -207,8 +205,8 @@ void DirectionalShadowPass::execute(ICommandBuffer*        cmdBuf,
                          static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
 
-    drawStaticBuckets(cmdBuf, flightIndex, frameData.drawBuckets.staticMeshes);
-    drawSkinnedBuckets(cmdBuf, flightIndex, frameData.drawBuckets.skinnedMeshes);
+    drawStaticBuckets(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.staticMeshes);
+    drawSkinnedBuckets(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.skinnedMeshes);
 
     cmdBuf->endRendering(renderInfo);
 }

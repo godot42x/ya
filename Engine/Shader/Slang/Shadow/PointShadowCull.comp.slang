@@ -9,8 +9,11 @@
 // compacted via atomics into a per-face indirect draw command stream.
 // ═══════════════════════════════════════════════════════════════════════════
 
-static const uint WORKGROUP_SIZE = 256;
-static const uint MAX_DRAWS_PER_FACE = 4096;
+#define POINT_SHADOW_CULL_WORKGROUP_SIZE 256
+#define POINT_SHADOW_MAX_DRAWS_PER_FACE 4096
+
+static const uint WORKGROUP_SIZE = POINT_SHADOW_CULL_WORKGROUP_SIZE;
+static const uint MAX_DRAWS_PER_FACE = POINT_SHADOW_MAX_DRAWS_PER_FACE;
 
 [[vk::binding(0, 0)]] StructuredBuffer<ShadowInstanceData>       uInstances;
 [[vk::binding(1, 0)]] StructuredBuffer<ShadowFaceFrustum>        uFaceFrustums;

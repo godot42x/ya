@@ -272,6 +272,11 @@ def collect_structs(type_node: dict, visited: set, ordered: list, struct_sizes: 
         if elem:
             collect_structs(elem, visited, ordered, struct_sizes)
         return
+    if kind == "resource":
+        result_type = type_node.get("resultType")
+        if result_type:
+            collect_structs(result_type, visited, ordered, struct_sizes)
+        return
     if kind == "array":
         # Capture struct total size from uniformStride if available
         stride = type_node.get("uniformStride")
@@ -498,6 +503,13 @@ def generate_source_only_header(output_path: str, namespace: str, slang_source: 
     return True
 
 
+def _sanitize_cpp_identifier(name: str) -> str:
+    sanitized = re.sub(r"\W", "_", name)
+    if re.match(r"^\d", sanitized):
+        sanitized = f"_{sanitized}"
+    return sanitized
+
+
 def _file_sub_namespace(slang_file: Path, slang_root: Path | None) -> tuple[str, str]:
     """Derive a dot-separated file stem and C++ sub-namespace from the .slang file path.
 
@@ -519,7 +531,7 @@ def _file_sub_namespace(slang_file: Path, slang_root: Path | None) -> tuple[str,
     # rel is e.g. DeferredRender/GBufferPass.slang — drop the .slang suffix
     parts = list(rel.parent.parts) + [rel.stem]
     dot_stem = ".".join(parts)        # DeferredRender.GBufferPass
-    ns_suffix = "::".join(parts)      # DeferredRender::GBufferPass
+    ns_suffix = "::".join(_sanitize_cpp_identifier(part) for part in parts) # DeferredRender::GBufferPass
     return dot_stem, ns_suffix
 
 

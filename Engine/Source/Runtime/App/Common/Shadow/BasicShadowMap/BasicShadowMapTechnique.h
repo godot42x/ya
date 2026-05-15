@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BasicShadowPayload.h"
 #include "DirectionalShadowPass.h"
 #include "PointShadowPass.h"
 #include "Runtime/App/Common/Shadow/ShadowTypes.h"
@@ -38,8 +39,9 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void refreshFromRenderTarget();
 
   private:
-    void rebuildLayerTextures();
-    void populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& ubo, uint32_t count) const;
+    void                    rebuildLayerTextures();
+    BasicShadowFramePayload buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const;
+    void                    populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& ubo, uint32_t count) const;
 
     IRender*       _render       = nullptr;
     IRenderTarget* _shadowMapRT  = nullptr;

@@ -89,6 +89,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render            = desc.render;
     _bViewportPassOpen = false;
+    bShadowMapping     = App::get()->getShadowSettings().isEnabled();
 
     initViewportResources(desc);
     initPostProcessResources(desc);
@@ -116,7 +117,7 @@ void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
                     .storeOp       = EAttachmentStoreOp::Store,
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
                 },
             },
             .depthAttach = AttachmentDescription{
@@ -388,6 +389,10 @@ void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
             if (_viewportStage) {
                 _viewportStage->setShadowMappingEnabled(bEnabled);
             }
+        }
+        if (shadowSettings.isEnabled()) {
+            ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
+            ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
         }
         ImGui::TreePop();
     }

@@ -1,5 +1,6 @@
 #include "Common/Limits.slang"
 #include "Shadow/PointShadowCommon.slang"
+#include "Shadow/PointShadowFace.slang"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Point Shadow Indirect Draw Shader
@@ -12,14 +13,7 @@
 // omnidirectional shadow mapping.
 // ═══════════════════════════════════════════════════════════════════════════
 
-struct PointLightFaceData
-{
-    float4x4 viewProj;
-    float3   lightPos;
-    float    farPlane;
-};
-
-[[vk::binding(0, 0)]] ConstantBuffer<PointLightFaceData, Std140DataLayout> uFace;
+[[vk::binding(0, 0)]] ConstantBuffer<PointShadowFaceData, Std140DataLayout> uFace;
 [[vk::binding(0, 1)]] StructuredBuffer<ShadowInstanceData> uInstances;
 
 struct VertexInput

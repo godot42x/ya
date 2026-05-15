@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BasicShadowPayload.h"
 #include "Runtime/App/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Buffer.h"
@@ -33,13 +34,9 @@ class DirectionalShadowPass
     void init(IRender* render, Extent2D shadowExtent);
     void destroy();
 
-    void prepare(uint32_t                flightIndex,
-                 const RenderFrameData&  frameData,
-                 const glm::mat4&        directionalLightMatrix);
+    void prepare(const BasicShadowFramePayload& payload);
 
-    void execute(ICommandBuffer*        cmdBuf,
-                 uint32_t               flightIndex,
-                 const RenderFrameData& frameData);
+    void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
 
     void renderGUI();
 

@@ -90,7 +90,7 @@ void LightStage::setShadowResources(IImageView*                                 
     _shadowDirectionalDepthIV = directionalDepthIV;
     _shadowPointCubeIVs       = pointCubeDepthIVs;
     _shadowSampler            = shadowSampler;
-    _bShadowDescriptorsInitialized = false;
+    invalidateShadowDescriptors();
 }
 
 void LightStage::setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow)
@@ -138,6 +138,34 @@ void LightStage::invalidateGBufferDescriptors()
     _lastGBufferFrameBuffer          = nullptr;
     _bGBufferDescriptorsInitialized  = false;
     _lastGBufferDescriptorWriteCount = 0;
+}
+
+void LightStage::invalidateShadowDescriptors()
+{
+    _lastShadowDirectionalImageViewHandle = nullptr;
+    _lastShadowPointCubeImageViewHandles.fill(nullptr);
+    _bShadowDescriptorsInitialized = false;
+    _lastShadowDescriptorWriteCount = 0;
+}
+
+bool LightStage::shouldRefreshShadowDescriptors() const
+{
+    if (!_bShadowDescriptorsInitialized || !_shadowDirectionalDepthIV || !_shadowSampler) {
+        return true;
+    }
+
+    if (_lastShadowDirectionalImageViewHandle != _shadowDirectionalDepthIV->getHandle()) {
+        return true;
+    }
+
+    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+        const auto currentHandle = _shadowPointCubeIVs[lightIndex] ? _shadowPointCubeIVs[lightIndex]->getHandle() : ImageViewHandle{};
+        if (_lastShadowPointCubeImageViewHandles[lightIndex] != currentHandle) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void LightStage::init(IRender* render)
@@ -257,6 +285,8 @@ void LightStage::destroy()
     _shadowPointCubeIVs.fill(nullptr);
     _shadowSampler                   = nullptr;
     _lastGBufferFrameBuffer          = nullptr;
+    _lastShadowDirectionalImageViewHandle = nullptr;
+    _lastShadowPointCubeImageViewHandles.fill(nullptr);
     _bGBufferDescriptorsInitialized  = false;
     _bShadowDescriptorsInitialized   = false;
     _lastGBufferDescriptorWriteCount = 0;
@@ -295,7 +325,7 @@ void LightStage::prepare(const RenderStageContext& ctx)
         _lastGBufferDescriptorWriteCount = 0;
     }
 
-    if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler && !_bShadowDescriptorsInitialized) {
+    if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler && shouldRefreshShadowDescriptors()) {
         std::vector<DescriptorImageInfo> pointShadowInfos(MAX_POINT_LIGHTS);
         for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
             pointShadowInfos[lightIndex] = DescriptorImageInfo{
@@ -316,6 +346,10 @@ void LightStage::prepare(const RenderStageContext& ctx)
                 .imageInfos      = pointShadowInfos,
             },
         });
+        _lastShadowDirectionalImageViewHandle = _shadowDirectionalDepthIV->getHandle();
+        for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+            _lastShadowPointCubeImageViewHandles[lightIndex] = _shadowPointCubeIVs[lightIndex] ? _shadowPointCubeIVs[lightIndex]->getHandle() : ImageViewHandle{};
+        }
         _bShadowDescriptorsInitialized  = true;
         _lastShadowDescriptorWriteCount = 1 + MAX_POINT_LIGHTS;
     }

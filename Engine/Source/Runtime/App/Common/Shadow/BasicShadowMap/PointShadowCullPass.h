@@ -43,11 +43,7 @@ class PointShadowCullPass
     void bindInstanceBuffer(uint32_t flightIndex, IBuffer* instanceBuffer);
 
   private:
-    struct PushConstants
-    {
-        uint32_t instanceCount = 0;
-        uint32_t faceCount     = 0;
-    };
+    using PushConstants = PointShadowCullPushConstant;
 
     struct PerFlightResources
     {

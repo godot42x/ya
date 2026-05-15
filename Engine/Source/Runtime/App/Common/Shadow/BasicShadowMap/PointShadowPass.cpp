@@ -10,6 +10,7 @@
 #include "imgui.h"
 
 #include <format>
+#include <vector>
 
 namespace ya
 {
@@ -22,9 +23,6 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
 {
     _render       = render;
     _shadowExtent = shadowExtent;
-
-    const auto& caps = _render->getCapabilities();
-    _bIndirectSupported = caps.computeShader && caps.drawIndexedIndirect && caps.storageBuffer && caps.drawIndexedIndirectCount;
 
     // ─── Descriptor set layouts ──────────────────────────────────────
     _frameDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
@@ -39,24 +37,26 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
         .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
     });
 
-    _indirectDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
-        .label    = "PointShadow_Indirect_DSL",
-        .set      = 1,
-        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-    });
-
     // ─── Pipeline: direct draw (CombineShadowMappingGenerate.slang) ──
     _directPipelineCI = GraphicsPipelineCreateInfo{
         .pipelineRenderingInfo = {.label = "Point Shadow Direct", .depthAttachmentFormat = EFormat::D32_SFLOAT},
-        .shaderDesc     = ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"},
-        .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Front, .frontFace = EFrontFaceType::CounterClockWise},
-        .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::LessOrEqual},
-        .colorBlendState    = {.attachments = {}},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
+        .shaderDesc            = ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"},
+        .dynamicFeatures       = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
+        .primitiveType         = EPrimitiveType::TriangleList,
+        .rasterizationState    = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Front, .frontFace = EFrontFaceType::CounterClockWise},
+        .depthStencilState     = {
+            .bDepthTestEnable  = true,
+            .bDepthWriteEnable = true,
+            .depthCompareOp    = ECompareOp::LessOrEqual,
+        },
+        .colorBlendState = {.attachments = {}},
+        .viewportState   = {
+            .viewports = {Viewport::defaults()},
+            .scissors  = {Scissor::defaults()},
+        },
     };
 
+    // Static Mesh
     _directStaticVariant.pipelineLayout = IPipelineLayout::create(
         _render, "PointShadow_Direct_Static_PPL",
         {PushConstantRange{.offset = 0, .size = sizeof(ModelPushConstant), .stageFlags = EShaderStage::Vertex}},
@@ -66,14 +66,17 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
     directStaticCI.pipelineLayout = _directStaticVariant.pipelineLayout.get();
     directStaticCI.shaderDesc.vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(Vertex)}};
     directStaticCI.shaderDesc.vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Vertex, position)}};
+    directStaticCI.shaderDesc.defines = {"POINT_SHADOW_FACE_DATA 1"};
     _directStaticVariant.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_directStaticVariant.pipeline && _directStaticVariant.pipeline->recreate(directStaticCI),
                    "Failed to create point shadow direct static pipeline");
 
+    // Skinning
     _directSkinnedVariant.pipelineLayout = IPipelineLayout::create(
         _render, "PointShadow_Direct_Skinned_PPL",
         {PushConstantRange{.offset = 0, .size = sizeof(ModelPushConstant), .stageFlags = EShaderStage::Vertex}},
         {_frameDSL, _skinningDSL});
+
 
     auto directSkinnedCI = _directPipelineCI;
     directSkinnedCI.pipelineLayout = _directSkinnedVariant.pipelineLayout.get();
@@ -86,45 +89,18 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
         {.bufferSlot = 1, .location = 4, .format = EVertexAttributeFormat::Int4,   .offset = offsetof(SkeletonMeshVertex, boneIDs)},
         {.bufferSlot = 1, .location = 5, .format = EVertexAttributeFormat::Float4, .offset = offsetof(SkeletonMeshVertex, weights)},
     };
-    directSkinnedCI.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 1"};
+    directSkinnedCI.shaderDesc.defines = {"POINT_SHADOW_FACE_DATA 1", "ENABLE_SKINNING 1", "SKINNING_SET_INDEX 1"};
     _directSkinnedVariant.pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_directSkinnedVariant.pipeline && _directSkinnedVariant.pipeline->recreate(directSkinnedCI),
                    "Failed to create point shadow direct skinned pipeline");
 
-    // ─── Pipeline: indirect draw (PointShadowIndirect.slang) ─────────
-    if (_bIndirectSupported) {
-        _indirectPipelineCI = GraphicsPipelineCreateInfo{
-            .pipelineRenderingInfo = {.label = "Point Shadow Indirect", .depthAttachmentFormat = EFormat::D32_SFLOAT},
-            .shaderDesc     = ShaderDesc{.shaderName = "Shadow/PointShadowIndirect.slang"},
-            .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
-            .primitiveType      = EPrimitiveType::TriangleList,
-            .rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::Front, .frontFace = EFrontFaceType::CounterClockWise},
-            .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::LessOrEqual},
-            .colorBlendState    = {.attachments = {}},
-            .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
-        };
-
-        _indirectStaticVariant.pipelineLayout = IPipelineLayout::create(
-            _render, "PointShadow_Indirect_Static_PPL",
-            {},
-            {_frameDSL, _indirectDSL});
-
-        auto indirectCI = _indirectPipelineCI;
-        indirectCI.pipelineLayout = _indirectStaticVariant.pipelineLayout.get();
-        indirectCI.shaderDesc.vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(Vertex)}};
-        indirectCI.shaderDesc.vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Vertex, position)}};
-        _indirectStaticVariant.pipeline = IGraphicsPipeline::create(_render);
-        YA_CORE_ASSERT(_indirectStaticVariant.pipeline && _indirectStaticVariant.pipeline->recreate(indirectCI),
-                       "Failed to create point shadow indirect static pipeline");
-
-        _cullPass.init(_render);
-    }
+    _indirectRenderer.init(_render, _frameDSL);
 
     // ─── Descriptor pool ─────────────────────────────────────────────
     const uint32_t faceCount   = ShadowConstants::POINT_SHADOW_FACE_COUNT;
-    const uint32_t maxSets     = MAX_FLIGHTS_IN_FLIGHT * (faceCount + 2); // face UBOs + skinning + indirect
+    const uint32_t maxSets     = MAX_FLIGHTS_IN_FLIGHT * (faceCount + 1); // face UBOs + skinning
     const uint32_t uboCount    = MAX_FLIGHTS_IN_FLIGHT * faceCount;
-    const uint32_t ssboCount   = MAX_FLIGHTS_IN_FLIGHT * 2; // skinning + instance
+    const uint32_t ssboCount   = MAX_FLIGHTS_IN_FLIGHT;
     _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
         .label     = "PointShadow_DSP",
         .maxSets   = maxSets,
@@ -135,18 +111,17 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
     });
 
     // ─── Per-flight resources ────────────────────────────────────────
-    using FaceUBO = slang_types::CombineShadowMappingGenerate::FrameData;
-    FaceUBO initialData{};
+    PointFaceUBO initialData{};
     for (uint32_t fi = 0; fi < MAX_FLIGHTS_IN_FLIGHT; ++fi) {
         auto& flight = _perFlight[fi];
         for (uint32_t face = 0; face < faceCount; ++face) {
             flight.faceUBO[face] = IBuffer::create(_render, BufferCreateInfo{
                 .label       = std::format("PointShadow_FaceUBO_{}_{}", fi, face),
                 .usage       = EBufferUsage::UniformBuffer,
-                .size        = sizeof(FaceUBO),
+                .size        = sizeof(PointFaceUBO),
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
-            flight.faceUBO[face]->writeData(&initialData, sizeof(FaceUBO), 0);
+            flight.faceUBO[face]->writeData(&initialData, sizeof(PointFaceUBO), 0);
 
             flight.faceDS[face] = _dsp->allocateDescriptorSets(_frameDSL);
             _render->getDescriptorHelper()->updateDescriptorSets({
@@ -158,15 +133,12 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
 
 void PointShadowPass::destroy()
 {
-    _cullPass.destroy();
+    _indirectRenderer.destroy();
 
     for (auto& flight : _perFlight) {
         for (auto& ubo : flight.faceUBO) ubo.reset();
         flight.skinningSSBO.reset();
-        flight.instanceBuffer.reset();
         flight.skinningDS  = nullptr;
-        flight.indirectDS  = nullptr;
-        flight.meshBatches.clear();
     }
     _dsp.reset();
     for (auto& faceTexArr : _faceDepthTextures) {
@@ -177,12 +149,9 @@ void PointShadowPass::destroy()
     }
     _directStaticVariant  = {};
     _directSkinnedVariant = {};
-    _indirectStaticVariant = {};
-    _indirectDSL.reset();
     _skinningDSL.reset();
     _frameDSL.reset();
     _skinningCapacity = 0;
-    _instanceCapacity = 0;
     _render = nullptr;
 }
 
@@ -190,147 +159,75 @@ void PointShadowPass::destroy()
 // Prepare
 // ═══════════════════════════════════════════════════════════════════════════
 
-void PointShadowPass::prepare(uint32_t               flightIndex,
-                               const RenderFrameData& frameData,
-                               const FrameUBO&        frameUBO,
-                               uint32_t               pointLightCount)
+void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
 {
-    auto& flight = _perFlight[flightIndex];
+    if (!payload.frameData) return;
+
+    auto& flight = _perFlight[payload.flightIndex];
 
     // Begin frame for pipelines
     if (_directStaticVariant.pipeline)  _directStaticVariant.pipeline->beginFrame();
     if (_directSkinnedVariant.pipeline) _directSkinnedVariant.pipeline->beginFrame();
-    if (_indirectStaticVariant.pipeline) _indirectStaticVariant.pipeline->beginFrame();
+    _indirectRenderer.beginFrame();
 
-    if (pointLightCount == 0) return;
+    if (payload.pointLightCount == 0) return;
 
     // ─── Write per-face UBOs ─────────────────────────────────────────
-    for (uint32_t lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
+    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            FrameUBO faceData{
-                .numPointLights      = 1,
-                .hasDirectionalLight = 0,
+            PointFaceUBO faceData{
+                .viewProj  = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
+                .lightPos  = payload.frameUBO.pointLights[lightIndex].pos,
+                .farPlane  = payload.frameUBO.pointLights[lightIndex].farPlane,
             };
-            faceData.pointLights[0]           = frameUBO.pointLights[lightIndex];
-            faceData.pointLights[0].matrix[0] = frameUBO.pointLights[lightIndex].matrix[faceIndex];
 
             const uint32_t faceGlobal = lightIndex * 6 + faceIndex;
-            flight.faceUBO[faceGlobal]->writeData(&faceData, sizeof(FrameUBO), 0);
+            flight.faceUBO[faceGlobal]->writeData(&faceData, sizeof(PointFaceUBO), 0);
         }
     }
 
     // ─── Skinning ────────────────────────────────────────────────────
-    const auto& palettes = frameData.skinningPalettes;
+    const auto& palettes = payload.frameData->skinningPalettes;
     ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
     if (!palettes.empty()) {
         flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
         flight.skinningSSBO->flush();
     }
 
-    // ─── Indirect path: collect instances and build frustums ─────────
-    if (!_bIndirectSupported || !_bUseIndirectDraw) return;
-
-    // Rebuild instance data using hashmap for O(N) grouping
-    std::vector<PointShadowInstanceData> instanceData;
-    flight.meshBatches.clear();
-    _meshBatchMap.clear();
-
-    auto addItems = [&](const std::vector<RenderDrawItem>& items)
-    {
-        for (const auto& item : items) {
-            if (!item.mesh) continue;
-
-            auto [it, inserted] = _meshBatchMap.try_emplace(item.mesh, static_cast<uint32_t>(flight.meshBatches.size()));
-            if (inserted) {
-                flight.meshBatches.push_back(MeshBatch{
-                    .mesh          = item.mesh,
-                    .firstInstance = static_cast<uint32_t>(instanceData.size()),
-                    .instanceCount = 0,
-                });
-            }
-            auto& batch = flight.meshBatches[it->second];
-            batch.instanceCount++;
-
-            const auto      worldBounds = item.mesh->boundingBox.transformed(item.worldMatrix);
-            const glm::vec3 center      = 0.5f * (worldBounds.min + worldBounds.max);
-            const float     radius      = glm::length(worldBounds.max - center);
-
-            instanceData.push_back(PointShadowInstanceData{
-                .worldMatrix   = item.worldMatrix,
-                .boundingSphere = glm::vec4(center, radius),
-                .indexCount    = item.mesh->getIndexCount(),
-                .firstIndex    = 0,
-                .vertexOffset  = 0,
-            });
-        }
-    };
-
-    const auto& staticBuckets = frameData.drawBuckets.staticMeshes;
-    addItems(staticBuckets.pbrDrawItems);
-    addItems(staticBuckets.phongDrawItems);
-    addItems(staticBuckets.unlitDrawItems);
-    addItems(staticBuckets.simpleDrawItems);
-    addItems(staticBuckets.fallbackDrawItems);
-
-    flight.totalInstances = static_cast<uint32_t>(instanceData.size());
-    if (instanceData.empty()) return;
-
-    ensureInstanceCapacity(flight.totalInstances);
-    flight.instanceBuffer->writeData(instanceData.data(), instanceData.size() * sizeof(PointShadowInstanceData), 0);
-    flight.instanceBuffer->flush();
-
-    // Build face frustums
-    const uint32_t activeFaces = pointLightCount * 6;
-    std::vector<PointShadowFaceFrustum> frustums(activeFaces);
-    for (uint32_t light = 0; light < pointLightCount; ++light) {
-        for (uint32_t face = 0; face < 6; ++face) {
-            const glm::mat4 viewProj = frameUBO.pointLights[light].matrix[face];
-            auto planes = extractFrustumPlanes(viewProj);
-            auto& frustum = frustums[light * 6 + face];
-            for (uint32_t p = 0; p < 6; ++p) {
-                frustum.planes[p] = planes[p];
-            }
-        }
-    }
-
-    // Bind instance buffer to cull pass and prepare
-    _cullPass.bindInstanceBuffer(flightIndex, flight.instanceBuffer.get());
-    _cullPass.prepare(flightIndex, frustums.data(), activeFaces, flight.totalInstances);
-
-    // Update indirect DS for the vertex shader
-    updateIndirectDescriptors(flightIndex);
+    _indirectRenderer.prepare(payload);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Execute
 // ═══════════════════════════════════════════════════════════════════════════
 
-void PointShadowPass::execute(ICommandBuffer*        cmdBuf,
-                               uint32_t               flightIndex,
-                               const RenderFrameData& frameData,
-                               uint32_t               pointLightCount)
+void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
-    if (pointLightCount == 0) return;
+    if (!payload.frameData || payload.pointLightCount == 0) return;
 
-    auto& flight = _perFlight[flightIndex];
-    const bool useIndirect = _bIndirectSupported && _bUseIndirectDraw &&
-                             _indirectStaticVariant.pipeline &&
-                             flight.totalInstances > 0;
+    auto& flight = _perFlight[payload.flightIndex];
+    const bool useIndirect = payload.pointIndirectRequested && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
     // Dispatch compute cull if using indirect
     if (useIndirect) {
-        _cullPass.dispatch(cmdBuf, flightIndex);
+        _indirectRenderer.dispatchCull(cmdBuf, payload.flightIndex);
     }
 
     // Render each face
-    for (uint32_t lightIndex = 0; lightIndex < pointLightCount; ++lightIndex) {
+    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            const uint32_t faceGlobal = lightIndex * 6 + faceIndex;
-            auto* depthTexture = _faceDepthTextures[lightIndex][faceIndex].get();
-            if (!depthTexture) continue;
+            PointShadowFacePayload facePayload{
+                .lightIndex      = lightIndex,
+                .faceIndex       = faceIndex,
+                .faceGlobalIndex = lightIndex * 6 + faceIndex,
+                .layerIndex      = 1 + lightIndex * 6 + faceIndex,
+            };
+            facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
+            facePayload.depthTexture = _faceDepthTextures[lightIndex][faceIndex].get();
+            if (!facePayload.depthTexture) continue;
 
             RenderingInfo::ImageSpec depthSpec{
-                .texture       = depthTexture,
+                .texture       = facePayload.depthTexture,
                 .loadOp        = EAttachmentLoadOp::Clear,
                 .storeOp       = EAttachmentStoreOp::Store,
                 .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
@@ -350,14 +247,13 @@ void PointShadowPass::execute(ICommandBuffer*        cmdBuf,
             cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
 
             if (useIndirect) {
-                renderFaceIndirect(cmdBuf, flightIndex, faceGlobal);
+                _indirectRenderer.renderFace(cmdBuf, payload, facePayload);
             } else {
-                renderFaceDirect(cmdBuf, flightIndex, frameData, faceGlobal);
+                renderFaceDirect(cmdBuf, payload, facePayload);
             }
 
             // Always draw skinned meshes with direct draw (no indirect path for skinned yet)
-            const uint32_t layerIndex = 1 + faceGlobal; // offset by directional layer
-            drawSkinnedBucketsDirect(cmdBuf, flightIndex, frameData.drawBuckets.skinnedMeshes, layerIndex);
+            drawSkinnedBucketsDirect(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.skinnedMeshes, facePayload.layerIndex);
 
             cmdBuf->endRendering(renderInfo);
         }
@@ -365,62 +261,14 @@ void PointShadowPass::execute(ICommandBuffer*        cmdBuf,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Render: Indirect path
-// ═══════════════════════════════════════════════════════════════════════════
-
-void PointShadowPass::renderFaceIndirect(ICommandBuffer* cmdBuf,
-                                          uint32_t        flightIndex,
-                                          uint32_t        faceGlobalIndex) const
-{
-    const auto& flight = _perFlight[flightIndex];
-
-    cmdBuf->bindPipeline(_indirectStaticVariant.pipeline.get());
-    cmdBuf->bindDescriptorSets(_indirectStaticVariant.pipelineLayout.get(), 0,
-                               {flight.faceDS[faceGlobalIndex], flight.indirectDS});
-
-    // One drawIndexedIndirectCount call per face — draws ALL visible instances at once
-    auto* drawCmdBuffer  = _cullPass.getDrawCommandBuffer(flightIndex);
-    auto* drawCountBuf   = _cullPass.getDrawCountBuffer(flightIndex);
-
-    const uint64_t drawOffset  = static_cast<uint64_t>(faceGlobalIndex) * ShadowConstants::MAX_DRAWS_PER_FACE * sizeof(PointShadowIndirectCommand);
-    const uint64_t countOffset = static_cast<uint64_t>(faceGlobalIndex) * sizeof(uint32_t);
-
-    // We need to bind the shared vertex/index buffers
-    // For indirect draw, each draw command specifies its own firstIndex/vertexOffset,
-    // but we need a single VBO/IBO bound. Since all instances reference the same mesh
-    // within a batch, we bind per-batch.
-    // Actually with the new design, each indirect command has its own index/vertex offset,
-    // so we just need ONE global VBO and IBO bound. But meshes have separate buffers...
-    // For now, bind the first mesh's buffers — this works because in practice all
-    // static meshes share a single merged buffer (or we need multi-draw).
-
-    // Simplified approach: one MDI call covers all meshes sharing the same VBO/IBO
-    // TODO: For multiple mesh buffers, need to group by buffer or use bindless
-    if (!flight.meshBatches.empty() && flight.meshBatches[0].mesh) {
-        auto* mesh = flight.meshBatches[0].mesh;
-        cmdBuf->bindVertexBuffer(0, mesh->getVertexBuffer(), 0);
-        cmdBuf->bindIndexBuffer(mesh->getIndexBufferMut(), 0, false);
-    }
-
-    cmdBuf->drawIndexedIndirectCount(
-        drawCmdBuffer, drawOffset,
-        drawCountBuf, countOffset,
-        ShadowConstants::MAX_DRAWS_PER_FACE,
-        sizeof(PointShadowIndirectCommand));
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Render: Direct draw fallback
 // ═══════════════════════════════════════════════════════════════════════════
 
-void PointShadowPass::renderFaceDirect(ICommandBuffer*        cmdBuf,
-                                        uint32_t               flightIndex,
-                                        const RenderFrameData& frameData,
-                                        uint32_t               faceGlobalIndex) const
+void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
+                                        const BasicShadowFramePayload& payload,
+                                        const PointShadowFacePayload&  facePayload) const
 {
-    // layerIndex for UBO lookup (offset by directional layer)
-    const uint32_t layerIndex = 1 + faceGlobalIndex;
-    drawStaticBucketsDirect(cmdBuf, flightIndex, frameData.drawBuckets.staticMeshes, layerIndex);
+    drawStaticBucketsDirect(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.staticMeshes, facePayload.layerIndex);
 }
 
 void PointShadowPass::drawStaticBucketsDirect(ICommandBuffer* cmdBuf, uint32_t flightIndex,
@@ -504,54 +352,20 @@ void PointShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
     }
 }
 
-void PointShadowPass::ensureInstanceCapacity(uint32_t requiredCount)
-{
-    if (requiredCount <= _instanceCapacity) return;
-
-    uint32_t newCap = _instanceCapacity == 0 ? 256u : _instanceCapacity;
-    while (newCap < requiredCount) newCap *= 2;
-    _instanceCapacity = newCap;
-
-    const uint32_t bufferSize = _instanceCapacity * sizeof(PointShadowInstanceData);
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        auto& flight = _perFlight[i];
-        flight.instanceBuffer = IBuffer::create(_render, BufferCreateInfo{
-            .label       = std::format("PointShadow_Instance_{}", i),
-            .usage       = EBufferUsage::StorageBuffer,
-            .size        = bufferSize,
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        updateIndirectDescriptors(i);
-    }
-}
-
-void PointShadowPass::updateIndirectDescriptors(uint32_t flightIndex)
-{
-    auto& flight = _perFlight[flightIndex];
-    if (!flight.instanceBuffer) return;
-
-    if (!flight.indirectDS) {
-        flight.indirectDS = _dsp->allocateDescriptorSets(_indirectDSL);
-    }
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneStorageBuffer(flight.indirectDS, 0, flight.instanceBuffer.get()),
-    });
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Pipeline refresh
 // ═══════════════════════════════════════════════════════════════════════════
 
 void PointShadowPass::refreshPipeline(EFormat::T depthFormat)
 {
-    _directPipelineCI.pipelineRenderingInfo.depthAttachmentFormat   = depthFormat;
-    _indirectPipelineCI.pipelineRenderingInfo.depthAttachmentFormat = depthFormat;
+    _directPipelineCI.pipelineRenderingInfo.depthAttachmentFormat = depthFormat;
 
     if (_directStaticVariant.pipeline) {
         auto ci = _directPipelineCI;
         ci.pipelineLayout = _directStaticVariant.pipelineLayout.get();
         ci.shaderDesc.vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(Vertex)}};
         ci.shaderDesc.vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Vertex, position)}};
+        ci.shaderDesc.defines = {"POINT_SHADOW_FACE_DATA 1"};
         _directStaticVariant.pipeline->updateDesc(ci);
     }
     if (_directSkinnedVariant.pipeline) {
@@ -566,16 +380,10 @@ void PointShadowPass::refreshPipeline(EFormat::T depthFormat)
             {.bufferSlot = 1, .location = 4, .format = EVertexAttributeFormat::Int4,   .offset = offsetof(SkeletonMeshVertex, boneIDs)},
             {.bufferSlot = 1, .location = 5, .format = EVertexAttributeFormat::Float4, .offset = offsetof(SkeletonMeshVertex, weights)},
         };
-        ci.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 1"};
+        ci.shaderDesc.defines = {"POINT_SHADOW_FACE_DATA 1", "ENABLE_SKINNING 1", "SKINNING_SET_INDEX 1"};
         _directSkinnedVariant.pipeline->updateDesc(ci);
     }
-    if (_indirectStaticVariant.pipeline) {
-        auto ci = _indirectPipelineCI;
-        ci.pipelineLayout = _indirectStaticVariant.pipelineLayout.get();
-        ci.shaderDesc.vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(Vertex)}};
-        ci.shaderDesc.vertexAttributes  = {{.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(Vertex, position)}};
-        _indirectStaticVariant.pipeline->updateDesc(ci);
-    }
+    _indirectRenderer.refreshPipeline(depthFormat);
 }
 
 void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
@@ -616,8 +424,8 @@ Texture* PointShadowPass::getFaceDepthTexture(uint32_t lightIndex, uint32_t face
 
 void PointShadowPass::renderGUI()
 {
-    ImGui::Checkbox("Use Indirect Draw", &_bUseIndirectDraw);
-    if (!_bIndirectSupported) {
+    ImGui::Text("Indirect Draw: %s", _bUseIndirectDraw ? "On" : "Off");
+    if (!_indirectRenderer.isSupported()) {
         ImGui::SameLine();
         ImGui::TextDisabled("(unsupported)");
     }

@@ -1,5 +1,6 @@
 #include "Common/Limits.slang"
 #include "Common/Skinning.slang"
+#include "Shadow/PointShadowFace.slang"
 
 struct PushConstants
 {
@@ -24,7 +25,11 @@ struct FrameData
     uint           hasDirectionalLight;
 };
 
+#if POINT_SHADOW_FACE_DATA
+[[vk::binding(0, 0)]] ConstantBuffer<PointShadowFaceData, Std140DataLayout> uPointFace;
+#else
 [[vk::binding(0, 0)]] ConstantBuffer<FrameData, Std140DataLayout> uFrame;
+#endif
 
 struct VertexInput
 {
@@ -60,18 +65,26 @@ VertexOutput vertMain(VertexInput input)
 
     VertexOutput output;
     output.worldPos = worldPos;
+#if POINT_SHADOW_FACE_DATA
+    output.sv_position = mul(uPointFace.viewProj, worldPos);
+#else
     if (uFrame.hasDirectionalLight == 1) {
         output.sv_position = mul(uFrame.directionalLightMatrix, worldPos);
     }
     else {
         output.sv_position = mul(uFrame.pointLights[0].matrix[0], worldPos);
     }
+#endif
     return output;
 }
 
 [shader("fragment")]
 float fragMain(VertexOutput input) : SV_Depth
 {
+#if POINT_SHADOW_FACE_DATA
+    float lightDistance = length(input.worldPos.xyz - uPointFace.lightPos);
+    return lightDistance / uPointFace.farPlane;
+#else
     // Directional shadow: hardware depth (SV_Position.z) is correct
     if (uFrame.hasDirectionalLight == 1) {
         return input.sv_position.z;
@@ -80,4 +93,5 @@ float fragMain(VertexOutput input) : SV_Depth
     // Point shadow: linear distance normalized by far plane
     float lightDistance = length(input.worldPos.xyz - uFrame.pointLights[0].pos);
     return lightDistance / uFrame.pointLights[0].farPlane;
+#endif
 }

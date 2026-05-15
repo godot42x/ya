@@ -2,6 +2,8 @@
 
 #include "Render/RenderDefines.h"
 
+#include "Shadow.PointShadowCull.comp.slang.h"
+
 #include <glm/glm.hpp>
 
 #include <array>
@@ -21,40 +23,18 @@ constexpr uint32_t FACES_PER_POINT_LIGHT    = 6;
 constexpr uint32_t POINT_SHADOW_FACE_COUNT  = MAX_POINT_LIGHTS * FACES_PER_POINT_LIGHT; // 36
 constexpr uint32_t DIRECTIONAL_SHADOW_COUNT = 1;
 constexpr uint32_t TOTAL_SHADOW_LAYERS      = DIRECTIONAL_SHADOW_COUNT + POINT_SHADOW_FACE_COUNT; // 37
-constexpr uint32_t CULL_WORKGROUP_SIZE      = 256;
-constexpr uint32_t MAX_DRAWS_PER_FACE       = 4096;
+constexpr uint32_t CULL_WORKGROUP_SIZE      = slang_types::Shadow::PointShadowCull_comp::POINT_SHADOW_CULL_WORKGROUP_SIZE;
+constexpr uint32_t MAX_DRAWS_PER_FACE       = slang_types::Shadow::PointShadowCull_comp::POINT_SHADOW_MAX_DRAWS_PER_FACE;
 } // namespace ShadowConstants
 
 // ═══════════════════════════════════════════════════════════════════════════
-// GPU-mirrored structures (must match PointShadowCommon.slang layout)
+// GPU-facing structures: single truth comes from generated Slang headers.
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Per-instance data uploaded to the GPU instance buffer.
-struct alignas(16) PointShadowInstanceData
-{
-    glm::mat4 worldMatrix{1.0f};
-    glm::vec4 boundingSphere{0.0f}; // xyz=center, w=radius (world space)
-    uint32_t  indexCount  = 0;
-    uint32_t  firstIndex  = 0;
-    int32_t   vertexOffset = 0;
-    uint32_t  _pad0       = 0;
-};
-
-/// Per-face frustum data for the compute cull shader.
-struct alignas(16) PointShadowFaceFrustum
-{
-    glm::vec4 planes[6]; // xyz=normal, w=d (normalized)
-};
-
-/// VkDrawIndexedIndirectCommand-compatible structure.
-struct PointShadowIndirectCommand
-{
-    uint32_t indexCount    = 0;
-    uint32_t instanceCount = 0;
-    uint32_t firstIndex    = 0;
-    int32_t  vertexOffset  = 0;
-    uint32_t firstInstance = 0;
-};
+using PointShadowInstanceData     = slang_types::Shadow::PointShadowCull_comp::ShadowInstanceData;
+using PointShadowFaceFrustum      = slang_types::Shadow::PointShadowCull_comp::ShadowFaceFrustum;
+using PointShadowIndirectCommand  = slang_types::Shadow::PointShadowCull_comp::IndexedIndirectCommand;
+using PointShadowCullPushConstant = slang_types::Shadow::PointShadowCull_comp::PushConstants;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CPU-side helpers
@@ -79,7 +59,7 @@ inline std::array<glm::vec4, 6> extractFrustumPlanes(const glm::mat4& viewProj)
         normalizePlane(row3 - row0), // right
         normalizePlane(row3 + row1), // bottom
         normalizePlane(row3 - row1), // top
-        normalizePlane(row3 + row2), // near
+        normalizePlane(row2),        // near (RH_ZO clip space: z >= 0)
         normalizePlane(row3 - row2), // far
     };
 }

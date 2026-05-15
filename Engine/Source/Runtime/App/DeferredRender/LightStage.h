@@ -53,6 +53,8 @@ struct LightStage : public IRenderStage
     std::array<IImageView*, MAX_POINT_LIGHTS> _shadowPointCubeIVs{};
     Sampler* _shadowSampler = nullptr;
     IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
+    ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
+    std::array<ImageViewHandle, MAX_POINT_LIGHTS> _lastShadowPointCubeImageViewHandles{};
     bool _bGBufferDescriptorsInitialized = false;
     bool _bShadowDescriptorsInitialized = false;
     uint32_t _lastGBufferDescriptorWriteCount = 0;
@@ -78,6 +80,8 @@ struct LightStage : public IRenderStage
     void setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
     void invalidateGBufferDescriptors();
+    void invalidateShadowDescriptors();
+    [[nodiscard]] bool shouldRefreshShadowDescriptors() const;
     [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }
     [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return _bEnablePBRSpecularIBL; }
 

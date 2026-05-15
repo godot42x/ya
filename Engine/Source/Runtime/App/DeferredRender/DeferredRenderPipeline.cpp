@@ -350,6 +350,9 @@ void DeferredRenderPipeline::loadPersistentSettings()
     if (automationShadowOverrides.pointLightUseIndirect) {
         shadowSettings.pointLightUseIndirect = *automationShadowOverrides.pointLightUseIndirect;
     }
+    if (automationShadowOverrides.pointLightIndirectCullEnabled) {
+        shadowSettings.pointLightIndirectCullEnabled = *automationShadowOverrides.pointLightIndirectCullEnabled;
+    }
     if (automationShadowOverrides.maxPointLightShadows) {
         shadowSettings.maxPointLightShadows = *automationShadowOverrides.maxPointLightShadows;
     }
@@ -922,6 +925,7 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
                 ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled);
                 ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
                 ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
+                ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
                 int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
                 if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
                     shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);

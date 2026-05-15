@@ -27,7 +27,8 @@ void PointShadowCullPass::init(IRender* render)
         });
 
     _pipelineLayout = IPipelineLayout::create(
-        _render, "PointShadowCull_PPL",
+        _render,
+        "PointShadowCull_PPL",
         {PushConstantRange{.offset = 0, .size = sizeof(PushConstants), .stageFlags = EShaderStage::Compute}},
         {_cullDSL});
 
