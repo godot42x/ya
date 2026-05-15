@@ -66,9 +66,11 @@ C++
 
 落地规则：
 
-1. 不要手写与 shader uniform 对应的 C++ 结构体。
-2. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
-3. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。
+1. 不要手写与 shader-facing layout 对应的 C++ 结构体，包括 UBO、SSBO、push constant、indirect command。
+2. C++ 侧必须 include `Engine/Shader/Slang/Generated/*.slang.h` 或 `Engine/Shader/GLSL/Generated/*.glsl.h`，消费 `slang_types::` / `ya::glsl_types` 里的生成类型。
+3. 若生成头缺少需要的 shader-facing 类型，修 shader 源或生成脚本，不在 C++ 侧补 mirror struct。
+4. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
+5. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。
 
 ## Dynamic Rendering / Layout 约束
 

@@ -71,14 +71,15 @@ xmake ya-shader
 
 1. 只使用 XMake，不引入 CMake。
 2. 生成文件只读；修生成链，不手改 `Generated/*`。
-3. 保持最小改动，不混入无关重构。
-4. 遵循现有抽象，不平行造新接口。
-5. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
-6. `Render2D` 使用左上角原点坐标系。
-7. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
-8. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
-9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
-10. 非明确要求时，不生成多余文档或显而易见的注释。
+3. Shader-facing C++ 类型以 Slang/GLSL 生成头为单一事实源；不要手写 UBO / SSBO / push constant / indirect command 的镜像结构。
+4. 保持最小改动，不混入无关重构。
+5. 遵循现有抽象，不平行造新接口。
+6. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
+7. `Render2D` 使用左上角原点坐标系。
+8. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
+9. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
+10. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
+11. 非明确要求时，不生成多余文档或显而易见的注释。
 
 ## Code Style
 

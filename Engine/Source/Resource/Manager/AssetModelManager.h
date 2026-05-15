@@ -21,6 +21,7 @@ class AssetModelManager
     std::unordered_map<std::string, TaskHandle<ImportedModelData>>                 _pendingModelLoads;
     std::unordered_map<std::string, std::vector<AssetManager::ModelReadyCallback>> _pendingModelCallbacks;
     std::unordered_set<std::string>                                                _failedModelLoads;
+    uint64_t                                                                       _clearGeneration = 0;
     mutable std::mutex                                                             _mutex;
 
   public:

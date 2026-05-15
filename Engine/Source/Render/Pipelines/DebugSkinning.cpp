@@ -9,7 +9,7 @@ void DebugSkinning::renderGUI()
 {
     if (ImGui::TreeNode("Debug Skinning")) {
         ImGui::Checkbox("Debug Skinning", &bEnabled);
-        ImGui::InputInt("Debug Skinning Bone", &pickingBone, 1.0f, 0);
+        ImGui::InputInt("Debug Skinning Bone", &pickingBone, 1, 0);
         if (_pipeline) {
             _pipeline->renderGUI();
         }

@@ -32,4 +32,5 @@
 
 - 不把 `misc/` 内容当成正式规范。
 - 不因为“可能有用”就预读全部 skills 或 memories。
+- Shader-facing C++ 类型必须消费 Slang/GLSL 生成头，不能手写 shader layout 镜像结构。
 - 修改架构或长期约定后，优先更新 skill；一次性故障结论优先更新 memory。

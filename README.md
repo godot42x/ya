@@ -32,5 +32,11 @@ make r
 
 # TBD
 
+## program 拆分
+
+- Editor 用户操作， 画面预览
+- Headless 纯cli操作，避免gui屏障, AI AGENT 服务。 不用跑一整个引擎, 只需要特性的组件来做资产修改
+
+
 
 

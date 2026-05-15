@@ -45,8 +45,10 @@ struct Mesh
 
     [[nodiscard]] const IBuffer* getVertexBuffer() const { return _vertexBuffer.get(); }
     [[nodiscard]] IBuffer*       getVertexBufferMut() const { return _vertexBuffer.get(); }
+    [[nodiscard]] uint32_t       getVertexBufferOffset() const { return _vertexBufferOffset; }
     [[nodiscard]] const IBuffer* getIndexBuffer() const { return _indexBuffer.get(); }
     [[nodiscard]] IBuffer*       getIndexBufferMut() const { return _indexBuffer.get(); }
+    [[nodiscard]] uint32_t       getIndexBufferOffset() const { return _indexBufferOffset; }
 
     void drawStatic(ICommandBuffer* cmdBuf) const
     {

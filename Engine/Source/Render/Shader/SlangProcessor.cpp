@@ -63,7 +63,7 @@ struct SlangVfsFileSystem : public ISlangFileSystem
         return remaining;
     }
 
-    SlangResult queryInterface(const SlangUUID& uuid, void** outObject) override 
+    SlangResult queryInterface(const SlangUUID& uuid, void** outObject) override
     {
         if (uuid == ISlangFileSystem::getTypeGuid() || uuid == ISlangUnknown::getTypeGuid()) {
             addRef();
@@ -178,9 +178,10 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     }
     slangVfs->release();
 
-    auto buildModuleName = [&](std::string_view sourceFilePath) -> std::string {
-        const auto sourcePath = std::filesystem::path(sourceFilePath);
-        auto       relative   = sourcePath.lexically_relative(shaderStoragePath);
+    auto buildModuleName = [&](std::string_view sourceFilePath) -> std::string
+    {
+        const auto sourcePath     = std::filesystem::path(sourceFilePath);
+        auto       relative       = sourcePath.lexically_relative(shaderStoragePath);
         const auto relativeString = relative.generic_string();
         if (relative.empty() || relativeString == ".." || relativeString.starts_with("../")) {
             relative = sourcePath.filename();
@@ -191,8 +192,8 @@ bool SlangProcessor::compileToSpv(std::string_view                source,
     };
 
     Slang::ComPtr<slang::IBlob> diagBlob;
-    auto* srcBlob = new SlangStringBlob();
-    srcBlob->data = std::string(source);
+    auto*                       srcBlob = new SlangStringBlob();
+    srcBlob->data                       = std::string(source);
 
     const std::string moduleName = buildModuleName(filePath);
 
@@ -268,7 +269,8 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
 
     stage2spirv_t ret;
 
-    auto compileStage = [&](EShaderStage::T stage, const std::string& stagePath, const std::string& entryName) -> bool {
+    auto compileStage = [&](EShaderStage::T stage, const std::string& stagePath, const std::string& entryName) -> bool
+    {
         std::string source;
         if (!VirtualFileSystem::get()->readFileToString(stagePath, source)) {
             YA_CORE_ERROR("[Slang] Failed to read shader source: {}", stagePath);
@@ -285,7 +287,8 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         return true;
     };
 
-    auto getCachePath = [&]() -> std::filesystem::path {
+    auto getCachePath = [&]() -> std::filesystem::path
+    {
         auto cacheDir = stdpath(intermediateStoragePath) / "Slang";
         auto key      = curFileName.empty() ? curFilePath.generic_string() : curFileName;
         return cacheDir / shader_internal::makeCacheFileName(key);
@@ -346,7 +349,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
                 stagePath = stdpath(shaderStoragePath) / stagePath;
             }
 
-            const auto entryIt = stageEntryNames.find(stageFile.stage);
+            const auto entryIt   = stageEntryNames.find(stageFile.stage);
             const auto entryName = entryIt != stageEntryNames.end() ? entryIt->second : std::string{"main"};
             if (!compileStage(stageFile.stage, stagePath.generic_string(), entryName)) {
                 return {};
@@ -370,7 +373,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             shaderName += ".slang";
         }
 
-        curFileName = ut::str::replace(shaderName, ".slang", "");
+        curFileName = cacheKey;
         curFilePath = stdpath(shaderStoragePath) / shaderName;
 
         std::string source;
@@ -379,11 +382,13 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             return {};
         }
 
-        const uint64_t sourceHash = shader_internal::buildShaderSourceHash({shader_internal::ShaderStageSource{
-            .stage  = EShaderStage::Vertex,
-            .path   = curFilePath.generic_string(),
-            .source = source,
-        }}, ci.defines);
+        const uint64_t sourceHash = shader_internal::buildShaderSourceHash(
+            {shader_internal::ShaderStageSource{
+                .stage  = EShaderStage::Vertex,
+                .path   = curFilePath.generic_string(),
+                .source = source,
+            }},
+            ci.defines);
         const auto cachePath = getCachePath();
         if (mode == EShaderProcessMode::UseCache && shader_internal::loadShaderDiskCache(cachePath, sourceHash, ret)) {
             YA_CORE_INFO("[Slang] Loaded shader disk cache for {}", shaderName);

@@ -216,6 +216,9 @@ void loadShadowAutomationOverrides(AppDesc& appDesc)
     if (bool pointLightUseIndirect = false; configManager.tryGet<bool>("automation", "shadow.pointLightUseIndirect", pointLightUseIndirect)) {
         appDesc.automation.shadow.pointLightUseIndirect = pointLightUseIndirect;
     }
+    if (bool pointLightIndirectCullEnabled = false; configManager.tryGet<bool>("automation", "shadow.pointLightIndirectCullEnabled", pointLightIndirectCullEnabled)) {
+        appDesc.automation.shadow.pointLightIndirectCullEnabled = pointLightIndirectCullEnabled;
+    }
     if (uint32_t maxPointLightShadows = 0; configManager.tryGet<uint32_t>("automation", "shadow.maxPointLightShadows", maxPointLightShadows)) {
         appDesc.automation.shadow.maxPointLightShadows = std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
     }
@@ -262,6 +265,9 @@ void applyShadowAutomationOverrides(const AppAutomationShadowOverrides& override
     }
     if (overrides.pointLightUseIndirect) {
         shadowSettings.pointLightUseIndirect = *overrides.pointLightUseIndirect;
+    }
+    if (overrides.pointLightIndirectCullEnabled) {
+        shadowSettings.pointLightIndirectCullEnabled = *overrides.pointLightIndirectCullEnabled;
     }
     if (overrides.maxPointLightShadows) {
         shadowSettings.maxPointLightShadows = std::min(*overrides.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));

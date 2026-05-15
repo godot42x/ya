@@ -1292,8 +1292,9 @@ struct SwapchainCreateInfo
     bool            bVsync      = true;               // V-Sync enabled by default
 
     // Image configuration
-    uint32_t minImageCount    = 2; // Double buffering by default
-    uint32_t imageArrayLayers = 1;
+    uint32_t minImageCount       = 2; // Double buffering by default
+    uint32_t imageArrayLayers    = 1;
+    bool     bEnableTransferSrc  = false;
     // std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
 
     // Transform and composite

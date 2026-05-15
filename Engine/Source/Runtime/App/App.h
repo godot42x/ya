@@ -82,6 +82,7 @@ struct AppAutomationShadowOverrides
     std::optional<bool>              directionalEnabled;
     std::optional<bool>              pointLightEnabled;
     std::optional<bool>              pointLightUseIndirect;
+    std::optional<bool>              pointLightIndirectCullEnabled;
     std::optional<uint32_t>          maxPointLightShadows;
     std::optional<EShadowFilter::T>  filter;
     std::optional<float>             bias;

@@ -20,6 +20,7 @@ AssetTextureManager::AssetTextureManager(AssetManager& owner)
 void AssetTextureManager::clear()
 {
     std::lock_guard lock(_mutex);
+    ++_clearGeneration;
     _textureViews.clear();
     _textureName2Path.clear();
     _pendingTextureLoads.clear();
@@ -185,10 +186,12 @@ AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchInto
         settingsList.push_back(_owner.resolveTextureImportSettings(filepath, colorSpace));
     }
 
-    AssetManager::TextureBatchMemoryHandle handleId = 0;
+    AssetManager::TextureBatchMemoryHandle handleId         = 0;
+    uint64_t                               clearGeneration = 0;
     {
         std::lock_guard lock(_mutex);
-        handleId = _nextTextureBatchMemoryHandle++;
+        handleId         = _nextTextureBatchMemoryHandle++;
+        clearGeneration = _clearGeneration;
     }
 
     if (filepaths.empty()) {
@@ -210,10 +213,13 @@ AssetManager::TextureBatchMemoryHandle AssetTextureManager::loadTextureBatchInto
 
             return batchMemory;
         },
-        [this, handleId](AssetManager::TextureBatchMemory batchMemory)
+        [this, handleId, clearGeneration](AssetManager::TextureBatchMemory batchMemory)
         {
             std::lock_guard lock(_mutex);
             _pendingTextureBatchMemoryLoads.erase(handleId);
+            if (clearGeneration != _clearGeneration) {
+                return;
+            }
             _readyTextureBatchMemory[handleId] = std::move(batchMemory);
         });
 
@@ -324,19 +330,27 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
                  static_cast<int>(settings.resolvedFormat),
                  AssetManager::texturePayloadTypeName(settings.payloadType));
 
+    const uint64_t clearGeneration = [&]() {
+        std::lock_guard lock(_mutex);
+        return _clearGeneration;
+    }();
+
     auto handle = TaskQueue::get().submitWithCallback(
         [settings]() -> AssetManager::TextureMemoryBlock
         {
             return decodeTextureToMemory(settings);
         },
-        [this, filepath, cacheKey, name](AssetManager::TextureMemoryBlock decoded)
+        [this, filepath, cacheKey, name, clearGeneration](AssetManager::TextureMemoryBlock decoded)
         {
             std::vector<AssetManager::TextureReadyCallback> callbacks;
             std::shared_ptr<Texture>                        readyTexture;
 
             {
                 std::lock_guard lock(_mutex);
-                auto            existing = _textureViews.find(cacheKey);
+                if (clearGeneration != _clearGeneration) {
+                    return;
+                }
+                auto existing = _textureViews.find(cacheKey);
                 if (existing != _textureViews.end()) {
                     _pendingTextureLoads.erase(cacheKey);
                     callbacks    = takeTextureCallbacks(cacheKey);

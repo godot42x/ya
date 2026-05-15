@@ -24,6 +24,7 @@ class AssetTextureManager
     std::unordered_map<AssetManager::TextureBatchMemoryHandle, AssetManager::TextureBatchMemory>
         _readyTextureBatchMemory;
     AssetManager::TextureBatchMemoryHandle _nextTextureBatchMemoryHandle = 1;
+    uint64_t                               _clearGeneration             = 0;
     mutable std::mutex                     _mutex;
 
   public:

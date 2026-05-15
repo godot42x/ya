@@ -273,9 +273,9 @@ uint64_t buildShaderSourceHash(const std::vector<ShaderStageSource>& stageSource
 {
     auto sortedStages = stageSources;
     std::sort(sortedStages.begin(), sortedStages.end(), [](const ShaderStageSource& lhs, const ShaderStageSource& rhs)
-              {
+                      {
         if (lhs.stage != rhs.stage) {
-            return lhs.stage < rhs.stage;
+             return lhs.stage < rhs.stage;
         }
         return lhs.path < rhs.path; });
 

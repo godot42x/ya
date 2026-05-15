@@ -18,7 +18,7 @@ void PostProcessingStage::recreateOutputTexture(Extent2D extent)
         .width   = extent.width,
         .height  = extent.height,
         .format  = _colorFormat,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
         .samples = ESampleCount::Sample_1,
         .isDepth = false,
     });

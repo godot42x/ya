@@ -17,6 +17,7 @@ AssetModelManager::AssetModelManager(AssetManager& owner)
 void AssetModelManager::clear()
 {
     std::lock_guard lock(_mutex);
+    ++_clearGeneration;
     modelCache.clear();
     _modalName2Path.clear();
     _pendingModelLoads.clear();

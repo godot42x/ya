@@ -472,7 +472,7 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
             shaderName += ".glsl";
         }
 
-        curFileName = ut::str::replace(shaderName, ".glsl", "");
+        curFileName = cacheKey;
         curFilePath = stdpath(shaderStoragePath) / shaderName;
 
         std::string shaderSource;

@@ -48,9 +48,7 @@ void TaskQueue::stop()
     _workers.clear();
     _running = false;
 
-    // Drain any remaining main-thread callbacks
-    while (auto cb = _mainThreadCallbacks.tryPop()) {
-        (*cb)();
+    while (_mainThreadCallbacks.tryPop()) {
     }
 
     YA_CORE_INFO("TaskQueue: stopped");

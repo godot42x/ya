@@ -13,8 +13,8 @@ extern ya::App *createApp();
 int main(int argc, char **argv)
 {
     // 静态初始化已完成，显示性能报告（如果未自动打印）
-    ya::profile::StaticInit::refOBJ();
-    ya::profile::StaticInit::recordEnd();
+    ya::profiling::StaticInitProfiler::refOBJ();
+    ya::profiling::StaticInitProfiler::recordEnd();
 
     // try {
         ya::AppDesc ci;

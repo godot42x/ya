@@ -160,10 +160,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
     {
         YA_PROFILE_SCOPE_LOG("App Init Subsystems");
         {
-            YA_PROFILE_SCOPE_LOG("Static Initializers");
-            profiling::StaticInitProfiler::recordStart();
+            YA_PROFILE_SCOPE_LOG("Deferred Initializers");
             ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
-            profiling::StaticInitProfiler::recordEnd();
         }
         VirtualFileSystem::init();
         ConfigManager::get().init();
@@ -186,7 +184,26 @@ void AppLifecycle::init(App& app, AppDesc ci)
     if (!app._ci.defaultScenePath) {
         app._ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
     }
+    if (app._ci.automation.configPath && !app._ci.automation.configPath->empty()) {
+        if (auto* vfs = VirtualFileSystem::get(); vfs && vfs->isFileExists(*app._ci.automation.configPath)) {
+            configManager.openDocument(
+                "automation",
+                *app._ci.automation.configPath,
+                Config::OpenDocumentOptions{
+                    .bPersistIfMissing = false,
+                    .bReadOnly         = true,
+                });
+            YA_CORE_INFO("Loaded automation override config: {}", *app._ci.automation.configPath);
+        }
+        else {
+            YA_CORE_WARN("Automation override config not found, falling back to default settings: {}", *app._ci.automation.configPath);
+        }
+    }
     AppAutomation::applyStartupOverrides(app._ci);
+    AppAutomation::beginRuntimeProfiling(app._ci.automation);
+    if (configManager.hasDocument("automation")) {
+        AppAutomation::applyRuntimeOverrides(app);
+    }
 
     app._renderRuntime = std::make_unique<RenderRuntime>();
     app._renderRuntime->init(RenderRuntime::InitDesc{
@@ -379,6 +396,7 @@ void AppLifecycle::quit(App& app)
     }
 
     MaterialFactory::get()->destroy();
+    AppAutomation::endRuntimeProfiling();
     ConfigManager::get().shutdown();
 }
 

@@ -109,9 +109,9 @@ struct Skeleton
         return it != nameToBoneIndex.end() && it->second < bones.size() ? &bones[it->second] : nullptr;
     }
 
-    bool hasBone(const FName& name) const
+    bool hasBone(const FName& boneName) const
     {
-        return findBone(name) != nullptr;
+        return findBone(boneName) != nullptr;
     }
 
     const SkeletonAnimationClip* getAnimation(size_t index) const

@@ -1,0 +1,4 @@
+
+## TODO
+1. 文件量比较大之后，应该按模块分 dll， 来做 UnityBuild
+2. 不同的库有不同的依赖库，如 Network 可能会独特依赖 ASIO 和 LibCurl 等

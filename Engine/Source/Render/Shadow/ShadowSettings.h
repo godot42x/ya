@@ -55,8 +55,10 @@ struct ShadowSettings
     uint32_t directionalCascades = 1;     // cascade count (1 = no cascading, future: 2/4)
 
     // Point light shadow
-    bool     pointLightEnabled    = true;
-    uint32_t maxPointLightShadows = 1; // how many point lights get shadows
+    bool     pointLightEnabled              = true;
+    bool     pointLightUseIndirect          = false;
+    bool     pointLightIndirectCullEnabled  = true;
+    uint32_t maxPointLightShadows           = 1; // how many point lights get shadows
 
     // Filtering
     EShadowFilter::T filter = EShadowFilter::Hard;
