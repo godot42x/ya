@@ -1,5 +1,7 @@
 #include "DirectionalShadowPass.h"
 
+#include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Mesh.h"
 #include "Render/RenderFrameData.h"
@@ -205,68 +207,27 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
                          static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
 
-    drawStaticBuckets(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.staticMeshes);
-    drawSkinnedBuckets(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.skinnedMeshes);
+    const auto& flight = _perFlight[payload.flightIndex];
+    ShadowDrawHelper::PassResources staticRes{
+        .pipeline       = _staticVariant.pipeline.get(),
+        .pipelineLayout = _staticVariant.pipelineLayout.get(),
+        .frameDS        = flight.frameDS,
+    };
+    ShadowDrawHelper::PassResources skinnedRes{
+        .pipeline       = _skinnedVariant.pipeline.get(),
+        .pipelineLayout = _skinnedVariant.pipelineLayout.get(),
+        .frameDS        = flight.frameDS,
+        .skinningDS     = flight.skinningDS,
+    };
+    ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
+    ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
 
     cmdBuf->endRendering(renderInfo);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Draw helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-void DirectionalShadowPass::drawStaticBuckets(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                               const RenderShadingDrawBuckets& buckets) const
-{
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
-    {
-        if (items.empty()) return;
-        const auto& flight = _perFlight[flightIndex];
-        cmdBuf->bindPipeline(_staticVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_staticVariant.pipelineLayout.get(), 0, {flight.frameDS});
-        for (const auto& item : items) {
-            if (!item.mesh) continue;
-            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = -1};
-            cmdBuf->pushConstants(_staticVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
-            item.mesh->drawStatic(cmdBuf);
-        }
-    };
-
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
-}
-
-void DirectionalShadowPass::drawSkinnedBuckets(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                                const RenderShadingDrawBuckets& buckets) const
-{
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
-    {
-        if (items.empty()) return;
-        const auto& flight = _perFlight[flightIndex];
-        cmdBuf->bindPipeline(_skinnedVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_skinnedVariant.pipelineLayout.get(), 0, {flight.frameDS, flight.skinningDS});
-        for (const auto& item : items) {
-            if (!item.mesh) continue;
-            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
-            cmdBuf->pushConstants(_skinnedVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
-            item.mesh->drawSkinned(cmdBuf);
-        }
-    };
-
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // Skinning capacity
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════════════
 void DirectionalShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
 {
     const uint32_t required = std::max(1u, paletteCount);

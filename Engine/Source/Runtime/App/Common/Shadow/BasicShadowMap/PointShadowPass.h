@@ -40,14 +40,10 @@ class PointShadowPass
 
     void init(IRender* render, Extent2D shadowExtent);
     void destroy();
-
     void prepare(const BasicShadowFramePayload& payload);
-
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
 
     void renderGUI();
-
-    void setUseIndirectDraw(bool enabled) { _bUseIndirectDraw = enabled; }
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
@@ -70,23 +66,15 @@ class PointShadowPass
 
     };
 
-    // ─── Rendering helpers ───────────────────────────────────────────
+    // ─── Rendering helpers ───────────────────────────────
     void renderFaceDirect(ICommandBuffer*                 cmdBuf,
                           const BasicShadowFramePayload& payload,
                           const PointShadowFacePayload&  facePayload) const;
 
-    void drawStaticBucketsDirect(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                 const RenderShadingDrawBuckets& buckets, uint32_t layerIndex) const;
-    void drawSkinnedBucketsDirect(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                  const RenderShadingDrawBuckets& buckets, uint32_t layerIndex) const;
-
     void ensureSkinningCapacity(uint32_t paletteCount);
-
-    // ─── State ───────────────────────────────────────────────────────
+    // ─── State ─────────────────────────────────────────────────
     IRender* _render       = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
-
-    bool _bUseIndirectDraw = false; // TODO: enable after indirect path is validated
 
     // Pipeline: direct draw (reuses CombineShadowMappingGenerate)
     struct ShadowPipelineVariant

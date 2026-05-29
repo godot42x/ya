@@ -3,18 +3,26 @@
 #include "Shadow/PointShadowFace.slang"
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Point Shadow Indirect Draw Shader
+// Point Shadow Indirect Draw — NoBaseInstance design.
 //
-// Vertex shader fetches the instance transform via SV_InstanceID which is
-// set to the global instance index by the compute cull shader's firstInstance
-// field in the indirect command.
+// Each draw call corresponds to one (batch, face) bucket. The CPU pushes
+// `bucketBase = bucketIndex * MAX_DRAWS_PER_FACE` so the VS can index into
+// `uVisibleInstances` using SV_InstanceID:
+//     globalInstance = uVisibleInstances[bucketBase + SV_InstanceID]
 //
-// Fragment shader outputs linear depth (distance / farPlane) for point-light
-// omnidirectional shadow mapping.
+// Fragment shader writes linear depth (distance / farPlane) for omni shadow.
 // ═══════════════════════════════════════════════════════════════════════════
 
 [[vk::binding(0, 0)]] ConstantBuffer<PointShadowFaceData, Std140DataLayout> uFace;
 [[vk::binding(0, 1)]] StructuredBuffer<ShadowInstanceData> uInstances;
+[[vk::binding(1, 1)]] StructuredBuffer<uint>               uVisibleInstances;
+
+struct PushConstants
+{
+    uint bucketBase;
+};
+
+[[vk::push_constant]] ConstantBuffer<PushConstants, Std140DataLayout> pc;
 
 struct VertexInput
 {
@@ -30,7 +38,9 @@ struct VertexOutput
 [shader("vertex")]
 VertexOutput vertMain(VertexInput input, uint instanceID : SV_InstanceID)
 {
-    ShadowInstanceData inst = uInstances[instanceID];
+    uint globalInstance = uVisibleInstances[pc.bucketBase + instanceID];
+    ShadowInstanceData inst = uInstances[globalInstance];
+
     float4 worldPos = mul(inst.worldMatrix, float4(input.position, 1.0));
 
     VertexOutput output;

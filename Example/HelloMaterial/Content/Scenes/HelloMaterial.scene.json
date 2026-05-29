@@ -436,16 +436,6 @@
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
-                "SkeletonAnimatorComponent": {
-                    "_clipIndex": 0,
-                    "_loop": true,
-                    "_meshIndex": 0,
-                    "_playing": true,
-                    "_skeletonIndex": 0,
-                    "_sourceModelPath": "Engine/Content/Misc/Monkey.obj",
-                    "_speed": 1.0,
-                    "_time": 0.0
-                },
                 "TransformComponent": {
                     "_position": [
                         5.0,
@@ -813,16 +803,6 @@
                     },
                     "_useEmbeddedMaterials": true
                 },
-                "SkeletonAnimatorComponent": {
-                    "_clipIndex": 0,
-                    "_loop": true,
-                    "_meshIndex": 0,
-                    "_playing": true,
-                    "_skeletonIndex": 0,
-                    "_sourceModelPath": "Engine/Content/Assets/backpack/backpack.obj",
-                    "_speed": 1.0,
-                    "_time": 0.0
-                },
                 "TransformComponent": {
                     "_position": [
                         -5.0,
@@ -866,9 +846,9 @@
                     "_meshIndex": 0,
                     "_playing": true,
                     "_skeletonIndex": 0,
-                    "_sourceModelPath": "Engine\\ThirdParty\\LearnOpenGL\\resources\\objects\\vampire\\dancing_vampire.dae",
+                    "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
                     "_speed": 1.0,
-                    "_time": 131305.992885
+                    "_time": 352674.177206
                 },
                 "TransformComponent": {
                     "_position": [
@@ -7892,16 +7872,6 @@
                         }
                     },
                     "_useEmbeddedMaterials": true
-                },
-                "SkeletonAnimatorComponent": {
-                    "_clipIndex": 0,
-                    "_loop": true,
-                    "_meshIndex": 0,
-                    "_playing": true,
-                    "_skeletonIndex": 0,
-                    "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/nanosuit/nanosuit.obj",
-                    "_speed": 1.0,
-                    "_time": 0.0
                 },
                 "TransformComponent": {
                     "_position": [

@@ -9,7 +9,6 @@
 #include "Render/Core/Pipeline.h"
 
 #include <array>
-#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -20,7 +19,27 @@ struct ICommandBuffer;
 struct IDescriptorSetLayout;
 struct Mesh;
 struct RenderDrawItem;
-struct RenderShadingDrawBuckets;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PointShadowIndirectRenderer
+//
+// Frame flow (see ShadowTypes.h for the bucket addressing convention):
+//
+//   1. prepare()       — CPU
+//        a. collectBatches()   : group draw items by mesh → batches
+//        b. uploadInstances()  : flatten to ShadowInstanceData[]
+//        c. uploadCmds()       : write 1 cmd template per (batch,face) bucket
+//        d. fillCullData()     : either upload frustums (compute path) or
+//                                 fill instanceCount + visibleInstances (NoCull)
+//
+//   2. dispatchCull()  — GPU compute (compute path only)
+//        atomically increments cmd.instanceCount and appends visible ids.
+//
+//   3. renderFace()    — GPU graphics, called once per (light, cube face)
+//        for each batch:
+//          bind VB/IB → push bucketBase → drawIndexedIndirect(1 cmd)
+//        VS reads visibleInstances[bucketBase + SV_InstanceID].
+// ═══════════════════════════════════════════════════════════════════════════
 
 class PointShadowIndirectRenderer
 {
@@ -31,70 +50,68 @@ class PointShadowIndirectRenderer
     void beginFrame();
     void prepare(const BasicShadowFramePayload& payload);
     void dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex) const;
-    void renderFace(ICommandBuffer* cmdBuf,
+    void renderFace(ICommandBuffer*                cmdBuf,
                     const BasicShadowFramePayload& payload,
-                    const PointShadowFacePayload& facePayload) const;
+                    const PointShadowFacePayload&  facePayload) const;
     void refreshPipeline(EFormat::T depthFormat);
 
     [[nodiscard]] bool isSupported() const { return _bSupported; }
     [[nodiscard]] bool hasRenderableInstances(uint32_t flightIndex) const;
 
   private:
+    // ─── Per-frame state ─────────────────────────────────────────────
     struct MeshBatch
     {
         Mesh*    mesh          = nullptr;
-        uint32_t firstInstance = 0;
-        uint32_t instanceCount = 0;
-    };
-
-    enum class ECullPlugin
-    {
-        Disabled,
-        NoCull,
-        Compute,
+        uint32_t firstInstance = 0;   // base offset into instanceData
+        uint32_t instanceCount = 0;   // how many entries in this batch
     };
 
     struct PerFlightResources
     {
-        stdptr<IBuffer>     instanceBuffer;
-        stdptr<IBuffer>     noCullDrawCommandBuffer;
-        stdptr<IBuffer>     noCullDrawCountBuffer;
+        stdptr<IBuffer>     instanceBuffer;   // ShadowInstanceData[]
         DescriptorSetHandle indirectDS = nullptr;
 
-        ECullPlugin activeCullPlugin = ECullPlugin::Disabled;
         std::vector<MeshBatch> meshBatches;
-        uint32_t               totalInstances = 0;
+        uint32_t               totalInstances  = 0;
+        uint32_t               activeFaceCount = 0;
+        bool                   useGpuCull      = false;
+        bool                   ready           = false;
     };
 
-    struct ShadowPipelineVariant
-    {
-        stdptr<IGraphicsPipeline> pipeline;
-        stdptr<IPipelineLayout>   pipelineLayout;
-    };
+    struct VsPushConstants { uint32_t bucketBase; };
 
+    // ─── prepare() sub-steps (all operate on _perFlight[payload.flightIndex]) ─
+    bool collectBatches(const BasicShadowFramePayload& payload,
+                        std::vector<PointShadowInstanceData>& outInstances);
+    void uploadInstances(uint32_t flightIndex,
+                         const std::vector<PointShadowInstanceData>& instances);
+    std::vector<PointShadowIndirectCommand> buildCmdTemplates(uint32_t flightIndex) const;
+    void fillCullDataCompute(const BasicShadowFramePayload&                 payload,
+                             const std::vector<PointShadowIndirectCommand>& cmdTemplates);
+    void fillCullDataNoCull(uint32_t                                       flightIndex,
+                            std::vector<PointShadowIndirectCommand>&       cmdTemplates);
+
+    // ─── Capacity & DS helpers ───────────────────────────────────────
     void ensureInstanceCapacity(uint32_t requiredCount);
-    void ensureNoCullCommandCapacity(uint32_t faceCount);
-    void uploadNoCullCommands(uint32_t flightIndex, uint32_t faceCount, const std::vector<PointShadowInstanceData>& instanceData);
     void updateIndirectDescriptors(uint32_t flightIndex);
 
+    // ─── Resources ───────────────────────────────────────────────────
     IRender* _render = nullptr;
-
-    bool _bSupported = false;
+    bool     _bSupported = false;
 
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _indirectDSL;
     stdptr<IDescriptorPool>      _dsp;
 
-    ShadowPipelineVariant      _staticVariant;
-    GraphicsPipelineCreateInfo _pipelineCI{};
+    stdptr<IGraphicsPipeline>    _pipeline;
+    stdptr<IPipelineLayout>      _pipelineLayout;
+    GraphicsPipelineCreateInfo   _pipelineCI{};
 
     PointShadowCullPass _cullPass;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
-    uint32_t _instanceCapacity       = 0;
-    uint32_t _noCullFaceCapacity     = 0;
-
-    std::unordered_map<Mesh*, uint32_t> _meshBatchMap;
+    uint32_t _instanceCapacity = 0;
 };
 
 } // namespace ya

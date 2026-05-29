@@ -37,6 +37,39 @@ using PointShadowIndirectCommand  = slang_types::Shadow::PointShadowCull_comp::I
 using PointShadowCullPushConstant = slang_types::Shadow::PointShadowCull_comp::PushConstants;
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Point Shadow Indirect — Bucket addressing
+// ───────────────────────────────────────────────────────────────────────────
+// All GPU buffers (cmd / visibleInstances) are addressed by a single key:
+//
+//     bucket = batch * faceCount + face
+//
+//   • batch     — index into PointShadowIndirectRenderer::_meshBatches
+//                 (= which mesh group this draw belongs to)
+//   • face      — global face index = lightIndex * 6 + cubeFace
+//   • faceCount = pointLightCount * 6   (active faces this frame)
+//
+// Layout per (batch, face) bucket:
+//
+//   uDrawCommands     [bucket]                                  // 1 cmd
+//   uVisibleInstances [bucket * MAX_DRAWS_PER_FACE ..  +N]      // up to 4096 ids
+//
+// The vertex shader receives `bucketBase = bucket * MAX_DRAWS_PER_FACE`
+// via push constant and uses SV_InstanceID to fetch its global instance id.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace PointShadowAddressing
+{
+constexpr uint32_t bucketIndex(uint32_t batch, uint32_t face, uint32_t faceCount)
+{
+    return batch * faceCount + face;
+}
+constexpr uint32_t bucketBaseSlot(uint32_t bucket)
+{
+    return bucket * ShadowConstants::MAX_DRAWS_PER_FACE;
+}
+} // namespace PointShadowAddressing
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CPU-side helpers
 // ═══════════════════════════════════════════════════════════════════════════
 

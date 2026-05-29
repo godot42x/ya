@@ -1,5 +1,7 @@
 #include "PointShadowPass.h"
 
+#include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/Texture.h"
 #include "Render/Core/TextureFactory.h"
@@ -206,7 +208,7 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
     if (!payload.frameData || payload.pointLightCount == 0) return;
 
     auto& flight = _perFlight[payload.flightIndex];
-    const bool useIndirect = payload.pointIndirectRequested && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
+    const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
     // Dispatch compute cull if using indirect
     if (useIndirect) {
@@ -253,79 +255,42 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
             }
 
             // Always draw skinned meshes with direct draw (no indirect path for skinned yet)
-            drawSkinnedBucketsDirect(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.skinnedMeshes, facePayload.layerIndex);
+            {
+                const auto& flight = _perFlight[payload.flightIndex];
+                ShadowDrawHelper::PassResources skinnedRes{
+                    .pipeline       = _directSkinnedVariant.pipeline.get(),
+                    .pipelineLayout = _directSkinnedVariant.pipelineLayout.get(),
+                    .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
+                    .skinningDS     = flight.skinningDS,
+                };
+                ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+            }
 
             cmdBuf->endRendering(renderInfo);
         }
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // Render: Direct draw fallback
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 
 void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
                                         const BasicShadowFramePayload& payload,
                                         const PointShadowFacePayload&  facePayload) const
 {
-    drawStaticBucketsDirect(cmdBuf, payload.flightIndex, payload.frameData->drawBuckets.staticMeshes, facePayload.layerIndex);
-}
-
-void PointShadowPass::drawStaticBucketsDirect(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                               const RenderShadingDrawBuckets& buckets, uint32_t layerIndex) const
-{
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
-    {
-        if (items.empty()) return;
-        const auto& flight = _perFlight[flightIndex];
-        // Use faceGlobal index (layerIndex - 1) for DS lookup
-        const uint32_t faceGlobal = layerIndex - 1;
-        cmdBuf->bindPipeline(_directStaticVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_directStaticVariant.pipelineLayout.get(), 0, {flight.faceDS[faceGlobal]});
-        for (const auto& item : items) {
-            if (!item.mesh) continue;
-            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = -1};
-            cmdBuf->pushConstants(_directStaticVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
-            item.mesh->drawStatic(cmdBuf);
-        }
+    const auto& flight = _perFlight[payload.flightIndex];
+    ShadowDrawHelper::PassResources staticRes{
+        .pipeline       = _directStaticVariant.pipeline.get(),
+        .pipelineLayout = _directStaticVariant.pipelineLayout.get(),
+        .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
     };
-
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
+    ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
 }
 
-void PointShadowPass::drawSkinnedBucketsDirect(ICommandBuffer* cmdBuf, uint32_t flightIndex,
-                                                const RenderShadingDrawBuckets& buckets, uint32_t layerIndex) const
-{
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
-    {
-        if (items.empty()) return;
-        const auto& flight = _perFlight[flightIndex];
-        const uint32_t faceGlobal = layerIndex - 1;
-        cmdBuf->bindPipeline(_directSkinnedVariant.pipeline.get());
-        cmdBuf->bindDescriptorSets(_directSkinnedVariant.pipelineLayout.get(), 0, {flight.faceDS[faceGlobal], flight.skinningDS});
-        for (const auto& item : items) {
-            if (!item.mesh) continue;
-            ModelPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
-            cmdBuf->pushConstants(_directSkinnedVariant.pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(ModelPushConstant), &pc);
-            item.mesh->drawSkinned(cmdBuf);
-        }
-    };
-
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // Buffer management
-// ═══════════════════════════════════════════════════════════════════════════
-
+// ═══════════════════════════════════════════════════════════════════════
 void PointShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
 {
     const uint32_t required = std::max(1u, paletteCount);
@@ -424,11 +389,7 @@ Texture* PointShadowPass::getFaceDepthTexture(uint32_t lightIndex, uint32_t face
 
 void PointShadowPass::renderGUI()
 {
-    ImGui::Text("Indirect Draw: %s", _bUseIndirectDraw ? "On" : "Off");
-    if (!_indirectRenderer.isSupported()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("(unsupported)");
-    }
+    ImGui::Text("Indirect Path: %s", _indirectRenderer.isSupported() ? "supported" : "unsupported");
 }
 
 } // namespace ya

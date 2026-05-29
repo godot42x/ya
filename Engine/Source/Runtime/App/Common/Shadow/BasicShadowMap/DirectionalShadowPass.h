@@ -62,8 +62,6 @@ class DirectionalShadowPass
         DescriptorSetHandle skinningDS    = nullptr;
     };
 
-    void drawStaticBuckets(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderShadingDrawBuckets& buckets) const;
-    void drawSkinnedBuckets(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderShadingDrawBuckets& buckets) const;
     void ensureSkinningCapacity(uint32_t paletteCount);
 
     IRender* _render       = nullptr;

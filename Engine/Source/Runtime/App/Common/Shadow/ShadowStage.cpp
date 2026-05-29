@@ -73,18 +73,6 @@ void ShadowStage::applySettings(const ShadowSettings& settings)
     }
 }
 
-void ShadowStage::setPointLightShadowEnabled(bool enabled)
-{
-    _settings.pointLightEnabled = enabled;
-    if (_technique) _technique->applySettings(_settings);
-}
-
-void ShadowStage::setMaxPointLightShadowCount(uint32_t count)
-{
-    _settings.maxPointLightShadows = std::min(count, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-    if (_technique) _technique->applySettings(_settings);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Render target management
 // ═══════════════════════════════════════════════════════════════════════════

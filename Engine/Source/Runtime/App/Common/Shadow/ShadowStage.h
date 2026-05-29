@@ -39,10 +39,6 @@ struct ShadowStage : public IRenderStage
     /// Apply shadow settings from App layer. Call each frame before prepare/execute.
     void applySettings(const ShadowSettings& settings);
 
-    /// Legacy setters (kept for backward compat during migration, delegate to settings)
-    void setPointLightShadowEnabled(bool enabled);
-    void setMaxPointLightShadowCount(uint32_t count);
-
     /// Access the active technique's output textures (for LightStage sampling)
     [[nodiscard]] Texture* getDirectionalDepthTexture() const;
     [[nodiscard]] Texture* getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const;
