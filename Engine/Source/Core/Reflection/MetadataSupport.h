@@ -2,6 +2,7 @@
 
 #include "Core/FName.h"
 #include <any>
+#include <functional>
 #include <reflects-core/lib.h>
 #include <span>
 #include <string>
@@ -24,10 +25,14 @@ namespace ya::reflection
 
 struct Meta
 {
-    static inline const FName Color       = "color";
-    static inline const FName Tooltip     = "tooltip";
-    static inline const FName Category    = "category";
-    static inline const FName DisplayName = "display_name";
+    static inline const FName Color        = "color";
+    static inline const FName Tooltip      = "tooltip";
+    static inline const FName Category     = "category";
+    static inline const FName DisplayName  = "display_name";
+    static inline const FName EditableIf   = "editable_if";
+    static inline const FName DisabledHint = "disabled_hint";
+
+    using EditablePredicate = std::function<bool(const void*)>;
 
     struct ManipulateSpec
     {
@@ -123,10 +128,21 @@ struct MetaBuilder
         return *this;
     }
 
+    template <typename Owner>
+    MetaBuilder& editableIf(bool (Owner::*predicate)() const, const std::string& disabledHint = {})
+    {
+        meta.set(Meta::EditableIf,
+                 Meta::EditablePredicate{[predicate](const void* owner) {
+                     return owner && (static_cast<const Owner*>(owner)->*predicate)();
+                 }});
+        if (!disabledHint.empty()) {
+            meta.set(Meta::DisabledHint, disabledHint);
+        }
+        return *this;
+    }
+
     MetaBuilder& enableIf(const std::string& conditionExpr)
     {
-        // TODO: implement condition expression parsing and evaluation in the editor
-        //  Use a scripts?
         meta.set("enable_if", conditionExpr);
         return *this;
     }

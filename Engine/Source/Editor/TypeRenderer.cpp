@@ -7,7 +7,9 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"
+#include "ImGuiHelper.h"
 #include "Render/Material/Material.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "reflects-core/lib.h"
 
 
@@ -52,9 +54,12 @@ void renderReflectedType(const std::string& name,
     }
 
 
-    // 如果没有类缓存，尝试使用类型渲染器
-    if (auto* renderer = TypeRenderRegistry::instance().getRenderer(typeIndex)) {
-        renderer->render(instance, propRenderCache ? *propRenderCache : PropertyRenderContext{}, ctx);
+    auto* renderer = TypeRenderRegistry::instance().getRenderer(typeIndex);
+    const PropertyRenderContext defaultPropRenderCache{};
+    const auto& propCtx = propRenderCache ? *propRenderCache : defaultPropRenderCache;
+
+    if (renderer && renderer->hasRenderOverride()) {
+        renderer->render(instance, propCtx, ctx);
         return;
     }
 
@@ -111,47 +116,51 @@ void renderReflectedType(const std::string& name,
                     const bool  isPointer    = propCtxCache.bPointer;
                     const auto& prettyName   = propCtxCache.prettyName;
 
-                    if (isContainer) {
-                        // 容器属性：使用容器渲染器
-                        // TODO: ContainerPropertyRenderer should also use RenderContext
-                        ya::editor::ContainerPropertyRenderer::renderContainer(
-                            prettyName,
-                            prop,
-                            subPropInstancePtr,
-                            depth + 2);
-                    }
-                    else if (isPointer && propCtxCache.pointeeTypeIndex != 0) {
-                        // Pointer property: dereference and render pointee object
-                        void** ptrLocation = static_cast<void**>(subPropInstancePtr);
-                        void*  pointee     = ptrLocation ? *ptrLocation : nullptr;
+                    auto renderProperty = [&]() {
+                        if (isContainer) {
+                            // 容器属性：使用容器渲染器
+                            // TODO: ContainerPropertyRenderer should also use RenderContext
+                            ya::editor::ContainerPropertyRenderer::renderContainer(
+                                prettyName,
+                                prop,
+                                subPropInstancePtr,
+                                depth + 2);
+                        }
+                        else if (isPointer && propCtxCache.pointeeTypeIndex != 0) {
+                            // Pointer property: dereference and render pointee object
+                            void** ptrLocation = static_cast<void**>(subPropInstancePtr);
+                            void*  pointee     = ptrLocation ? *ptrLocation : nullptr;
 
-                        if (pointee) {
-                            // Has valid pointee - render it with indirection indicator
-                            std::string ptrLabel = prettyName + " (->)";
-                            renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, &propCtxCache);
+                            if (pointee) {
+                                // Has valid pointee - render it with indirection indicator
+                                std::string ptrLabel = prettyName + " (->)";
+                                renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, &propCtxCache);
+                            }
+                            else {
+                                // Null pointer - show placeholder
+                                ImGui::TextDisabled("%s: [null]", prettyName.c_str());
+                            }
                         }
                         else {
-                            // Null pointer - show placeholder
-                            ImGui::TextDisabled("%s: [null]", prettyName.c_str());
-                        }
-                    }
-                    else {
-                        // TODO: use metadata enableIf or meta=(EditCondition("xxxx"))
-                        // 普通属性：直接传递 PropertyRenderContext
-                        if (typeIndex == ya::type_index_v<TextureSlot> &&
-                            propName == "bEnable" &&
-                            !static_cast<TextureSlot*>(instance)->isEditorEnableEditable()) {
-                            auto* textureSlot = static_cast<TextureSlot*>(instance);
-                            ImGui::BeginDisabled();
-                            bool displayedEnabled = textureSlot->bEnable;
-                            ImGui::Checkbox(prettyName.c_str(), &displayedEnabled);
-                            ImGui::EndDisabled();
-                            ImGui::SameLine();
-                            ImGui::TextDisabled("[empty slot]");
-                        }
-                        else {
+                            // 普通属性：直接传递 PropertyRenderContext
                             renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, ctx, depth + 1, &propCtxCache);
                         }
+                    };
+
+                    const bool editable = propCtxCache.isEditable(instance);
+                    if (!editable) {
+                        ImGui::BeginDisabled();
+                    }
+                    renderProperty();
+                    if (!editable) {
+                        ImGui::EndDisabled();
+                        if (!propCtxCache.disabledHint.empty()) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("[%s]", propCtxCache.disabledHint.c_str());
+                        }
+                    }
+                    if (renderer) {
+                        renderer->renderAfterProperty(propName, instance, subPropInstancePtr, propCtxCache, ctx);
                     }
                 });
             };
@@ -185,6 +194,43 @@ void renderReflectedType(const std::string& name,
 // ============================================================================
 // Builtin Type Renderers Registration
 // ============================================================================
+
+static void renderTextureSlotPreview(TextureSlot& slot)
+{
+    if (!slot.hasPath()) {
+        return;
+    }
+
+    auto texture = slot.getResolvedTexture();
+    if (!texture || !texture->getImageView()) {
+        ImGui::TextDisabled("Preview unavailable until loaded");
+        return;
+    }
+
+    const auto extent = texture->getExtent();
+    if (extent.width == 0 || extent.height == 0) {
+        ImGui::TextDisabled("Preview unavailable");
+        return;
+    }
+
+    constexpr float maxPreviewSize = 128.0f;
+    const float scale = std::min(maxPreviewSize / static_cast<float>(extent.width),
+                                 maxPreviewSize / static_cast<float>(extent.height));
+    const ImVec2 size(static_cast<float>(extent.width) * scale,
+                      static_cast<float>(extent.height) * scale);
+
+    auto sampler = TextureLibrary::get().getLinearSampler();
+    if (!sampler) {
+        ImGui::TextDisabled("Preview sampler unavailable");
+        return;
+    }
+
+    ImGui::TextDisabled("Preview");
+    ImGuiHelper::Image(texture->getImageView(), sampler.get(), "No Preview", size);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", slot.textureRef.getPath().c_str());
+    }
+}
 
 // Helper function for integer types rendering
 static bool integerRenderFunc(int& value, const PropertyRenderContext& propCtx)
@@ -428,6 +474,18 @@ void registerBuiltinTypeRenderers()
                         }
                     }
                 });
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<TextureSlot>,
+        TypeRenderer{
+            .typeName = "TextureSlot",
+            .afterPropertyRenderers = {
+                {"textureRef",
+                 [](void* owner, void*, const PropertyRenderContext&, RenderContext&) {
+                     renderTextureSlotPreview(*static_cast<TextureSlot*>(owner));
+                 }},
             },
         });
 }

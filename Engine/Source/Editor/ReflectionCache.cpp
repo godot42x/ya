@@ -107,6 +107,12 @@ PropertyRenderContext PropertyRenderContext::createFrom(ReflectionCache* owner, 
             if (metadata.hasMeta(ya::reflection::Meta::Color)) {
                 ctx.bColor = metadata.get<bool>(ya::reflection::Meta::Color);
             }
+            if (metadata.hasMeta(ya::reflection::Meta::EditableIf)) {
+                ctx.editableIf = metadata.get<ya::reflection::Meta::EditablePredicate>(ya::reflection::Meta::EditableIf);
+            }
+            if (metadata.hasMeta(ya::reflection::Meta::DisabledHint)) {
+                ctx.disabledHint = metadata.get<std::string>(ya::reflection::Meta::DisabledHint);
+            }
         }
     }
 

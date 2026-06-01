@@ -451,15 +451,30 @@ struct RenderContext
 struct TypeRenderer
 {
     // RenderFunc now receives both PropertyRenderContext (readonly cache) and RenderContext (modification tracking)
-    using RenderFunc = std::function<void(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx)>;
+    using RenderFunc        = std::function<void(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx)>;
+    using PropertyRenderFunc = std::function<void(void* owner, void* property, const PropertyRenderContext& propCtx, RenderContext& ctx)>;
 
-    std::string typeName;
-    RenderFunc  renderFunc = nullptr;
+    std::string                                    typeName;
+    RenderFunc                                     renderFunc = nullptr;
+    std::unordered_map<std::string, PropertyRenderFunc> afterPropertyRenderers;
+
+    bool hasRenderOverride() const { return renderFunc != nullptr; }
 
     void render(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) const
     {
         if (renderFunc) {
             renderFunc(instance, propCtx, ctx);
+        }
+    }
+
+    void renderAfterProperty(const std::string& propertyName,
+                             void* owner,
+                             void* property,
+                             const PropertyRenderContext& propCtx,
+                             RenderContext& ctx) const
+    {
+        if (auto it = afterPropertyRenderers.find(propertyName); it != afterPropertyRenderers.end()) {
+            it->second(owner, property, propCtx, ctx);
         }
     }
 };

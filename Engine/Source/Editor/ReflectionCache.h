@@ -41,6 +41,14 @@ struct PropertyRenderContext
     reflection::Meta::ManipulateSpec manipulateSpec;
     bool                             bColor = false;
 
+    reflection::Meta::EditablePredicate editableIf;
+    std::string                         disabledHint;
+
+    bool isEditable(const void* instance) const
+    {
+        return !editableIf || editableIf(instance);
+    }
+
     // 辅助方法：从 Property 提取元数据
     static PropertyRenderContext createFrom(ReflectionCache *owner, const Property &prop, const std::string &propName);
 };

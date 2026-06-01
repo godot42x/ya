@@ -61,7 +61,7 @@ struct TextureSlot
 {
     YA_REFLECT_BEGIN(TextureSlot)
     YA_REFLECT_FIELD(textureRef)
-    YA_REFLECT_FIELD(bEnable)
+    YA_REFLECT_FIELD(bEnable, .editableIf<class_t>(&class_t::isEditorEnableEditable, "empty slot"))
     YA_REFLECT_FIELD(uvScale)
     YA_REFLECT_FIELD(uvOffset)
     YA_REFLECT_FIELD(uvRotation)
