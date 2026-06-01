@@ -21,23 +21,7 @@ namespace ya
 class AssetModelManager;
 class AssetTextureManager;
 
-namespace EResource
-{
-enum T
-{
-    None = 0,
-    Texture,
-    Model,
-
-};
-
-
-};
-
-struct Resource
-{
-};
-
+// Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
 
 class AssetManager : public IResourceCache
 {
