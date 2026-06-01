@@ -3,7 +3,6 @@
 #include "Resource/Handle/ResourceHandle.h"
 
 #include <memory>
-#include <mutex>
 #include <vector>
 
 namespace ya
@@ -20,9 +19,12 @@ namespace ya
  * Stores shared_ptr<T> so the existing lifetime model (use_count()==1 reclaim +
  * DeferredDeletionQueue GPU-safe destruction) keeps working unchanged.
  *
- * Thread-safety: load happens on a worker thread, AssetFuture callbacks run on
- * the main thread, so all access is guarded by a coarse mutex (same granularity
- * as the existing AssetTextureManager mutex).
+ * Thread-safety: this table is intentionally NOT internally synchronized. It is
+ * a passive data structure; the owner is responsible for serializing access.
+ * Like Bevy's `Assets<T>` or UE's FUObjectArray, concurrency is handled one
+ * level up (the only production owner, AssetTextureManager, guards every call
+ * with its own coarse mutex). Adding a second lock here would only ever be
+ * uncontended overhead, so it is left out.
  */
 template <typename T>
 class ResourceTable
@@ -36,14 +38,11 @@ class ResourceTable
 
     std::vector<Slot>     _slots;
     std::vector<uint32_t> _freeList;
-    mutable std::mutex    _mutex;
 
   public:
     /// Allocate a slot. resource may be null (lazy slot, pending async load).
     FResourceHandle<T> allocate(std::shared_ptr<T> res = nullptr)
     {
-        std::lock_guard lock(_mutex);
-
         uint32_t index;
         if (!_freeList.empty()) {
             index = _freeList.back();
@@ -63,15 +62,15 @@ class ResourceTable
 
     [[nodiscard]] bool isValid(FResourceHandle<T> h) const
     {
-        std::lock_guard lock(_mutex);
-        return isValidLocked(h);
+        return h.index < _slots.size() &&
+               _slots[h.index].alive &&
+               _slots[h.index].generation == h.generation;
     }
 
     /// Returns the raw object, or nullptr if the handle is stale / slot empty.
     [[nodiscard]] T *get(FResourceHandle<T> h) const
     {
-        std::lock_guard lock(_mutex);
-        if (!isValidLocked(h)) {
+        if (!isValid(h)) {
             return nullptr;
         }
         return _slots[h.index].resource.get();
@@ -79,8 +78,7 @@ class ResourceTable
 
     [[nodiscard]] std::shared_ptr<T> getShared(FResourceHandle<T> h) const
     {
-        std::lock_guard lock(_mutex);
-        if (!isValidLocked(h)) {
+        if (!isValid(h)) {
             return nullptr;
         }
         return _slots[h.index].resource;
@@ -95,8 +93,7 @@ class ResourceTable
      */
     [[nodiscard]] long useCount(FResourceHandle<T> h) const
     {
-        std::lock_guard lock(_mutex);
-        if (!isValidLocked(h) || !_slots[h.index].resource) {
+        if (!isValid(h) || !_slots[h.index].resource) {
             return 0;
         }
         return _slots[h.index].resource.use_count();
@@ -105,7 +102,6 @@ class ResourceTable
     /// Current generation of the slot, or 0 if the handle is stale.
     [[nodiscard]] uint32_t generationOf(FResourceHandle<T> h) const
     {
-        std::lock_guard lock(_mutex);
         if (h.index >= _slots.size() || !_slots[h.index].alive) {
             return 0;
         }
@@ -121,7 +117,6 @@ class ResourceTable
      */
     std::shared_ptr<T> replace(FResourceHandle<T> h, std::shared_ptr<T> res)
     {
-        std::lock_guard lock(_mutex);
         if (h.index >= _slots.size() || !_slots[h.index].alive) {
             return nullptr;
         }
@@ -140,7 +135,6 @@ class ResourceTable
      */
     std::shared_ptr<T> release(FResourceHandle<T> h)
     {
-        std::lock_guard lock(_mutex);
         if (h.index >= _slots.size() || !_slots[h.index].alive || _slots[h.index].generation != h.generation) {
             return nullptr;
         }
@@ -161,17 +155,8 @@ class ResourceTable
      */
     void clear()
     {
-        std::lock_guard lock(_mutex);
         _slots.clear();
         _freeList.clear();
-    }
-
-  private:
-    bool isValidLocked(FResourceHandle<T> h) const
-    {
-        return h.index < _slots.size() &&
-               _slots[h.index].alive &&
-               _slots[h.index].generation == h.generation;
     }
 };
 
